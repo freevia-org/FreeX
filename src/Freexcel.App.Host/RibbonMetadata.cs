@@ -42,6 +42,27 @@ public static class RibbonMetadata
             typeof(RibbonMetadata),
             new FrameworkPropertyMetadata(""));
 
+    public static readonly DependencyProperty DropdownMenuButtonProperty =
+        DependencyProperty.RegisterAttached(
+            "DropdownMenuButton",
+            typeof(bool),
+            typeof(RibbonMetadata),
+            new FrameworkPropertyMetadata(false));
+
+    public static readonly DependencyProperty DropdownZoneHandlerAttachedProperty =
+        DependencyProperty.RegisterAttached(
+            "DropdownZoneHandlerAttached",
+            typeof(bool),
+            typeof(RibbonMetadata),
+            new FrameworkPropertyMetadata(false));
+
+    public static readonly DependencyProperty DropdownZoneHighlightAttachedProperty =
+        DependencyProperty.RegisterAttached(
+            "DropdownZoneHighlightAttached",
+            typeof(bool),
+            typeof(RibbonMetadata),
+            new FrameworkPropertyMetadata(false));
+
     public static RibbonMetadataRole GetRole(DependencyObject element) =>
         (RibbonMetadataRole)element.GetValue(RoleProperty);
 
@@ -71,6 +92,24 @@ public static class RibbonMetadata
 
     public static void SetGroupName(DependencyObject element, string value) =>
         element.SetValue(GroupNameProperty, value);
+
+    public static bool GetDropdownMenuButton(DependencyObject element) =>
+        (bool)element.GetValue(DropdownMenuButtonProperty);
+
+    public static void SetDropdownMenuButton(DependencyObject element, bool value) =>
+        element.SetValue(DropdownMenuButtonProperty, value);
+
+    public static bool GetDropdownZoneHandlerAttached(DependencyObject element) =>
+        (bool)element.GetValue(DropdownZoneHandlerAttachedProperty);
+
+    public static void SetDropdownZoneHandlerAttached(DependencyObject element, bool value) =>
+        element.SetValue(DropdownZoneHandlerAttachedProperty, value);
+
+    public static bool GetDropdownZoneHighlightAttached(DependencyObject element) =>
+        (bool)element.GetValue(DropdownZoneHighlightAttachedProperty);
+
+    public static void SetDropdownZoneHighlightAttached(DependencyObject element, bool value) =>
+        element.SetValue(DropdownZoneHighlightAttachedProperty, value);
 
     public static void SetCompactWidths(DependencyObject element, double fullWidth, double compactWidth)
     {
@@ -104,6 +143,12 @@ public static class RibbonMetadata
         GetRole(element) == RibbonMetadataRole.CollapsedChevron ||
         element is TextBlock { Text: "\uE70D", Tag: string tag } &&
         string.Equals(tag, "RibbonIcon", StringComparison.Ordinal);
+
+    public static bool IsDropdownChevron(DependencyObject element) =>
+        GetRole(element) == RibbonMetadataRole.DropdownChevron;
+
+    public static bool IsDropdownMenuButton(DependencyObject element) =>
+        GetDropdownMenuButton(element);
 
     public static bool IsCollapsedGroupButton(DependencyObject element) =>
         HasRole(element, RibbonMetadataRole.CollapsedGroupButton, "RibbonCollapsedGroupButton");
@@ -180,7 +225,8 @@ public enum RibbonMetadataRole
     CollapsedGroupButton,
     CollapsedChevron,
     CommandSpacer,
-    RibbonGroup
+    RibbonGroup,
+    DropdownChevron
 }
 
 public enum RibbonCommandContentLayout

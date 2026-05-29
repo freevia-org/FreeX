@@ -159,4 +159,26 @@ public sealed class RibbonMetadataTests
             RibbonMetadata.IsCollapsedChevron(chevron).Should().BeTrue();
         });
     }
+
+    [Fact]
+    public void DropdownChevronAndHandlerState_UseExplicitMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var chevron = new TextBlock();
+            var button = new Button();
+
+            RibbonMetadata.SetRole(chevron, RibbonMetadataRole.DropdownChevron);
+            RibbonMetadata.SetDropdownMenuButton(button, true);
+            RibbonMetadata.SetDropdownZoneHandlerAttached(button, true);
+            RibbonMetadata.SetDropdownZoneHighlightAttached(button, true);
+
+            RibbonMetadata.IsDropdownChevron(chevron).Should().BeTrue();
+            RibbonMetadata.IsDropdownMenuButton(button).Should().BeTrue();
+            RibbonMetadata.GetDropdownMenuButton(button).Should().BeTrue();
+            RibbonMetadata.IsCommandIcon(chevron).Should().BeFalse();
+            RibbonMetadata.GetDropdownZoneHandlerAttached(button).Should().BeTrue();
+            RibbonMetadata.GetDropdownZoneHighlightAttached(button).Should().BeTrue();
+        });
+    }
 }

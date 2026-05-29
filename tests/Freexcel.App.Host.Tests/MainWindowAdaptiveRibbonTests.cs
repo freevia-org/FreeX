@@ -868,6 +868,59 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Theory]
+    [InlineData("Paste")]
+    [InlineData("Orientation")]
+    [InlineData("AutoSum")]
+    [InlineData("Sort & Filter")]
+    public void RibbonMenuButtons_ShowActionableDropdownGlyph(string title)
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRibbonTab("Home", 1465);
+
+            harness.VisibleRibbonButtonDropdownChevronCount(title).Should().Be(1,
+                $"{title} should not keep the old decorative glyph after it receives a real dropdown target");
+            harness.VisibleRibbonButtonHasDropdownChevron(title).Should().BeTrue(
+                $"{title} should expose a real dropdown hit target when it owns a menu");
+            harness.VisibleRibbonButtonHasDropdownZoneHandler(title).Should().BeTrue(
+                $"{title} should route clicks on the chevron zone to its menu");
+            harness.VisibleRibbonButtonHasDropdownZoneHighlight(title).Should().BeTrue(
+                $"{title} should show a split-button hover affordance for its main and menu zones");
+        });
+    }
+
+    [Fact]
+    public void RibbonMenuButtons_AllTabsUseSplitDropdownTreatment()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Page Layout", "Formulas", "Data", "Review", "View" })
+            {
+                harness.SelectRibbonTab(tab, 1800);
+
+                harness.ActiveRibbonMenuButtonsWithoutSplitTreatment.Should().BeEmpty(
+                    $"{tab} menu-capable ribbon buttons should show one actionable chevron with split hover/click metadata");
+            }
+        });
+    }
+
+    [Fact]
+    public void ExpandedRibbonGroups_HideCollapsedGroupDropdownGlyphs()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRibbonTab("Home", 1465);
+
+            harness.HiddenCollapsedRibbonGroupsWithVisibleDropdownGlyph.Should().BeEmpty(
+                "overflow glyph adorners should disappear when their collapsed group buttons are hidden");
+        });
+    }
+
     [Fact]
     public void RibbonScrollViewers_DefaultToHiddenHorizontalScrollBarsInXaml()
     {
@@ -975,6 +1028,16 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Where(title => !string.IsNullOrWhiteSpace(title))
                 .ToList();
 
+        public IReadOnlyList<string> HiddenCollapsedRibbonGroupsWithVisibleDropdownGlyph =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<Button>()
+                .Where(button => RibbonMetadata.IsCollapsedGroupButton(button) &&
+                                 button.Visibility != Visibility.Visible)
+                .Where(HasVisibleCollapsedGroupDropdownGlyph)
+                .Select(button => RibbonTooltip.GetTitle(button) ?? "")
+                .Where(title => !string.IsNullOrWhiteSpace(title))
+                .ToList();
+
         public IReadOnlyList<ContextMenu> CollapsedRibbonGroupMenus =>
             HomeRibbonChildren
                 .OfType<Button>()
@@ -1033,6 +1096,72 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .OfType<Button>()
                 .Distinct()
                 .FirstOrDefault(button => string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal));
+
+        public bool VisibleRibbonButtonHasDropdownChevron(string title) =>
+            VisibleOrCollapsedRibbonButton(title) is { } button &&
+            DropdownChevronCount(button) > 0;
+
+        public int VisibleRibbonButtonDropdownChevronCount(string title) =>
+            VisibleOrCollapsedRibbonButton(title) is { } button
+                ? DropdownChevronCount(button)
+                : 0;
+
+        public bool VisibleRibbonButtonHasDropdownZoneHandler(string title) =>
+            VisibleOrCollapsedRibbonButton(title) is { } button &&
+            RibbonMetadata.GetDropdownZoneHandlerAttached(button);
+
+        public bool VisibleRibbonButtonHasDropdownZoneHighlight(string title) =>
+            VisibleOrCollapsedRibbonButton(title) is { } button &&
+            HasDropdownZoneHighlight(button);
+
+        public IReadOnlyList<string> ActiveRibbonMenuButtonsWithoutSplitTreatment =>
+            ActiveRibbonMenuButtons
+                .Where(button => DropdownChevronCount(button) != 1 ||
+                                 !RibbonMetadata.GetDropdownZoneHandlerAttached(button) ||
+                                 !HasDropdownZoneHighlight(button))
+                .Select(button =>
+                    $"{GetButtonDebugName(button)}: chevrons={DropdownChevronCount(button)}, " +
+                    $"handler={RibbonMetadata.GetDropdownZoneHandlerAttached(button)}, " +
+                    $"highlight={HasDropdownZoneHighlight(button)}")
+                .ToList();
+
+        private IReadOnlyList<Button> ActiveRibbonMenuButtons =>
+            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                .Concat(EnumerateLogicalDescendants(SelectedRibbonContentRoot))
+                .OfType<Button>()
+                .Distinct()
+                .Where(IsEffectivelyVisible)
+                .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
+                .Where(button => button.ContextMenu is not null || RibbonMetadata.IsDropdownMenuButton(button))
+                .ToList();
+
+        private static int DropdownChevronCount(ButtonBase button) =>
+            EnumerateSelfAndVisualDescendants(button)
+                .Concat(EnumerateLogicalDescendants(button))
+                .Distinct()
+                .Count(RibbonMetadata.IsDropdownChevron);
+
+        private static bool HasDropdownZoneHighlight(ButtonBase button) =>
+            RibbonMetadata.GetDropdownZoneHighlightAttached(button) &&
+            System.Windows.Documents.AdornerLayer.GetAdornerLayer(button)
+                ?.GetAdorners(button)
+                ?.Any(adorner => adorner.GetType().Name == "RibbonDropdownZoneAdorner") == true;
+
+        private static string GetButtonDebugName(Button button)
+        {
+            var title = RibbonTooltip.GetTitle(button);
+            if (!string.IsNullOrWhiteSpace(title))
+                return title;
+
+            var label = GetButtonLabel(button);
+            if (!string.IsNullOrWhiteSpace(label))
+                return label;
+
+            if (!string.IsNullOrWhiteSpace(button.Name))
+                return button.Name;
+
+            return button.Content?.ToString() ?? button.GetType().Name;
+        }
 
         private IEnumerable<UIElement> HomeRibbonChildren =>
             (_window.FindName("HomeRibbonPanel") as StackPanel)?.Children.Cast<UIElement>() ?? [];
@@ -1487,6 +1616,15 @@ public sealed class MainWindowAdaptiveRibbonTests
         private static bool IsVisibleCollapsedGroupButton(Button button) =>
             RibbonMetadata.IsCollapsedGroupButton(button) &&
             button.Visibility == Visibility.Visible;
+
+        private static bool HasVisibleCollapsedGroupDropdownGlyph(Button button) =>
+            System.Windows.Documents.AdornerLayer.GetAdornerLayer(button)
+                ?.GetAdorners(button)
+                ?.SelectMany(EnumerateSelfAndVisualDescendants)
+                .OfType<TextBlock>()
+                .Any(textBlock => RibbonMetadata.IsCollapsedChevron(textBlock) &&
+                                  textBlock.Visibility == Visibility.Visible &&
+                                  textBlock.IsVisible) == true;
 
         private static double GetCheckBoxLabelOffset(CheckBox checkBox)
         {

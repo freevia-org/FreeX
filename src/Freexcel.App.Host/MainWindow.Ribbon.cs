@@ -4,6 +4,8 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -11,12 +13,19 @@ namespace Freexcel.App.Host;
 
 public partial class MainWindow
 {
+    private const string RibbonDropdownMainHoverPartName = "PART_RibbonDropdownMainHover";
+    private const string RibbonDropdownMenuHoverPartName = "PART_RibbonDropdownMenuHover";
+    private const string RibbonDropdownContentPartName = "PART_RibbonDropdownContent";
+
     private void NormalizeRibbonCommandButtons()
     {
         if (RibbonTabs is null)
             return;
 
-        foreach (var button in EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>())
+        foreach (var button in EnumerateVisualDescendants(RibbonTabs)
+                     .Concat(EnumerateLogicalDescendants(RibbonTabs))
+                     .OfType<ButtonBase>()
+                     .Distinct())
         {
             if (button is CheckBox or RadioButton)
                 continue;
@@ -54,6 +63,7 @@ public partial class MainWindow
             NormalizeExistingRibbonIconText();
             ConfigureInsertRibbonSurface();
             NormalizeRibbonCommandGroups();
+            NormalizeRibbonMenuButtons();
             AlignRibbonIconColumns();
             HideRibbonScrollBars();
             ApplyToolbarDropdownWhiteBackgrounds();
@@ -111,6 +121,487 @@ public partial class MainWindow
 
         foreach (var scrollViewer in EnumerateVisualDescendants(RibbonTabs).OfType<ScrollViewer>())
             scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
+    }
+
+    private void NormalizeRibbonMenuButtons()
+    {
+        if (RibbonTabs is null)
+            return;
+
+        foreach (var button in EnumerateVisualDescendants(RibbonTabs)
+                     .Concat(EnumerateLogicalDescendants(RibbonTabs))
+                     .OfType<ButtonBase>()
+                     .Distinct())
+        {
+            if (RibbonMetadata.IsCollapsedGroupButton(button) ||
+                button.ContextMenu is null && !RibbonMetadata.IsDropdownMenuButton(button))
+            {
+                continue;
+            }
+
+            EnsureRibbonDropdownChevron(button);
+            EnsureRibbonDropdownZoneHandler(button);
+            EnsureRibbonDropdownZoneHighlight(button);
+        }
+    }
+
+    private static void EnsureRibbonDropdownChevron(ButtonBase button)
+    {
+        var contentRoot = button.Content as DependencyObject ??
+                          WrapRibbonDropdownTextContent(button);
+
+        if (contentRoot is null ||
+            ContainsRibbonDropdownChevron(contentRoot))
+            return;
+
+        var layout = GetRibbonDropdownZoneLayout(button);
+        switch (contentRoot)
+        {
+            case Grid grid:
+                AddRibbonDropdownChevronToGrid(grid, layout);
+                break;
+            case StackPanel stack:
+                AddRibbonDropdownChevronToStack(stack, layout);
+                break;
+            case Panel panel:
+                panel.Children.Add(CreateRibbonDropdownChevron(layout));
+                break;
+        }
+    }
+
+    private static DependencyObject? WrapRibbonDropdownTextContent(ButtonBase button)
+    {
+        if (button.Content is not string text)
+            return null;
+
+        var title = RibbonTooltip.GetTitle(button);
+        var commandName = string.IsNullOrWhiteSpace(title) ? text : title;
+        var layoutKind = RibbonCommandPresentationPlanner.GetLayoutKind(commandName, text);
+        ApplyRibbonCommandSize(button, layoutKind);
+        if (layoutKind is RibbonCommandLayoutKind.Small)
+            button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(text));
+        var fullWidth = button.Width is > 0 ? button.Width : Math.Max(button.ActualWidth, 64);
+        var compactWidth = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium ? 38 : 24;
+        SetRibbonCompactWidthTag(button, fullWidth, compactWidth);
+
+        var content = CreateRibbonCommandContent(commandName, text, layoutKind);
+        button.Content = content;
+        button.HorizontalContentAlignment = layoutKind is RibbonCommandLayoutKind.Small
+            ? System.Windows.HorizontalAlignment.Left
+            : System.Windows.HorizontalAlignment.Center;
+        return content;
+    }
+
+    private static bool ContainsRibbonDropdownChevron(DependencyObject root) =>
+        EnumerateVisualDescendants(root)
+            .Concat(EnumerateLogicalDescendants(root))
+            .Distinct()
+            .Any(RibbonMetadata.IsDropdownChevron);
+
+    private static void AddRibbonDropdownChevronToGrid(Grid grid, RibbonCommandContentLayout layout)
+    {
+        var chevron = CreateRibbonDropdownChevron(layout);
+        if (layout == RibbonCommandContentLayout.IconOnly ||
+            grid.ColumnDefinitions.Count == 0)
+        {
+            chevron.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
+            chevron.VerticalAlignment = System.Windows.VerticalAlignment.Bottom;
+            chevron.Margin = new Thickness(0, 0, -1, -1);
+            grid.Children.Add(chevron);
+            return;
+        }
+
+        var column = new ColumnDefinition { Width = new GridLength(12) };
+        grid.ColumnDefinitions.Add(column);
+        Grid.SetColumn(chevron, grid.ColumnDefinitions.Count - 1);
+        grid.Children.Add(chevron);
+    }
+
+    private static void AddRibbonDropdownChevronToStack(StackPanel stack, RibbonCommandContentLayout layout)
+    {
+        var chevron = CreateRibbonDropdownChevron(layout);
+        if (layout is RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium)
+        {
+            chevron.Margin = stack.Orientation == Orientation.Horizontal
+                ? new Thickness(4, 0, 0, 0)
+                : new Thickness(0, 0, 0, 0);
+        }
+
+        stack.Children.Add(chevron);
+    }
+
+    private static TextBlock CreateRibbonDropdownChevron(RibbonCommandContentLayout layout)
+    {
+        var chevron = new TextBlock
+        {
+            Text = "\uE70D",
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = layout == RibbonCommandContentLayout.IconOnly ? 7 : 8,
+            Width = 10,
+            Height = 8,
+            LineHeight = 8,
+            TextAlignment = TextAlignment.Center,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            IsHitTestVisible = false
+        };
+        RibbonMetadata.SetRole(chevron, RibbonMetadataRole.DropdownChevron);
+        return chevron;
+    }
+
+    private void EnsureRibbonDropdownZoneHandler(ButtonBase button)
+    {
+        if (RibbonMetadata.GetDropdownZoneHandlerAttached(button))
+            return;
+
+        RibbonMetadata.SetDropdownZoneHandlerAttached(button, true);
+        button.PreviewMouseLeftButtonDown += RibbonMenuButton_PreviewMouseLeftButtonDown;
+    }
+
+    private static void EnsureRibbonDropdownZoneHighlight(ButtonBase button)
+    {
+        if (RibbonMetadata.GetDropdownZoneHighlightAttached(button))
+            return;
+
+        RibbonMetadata.SetDropdownZoneHighlightAttached(button, true);
+        if (button is Button standardButton)
+            standardButton.Template = CreateRibbonDropdownButtonTemplate();
+        button.Background = Brushes.Transparent;
+        button.BorderBrush = Brushes.Transparent;
+        button.Loaded += RibbonMenuButton_Loaded;
+        button.MouseMove += RibbonMenuButton_InvalidateDropdownZoneHighlight;
+        button.MouseLeave += RibbonMenuButton_InvalidateDropdownZoneHighlight;
+        button.SizeChanged += RibbonMenuButton_InvalidateDropdownZoneHighlight;
+        button.ApplyTemplate();
+        UpdateRibbonDropdownZoneHighlight(button);
+        EnsureRibbonDropdownZoneAdorner(button);
+        button.Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                EnsureRibbonDropdownZoneAdorner(button);
+                UpdateRibbonDropdownZoneHighlight(button);
+            }),
+            DispatcherPriority.Loaded);
+    }
+
+    private static ControlTemplate CreateRibbonDropdownButtonTemplate()
+    {
+        var template = new ControlTemplate(typeof(Button));
+        var root = new FrameworkElementFactory(typeof(Grid));
+        root.SetValue(Panel.BackgroundProperty, Brushes.Transparent);
+        root.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
+
+        root.AppendChild(CreateRibbonDropdownHoverPart(RibbonDropdownMainHoverPartName));
+        root.AppendChild(CreateRibbonDropdownHoverPart(RibbonDropdownMenuHoverPartName));
+
+        var chrome = new FrameworkElementFactory(typeof(Border));
+        chrome.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        chrome.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
+        chrome.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
+        chrome.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+        chrome.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
+
+        var content = new FrameworkElementFactory(typeof(ContentPresenter));
+        content.Name = RibbonDropdownContentPartName;
+        content.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(ContentControl.ContentProperty));
+        content.SetValue(ContentPresenter.ContentTemplateProperty, new TemplateBindingExtension(ContentControl.ContentTemplateProperty));
+        content.SetValue(ContentPresenter.ContentTemplateSelectorProperty, new TemplateBindingExtension(ContentControl.ContentTemplateSelectorProperty));
+        content.SetValue(ContentPresenter.ContentStringFormatProperty, new TemplateBindingExtension(ContentControl.ContentStringFormatProperty));
+        content.SetValue(ContentPresenter.RecognizesAccessKeyProperty, false);
+        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, new TemplateBindingExtension(Control.HorizontalContentAlignmentProperty));
+        content.SetValue(FrameworkElement.VerticalAlignmentProperty, new TemplateBindingExtension(Control.VerticalContentAlignmentProperty));
+        content.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
+        chrome.AppendChild(content);
+        root.AppendChild(chrome);
+
+        var disabledTrigger = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+        disabledTrigger.Setters.Add(new Setter(UIElement.OpacityProperty, 0.42, RibbonDropdownContentPartName));
+        template.Triggers.Add(disabledTrigger);
+        template.VisualTree = root;
+        return template;
+    }
+
+    private static FrameworkElementFactory CreateRibbonDropdownHoverPart(string name)
+    {
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.Name = name;
+        border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        border.SetValue(Border.BorderThicknessProperty, new Thickness(0));
+        border.SetValue(FrameworkElement.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Left);
+        border.SetValue(FrameworkElement.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Top);
+        border.SetValue(UIElement.IsHitTestVisibleProperty, false);
+        border.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
+        return border;
+    }
+
+    private static void RibbonMenuButton_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is ButtonBase button)
+        {
+            EnsureRibbonDropdownZoneAdorner(button);
+            UpdateRibbonDropdownZoneHighlight(button);
+        }
+    }
+
+    private static void RibbonMenuButton_InvalidateDropdownZoneHighlight(object sender, EventArgs e)
+    {
+        if (sender is ButtonBase button)
+        {
+            UpdateRibbonDropdownZoneHighlight(button);
+            InvalidateRibbonDropdownZoneAdorner(button);
+        }
+    }
+
+    private static void UpdateRibbonDropdownZoneHighlight(ButtonBase button)
+    {
+        if (button is not Button standardButton)
+            return;
+
+        var mainHover = standardButton.Template.FindName(RibbonDropdownMainHoverPartName, standardButton) as Border;
+        var menuHover = standardButton.Template.FindName(RibbonDropdownMenuHoverPartName, standardButton) as Border;
+        if (mainHover is null || menuHover is null)
+            return;
+
+        HideRibbonDropdownHoverPart(mainHover);
+        HideRibbonDropdownHoverPart(menuHover);
+
+        if (!button.IsEnabled ||
+            !button.IsMouseOver ||
+            !TryGetRibbonDropdownZoneBounds(button, out var dropdownBounds))
+        {
+            return;
+        }
+
+        var mouse = Mouse.GetPosition(button);
+        var isDropdownHover = dropdownBounds.Contains(mouse);
+        var activeBounds = isDropdownHover
+            ? dropdownBounds
+            : GetRibbonMainActionBounds(button, dropdownBounds);
+        if (activeBounds is not { Width: > 0, Height: > 0 })
+            return;
+
+        ShowRibbonDropdownHoverPart(
+            isDropdownHover ? menuHover : mainHover,
+            activeBounds,
+            GetRibbonDropdownHoverBrush(button));
+    }
+
+    private static Brush GetRibbonDropdownHoverBrush(FrameworkElement element)
+    {
+        if (element.TryFindResource("FreexcelGreenSoftBrush") is Brush brush)
+            return brush;
+
+        return new SolidColorBrush(Color.FromRgb(0xEA, 0xF4, 0xEF));
+    }
+
+    private static void HideRibbonDropdownHoverPart(Border border)
+    {
+        border.Background = Brushes.Transparent;
+        border.Width = 0;
+        border.Height = 0;
+    }
+
+    private static void ShowRibbonDropdownHoverPart(Border border, Rect bounds, Brush brush)
+    {
+        border.Background = brush;
+        border.Margin = new Thickness(bounds.X, bounds.Y, 0, 0);
+        border.Width = bounds.Width;
+        border.Height = bounds.Height;
+    }
+
+    private static void EnsureRibbonDropdownZoneAdorner(ButtonBase button)
+    {
+        var layer = AdornerLayer.GetAdornerLayer(button);
+        if (layer is null)
+            return;
+
+        if (layer.GetAdorners(button)?.Any(adorner => adorner is RibbonDropdownZoneAdorner) == true)
+            return;
+
+        layer.Add(new RibbonDropdownZoneAdorner(button));
+    }
+
+    private static void InvalidateRibbonDropdownZoneAdorner(ButtonBase button)
+    {
+        var adorners = AdornerLayer.GetAdornerLayer(button)?.GetAdorners(button);
+        if (adorners is null)
+            return;
+
+        foreach (var adorner in adorners.OfType<RibbonDropdownZoneAdorner>())
+            adorner.InvalidateVisual();
+    }
+
+    private void RibbonMenuButton_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.Handled ||
+            sender is not ButtonBase button ||
+            button.ContextMenu is not { } menu ||
+            !button.IsEnabled ||
+            !IsRibbonDropdownZoneClick(button, e.GetPosition(button)))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        OpenRibbonContextMenu(button, menu);
+    }
+
+    private static bool IsRibbonDropdownZoneClick(ButtonBase button, Point position)
+    {
+        return TryGetRibbonDropdownZoneBounds(button, out var bounds) &&
+               bounds.Contains(position);
+    }
+
+    private static bool TryGetRibbonDropdownZoneBounds(ButtonBase button, out Rect bounds)
+    {
+        bounds = Rect.Empty;
+        var width = button.ActualWidth;
+        var height = button.ActualHeight;
+        if (width <= 0 || height <= 0)
+            return false;
+
+        var layout = GetRibbonDropdownZoneLayout(button);
+        bounds = layout switch
+        {
+            RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium =>
+                new Rect(0, Math.Max(0, height - 20), width, Math.Min(20, height)),
+            RibbonCommandContentLayout.IconOnly =>
+                new Rect(Math.Max(0, width - 16), Math.Max(0, height - 16), Math.Min(16, width), Math.Min(16, height)),
+            _ => new Rect(Math.Max(0, width - 18), 0, Math.Min(18, width), height)
+        };
+
+        if (TryGetRibbonDropdownChevronBounds(button, out var chevronBounds))
+            bounds.Union(chevronBounds);
+
+        return bounds is { Width: > 0, Height: > 0 };
+    }
+
+    private static RibbonCommandContentLayout GetRibbonDropdownZoneLayout(ButtonBase button)
+    {
+        if (button.Content is DependencyObject content &&
+            RibbonMetadata.TryGetCommandContentLayout(content, out var contentLayout) &&
+            contentLayout != RibbonCommandContentLayout.None)
+        {
+            return contentLayout;
+        }
+
+        if (button is FrameworkElement element)
+        {
+            var width = element.ActualWidth > 0 ? element.ActualWidth : element.Width;
+            var height = element.ActualHeight > 0 ? element.ActualHeight : element.Height;
+            if (height >= 54)
+                return RibbonCommandContentLayout.Large;
+            if (width <= 44 && height <= 44)
+                return RibbonCommandContentLayout.IconOnly;
+        }
+
+        return RibbonCommandContentLayout.None;
+    }
+
+    private static Rect GetRibbonMainActionBounds(ButtonBase button, Rect dropdownBounds)
+    {
+        var width = button.ActualWidth;
+        var height = button.ActualHeight;
+        if (width <= 0 || height <= 0)
+            return Rect.Empty;
+
+        if (dropdownBounds.Y > 0 && dropdownBounds.Width >= width - 0.5)
+            return new Rect(0, 0, width, Math.Max(0, dropdownBounds.Y));
+
+        if (dropdownBounds.X > 0 && dropdownBounds.Height >= height - 0.5)
+            return new Rect(0, 0, Math.Max(0, dropdownBounds.X), height);
+
+        return new Rect(0, 0, width, height);
+    }
+
+    private static bool TryGetRibbonDropdownChevronBounds(ButtonBase button, out Rect bounds)
+    {
+        bounds = Rect.Empty;
+        if (button.Content is not DependencyObject contentRoot)
+            return false;
+
+        foreach (var chevron in EnumerateVisualDescendants(contentRoot)
+                     .Concat(EnumerateLogicalDescendants(contentRoot))
+                     .OfType<FrameworkElement>()
+                     .Distinct()
+                     .Where(RibbonMetadata.IsDropdownChevron))
+        {
+            if (!chevron.IsVisible ||
+                chevron.ActualWidth <= 0 ||
+                chevron.ActualHeight <= 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                bounds = chevron.TransformToAncestor(button)
+                    .TransformBounds(new Rect(0, 0, chevron.ActualWidth, chevron.ActualHeight));
+                bounds.Inflate(7, 7);
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    private sealed class RibbonDropdownZoneAdorner : Adorner
+    {
+        private static readonly Pen HoverBorder = CreatePen(Color.FromRgb(0xC8, 0xCC, 0xD0), 1);
+        private static readonly Pen SeparatorPen = CreatePen(Color.FromRgb(0xC8, 0xCC, 0xD0), 1);
+        private readonly ButtonBase _button;
+
+        public RibbonDropdownZoneAdorner(ButtonBase button)
+            : base(button)
+        {
+            _button = button;
+            IsHitTestVisible = false;
+        }
+
+        protected override void OnRender(DrawingContext drawingContext)
+        {
+            base.OnRender(drawingContext);
+            if (!_button.IsEnabled ||
+                !_button.IsMouseOver ||
+                _button.ActualWidth <= 0 ||
+                _button.ActualHeight <= 0 ||
+                !TryGetRibbonDropdownZoneBounds(_button, out var dropdownBounds))
+            {
+                return;
+            }
+
+            var outerBounds = new Rect(0.5, 0.5, Math.Max(0, _button.ActualWidth - 1), Math.Max(0, _button.ActualHeight - 1));
+            if (outerBounds is { Width: > 0, Height: > 0 })
+                drawingContext.DrawRoundedRectangle(null, HoverBorder, outerBounds, 2, 2);
+            DrawSplitLine(drawingContext, _button, dropdownBounds);
+        }
+
+        private static void DrawSplitLine(DrawingContext drawingContext, ButtonBase button, Rect dropdownBounds)
+        {
+            var width = button.ActualWidth;
+            var height = button.ActualHeight;
+            if (dropdownBounds.Y > 0 && dropdownBounds.Width >= width - 0.5)
+            {
+                drawingContext.DrawLine(SeparatorPen, new Point(0, dropdownBounds.Y), new Point(width, dropdownBounds.Y));
+                return;
+            }
+
+            if (dropdownBounds.X > 0)
+                drawingContext.DrawLine(SeparatorPen, new Point(dropdownBounds.X, 0), new Point(dropdownBounds.X, height));
+        }
+
+        private static Pen CreatePen(Color color, double thickness)
+        {
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            var pen = new Pen(brush, thickness);
+            pen.Freeze();
+            return pen;
+        }
     }
 
     private void NormalizeRibbonSurfaceAfterTabSelection()
