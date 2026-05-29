@@ -2,6 +2,7 @@ using System.Reflection;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FluentAssertions;
 using Freexcel.Core.Calc;
@@ -156,6 +157,28 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.ActiveCellBold.Should().BeTrue();
             harness.UndoQatIsEnabled.Should().BeTrue();
             harness.RedoQatIsEnabled.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void DirectAltQatKeyTips_NormalizeAttachedKeyTipMetadata()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectActiveCell();
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+            harness.HandleKeyTip(Key.D1);
+            harness.ActiveCellBold.Should().BeTrue();
+
+            harness.SetButtonKeyTip("UndoQatBtn", " 2 ");
+
+            harness.HandleDirectTopLevelKeyTip(Key.D2).Should().BeTrue();
+
+            harness.ActiveCellBold.Should().BeFalse();
+            harness.KeyTipScope.Should().Be("None");
         });
     }
 
@@ -1272,6 +1295,14 @@ public sealed class MainWindowRibbonKeyTipTests
                     new CellAddress(sheet.Id, endRow, endCol));
             }
 
+            PumpDispatcher();
+        }
+
+        public void SetButtonKeyTip(string name, string keyTip)
+        {
+            var button = (_window.FindName(name) as ButtonBase)
+                ?? throw new InvalidOperationException($"Button {name} was not found.");
+            RibbonTooltip.SetKeyTip(button, keyTip);
             PumpDispatcher();
         }
 

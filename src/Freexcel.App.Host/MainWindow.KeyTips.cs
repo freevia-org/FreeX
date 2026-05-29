@@ -385,10 +385,11 @@ public partial class MainWindow
 
     private bool TryInvokeTopLevelQatKeyTip(string keyTip)
     {
-        var match = GetVisibleKeyTipElements(RibbonKeyTipScope.TopLevel)
+        var match = RibbonKeyTipRouting.ResolveKeyTipElement(
+            GetVisibleKeyTipElements(RibbonKeyTipScope.TopLevel)
             .OfType<ButtonBase>()
-            .FirstOrDefault(element =>
-                string.Equals(RibbonTooltip.GetKeyTip(element), keyTip, StringComparison.OrdinalIgnoreCase));
+            .Cast<FrameworkElement>(),
+            keyTip) as ButtonBase;
 
         if (match is null)
             return false;
