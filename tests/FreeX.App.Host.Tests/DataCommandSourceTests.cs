@@ -17,7 +17,7 @@ public sealed class DataCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
         button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -61,21 +61,29 @@ public sealed class DataCommandSourceTests
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
-    private static string ExtractButtonElementByTitle(string xaml, string title)
+    private static string ExtractButtonElementByTitle(string xaml, string title, string? handler = null)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
-        titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} Data command should be present");
+        var searchIndex = 0;
+        while (true)
+        {
+            var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", searchIndex, StringComparison.Ordinal);
+            titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} Data command should be present");
 
-        var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {title} Data command should be a Button");
+            var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);
+            start.Should().BeGreaterThanOrEqualTo(0, $"the {title} Data command should be a Button");
 
-        var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-        var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
-        var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
-            ? closingEnd + "</Button>".Length
-            : selfClosingEnd + 2;
+            var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
+            var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
+            var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
+                ? closingEnd + "</Button>".Length
+                : selfClosingEnd + 2;
 
-        end.Should().BeGreaterThan(titleIndex, $"the {title} Data button should have a closing marker");
-        return xaml[start..end];
+            end.Should().BeGreaterThan(titleIndex, $"the {title} Data button should have a closing marker");
+            var button = xaml[start..end];
+            if (handler is null || button.Contains($"Click=\"{handler}\"", StringComparison.Ordinal))
+                return button;
+
+            searchIndex = end;
+        }
     }
 }
