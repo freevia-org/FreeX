@@ -142,8 +142,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue CeilingScalar(ScalarValue value, double sig)
     {
         var n = ToNumber(value);
-        if (sig == 0) return new NumberValue(0);
         if (!double.IsFinite(n) || !double.IsFinite(sig)) return ErrorValue.Num;
+        if (sig == 0) return new NumberValue(0);
         if (n > 0 && sig < 0) return ErrorValue.Num;
         return NumberResult(Math.Ceiling(n / sig) * sig);
     }
@@ -203,8 +203,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue FloorScalar(ScalarValue value, double sig)
     {
         var n = ToNumber(value);
-        if (sig == 0) return new NumberValue(0);
         if (!double.IsFinite(n) || !double.IsFinite(sig)) return ErrorValue.Num;
+        if (sig == 0) return new NumberValue(0);
         if (n * sig < 0) return ErrorValue.Num;
         return NumberResult(Math.Floor(n / sig) * sig);
     }
