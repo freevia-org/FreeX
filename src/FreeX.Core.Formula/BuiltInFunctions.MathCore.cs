@@ -917,6 +917,8 @@ public static partial class BuiltInFunctions
                 var right = secondRange.Cells[row, col];
                 if (left is ErrorValue leftError) return leftError;
                 if (right is ErrorValue rightError) return rightError;
+                if (IsNonFiniteDirectTextNumber(left) || IsNonFiniteDirectTextNumber(right))
+                    return ErrorValue.Num;
                 if (!TryMathAggregateNumber(left, out var x) || !TryMathAggregateNumber(right, out var y))
                     return ErrorValue.Value;
                 total += map(x, y);
@@ -952,6 +954,11 @@ public static partial class BuiltInFunctions
             return double.IsFinite(number);
         return false;
     }
+
+    private static bool IsNonFiniteDirectTextNumber(ScalarValue value) =>
+        value is DirectTextLiteralValue direct &&
+        TryDirectTextNumber(direct, out var number) &&
+        !double.IsFinite(number);
 
     private static ScalarValue Quotient(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
