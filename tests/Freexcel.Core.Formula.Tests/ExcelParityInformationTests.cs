@@ -31,6 +31,14 @@ public sealed class ExcelParityInformationTests
         _eval.Evaluate(formula, sheet).Should().Be(new BoolValue(expected));
     }
 
+    [Theory]
+    [InlineData("=ISREF(A:A)")]
+    [InlineData("=ISREF(1:1)")]
+    public void IsRef_ReturnsTrueForFullRowAndColumnReferences(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new BoolValue(true));
+    }
+
     [Fact]
     public void IsErrAndIsNonText_SpillOverRanges()
     {

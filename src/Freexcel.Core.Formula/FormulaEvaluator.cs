@@ -1700,6 +1700,8 @@ public sealed class FormulaEvaluator
         {
             CellRefNode cell  => new BoolValue(cell.SheetName is null || context.SheetExists(cell.SheetName)),
             RangeRefNode rng  => new BoolValue(rng.SheetName is null || context.SheetExists(rng.SheetName)),
+            FullColumnRangeRefNode col => new BoolValue(col.SheetName is null || context.SheetExists(col.SheetName)),
+            FullRowRangeRefNode row => new BoolValue(row.SheetName is null || context.SheetExists(row.SheetName)),
             NamedRangeNode nm => new BoolValue(context.TryResolveNamedRange(nm.Name) is not null),
             FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT"
                 => EvaluateReferenceReturningIsRef(fn, context),
