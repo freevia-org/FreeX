@@ -160,6 +160,20 @@ public partial class MainWindow
         NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true, scheduleFallback: true);
     }
 
+    private void ChangeRibbonSelectionWithoutTabNormalization(Action changeSelection)
+    {
+        var previous = _suppressRibbonSelectionChangedNormalization;
+        _suppressRibbonSelectionChangedNormalization = true;
+        try
+        {
+            changeSelection();
+        }
+        finally
+        {
+            _suppressRibbonSelectionChangedNormalization = previous;
+        }
+    }
+
     private void NormalizeRibbonSurfaceAfterResize()
     {
         if (!ShouldNormalizeRibbonSurfaceForResize())

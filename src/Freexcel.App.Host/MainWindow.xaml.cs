@@ -106,6 +106,7 @@ public partial class MainWindow : Window
     private bool _ribbonAdaptiveStateDiffInvalidated;
     private bool _ribbonFallbackPending;
     private RibbonFallbackWork _ribbonFallbackWork;
+    private bool _suppressRibbonSelectionChangedNormalization;
     private bool _resizeViewportRefreshPending;
     private bool _isInWindowResizeMoveLoop;
     private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;
