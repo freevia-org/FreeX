@@ -78,7 +78,7 @@ public static class RibbonTooltip
     }
 
     private static string? NormalizeKeyTip(string? keyTip) =>
-        string.IsNullOrWhiteSpace(keyTip) ? null : keyTip.Trim();
+        string.IsNullOrWhiteSpace(keyTip) ? null : keyTip.Trim().ToUpperInvariant();
 
     private static void OnKeyTipChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
