@@ -823,4 +823,15 @@ public sealed class PrintRendererPageSetupTests
             .Equal(Enumerable.Range(1, 90).Select(row => (uint)row));
         pages.Count.Should().BeGreaterThan(1);
     }
+
+    [Fact]
+    public void BuildCommentSummaryPages_AvoidsLinqPagingAndSortingScaffolding()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PrintRenderer.Comments.cs"));
+
+        source.Should().NotContain(".Chunk(");
+        source.Should().NotContain(".Concat(threadedComments");
+        source.Should().NotContain(".OrderBy(pair => pair.Key.Row)");
+        source.Should().Contain("result.Sort(static (left, right) =>");
+    }
 }
