@@ -176,6 +176,7 @@ public sealed class ExcelParityMathTrigTests
         Number("=COMBIN(5.9,2.1)").Should().Be(10);
         Number("=COMBINA(4.9,3.1)").Should().Be(20);
         Number("=PERMUTATIONA(3.9,2.1)").Should().Be(9);
+        Number("=FACT(170.9)").Should().Be(Number("=FACT(170)"));
         Number("=FACTDOUBLE(6.9)").Should().Be(48);
     }
 

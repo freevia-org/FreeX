@@ -833,6 +833,23 @@ public sealed class GridViewSplitPaneLayoutTests
         elapsed.ElapsedMilliseconds.Should().BeLessThan(1_500);
     }
 
+    [Fact]
+    public void FormulaTraceLayoutPlanner_StopsSingleMetricLookupsOnceSortedMetricsPassAddress()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "FormulaTraceLayoutPlanner.cs"));
+        var rowLookup = source[
+            source.IndexOf("private static RowMetric? FindRowMetric", StringComparison.Ordinal)..
+            source.IndexOf("private static ColMetric? GetColMetric", StringComparison.Ordinal)];
+        var columnLookup = source[
+            source.IndexOf("private static ColMetric? FindColMetric", StringComparison.Ordinal)..];
+
+        rowLookup.Should().Contain("if (metric.Row > row)");
+        rowLookup.Should().Contain("break;");
+        columnLookup.Should().Contain("if (metric.Col > col)");
+        columnLookup.Should().Contain("break;");
+    }
+
     private static DisplayCell Cell(uint row, uint col, string text, CellStyle? style = null) =>
         new(row, col, new TextValue(text), text, null, StyleId.Default, null, style);
 

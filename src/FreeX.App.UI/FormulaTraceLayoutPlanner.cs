@@ -181,6 +181,9 @@ public static class FormulaTraceLayoutPlanner
     {
         foreach (var metric in rows)
         {
+            if (metric.Row > row)
+                break;
+
             if (metric.Row == row)
                 return metric;
         }
@@ -201,6 +204,9 @@ public static class FormulaTraceLayoutPlanner
     {
         foreach (var metric in columns)
         {
+            if (metric.Col > col)
+                break;
+
             if (metric.Col == col)
                 return metric;
         }

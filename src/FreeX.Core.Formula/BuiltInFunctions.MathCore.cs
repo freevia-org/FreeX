@@ -361,8 +361,9 @@ public static partial class BuiltInFunctions
     private static ScalarValue FactScalar(ScalarValue value)
     {
         var n = ToNumber(value);
-        if (!double.IsFinite(n) || n < 0 || n > 170) return ErrorValue.Num; // Excel limit; 171! overflows double
+        if (!double.IsFinite(n)) return ErrorValue.Num;
         int ni = (int)Math.Truncate(n);
+        if (ni < 0 || ni > 170) return ErrorValue.Num; // Excel limit; 171! overflows double
         double result = 1;
         for (int i = 2; i <= ni; i++) result *= i;
         return new NumberValue(result);
