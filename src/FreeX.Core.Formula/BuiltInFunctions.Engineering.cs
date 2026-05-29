@@ -22,6 +22,7 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Weight, "kg", 1000);
         Add(UnitCategory.Weight, "lbm", 453.59237);
         Add(UnitCategory.Weight, "ozm", 28.349523);
+        Add(UnitCategory.Weight, "grain", 0.06479891);
         Add(UnitCategory.Weight, "stone", 6350.293);
         Add(UnitCategory.Weight, "ton", 907184.74);
         Add(UnitCategory.Weight, "uk_ton", 1016046.91);
@@ -36,12 +37,16 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Distance, "m", 1);
         Add(UnitCategory.Distance, "km", 1000);
         Add(UnitCategory.Distance, "mi", 1609.344);
+        Add(UnitCategory.Distance, "survey_mi", 1609.347218694);
         Add(UnitCategory.Distance, "Nmi", 1852);
         Add(UnitCategory.Distance, "in", 0.0254);
         Add(UnitCategory.Distance, "ft", 0.3048);
         Add(UnitCategory.Distance, "yd", 0.9144);
         Add(UnitCategory.Distance, "ang", 1e-10);
+        Add(UnitCategory.Distance, "ell", 1.143);
         Add(UnitCategory.Distance, "Pica", 0.000423333);
+        Add(UnitCategory.Distance, "Picapt", 0.000352777778);
+        Add(UnitCategory.Distance, "pica", 0.00423333333);
         Add(UnitCategory.Distance, "cm", 0.01);
         Add(UnitCategory.Distance, "mm", 0.001);
         Add(UnitCategory.Distance, "um", 1e-6);
@@ -49,6 +54,7 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Distance, "ly", 9.4607304725808e15);
         Add(UnitCategory.Distance, "au", 149597870700.0);
         Add(UnitCategory.Distance, "pc", 3.085677581491367e16);
+        Add(UnitCategory.Distance, "parsec", 3.085677581491367e16);
 
         // Time (base = second)
         Add(UnitCategory.Time, "sec", 1);
@@ -57,11 +63,14 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Time, "mn", 2629800);
         Add(UnitCategory.Time, "hr", 3600);
         Add(UnitCategory.Time, "day", 86400);
+        Add(UnitCategory.Time, "d", 86400);
         Add(UnitCategory.Time, "yr", 31557600);
 
         // Pressure (base = Pa)
         Add(UnitCategory.Pressure, "Pa", 1);
+        Add(UnitCategory.Pressure, "p", 1);
         Add(UnitCategory.Pressure, "atm", 101325);
+        Add(UnitCategory.Pressure, "at", 101325);
         Add(UnitCategory.Pressure, "mmHg", 133.322);
         Add(UnitCategory.Pressure, "psi", 6894.757);
         Add(UnitCategory.Pressure, "Torr", 133.322);
