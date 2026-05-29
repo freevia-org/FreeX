@@ -148,6 +148,57 @@ public sealed class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void PasteSpecialCellsCommand_AddOperationTreatsDatesAsExcelSerials()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var dest = new CellAddress(sheet.Id, 3, 3);
+        var startDate = DateTimeValue.FromDateTime(new DateTime(2026, 5, 29));
+        sheet.SetCell(dest, startDate);
+        var source = new[]
+        {
+            (new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(2)))
+        };
+
+        var command = new PasteSpecialCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            source,
+            dest,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(dest).Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 31)));
+    }
+
+    [Fact]
+    public void PasteSpecialCellsCommand_AddOperationTreatsBooleansAsExcelNumbers()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var dest = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(dest, new NumberValue(10));
+        var source = new[]
+        {
+            (new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new BoolValue(true)))
+        };
+
+        var command = new PasteSpecialCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            source,
+            dest,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(dest).Should().Be(new NumberValue(11));
+    }
+
+    [Fact]
     public void PasteSpecialCellsCommand_RejectsInvalidOperation()
     {
         var wb = new Workbook("test");
