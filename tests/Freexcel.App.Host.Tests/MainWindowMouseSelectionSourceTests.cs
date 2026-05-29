@@ -247,6 +247,42 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void HeaderMouseSelectionClearsStaleCommentPreview()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var selectRow = selectionSource[
+            selectionSource.IndexOf("private void SelectRow", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void SelectColumn", StringComparison.Ordinal)];
+        var selectColumn = selectionSource[
+            selectionSource.IndexOf("private void SelectColumn", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void SelectAll", StringComparison.Ordinal)];
+        var selectAll = selectionSource[
+            selectionSource.IndexOf("private void SelectAll", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)];
+        var mouseDown = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal)];
+
+        selectRow.Should().Contain("ClearCommentPreview();");
+        selectColumn.Should().Contain("ClearCommentPreview();");
+        selectAll.Should().Contain("ClearCommentPreview();");
+
+        var columnAnchorIndex = mouseDown.IndexOf("uint anchorCol = _selectionAnchor.Value.Col;", StringComparison.Ordinal);
+        var rowAnchorIndex = mouseDown.IndexOf("uint anchorRow = _selectionAnchor.Value.Row;", StringComparison.Ordinal);
+        var columnShiftSelection = mouseDown[
+            mouseDown.LastIndexOf("HideValidationDropdown();", columnAnchorIndex, StringComparison.Ordinal)..
+            mouseDown.IndexOf("else", columnAnchorIndex, StringComparison.Ordinal)];
+        var rowShiftSelection = mouseDown[
+            mouseDown.LastIndexOf("HideValidationDropdown();", rowAnchorIndex, StringComparison.Ordinal)..
+            mouseDown.IndexOf("else", rowAnchorIndex, StringComparison.Ordinal)];
+
+        columnShiftSelection.Should().Contain("ClearCommentPreview();");
+        rowShiftSelection.Should().Contain("ClearCommentPreview();");
+    }
+
+    [Fact]
     public void MouseUpSelectionIgnoresNonLeftButtonsBeforeCompletingDrag()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(

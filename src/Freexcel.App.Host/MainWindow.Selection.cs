@@ -14,6 +14,7 @@ public partial class MainWindow
     private void SelectRow(uint row)
     {
         HideValidationDropdown();
+        ClearCommentPreview();
         const uint maxCol = 16_384;
         _selectionAnchor = new CellAddress(_currentSheetId, row, 1);
         _selectionCursor = new CellAddress(_currentSheetId, row, maxCol);
@@ -30,6 +31,7 @@ public partial class MainWindow
     private void SelectColumn(uint col)
     {
         HideValidationDropdown();
+        ClearCommentPreview();
         const uint maxRow = 1_048_576;
         _selectionAnchor = new CellAddress(_currentSheetId, 1, col);
         _selectionCursor = new CellAddress(_currentSheetId, maxRow, col);
@@ -47,6 +49,7 @@ public partial class MainWindow
     private void SelectAll()
     {
         HideValidationDropdown();
+        ClearCommentPreview();
         const uint maxRow = 1_048_576;
         const uint maxCol = 16_384;
         _selectionAnchor = new CellAddress(_currentSheetId, 1, 1);
@@ -95,6 +98,7 @@ public partial class MainWindow
                         if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
                         {
                             HideValidationDropdown();
+                            ClearCommentPreview();
                             uint anchorCol = _selectionAnchor.Value.Col;
                             _selectionCursor = new CellAddress(_currentSheetId, 1_048_576, cm.Col);
                             SheetGrid.SelectedRanges = null;
@@ -129,6 +133,7 @@ public partial class MainWindow
                     if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
                     {
                         HideValidationDropdown();
+                        ClearCommentPreview();
                         uint anchorRow = _selectionAnchor.Value.Row;
                         _selectionCursor = new CellAddress(_currentSheetId, rm.Row, 16_384);
                         SheetGrid.SelectedRanges = null;
