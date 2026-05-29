@@ -20,7 +20,9 @@ public static partial class ChartRenderer
         uint headerRow,
         WorkbookTheme theme)
     {
-        var seriesNames = new List<string>();
+        var seriesCount = (int)Math.Min(int.MaxValue, endCol - dataStartCol + 1);
+        var categoryCount = (int)Math.Min(int.MaxValue, endRow - dataStartRow + 1);
+        var seriesNames = new List<string>(seriesCount);
         for (uint col = dataStartCol; col <= endCol; col++)
         {
             seriesNames.Add(chart.FirstRowIsHeader && cellLookup.TryGetValue((headerRow, col), out var header)
@@ -57,7 +59,12 @@ public static partial class ChartRenderer
             }
         });
 
-        var surfaceValues = new List<(int CategoryIndex, int SeriesIndex, double Value)>();
+        var surfaceValueCapacity = categoryCount > 0 && seriesCount <= int.MaxValue / categoryCount
+            ? seriesCount * categoryCount
+            : 0;
+        var surfaceValues = new List<(int CategoryIndex, int SeriesIndex, double Value)>(surfaceValueCapacity);
+        var minValue = 0d;
+        var maxValue = 0d;
         var scanSeriesIndex = 0;
         for (uint col = dataStartCol; col <= endCol; col++, scanSeriesIndex++)
         {
@@ -66,12 +73,23 @@ public static partial class ChartRenderer
             {
                 if (cellLookup.TryGetValue((row, col), out var cell) &&
                     double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
+                {
+                    if (surfaceValues.Count == 0)
+                    {
+                        minValue = value;
+                        maxValue = value;
+                    }
+                    else
+                    {
+                        minValue = Math.Min(minValue, value);
+                        maxValue = Math.Max(maxValue, value);
+                    }
+
                     surfaceValues.Add((categoryIndex, scanSeriesIndex, value));
+                }
             }
         }
 
-        var minValue = surfaceValues.Count == 0 ? 0 : surfaceValues.Min(item => item.Value);
-        var maxValue = surfaceValues.Count == 0 ? 0 : surfaceValues.Max(item => item.Value);
         var surfaceSeries = new RectangleBarSeries { Title = chart.Title ?? "Surface" };
         ApplyRectangleBarFormat(surfaceSeries, GetSeriesFormat(chart, 0), theme);
 
