@@ -1874,6 +1874,13 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Rept_NegativeFractionalTimes_ReturnsValueError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=REPT(\"x\",-0.5)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Rept_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet();

@@ -316,6 +316,17 @@ public sealed class ObjectDialogTests
     }
 
     [Theory]
+    [InlineData("450", 90)]
+    [InlineData("-90", 270)]
+    [InlineData("720", 0)]
+    public void RotationDialog_TryParseRotation_NormalizesExcelFullTurnDegrees(string input, double expectedDegrees)
+    {
+        RotationDialog.TryParseRotation(input, out var rotation).Should().BeTrue();
+
+        rotation.Should().Be(new RotationDialogResult(expectedDegrees));
+    }
+
+    [Theory]
     [InlineData("NaN")]
     [InlineData("Infinity")]
     public void RotationDialog_TryParseRotation_RejectsNonFiniteDegrees(string input)
@@ -334,6 +345,7 @@ public sealed class ObjectDialogTests
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_rotationBox);");
+        source.Should().Contain("NormalizeRotationDegrees(value)");
     }
 
     [Fact]
