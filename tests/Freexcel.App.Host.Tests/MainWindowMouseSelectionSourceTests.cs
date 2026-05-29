@@ -164,12 +164,14 @@ public sealed class MainWindowMouseSelectionSourceTests
             selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
             selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal)];
 
+        var columnAnchorIndex = mouseDown.IndexOf("uint anchorCol = _selectionAnchor.Value.Col;", StringComparison.Ordinal);
+        var rowAnchorIndex = mouseDown.IndexOf("uint anchorRow = _selectionAnchor.Value.Row;", StringComparison.Ordinal);
         var columnShiftSelection = mouseDown[
-            mouseDown.IndexOf("uint anchorCol = _selectionAnchor.Value.Col;", StringComparison.Ordinal)..
-            mouseDown.IndexOf("else", mouseDown.IndexOf("uint anchorCol = _selectionAnchor.Value.Col;", StringComparison.Ordinal), StringComparison.Ordinal)];
+            mouseDown.LastIndexOf("HideValidationDropdown();", columnAnchorIndex, StringComparison.Ordinal)..
+            mouseDown.IndexOf("else", columnAnchorIndex, StringComparison.Ordinal)];
         var rowShiftSelection = mouseDown[
-            mouseDown.IndexOf("uint anchorRow = _selectionAnchor.Value.Row;", StringComparison.Ordinal)..
-            mouseDown.IndexOf("else", mouseDown.IndexOf("uint anchorRow = _selectionAnchor.Value.Row;", StringComparison.Ordinal), StringComparison.Ordinal)];
+            mouseDown.LastIndexOf("HideValidationDropdown();", rowAnchorIndex, StringComparison.Ordinal)..
+            mouseDown.IndexOf("else", rowAnchorIndex, StringComparison.Ordinal)];
 
         columnShiftSelection.Should().Contain("SheetGrid.SelectedRanges = null;");
         columnShiftSelection.Should().Contain("SheetGrid.SelectedRange = new GridRange(");
