@@ -61,6 +61,43 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         });
     }
 
+    [Fact]
+    public void AdaptiveCompaction_ReusesMeasuredGroupsAndThresholdsAcrossResizeWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonAdaptiveDiagnosticsHarness.Create();
+
+            harness.SelectRibbonTab("Home", 1280);
+            harness.UpdateCompact(force: true);
+            var warm = harness.Diagnostics;
+            warm.MeasurementCacheKey.Should().NotBeNullOrWhiteSpace();
+            warm.ResizeThresholdCacheKey.Should().NotBeNullOrWhiteSpace();
+            warm.CompactSnapshotCacheKey.Should().NotBeNullOrWhiteSpace();
+
+            harness.ResetDiagnostics();
+            harness.SetWidth(1100);
+            harness.UpdateCompact();
+
+            var resized = harness.Diagnostics;
+            resized.MeasurementInvalidationCount.Should().Be(0);
+            resized.GroupMeasurementCount.Should().Be(0);
+            resized.CompactSnapshotCaptureCount.Should().Be(0);
+            resized.ResizeThresholdRebuildCount.Should().Be(0);
+            resized.MeasurementCacheKey.Should().Be(warm.MeasurementCacheKey);
+            resized.ResizeThresholdCacheKey.Should().Be(warm.ResizeThresholdCacheKey);
+            resized.CompactSnapshotCacheKey.Should().Be(warm.CompactSnapshotCacheKey);
+
+            harness.ResetDiagnostics();
+            harness.UpdateCompact();
+
+            var sameWidth = harness.Diagnostics;
+            sameWidth.GroupMeasurementCount.Should().Be(0);
+            sameWidth.ResizeThresholdRebuildCount.Should().Be(0);
+            sameWidth.AppliedStateSkipCount.Should().Be(1, "a second pass at the same width should hit the applied-state guard instead of reapplying the ribbon tree");
+        });
+    }
+
     private sealed class RibbonAdaptiveDiagnosticsHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -107,9 +144,22 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             PumpDispatcher();
         }
 
+        public void SetWidth(double width)
+        {
+            _window.WindowState = WindowState.Normal;
+            _window.Width = width;
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
         public void ForceCompact()
         {
-            _updateRibbonCompactMode.Invoke(_window, [true]);
+            UpdateCompact(force: true);
+        }
+
+        public void UpdateCompact(bool force = false)
+        {
+            _updateRibbonCompactMode.Invoke(_window, [force]);
             _window.UpdateLayout();
             PumpDispatcher();
         }
