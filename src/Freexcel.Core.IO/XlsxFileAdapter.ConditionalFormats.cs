@@ -96,7 +96,9 @@ public sealed partial class XlsxFileAdapter
                         TopBottomRank = ReadIntAttribute(rule, "rank") ?? 10,
                         TopBottomPercent = IsTruthy(rule.Attribute("percent")?.Value),
                         TextRuleText = rule.Attribute("text")?.Value,
-                        DateOccurringPeriod = NormalizeOptionalText(rule.Attribute("timePeriod")?.Value),
+                        DateOccurringPeriod = mappedType == CfRuleType.DateOccurring
+                            ? XlsxAdvancedConditionalFormatMetadata.NormalizeDateOccurringPeriod(rule.Attribute("timePeriod")?.Value)
+                            : null,
                         StopIfTrue = IsTruthy(rule.Attribute("stopIfTrue")?.Value),
                         FormulaText = rule.Element(worksheetNs + "formula")?.Value,
                         FormatIfTrue = formatIfTrue
