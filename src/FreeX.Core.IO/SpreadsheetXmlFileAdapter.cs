@@ -22,6 +22,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static readonly XName SpreadsheetAuthorAttribute = SpreadsheetNs + "Author";
     private static readonly XName SpreadsheetVisibleAttribute = SpreadsheetNs + "Visible";
     private static readonly XName SpreadsheetHeightAttribute = SpreadsheetNs + "Height";
+    private static readonly XName SpreadsheetWidthAttribute = SpreadsheetNs + "Width";
     private static readonly XName SpreadsheetHiddenAttribute = SpreadsheetNs + "Hidden";
 
     public string Extension => ".xml";
@@ -137,6 +138,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         if (tableElement is null)
             return;
 
+        ReadColumns(sheet, tableElement);
+
         var rowIndex = 1u;
         foreach (var rowElement in tableElement.Elements(SpreadsheetNs + "Row"))
         {
@@ -180,6 +183,36 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
             rowIndex++;
         }
+    }
+
+    private static void ReadColumns(Sheet sheet, XElement tableElement)
+    {
+        var columnIndex = 1u;
+        foreach (var columnElement in tableElement.Elements(SpreadsheetNs + "Column"))
+        {
+            columnIndex = ReadIndex(columnElement, columnIndex);
+            if (columnIndex > CellAddress.MaxCol)
+                break;
+
+            ReadColumnLayout(sheet, columnElement, columnIndex);
+            columnIndex++;
+        }
+    }
+
+    private static void ReadColumnLayout(Sheet sheet, XElement columnElement, uint columnIndex)
+    {
+        if (double.TryParse(
+                columnElement.Attribute(SpreadsheetWidthAttribute)?.Value,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var width) &&
+            IsPositiveFinite(width))
+        {
+            sheet.ColumnWidths[columnIndex] = width;
+        }
+
+        if (ReadBoolean(columnElement.Attribute(SpreadsheetHiddenAttribute)?.Value ?? "", out var hidden) && hidden)
+            sheet.HiddenCols.Add(columnIndex);
     }
 
     private static void ReadRowLayout(Sheet sheet, XElement rowElement, uint rowIndex)
@@ -319,7 +352,10 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             ToWorksheetVisibilityAttribute(sheet),
             new XElement(
                 SpreadsheetNs + "Table",
-                ToRowElements(sheet)));
+                ToTableElements(sheet)));
+
+    private static IEnumerable<XElement> ToTableElements(Sheet sheet) =>
+        ToColumnElements(sheet).Concat(ToRowElements(sheet));
 
     private static XAttribute? ToWorksheetVisibilityAttribute(Sheet sheet)
     {
@@ -420,6 +456,29 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         sheet.GetMergeRegion(address) is { } mergeRange &&
         (mergeRange.Start.Row != address.Row || mergeRange.Start.Col != address.Col);
 
+    private static IEnumerable<XElement> ToColumnElements(Sheet sheet)
+    {
+        var columnIndexes = sheet.ColumnWidths.Keys
+            .Where(IsValidColumnLayoutIndex)
+            .Concat(sheet.HiddenCols.Where(IsValidColumnLayoutIndex))
+            .Distinct()
+            .OrderBy(column => column);
+
+        foreach (var columnIndex in columnIndexes)
+        {
+            yield return new XElement(
+                SpreadsheetNs + "Column",
+                new XAttribute(SpreadsheetIndexAttribute, columnIndex),
+                ToColumnWidthAttribute(sheet, columnIndex),
+                sheet.HiddenCols.Contains(columnIndex) ? new XAttribute(SpreadsheetHiddenAttribute, "1") : null);
+        }
+    }
+
+    private static XAttribute? ToColumnWidthAttribute(Sheet sheet, uint columnIndex) =>
+        sheet.ColumnWidths.TryGetValue(columnIndex, out var width) && IsPositiveFinite(width)
+            ? new XAttribute(SpreadsheetWidthAttribute, width.ToString("R", CultureInfo.InvariantCulture))
+            : null;
+
     private static IEnumerable<XElement> ToRowElements(Sheet sheet)
     {
         var cellsByRow = EnumerateXmlCells(sheet)
@@ -457,6 +516,9 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
     private static bool IsValidRowLayoutIndex(uint rowIndex) =>
         rowIndex is >= 1 and <= CellAddress.MaxRow;
+
+    private static bool IsValidColumnLayoutIndex(uint columnIndex) =>
+        columnIndex is >= 1 and <= CellAddress.MaxCol;
 
     private static bool IsPositiveFinite(double value) =>
         value > 0 && !double.IsNaN(value) && !double.IsInfinity(value);
