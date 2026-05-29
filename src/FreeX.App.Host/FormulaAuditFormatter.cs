@@ -14,10 +14,24 @@ public static class FormulaAuditFormatter
 
     public static string FormatAddresses(Workbook workbook, IReadOnlyList<CellAddress> addresses)
     {
-        var shown = addresses.Take(MaxShownAddresses).Select(address => FormatAddress(workbook, address));
-        var suffix = addresses.Count > MaxShownAddresses
-            ? $"\n...and {addresses.Count - MaxShownAddresses} more."
-            : "";
-        return string.Join(", ", shown) + suffix;
+        var shown = BuildShownAddresses(workbook, addresses);
+        return string.Join(", ", shown) + FormatOverflowSuffix(addresses.Count);
+    }
+
+    private static List<string> BuildShownAddresses(Workbook workbook, IReadOnlyList<CellAddress> addresses)
+    {
+        var shownCount = Math.Min(addresses.Count, MaxShownAddresses);
+        var shown = new List<string>(shownCount);
+
+        for (var index = 0; index < shownCount; index++)
+            shown.Add(FormatAddress(workbook, addresses[index]));
+
+        return shown;
+    }
+
+    private static string FormatOverflowSuffix(int addressCount)
+    {
+        var hiddenCount = addressCount - MaxShownAddresses;
+        return hiddenCount > 0 ? $"\n...and {hiddenCount} more." : "";
     }
 }

@@ -39,6 +39,7 @@ public sealed class HomeCellsCommandSourceTests
     [InlineData("Unhide Rows", "U", "FormatUnhideRowMenuItem_Click")]
     [InlineData("Hide Columns", "D", "FormatHideColMenuItem_Click")]
     [InlineData("Unhide Columns", "N", "FormatUnhideColMenuItem_Click")]
+    [InlineData("Rename Sheet", "R", "FormatRenameSheetMenuItem_Click")]
     [InlineData("Protect Sheet...", "P", "FormatProtectSheetMenuItem_Click")]
     [InlineData("Lock Cell", "L", "FormatLockCellMenuItem_Click")]
     [InlineData("Format Cells...", "F", "FormatCellsMenuItem_Click")]
@@ -76,6 +77,7 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().Contain("RowColumnDimensionPlanner.CreateAutoFitColumnWidthCommand(sheetId, plans)");
         source.Should().Contain("RowColumnDimensionPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden)");
         source.Should().Contain("RowColumnDimensionPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden)");
+        source.Should().Contain("private void FormatRenameSheetMenuItem_Click(object sender, RoutedEventArgs e) => RenameCurrentSheet();");
         source.Should().Contain("private void FormatProtectSheetMenuItem_Click(object sender, RoutedEventArgs e) { ProtectSheetBtn_Click(sender, e); }");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(Locked: !style.Locked))");
         source.Should().Contain("private void FormatCellsMenuItem_Click(object sender, RoutedEventArgs e) => OpenFormatCellsDialog();");

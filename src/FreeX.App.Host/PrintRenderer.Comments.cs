@@ -265,7 +265,7 @@ public static partial class PrintRenderer
         double pageH,
         double marginTop)
     {
-        var printableComments = GetPrintableComments(comments, threadedComments).ToList();
+        var printableComments = GetPrintableComments(comments, threadedComments);
         if (printableComments.Count == 0)
             return [];
 
@@ -274,24 +274,47 @@ public static partial class PrintRenderer
             pageH - marginTop * 2 - CommentSummaryHeaderHeight);
         var commentsPerPage = Math.Max(1, (int)Math.Floor(bodyHeight / CommentSummaryLineHeight));
 
-        return printableComments
-            .Chunk(commentsPerPage)
-            .Select(chunk => (IReadOnlyList<KeyValuePair<CellAddress, string>>)chunk.ToList())
-            .ToList();
+        var pageCount = (printableComments.Count + commentsPerPage - 1) / commentsPerPage;
+        var pages = new List<IReadOnlyList<KeyValuePair<CellAddress, string>>>(pageCount);
+        for (var pageIndex = 0; pageIndex < pageCount; pageIndex++)
+        {
+            var start = pageIndex * commentsPerPage;
+            var count = Math.Min(commentsPerPage, printableComments.Count - start);
+            var page = new List<KeyValuePair<CellAddress, string>>(count);
+            for (var index = 0; index < count; index++)
+                page.Add(printableComments[start + index]);
+            pages.Add(page);
+        }
+
+        return pages;
     }
 
-    private static IEnumerable<KeyValuePair<CellAddress, string>> GetPrintableComments(
+    private static List<KeyValuePair<CellAddress, string>> GetPrintableComments(
         IReadOnlyDictionary<CellAddress, string> comments,
         IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments)
     {
-        return comments
-            .Concat(threadedComments
-                .Where(pair => !comments.ContainsKey(pair.Key))
-                .Select(pair => new KeyValuePair<CellAddress, string>(
-                    pair.Key,
-                    CommentNavigationPlanner.FormatThreadedComment(pair.Value))))
-            .OrderBy(pair => pair.Key.Row)
-            .ThenBy(pair => pair.Key.Col);
+        var result = new List<KeyValuePair<CellAddress, string>>(comments.Count + threadedComments.Count);
+        foreach (var pair in comments)
+            result.Add(pair);
+
+        foreach (var pair in threadedComments)
+        {
+            if (comments.ContainsKey(pair.Key))
+                continue;
+
+            result.Add(new KeyValuePair<CellAddress, string>(
+                pair.Key,
+                CommentNavigationPlanner.FormatThreadedComment(pair.Value)));
+        }
+
+        result.Sort(static (left, right) =>
+        {
+            var rowComparison = left.Key.Row.CompareTo(right.Key.Row);
+            return rowComparison != 0
+                ? rowComparison
+                : left.Key.Col.CompareTo(right.Key.Col);
+        });
+        return result;
     }
 
     private static double DrawCommentText(
