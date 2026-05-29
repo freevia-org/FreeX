@@ -69,7 +69,7 @@ public sealed partial class NativeJsonAdapter
             DataBarMaxLength = ValidDataBarLengthOrNull(formatDto.DataBarMaxLength),
             DataBarGradient = formatDto.DataBarGradient,
             DataBarBorder = formatDto.DataBarBorder,
-            DataBarAxisPosition = formatDto.DataBarAxisPosition,
+            DataBarAxisPosition = ValidDataBarAxisPositionOrNull(formatDto.DataBarAxisPosition),
             DataBarAxisColor = formatDto.DataBarAxisColor,
             DataBarNegativeFillColor = formatDto.DataBarNegativeFillColor,
             DataBarNegativeBorderColor = formatDto.DataBarNegativeBorderColor,
@@ -131,7 +131,7 @@ public sealed partial class NativeJsonAdapter
             DataBarMaxLength = ValidDataBarLengthOrNull(format.DataBarMaxLength),
             DataBarGradient = format.DataBarGradient,
             DataBarBorder = format.DataBarBorder,
-            DataBarAxisPosition = format.DataBarAxisPosition,
+            DataBarAxisPosition = ValidDataBarAxisPositionOrNull(format.DataBarAxisPosition),
             DataBarAxisColor = format.DataBarAxisColor,
             DataBarNegativeFillColor = format.DataBarNegativeFillColor,
             DataBarNegativeBorderColor = format.DataBarNegativeBorderColor,
@@ -175,6 +175,14 @@ public sealed partial class NativeJsonAdapter
 
     private static int? ValidDataBarLengthOrNull(int? value) =>
         value is >= 0 and <= 100 ? value : null;
+
+    private static string? ValidDataBarAxisPositionOrNull(string? value)
+    {
+        var normalized = value?.Trim();
+        return normalized is "automatic" or "middle" or "none"
+            ? normalized
+            : null;
+    }
 
     private static int ValidTopBottomRankOrDefault(int value) =>
         value is >= 1 and <= 1000 ? value : 10;

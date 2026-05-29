@@ -100,6 +100,16 @@ public sealed class ExcelParityModernTextTests
     }
 
     [Theory]
+    [InlineData("=SEARCH(\"~*\",\"a*b\")", 2)]
+    [InlineData("=SEARCH(\"~~\",\"a~b\")", 2)]
+    [InlineData("=SEARCHB(\"~*\",\"A*\u754c\")", 2)]
+    [InlineData("=SEARCHB(\"~~\",\"A~\u754c\")", 2)]
+    public void SearchFunctions_TildeEscapesWildcardCharacters(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
     [InlineData("=LEFTB(\"A\u754cB\",3)", "A\u754c")]
     [InlineData("=RIGHTB(\"A\u754cB\",3)", "\u754cB")]
     [InlineData("=MIDB(\"A\u754cB\",2,2)", "\u754c")]
