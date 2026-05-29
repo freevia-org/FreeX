@@ -499,6 +499,8 @@ public sealed class MainWindowAdaptiveRibbonTests
         fields.Should().Contain("private IReadOnlyList<double> _ribbonResizeThresholds = [];");
         fields.Should().Contain("private bool _ribbonResizeNormalizationRequired = true;");
         fields.Should().Contain("private string? _lastRibbonAdaptiveAppliedStateKey;");
+        fields.Should().Contain("private TabItem? _ribbonAdaptiveActivePanelCacheTab;");
+        fields.Should().Contain("private StackPanel? _ribbonAdaptiveActivePanelCache;");
         fields.Should().Contain("private IReadOnlyList<FrameworkElement>? _ribbonAdaptiveGroupControlCache;");
         fields.Should().Contain("private IReadOnlyList<Button>? _ribbonAdaptiveCollapsedButtonCache;");
         fields.Should().Contain("private ScrollViewer? _ribbonAdaptiveScrollViewerCache;");
@@ -513,6 +515,8 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth)");
         source.Should().Contain("GetCachedRibbonAdaptiveGroups(activePanel)");
         source.Should().Contain("GetCachedRibbonCollapsedGroupButtons(activePanel, groups, controlCacheKey)");
+        source.Should().Contain("TryGetCachedActiveRibbonPanel(tabItem, out var cachedPanel)");
+        source.Should().Contain("CacheActiveRibbonPanel(tabItem, activePanel)");
         source.Should().Contain("_ribbonAdaptiveScrollViewerCache");
         source.Should().Contain("ribbonScrollViewer ??= FindVisualAncestor<ScrollViewer>(activePanel)");
         source.Should().Contain("RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth)");
