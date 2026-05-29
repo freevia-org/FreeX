@@ -35,6 +35,28 @@ public sealed class FormulaDialogAccessKeyTests
     }
 
     [Fact]
+    public void CreateNamesFromSelectionDialog_OptionCheckboxesExposeAutomationMetadata()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateNamesFromSelectionDialog.cs"));
+
+        source.Should().Contain("SetOptionAutomationMetadata(");
+        source.Should().Contain("AutomationProperties.SetAutomationId(checkBox, automationId);");
+        source.Should().Contain("AutomationProperties.SetHelpText(checkBox, helpText);");
+        foreach (var expected in new[]
+        {
+            "CreateNamesTopRowCheckBox",
+            "CreateNamesLeftColumnCheckBox",
+            "CreateNamesBottomRowCheckBox",
+            "CreateNamesRightColumnCheckBox",
+            "Use the top row of the selection as names.",
+            "Use the left column of the selection as names.",
+            "Use the bottom row of the selection as names.",
+            "Use the right column of the selection as names."
+        })
+            source.Should().Contain(expected);
+    }
+
+    [Fact]
     public void CreateNamesFromSelectionDialogOpenedFromKeyboard_FocusesTopRowChoice()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateNamesFromSelectionDialog.cs"));
