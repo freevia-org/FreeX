@@ -2,6 +2,10 @@ namespace FreeX.App.Host;
 
 public static class OpenWorkbookProgressPlanner
 {
+    private const double RunningStageHoldbackPercent = 0.5;
+    private const double MinimumExpectedDurationMilliseconds = 1;
+    private const double DetailRotationIntervalSeconds = 3.0;
+
     public static double CalculateStageProgress(
         double stageStartPercent,
         double stageEndPercent,
@@ -11,20 +15,26 @@ public static class OpenWorkbookProgressPlanner
         if (stageEndPercent <= stageStartPercent)
             return stageStartPercent;
 
-        var duration = expectedDuration.TotalMilliseconds <= 0
-            ? 1
-            : expectedDuration.TotalMilliseconds;
+        var duration = Math.Max(MinimumExpectedDurationMilliseconds, expectedDuration.TotalMilliseconds);
         var ratio = Math.Clamp(elapsed.TotalMilliseconds / duration, 0, 1);
-        var maxWhileRunning = stageEndPercent - 0.5;
+        var maxWhileRunning = stageEndPercent - RunningStageHoldbackPercent;
         return Math.Min(maxWhileRunning, stageStartPercent + (stageEndPercent - stageStartPercent) * ratio);
     }
 
     public static string FormatLoadingFileDetail(string phase, TimeSpan elapsed)
     {
-        var normalizedPhase = string.IsNullOrWhiteSpace(phase)
+        var normalizedPhase = NormalizePhase(phase);
+        var messages = GetPhaseMessages(normalizedPhase);
+        return messages[CalculateDetailIndex(elapsed, messages.Length)];
+    }
+
+    private static string NormalizePhase(string phase) =>
+        string.IsNullOrWhiteSpace(phase)
             ? "working"
             : phase.Trim();
-        string[] messages = normalizedPhase.ToLowerInvariant() switch
+
+    private static string[] GetPhaseMessages(string normalizedPhase) =>
+        normalizedPhase.ToLowerInvariant() switch
         {
             "reading" =>
             [
@@ -60,7 +70,6 @@ public static class OpenWorkbookProgressPlanner
             _ => [$"Loading file ({normalizedPhase})"]
         };
 
-        var index = (int)Math.Floor(Math.Max(0, elapsed.TotalSeconds) / 3.0) % messages.Length;
-        return messages[index];
-    }
+    private static int CalculateDetailIndex(TimeSpan elapsed, int messageCount) =>
+        (int)Math.Floor(Math.Max(0, elapsed.TotalSeconds) / DetailRotationIntervalSeconds) % messageCount;
 }
