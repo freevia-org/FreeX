@@ -57,15 +57,19 @@ public sealed class MainWindowMouseSelectionSourceTests
         mouseMove.Should().Contain("UpdateCommentPreview(hitAddr.Value);");
         mouseMove.Should().Contain("ClearCommentPreview();");
         mouseMove.Should().Contain("e.Handled = true;");
+        var cancelBlock = mouseMove[
+            mouseMove.IndexOf("if (e.LeftButton != MouseButtonState.Pressed)", StringComparison.Ordinal)..
+            mouseMove.IndexOf("RequestSelectionDragAutoScroll(pos);", StringComparison.Ordinal)];
+
         mouseMove.IndexOf("if (e.LeftButton != MouseButtonState.Pressed)", StringComparison.Ordinal)
             .Should()
             .BeLessThan(mouseMove.IndexOf("RequestSelectionDragAutoScroll(pos);", StringComparison.Ordinal));
         mouseMove.IndexOf("e.Handled = true;", StringComparison.Ordinal)
             .Should()
             .BeLessThan(mouseMove.IndexOf("RequestSelectionDragAutoScroll(pos);", StringComparison.Ordinal));
-        mouseMove.IndexOf("CompleteDragSelectionStatusRefresh();", StringComparison.Ordinal)
+        cancelBlock.IndexOf("CompleteDragSelectionStatusRefresh();", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(mouseMove.IndexOf("UpdateCommentPreview(hitAddr.Value);", StringComparison.Ordinal));
+            .BeLessThan(cancelBlock.IndexOf("UpdateCommentPreview(hitAddr.Value);", StringComparison.Ordinal));
     }
 
     [Fact]
