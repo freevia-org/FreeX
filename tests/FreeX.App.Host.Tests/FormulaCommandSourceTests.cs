@@ -53,6 +53,7 @@ public sealed class FormulaCommandSourceTests
     [InlineData("Count All", "T", "AutoSumCountAllMenuItem_Click")]
     [InlineData("Max", "X", "AutoSumMaxMenuItem_Click")]
     [InlineData("Min", "M", "AutoSumMinMenuItem_Click")]
+    [InlineData("More Functions...", "F", "AutoSumMoreMenuItem_Click")]
     public void FormulaAutoSumMenuItems_ExposeExpectedKeyTipsAndHandlers(
         string header,
         string keyTip,
