@@ -857,6 +857,19 @@ public static partial class BuiltInFunctions
         foreach (var arg in args)
         {
             if (arg is ErrorValue e) return e;
+            if (arg is RangeValue range)
+            {
+                foreach (var value in range.Flatten())
+                {
+                    if (value is ErrorValue cellError) return cellError;
+                    if (!TryCellNumber(value, out var number)) continue;
+                    total += number * number;
+                    if (!double.IsFinite(total)) return ErrorValue.Num;
+                }
+
+                continue;
+            }
+
             foreach (var value in FlattenMathArguments(arg))
             {
                 if (value is ErrorValue cellError) return cellError;
