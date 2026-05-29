@@ -162,10 +162,12 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             {
                 var thresholdXmls = GetIconSetThresholds(cf)
                     .Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value, threshold.GreaterThanOrEqual));
-                var overrideXmls = cf.IconOverrides.Select(o => new XElement(
-                    worksheetNs + "cfIcon",
-                    new XAttribute("iconSet", o.IconSet?.Trim() ?? string.Empty),
-                    new XAttribute("iconId", o.IconId.ToString(CultureInfo.InvariantCulture))));
+                var overrideXmls = cf.IconOverrides
+                    .Where(IsValidIconOverride)
+                    .Select(o => new XElement(
+                        worksheetNs + "cfIcon",
+                        new XAttribute("iconSet", o.IconSet.Trim()),
+                        new XAttribute("iconId", o.IconId.ToString(CultureInfo.InvariantCulture))));
                 rule.Add(AddConditionalFormatPayloadNativeMetadata(new XElement(
                     worksheetNs + "iconSet",
                     new XAttribute("iconSet", string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle.Trim()),
@@ -276,6 +278,9 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 new CfThresholdModel(CfThresholdType.Percent, "33"),
                 new CfThresholdModel(CfThresholdType.Percent, "67")
             ];
+
+    private static bool IsValidIconOverride(CfIconOverride icon) =>
+        !string.IsNullOrWhiteSpace(icon.IconSet) && icon.IconId >= 0;
 
     private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
     {
