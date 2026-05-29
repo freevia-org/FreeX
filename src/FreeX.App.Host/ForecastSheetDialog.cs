@@ -24,6 +24,8 @@ public sealed class ForecastSheetDialog : Window
         ShowInTaskbar = false;
         _periodsBox.Text = periods.ToString(CultureInfo.InvariantCulture);
         AutomationProperties.SetName(_periodsBox, "Forecast periods");
+        AutomationProperties.SetAutomationId(_periodsBox, "ForecastPeriodsBox");
+        AutomationProperties.SetHelpText(_periodsBox, "Enter the positive whole number of periods to forecast.");
         Content = ObjectSizeDialog.CreateSingleInputContent("Forecast _periods:", _periodsBox, Accept, acceptContent: "_Create");
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
