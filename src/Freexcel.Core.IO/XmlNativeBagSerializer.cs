@@ -75,6 +75,9 @@ internal static class XmlNativeBagSerializer
         try
         {
             var element = XElement.Parse(value, LoadOptions.PreserveWhitespace);
+            if (element.Name.LocalName != WrapperTag)
+                return (attrs, children);
+
             foreach (var attr in element.Attributes())
             {
                 if (!attr.IsNamespaceDeclaration)
