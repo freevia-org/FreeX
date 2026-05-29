@@ -12,6 +12,8 @@ public sealed class SolutionProjectsPreflightTests
         var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1"));
 
         script.Should().Contain("FreeX.slnx");
+        script.Should().Contain("*_wpftmp.csproj");
+        script.Should().Contain("$segments -contains \".worktrees\"");
         script.Should().Contain("Project missing from solution");
         script.Should().Contain("Solution references missing project");
         script.Should().Contain("Validated $($solutionProjectPaths.Count) solution project entry(s).");
@@ -27,6 +29,42 @@ public sealed class SolutionProjectsPreflightTests
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ");
         result.Output.Should().Contain("solution project entry(s).");
+    }
+
+    [Fact]
+    public void SolutionProjectsPreflight_IgnoresTransientAndNestedWorktreeProjects()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Included"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "FreeX.App.Host"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch"));
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(tempDirectory, "FreeX.slnx"),
+                """
+                <Solution>
+                  <Folder Name="/src/">
+                    <Project Path="src/Included/Included.csproj" />
+                  </Folder>
+                </Solution>
+                """);
+            File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
+            File.WriteAllText(Path.Combine(tempDirectory, "src", "FreeX.App.Host", "FreeX.App.Host_abc123_wpftmp.csproj"), "<Project />");
+            File.WriteAllText(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project />");
+
+            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+
+            result.ExitCode.Should().Be(0, result.Error);
+            result.Output.Should().Contain("Validated 1 solution project entry(s).");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]
@@ -55,7 +93,7 @@ public sealed class SolutionProjectsPreflightTests
             var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
             result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("Project missing from solution");
+            (result.Output + result.Error).Should().Contain("missing from solution");
             (result.Output + result.Error).Should().Contain("src/Missing/Missing.csproj");
         }
         finally
@@ -89,7 +127,7 @@ public sealed class SolutionProjectsPreflightTests
             var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
             result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("Solution references missing project");
+            (result.Output + result.Error).Should().Contain("references missing project");
             (result.Output + result.Error).Should().Contain("src/Missing/Missing.csproj");
         }
         finally

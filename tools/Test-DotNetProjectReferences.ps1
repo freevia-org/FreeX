@@ -16,6 +16,34 @@ function Resolve-RepoPath {
     return Join-Path $repoRoot $Path
 }
 
+function Get-RelativeRepoPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $rootPath = [System.IO.Path]::GetFullPath($resolvedProjectRoot)
+    if (-not $rootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+        $rootPath += [System.IO.Path]::DirectorySeparatorChar
+    }
+
+    $rootUri = New-Object System.Uri($rootPath)
+    $pathUri = New-Object System.Uri([System.IO.Path]::GetFullPath($Path))
+    return [System.Uri]::UnescapeDataString($rootUri.MakeRelativeUri($pathUri).ToString())
+}
+
+function Test-IsIgnoredProjectPath {
+    param([Parameter(Mandatory = $true)][System.IO.FileInfo]$ProjectFile)
+
+    if ($ProjectFile.Name -like "*_wpftmp.csproj") {
+        return $true
+    }
+
+    $relativePath = Get-RelativeRepoPath $ProjectFile.FullName
+    $segments = $relativePath -split "/"
+    return $segments -contains "bin" -or
+        $segments -contains "obj" -or
+        $segments -contains ".git" -or
+        $segments -contains ".worktrees"
+}
+
 $resolvedProjectRoot = Resolve-RepoPath $ProjectRoot
 if (-not (Test-Path -LiteralPath $resolvedProjectRoot -PathType Container)) {
     throw "Project root was not found: $resolvedProjectRoot"
@@ -23,6 +51,7 @@ if (-not (Test-Path -LiteralPath $resolvedProjectRoot -PathType Container)) {
 
 $projectFiles = @(
     Get-ChildItem -LiteralPath $resolvedProjectRoot -Filter "*.csproj" -File -Recurse |
+        Where-Object { -not (Test-IsIgnoredProjectPath $_) } |
         Sort-Object FullName
 )
 
@@ -46,7 +75,7 @@ foreach ($projectFile in $projectFiles) {
         $resolvedReferencePath = [System.IO.Path]::GetFullPath($referencedProjectPath)
 
         if (-not (Test-Path -LiteralPath $resolvedReferencePath -PathType Leaf)) {
-            $relativeProjectPath = [System.IO.Path]::GetRelativePath($resolvedProjectRoot, $projectFile.FullName)
+            $relativeProjectPath = Get-RelativeRepoPath $projectFile.FullName
             $missingReferences.Add("${relativeProjectPath}: $include")
         }
     }

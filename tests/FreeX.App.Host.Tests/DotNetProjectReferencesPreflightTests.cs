@@ -12,6 +12,8 @@ public sealed class DotNetProjectReferencesPreflightTests
         var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1"));
 
         script.Should().Contain("Get-ChildItem -LiteralPath $resolvedProjectRoot -Filter \"*.csproj\" -File -Recurse");
+        script.Should().Contain("*_wpftmp.csproj");
+        script.Should().Contain("$segments -contains \".worktrees\"");
         script.Should().Contain("ProjectReference");
         script.Should().Contain("Missing ProjectReference target");
         script.Should().Contain("Validated ProjectReference targets for $($projectFiles.Count) .NET project file(s).");
@@ -27,6 +29,31 @@ public sealed class DotNetProjectReferencesPreflightTests
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ProjectReference targets for ");
         result.Output.Should().Contain(".NET project file(s).");
+    }
+
+    [Fact]
+    public void DotNetProjectReferencesPreflight_IgnoresTransientAndNestedWorktreeProjects()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-project-reference-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "FreeX.App.Host"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch"));
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDirectory, "src", "FreeX.App.Host", "FreeX.App.Host.csproj"), "<Project />");
+            File.WriteAllText(Path.Combine(tempDirectory, "src", "FreeX.App.Host", "FreeX.App.Host_abc123_wpftmp.csproj"), "<Project><ItemGroup><ProjectReference Include=\"Missing.csproj\" /></ItemGroup></Project>");
+            File.WriteAllText(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project><ItemGroup><ProjectReference Include=\"Missing.csproj\" /></ItemGroup></Project>");
+            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
+
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
+
+            result.ExitCode.Should().Be(0, result.Error);
+            result.Output.Should().Contain("Validated ProjectReference targets for 1 .NET project file(s).");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]
