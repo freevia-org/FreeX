@@ -40,6 +40,7 @@ public sealed class HomeCellsCommandSourceTests
     [InlineData("Hide Columns", "D", "FormatHideColMenuItem_Click")]
     [InlineData("Unhide Columns", "N", "FormatUnhideColMenuItem_Click")]
     [InlineData("Rename Sheet", "R", "FormatRenameSheetMenuItem_Click")]
+    [InlineData("Tab Color", "T", "FormatTabColorMenuItem_Click")]
     [InlineData("Hide Sheet", "S", "FormatHideSheetMenuItem_Click")]
     [InlineData("Unhide Sheet...", "T", "FormatUnhideSheetMenuItem_Click")]
     [InlineData("Protect Sheet...", "P", "FormatProtectSheetMenuItem_Click")]
@@ -80,6 +81,7 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().Contain("RowColumnDimensionPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden)");
         source.Should().Contain("RowColumnDimensionPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden)");
         source.Should().Contain("private void FormatRenameSheetMenuItem_Click(object sender, RoutedEventArgs e) => RenameCurrentSheet();");
+        source.Should().Contain("private void FormatTabColorMenuItem_Click(object sender, RoutedEventArgs e) => ColorCurrentSheetTab();");
         source.Should().Contain("private void FormatHideSheetMenuItem_Click(object sender, RoutedEventArgs e) => HideCurrentSheet();");
         source.Should().Contain("private void FormatUnhideSheetMenuItem_Click(object sender, RoutedEventArgs e) => UnhideSheet();");
         source.Should().Contain("private void FormatProtectSheetMenuItem_Click(object sender, RoutedEventArgs e) { ProtectSheetBtn_Click(sender, e); }");
@@ -106,6 +108,20 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().Contain("private void UnhideSheet()");
         source.Should().Contain("new UnhideSheetDialog(hiddenSheets.Select(sheet => sheet.Name))");
         source.Should().Contain("new SetSheetHiddenCommand(sheet.Id, hidden: false)");
+    }
+
+    [Fact]
+    public void TabColorCommand_SharesSheetTabColorWorkflow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+
+        source.Should().Contain("private void SheetCtxTabColor_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("ColorSheetTab(tab.Id);");
+        source.Should().Contain("private void ColorCurrentSheetTab()");
+        source.Should().Contain("ColorSheetTab(_currentSheetId);");
+        source.Should().Contain("private void ColorSheetTab(SheetId sheetId)");
+        source.Should().Contain("TryShowColorPicker(\"Tab Color\"");
+        source.Should().Contain("new SetSheetTabColorCommand(sheetId, tabColor)");
     }
 
     private static string ExtractButtonElementByClickHandler(string xaml, string clickHandler)
