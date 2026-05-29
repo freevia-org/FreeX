@@ -107,7 +107,11 @@ public static partial class BuiltInFunctions
         var suffix = args.Count > 2 && args[2] is not BlankValue ? ToText(args[2]).ToLowerInvariant() : "i";
         if (suffix is not ("i" or "j")) return ErrorValue.Value;
 
-        return TextResult(FormatComplex(ToNumber(args[0]), ToNumber(args[1]), suffix));
+        var real = ToNumber(args[0]);
+        var imaginary = ToNumber(args[1]);
+        if (!double.IsFinite(real) || !double.IsFinite(imaginary)) return ErrorValue.Num;
+
+        return TextResult(FormatComplex(real, imaginary, suffix));
     }
 
     private static ScalarValue ImReal(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
