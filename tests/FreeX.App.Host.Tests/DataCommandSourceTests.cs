@@ -9,7 +9,7 @@ public sealed class DataCommandSourceTests
     [InlineData("Sort A to Z", "SA", "SortAscButton_Click")]
     [InlineData("Sort Z to A", "SD", "SortDescButton_Click")]
     [InlineData("Filter", "T", "FilterButton_Click")]
-    [InlineData("Clear Filter", "C", "ClearFilterButton_Click")]
+    [InlineData("Clear", "C", "ClearFilterButton_Click")]
     [InlineData("Advanced Filter", "A", "AdvancedFilterBtn_Click")]
     public void DataSortAndFilterCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
