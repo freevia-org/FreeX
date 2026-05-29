@@ -274,7 +274,10 @@ public sealed partial class NativeJsonAdapter
                     .Where(sparkline => IsSparklineOnSheet(sparkline, s.Id) && Enum.IsDefined(sparkline.Kind))
                     .Select(ToSparklineDto)
                     .ToList(),
-                Charts = s.Charts.Select(ToChartDto).ToList(),
+                Charts = s.Charts
+                    .Where(chart => IsChartOnSheet(chart, s.Id))
+                    .Select(ToChartDto)
+                    .ToList(),
                 DataValidations = s.DataValidations
                     .Where(validation => IsDataValidationOnSheet(validation, s.Id) && IsSupportedDataValidation(validation))
                     .Select(validation => ToDataValidationDto(validation, s.Id))

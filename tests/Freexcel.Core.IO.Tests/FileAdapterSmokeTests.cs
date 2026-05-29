@@ -3071,6 +3071,42 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Save_SkipsCrossSheetCharts()
+    {
+        var workbook = new Workbook("ChartCrossSheetSaveTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var otherSheet = workbook.AddSheet("Other");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 2)),
+            Title = "On Sheet"
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(
+                new CellAddress(otherSheet.Id, 1, 1),
+                new CellAddress(otherSheet.Id, 3, 2)),
+            Title = "Other Sheet"
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var sheetJson = document.RootElement.GetProperty("Sheets")[0];
+        var chart = sheetJson.GetProperty("Charts").EnumerateArray()
+            .Should().ContainSingle()
+            .Subject;
+        chart.GetProperty("Title").GetString().Should().Be("On Sheet");
+        chart.GetProperty("DataRange").GetString().Should().Be("A1:B3");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_Sparklines()
     {
         var workbook = new Workbook("SparklineNativeTest");
