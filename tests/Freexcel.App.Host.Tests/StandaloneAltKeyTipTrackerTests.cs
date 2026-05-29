@@ -57,6 +57,10 @@ public sealed class StandaloneAltKeyTipTrackerTests
     [InlineData(Key.Back, false)]
     [InlineData(Key.Insert, false)]
     [InlineData(Key.Delete, false)]
+    [InlineData(Key.Left, false)]
+    [InlineData(Key.Up, false)]
+    [InlineData(Key.Right, false)]
+    [InlineData(Key.Down, false)]
     [InlineData(Key.F10, false)]
     public void IsStandaloneAltKey_AcceptsOnlyStandaloneAltKeys(Key key, bool expected)
     {
@@ -82,6 +86,10 @@ public sealed class StandaloneAltKeyTipTrackerTests
     [InlineData(0x08)]
     [InlineData(0x2D)]
     [InlineData(0x2E)]
+    [InlineData(0x25)]
+    [InlineData(0x26)]
+    [InlineData(0x27)]
+    [InlineData(0x28)]
     [InlineData(0x73)]
     [InlineData(0x75)]
     [InlineData(0x79)]
