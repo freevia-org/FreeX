@@ -622,7 +622,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue SechScalar(ScalarValue value)
     {
         var n = ToNumber(value);
-        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (!double.IsFinite(n) || Math.Abs(n) >= TrigInputLimit) return ErrorValue.Num;
         return NumberResult(1.0 / Math.Cosh(n));
     }
 
@@ -636,7 +636,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue CschScalar(ScalarValue value)
     {
         var n = ToNumber(value);
-        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (!double.IsFinite(n) || Math.Abs(n) >= TrigInputLimit) return ErrorValue.Num;
         var denominator = Math.Sinh(n);
         if (denominator == 0) return ErrorValue.DivByZero;
         return NumberResult(1.0 / denominator);
@@ -652,7 +652,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue CothScalar(ScalarValue value)
     {
         var n = ToNumber(value);
-        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (!double.IsFinite(n) || Math.Abs(n) >= TrigInputLimit) return ErrorValue.Num;
         var denominator = Math.Tanh(n);
         if (denominator == 0) return ErrorValue.DivByZero;
         return NumberResult(1.0 / denominator);
