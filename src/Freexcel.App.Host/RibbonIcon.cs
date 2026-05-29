@@ -13,6 +13,13 @@ public sealed class RibbonIcon : Viewbox
             typeof(RibbonIcon),
             new PropertyMetadata(RibbonCommandIconKind.Generic, OnVisualPropertyChanged));
 
+    public static readonly DependencyProperty CommandNameProperty =
+        DependencyProperty.Register(
+            nameof(CommandName),
+            typeof(string),
+            typeof(RibbonIcon),
+            new PropertyMetadata(string.Empty, OnVisualPropertyChanged));
+
     public static readonly DependencyProperty IconSizeProperty =
         DependencyProperty.Register(
             nameof(IconSize),
@@ -31,6 +38,12 @@ public sealed class RibbonIcon : Viewbox
     {
         get => (RibbonCommandIconKind)GetValue(KindProperty);
         set => SetValue(KindProperty, value);
+    }
+
+    public string CommandName
+    {
+        get => (string)GetValue(CommandNameProperty);
+        set => SetValue(CommandNameProperty, value);
     }
 
     public double IconSize
@@ -64,9 +77,10 @@ public sealed class RibbonIcon : Viewbox
     {
         Width = IconSize;
         Height = IconSize;
-        Child = RibbonIconFactory.CreateIcon(
-            new RibbonCommandIcon(Kind),
-            IconSize,
-            Foreground ?? Brushes.Black);
+        var brush = Foreground ?? Brushes.Black;
+        var fallback = new RibbonCommandIcon(Kind);
+        Child = string.IsNullOrWhiteSpace(CommandName)
+            ? RibbonIconFactory.CreateIcon(fallback, IconSize, brush)
+            : RibbonIconFactory.CreateCommandIcon(CommandName, fallback, IconSize, brush);
     }
 }

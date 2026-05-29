@@ -112,7 +112,7 @@ public sealed class RibbonTabParityTests
 
         ExtractTooltipTitles(pageSetupGroup).Should().ContainInOrder(
             "Margins",
-            "Orientation",
+            "Page Orientation",
             "Paper Size",
             "Print Area",
             "Breaks",

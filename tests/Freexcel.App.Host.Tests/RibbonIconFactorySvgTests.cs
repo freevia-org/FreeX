@@ -50,6 +50,23 @@ public sealed class RibbonIconFactorySvgTests
     }
 
     [Fact]
+    public void RibbonIcon_UsesCommandArtworkForWhiteSidebarGlyphs()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var icon = new RibbonIcon
+            {
+                CommandName = "Open",
+                Kind = RibbonCommandIconKind.GetData,
+                IconSize = 15,
+                Foreground = Brushes.White
+            };
+
+            icon.Child.Should().BeOfType<Image>();
+        });
+    }
+
+    [Fact]
     public void CreateCommandIcon_PrefersNativeSvgVariantForRequestedRibbonSlot()
     {
         var method = typeof(RibbonIconFactory).GetMethod(
@@ -239,5 +256,54 @@ public sealed class RibbonIconFactorySvgTests
             baseText.Should().Contain("height=\"1\"");
             baseText.Should().NotContain("height=\"2\"");
         }
+    }
+
+    [Fact]
+    public void CommandIconAssets_DoNotContainEmptyShellSvgs()
+    {
+        var iconDirectory = Path.Combine(
+            Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Freexcel.App.Host.csproj"))!,
+            "Resources",
+            "CommandIconsSvg");
+
+        var emptyShells = Directory
+            .EnumerateFiles(iconDirectory, "*.svg")
+            .Where(path => File.ReadAllText(path).TrimEnd().EndsWith("/>", StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        emptyShells.Should().BeEmpty("visible command SVG assets should render actual geometry, not blank placeholders");
+    }
+
+    [Theory]
+    [InlineData("get-add-ins.svg")]
+    [InlineData("my-add-ins.svg")]
+    [InlineData("draw-with-touch.svg")]
+    [InlineData("lasso-select.svg")]
+    [InlineData("page-orientation.svg")]
+    [InlineData("stocks.svg")]
+    [InlineData("geography.svg")]
+    [InlineData("queries-connections.svg")]
+    [InlineData("macros.svg")]
+    [InlineData("contact-support.svg")]
+    [InlineData("what-s-new.svg")]
+    [InlineData("check-for-updates.svg")]
+    [InlineData("selection-pane.svg")]
+    [InlineData("clear-filter.svg")]
+    public void AcceptedIconReviewCommands_HaveDedicatedNonblankSvgArtwork(string fileName)
+    {
+        var iconPath = WorkspaceFileLocator.Find(
+            "src",
+            "Freexcel.App.Host",
+            "Resources",
+            "CommandIconsSvg",
+            fileName);
+
+        var svg = File.ReadAllText(iconPath);
+
+        svg.Should().Contain("<svg");
+        svg.Should().MatchRegex("<(path|rect|circle|ellipse|line)\\b");
+        svg.Should().NotEndWith("/>");
     }
 }

@@ -399,7 +399,10 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("Click")?.Value == "SaveAsButton_Click");
 
-        saveAsButton.Attribute("Content")?.Value.Should().Be("Save _As");
+        saveAsButton.ToString().Should().Contain("Text=\"Save _As\"");
+        saveAsButton.Descendants(local + "RibbonIcon")
+            .Single()
+            .Attribute("CommandName")?.Value.Should().Be("Save As");
         saveAsButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("A");
     }
 
@@ -598,7 +601,7 @@ public sealed class MainWindowXamlKeyTipTests
 
         var accountButton = document
             .Descendants()
-            .Single(element => element.Attribute("Content")?.Value == "Account");
+            .Single(element => element.Attribute(x + "Name")?.Value == "SsAccountNavBtn");
 
         accountButton.Attribute(x + "Name")?.Value.Should().Be("SsAccountNavBtn");
         accountButton.Attribute("Click")?.Value.Should().Be("SsAccountBtn_Click");
@@ -758,7 +761,7 @@ public sealed class MainWindowXamlKeyTipTests
         var exportButton = document
             .Descendants(presentation + "Button")
             .Single(element =>
-                element.Attribute("Content")?.Value == "Export" &&
+                GetButtonText(element, presentation) == "Export" &&
                 element.Attribute("Click")?.Value == "ExportPdfButton_Click");
 
         exportButton.Attribute(local + "RibbonTooltip.Title")?.Value.Should().Be("Export PDF/XPS");
@@ -1331,7 +1334,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Single(element => element.Attribute(x + "Name")?.Value == "StartScreenOverlay");
 
         startScreen.Descendants(presentation + "Button")
-            .Select(button => button.Attribute("Content")?.Value)
+            .Select(button => GetButtonText(button, presentation))
             .Should()
             .Contain(["_Save", "_Close"]);
     }
@@ -2269,7 +2272,7 @@ public sealed class MainWindowXamlKeyTipTests
         var shareButtonPlans = shareButtons
             .Select(button => new
             {
-                Content = button.Attribute("Content")?.Value,
+                Content = GetButtonText(button, presentation),
                 Click = button.Attribute("Click")?.Value,
                 KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
                 Title = button.Attribute(local + "RibbonTooltip.Title")?.Value,
@@ -2822,6 +2825,18 @@ public sealed class MainWindowXamlKeyTipTests
 
     private static bool ContainsExcludedStatus(string? value) =>
         value?.Contains("excluded", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static string? GetButtonText(XElement button, XNamespace presentation)
+    {
+        if (button.Attribute("Content")?.Value is { } content)
+            return content;
+
+        return button
+            .Descendants()
+            .Where(element => element.Name == presentation + "TextBlock" || element.Name == presentation + "AccessText")
+            .Select(element => element.Attribute("Text")?.Value ?? element.Value)
+            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+    }
 
     private static XElement FindTab(XDocument document, string header)
     {

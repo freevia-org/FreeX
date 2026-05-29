@@ -253,6 +253,18 @@ public static partial class RibbonIconFactory
             "side-by-side" => "view-side-by-side",
             "sync-scrolling" => "synchronous-scrolling",
             "reset-position" => "reset-window-position",
+            "page-orientation" => "page-orientation",
+            "hide" => "hide-sheet",
+            "unhide" => "unhide-sheet",
+            "macros" => "macros",
+            "macro" => "macros",
+            "queries-connections" => "queries-connections",
+            "check-for-updates" => "check-for-updates",
+            "pin-to-list" => "pin-to-list",
+            "unpin-from-list" => "unpin-from-list",
+            "remove-from-list" => "remove-from-list",
+            "rename" => "rename-sheet",
+            "duplicate" => "duplicate-sheet",
             _ => ""
         };
 
