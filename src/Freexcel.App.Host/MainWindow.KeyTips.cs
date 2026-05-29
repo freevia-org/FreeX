@@ -10,6 +10,11 @@ namespace Freexcel.App.Host;
 
 public partial class MainWindow
 {
+    private List<FrameworkElement>? _visibleKeyTipElementCache;
+    private RibbonKeyTipScope _visibleKeyTipElementCacheScope = RibbonKeyTipScope.None;
+    private List<MenuItem>? _activeMenuKeyTipItemCache;
+    private ItemsControl? _activeMenuKeyTipItemCacheOwner;
+
     private static Key GetEffectiveKey(System.Windows.Input.KeyEventArgs e) =>
         e.SystemKey == Key.None ? e.Key : e.SystemKey;
 
@@ -24,6 +29,7 @@ public partial class MainWindow
         _legacyDataKeyTipSequence = false;
         _activeRibbonKeyTipMenu = null;
         _activeRibbonKeyTipItemsControl = null;
+        InvalidateKeyTipCandidateCaches();
         ShowKeyTipOverlay(scope);
     }
 
@@ -38,6 +44,7 @@ public partial class MainWindow
         _legacyDataKeyTipSequence = false;
         _activeRibbonKeyTipMenu = null;
         _activeRibbonKeyTipItemsControl = null;
+        InvalidateKeyTipCandidateCaches();
         ClearKeyTipOverlay();
     }
 
@@ -132,6 +139,7 @@ public partial class MainWindow
 
         UpdateRibbonLayoutIfNeeded(RootGrid);
         KeyTipOverlay.Children.Clear();
+        InvalidateVisibleKeyTipElementCache();
 
         foreach (var element in GetVisibleKeyTipElements(scope))
         {
@@ -318,6 +326,8 @@ public partial class MainWindow
         _activeRibbonKeyTipItemsControl = menu;
         _ribbonKeyTipScope = RibbonKeyTipScope.Menu;
         _ribbonKeyTipSequence = "";
+        InvalidateVisibleKeyTipElementCache();
+        InvalidateActiveMenuKeyTipItems();
         ClearKeyTipOverlay();
     }
 
@@ -332,6 +342,7 @@ public partial class MainWindow
 
         _activeRibbonKeyTipItemsControl = submenu;
         _ribbonKeyTipSequence = "";
+        InvalidateActiveMenuKeyTipItems();
         return true;
     }
 
@@ -340,7 +351,7 @@ public partial class MainWindow
         if (_activeRibbonKeyTipItemsControl is null)
             return false;
 
-        var match = RibbonKeyTipRouting.ResolveMenuItem(GetEnabledMenuItems(_activeRibbonKeyTipItemsControl), keyTip);
+        var match = RibbonKeyTipRouting.ResolveMenuItem(GetEnabledActiveMenuItems(_activeRibbonKeyTipItemsControl), keyTip);
         if (match is null)
             return false;
 
@@ -353,7 +364,20 @@ public partial class MainWindow
 
     private bool HasActiveMenuItemKeyTipPrefix(string keyTipPrefix) =>
         _activeRibbonKeyTipItemsControl is not null &&
-        RibbonKeyTipRouting.HasMenuItemKeyTipPrefix(GetEnabledMenuItems(_activeRibbonKeyTipItemsControl), keyTipPrefix);
+        RibbonKeyTipRouting.HasMenuItemKeyTipPrefix(GetEnabledActiveMenuItems(_activeRibbonKeyTipItemsControl), keyTipPrefix);
+
+    private IReadOnlyList<MenuItem> GetEnabledActiveMenuItems(ItemsControl itemsControl)
+    {
+        if (ReferenceEquals(_activeMenuKeyTipItemCacheOwner, itemsControl) &&
+            _activeMenuKeyTipItemCache is not null)
+        {
+            return _activeMenuKeyTipItemCache;
+        }
+
+        _activeMenuKeyTipItemCacheOwner = itemsControl;
+        _activeMenuKeyTipItemCache = GetEnabledMenuItems(itemsControl).ToList();
+        return _activeMenuKeyTipItemCache;
+    }
 
     private static IEnumerable<MenuItem> GetEnabledMenuItems(ItemsControl itemsControl) =>
         GetMenuItems(itemsControl).Where(item => item.IsEnabled);
@@ -404,6 +428,32 @@ public partial class MainWindow
 
     private IEnumerable<FrameworkElement> GetVisibleKeyTipElements(RibbonKeyTipScope scope)
     {
+        if (CanReuseVisibleKeyTipElementCache(scope))
+            return _visibleKeyTipElementCache!;
+
+        var elements = MaterializeVisibleKeyTipElements(scope);
+        if (ShouldCacheVisibleKeyTipElements(scope))
+        {
+            _visibleKeyTipElementCacheScope = scope;
+            _visibleKeyTipElementCache = elements;
+        }
+
+        return elements;
+    }
+
+    private bool CanReuseVisibleKeyTipElementCache(RibbonKeyTipScope scope) =>
+        _visibleKeyTipElementCache is not null &&
+        _visibleKeyTipElementCacheScope == scope &&
+        ShouldCacheVisibleKeyTipElements(scope);
+
+    private bool ShouldCacheVisibleKeyTipElements(RibbonKeyTipScope scope) =>
+        scope != RibbonKeyTipScope.None &&
+        _ribbonKeyTipMode.IsActive &&
+        _ribbonKeyTipScope == scope;
+
+    private List<FrameworkElement> MaterializeVisibleKeyTipElements(RibbonKeyTipScope scope)
+    {
+        var elements = new List<FrameworkElement>();
         var seen = new HashSet<FrameworkElement>();
         foreach (var element in EnumerateKeyTipCandidateElements(scope))
         {
@@ -411,8 +461,10 @@ public partial class MainWindow
                 !IsVisibleKeyTipElement(element, scope))
                 continue;
 
-            yield return element;
+            elements.Add(element);
         }
+
+        return elements;
     }
 
     private IEnumerable<FrameworkElement> EnumerateKeyTipCandidateElements(RibbonKeyTipScope scope)
@@ -483,6 +535,24 @@ public partial class MainWindow
         ShouldShowKeyTipElement(element, scope) &&
         IsEnabledKeyTipTarget(element) &&
         !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element));
+
+    private void InvalidateKeyTipCandidateCaches()
+    {
+        InvalidateVisibleKeyTipElementCache();
+        InvalidateActiveMenuKeyTipItems();
+    }
+
+    private void InvalidateVisibleKeyTipElementCache()
+    {
+        _visibleKeyTipElementCache = null;
+        _visibleKeyTipElementCacheScope = RibbonKeyTipScope.None;
+    }
+
+    private void InvalidateActiveMenuKeyTipItems()
+    {
+        _activeMenuKeyTipItemCache = null;
+        _activeMenuKeyTipItemCacheOwner = null;
+    }
 
     private bool IsStartScreenVisible() =>
         StartScreenOverlay?.Visibility == Visibility.Visible;
