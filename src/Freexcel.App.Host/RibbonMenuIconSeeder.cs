@@ -151,7 +151,10 @@ public static class RibbonMenuIconSeeder
         if (item.IsEnabled)
             return false;
 
-        return header is "Directional" or "Shapes" or "Indicators" or "Ratings";
+        return string.Equals(header, "Directional", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(header, "Shapes", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(header, "Indicators", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(header, "Ratings", StringComparison.OrdinalIgnoreCase);
     }
 
     private readonly record struct MenuIconSeed(string CommandName, RibbonCommandIcon Fallback);

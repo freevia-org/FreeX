@@ -55,6 +55,23 @@ public sealed class RibbonMenuIconSeederTests
         });
     }
 
+    [Fact]
+    public void SeedMenuItems_SkipsCleanedGallerySectionHeadersCaseInsensitively()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sectionHeader = new MenuItem
+            {
+                Header = "_shapes...",
+                IsEnabled = false
+            };
+
+            SeedMenuItems(sectionHeader);
+
+            sectionHeader.Icon.Should().BeNull();
+        });
+    }
+
     private static void SeedMenuItems(params MenuItem[] menuItems)
     {
         var method = typeof(RibbonMenuIconSeeder)
