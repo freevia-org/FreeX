@@ -2567,7 +2567,7 @@
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
                                     <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="AdvancedFilterBtn_Click"
-                                            local:RibbonTooltip.Title="Advanced Filter"
+                                            local:RibbonTooltip.Title="Advanced"
                                             local:RibbonTooltip.KeyTip="A"
                                             local:RibbonTooltip.Description="Filter a list using an Excel-style criteria range, optionally copying matching rows elsewhere.">
                                         <local:RibbonIcon Kind="Filter" IconSize="16" HorizontalAlignment="Center"/>
