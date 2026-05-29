@@ -5,7 +5,8 @@ param(
     [string]$GitHubWorkflowsScriptPath = "tools\Test-GitHubWorkflows.ps1",
     [string]$DotNetProjectReferencesScriptPath = "tools\Test-DotNetProjectReferences.ps1",
     [string]$SolutionProjectsScriptPath = "tools\Test-SolutionProjects.ps1",
-    [string]$GeneratedDocsScriptPath = "tools\Test-GeneratedDocs.ps1"
+    [string]$GeneratedDocsScriptPath = "tools\Test-GeneratedDocs.ps1",
+    [string]$ConflictMarkersScriptPath = "tools\Test-ConflictMarkers.ps1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,5 +45,6 @@ Invoke-RepositoryPreflight -ScriptPath $GitHubWorkflowsScriptPath -Label "GitHub
 Invoke-RepositoryPreflight -ScriptPath $DotNetProjectReferencesScriptPath -Label ".NET project references"
 Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "solution projects"
 Invoke-RepositoryPreflight -ScriptPath $GeneratedDocsScriptPath -Label "generated docs"
+Invoke-RepositoryPreflight -ScriptPath $ConflictMarkersScriptPath -Label "Git conflict markers"
 
 Write-Host "Repository preflight checks passed."
