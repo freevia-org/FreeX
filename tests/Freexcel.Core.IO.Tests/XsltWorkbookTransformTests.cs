@@ -313,6 +313,24 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_IdentityTransform_PreservesDocumentLevelCommentsAndProcessingInstructions()
+    {
+        using var source = StreamFromString(
+            "<?freexcel before=\"true\"?><!--before root--><rows><row name=\"Golf\" /></rows><?freexcel after=\"true\"?><!--after root-->");
+        using var stylesheet = IdentityStylesheet();
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        var xml = reader.ReadToEnd();
+        xml.Should().Contain("<?freexcel before=\"true\"?>");
+        xml.Should().Contain("<!--before root-->");
+        xml.Should().Contain("<rows><row name=\"Golf\" /></rows>");
+        xml.Should().Contain("<?freexcel after=\"true\"?>");
+        xml.Should().Contain("<!--after root-->");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_IdentityTransform_PreservesCDataTextValue()
     {
         using var source = StreamFromString("<rows><formula><![CDATA[A1<B1 && C1>D1]]></formula></rows>");
