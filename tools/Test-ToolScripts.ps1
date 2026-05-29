@@ -27,6 +27,7 @@ if ($scripts.Count -eq 0) {
 }
 
 $failedScripts = New-Object System.Collections.Generic.List[string]
+$missingFailFastScripts = New-Object System.Collections.Generic.List[string]
 
 foreach ($script in $scripts) {
     $tokens = $null
@@ -39,10 +40,22 @@ foreach ($script in $scripts) {
             Write-Error "$($script.FullName): $($parseError.Message)" -ErrorAction Continue
         }
     }
+
+    if ($script.Name.StartsWith("Test-", [System.StringComparison]::OrdinalIgnoreCase)) {
+        $content = Get-Content -LiteralPath $script.FullName -Raw
+        if (-not $content.Contains('$ErrorActionPreference = "Stop"')) {
+            $missingFailFastScripts.Add($script.FullName)
+            Write-Error "$($script.FullName): preflight scripts must set `$ErrorActionPreference = `"Stop`"." -ErrorAction Continue
+        }
+    }
 }
 
 if ($failedScripts.Count -gt 0) {
     throw "PowerShell syntax validation failed for $($failedScripts.Count) tool script(s)."
+}
+
+if ($missingFailFastScripts.Count -gt 0) {
+    throw "PowerShell fail-fast validation failed for $($missingFailFastScripts.Count) preflight script(s)."
 }
 
 Write-Host "Validated $($scripts.Count) PowerShell tool script(s)."
