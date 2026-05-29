@@ -18,6 +18,7 @@ public partial class MainWindow
             SetActiveCell(actualAddr);
 
         HideValidationDropdown();
+        ClearCommentPreview();
 
         var targetKind = GetWorksheetContextMenuTargetKind(actualAddr);
         var state = GetWorksheetContextMenuState(actualAddr);
