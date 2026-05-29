@@ -66,6 +66,16 @@ public sealed class PrintLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildPagePlans_AvoidLinqPageSlicing()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.Model", "PrintLayoutPlanner.cs"));
+
+        source.Should().Contain("CopyPageValues(");
+        source.Should().NotContain(".Skip(");
+        source.Should().NotContain(".Take(");
+    }
+
+    [Fact]
     public void MeasurePrintableGrid_IncludesHeadingSlotsWhenEnabled()
     {
         var size = PrintLayoutPlanner.MeasurePrintableGrid(
@@ -79,5 +89,20 @@ public sealed class PrintLayoutPlannerTests
         size.HeaderHeight.Should().Be(20);
         size.ColumnWidth.Should().Be(90);
         size.RowHeight.Should().Be(20);
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. parts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not find workspace file.", Path.Combine(parts));
     }
 }

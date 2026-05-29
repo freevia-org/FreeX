@@ -5849,6 +5849,17 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("Hello Excel"));
 
     [Fact]
+    public void Replace_NumCharsBeyondRemainingText_ReplacesThroughEnd()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=REPLACE(\"abcdef\",3,2147483647,\"X\")", sheet)
+            .Should().Be(new TextValue("abX"));
+        _eval.Evaluate("=REPLACEB(\"A\u754cB\",2,2147483647,\"X\")", sheet)
+            .Should().Be(new TextValue("AX"));
+    }
+
+    [Fact]
     public void Replace_RangeOldTextArgument_SpillsElementwise()
     {
         var sheet = MakeSheet(
