@@ -18960,6 +18960,56 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_SkipsWorksheetAutoFilterWithInvalidReference()
+    {
+        const string json = """
+        {
+          "Name": "WorksheetAutoFilterInvalidReferenceLoadTest",
+          "Sheets": [
+            {
+              "Name": "Data",
+              "AutoFilter": {
+                "Reference": "XFE1:XFE3",
+                "FilterColumns": [
+                  { "ColumnId": 0, "Values": [ "A" ] }
+                ]
+              }
+            }
+          ]
+        }
+        """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var loaded = new NativeJsonAdapter().Load(stream);
+
+        loaded.GetSheetAt(0).AutoFilter.Should().BeNull();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_SkipsWorksheetAutoFilterWithInvalidReference()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterInvalidReferenceSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.AutoFilter = new WorksheetAutoFilterModel("XFE1:XFE3", null);
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["A"],
+            IncludeBlank: false,
+            NativeFilterXmls: []));
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        using var document = JsonDocument.Parse(stream);
+        document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("AutoFilter")
+            .ValueKind
+            .Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsPivotTableMetadata()
     {
         var workbook = new Workbook("PivotMetadataTest");
