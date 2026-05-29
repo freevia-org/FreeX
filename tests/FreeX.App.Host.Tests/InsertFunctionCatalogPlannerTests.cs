@@ -16,6 +16,10 @@ public sealed class InsertFunctionCatalogPlannerTests
     [InlineData("ISBLANK", "Information")]
     [InlineData("DSUM", "Database")]
     [InlineData("CONVERT", "Engineering")]
+    [InlineData("COMPLEX", "Engineering")]
+    [InlineData("DELTA", "Engineering")]
+    [InlineData("GESTEP", "Engineering")]
+    [InlineData("IMABS", "Engineering")]
     [InlineData("MAP", "Dynamic Array")]
     [InlineData("SORTBY", "Dynamic Array")]
     [InlineData("LAMBDA", "Logical")]
@@ -31,7 +35,11 @@ public sealed class InsertFunctionCatalogPlannerTests
         InsertFunctionCatalogPlanner.GetDescription("SUM").Should().Be("Adds numbers.");
         InsertFunctionCatalogPlanner.GetDescription("GETPIVOTDATA").Should().Contain("PivotTable");
         InsertFunctionCatalogPlanner.GetDescription("DSUM").Should().Contain("database criteria");
+        InsertFunctionCatalogPlanner.GetDescription("COMPLEX").Should().Contain("complex number");
         InsertFunctionCatalogPlanner.GetDescription("CONVERT").Should().Contain("measurement");
+        InsertFunctionCatalogPlanner.GetDescription("DELTA").Should().Contain("equal");
+        InsertFunctionCatalogPlanner.GetDescription("GESTEP").Should().Contain("threshold");
+        InsertFunctionCatalogPlanner.GetDescription("IMABS").Should().Contain("complex number");
         InsertFunctionCatalogPlanner.GetDescription("MAP").Should().Contain("LAMBDA");
         InsertFunctionCatalogPlanner.GetDescription("CUSTOM").Should().Be("CUSTOM function.");
     }
@@ -53,8 +61,27 @@ public sealed class InsertFunctionCatalogPlannerTests
 
         catalog.Should().Contain(entry => entry.Name == "DSUM" && entry.Category == "Database");
         catalog.Should().Contain(entry => entry.Name == "CONVERT" && entry.Category == "Engineering");
+        catalog.Should().Contain(entry => entry.Name == "DELTA" && entry.Category == "Engineering");
+        catalog.Should().Contain(entry => entry.Name == "IMSUM" && entry.Category == "Engineering");
         catalog.Should().Contain(entry => entry.Name == "TAKE" && entry.Category == "Dynamic Array");
         catalog.Should().Contain(entry => entry.Name == "GETPIVOTDATA" && entry.Category == "Lookup & Reference");
         catalog.Should().Contain(entry => entry.Name == "LAMBDA" && entry.Category == "Logical");
+    }
+
+    [Fact]
+    public void BuildCatalog_CategorizesImplementedEngineeringFunctionsLikeExcel()
+    {
+        var catalog = InsertFunctionCatalogPlanner.BuildCatalog();
+        string[] engineeringFunctions =
+        [
+            "BASE", "COMPLEX", "DECIMAL", "DELTA", "ERF", "ERF.PRECISE", "ERFC", "ERFC.PRECISE",
+            "GESTEP", "IMABS", "IMAGINARY", "IMARGUMENT", "IMCONJUGATE", "IMDIV", "IMPRODUCT",
+            "IMREAL", "IMSUB", "IMSUM"
+        ];
+
+        catalog
+            .Where(entry => engineeringFunctions.Contains(entry.Name))
+            .Should()
+            .OnlyContain(entry => entry.Category == "Engineering");
     }
 }
