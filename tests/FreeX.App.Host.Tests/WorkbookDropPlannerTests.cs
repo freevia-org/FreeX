@@ -38,6 +38,19 @@ public sealed class WorkbookDropPlannerTests
     }
 
     [Fact]
+    public void SelectOpenableFile_SkipsPathsWithoutExtensions()
+    {
+        var selected = WorkbookDropPlanner.SelectOpenableFile(
+            [
+                @"C:\Temp\README",
+                @"C:\Temp\Book.xlsx"
+            ],
+            [new FakeAdapter(".xlsx", "Excel Workbook")]);
+
+        selected.Should().Be(@"C:\Temp\Book.xlsx");
+    }
+
+    [Fact]
     public void SelectOpenableFile_UsesAdapterFormatAliases()
     {
         var selected = WorkbookDropPlanner.SelectOpenableFile(
