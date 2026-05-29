@@ -666,6 +666,27 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Save_RoundTripsAtPrefixedTextFieldsAsLiteralText()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("@SUM(A1)"));
+
+        var adapter = new CsvFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"@SUM(A1)\"\r\n");
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var cell = roundTripped.Sheets.Single().GetCell(1, 1);
+
+        cell.Should().NotBeNull();
+        cell!.FormulaText.Should().BeNull();
+        cell.Value.Should().Be(new TextValue("@SUM(A1)"));
+    }
+
+    [Fact]
     public void Save_RoundTripsSeparatorDirectivePrefixTextBeforeBlankCell()
     {
         var workbook = new Workbook("Book1");
