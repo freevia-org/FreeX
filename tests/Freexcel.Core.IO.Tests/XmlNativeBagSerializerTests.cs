@@ -320,6 +320,24 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void ApplyToElement_MatchingChildXmlWithCData_DoesNotReportChange()
+    {
+        var childXml = "<ext><formula><![CDATA[A1<B1 && C1>D1]]></formula></ext>";
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            [childXml]);
+        var target = new XElement(
+            "root",
+            XElement.Parse(childXml, LoadOptions.PreserveWhitespace));
+
+        var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, []);
+
+        changed.Should().BeFalse();
+        target.ToString(SaveOptions.DisableFormatting)
+            .Should().Be("<root><ext><formula><![CDATA[A1<B1 && C1>D1]]></formula></ext></root>");
+    }
+
+    [Fact]
     public void ApplyToElement_PreservedChildXml_RemovesStaleNonElementChildNodes()
     {
         var bagValue = XmlNativeBagSerializer.Serialize(
