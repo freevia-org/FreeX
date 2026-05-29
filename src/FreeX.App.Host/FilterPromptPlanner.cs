@@ -34,6 +34,42 @@ public sealed record FilterPromptPlan(
 
 public static class FilterPromptPlanner
 {
+    private static readonly string[] TopBottomPrefixes =
+    [
+        "top:",
+        "toppercent:",
+        "bottompercent:",
+        "bottom:"
+    ];
+
+    private static readonly string[] CaseInsensitiveCriterionPrefixes =
+    [
+        "and:",
+        "or:",
+        "date=",
+        "date<>",
+        "date>=",
+        "date>",
+        "date<=",
+        "date<",
+        "datebetween:",
+        "contains:",
+        "notcontains:",
+        "begins:",
+        "ends:",
+        "equals:",
+        "text=",
+        "text<>",
+        "between:"
+    ];
+
+    private static readonly string[] SymbolCriterionPrefixes =
+    [
+        "<>",
+        ">=",
+        "<="
+    ];
+
     public static bool TryPlan(string input, out FilterPromptPlan? plan, out string? error)
     {
         plan = null;
@@ -71,36 +107,26 @@ public static class FilterPromptPlanner
     }
 
     private static bool IsTopBottomInput(string filterText) =>
-        filterText.StartsWith("top:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("toppercent:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("bottompercent:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("bottom:", StringComparison.OrdinalIgnoreCase);
+        StartsWithAny(filterText, TopBottomPrefixes, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsCriterionInput(string filterText) =>
         filterText.Equals("blank", StringComparison.OrdinalIgnoreCase) ||
         filterText.Equals("nonblank", StringComparison.OrdinalIgnoreCase) ||
         filterText.Equals("non-blank", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("and:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("or:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("date=", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("date<>", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("date>=", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("date>", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("date<=", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("date<", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("datebetween:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("contains:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("notcontains:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("begins:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("ends:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("equals:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("text=", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("text<>", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("between:", StringComparison.OrdinalIgnoreCase) ||
-        filterText.StartsWith("<>", StringComparison.Ordinal) ||
-        filterText.StartsWith(">=", StringComparison.Ordinal) ||
-        filterText.StartsWith("<=", StringComparison.Ordinal) ||
+        StartsWithAny(filterText, CaseInsensitiveCriterionPrefixes, StringComparison.OrdinalIgnoreCase) ||
+        StartsWithAny(filterText, SymbolCriterionPrefixes, StringComparison.Ordinal) ||
         filterText.StartsWith('>') ||
         filterText.StartsWith('<') ||
         filterText.StartsWith('=');
+
+    private static bool StartsWithAny(string value, IReadOnlyList<string> prefixes, StringComparison comparison)
+    {
+        foreach (var prefix in prefixes)
+        {
+            if (value.StartsWith(prefix, comparison))
+                return true;
+        }
+
+        return false;
+    }
 }
