@@ -617,6 +617,62 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_SourceAboveInputLimit_ReportsTransformSourceDiagnostic()
+    {
+        using var source = StreamFromString($"<rows><row value=\"{new string('A', 1024)}\"/></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Limited"><ss:Table/></ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(
+            source,
+            stylesheet,
+            XsltWorkbookTransform.DefaultMaxOutputBytes,
+            maxInputCharacters: 512);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*source XML*");
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
+    public void LoadTransformed_StylesheetAboveInputLimit_ReportsTransformStylesheetDiagnostic()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Limited"><ss:Table/></ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(
+            source,
+            stylesheet,
+            XsltWorkbookTransform.DefaultMaxOutputBytes,
+            maxInputCharacters: 64);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*");
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void LoadTransformed_RejectsExternalDocumentFunction()
     {
         using var source = StreamFromString("<rows/>");
