@@ -247,6 +247,17 @@ public sealed class ExcelParityMathTrigTests
     }
 
     [Fact]
+    public void Convert_RecognizesDocumentedExcelUnitAliases()
+    {
+        Number("=CONVERT(1,\"grain\",\"g\")").Should().BeApproximately(0.06479891, 1e-12);
+        Number("=CONVERT(1,\"ell\",\"ft\")").Should().BeApproximately(3.75, 1e-10);
+        Number("=CONVERT(1,\"parsec\",\"pc\")").Should().BeApproximately(1, 1e-12);
+        Number("=CONVERT(1,\"d\",\"hr\")").Should().Be(24);
+        Number("=CONVERT(1,\"at\",\"Pa\")").Should().Be(101325);
+        Number("=CONVERT(1,\"p\",\"Pa\")").Should().Be(1);
+    }
+
+    [Fact]
     public void MatrixMathFunctions_ReturnExcelShapeAndValues()
     {
         var sheet = MakeSheet(
