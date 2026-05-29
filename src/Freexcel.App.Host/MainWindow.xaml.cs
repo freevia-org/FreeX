@@ -104,6 +104,13 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
     private readonly Dictionary<string, bool> _ribbonMeasuredOverflowCache = [];
     private bool _ribbonAdaptiveStateDiffInvalidated;
+    private int _ribbonAdaptiveMeasurementInvalidationCount;
+    private int _ribbonAdaptiveGroupMeasurementCount;
+    private int _ribbonCompactSnapshotCaptureCount;
+    private int _ribbonResizeThresholdRebuildCount;
+    private int _ribbonMeasuredOverflowMeasurementCount;
+    private int _ribbonCorrectedStateCacheHitCount;
+    private int _ribbonAppliedStateSkipCount;
     private bool _ribbonFallbackPending;
     private RibbonFallbackWork _ribbonFallbackWork;
     private int _ribbonFallbackRequestCount;

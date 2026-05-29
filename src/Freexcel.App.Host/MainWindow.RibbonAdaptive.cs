@@ -51,6 +51,7 @@ public partial class MainWindow
                 Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groups.Count).ToArray(),
                 previousStates: null);
             fixedChromeWidth = MeasureRibbonFixedChromeWidth(activePanel) + 24;
+            _ribbonAdaptiveGroupMeasurementCount += groupSnapshots.Count;
             adaptiveGroups = groupSnapshots
                 .Select((snapshot, index) => MeasureRibbonAdaptiveGroup(snapshot, collapsedButtons[index]))
                 .ToList();
@@ -71,6 +72,8 @@ public partial class MainWindow
 
         var correctionCacheKey = CreateRibbonCorrectionCacheKey(cacheKey, availableWidth, plannedStates);
         var hasCachedCorrection = _ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates);
+        if (hasCachedCorrection)
+            _ribbonCorrectedStateCacheHitCount++;
         var cachedCorrectionNeedsExpansion = false;
         if (hasCachedCorrection && correctedStates is not null)
         {
@@ -83,6 +86,7 @@ public partial class MainWindow
             !_ribbonAdaptiveStateDiffInvalidated &&
             string.Equals(_lastRibbonAdaptiveAppliedStateKey, appliedStateKey, StringComparison.Ordinal))
         {
+            _ribbonAppliedStateSkipCount++;
             return;
         }
 
@@ -195,6 +199,7 @@ public partial class MainWindow
         var snapshots = groups
             .Select(CaptureRibbonCompactGroupSnapshot)
             .ToList();
+        _ribbonCompactSnapshotCaptureCount += snapshots.Count;
         _ribbonCompactSnapshotCacheKey = controlCacheKey;
         _ribbonCompactGroupSnapshotCache = snapshots;
         return snapshots;
@@ -202,6 +207,7 @@ public partial class MainWindow
 
     private void InvalidateRibbonAdaptiveMeasurementCaches()
     {
+        _ribbonAdaptiveMeasurementInvalidationCount++;
         _ribbonAdaptiveMeasurementCacheKey = null;
         _ribbonAdaptiveGroupCache = null;
         _ribbonAdaptiveFixedChromeWidthCache = 0;
@@ -215,6 +221,36 @@ public partial class MainWindow
         _ribbonCorrectedStateCache.Clear();
         _ribbonMeasuredOverflowCache.Clear();
         _ribbonAdaptiveStateDiffInvalidated = true;
+    }
+
+    internal RibbonAdaptiveDiagnosticsSnapshot GetRibbonAdaptiveDiagnosticsForTests() =>
+        new(
+            _ribbonAdaptiveMeasurementInvalidationCount,
+            _ribbonAdaptiveGroupMeasurementCount,
+            _ribbonCompactSnapshotCaptureCount,
+            _ribbonResizeThresholdRebuildCount,
+            _ribbonMeasuredOverflowMeasurementCount,
+            _ribbonCorrectedStateCacheHitCount,
+            _ribbonAppliedStateSkipCount,
+            _ribbonAdaptiveMeasurementCacheKey,
+            _ribbonResizeThresholdCacheKey,
+            _ribbonCompactSnapshotCacheKey);
+
+    internal void ResetRibbonAdaptiveDiagnosticsForTests(bool resetSelectedStaticNormalization = false)
+    {
+        _ribbonAdaptiveMeasurementInvalidationCount = 0;
+        _ribbonAdaptiveGroupMeasurementCount = 0;
+        _ribbonCompactSnapshotCaptureCount = 0;
+        _ribbonResizeThresholdRebuildCount = 0;
+        _ribbonMeasuredOverflowMeasurementCount = 0;
+        _ribbonCorrectedStateCacheHitCount = 0;
+        _ribbonAppliedStateSkipCount = 0;
+
+        if (resetSelectedStaticNormalization &&
+            RibbonTabs?.SelectedItem is TabItem selectedTab)
+        {
+            _normalizedRibbonStaticTabs.Remove(selectedTab);
+        }
     }
 
     private double GetRibbonAvailableWidth(StackPanel activePanel)
@@ -305,6 +341,7 @@ public partial class MainWindow
             return overflows;
 
         overflows = RibbonRowOverflowsMeasured(activePanel, availableWidth);
+        _ribbonMeasuredOverflowMeasurementCount++;
         _ribbonMeasuredOverflowCache[overflowCacheKey] = overflows;
         return overflows;
     }
@@ -523,6 +560,7 @@ public partial class MainWindow
         }
 
         _ribbonResizeThresholdCacheKey = cacheKey;
+        _ribbonResizeThresholdRebuildCount++;
         _ribbonResizeThresholds = RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth, selectedTabHeader);
     }
 
