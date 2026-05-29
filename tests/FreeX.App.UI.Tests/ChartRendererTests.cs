@@ -387,6 +387,16 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void SurfaceRenderer_AvoidsMinMaxLinqScaffolding()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.Surface.cs"));
+
+        source.Should().NotContain("surfaceValues.Min(");
+        source.Should().NotContain("surfaceValues.Max(");
+    }
+
+    [Fact]
     public void ChartRenderer_ParsesInvariantDecimalValuesUnderNonInvariantCulture()
     {
         RunWithCulture("de-DE", () =>
