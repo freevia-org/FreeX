@@ -126,6 +126,7 @@ Assert-Contains -Text $checklist -Expected "release/progress.json" -Label "Teste
 Assert-Contains -Text $checklist -Expected "Test result artifact was uploaded, even for failed release-gate attempts." -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Versioned ``.exe``, latest ``.exe``, versioned MSIX, latest MSIX, and checksum artifacts" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Stable latest checksum assets were included for both the ``.exe`` and MSIX packages" -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "Latest ``.exe`` and MSIX download links were checked from the published release." -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Known accessibility issues" -Label "Tester release checklist"
 
 $missingAccessibilityGate = @()
