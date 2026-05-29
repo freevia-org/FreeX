@@ -222,6 +222,31 @@ public sealed class RibbonTooltipTests
     }
 
     [Fact]
+    public void TryOpenSubmenuForKeyTip_PreservesPreviouslyOpenSubmenuWhenNoNestedMatch()
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Color Scales" };
+            var child = new MenuItem { Header = "More Rules" };
+            RibbonTooltip.SetKeyTip(child, "MR");
+            child.Items.Add(new MenuItem { Header = "Format Rule..." });
+            parent.Items.Add(child);
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+            parent.IsSubmenuOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, "ZZ", out var openedSubmenu).Should().BeFalse();
+
+            openedSubmenu.Should().BeNull();
+            parent.IsSubmenuOpen.Should().BeTrue("failed keytip probing should restore submenus that were already open");
+            child.IsSubmenuOpen.Should().BeFalse();
+            menu.IsOpen = false;
+        });
+    }
+
+    [Fact]
     public void TryOpenSubmenuForKeyTip_IgnoresDisabledSubmenus()
     {
         RunSta(() =>
