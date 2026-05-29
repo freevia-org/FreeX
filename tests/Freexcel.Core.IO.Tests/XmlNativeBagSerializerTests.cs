@@ -52,6 +52,24 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void ApplyToElement_PreservedChildXml_RetainsDefaultNamespace()
+    {
+        const string childXml = "<ext xmlns=\"urn:freexcel:test-default\"><leaf id=\"1\" /></ext>";
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            [childXml]);
+        var target = new XElement("root");
+
+        var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, []);
+
+        changed.Should().BeTrue();
+        var child = target.Elements().Should().ContainSingle().Which;
+        child.Name.Should().Be(XName.Get("ext", "urn:freexcel:test-default"));
+        child.Elements().Single().Name.Should().Be(XName.Get("leaf", "urn:freexcel:test-default"));
+        child.ToString(SaveOptions.DisableFormatting).Should().Be(childXml);
+    }
+
+    [Fact]
     public void SerializeDeserialize_NamespacedAttributes_CanBeAppliedToElement()
     {
         var namespacedAttribute = XName.Get("flag", "urn:freexcel:test").ToString();
