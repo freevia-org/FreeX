@@ -111,7 +111,7 @@ public static partial class BuiltInFunctions
         var imaginary = ToNumber(args[1]);
         if (!double.IsFinite(real) || !double.IsFinite(imaginary)) return ErrorValue.Num;
 
-        return TextResult(FormatComplex(real, imaginary, suffix));
+        return ComplexTextResult(real, imaginary, suffix);
     }
 
     private static ScalarValue ImReal(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -178,7 +178,7 @@ public static partial class BuiltInFunctions
         var parsed = ParseComplexArgument(value);
         return parsed.Error is not null
             ? parsed.Error
-            : TextResult(FormatComplex(parsed.Real, -parsed.Imaginary, parsed.Suffix));
+            : ComplexTextResult(parsed.Real, -parsed.Imaginary, parsed.Suffix);
     }
 
     private static ScalarValue ImSum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -195,7 +195,7 @@ public static partial class BuiltInFunctions
             suffix = parsed.Suffix;
         }
 
-        return TextResult(FormatComplex(real, imaginary, suffix));
+        return ComplexTextResult(real, imaginary, suffix);
     }
 
     private static ScalarValue ImSub(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -205,7 +205,7 @@ public static partial class BuiltInFunctions
         var right = ParseComplexArgument(args[1]);
         if (right.Error is not null) return right.Error;
 
-        return TextResult(FormatComplex(left.Real - right.Real, left.Imaginary - right.Imaginary, left.Suffix));
+        return ComplexTextResult(left.Real - right.Real, left.Imaginary - right.Imaginary, left.Suffix);
     }
 
     private static ScalarValue ImProduct(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -224,7 +224,7 @@ public static partial class BuiltInFunctions
             suffix = parsed.Suffix;
         }
 
-        return TextResult(FormatComplex(real, imaginary, suffix));
+        return ComplexTextResult(real, imaginary, suffix);
     }
 
     private static ScalarValue ImPower(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -250,10 +250,10 @@ public static partial class BuiltInFunctions
         double angle = Math.Atan2(parsed.Imaginary, parsed.Real) * exponent;
         if (!double.IsFinite(magnitude) || !double.IsFinite(angle)) return ErrorValue.Num;
 
-        return TextResult(FormatComplex(
+        return ComplexTextResult(
             magnitude * Math.Cos(angle),
             magnitude * Math.Sin(angle),
-            parsed.Suffix));
+            parsed.Suffix);
     }
 
     private static ScalarValue ImDiv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -268,7 +268,7 @@ public static partial class BuiltInFunctions
 
         var real = (left.Real * right.Real + left.Imaginary * right.Imaginary) / denominator;
         var imaginary = (left.Imaginary * right.Real - left.Real * right.Imaginary) / denominator;
-        return TextResult(FormatComplex(real, imaginary, left.Suffix));
+        return ComplexTextResult(real, imaginary, left.Suffix);
     }
 
     private static ScalarValue ImCos(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -282,10 +282,10 @@ public static partial class BuiltInFunctions
         var parsed = ParseComplexArgument(value);
         if (parsed.Error is not null) return parsed.Error;
 
-        return TextResult(FormatComplex(
+        return ComplexTextResult(
             Math.Cos(parsed.Real) * Math.Cosh(parsed.Imaginary),
             -Math.Sin(parsed.Real) * Math.Sinh(parsed.Imaginary),
-            parsed.Suffix));
+            parsed.Suffix);
     }
 
     private static ScalarValue ImCot(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -318,10 +318,10 @@ public static partial class BuiltInFunctions
         var parsed = ParseComplexArgument(value);
         if (parsed.Error is not null) return parsed.Error;
 
-        return TextResult(FormatComplex(
+        return ComplexTextResult(
             Math.Cosh(parsed.Real) * Math.Cos(parsed.Imaginary),
             Math.Sinh(parsed.Real) * Math.Sin(parsed.Imaginary),
-            parsed.Suffix));
+            parsed.Suffix);
     }
 
     private static ScalarValue ImCsc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -370,10 +370,10 @@ public static partial class BuiltInFunctions
         if (parsed.Error is not null) return parsed.Error;
 
         double magnitude = Math.Exp(parsed.Real);
-        return TextResult(FormatComplex(
+        return ComplexTextResult(
             magnitude * Math.Cos(parsed.Imaginary),
             magnitude * Math.Sin(parsed.Imaginary),
-            parsed.Suffix));
+            parsed.Suffix);
     }
 
     private static ScalarValue ImSec(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -446,7 +446,7 @@ public static partial class BuiltInFunctions
         if (modulus == 0) return ErrorValue.Num;
 
         double angle = Math.Atan2(parsed.Imaginary, parsed.Real);
-        return TextResult(FormatComplex(Math.Log(modulus) / divisor, angle / divisor, parsed.Suffix));
+        return ComplexTextResult(Math.Log(modulus) / divisor, angle / divisor, parsed.Suffix);
     }
 
     private static ScalarValue ImSin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -460,10 +460,10 @@ public static partial class BuiltInFunctions
         var parsed = ParseComplexArgument(value);
         if (parsed.Error is not null) return parsed.Error;
 
-        return TextResult(FormatComplex(
+        return ComplexTextResult(
             Math.Sin(parsed.Real) * Math.Cosh(parsed.Imaginary),
             Math.Cos(parsed.Real) * Math.Sinh(parsed.Imaginary),
-            parsed.Suffix));
+            parsed.Suffix);
     }
 
     private static ScalarValue ImSinh(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -477,10 +477,10 @@ public static partial class BuiltInFunctions
         var parsed = ParseComplexArgument(value);
         if (parsed.Error is not null) return parsed.Error;
 
-        return TextResult(FormatComplex(
+        return ComplexTextResult(
             Math.Sinh(parsed.Real) * Math.Cos(parsed.Imaginary),
             Math.Cosh(parsed.Real) * Math.Sin(parsed.Imaginary),
-            parsed.Suffix));
+            parsed.Suffix);
     }
 
     private static ScalarValue ImSqrt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -497,7 +497,7 @@ public static partial class BuiltInFunctions
         double modulus = Math.Sqrt(parsed.Real * parsed.Real + parsed.Imaginary * parsed.Imaginary);
         double real = Math.Sqrt((modulus + parsed.Real) / 2.0);
         double imaginary = Math.CopySign(Math.Sqrt(Math.Max(0.0, (modulus - parsed.Real) / 2.0)), parsed.Imaginary);
-        return TextResult(FormatComplex(real, imaginary, parsed.Suffix));
+        return ComplexTextResult(real, imaginary, parsed.Suffix);
     }
 
     private static ScalarValue ImTan(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -516,7 +516,7 @@ public static partial class BuiltInFunctions
 
         double real = Math.Sin(2.0 * parsed.Real) / denominator;
         double imaginary = Math.Sinh(2.0 * parsed.Imaginary) / denominator;
-        return TextResult(FormatComplex(real, imaginary, parsed.Suffix));
+        return ComplexTextResult(real, imaginary, parsed.Suffix);
     }
 
     private static ScalarValue FormatReciprocalComplex(double real, double imaginary, string suffix)
@@ -524,8 +524,13 @@ public static partial class BuiltInFunctions
         double denominator = real * real + imaginary * imaginary;
         if (denominator == 0) return ErrorValue.Num;
 
-        return TextResult(FormatComplex(real / denominator, -imaginary / denominator, suffix));
+        return ComplexTextResult(real / denominator, -imaginary / denominator, suffix);
     }
+
+    private static ScalarValue ComplexTextResult(double real, double imaginary, string suffix) =>
+        double.IsFinite(real) && double.IsFinite(imaginary)
+            ? TextResult(FormatComplex(real, imaginary, suffix))
+            : ErrorValue.Num;
 
     private static IEnumerable<ScalarValue> FlattenComplexArguments(IReadOnlyList<ScalarValue> args)
     {

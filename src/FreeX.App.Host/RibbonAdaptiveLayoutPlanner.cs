@@ -8,14 +8,13 @@ public static class RibbonAdaptiveLayoutPlanner
         double fixedChromeWidth = 0)
     {
         availableWidth = Math.Max(0, availableWidth - Math.Max(0, fixedChromeWidth));
-        var states = Enumerable
-            .Repeat(RibbonAdaptiveGroupState.Full, groups.Count)
-            .ToArray();
+        var states = new RibbonAdaptiveGroupState[groups.Count];
+        Array.Fill(states, RibbonAdaptiveGroupState.Full);
 
         if (groups.Count == 0 || Fits(availableWidth, groups, states))
             return states;
 
-        foreach (var index in RightToLeft(groups.Count))
+        for (var index = groups.Count - 1; index >= 0; index--)
         {
             states[index] = RibbonAdaptiveGroupState.SmallWithLabels;
             if (Fits(availableWidth, groups, states))
@@ -42,8 +41,18 @@ public static class RibbonAdaptiveLayoutPlanner
     private static bool Fits(
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroup> groups,
-        IReadOnlyList<RibbonAdaptiveGroupState> states) =>
-        groups.Select((group, index) => WidthFor(group, states[index])).Sum() <= availableWidth;
+        IReadOnlyList<RibbonAdaptiveGroupState> states)
+    {
+        var width = 0d;
+        for (var index = 0; index < groups.Count; index++)
+        {
+            width += WidthFor(groups[index], states[index]);
+            if (width > availableWidth)
+                return false;
+        }
+
+        return true;
+    }
 
     private static double WidthFor(RibbonAdaptiveGroup group, RibbonAdaptiveGroupState state) =>
         state switch
@@ -54,12 +63,6 @@ public static class RibbonAdaptiveLayoutPlanner
             RibbonAdaptiveGroupState.Collapsed => group.CollapsedWidth,
             _ => group.FullWidth
         };
-
-    private static IEnumerable<int> RightToLeft(int count)
-    {
-        for (var i = count - 1; i >= 0; i--)
-            yield return i;
-    }
 
 }
 
