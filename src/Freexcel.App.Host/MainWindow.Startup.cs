@@ -46,5 +46,7 @@ public partial class MainWindow
         RefreshSheetTabs();
         UpdateTitleBar();
         TryStartScreenshotTour();
+        TryStartSheetTabVisualTour();
+        TryStartGreenBarVisualTour();
     }
 }

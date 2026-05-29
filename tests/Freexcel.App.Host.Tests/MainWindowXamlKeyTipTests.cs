@@ -1690,6 +1690,59 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void GreenSurfaceButtons_UseCustomHoverChromeInsteadOfNativeBlueHover()
+    {
+        var mainWindow = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        var resources = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Resources", "MainWindowResources.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        foreach (var buttonName in new[] { "StatusZoomOutButton", "StatusZoomInButton" })
+        {
+            var button = mainWindow
+                .Descendants(presentation + "Button")
+                .Single(element => element.Attribute(x + "Name")?.Value == buttonName);
+
+            button.Attribute("Style")?.Value.Should().Be("{StaticResource StatusBarZoomButtonStyle}");
+        }
+
+        static XElement ResourceStyle(XDocument document, XNamespace presentation, XNamespace x, string key) =>
+            document
+                .Descendants(presentation + "Style")
+                .Single(style => style.Attribute(x + "Key")?.Value == key);
+
+        foreach (var styleKey in new[] { "StatusBarZoomButtonStyle", "SysBtnStyle", "TitleBarQatButton" })
+        {
+            var style = ResourceStyle(resources, presentation, x, styleKey);
+
+            style
+                .Descendants(presentation + "ControlTemplate")
+                .Should()
+                .NotBeEmpty($"{styleKey} should not fall back to the native WPF button template");
+
+            style
+                .ToString(SaveOptions.DisableFormatting)
+                .Should()
+                .Contain("FreexcelTitleBarHoverBrush", $"{styleKey} should use the green title/status hover color");
+        }
+
+        var closeStyle = ResourceStyle(resources, presentation, x, "CloseSysBtnStyle");
+        closeStyle.Attribute("BasedOn")?.Value.Should().Be("{StaticResource SysBtnStyle}");
+        closeStyle
+            .Descendants(presentation + "Trigger")
+            .Where(trigger => trigger.Attribute("Property")?.Value == "IsMouseOver")
+            .Should()
+            .BeEmpty("the close button should share the same title-bar hover chrome as the other green-surface buttons");
+
+        var greenSurfaceStyleText = string.Concat(
+            new[] { "StatusBarZoomButtonStyle", "SysBtnStyle", "TitleBarQatButton", "CloseSysBtnStyle" }
+                .Select(styleKey => ResourceStyle(resources, presentation, x, styleKey).ToString(SaveOptions.DisableFormatting)));
+
+        greenSurfaceStyleText.Should().NotContain("#0078", "green-surface hover should not use Windows blue accent colors");
+        greenSurfaceStyleText.Should().NotContain("SystemColors.Highlight", "green-surface hover should not use native highlight brushes");
+    }
+
+    [Fact]
     public void BackstageSearchBox_HasAccessibleNameAndHelpText()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
