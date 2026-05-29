@@ -17,10 +17,14 @@ public static class BackstageTabSelectionPlanner
     public static BackstageTabSelectionPlan Select(bool isShowingPinnedList, BackstageRecentTab requestedTab)
     {
         var activeTab = requestedTab;
+        var isPinnedTab = IsPinnedTab(activeTab);
+
         return new BackstageTabSelectionPlan(
             activeTab,
-            activeTab == BackstageRecentTab.Recent,
-            activeTab == BackstageRecentTab.Pinned,
-            isShowingPinnedList != (activeTab == BackstageRecentTab.Pinned));
+            !isPinnedTab,
+            isPinnedTab,
+            isShowingPinnedList != isPinnedTab);
     }
+
+    private static bool IsPinnedTab(BackstageRecentTab tab) => tab == BackstageRecentTab.Pinned;
 }

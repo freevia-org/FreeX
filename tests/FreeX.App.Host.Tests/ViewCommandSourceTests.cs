@@ -112,7 +112,7 @@ public sealed class ViewCommandSourceTests
     [InlineData("Freeze Panes", "F", "FreezeAtSelectionMenuItem_Click")]
     [InlineData("Freeze Top Row", "R", "FreezeTopRowMenuItem_Click")]
     [InlineData("Freeze First Column", "C", "FreezeFirstColMenuItem_Click")]
-    [InlineData("Unfreeze All", "U", "UnfreezeAllMenuItem_Click")]
+    [InlineData("Unfreeze Panes", "U", "UnfreezeAllMenuItem_Click")]
     public void ViewFreezePanesMenuItems_ExposeExpectedKeyTipsAndHandlers(
         string header,
         string keyTip,

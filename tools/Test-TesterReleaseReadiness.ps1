@@ -106,6 +106,7 @@ foreach ($marker in @(
     "TestResults/tests.trx",
     "Public-preview promotion requires completed accessibility gate inputs",
     "gh release create",
+    "--draft=false",
     "FreeX-latest-win-x64.exe",
     "FreeX-latest-win-x64.exe.sha256",
     "FreeX-latest-win-x64.msix",
