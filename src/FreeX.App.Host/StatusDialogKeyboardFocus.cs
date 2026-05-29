@@ -19,7 +19,7 @@ internal static class StatusDialogKeyboardFocus
     {
         foreach (var child in LogicalTreeHelper.GetChildren(parent))
         {
-            if (child is Button { IsDefault: true } button)
+            if (child is Button { IsDefault: true, IsEnabled: true } button)
                 return button;
 
             if (child is DependencyObject dependencyObject &&
