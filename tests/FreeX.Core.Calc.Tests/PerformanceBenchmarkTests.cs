@@ -381,6 +381,22 @@ public class PerformanceBenchmarkTests
             "dynamic-array column sorting should sort the compact index array in place");
     }
 
+    [Fact]
+    public void Benchmark_SplitPaneViewportCells_LazilyAllocatesDedupeSet()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Calc", "ViewportService.cs"));
+        var buildSplitPaneCells = source[
+            source.IndexOf("private static List<DisplayCell> BuildSplitPaneCells", StringComparison.Ordinal)..];
+        buildSplitPaneCells = buildSplitPaneCells[..buildSplitPaneCells.IndexOf("private static void AddDisplayCell", StringComparison.Ordinal)];
+
+        buildSplitPaneCells.Should().Contain(
+            "var dedupeCells = SplitPaneRegionsCanOverlap",
+            "split-pane viewport generation should avoid dedupe scaffolding for naturally disjoint panes");
+        buildSplitPaneCells.Should().NotContain(
+            "new HashSet",
+            "the split-pane hot path should allocate the dedupe set only when pane regions can overlap");
+    }
+
     /// <summary>
     /// Benchmark: Memory usage for 1,000,000 cells (values only, no formulas).
     /// Target: <200MB
