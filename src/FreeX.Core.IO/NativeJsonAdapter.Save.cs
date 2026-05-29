@@ -177,7 +177,7 @@ public sealed partial class NativeJsonAdapter
                 AutoFilter = ToWorksheetAutoFilterDto(s.AutoFilter, s.Id),
                 SmartTags = ToWorksheetSmartTagsDto(s.SmartTags),
                 DataConsolidation = ToWorksheetDataConsolidationDto(s.DataConsolidation),
-                SortState = ToWorksheetSortStateDto(s.SortState),
+                SortState = ToWorksheetSortStateDto(s.SortState, s.Id),
                 SingleXmlCells = ToWorksheetSingleXmlCellsDto(s.SingleXmlCells),
                 CellWatchesMetadata = ToWorksheetCellWatchesMetadataDto(s.CellWatchesMetadata),
                 IgnoredErrorsMetadata = ToWorksheetIgnoredErrorsMetadataDto(s.IgnoredErrorsMetadata),

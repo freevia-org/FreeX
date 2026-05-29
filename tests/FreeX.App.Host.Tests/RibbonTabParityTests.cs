@@ -57,7 +57,7 @@ public sealed class RibbonTabParityTests
         ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
         ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Timeline\"");
         ExtractGroupXaml(insertTab, "Links").Should().Contain("local:RibbonTooltip.Title=\"Insert Link\"");
-        ExtractGroupXaml(insertTab, "Comments").Should().Contain("local:RibbonTooltip.Title=\"New Comment\"");
+        ExtractGroupXaml(insertTab, "Comments").Should().Contain("local:RibbonTooltip.Title=\"Comment\"");
         ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonTooltip.Title=\"Text Box\"");
         ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonTooltip.Title=\"Header &amp; Footer\"");
         ExtractGroupXaml(insertTab, "Symbols").Should().Contain("local:RibbonTooltip.Title=\"Insert Symbol\"");

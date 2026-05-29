@@ -4,17 +4,17 @@ namespace FreeX.Core.IO;
 
 public sealed partial class NativeJsonAdapter
 {
-    private static WorksheetSortStateModel? ToWorksheetSortState(WorksheetSortStateDto? dto)
+    private static WorksheetSortStateModel? ToWorksheetSortState(WorksheetSortStateDto? dto, SheetId sheetId)
     {
         if (dto is null)
             return null;
 
-        var reference = string.IsNullOrWhiteSpace(dto.Reference) ? null : dto.Reference;
+        var reference = ValidSortRangeReferenceOrNull(dto.Reference, sheetId);
         var sortMethod = string.IsNullOrWhiteSpace(dto.SortMethod) ? null : dto.SortMethod;
         var nativeXml = string.IsNullOrWhiteSpace(dto.NativeXml) ? null : dto.NativeXml;
         var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
         var conditions = (dto.Conditions ?? [])
-            .Select(ToWorksheetSortCondition)
+            .Select(condition => ToWorksheetSortCondition(condition, sheetId))
             .OfType<WorksheetSortConditionModel>()
             .ToList();
         if (reference is null && dto.ColumnSort is null && dto.CaseSensitive is null && sortMethod is null &&
@@ -35,12 +35,15 @@ public sealed partial class NativeJsonAdapter
         };
     }
 
-    private static WorksheetSortConditionModel? ToWorksheetSortCondition(WorksheetSortConditionDto? dto)
+    private static WorksheetSortConditionModel? ToWorksheetSortCondition(WorksheetSortConditionDto? dto, SheetId sheetId)
     {
         if (dto is null)
             return null;
 
-        var reference = string.IsNullOrWhiteSpace(dto.Reference) ? null : dto.Reference;
+        var reference = ValidSortRangeReferenceOrNull(dto.Reference, sheetId);
+        if (!string.IsNullOrWhiteSpace(dto.Reference) && reference is null)
+            return null;
+
         var sortBy = string.IsNullOrWhiteSpace(dto.SortBy) ? null : dto.SortBy;
         var customList = string.IsNullOrWhiteSpace(dto.CustomList) ? null : dto.CustomList;
         var dxfId = string.IsNullOrWhiteSpace(dto.DxfId) ? null : dto.DxfId;
@@ -66,17 +69,17 @@ public sealed partial class NativeJsonAdapter
         };
     }
 
-    private static WorksheetSortStateDto? ToWorksheetSortStateDto(WorksheetSortStateModel? model)
+    private static WorksheetSortStateDto? ToWorksheetSortStateDto(WorksheetSortStateModel? model, SheetId sheetId)
     {
         if (model is null)
             return null;
 
-        var reference = string.IsNullOrWhiteSpace(model.Reference) ? null : model.Reference;
+        var reference = ValidSortRangeReferenceOrNull(model.Reference, sheetId);
         var sortMethod = string.IsNullOrWhiteSpace(model.SortMethod) ? null : model.SortMethod;
         var nativeXml = string.IsNullOrWhiteSpace(model.NativeXml) ? null : model.NativeXml;
         var nativeAttributes = CleanNativeAttributes(model.NativeAttributes);
         var conditions = model.Conditions
-            .Select(ToWorksheetSortConditionDto)
+            .Select(condition => ToWorksheetSortConditionDto(condition, sheetId))
             .OfType<WorksheetSortConditionDto>()
             .ToList();
         if (reference is null && model.ColumnSort is null && model.CaseSensitive is null && sortMethod is null &&
@@ -97,12 +100,15 @@ public sealed partial class NativeJsonAdapter
         };
     }
 
-    private static WorksheetSortConditionDto? ToWorksheetSortConditionDto(WorksheetSortConditionModel? model)
+    private static WorksheetSortConditionDto? ToWorksheetSortConditionDto(WorksheetSortConditionModel? model, SheetId sheetId)
     {
         if (model is null)
             return null;
 
-        var reference = string.IsNullOrWhiteSpace(model.Reference) ? null : model.Reference;
+        var reference = ValidSortRangeReferenceOrNull(model.Reference, sheetId);
+        if (!string.IsNullOrWhiteSpace(model.Reference) && reference is null)
+            return null;
+
         var sortBy = string.IsNullOrWhiteSpace(model.SortBy) ? null : model.SortBy;
         var customList = string.IsNullOrWhiteSpace(model.CustomList) ? null : model.CustomList;
         var dxfId = string.IsNullOrWhiteSpace(model.DxfId) ? null : model.DxfId;
@@ -126,5 +132,21 @@ public sealed partial class NativeJsonAdapter
             IconId = iconId,
             NativeAttributes = nativeAttributes
         };
+    }
+
+    private static string? ValidSortRangeReferenceOrNull(string? reference, SheetId sheetId)
+    {
+        if (string.IsNullOrWhiteSpace(reference))
+            return null;
+
+        try
+        {
+            var range = GridRange.Parse(reference, sheetId);
+            return IsValidRangeOnSheet(range, sheetId) ? range.ToString() : null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
     }
 }
