@@ -230,6 +230,19 @@ public sealed class ExcelParityMathTrigTests
     }
 
     [Fact]
+    public void InverseTrig_NonFiniteReferencedNumbers_ReturnExcelNumError()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(double.NaN)),
+            (2, 1, new NumberValue(double.PositiveInfinity)));
+
+        _eval.Evaluate("=ASIN(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=ACOS(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=ASIN(A2)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=ACOS(A2)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void GcdAndLcm_RangeArgumentsScanAllReferencedCellsLikeExcel()
     {
         var sheet = MakeSheet(

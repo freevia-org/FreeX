@@ -683,7 +683,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue AsinScalar(ScalarValue value)
     {
         double n = ToNumber(value);
-        if (n < -1 || n > 1) return ErrorValue.Num;
+        if (!double.IsFinite(n) || n < -1 || n > 1) return ErrorValue.Num;
         return new NumberValue(Math.Asin(n));
     }
 
@@ -711,7 +711,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue AcosScalar(ScalarValue value)
     {
         double n = ToNumber(value);
-        if (n < -1 || n > 1) return ErrorValue.Num;
+        if (!double.IsFinite(n) || n < -1 || n > 1) return ErrorValue.Num;
         return new NumberValue(Math.Acos(n));
     }
 

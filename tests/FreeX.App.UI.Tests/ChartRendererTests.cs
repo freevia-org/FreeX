@@ -917,6 +917,31 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void GridView_DoesNotHitTestPivotChartFieldButtonsOutsideChartBounds()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            Left = 100,
+            Top = 80,
+            Width = 40,
+            Height = 120
+        };
+
+        GridView.HitTestPivotChartFieldButton(
+                [chart],
+                new System.Windows.Point(185, 116),
+                rowHeaderWidth: 40,
+                columnHeaderHeight: 24)
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
     public void GridView_DoesNotHitTestIndividuallyHiddenPivotChartFieldButtons()
     {
         var sheetId = SheetId.New();
