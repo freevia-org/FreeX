@@ -170,6 +170,21 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
+    public void BuildResizeThresholds_SourceAvoidsRedundantSortedSetLinqPasses()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));
+        var method = source.Substring(
+            source.IndexOf("public static IReadOnlyList<double> BuildResizeThresholds", StringComparison.Ordinal),
+            source.IndexOf("public static IReadOnlyList<int> GetExpandableGroupIndexes", StringComparison.Ordinal) -
+            source.IndexOf("public static IReadOnlyList<double> BuildResizeThresholds", StringComparison.Ordinal));
+
+        method.Should().Contain("new List<double>(thresholds.Count)");
+        method.Should().NotContain(".Distinct()");
+        method.Should().NotContain(".OrderBy(");
+        method.Should().NotContain(".ToList()");
+    }
+
+    [Fact]
     public void BuildResizeThresholds_KeepsGenericFallbackBreakpointsForUnknownTabs()
     {
         var groups = new[]
