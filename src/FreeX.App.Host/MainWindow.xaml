@@ -2145,9 +2145,9 @@
                                         local:RibbonTooltip.Description="Choose a paper size for the printed page.">
                                     <Button.ContextMenu>
                                         <ContextMenu>
-                                            <MenuItem Header="Letter (8.5x11)"  local:RibbonTooltip.KeyTip="L" Click="SizeLetter_Click"/>
-                                            <MenuItem Header="A4 (210x297 mm)"  local:RibbonTooltip.KeyTip="A" Click="SizeA4_Click"/>
-                                            <MenuItem Header="Legal (8.5x14)"   local:RibbonTooltip.KeyTip="G" Click="SizeLegal_Click"/>
+                                            <MenuItem Header="Letter"           local:RibbonTooltip.KeyTip="L" Click="SizeLetter_Click"/>
+                                            <MenuItem Header="A4"               local:RibbonTooltip.KeyTip="A" Click="SizeA4_Click"/>
+                                            <MenuItem Header="Legal"            local:RibbonTooltip.KeyTip="G" Click="SizeLegal_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
