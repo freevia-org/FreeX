@@ -182,6 +182,17 @@ public partial class GridView
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
+        if (_objectDragKind != ObjectDragKind.None ||
+            _marginDragEdge.HasValue ||
+            _splitDividerDragHandle != SplitDividerHandle.None ||
+            _splitPaneScrollbarDragging ||
+            _autofillDragging ||
+            _resizeTarget != ResizeTarget.None)
+        {
+            e.Handled = true;
+            return;
+        }
+
         var pos = e.GetPosition(this);
 
         // Check if clicking on an already-selected object's handles

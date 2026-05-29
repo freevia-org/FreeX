@@ -100,6 +100,30 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void LeftMouseDownIgnoresReentrantClicksWhileCapturedDragIsActive()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var mouseDownBlock = source[
+            source.IndexOf("protected override void OnMouseLeftButtonDown", StringComparison.Ordinal)..
+            source.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)];
+
+        mouseDownBlock.Should().Contain("_objectDragKind != ObjectDragKind.None");
+        mouseDownBlock.Should().Contain("_marginDragEdge.HasValue");
+        mouseDownBlock.Should().Contain("_splitDividerDragHandle != SplitDividerHandle.None");
+        mouseDownBlock.Should().Contain("_splitPaneScrollbarDragging");
+        mouseDownBlock.Should().Contain("_autofillDragging");
+        mouseDownBlock.Should().Contain("_resizeTarget != ResizeTarget.None");
+        mouseDownBlock.Should().Contain("e.Handled = true;");
+        mouseDownBlock.IndexOf("_objectDragKind != ObjectDragKind.None", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseDownBlock.IndexOf("var pos = e.GetPosition(this);", StringComparison.Ordinal));
+        mouseDownBlock.IndexOf("e.Handled = true;", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseDownBlock.IndexOf("HitTestDrawingObject(pos)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SplitPaneScrollbarDragPreservesOrientationCursor()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
