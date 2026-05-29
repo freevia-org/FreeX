@@ -373,10 +373,13 @@ public partial class MainWindow
 
     private void RibbonTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_suppressRibbonSelectionChangedNormalization)
+            return;
+
         if (RibbonTabs.SelectedItem == FileTab)
         {
             // Switch back to Home immediately so the tab never stays selected
-            RibbonTabs.SelectedIndex = 1;
+            ChangeRibbonSelectionWithoutTabNormalization(() => RibbonTabs.SelectedIndex = 1);
             ShowStartScreen();
             NormalizeRibbonSurfaceAfterTabSelection();
             return;

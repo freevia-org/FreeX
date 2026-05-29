@@ -397,6 +397,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         fields.Should().Contain("private readonly HashSet<TabItem> _normalizedRibbonStaticTabs = [];");
         fields.Should().Contain("private bool _ribbonFallbackPending;");
         fields.Should().Contain("private RibbonFallbackWork _ribbonFallbackWork;");
+        fields.Should().Contain("private bool _suppressRibbonSelectionChangedNormalization;");
         source.Should().Contain("NormalizeStaticRibbonSurfaceForSelectedTabOnce();");
         source.Should().Contain("_normalizedRibbonStaticTabs.Add(tabItem)");
         source.Should().Contain("var surface = CaptureRibbonStaticSurface(root);");
@@ -421,6 +422,9 @@ public sealed class MainWindowAdaptiveRibbonTests
         layoutReadiness.Should().Contain("!element.IsArrangeValid");
         layoutReadiness.Should().Contain("element.UpdateLayout();");
         method.Should().Contain("NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true, scheduleFallback: true)");
+        method.Should().Contain("private void ChangeRibbonSelectionWithoutTabNormalization(Action changeSelection)");
+        method.Should().Contain("_suppressRibbonSelectionChangedNormalization = true;");
+        method.Should().Contain("_suppressRibbonSelectionChangedNormalization = previous;");
         layoutChangeNormalizer.Should().Contain("if (prepareSelectedTab)");
         layoutChangeNormalizer.Should().Contain("PrepareSelectedRibbonTabForImmediateCompaction();");
         layoutChangeNormalizer.Should().Contain("QueueRibbonFallback(RibbonFallbackWork.NormalizeSurface)");
@@ -433,10 +437,36 @@ public sealed class MainWindowAdaptiveRibbonTests
         fallbackScheduler.Should().NotContain("PrepareRibbonTabForImmediateCompaction");
         keyTipTabSelection.Should().NotContain("NormalizeRibbonSurface(forceCompact: true);");
         keyTipTabSelection.Should().Contain("var selectionChanged = !ReferenceEquals(RibbonTabs.SelectedItem, item);");
+        keyTipTabSelection.Should().Contain("ChangeRibbonSelectionWithoutTabNormalization(() => RibbonTabs.SelectedItem = item);");
         keyTipTabSelection.Should().Contain("UpdateRibbonLayoutIfNeeded(RibbonTabs, force: selectionChanged);");
         keyTipTabSelection.Should().Contain("NormalizeRibbonSurfaceAfterTabSelection();");
         method.Should().Contain("QueueRibbonFallback");
         method.Should().NotContain("DispatcherPriority.Loaded");
+    }
+
+    [Fact]
+    public void RibbonTabSelection_SuppressesDuplicateProgrammaticNormalization()
+    {
+        var backstageSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
+        var editingSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Editing.cs"));
+        var fields = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml.cs"));
+
+        var selectionChanged = backstageSource.Substring(
+            backstageSource.IndexOf("private void RibbonTabs_SelectionChanged", StringComparison.Ordinal),
+            backstageSource.IndexOf("private async void SsShareBtn_Click", StringComparison.Ordinal) -
+            backstageSource.IndexOf("private void RibbonTabs_SelectionChanged", StringComparison.Ordinal));
+        var keyTipSelection = editingSource.Substring(
+            editingSource.IndexOf("private bool SelectRibbonTabByHeader", StringComparison.Ordinal));
+
+        fields.Should().Contain("private bool _suppressRibbonSelectionChangedNormalization;");
+        selectionChanged.Should().Contain("if (_suppressRibbonSelectionChangedNormalization)");
+        selectionChanged.Should().Contain("return;");
+        selectionChanged.Should().Contain("ChangeRibbonSelectionWithoutTabNormalization(() => RibbonTabs.SelectedIndex = 1);");
+        selectionChanged.Should().Contain("NormalizeRibbonSurfaceAfterTabSelection();");
+        keyTipSelection.Should().Contain("if (selectionChanged)");
+        keyTipSelection.Should().Contain("ChangeRibbonSelectionWithoutTabNormalization(() => RibbonTabs.SelectedItem = item);");
+        keyTipSelection.Should().Contain("UpdateRibbonLayoutIfNeeded(RibbonTabs, force: selectionChanged);");
+        keyTipSelection.Should().Contain("NormalizeRibbonSurfaceAfterTabSelection();");
     }
 
     [Fact]

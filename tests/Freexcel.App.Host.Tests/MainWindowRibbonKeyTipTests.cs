@@ -108,6 +108,35 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void CommandKeyTipCandidates_AreReusedDuringScopeAndRefreshedOnReentry()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+            harness.VisibleCommandKeyTips("ZZ").Should().BeEmpty();
+
+            using var dynamicCommand = harness.AddHomeRibbonCommandButton("ZZ", "Late Test Command");
+
+            harness.VisibleCommandKeyTips("ZZ")
+                .Should()
+                .BeEmpty("an active command keytip pass should reuse the candidates captured when its overlay was shown");
+
+            harness.HandleKeyTip(Key.Z);
+            harness.KeyTipScope.Should().Be("None", "the late command should not extend the active cached command scope");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+
+            harness.VisibleCommandKeyTips("ZZ")
+                .Should()
+                .ContainSingle("Late Test Command", "a fresh keytip pass should refresh visible command candidates");
+        });
+    }
+
+    [Fact]
     public void DirectAltTopLevelKeyTips_OpenTabsAndBackstage()
     {
         RunSta(() =>
@@ -1315,6 +1344,32 @@ public sealed class MainWindowRibbonKeyTipTests
             return originalKeyTip;
         }
 
+        public IDisposable AddHomeRibbonCommandButton(string keyTip, string title)
+        {
+            var panel = (_window.FindName("HomeRibbonPanel") as Panel)
+                ?? throw new InvalidOperationException("HomeRibbonPanel was not found.");
+            var button = new Button
+            {
+                Content = title,
+                Width = 96,
+                Height = 28,
+                IsEnabled = true
+            };
+            RibbonTooltip.SetTitle(button, title);
+            RibbonTooltip.SetKeyTip(button, keyTip);
+
+            panel.Children.Add(button);
+            _window.UpdateLayout();
+            PumpDispatcher();
+
+            return new DisposableAction(() =>
+            {
+                panel.Children.Remove(button);
+                _window.UpdateLayout();
+                PumpDispatcher();
+            });
+        }
+
         public void AddNote(uint row, uint col, string text)
         {
             var sheet = _workbook.Sheets[0];
@@ -1608,6 +1663,21 @@ public sealed class MainWindowRibbonKeyTipTests
         }
 
         private sealed record SharedMainWindowSession(MainWindow Window, WorkbookRef WorkbookRef);
+
+        private sealed class DisposableAction(Action dispose) : IDisposable
+        {
+            private Action? _dispose = dispose;
+
+            public void Dispose()
+            {
+                var disposeAction = _dispose;
+                if (disposeAction is null)
+                    return;
+
+                _dispose = null;
+                disposeAction();
+            }
+        }
 
         private static IEnumerable<MenuItem> EnumerateMenuItems(ItemsControl control)
         {
