@@ -60,11 +60,14 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             if (IsSupportedFormulaErrorCode(errorCode))
                 workbook.DisabledFormulaErrorCodes.Add(errorCode);
 
+        var loadedSheetsBySourceName = new Dictionary<string, Sheet>(StringComparer.OrdinalIgnoreCase);
         var sheetIndex = 1;
         foreach (var sDto in dto.Sheets ?? [])
         {
             if (sDto is null) continue;
             var sheet = workbook.AddSheet(UniqueSheetName(workbook, sDto.Name, sheetIndex++));
+            if (!string.IsNullOrWhiteSpace(sDto.Name))
+                loadedSheetsBySourceName.TryAdd(sDto.Name, sheet);
             sheet.IsHidden = sDto.IsHidden;
             sheet.TabColor = sDto.TabColor is { } tabColor ? ParseColor(tabColor) : null;
             sheet.IsProtected = sDto.IsProtected;
@@ -342,7 +345,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 continue;
             }
 
-            var sheet = workbook.GetSheet(namedRangeDto.SheetName);
+            var sheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, namedRangeDto.SheetName);
             if (sheet is null)
                 continue;
 
@@ -364,7 +367,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             if (string.IsNullOrWhiteSpace(viewDto?.Name)) continue;
             workbook.CustomViews.Add(new WorkbookCustomView(
                 viewDto.Name,
-                (viewDto.Sheets ?? []).Select(ToWorksheetCustomViewState).ToList(),
+                (viewDto.Sheets ?? []).Select(sheetDto => ToWorksheetCustomViewState(sheetDto, workbook, loadedSheetsBySourceName)).ToList(),
                 string.IsNullOrWhiteSpace(viewDto.Id) ? null : viewDto.Id,
                 viewDto.IncludePrintSettings ?? true,
                 viewDto.IncludeHiddenRowsColumnsAndFilterSettings ?? true));
@@ -378,7 +381,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 continue;
             }
 
-            var sheet = workbook.Sheets.FirstOrDefault(s => s.Name == watchDto.SheetName);
+            var sheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, watchDto.SheetName);
             if (sheet is null)
                 continue;
 
@@ -403,7 +406,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     continue;
                 }
 
-                var sheet = workbook.Sheets.FirstOrDefault(s => s.Name == changeDto.SheetName);
+                var sheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, changeDto.SheetName);
                 if (sheet is null)
                     continue;
 
@@ -428,6 +431,13 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
         return workbook;
     }
+
+    private static Sheet? ResolveLoadedSheet(
+        Workbook workbook,
+        IReadOnlyDictionary<string, Sheet> loadedSheetsBySourceName,
+        string sheetName) =>
+        workbook.GetSheet(sheetName) ??
+        (loadedSheetsBySourceName.TryGetValue(sheetName, out var sheet) ? sheet : null);
 
     private static string UniqueSheetName(Workbook workbook, string? rawName, int index)
     {
