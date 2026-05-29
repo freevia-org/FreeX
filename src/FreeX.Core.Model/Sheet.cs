@@ -590,6 +590,12 @@ public sealed partial class Sheet
         return _cells.Keys;
     }
 
+    /// <summary>Get occupied cells keyed by primitive row and column coordinates.</summary>
+    public IReadOnlyDictionary<(uint Row, uint Col), Cell> GetOccupiedCellMap()
+    {
+        return _cells;
+    }
+
     /// <summary>Get all cells as address-cell pairs.</summary>
     public IEnumerable<(CellAddress Address, Cell Cell)> EnumerateCells()
     {
