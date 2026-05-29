@@ -75,6 +75,24 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void SerializeDeserialize_AttributeValues_PreservesXmlSensitiveCharacters()
+    {
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["formula"] = "A1<B1 && \"quoted\"",
+                ["apostrophe"] = "O'Brien"
+            },
+            ["<ext note=\"keep\" />"]);
+
+        var (roundTripAttrs, roundTripChildren) = XmlNativeBagSerializer.Deserialize(bagValue);
+
+        roundTripAttrs.Should().ContainKey("formula").WhoseValue.Should().Be("A1<B1 && \"quoted\"");
+        roundTripAttrs.Should().ContainKey("apostrophe").WhoseValue.Should().Be("O'Brien");
+        roundTripChildren.Should().Equal("<ext note=\"keep\" />");
+    }
+
+    [Fact]
     public void Deserialize_NamespaceDeclarations_DoesNotReturnDeclarationsAsNativeAttributes()
     {
         const string bagValue = """
