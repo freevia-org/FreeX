@@ -705,6 +705,8 @@ public partial class MainWindow
             return;
 
         layer.Add(new RibbonCollapsedGroupChevronAdorner(button));
+        button.IsVisibleChanged += (_, _) => layer.Update(button);
+        button.SizeChanged += (_, _) => layer.Update(button);
     }
 
     private static ContextMenu CreateLazyCollapsedRibbonGroupMenu(FrameworkElement group)
@@ -1032,17 +1034,33 @@ public partial class MainWindow
 
         protected override Size MeasureOverride(Size constraint)
         {
+            _chevron.Visibility = ShouldShowChevron() ? Visibility.Visible : Visibility.Collapsed;
+            if (_chevron.Visibility != Visibility.Visible)
+                return new Size(0, 0);
+
             _chevron.Measure(new Size(8, 8));
             return new Size(0, 0);
         }
 
         protected override Size ArrangeOverride(Size finalSize)
         {
+            if (!ShouldShowChevron())
+            {
+                _chevron.Visibility = Visibility.Collapsed;
+                _chevron.Arrange(new Rect(0, 0, 0, 0));
+                return finalSize;
+            }
+
+            _chevron.Visibility = Visibility.Visible;
             var x = Math.Max(0, (AdornedElement.RenderSize.Width - 8) / 2);
             var y = Math.Max(0, AdornedElement.RenderSize.Height - 9);
             _chevron.Arrange(new Rect(new Point(x, y), new Size(8, 8)));
             return finalSize;
         }
+
+        private bool ShouldShowChevron() =>
+            AdornedElement is FrameworkElement { IsVisible: true } &&
+            AdornedElement.RenderSize is { Width: > 0, Height: > 0 };
     }
 
     private static RibbonCompactGroupSnapshot CaptureRibbonCompactGroupSnapshot(FrameworkElement group)
