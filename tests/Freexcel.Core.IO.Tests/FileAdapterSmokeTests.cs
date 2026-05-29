@@ -5655,6 +5655,48 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_SkipsDataValidationsWithInvalidRanges()
+    {
+        const string json = """
+        {
+          "Name": "DvNativeInvalidRangeLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "DataValidations": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "Type": 5,
+                  "Operator": 0,
+                  "AlertStyle": 1,
+                  "Formula1": "09:00",
+                  "Formula2": "17:30"
+                },
+                {
+                  "AppliesTo": "not-a-range",
+                  "Type": 5,
+                  "Operator": 0,
+                  "AlertStyle": 1,
+                  "Formula1": "08:00",
+                  "Formula2": "18:00"
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var validation = loaded.GetSheetAt(0).DataValidations.Should().ContainSingle().Subject;
+        validation.AppliesTo.ToString().Should().Be("A1:A5");
+        validation.Formula1.Should().Be("09:00");
+        validation.Formula2.Should().Be("17:30");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_DropsInvalidDataValidationAdditionalRanges()
     {
         const string json = """
