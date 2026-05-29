@@ -61,11 +61,13 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
 
         if (_copyTo is null)
         {
+            var matchedRows = new HashSet<uint>(matches);
             for (var row = _listRange.Start.Row + 1; row <= _listRange.End.Row; row++)
+            {
                 sheet.FilterHiddenRows.Remove(row);
-            foreach (var row in Enumerable.Range((int)_listRange.Start.Row + 1, (int)(_listRange.End.Row - _listRange.Start.Row)).Select(r => (uint)r))
-                if (!matches.Contains(row))
+                if (!matchedRows.Contains(row))
                     sheet.FilterHiddenRows.Add(row);
+            }
             return new CommandOutcome(true);
         }
 
