@@ -5892,6 +5892,44 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_SkipsConditionalFormatsWithInvalidRanges()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeInvalidRangeLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 0,
+                  "Operator": 2,
+                  "Value1": "5"
+                },
+                {
+                  "AppliesTo": "not-a-range",
+                  "RuleType": 0,
+                  "Operator": 2,
+                  "Value1": "10"
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.AppliesTo.Start.ToA1().Should().Be("A1");
+        rule.AppliesTo.End.ToA1().Should().Be("A5");
+        rule.Value1.Should().Be("5");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_SanitizesInvalidConditionalFormatThresholdTypes()
     {
         const string json = """
