@@ -105,7 +105,9 @@ foreach ($marker in @(
     "Public-preview promotion requires completed accessibility gate inputs",
     "gh release create",
     "FreeX-latest-win-x64.exe",
-    "FreeX-latest-win-x64.msix"
+    "FreeX-latest-win-x64.exe.sha256",
+    "FreeX-latest-win-x64.msix",
+    "FreeX-latest-win-x64.msix.sha256"
 )) {
     Assert-Contains -Text $workflow -Expected $marker -Label "Tester Release workflow"
 }
@@ -119,6 +121,7 @@ Assert-Contains -Text $distributionPlan -Expected "UI Automation catalog review"
 $checklist = Get-Content -LiteralPath $checklistFile -Raw
 Assert-Contains -Text $checklist -Expected "release/progress.json" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Versioned ``.exe``, latest ``.exe``, versioned MSIX, latest MSIX, and checksum artifacts" -Label "Tester release checklist"
+Assert-Contains -Text $checklist -Expected "Stable latest checksum assets were included for both the ``.exe`` and MSIX packages" -Label "Tester release checklist"
 Assert-Contains -Text $checklist -Expected "Known accessibility issues" -Label "Tester release checklist"
 
 $missingAccessibilityGate = @()
