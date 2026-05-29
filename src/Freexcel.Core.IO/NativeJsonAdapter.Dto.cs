@@ -630,8 +630,14 @@ public sealed partial class NativeJsonAdapter
         public RgbColor MidColor { get; set; } = new(255, 235, 132);
         public RgbColor MaxColor { get; set; } = new(248, 105, 107);
         public bool UseThreeColorScale { get; set; }
+        public CfThresholdType MinThresholdType { get; set; } = CfThresholdType.Min;
+        public string? MinThresholdValue { get; set; }
         public bool? MinThresholdGreaterThanOrEqual { get; set; }
+        public CfThresholdType MidThresholdType { get; set; } = CfThresholdType.Percentile;
+        public string? MidThresholdValue { get; set; }
         public bool? MidThresholdGreaterThanOrEqual { get; set; }
+        public CfThresholdType MaxThresholdType { get; set; } = CfThresholdType.Max;
+        public string? MaxThresholdValue { get; set; }
         public bool? MaxThresholdGreaterThanOrEqual { get; set; }
         public RgbColor DataBarColor { get; set; } = new(99, 142, 198);
         public CfThresholdType DataBarMinThresholdType { get; set; } = CfThresholdType.Min;
