@@ -39,6 +39,26 @@ public class ConditionalFormatTests
     // ─── tests ────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void ConditionalFormatAggregates_OnlyAllocateRankAndCountCachesForRulesThatNeedThem()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+
+        source.Should().Contain(
+            "cf.RuleType == CfRuleType.Top10 ? [] : null",
+            "only top/bottom rules need a ranked-value cache while precomputing conditional-format aggregates");
+        source.Should().Contain(
+            "CfRuleType.DuplicateValues or CfRuleType.UniqueValues",
+            "only duplicate/unique rules need display-value occurrence counts");
+        source.Should().NotContain(
+            "var rankedValues = new List<(CellAddress Address, double Value)>();",
+            "color scales, icon sets, and above-average rules should avoid unused ranking-list allocations");
+        source.Should().NotContain(
+            "var valueCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);",
+            "non-duplicate aggregate rules should avoid unused value-count dictionary allocations");
+    }
+
+    [Fact]
     public void ConditionalFormatEvaluation_DoesNotRunLinqRangeFiltersPerDisplayedCell()
     {
         var source = File.ReadAllText(FindWorkspaceFile(

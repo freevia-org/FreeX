@@ -171,11 +171,15 @@ internal static class ViewportConditionalFormatEvaluator
 
             double sum = 0, min = double.MaxValue, max = double.MinValue;
             int count = 0;
-            var rankedValues = new List<(CellAddress Address, double Value)>();
-            var valueCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            List<(CellAddress Address, double Value)>? rankedValues =
+                cf.RuleType == CfRuleType.Top10 ? [] : null;
+            Dictionary<string, int>? valueCounts =
+                cf.RuleType is CfRuleType.DuplicateValues or CfRuleType.UniqueValues
+                    ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                    : null;
             foreach (var (a, v) in EnumerateAggregateValues(sheet, cf.AppliesTo))
             {
-                if (cf.RuleType is CfRuleType.DuplicateValues or CfRuleType.UniqueValues)
+                if (valueCounts is not null)
                 {
                     var key = NormalizeDisplayValue(v);
                     valueCounts[key] = valueCounts.GetValueOrDefault(key) + 1;
@@ -187,28 +191,27 @@ internal static class ViewportConditionalFormatEvaluator
                     if (x < min) min = x;
                     if (x > max) max = x;
                     count++;
-                    if (cf.RuleType == CfRuleType.Top10)
-                        rankedValues.Add((a, x));
+                    rankedValues?.Add((a, x));
                 }
             }
 
             var topBottomMatches = ResolveTopBottomMatches(cf, rankedValues);
-            if (count > 0 || valueCounts.Count > 0 || topBottomMatches is not null)
+            if (count > 0 || valueCounts?.Count > 0 || topBottomMatches is not null)
                 result[cf] = new CfAggregateCache(
                     count > 0 ? sum / count : 0,
                     count > 0 ? min : 0,
                     count > 0 ? max : 0,
                     topBottomMatches,
-                    valueCounts.Count > 0 ? valueCounts : null);
+                    valueCounts?.Count > 0 ? valueCounts : null);
         }
         return result;
     }
 
     private static IReadOnlySet<CellAddress>? ResolveTopBottomMatches(
         ConditionalFormat cf,
-        IReadOnlyList<(CellAddress Address, double Value)> rankedValues)
+        IReadOnlyList<(CellAddress Address, double Value)>? rankedValues)
     {
-        if (cf.RuleType != CfRuleType.Top10 || rankedValues.Count == 0)
+        if (cf.RuleType != CfRuleType.Top10 || rankedValues is null || rankedValues.Count == 0)
             return null;
 
         var take = Math.Clamp(
