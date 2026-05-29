@@ -34,34 +34,57 @@ public partial class MainWindow
     // Activated by FREEXCEL_SS_TOUR=1 env var.  Output lands in <repo-root>/screenshots/.
     private void TryStartScreenshotTour()
     {
-        if (Environment.GetEnvironmentVariable("FREEXCEL_SS_TOUR") != "1")
+        var ribbonTour = Environment.GetEnvironmentVariable("FREEXCEL_SS_TOUR") == "1";
+        var backstageTour = Environment.GetEnvironmentVariable("FREEXCEL_BACKSTAGE_TOUR") == "1";
+        if (!ribbonTour && !backstageTour)
             return;
 
         var outputDir = Path.GetFullPath(
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots"));
         Directory.CreateDirectory(outputDir);
-        _ = RunScreenshotTourAsync(outputDir);
+        _ = RunScreenshotTourAsync(outputDir, ribbonTour, backstageTour);
     }
 
-    private async Task RunScreenshotTourAsync(string outputDir)
+    private async Task RunScreenshotTourAsync(string outputDir, bool ribbonTour, bool backstageTour)
     {
-        await Task.Delay(1200);
-        await CaptureAllTabsAsync(outputDir, "max");
+        if (ribbonTour)
+        {
+            await Task.Delay(1200);
+            await CaptureAllTabsAsync(outputDir, "max");
 
-        WindowState = WindowState.Normal;
-        Width = 1100; Height = 768;
-        await Task.Delay(600);
-        await CaptureAllTabsAsync(outputDir, "1100");
+            WindowState = WindowState.Normal;
+            Width = 1100; Height = 768;
+            await Task.Delay(600);
+            await CaptureAllTabsAsync(outputDir, "1100");
 
-        Width = 900;
-        await Task.Delay(600);
-        await CaptureAllTabsAsync(outputDir, "900");
+            Width = 900;
+            await Task.Delay(600);
+            await CaptureAllTabsAsync(outputDir, "900");
 
-        Width = 750;
-        await Task.Delay(600);
-        await CaptureAllTabsAsync(outputDir, "750");
+            Width = 750;
+            await Task.Delay(600);
+            await CaptureAllTabsAsync(outputDir, "750");
+        }
+
+        if (backstageTour)
+            await CaptureBackstageAsync(outputDir);
 
         Application.Current.Shutdown();
+    }
+
+    private async Task CaptureBackstageAsync(string outputDir)
+    {
+        WindowState = WindowState.Normal;
+        Width = 1100;
+        Height = 768;
+        await Task.Delay(800);
+
+        ShowStartScreen();
+        UpdateLayout();
+        await Task.Delay(350);
+        UpdateLayout();
+
+        await CaptureCurrentWindowAsync(outputDir, "backstage_home", 760);
     }
 
     private async Task CaptureAllTabsAsync(string outputDir, string label)
@@ -80,22 +103,27 @@ public partial class MainWindow
             await Task.Delay(350);
             UpdateLayout();
 
-            var source = PresentationSource.FromVisual(this);
-            var dpiX = source?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
-            var dpiY = source?.CompositionTarget.TransformToDevice.M22 ?? 1.0;
-            int pw = Math.Max(1, (int)(ActualWidth * dpiX));
-            int ph = Math.Max(1, (int)(Math.Min(ActualHeight, ScreenshotTourCaptureHeight) * dpiY));
-
-            var rtb = new RenderTargetBitmap(pw, ph, 96 * dpiX, 96 * dpiY, PixelFormats.Pbgra32);
-            rtb.Render(this);
-            var bitmap = new CroppedBitmap(rtb, new Int32Rect(0, 0, pw, ph));
-
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(bitmap));
-            var path = Path.Combine(outputDir, $"{label}_{fileName}.png");
-            await using var stream = File.Create(path);
-            encoder.Save(stream);
+            await CaptureCurrentWindowAsync(outputDir, $"{label}_{fileName}", ScreenshotTourCaptureHeight);
         }
+    }
+
+    private async Task CaptureCurrentWindowAsync(string outputDir, string fileName, double logicalHeight)
+    {
+        var source = PresentationSource.FromVisual(this);
+        var dpiX = source?.CompositionTarget.TransformToDevice.M11 ?? 1.0;
+        var dpiY = source?.CompositionTarget.TransformToDevice.M22 ?? 1.0;
+        int pw = Math.Max(1, (int)(ActualWidth * dpiX));
+        int ph = Math.Max(1, (int)(Math.Min(ActualHeight, logicalHeight) * dpiY));
+
+        var rtb = new RenderTargetBitmap(pw, ph, 96 * dpiX, 96 * dpiY, PixelFormats.Pbgra32);
+        rtb.Render(this);
+        var bitmap = new CroppedBitmap(rtb, new Int32Rect(0, 0, pw, ph));
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        var path = Path.Combine(outputDir, $"{fileName}.png");
+        await using var stream = File.Create(path);
+        encoder.Save(stream);
     }
 
     // Activated by FREEXCEL_GREEN_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/green-bars-tour/.

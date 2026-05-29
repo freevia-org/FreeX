@@ -73,6 +73,12 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Help Online", RibbonCommandIconKind.Help)]
     [InlineData("Report Issue", RibbonCommandIconKind.Feedback)]
     [InlineData("Copy Diagnostics", RibbonCommandIconKind.Info)]
+    [InlineData("Get Add-ins", RibbonCommandIconKind.Insert)]
+    [InlineData("Stocks", RibbonCommandIconKind.Table)]
+    [InlineData("Geography", RibbonCommandIconKind.Table)]
+    [InlineData("Page Orientation", RibbonCommandIconKind.Page)]
+    [InlineData("Lasso Select", RibbonCommandIconKind.Target)]
+    [InlineData("Macros", RibbonCommandIconKind.Function)]
     [InlineData("What's New", RibbonCommandIconKind.Info)]
     [InlineData("Unknown Command", RibbonCommandIconKind.Generic)]
     public void GetIcon_MapsKnownCommandsToSemanticVectorKinds(string commandName, RibbonCommandIconKind expectedKind)

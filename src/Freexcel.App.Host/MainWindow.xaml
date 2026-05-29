@@ -2129,7 +2129,7 @@
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Orientation" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageOrientBtn_Click"
-                                        local:RibbonTooltip.Title="Orientation"
+                                        local:RibbonTooltip.Title="Page Orientation"
                                         local:RibbonTooltip.KeyTip="OR"
                                         local:RibbonTooltip.Description="Change the page orientation to Portrait or Landscape.">
                                     <Button.ContextMenu>
@@ -4281,17 +4281,22 @@
 
                 <!-- Home (active/selected when showing home view) -->
                 <Button x:Name="SsHomeNavBtn" DockPanel.Dock="Top"
-                        Content="Home" HorizontalAlignment="Stretch"
+                        HorizontalAlignment="Stretch"
                         Style="{StaticResource SsNavBtnActive}"
                         Click="SsHomeNavBtn_Click"
                         local:RibbonTooltip.Title="Home"
-                        local:RibbonTooltip.KeyTip="H"/>
+                        local:RibbonTooltip.KeyTip="H">
+                    <StackPanel Orientation="Horizontal">
+                        <local:RibbonIcon CommandName="Home" Kind="Grid" IconSize="15" Foreground="{StaticResource FreexcelWhiteBrush}" Margin="0,0,10,0"/>
+                        <AccessText Text="Home" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
 
                 <!-- Account / Options pinned to bottom -->
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,10">
                     <Rectangle Height="1" Fill="#2C5C40" Margin="0,0,0,6"/>
                     <local:AutomationInvokeButton x:Name="SsAccountNavBtn"
-                                                  Content="Account" HorizontalAlignment="Stretch"
+                                                  HorizontalAlignment="Stretch"
                                                   Style="{StaticResource SsNavBtn}"
                                                   Click="SsAccountBtn_Click"
                                                   IsTabStop="True"
@@ -4300,9 +4305,14 @@
                                                   AutomationProperties.HelpText="Show local account information for Freexcel."
                                                   local:RibbonTooltip.Title="Local Account"
                                                   local:RibbonTooltip.KeyTip="AC"
-                                                  local:RibbonTooltip.Description="Microsoft account integration is not implemented; Freexcel uses local files and local options."/>
+                                                  local:RibbonTooltip.Description="Microsoft account integration is not implemented; Freexcel uses local files and local options.">
+                        <StackPanel Orientation="Horizontal">
+                            <local:RibbonIcon CommandName="Account" Kind="Info" IconSize="15" Foreground="{StaticResource FreexcelWhiteBrush}" Margin="0,0,10,0"/>
+                            <AccessText Text="Account" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </local:AutomationInvokeButton>
                     <local:AutomationInvokeButton x:Name="SsOptionsNavBtn"
-                                                  Content="Options" HorizontalAlignment="Stretch"
+                                                  HorizontalAlignment="Stretch"
                                                   Style="{StaticResource SsNavBtn}"
                                                   Click="SsOptionsBtn_Click"
                                                   IsTabStop="True"
@@ -4310,47 +4320,82 @@
                                                   AutomationProperties.AutomationId="BackstageOptionsButton"
                                                   AutomationProperties.HelpText="Open Freexcel settings and formula error checking options."
                                                   local:RibbonTooltip.Title="Options"
-                                                  local:RibbonTooltip.KeyTip="T"/>
+                                                  local:RibbonTooltip.KeyTip="T">
+                        <StackPanel Orientation="Horizontal">
+                            <local:RibbonIcon CommandName="Options" Kind="View" IconSize="15" Foreground="{StaticResource FreexcelWhiteBrush}" Margin="0,0,10,0"/>
+                            <AccessText Text="Options" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </local:AutomationInvokeButton>
                 </StackPanel>
 
                 <!-- Navigation items -->
                 <StackPanel>
-                    <Button Content="New" HorizontalAlignment="Stretch"
+                    <Button HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsNewBtn_Click"
                             local:RibbonTooltip.Title="New"
-                            local:RibbonTooltip.KeyTip="N"/>
-                    <Button Content="Open" HorizontalAlignment="Stretch"
+                            local:RibbonTooltip.KeyTip="N">
+                        <StackPanel Orientation="Horizontal">
+                            <local:RibbonIcon CommandName="New" Kind="Insert" IconSize="15" Foreground="{StaticResource FreexcelWhiteBrush}" Margin="0,0,10,0"/>
+                            <AccessText Text="New" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsOpenBtn_Click"
                             local:RibbonTooltip.Title="Open"
-                            local:RibbonTooltip.KeyTip="O"/>
-                    <Button Content="Share" HorizontalAlignment="Stretch"
+                            local:RibbonTooltip.KeyTip="O">
+                        <StackPanel Orientation="Horizontal">
+                            <local:RibbonIcon CommandName="Open" Kind="GetData" IconSize="15" Foreground="{StaticResource FreexcelWhiteBrush}" Margin="0,0,10,0"/>
+                            <AccessText Text="Open" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsShareBtn_Click"
                             local:RibbonTooltip.Title="Share"
                             local:RibbonTooltip.KeyTip="SH"
-                            local:RibbonTooltip.Description="Save the workbook if needed and open Windows Share for the file."/>
+                            local:RibbonTooltip.Description="Save the workbook if needed and open Windows Share for the file.">
+                        <StackPanel Orientation="Horizontal">
+                            <local:RibbonIcon CommandName="Share" Kind="Share" IconSize="15" Foreground="{StaticResource FreexcelWhiteBrush}" Margin="0,0,10,0"/>
+                            <AccessText Text="Share" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
 
                     <Rectangle Height="1" Fill="#2C5C40" Margin="0,6"/>
 
-                    <Button x:Name="SsInfoNavBtn" Content="Info"
+                    <Button x:Name="SsInfoNavBtn"
                             HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsInfoBtn_Click"
                             local:RibbonTooltip.Title="Info"
-                            local:RibbonTooltip.KeyTip="I"/>
-                    <Button Content="_Save" HorizontalAlignment="Stretch"
+                            local:RibbonTooltip.KeyTip="I">
+                        <StackPanel Orientation="Horizontal">
+                            <local:RibbonIcon CommandName="Info" Kind="Info" IconSize="15" Foreground="{StaticResource FreexcelWhiteBrush}" Margin="0,0,10,0"/>
+                            <AccessText Text="Info" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SaveButton_Click"
                             local:RibbonTooltip.Title="Save"
-                            local:RibbonTooltip.KeyTip="S"/>
-                    <Button Content="Save _As" HorizontalAlignment="Stretch"
+                            local:RibbonTooltip.KeyTip="S">
+                        <StackPanel Orientation="Horizontal">
+                            <local:RibbonIcon CommandName="Save" Kind="Save" IconSize="15" Foreground="{StaticResource FreexcelWhiteBrush}" Margin="0,0,10,0"/>
+                            <AccessText Text="_Save" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SaveAsButton_Click"
                             local:RibbonTooltip.Title="Save As"
-                            local:RibbonTooltip.KeyTip="A"/>
-                    <Button x:Name="SsPrintNavBtn" Content="Print" HorizontalAlignment="Stretch"
+                            local:RibbonTooltip.KeyTip="A">
+                        <StackPanel Orientation="Horizontal">
+                            <local:RibbonIcon CommandName="Save As" Kind="Save" IconSize="15" Foreground="{StaticResource FreexcelWhiteBrush}" Margin="0,0,10,0"/>
+                            <AccessText Text="Save _As" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="SsPrintNavBtn" HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             AutomationProperties.AutomationId="BackstagePrintButton"
                             AutomationProperties.Name="Print"
@@ -4358,18 +4403,33 @@
                             Click="PrintButton_Click"
                             local:RibbonTooltip.Title="Print"
                             local:RibbonTooltip.KeyTip="P"
-                            local:RibbonTooltip.Description="Open the print preview and native print dialog for the rendered worksheet."/>
-                    <Button Content="Export" HorizontalAlignment="Stretch"
+                            local:RibbonTooltip.Description="Open the print preview and native print dialog for the rendered worksheet.">
+                        <StackPanel Orientation="Horizontal">
+                            <local:RibbonIcon CommandName="Print" Kind="Print" IconSize="15" Foreground="{StaticResource FreexcelWhiteBrush}" Margin="0,0,10,0"/>
+                            <AccessText Text="Print" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="ExportPdfButton_Click"
                             local:RibbonTooltip.Title="Export PDF/XPS"
                             local:RibbonTooltip.KeyTip="E"
-                            local:RibbonTooltip.Description="Save sheets, the current selection, or the workbook as a PDF file or an XPS package."/>
-                    <Button Content="_Close" HorizontalAlignment="Stretch"
+                            local:RibbonTooltip.Description="Save sheets, the current selection, or the workbook as a PDF file or an XPS package.">
+                        <StackPanel Orientation="Horizontal">
+                            <local:RibbonIcon CommandName="Export" Kind="Share" IconSize="15" Foreground="{StaticResource FreexcelWhiteBrush}" Margin="0,0,10,0"/>
+                            <AccessText Text="Export" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button HorizontalAlignment="Stretch"
                             Style="{StaticResource SsNavBtn}"
                             Click="SsCloseBtn_Click"
                             local:RibbonTooltip.Title="Close"
-                            local:RibbonTooltip.KeyTip="C"/>
+                            local:RibbonTooltip.KeyTip="C">
+                        <StackPanel Orientation="Horizontal">
+                            <local:RibbonIcon CommandName="Close" Kind="WindowClose" IconSize="15" Foreground="{StaticResource FreexcelWhiteBrush}" Margin="0,0,10,0"/>
+                            <AccessText Text="_Close" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </DockPanel>
 

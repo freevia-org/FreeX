@@ -151,7 +151,8 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Backstage.cs"));
 
-        xaml.Should().Contain("Content=\"Save _As\"");
+        xaml.Should().Contain("Text=\"Save _As\"");
+        xaml.Should().Contain("CommandName=\"Save As\"");
         xaml.Should().Contain("Click=\"SaveAsButton_Click\"");
         backstageSource.Should().Contain("private async void SaveAsButton_Click(object sender, RoutedEventArgs e)");
         backstageSource.Should().Contain("await SaveWorkbookWithDialogAsync();");
@@ -1433,7 +1434,7 @@ public sealed class MainWindowSourceHygieneTests
         iconResources.Should().Contain("FreexcelRibbonSmallLabel");
 
         source.Should().Contain("CreateRibbonCommandContent(commandName, label, layoutKind)");
-        source.Should().Contain("NormalizeExistingRibbonIconText(root);");
+        source.Should().Contain("NormalizeExistingRibbonIconText(surface);");
         source.Should().Contain("GetRibbonIconAccentBrushes");
         source.Should().Contain("RibbonIconFactory.CreateCommandIcon(commandName, icon, iconSize, glyphBrush)");
         source.Should().Contain("ReplaceRibbonGlyphIcons(button.Content, button, tall)");
