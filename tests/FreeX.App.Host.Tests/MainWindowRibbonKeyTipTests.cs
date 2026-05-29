@@ -69,6 +69,28 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void KeyTipOverlay_NormalizesAttachedKeyTipMetadata()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var originalKeyTip = harness.SetButtonKeyTip("SaveQatBtn", " 1 ");
+
+            try
+            {
+                harness.EnterKeyTipScope("TopLevel");
+
+                harness.OverlayBadgeTexts.Should().Contain("1");
+                harness.OverlayBadgeTexts.Should().NotContain(" 1 ");
+            }
+            finally
+            {
+                harness.SetButtonKeyTip("SaveQatBtn", originalKeyTip ?? "");
+            }
+        });
+    }
+
+    [Fact]
     public void FileKeyTip_RoutesThroughBackstageCommandsOnly()
     {
         RunSta(() =>

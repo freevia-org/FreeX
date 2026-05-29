@@ -2002,6 +2002,7 @@ public sealed class MainWindowSourceHygieneTests
         keyboardFocusSource.Should().Contain("private bool FocusSlicerTimelinePane()");
         keyboardFocusSource.Should().Contain("SlicerTimelinePane?.Visibility != Visibility.Visible");
         keyboardFocusSource.Should().Contain("TryFocusTaskPaneElement(SlicerTimelinePaneCloseBtn)");
+        keyboardFocusSource.Should().Contain("TryFocusTaskPaneElement(SlicerTimelinePane)");
         keyboardFocusSource.Should().Contain("DispatcherPriority.Input");
         xaml.Should().Contain("x:Name=\"SlicerTimelinePane\"");
         xaml.Should().Contain("x:Name=\"SlicerTimelinePaneCloseBtn\"");

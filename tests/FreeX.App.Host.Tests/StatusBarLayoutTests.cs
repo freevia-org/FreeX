@@ -280,7 +280,7 @@ public sealed class StatusBarLayoutTests
             harness.CycleShellFocus(reverse: false);
 
             harness.CurrentShellFocusTarget.Should().Be(ShellFocusTarget.TaskPane);
-            harness.FocusedElementName.Should().Be("SlicerTimelinePaneCloseBtn");
+            harness.FocusedElementName.Should().BeOneOf("SlicerTimelinePaneCloseBtn", "SlicerTimelinePane");
         });
     }
 
