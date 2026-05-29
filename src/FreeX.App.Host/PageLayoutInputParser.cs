@@ -152,7 +152,7 @@ public static class PageLayoutInputParser
         var trimmed = input.Trim();
         if (trimmed.Contains('x', StringComparison.OrdinalIgnoreCase))
         {
-            var parts = trimmed.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            var parts = trimmed.Split(['x', 'X'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 2 &&
                 int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var wide) &&
                 int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var tall) &&

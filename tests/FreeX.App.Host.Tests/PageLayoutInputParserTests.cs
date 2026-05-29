@@ -178,6 +178,7 @@ public sealed class PageLayoutInputParserTests
     [InlineData("400", true, 400, null, null)]
     [InlineData("1x1", true, null, 1, 1)]
     [InlineData("2 x 3", true, null, 2, 3)]
+    [InlineData("2 X 3", true, null, 2, 3)]
     [InlineData("9", false, null, null, null)]
     [InlineData("9%", false, null, null, null)]
     [InlineData("401", false, null, null, null)]
