@@ -29,51 +29,60 @@ public sealed class AutofillCommand : IWorkbookCommand
         if (!TryGetFillPlan(out var plan))
             return new CommandOutcome(false, "The autofill range must be adjacent to the source range and aligned by row or column.");
 
-        var targets = _fillRange.AllCells().ToList();
-        if (targets.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
-            return new CommandOutcome(false, "The sheet is protected.");
+        for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)
+        {
+            for (var col = _fillRange.Start.Col; col <= _fillRange.End.Col; col++)
+            {
+                if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, new CellAddress(_sheetId, row, col)))
+                    return new CommandOutcome(false, "The sheet is protected.");
+            }
+        }
 
         var sourceAddr = GetSourceEdgeAddress(plan);
         var sourceCell = sheet.GetCell(sourceAddr);
         var scalarSeries = TryCreateScalarSeries(sheet, plan);
 
-        _snapshot = [];
+        _snapshot = new List<(CellAddress Addr, Cell? OldCell)>(GetFillCellCapacity());
 
-        foreach (var addr in targets)
+        for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)
         {
-            _snapshot.Add((addr, sheet.GetCell(addr)?.Clone()));
-
-            if (sourceCell is null)
+            for (var col = _fillRange.Start.Col; col <= _fillRange.End.Col; col++)
             {
-                sheet.ClearCell(addr);
-                continue;
-            }
+                var addr = new CellAddress(_sheetId, row, col);
+                _snapshot.Add((addr, sheet.GetCell(addr)?.Clone()));
 
-            int rowOffset = (int)addr.Row - (int)sourceAddr.Row;
-            int colOffset = (int)addr.Col - (int)sourceAddr.Col;
+                if (sourceCell is null)
+                {
+                    sheet.ClearCell(addr);
+                    continue;
+                }
 
-            Cell newCell;
-            if (scalarSeries is not null)
-            {
-                var offset = scalarSeries.Axis == FillAxis.Vertical
-                    ? Math.Abs((int)addr.Row - (int)sourceAddr.Row)
-                    : Math.Abs((int)addr.Col - (int)sourceAddr.Col);
-                newCell = Cell.FromValue(scalarSeries.CreateValue(scalarSeries.LastValue + scalarSeries.Step * offset));
-            }
-            else if (sourceCell.HasFormula && sourceCell.FormulaText is not null)
-            {
-                var shifted = FormulaRewriter.Rewrite(sourceCell.FormulaText,
-                    new PasteOffsetOp(rowOffset, colOffset), sheet.Name)
-                    ?? sourceCell.FormulaText;
-                newCell = Cell.FromFormula(shifted);
-            }
-            else
-            {
-                newCell = Cell.FromValue(sourceCell.Value);
-            }
+                int rowOffset = (int)addr.Row - (int)sourceAddr.Row;
+                int colOffset = (int)addr.Col - (int)sourceAddr.Col;
 
-            newCell.StyleId = sourceCell.StyleId;
-            sheet.SetCell(addr, newCell);
+                Cell newCell;
+                if (scalarSeries is not null)
+                {
+                    var offset = scalarSeries.Axis == FillAxis.Vertical
+                        ? Math.Abs((int)addr.Row - (int)sourceAddr.Row)
+                        : Math.Abs((int)addr.Col - (int)sourceAddr.Col);
+                    newCell = Cell.FromValue(scalarSeries.CreateValue(scalarSeries.LastValue + scalarSeries.Step * offset));
+                }
+                else if (sourceCell.HasFormula && sourceCell.FormulaText is not null)
+                {
+                    var shifted = FormulaRewriter.Rewrite(sourceCell.FormulaText,
+                        new PasteOffsetOp(rowOffset, colOffset), sheet.Name)
+                        ?? sourceCell.FormulaText;
+                    newCell = Cell.FromFormula(shifted);
+                }
+                else
+                {
+                    newCell = Cell.FromValue(sourceCell.Value);
+                }
+
+                newCell.StyleId = sourceCell.StyleId;
+                sheet.SetCell(addr, newCell);
+            }
         }
 
         return new CommandOutcome(true);
@@ -146,6 +155,12 @@ public sealed class AutofillCommand : IWorkbookCommand
         FillDirection.Left => _sourceRange.Start,
         _ => _sourceRange.End
     };
+
+    private int GetFillCellCapacity()
+    {
+        var count = _fillRange.CellCount;
+        return count <= int.MaxValue ? (int)count : 0;
+    }
 
     private ScalarSeries? TryCreateScalarSeries(Sheet sheet, FillPlan plan)
     {
