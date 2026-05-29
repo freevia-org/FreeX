@@ -462,6 +462,31 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_OutputOneByteOverLimit_ReportsSafetyDiagnostic()
+    {
+        const string stylesheetXml = """
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <output>abcdefghijklmnopqrstuvwxyz</output>
+              </xsl:template>
+            </xsl:stylesheet>
+            """;
+        using var expected = XsltWorkbookTransform.TransformToSpreadsheetXml(
+            StreamFromString("<rows />"),
+            StreamFromString(stylesheetXml));
+        var tooSmallLimit = expected.Length - 1;
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(
+            StreamFromString("<rows />"),
+            StreamFromString(stylesheetXml),
+            tooSmallLimit);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage($"*output exceeded*{tooSmallLimit} byte safety limit*")
+            .WithInnerException<IOException>();
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_InvalidOutputLimit_ThrowsArgumentOutOfRangeException()
     {
         using var source = StreamFromString("<rows />");
