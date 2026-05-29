@@ -445,36 +445,37 @@ public sealed class MainWindowAdaptiveRibbonTests
     [Fact]
     public void RibbonGroupDiscovery_UsesMetadataRatherThanVisualShapeDuringResize()
     {
-        var ribbonSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
-        var adaptiveSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.RibbonAdaptive.cs"));
-        var xaml = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
-        var iconResources = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Resources", "IconResources.xaml"));
-        var resources = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "Resources", "MainWindowResources.xaml"));
-        var footprintUpdater = adaptiveSource.Substring(
-            adaptiveSource.IndexOf("private static void SetCollapsedRibbonButtonFootprint", StringComparison.Ordinal),
-            adaptiveSource.IndexOf("private void SetCollapsedRibbonButtonFootprintIfNeeded", StringComparison.Ordinal) -
-            adaptiveSource.IndexOf("private static void SetCollapsedRibbonButtonFootprint", StringComparison.Ordinal));
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
 
-        ribbonSource.Should().Contain("NormalizeRibbonGroupMetadata(surface);");
-        ribbonSource.Should().Contain("private sealed class RibbonStaticSurfaceSnapshot");
-        ribbonSource.Should().Contain("ButtonBases = descendants.OfType<ButtonBase>().ToList();");
-        ribbonSource.Should().Contain("StackPanels = descendants.OfType<StackPanel>().ToList();");
-        ribbonSource.Should().NotContain("EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>()");
-        ribbonSource.Should().NotContain("EnumerateVisualDescendants(this).OfType<ButtonBase>()");
-        adaptiveSource.Should().Contain("RibbonMetadata.IsRibbonGroup(e)");
-        adaptiveSource.Should().NotContain("System.Windows.Shapes.Rectangle");
-        adaptiveSource.Should().NotContain("FindVisualAncestor<Border>(textBlock)");
-        adaptiveSource.Should().Contain("ContextMenu = CreateLazyCollapsedRibbonGroupMenu(group)");
-        adaptiveSource.Should().Contain("EnsureCollapsedRibbonGroupMenuItems(menu)");
-        adaptiveSource.Should().NotContain("ContextMenu = CreateCollapsedRibbonGroupMenu(group)");
-        footprintUpdater.Should().Contain("TryGetCollapsedRibbonButtonCaption(button, out var caption)");
-        footprintUpdater.Should().NotContain("EnumerateVisualDescendants");
-        footprintUpdater.Should().NotContain("EnumerateLogicalDescendants");
-        resources.Should().Contain("Property=\"local:RibbonMetadata.Role\" Value=\"RibbonGroup\"");
-        xaml.Should().NotContain("Tag=\"RibbonLabel\"");
-        xaml.Should().NotContain("Tag=\"RibbonCompact:");
-        iconResources.Should().NotContain("Property=\"Tag\" Value=\"RibbonLabel\"");
-        iconResources.Should().Contain("Property=\"local:RibbonMetadata.Role\" Value=\"CommandLabel\"");
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 1465);
+                var expectedGroupOrder = harness.ActiveRibbonGroupNames;
+
+                expectedGroupOrder.Should().NotBeEmpty($"{tab} should expose metadata-backed ribbon groups before resize");
+                expectedGroupOrder.Should().OnlyContain(
+                    name => !string.IsNullOrWhiteSpace(name) && !string.Equals(name, "Commands", StringComparison.Ordinal),
+                    $"{tab} should resolve group identity from ribbon metadata, not from generic visual shape");
+
+                var sawCollapsedGroups = false;
+                foreach (var width in new[] { 900.0, 640.0, 220.0, 1280.0, 1465.0 })
+                {
+                    harness.SelectRibbonTab(tab, width);
+                    sawCollapsedGroups |= harness.CollapsedActiveRibbonGroupNames.Count > 0;
+
+                    harness.ActiveRibbonGroupNames.Should().Equal(
+                        expectedGroupOrder,
+                        $"{tab} metadata group order should stay stable after switching tabs and resizing to {width:0}px");
+                    harness.ActiveRibbonPresentationGroupNames.Should().Equal(
+                        expectedGroupOrder,
+                        $"{tab} should present one visible group affordance per metadata group after resizing to {width:0}px");
+                }
+
+                sawCollapsedGroups.Should().BeTrue($"{tab} should exercise collapsed group discovery during the resize sweep");
+            }
+        });
     }
 
     [Fact]
@@ -1006,13 +1007,26 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void RibbonScrollViewers_DefaultToHiddenHorizontalScrollBarsInXaml()
+    public void RibbonScrollViewers_KeepHorizontalScrollBarsHiddenDuringTabSwitchesAndResize()
     {
-        var xaml = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"));
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
 
-        xaml.Should().NotContain(
-            "HorizontalScrollBarVisibility=\"Auto\"",
-            "ribbon tabs should not briefly show a horizontal scrollbar before runtime normalization collapses groups");
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                foreach (var width in new[] { 1465.0, 900.0, 640.0, 220.0, 1280.0 })
+                {
+                    harness.SelectRibbonTab(tab, width);
+
+                    harness.ActiveRibbonHorizontalScrollBarMode.Should().Be(
+                        ScrollBarVisibility.Hidden,
+                        $"{tab} should keep its ribbon content scroller hidden after resizing to {width:0}px");
+                    harness.ActiveRibbonVisibleHorizontalScrollBars.Should().BeEmpty(
+                        $"{tab} should not show a horizontal ribbon scrollbar after resizing to {width:0}px");
+                }
+            }
+        });
     }
 
     private sealed class MainWindowHarness : IDisposable
@@ -1055,6 +1069,14 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .OfType<DependencyObject>()
                 .Where(RibbonMetadata.IsRibbonGroup)
                 .Select(group => RibbonMetadata.TryGetGroupName(group, out var name) ? name : "")
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .ToList();
+
+        public IReadOnlyList<string> ActiveRibbonPresentationGroupNames =>
+            (ActiveRibbonPanel?.Children.Cast<UIElement>() ?? [])
+                .OfType<FrameworkElement>()
+                .Where(IsEffectivelyVisible)
+                .Select(GetRibbonPresentationGroupName)
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .ToList();
 
@@ -1356,6 +1378,20 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .ToList()
                 : [];
 
+        public ScrollBarVisibility? ActiveRibbonHorizontalScrollBarMode =>
+            ActiveRibbonScrollViewer?.HorizontalScrollBarVisibility;
+
+        public IReadOnlyList<string> ActiveRibbonVisibleHorizontalScrollBars =>
+            ActiveRibbonScrollViewer is { } scrollViewer
+                ? EnumerateSelfAndVisualDescendants(scrollViewer)
+                    .OfType<ScrollBar>()
+                    .Where(scrollBar => scrollBar.Orientation == Orientation.Horizontal)
+                    .Where(IsEffectivelyVisible)
+                    .Where(scrollBar => scrollBar.ActualWidth > 0 && scrollBar.ActualHeight > 0)
+                    .Select(scrollBar => $"{scrollBar.Name}:{scrollBar.Visibility}:{scrollBar.ActualWidth:0.#}x{scrollBar.ActualHeight:0.#}")
+                    .ToList()
+                : [];
+
         public double ActiveRibbonPanelOverflow
         {
             get
@@ -1398,6 +1434,11 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .OrderByDescending(panel => panel.Children.OfType<DependencyObject>().Count(RibbonMetadata.IsRibbonGroup))
                     .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
                                              panel.Children.OfType<DependencyObject>().Any(RibbonMetadata.IsRibbonGroup))
+                : null;
+
+        private ScrollViewer? ActiveRibbonScrollViewer =>
+            ActiveRibbonPanel is { } panel
+                ? FindVisualAncestor<ScrollViewer>(panel)
                 : null;
 
         private Grid? FindActiveRibbonGroup(string groupName) =>
@@ -1565,6 +1606,23 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .OfType<TextBlock>()
                 .FirstOrDefault(RibbonMetadata.IsCommandLabel)
                 ?.Text ?? "";
+        }
+
+        private static string GetRibbonPresentationGroupName(FrameworkElement element)
+        {
+            if (RibbonMetadata.IsRibbonGroup(element) &&
+                RibbonMetadata.TryGetGroupName(element, out var groupName))
+            {
+                return groupName;
+            }
+
+            if (element is Button button &&
+                RibbonMetadata.IsCollapsedGroupButton(button))
+            {
+                return RibbonTooltip.GetTitle(button) ?? "";
+            }
+
+            return "";
         }
 
         private static double GetIconSlotOffset(Visual ancestor, Button button)
