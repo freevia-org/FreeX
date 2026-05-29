@@ -39,8 +39,8 @@ public sealed class TesterReleaseReadinessPreflightTests
 
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Tester release readiness preflight passed.");
-        result.Output.Should().Contain("Default tester version for run 42: v0.7.42");
-        result.Output.Should().Contain("Tester stream: v0.7.<run>");
+        result.Output.Should().Contain("Default tester version for run 42: v0.8.42");
+        result.Output.Should().Contain("Tester stream: v0.8.<run>");
         result.Output.Should().Contain("Promotion status: internal-only");
     }
 
@@ -55,6 +55,18 @@ public sealed class TesterReleaseReadinessPreflightTests
         result.Error.Should().Contain("Screen-reader smoke validation");
         result.Error.Should().Contain("UI Automation catalog review");
         result.Error.Should().Contain("Known accessibility issues reviewed/listed");
+    }
+
+    [Fact]
+    public void ReadinessPreflight_AllowsPublicPreviewWhenAccessibilityGateIsComplete()
+    {
+        var result = RunReadinessPreflight("-RunNumber 42 -PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues");
+
+        result.ExitCode.Should().Be(0, result.Error);
+        result.Output.Should().Contain("Tester release readiness preflight passed.");
+        result.Output.Should().Contain("Default tester version for run 42: v0.8.42");
+        result.Output.Should().Contain("Tester stream: v0.8.<run>");
+        result.Output.Should().Contain("Promotion status: public-preview eligible");
     }
 
     private static (int ExitCode, string Output, string Error) RunReadinessPreflight(string arguments)

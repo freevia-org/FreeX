@@ -41,7 +41,7 @@ function Get-TesterMinorVersion {
     param([Parameter(Mandatory = $true)][int]$OverallCompletion)
 
     if ($OverallCompletion -ge 99) { return 9 }
-    if ($OverallCompletion -ge 96) { return 8 }
+    if ($OverallCompletion -ge 95) { return 8 }
     if ($OverallCompletion -ge 93) { return 7 }
     if ($OverallCompletion -ge 90) { return 6 }
     return 5
