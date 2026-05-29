@@ -1006,7 +1006,7 @@
                                             <MenuItem Header="Insert Cells..."        local:RibbonTooltip.KeyTip="C" Click="InsertCellsMenuItem_Click"/>
                                             <MenuItem Header="Insert Sheet Rows"     local:RibbonTooltip.KeyTip="R" Click="InsertRowBtn_Click"/>
                                             <MenuItem Header="Insert Sheet Columns"  local:RibbonTooltip.KeyTip="O" Click="InsertColBtn_Click"/>
-                                            <MenuItem Header="Insert Sheet..."        local:RibbonTooltip.KeyTip="S" Click="InsertSheetMenuItem_Click"/>
+                                            <MenuItem Header="Insert Sheet"           local:RibbonTooltip.KeyTip="S" Click="InsertSheetMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -1025,7 +1025,7 @@
                                             <MenuItem Header="Delete Cells..."        local:RibbonTooltip.KeyTip="C" Click="DeleteCellsMenuItem_Click"/>
                                             <MenuItem Header="Delete Sheet Rows"     local:RibbonTooltip.KeyTip="R" Click="DeleteRowBtn_Click"/>
                                             <MenuItem Header="Delete Sheet Columns"  local:RibbonTooltip.KeyTip="O" Click="DeleteColBtn_Click"/>
-                                            <MenuItem Header="Delete Sheet..."        local:RibbonTooltip.KeyTip="S" Click="DeleteSheetMenuItem_Click"/>
+                                            <MenuItem Header="Delete Sheet"           local:RibbonTooltip.KeyTip="S" Click="DeleteSheetMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
