@@ -5868,6 +5868,44 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Save_SanitizesInvalidConditionalFormatThresholdState()
+    {
+        var workbook = new Workbook("CfNativeInvalidThresholdSave");
+        var sheet = workbook.AddSheet("S1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 5, 1));
+        var format = new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.IconSet,
+            Operator = CfOperator.Equal,
+            DataBarMinThresholdType = (CfThresholdType)999,
+            DataBarMaxThresholdType = (CfThresholdType)999
+        };
+        format.IconSetThresholds.AddRange([
+            new CfThresholdModel((CfThresholdType)999, "bad"),
+            new CfThresholdModel(CfThresholdType.Percent, "50")
+        ]);
+        sheet.ConditionalFormats.Add(format);
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var savedFormat = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")[0];
+
+        savedFormat.GetProperty("DataBarMinThresholdType").GetInt32().Should().Be((int)CfThresholdType.Min);
+        savedFormat.GetProperty("DataBarMaxThresholdType").GetInt32().Should().Be((int)CfThresholdType.Max);
+        savedFormat.GetProperty("IconSetThresholds").EnumerateArray()
+            .Should().ContainSingle()
+            .Which.GetProperty("Type").GetInt32().Should().Be((int)CfThresholdType.Percent);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_MergedRegions_Survive()
     {
         var workbook = new Workbook("MergeNativeTest");
