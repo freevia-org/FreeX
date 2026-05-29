@@ -44,6 +44,34 @@ public sealed class MenuKeyTipAssignerTests
     }
 
     [Fact]
+    public void ReadsAccessTextHeaderWhenAssigningDynamicMenuKeyTips()
+    {
+        RunSta(() =>
+        {
+            var saveAs = new MenuItem { Header = new AccessText { Text = "Save _As" } };
+            var save = new MenuItem { Header = new AccessText { Text = "_Save" } };
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([saveAs, save]);
+
+            RibbonTooltip.GetKeyTip(saveAs).Should().Be("A");
+            RibbonTooltip.GetKeyTip(save).Should().Be("S");
+        });
+    }
+
+    [Fact]
+    public void ReadsTextBlockHeaderWhenAssigningDynamicMenuKeyTips()
+    {
+        RunSta(() =>
+        {
+            var saveAs = new MenuItem { Header = new TextBlock { Text = "Save _As" } };
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips([saveAs]);
+
+            RibbonTooltip.GetKeyTip(saveAs).Should().Be("A");
+        });
+    }
+
+    [Fact]
     public void TreatsEscapedUnderscoreAsLiteralHeaderTextWhenAssigningDynamicMenuKeyTips()
     {
         RunSta(() =>
