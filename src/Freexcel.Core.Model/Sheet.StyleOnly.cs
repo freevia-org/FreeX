@@ -2,6 +2,9 @@ namespace Freexcel.Core.Model;
 
 public sealed partial class Sheet
 {
+    /// <summary>Whether any empty cells carry style-only overrides.</summary>
+    public bool HasStyleOnlyCells => _styleOnly.Count != 0;
+
     /// <summary>Returns the style-only override for an empty cell, or null if none exists.</summary>
     public StyleId? GetStyleOnly(uint row, uint col)
         => _styleOnly.TryGetValue((row, col), out var s) ? s : null;
