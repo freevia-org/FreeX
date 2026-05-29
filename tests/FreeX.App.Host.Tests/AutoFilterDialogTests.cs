@@ -626,6 +626,35 @@ public sealed class AutoFilterDialogTests
         sheet.FilterHiddenRows.Should().NotContain(3);
     }
 
+    [Fact]
+    public void CriteriaPlanner_ChecklistHotPathsAvoidLinqMaterialization()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialogCriteriaPlanner.cs"));
+        var checklistBlock = source[
+            source.IndexOf("public static IReadOnlyList<AutoFilterDialogItem> FilterItems", StringComparison.Ordinal)..
+            source.IndexOf("public static string GetFilterFamilyHeader", StringComparison.Ordinal)];
+        var resultBlock = source[
+            source.IndexOf("public static AutoFilterDialogResult BuildResult", StringComparison.Ordinal)..
+            source.IndexOf("public static AutoFilterDialogResult CreateClearFilterResult", StringComparison.Ordinal)];
+        var suggestionsBlock = source[
+            source.IndexOf("public static IReadOnlyList<string> GetCriteriaSuggestions", StringComparison.Ordinal)..
+            source.IndexOf("public static IReadOnlyList<AutoFilterCriteriaOption> GetCriteriaOptions", StringComparison.Ordinal)];
+
+        checklistBlock.Should().Contain("foreach (var item in items)");
+        checklistBlock.Should().NotContain(".Where(");
+        checklistBlock.Should().NotContain(".Select(");
+        checklistBlock.Should().NotContain(".ToList(");
+        checklistBlock.Should().NotContain(".ToHashSet(");
+        resultBlock.Should().Contain("foreach (var item in resultItems)");
+        resultBlock.Should().NotContain(".Where(");
+        resultBlock.Should().NotContain(".Select(");
+        resultBlock.Should().NotContain(".ToList(");
+        suggestionsBlock.Should().Contain("foreach (var entry in menuPlan.Entries)");
+        suggestionsBlock.Should().NotContain(".FirstOrDefault(");
+        suggestionsBlock.Should().NotContain(".Where(");
+        suggestionsBlock.Should().NotContain(".ToList(");
+    }
+
     private static string ReadAutoFilterDialogSources()
     {
         return string.Join(

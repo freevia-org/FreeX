@@ -1123,10 +1123,10 @@
                                             local:RibbonTooltip.Description="Continue a pattern into one or more adjacent cells.">
                                         <Button.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="Fill Down"    local:RibbonTooltip.KeyTip="D" Click="FillDownMenuItem_Click"/>
-                                                <MenuItem Header="Fill Right"   local:RibbonTooltip.KeyTip="R" Click="FillRightMenuItem_Click"/>
-                                                <MenuItem Header="Fill Up"      local:RibbonTooltip.KeyTip="U" Click="FillUpMenuItem_Click"/>
-                                                <MenuItem Header="Fill Left"    local:RibbonTooltip.KeyTip="L" Click="FillLeftMenuItem_Click"/>
+                                                <MenuItem Header="Down"         local:RibbonTooltip.KeyTip="D" Click="FillDownMenuItem_Click"/>
+                                                <MenuItem Header="Right"        local:RibbonTooltip.KeyTip="R" Click="FillRightMenuItem_Click"/>
+                                                <MenuItem Header="Up"           local:RibbonTooltip.KeyTip="U" Click="FillUpMenuItem_Click"/>
+                                                <MenuItem Header="Left"         local:RibbonTooltip.KeyTip="L" Click="FillLeftMenuItem_Click"/>
                                                 <Separator/>
                                                 <MenuItem Header="Series..."    local:RibbonTooltip.KeyTip="S" Click="FillSeriesMenuItem_Click"/>
                                                 <MenuItem Header="Flash Fill"   local:RibbonTooltip.KeyTip="F" Click="FlashFillMenuItem_Click"/>
