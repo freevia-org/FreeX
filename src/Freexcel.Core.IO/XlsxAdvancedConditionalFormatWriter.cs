@@ -164,11 +164,11 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     .Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value, threshold.GreaterThanOrEqual));
                 var overrideXmls = cf.IconOverrides.Select(o => new XElement(
                     worksheetNs + "cfIcon",
-                    new XAttribute("iconSet", o.IconSet),
+                    new XAttribute("iconSet", o.IconSet?.Trim() ?? string.Empty),
                     new XAttribute("iconId", o.IconId.ToString(CultureInfo.InvariantCulture))));
                 rule.Add(AddConditionalFormatPayloadNativeMetadata(new XElement(
                     worksheetNs + "iconSet",
-                    new XAttribute("iconSet", string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle),
+                    new XAttribute("iconSet", string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle.Trim()),
                     new XAttribute("showValue", cf.IconSetShowValue ? "1" : "0"),
                     new XAttribute("reverse", cf.IconSetReverse ? "1" : "0"),
                     thresholdXmls,
