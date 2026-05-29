@@ -69,15 +69,15 @@ public sealed class TestDistributionPlanTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("docs", "TEST_DISTRIBUTION_PLAN.md"));
         var outstanding = File.ReadAllText(WorkspaceFileLocator.Find("docs", "OUTSTANDING_BUILD.md"));
 
-        source.Should().Contain("| 8. Accessibility validation | Required before public preview |");
+        source.Should().Contain("| 8. Accessibility validation | Complete");
         source.Should().Contain("Keyboard-only smoke validation");
         source.Should().Contain("Screen-reader smoke validation");
         source.Should().Contain("UI Automation catalog review");
         source.Should().Contain("known-issues section");
         source.Should().Contain("internal-only");
         source.Should().Contain("[TESTER_RELEASE_CHECKLIST.md](TESTER_RELEASE_CHECKLIST.md)");
-        outstanding.Should().Contain("documented accessibility validation gate");
-        outstanding.Should().Contain("keyboard-only, screen-reader, UI Automation catalog, and known-issues");
+        outstanding.Should().Contain("accessibility validation gate from `TEST_DISTRIBUTION_PLAN.md` has been audited");
+        outstanding.Should().Contain("live keyboard-only and screen-reader validation");
     }
 
     [Fact]
