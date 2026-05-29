@@ -517,6 +517,9 @@ public sealed class MainWindowAdaptiveRibbonTests
         source.Should().Contain("GetCachedRibbonCollapsedGroupButtons(activePanel, groups, controlCacheKey)");
         source.Should().Contain("TryGetCachedActiveRibbonPanel(tabItem, out var cachedPanel)");
         source.Should().Contain("CacheActiveRibbonPanel(tabItem, activePanel)");
+        source.Should().Contain("var hasCachedCorrection = _ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates);");
+        source.Should().Contain("var requiresMeasuredCorrection = !hasCachedCorrection && layout.RequiresMeasuredCorrection;");
+        source.Should().Contain("if (!hasCachedCorrection)");
         source.Should().Contain("_ribbonAdaptiveScrollViewerCache");
         source.Should().Contain("ribbonScrollViewer ??= FindVisualAncestor<ScrollViewer>(activePanel)");
         source.Should().Contain("RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth)");
