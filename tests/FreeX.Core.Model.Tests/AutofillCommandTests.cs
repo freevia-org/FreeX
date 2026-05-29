@@ -303,9 +303,38 @@ public class AutofillCommandTests
         sheet.GetValue(target).Should().Be(new TextValue("source"));
     }
 
+    [Fact]
+    public void Apply_ScansFillTargetsWithoutMaterializingAddressList()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "AutofillCommand.cs"));
+        var apply = source[
+            source.IndexOf("public CommandOutcome Apply", StringComparison.Ordinal)..
+            source.IndexOf("public void Revert", StringComparison.Ordinal)];
+
+        apply.Should().NotContain("_fillRange.AllCells().ToList()");
+        apply.Should().Contain("new List<(CellAddress Addr, Cell? OldCell)>(GetFillCellCapacity())");
+        apply.Should().Contain("for (var row = _fillRange.Start.Row; row <= _fillRange.End.Row; row++)");
+        apply.Should().Contain("for (var col = _fillRange.Start.Col; col <= _fillRange.End.Col; col++)");
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;
         public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine([dir, .. parts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new FileNotFoundException($"Could not find workspace file: {Path.Combine(parts)}");
     }
 }
