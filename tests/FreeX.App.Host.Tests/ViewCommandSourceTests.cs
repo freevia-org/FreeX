@@ -33,7 +33,7 @@ public sealed class ViewCommandSourceTests
         string keyTip,
         string tag)
     {
-        var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header);
+        var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header, "ZoomPresetMenuItem_Click");
 
         item.Should().Contain($"Header=\"{header}\"");
         item.Should().Contain($"Tag=\"{tag}\"");
@@ -99,7 +99,7 @@ public sealed class ViewCommandSourceTests
         string keyTip,
         string tag)
     {
-        var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header);
+        var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header, "ArrangeAllMenuItem_Click");
 
         item.Should().Contain($"Header=\"{header}\"");
         item.Should().Contain($"Tag=\"{tag}\"");
@@ -177,16 +177,28 @@ public sealed class ViewCommandSourceTests
         return start;
     }
 
-    private static string ExtractMenuItemElementByHeader(string xaml, string header)
+    private static string ExtractMenuItemElementByHeader(string xaml, string header, string? clickHandler = null)
     {
-        var headerIndex = xaml.IndexOf($"Header=\"{header}\"", StringComparison.Ordinal);
-        headerIndex.Should().BeGreaterThanOrEqualTo(0, $"the {header} zoom preset should be present");
+        var matches = new List<string>();
+        var searchIndex = 0;
+        while (true)
+        {
+            var headerIndex = xaml.IndexOf($"Header=\"{header}\"", searchIndex, StringComparison.Ordinal);
+            if (headerIndex < 0)
+                break;
 
-        var start = xaml.LastIndexOf("<MenuItem", headerIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {header} zoom preset should be a MenuItem");
+            var start = xaml.LastIndexOf("<MenuItem", headerIndex, StringComparison.Ordinal);
+            start.Should().BeGreaterThanOrEqualTo(0, $"the {header} zoom preset should be a MenuItem");
 
-        var end = xaml.IndexOf("/>", headerIndex, StringComparison.Ordinal);
-        end.Should().BeGreaterThan(headerIndex, $"the {header} zoom preset should be self-closing");
-        return xaml[start..(end + 2)];
+            var end = xaml.IndexOf("/>", headerIndex, StringComparison.Ordinal);
+            end.Should().BeGreaterThan(headerIndex, $"the {header} zoom preset should be self-closing");
+            matches.Add(xaml[start..(end + 2)]);
+            searchIndex = end + 2;
+        }
+
+        matches.Should().NotBeEmpty($"the {header} menu item should be present");
+        return clickHandler is null
+            ? matches[0]
+            : matches.LastOrDefault(item => item.Contains($"Click=\"{clickHandler}\"", StringComparison.Ordinal)) ?? matches[0];
     }
 }
