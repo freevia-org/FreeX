@@ -543,6 +543,23 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_SourceInputLimitFailure_LeavesInputStreamsOpen()
+    {
+        using var source = StreamFromString($"<rows><row name=\"{new string('A', 600)}\" /></rows>");
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(
+            source,
+            stylesheet,
+            XsltWorkbookTransform.DefaultMaxOutputBytes,
+            maxInputCharacters: 512);
+
+        act.Should().Throw<InvalidDataException>();
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetAboveInputLimit_ReportsStylesheetDiagnostic()
     {
         using var source = StreamFromString("<rows />");
@@ -558,6 +575,23 @@ public sealed class XsltWorkbookTransformTests
             .WithMessage("*stylesheet*")
             .WithInnerException<XmlException>();
         source.Position.Should().Be(0);
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_StylesheetInputLimitFailure_LeavesInputStreamsOpen()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(
+            source,
+            stylesheet,
+            XsltWorkbookTransform.DefaultMaxOutputBytes,
+            maxInputCharacters: 8);
+
+        act.Should().Throw<InvalidDataException>();
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
     }
 
     [Fact]
