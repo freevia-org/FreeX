@@ -11,11 +11,14 @@ public sealed class GridViewPointerCursorTests
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var hoverCursorBlock = source[
-            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
+            source.IndexOf("var selectedObjectDragKind = ObjectDragKind.None;", StringComparison.Ordinal)..
             source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
 
         hoverCursorBlock.Should().Contain("selectedObjectDragKind = HitTestObjectHandle(pos, GetSelectedObjectRect());");
-        hoverCursorBlock.Should().Contain("Cursor = selectedObjectDragKind != ObjectDragKind.None ? ObjectDragCursor(selectedObjectDragKind)");
+        hoverCursorBlock.Should().Contain("if (selectedObjectDragKind != ObjectDragKind.None)");
+        hoverCursorBlock.Should().Contain("Cursor = ObjectDragCursor(selectedObjectDragKind);");
+        hoverCursorBlock.IndexOf("if (selectedObjectDragKind != ObjectDragKind.None)", StringComparison.Ordinal)
+            .Should().BeLessThan(hoverCursorBlock.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -24,12 +27,15 @@ public sealed class GridViewPointerCursorTests
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var hoverCursorBlock = source[
-            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
+            source.IndexOf("var selectedObjectDragKind = ObjectDragKind.None;", StringComparison.Ordinal)..
             source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
 
         hoverCursorBlock.Should().Contain("var hoveringObjectBody = selectedObjectDragKind == ObjectDragKind.None");
         hoverCursorBlock.Should().Contain("HitTestDrawingObject(pos).Id != Guid.Empty");
-        hoverCursorBlock.Should().Contain(": hoveringObjectBody ? Cursors.SizeAll");
+        hoverCursorBlock.Should().Contain("if (hoveringObjectBody)");
+        hoverCursorBlock.Should().Contain("Cursor = Cursors.SizeAll;");
+        hoverCursorBlock.IndexOf("if (hoveringObjectBody)", StringComparison.Ordinal)
+            .Should().BeLessThan(hoverCursorBlock.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal));
     }
 
     [Fact]
