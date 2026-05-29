@@ -173,12 +173,19 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.HandleKeyTip(Key.D1);
             harness.ActiveCellBold.Should().BeTrue();
 
-            harness.SetButtonKeyTip("UndoQatBtn", " 2 ");
+            var originalKeyTip = harness.SetButtonKeyTip("UndoQatBtn", " 2 ");
 
-            harness.HandleDirectTopLevelKeyTip(Key.D2).Should().BeTrue();
+            try
+            {
+                harness.HandleDirectTopLevelKeyTip(Key.D2).Should().BeTrue();
 
-            harness.ActiveCellBold.Should().BeFalse();
-            harness.KeyTipScope.Should().Be("None");
+                harness.ActiveCellBold.Should().BeFalse();
+                harness.KeyTipScope.Should().Be("None");
+            }
+            finally
+            {
+                harness.SetButtonKeyTip("UndoQatBtn", originalKeyTip ?? "");
+            }
         });
     }
 
@@ -1298,12 +1305,14 @@ public sealed class MainWindowRibbonKeyTipTests
             PumpDispatcher();
         }
 
-        public void SetButtonKeyTip(string name, string keyTip)
+        public string? SetButtonKeyTip(string name, string keyTip)
         {
             var button = (_window.FindName(name) as ButtonBase)
                 ?? throw new InvalidOperationException($"Button {name} was not found.");
+            var originalKeyTip = RibbonTooltip.GetKeyTip(button);
             RibbonTooltip.SetKeyTip(button, keyTip);
             PumpDispatcher();
+            return originalKeyTip;
         }
 
         public void AddNote(uint row, uint col, string text)
