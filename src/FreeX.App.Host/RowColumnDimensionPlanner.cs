@@ -49,25 +49,30 @@ public static class RowColumnDimensionPlanner
 
     public static IWorkbookCommand CreateAutoFitRowHeightCommand(
         SheetId sheetId,
-        IReadOnlyList<AutoFitSizePlan> plans)
-    {
-        if (plans.Count == 1)
-            return new SetRowHeightCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size);
-
-        return new CompositeWorkbookCommand(
+        IReadOnlyList<AutoFitSizePlan> plans) =>
+        CreateAutoFitCommand(
+            plans,
             "Auto Row Height",
-            plans.Select(plan => (IWorkbookCommand)new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size)).ToList());
-    }
+            plan => new SetRowHeightCommand(sheetId, plan.Index, plan.Index, plan.Size));
 
     public static IWorkbookCommand CreateAutoFitColumnWidthCommand(
         SheetId sheetId,
-        IReadOnlyList<AutoFitSizePlan> plans)
+        IReadOnlyList<AutoFitSizePlan> plans) =>
+        CreateAutoFitCommand(
+            plans,
+            "Auto Column Width",
+            plan => new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size));
+
+    private static IWorkbookCommand CreateAutoFitCommand(
+        IReadOnlyList<AutoFitSizePlan> plans,
+        string compositeName,
+        Func<AutoFitSizePlan, IWorkbookCommand> createCommand)
     {
         if (plans.Count == 1)
-            return new SetColumnWidthCommand(sheetId, plans[0].Index, plans[0].Index, plans[0].Size);
+            return createCommand(plans[0]);
 
         return new CompositeWorkbookCommand(
-            "Auto Column Width",
-            plans.Select(plan => (IWorkbookCommand)new SetColumnWidthCommand(sheetId, plan.Index, plan.Index, plan.Size)).ToList());
+            compositeName,
+            plans.Select(createCommand).ToList());
     }
 }
