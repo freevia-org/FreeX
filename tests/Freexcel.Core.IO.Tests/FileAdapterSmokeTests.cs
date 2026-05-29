@@ -4953,6 +4953,40 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_ConditionalFormatIconSet_DropsInvalidIconOverrides()
+    {
+        var workbook = new Workbook("CfIconOverrideInvalidSave");
+        var sheet = workbook.AddSheet("S1");
+        for (uint row = 1; row <= 3; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+        var format = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+            RuleType = CfRuleType.IconSet,
+            Priority = 1,
+            IconSetStyle = "3TrafficLights1"
+        };
+        format.IconOverrides.AddRange([
+            new CfIconOverride("3Arrows", 2),
+            new CfIconOverride("   ", 0),
+            new CfIconOverride("3TrafficLights1", -1)
+        ]);
+        sheet.ConditionalFormats.Add(format);
+
+        using var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var icon = worksheetXml.Descendants(worksheetNs + "cfIcon").Should().ContainSingle().Subject;
+
+        icon.Attribute("iconSet")?.Value.Should().Be("3Arrows");
+        icon.Attribute("iconId")?.Value.Should().Be("2");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadSave_RoundTripsAdvancedConditionalFormatNativeMetadata()
     {
         var workbook = new Workbook("CfNativeMetadata");
