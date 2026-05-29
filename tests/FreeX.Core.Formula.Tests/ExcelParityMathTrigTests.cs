@@ -260,6 +260,12 @@ public sealed class ExcelParityMathTrigTests
     }
 
     [Fact]
+    public void Convert_NonFiniteNumber_ReturnsExcelNumError()
+    {
+        _eval.Evaluate("=CONVERT(1E309,\"kg\",\"g\")", MakeSheet()).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
     public void MatrixMathFunctions_ReturnExcelShapeAndValues()
     {
         var sheet = MakeSheet(
