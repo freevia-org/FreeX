@@ -180,14 +180,17 @@ public partial class GridView
             columnHeaderHeight,
             edgeThreshold);
 
+    private bool HasActiveCapturedGridDrag() =>
+        _objectDragKind != ObjectDragKind.None ||
+        _marginDragEdge.HasValue ||
+        _splitDividerDragHandle != SplitDividerHandle.None ||
+        _splitPaneScrollbarDragging ||
+        _autofillDragging ||
+        _resizeTarget != ResizeTarget.None;
+
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
-        if (_objectDragKind != ObjectDragKind.None ||
-            _marginDragEdge.HasValue ||
-            _splitDividerDragHandle != SplitDividerHandle.None ||
-            _splitPaneScrollbarDragging ||
-            _autofillDragging ||
-            _resizeTarget != ResizeTarget.None)
+        if (HasActiveCapturedGridDrag())
         {
             e.Handled = true;
             return;
@@ -360,12 +363,7 @@ public partial class GridView
 
     protected override void OnMouseRightButtonDown(MouseButtonEventArgs e)
     {
-        if (_objectDragKind != ObjectDragKind.None ||
-            _marginDragEdge.HasValue ||
-            _splitDividerDragHandle != SplitDividerHandle.None ||
-            _splitPaneScrollbarDragging ||
-            _autofillDragging ||
-            _resizeTarget != ResizeTarget.None)
+        if (HasActiveCapturedGridDrag())
         {
             e.Handled = true;
             return;
@@ -578,12 +576,7 @@ public partial class GridView
 
     protected override void OnMouseLeave(MouseEventArgs e)
     {
-        if (_objectDragKind == ObjectDragKind.None &&
-            !_autofillDragging &&
-            _resizeTarget == ResizeTarget.None &&
-            !_marginDragEdge.HasValue &&
-            _splitDividerDragHandle == SplitDividerHandle.None &&
-            !_splitPaneScrollbarDragging)
+        if (!HasActiveCapturedGridDrag())
             Cursor = null;
         base.OnMouseLeave(e);
     }

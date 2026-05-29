@@ -108,19 +108,31 @@ public sealed class GridViewPointerCursorTests
             source.IndexOf("protected override void OnMouseLeftButtonDown", StringComparison.Ordinal)..
             source.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)];
 
-        mouseDownBlock.Should().Contain("_objectDragKind != ObjectDragKind.None");
-        mouseDownBlock.Should().Contain("_marginDragEdge.HasValue");
-        mouseDownBlock.Should().Contain("_splitDividerDragHandle != SplitDividerHandle.None");
-        mouseDownBlock.Should().Contain("_splitPaneScrollbarDragging");
-        mouseDownBlock.Should().Contain("_autofillDragging");
-        mouseDownBlock.Should().Contain("_resizeTarget != ResizeTarget.None");
+        mouseDownBlock.Should().Contain("if (HasActiveCapturedGridDrag())");
         mouseDownBlock.Should().Contain("e.Handled = true;");
-        mouseDownBlock.IndexOf("_objectDragKind != ObjectDragKind.None", StringComparison.Ordinal)
+        mouseDownBlock.IndexOf("if (HasActiveCapturedGridDrag())", StringComparison.Ordinal)
             .Should()
             .BeLessThan(mouseDownBlock.IndexOf("var pos = e.GetPosition(this);", StringComparison.Ordinal));
         mouseDownBlock.IndexOf("e.Handled = true;", StringComparison.Ordinal)
             .Should()
             .BeLessThan(mouseDownBlock.IndexOf("HitTestDrawingObject(pos)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CapturedGridDragPredicateCoversAllMouseDragStates()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var helperBlock = source[
+            source.IndexOf("private bool HasActiveCapturedGridDrag", StringComparison.Ordinal)..
+            source.IndexOf("protected override void OnMouseLeftButtonDown", StringComparison.Ordinal)];
+
+        helperBlock.Should().Contain("_objectDragKind != ObjectDragKind.None");
+        helperBlock.Should().Contain("_marginDragEdge.HasValue");
+        helperBlock.Should().Contain("_splitDividerDragHandle != SplitDividerHandle.None");
+        helperBlock.Should().Contain("_splitPaneScrollbarDragging");
+        helperBlock.Should().Contain("_autofillDragging");
+        helperBlock.Should().Contain("_resizeTarget != ResizeTarget.None");
     }
 
     [Fact]
@@ -347,12 +359,7 @@ public sealed class GridViewPointerCursorTests
         var mouseLeave = source[
             source.IndexOf("protected override void OnMouseLeave", StringComparison.Ordinal)..];
 
-        mouseLeave.Should().Contain("_objectDragKind == ObjectDragKind.None");
-        mouseLeave.Should().Contain("!_autofillDragging");
-        mouseLeave.Should().Contain("_resizeTarget == ResizeTarget.None");
-        mouseLeave.Should().Contain("!_marginDragEdge.HasValue");
-        mouseLeave.Should().Contain("_splitDividerDragHandle == SplitDividerHandle.None");
-        mouseLeave.Should().Contain("!_splitPaneScrollbarDragging");
+        mouseLeave.Should().Contain("if (!HasActiveCapturedGridDrag())");
         mouseLeave.Should().Contain("Cursor = null;");
     }
 
