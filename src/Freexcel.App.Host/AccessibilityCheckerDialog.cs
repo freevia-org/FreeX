@@ -14,6 +14,7 @@ public sealed class AccessibilityCheckerDialog : Window
     private readonly TextBox _messageBox = new();
     private readonly ListBox _issueList = new();
     private readonly Button _goToButton = new() { Content = "_Go To", Width = 76, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+    private readonly Button _closeButton = new() { Content = "_Close", Width = 76, IsCancel = true };
 
     public AccessibilityCheckerDialogResult? Result { get; private set; }
 
@@ -34,6 +35,9 @@ public sealed class AccessibilityCheckerDialog : Window
         AutomationProperties.SetName(_goToButton, "Go to selected accessibility issue");
         AutomationProperties.SetAutomationId(_goToButton, "AccessibilityCheckerGoToButton");
         AutomationProperties.SetHelpText(_goToButton, "Navigate to the selected accessibility issue.");
+        AutomationProperties.SetName(_closeButton, "Close Accessibility Checker");
+        AutomationProperties.SetAutomationId(_closeButton, "AccessibilityCheckerCloseButton");
+        AutomationProperties.SetHelpText(_closeButton, "Close the Accessibility Checker without navigating to an issue.");
         Content = issues.Count == 0
             ? CreateCleanContent(CreateMessage(issues))
             : CreateIssueContent(issues);
@@ -87,7 +91,7 @@ public sealed class AccessibilityCheckerDialog : Window
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
         _goToButton.Click += (_, _) => GoToSelectedIssue();
         buttons.Children.Add(_goToButton);
-        buttons.Children.Add(new Button { Content = "_Close", Width = 76, IsCancel = true });
+        buttons.Children.Add(_closeButton);
         stack.Children.Add(buttons);
         UpdateGoToButtonState();
         return stack;
