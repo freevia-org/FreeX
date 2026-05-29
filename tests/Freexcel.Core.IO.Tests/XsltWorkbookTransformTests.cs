@@ -439,6 +439,29 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_OutputAtLimit_Succeeds()
+    {
+        const string stylesheetXml = """
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <output>abcdefghijklmnopqrstuvwxyz</output>
+              </xsl:template>
+            </xsl:stylesheet>
+            """;
+        using var expected = XsltWorkbookTransform.TransformToSpreadsheetXml(
+            StreamFromString("<rows />"),
+            StreamFromString(stylesheetXml));
+        var exactOutputLength = expected.Length;
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(
+            StreamFromString("<rows />"),
+            StreamFromString(stylesheetXml),
+            exactOutputLength);
+
+        transformed.ToArray().Should().BeEquivalentTo(expected.ToArray(), options => options.WithStrictOrdering());
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_InvalidOutputLimit_ThrowsArgumentOutOfRangeException()
     {
         using var source = StreamFromString("<rows />");
