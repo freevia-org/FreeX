@@ -304,6 +304,10 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.D8, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
     [InlineData(Key.Y, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
     [InlineData(Key.System, Key.Y, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.P, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.L, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.V, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
     [InlineData(Key.Back, Key.None, ModifierKeys.Alt)]
     [InlineData(Key.Back, Key.None, ModifierKeys.Alt | ModifierKeys.Shift)]
     public void TryGetCommandShortcut_DoesNotStealExtraModifierCombinations(Key key, Key systemKey, ModifierKeys modifiers)
