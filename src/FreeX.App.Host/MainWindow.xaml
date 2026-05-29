@@ -2948,7 +2948,7 @@
                                                 <MenuItem Header="Freeze Top Row" local:RibbonTooltip.KeyTip="R" Click="FreezeTopRowMenuItem_Click"/>
                                                 <MenuItem Header="Freeze First Column" local:RibbonTooltip.KeyTip="C" Click="FreezeFirstColMenuItem_Click"/>
                                                 <Separator/>
-                                                <MenuItem Header="Unfreeze All" local:RibbonTooltip.KeyTip="U" Click="UnfreezeAllMenuItem_Click"/>
+                                                <MenuItem Header="Unfreeze Panes" local:RibbonTooltip.KeyTip="U" Click="UnfreezeAllMenuItem_Click"/>
                                             </ContextMenu>
                                         </Button.ContextMenu>
                                     </Button>

@@ -459,6 +459,25 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_OutputLimitFailure_LeavesInputStreamsOpen()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <output>abcdefghijklmnopqrstuvwxyz</output>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet, maxOutputBytes: 16);
+
+        act.Should().Throw<InvalidDataException>();
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_OutputAtLimit_Succeeds()
     {
         const string stylesheetXml = """
