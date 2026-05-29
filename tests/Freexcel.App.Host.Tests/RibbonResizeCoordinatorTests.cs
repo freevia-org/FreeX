@@ -48,6 +48,37 @@ public sealed class RibbonResizeCoordinatorTests
     }
 
     [Fact]
+    public void WindowResize_UsesResizeThresholdGateBeforeCompactingRibbon()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonCoordinatorHarness.Create();
+
+            harness.SelectRibbonTab("Home", width: 1500);
+            harness.PrimeResizeGate();
+            harness.ResetDiagnostics();
+
+            harness.ResizeWindow(1498);
+
+            var sameBand = harness.Diagnostics;
+            sameBand.RequestCount.Should().Be(0);
+            sameBand.PostedCount.Should().Be(0);
+            sameBand.ExecutedCount.Should().Be(0);
+            harness.AdaptiveDiagnostics.GroupMeasurementCount.Should().Be(0);
+            harness.AdaptiveDiagnostics.ResizeThresholdRebuildCount.Should().Be(0);
+
+            harness.ResizeWindow(700);
+
+            var crossedBand = harness.Diagnostics;
+            crossedBand.RequestCount.Should().Be(1);
+            crossedBand.PostedCount.Should().Be(1);
+            crossedBand.ExecutedCount.Should().Be(1);
+            crossedBand.ForcedCompactCount.Should().Be(1);
+            crossedBand.LastRequestedWork.Should().Be("CompactOnly");
+        });
+    }
+
+    [Fact]
     public void WindowResize_DebouncesViewportRefreshUntilResizeIdle()
     {
         StaTestRunner.Run(() =>
@@ -185,6 +216,7 @@ public sealed class RibbonResizeCoordinatorTests
         }
 
         public RibbonFallbackDiagnosticsSnapshot Diagnostics => _window.GetRibbonFallbackDiagnosticsForTests();
+        public RibbonAdaptiveDiagnosticsSnapshot AdaptiveDiagnostics => _window.GetRibbonAdaptiveDiagnosticsForTests();
         public int ViewportCallCount => _viewportService.GetViewportCallCount;
         public bool IsLiveResizing => SheetGrid.IsLiveResizing;
 
@@ -252,6 +284,7 @@ public sealed class RibbonResizeCoordinatorTests
         public void ResetDiagnostics()
         {
             _window.ResetRibbonFallbackDiagnosticsForTests();
+            _window.ResetRibbonAdaptiveDiagnosticsForTests();
             _viewportService.Reset();
         }
 
