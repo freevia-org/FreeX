@@ -26,9 +26,18 @@ internal static class SelectionPaneDialogStatePlanner
     {
         var normalizedSearch = search.Trim();
         var normalizedFilter = string.IsNullOrWhiteSpace(filter) ? "All" : filter;
-        return items
-            .Where(item => MatchesSearch(item, normalizedSearch) && MatchesFilter(item, normalizedFilter))
-            .ToList();
+        if (normalizedSearch.Length == 0 && string.Equals(normalizedFilter, "All", StringComparison.Ordinal))
+            return items;
+
+        var filtered = new List<SelectionPaneDialogItemState>();
+        for (var index = 0; index < items.Count; index++)
+        {
+            var item = items[index];
+            if (MatchesSearch(item, normalizedSearch) && MatchesFilter(item, normalizedFilter))
+                filtered.Add(item);
+        }
+
+        return filtered;
     }
 
     public static SelectionPaneDialogReorderPlan? PlanMove(
@@ -41,7 +50,7 @@ internal static class SelectionPaneDialogStatePlanner
         if (targetIndex < 0)
             return null;
 
-        var orderedIds = items.Select(item => item.Id).ToList();
+        var orderedIds = CreateOrderedIds(items);
         (orderedIds[currentIndex], orderedIds[targetIndex]) = (orderedIds[targetIndex], orderedIds[currentIndex]);
         var selected = items[currentIndex];
         return new SelectionPaneDialogReorderPlan(
@@ -58,7 +67,7 @@ internal static class SelectionPaneDialogStatePlanner
         if (dragPlan is null)
             return null;
 
-        var orderedIds = items.Select(item => item.Id).ToList();
+        var orderedIds = CreateOrderedIds(items);
         var dragged = orderedIds[dragPlan.DraggedIndex];
         orderedIds.RemoveAt(dragPlan.DraggedIndex);
         var targetIndex = dragPlan.TargetIndex;
@@ -91,10 +100,15 @@ internal static class SelectionPaneDialogStatePlanner
         IReadOnlyList<SelectionPaneDialogItemState> currentStates)
     {
         var states = currentStates.ToDictionary(state => state.Id, state => state.IsVisible);
-        return originalItems
-            .Where(item => states.TryGetValue(item.Id, out var isVisible) && isVisible != item.IsVisible)
-            .Select(item => new SelectionPaneVisibilityChange(item.Kind, item.Id, states[item.Id]))
-            .ToList();
+        var changes = new List<SelectionPaneVisibilityChange>();
+        for (var index = 0; index < originalItems.Count; index++)
+        {
+            var item = originalItems[index];
+            if (states.TryGetValue(item.Id, out var isVisible) && isVisible != item.IsVisible)
+                changes.Add(new SelectionPaneVisibilityChange(item.Kind, item.Id, isVisible));
+        }
+
+        return changes;
     }
 
     public static IReadOnlyList<SelectionPaneRenameChange> CreateRenameChanges(
@@ -102,10 +116,15 @@ internal static class SelectionPaneDialogStatePlanner
         IReadOnlyList<SelectionPaneDialogItemState> currentStates)
     {
         var names = currentStates.ToDictionary(state => state.Id, state => NormalizeName(state.Name));
-        return originalItems
-            .Where(item => names.TryGetValue(item.Id, out var name) && !string.Equals(name, item.Name, StringComparison.Ordinal))
-            .Select(item => new SelectionPaneRenameChange(item.Kind, item.Id, names[item.Id]))
-            .ToList();
+        var changes = new List<SelectionPaneRenameChange>();
+        for (var index = 0; index < originalItems.Count; index++)
+        {
+            var item = originalItems[index];
+            if (names.TryGetValue(item.Id, out var name) && !string.Equals(name, item.Name, StringComparison.Ordinal))
+                changes.Add(new SelectionPaneRenameChange(item.Kind, item.Id, name));
+        }
+
+        return changes;
     }
 
     public static SelectionPaneDialogResult CreateResult(
@@ -202,6 +221,15 @@ internal static class SelectionPaneDialogStatePlanner
         }
 
         return -1;
+    }
+
+    private static List<Guid> CreateOrderedIds(IReadOnlyList<SelectionPaneDialogItemState> items)
+    {
+        var orderedIds = new List<Guid>(items.Count);
+        for (var index = 0; index < items.Count; index++)
+            orderedIds.Add(items[index].Id);
+
+        return orderedIds;
     }
 
     private static (int DraggedIndex, int TargetIndex) FindDragIndexes(
