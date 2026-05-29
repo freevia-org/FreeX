@@ -349,6 +349,17 @@ public partial class GridView
 
     protected override void OnMouseRightButtonDown(MouseButtonEventArgs e)
     {
+        if (_objectDragKind != ObjectDragKind.None ||
+            _marginDragEdge.HasValue ||
+            _splitDividerDragHandle != SplitDividerHandle.None ||
+            _splitPaneScrollbarDragging ||
+            _autofillDragging ||
+            _resizeTarget != ResizeTarget.None)
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (Viewport == null) { base.OnMouseRightButtonDown(e); return; }
         var pos = e.GetPosition(this);
         if (HitTestPivotChartFieldButton(Charts, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight) is { } pivotButton)

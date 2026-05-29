@@ -59,8 +59,8 @@ public sealed partial class NativeJsonAdapter
             DataBarMaxThresholdType = ValidCfThresholdTypeOrDefault(formatDto.DataBarMaxThresholdType, CfThresholdType.Max),
             DataBarMaxThresholdValue = formatDto.DataBarMaxThresholdValue,
             DataBarShowValue = formatDto.DataBarShowValue,
-            DataBarMinLength = formatDto.DataBarMinLength,
-            DataBarMaxLength = formatDto.DataBarMaxLength,
+            DataBarMinLength = ValidDataBarLengthOrNull(formatDto.DataBarMinLength),
+            DataBarMaxLength = ValidDataBarLengthOrNull(formatDto.DataBarMaxLength),
             DataBarGradient = formatDto.DataBarGradient,
             DataBarBorder = formatDto.DataBarBorder,
             DataBarAxisPosition = formatDto.DataBarAxisPosition,
@@ -113,8 +113,8 @@ public sealed partial class NativeJsonAdapter
             DataBarMaxThresholdType = ValidCfThresholdTypeOrDefault(format.DataBarMaxThresholdType, CfThresholdType.Max),
             DataBarMaxThresholdValue = format.DataBarMaxThresholdValue,
             DataBarShowValue = format.DataBarShowValue,
-            DataBarMinLength = format.DataBarMinLength,
-            DataBarMaxLength = format.DataBarMaxLength,
+            DataBarMinLength = ValidDataBarLengthOrNull(format.DataBarMinLength),
+            DataBarMaxLength = ValidDataBarLengthOrNull(format.DataBarMaxLength),
             DataBarGradient = format.DataBarGradient,
             DataBarBorder = format.DataBarBorder,
             DataBarAxisPosition = format.DataBarAxisPosition,
@@ -152,4 +152,7 @@ public sealed partial class NativeJsonAdapter
 
     private static bool IsValidCfIconOverride(CfIconOverride icon) =>
         !string.IsNullOrWhiteSpace(icon.IconSet) && icon.IconId >= 0;
+
+    private static int? ValidDataBarLengthOrNull(int? value) =>
+        value is >= 0 and <= 100 ? value : null;
 }
