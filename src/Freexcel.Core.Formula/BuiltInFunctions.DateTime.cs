@@ -378,6 +378,8 @@ public static partial class BuiltInFunctions
         var text = ToText(value);
         if (TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out _)) return new NumberValue(60);
         if (!TextHasDateComponent(text)) return ErrorValue.Value;
+        if (TryParseMonthYearDateValueText(text, out var monthYearDate))
+            return new NumberValue(DateToSerial(monthYearDate));
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(Math.Floor(DateToSerial(dt)));
@@ -391,6 +393,14 @@ public static partial class BuiltInFunctions
     private static bool TextHasDateComponent(string text) =>
         DateTimeTextHasDateSeparatorRegex.IsMatch(text) ||
         DateTimeTextHasMonthNameRegex.IsMatch(text);
+
+    private static bool TryParseMonthYearDateValueText(string text, out DateTime dt) =>
+        DateTime.TryParseExact(
+            text.Trim(),
+            ["MMMM yyyy", "MMM yyyy", "MMMM, yyyy", "MMM, yyyy", "MMMM-yyyy", "MMM-yyyy"],
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out dt);
 
     private static bool TryParseExcelFakeLeapDayValueText(string text, CultureInfo culture, out double serial)
     {
