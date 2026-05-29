@@ -198,6 +198,30 @@ public sealed class RibbonTooltipTests
     }
 
     [Fact]
+    public void TryOpenSubmenuForKeyTip_RestoresSubmenuStateWhenNoNestedMatch()
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Color Scales" };
+            var child = new MenuItem { Header = "More Rules" };
+            RibbonTooltip.SetKeyTip(child, "MR");
+            child.Items.Add(new MenuItem { Header = "Format Rule..." });
+            parent.Items.Add(child);
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, "ZZ", out var openedSubmenu).Should().BeFalse();
+
+            openedSubmenu.Should().BeNull();
+            parent.IsSubmenuOpen.Should().BeFalse("a failed nested keytip probe should not leave ancestors expanded");
+            child.IsSubmenuOpen.Should().BeFalse("a failed nested keytip probe should restore child submenu state");
+            menu.IsOpen = false;
+        });
+    }
+
+    [Fact]
     public void TryOpenSubmenuForKeyTip_IgnoresDisabledSubmenus()
     {
         RunSta(() =>
