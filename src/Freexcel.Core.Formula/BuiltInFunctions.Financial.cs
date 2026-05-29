@@ -36,7 +36,7 @@ public static partial class BuiltInFunctions
     {
         if (value is ErrorValue) return false;
         double serial = ToNumber(value);
-        return double.IsFinite(serial) && Math.Abs(serial) < 1e-10;
+        return double.IsFinite(serial) && serial >= 0 && serial < 1;
     }
 
     private static double ActualYearLength(DateTime d1, DateTime d2)
