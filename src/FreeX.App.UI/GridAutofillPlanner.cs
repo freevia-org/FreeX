@@ -120,8 +120,10 @@ public static class GridAutofillPlanner
         foreach (var row in viewport.RowMetrics)
         {
             var midY = row.TopOffset + columnHeaderHeight + row.Height / 2;
-            if (midY < boundTop || midY > boundBottom)
+            if (midY < boundTop)
                 continue;
+            if (midY > boundBottom)
+                break;
 
             targetRow ??= row.Row;
             if (!preferTopRow)
@@ -131,8 +133,10 @@ public static class GridAutofillPlanner
         foreach (var column in viewport.ColMetrics)
         {
             var midX = column.LeftOffset + rowHeaderWidth + column.Width / 2;
-            if (midX < boundLeft || midX > boundRight)
+            if (midX < boundLeft)
                 continue;
+            if (midX > boundRight)
+                break;
 
             targetColumn ??= column.Col;
             if (!preferLeftColumn)
