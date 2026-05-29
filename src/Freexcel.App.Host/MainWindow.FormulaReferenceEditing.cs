@@ -114,6 +114,9 @@ public partial class MainWindow
             return false;
         }
 
+        HideValidationDropdown();
+        ClearCommentPreview();
+
         _selectionAnchor = anchor;
         _selectionCursor = target;
         SheetGrid.SelectedRanges = null;

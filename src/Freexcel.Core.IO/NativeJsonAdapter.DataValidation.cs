@@ -36,8 +36,17 @@ public sealed partial class NativeJsonAdapter
             };
             foreach (var range in validationDto.AdditionalRanges ?? [])
             {
-                if (!string.IsNullOrWhiteSpace(range))
+                if (string.IsNullOrWhiteSpace(range))
+                    continue;
+
+                try
+                {
                     validation.AdditionalRanges.Add(GridRange.Parse(range, sheetId));
+                }
+                catch (FormatException)
+                {
+                    // Keep the primary validation rule and drop only malformed optional ranges.
+                }
             }
 
             return validation;
