@@ -35,6 +35,22 @@ public sealed class CreateNamesFromSelectionDialog : Window
         ResizeMode = ResizeMode.NoResize;
 
         var root = new StackPanel { Margin = new Thickness(16) };
+        SetOptionAutomationMetadata(
+            _topRow,
+            "CreateNamesTopRowCheckBox",
+            "Use the top row of the selection as names.");
+        SetOptionAutomationMetadata(
+            _leftColumn,
+            "CreateNamesLeftColumnCheckBox",
+            "Use the left column of the selection as names.");
+        SetOptionAutomationMetadata(
+            _bottomRow,
+            "CreateNamesBottomRowCheckBox",
+            "Use the bottom row of the selection as names.");
+        SetOptionAutomationMetadata(
+            _rightColumn,
+            "CreateNamesRightColumnCheckBox",
+            "Use the right column of the selection as names.");
         root.Children.Add(new TextBlock
         {
             Text = "Create names from values in the:",
@@ -61,6 +77,12 @@ public sealed class CreateNamesFromSelectionDialog : Window
 
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private static void SetOptionAutomationMetadata(CheckBox checkBox, string automationId, string helpText)
+    {
+        AutomationProperties.SetAutomationId(checkBox, automationId);
+        AutomationProperties.SetHelpText(checkBox, helpText);
     }
 
     public static bool TryCreateResult(
