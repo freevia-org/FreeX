@@ -79,6 +79,9 @@ public sealed class GridViewPageLayoutTests
         calculateGuide.Should().Contain("TryFindRowMetrics(viewport.RowMetrics");
         calculateGuide.Should().Contain("TryFindColumnMetrics(viewport.ColMetrics");
         calculateGuide.Should().Contain("foreach (var metric in metrics)");
+        calculateGuide.Should().Contain("if (metric.Row > bottomRow)");
+        calculateGuide.Should().Contain("if (metric.Col > rightColumn)");
+        calculateGuide.Should().Contain("break;");
         calculateGuide.Should().NotContain("FirstOrDefault");
         calculateGuide.Should().NotContain(".Where(");
         calculateGuide.Should().NotContain(".ToList()");
