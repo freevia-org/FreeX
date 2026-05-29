@@ -340,9 +340,9 @@ public static partial class BuiltInFunctions
     {
         double rawH = ToNumber(hourValue);
         if (!double.IsFinite(rawH) || !double.IsFinite(rawM) || !double.IsFinite(rawS)) return ErrorValue.Num;
-        if (rawH < 0 || rawM < 0 || rawS < 0) return ErrorValue.Num;
-        if (rawH > 32767 || rawM > 32767 || rawS > 32767) return ErrorValue.Num;
         int h = (int)rawH, m = (int)rawM, s = (int)rawS;
+        if (h < 0 || m < 0 || s < 0) return ErrorValue.Num;
+        if (h > 32767 || m > 32767 || s > 32767) return ErrorValue.Num;
         double frac = (h * 3600 + m * 60 + s) / 86400.0;
         return new NumberValue(frac - Math.Floor(frac));
     }
