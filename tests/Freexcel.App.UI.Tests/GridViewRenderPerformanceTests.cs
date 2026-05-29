@@ -414,8 +414,11 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("if (target != ResizeTarget.None)", StringComparison.Ordinal)..
             source.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)];
 
-        resizeMove.Should().Contain("FindColMetric(Viewport!.ColMetrics, _resizeIndex)");
-        resizeMove.Should().Contain("FindRowMetric(Viewport!.RowMetrics, _resizeIndex)");
+        resizeMove.Should().Contain("if (Viewport is null)");
+        resizeMove.Should().Contain("FindColMetric(Viewport.ColMetrics, _resizeIndex)");
+        resizeMove.Should().Contain("FindRowMetric(Viewport.RowMetrics, _resizeIndex)");
+        resizeMove.Should().NotContain("Viewport!.ColMetrics");
+        resizeMove.Should().NotContain("Viewport!.RowMetrics");
         resizeMove.Should().NotContain("FirstOrDefault");
         resizeStart.Should().Contain("FindColMetric(Viewport!.ColMetrics, index)");
         resizeStart.Should().Contain("FindRowMetric(Viewport!.RowMetrics, index)");
