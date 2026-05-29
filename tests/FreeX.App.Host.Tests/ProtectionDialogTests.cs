@@ -194,6 +194,8 @@ public sealed class ProtectionDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AllowEditRangeDialog.cs"));
 
         source.Should().Contain("AutomationProperties.SetName(_existingRangesBox, \"Ranges unlocked by password\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_existingRangesBox, \"AllowEditRangeExistingRangesList\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_existingRangesBox, \"Select an existing editable range to delete.\");");
     }
 
     [Fact]
@@ -202,6 +204,25 @@ public sealed class ProtectionDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AllowEditRangeDialog.cs"));
 
         source.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Editable range\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_rangeBox, \"AllowEditRangeBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_rangeBox, \"Enter the worksheet range that users can edit while the sheet is protected.\");");
+    }
+
+    [Fact]
+    public void AllowEditRangeDialog_ActionButtonsExposeAutomationMetadata()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AllowEditRangeDialog.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(_deleteRangeButton, \"Delete\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_deleteRangeButton, \"AllowEditRangeDeleteButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_deleteRangeButton, \"Delete the selected editable range.\");");
+        source.Should().Contain("AutomationProperties.SetName(_clearRangesButton, \"Clear All\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_clearRangesButton, \"AllowEditRangeClearAllButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_clearRangesButton, \"Delete all editable ranges for this worksheet.\");");
+        source.Should().Contain("AutomationProperties.SetName(rangePicker, \"Select editable range\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(rangePicker, \"AllowEditRangePickerButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(");
+        source.Should().Contain("\"Collapse dialog and select the editable range from the worksheet.\");");
     }
 
     [Fact]
