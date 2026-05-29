@@ -1232,6 +1232,10 @@ public static partial class BuiltInFunctions
             if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
             dec = (int)rawDec;
         }
+        else
+        {
+            dec = 0;
+        }
         return FixedScalar(value, dec, noCommas);
     }
 

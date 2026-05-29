@@ -6212,6 +6212,13 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("1234.57"));
 
     [Fact]
+    public void Fixed_BlankDecimalsSlot_UsesZeroDecimals()
+    {
+        _eval.Evaluate("=FIXED(1234.5,)", MakeSheet())
+            .Should().Be(new TextValue("1,235"));
+    }
+
+    [Fact]
     public void FixedDollarTAndEncodeUrl_RangeArgument_SpillElementwise()
     {
         var numbers = MakeSheet(
