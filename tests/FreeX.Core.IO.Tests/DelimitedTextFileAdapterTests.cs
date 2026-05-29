@@ -69,6 +69,15 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Constructor_RejectsQuoteDelimiter()
+    {
+        var create = () => new DelimitedTextFileAdapter(".txt", "Delimited text", '"');
+
+        create.Should().Throw<ArgumentException>()
+            .WithMessage("Delimited text field delimiter cannot be the quote character.*");
+    }
+
+    [Fact]
     public void Load_ReadsTabDelimitedValuesAndQuotedTabs()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');

@@ -24,6 +24,8 @@ public sealed class DelimitedTextFileAdapter(string extension, string formatName
     {
         if (delimiter is '\r' or '\n')
             throw new ArgumentException("Delimited text field delimiter cannot be a line break.", nameof(delimiter));
+        if (delimiter is '"')
+            throw new ArgumentException("Delimited text field delimiter cannot be the quote character.", nameof(delimiter));
 
         return delimiter;
     }
