@@ -121,6 +121,20 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void AdvancedFamilyRenderers_AvoidLinqAggregateAndOutlierScaffolding()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.AdvancedFamilies.cs"));
+
+        source.Should().NotContain(".Sum(");
+        source.Should().NotContain(".Max(");
+        source.Should().NotContain(".Where(");
+        source.Should().NotContain(".ToList(");
+        source.Should().NotContain(".FirstOrDefault(");
+        source.Should().NotContain(".LastOrDefault(");
+    }
+
+    [Fact]
     public void TreemapRenderer_ProducesRectangleAnnotationsProportionalToValues()
     {
         var sheetId = SheetId.New();
@@ -2768,6 +2782,21 @@ public sealed class ChartRendererTests
 
     private static ChartDataCell ChartCell(SheetId sheetId, uint row, uint col, string text) =>
         new(sheetId, row, col, text);
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
+    }
 
     private static void RunWithCulture(string cultureName, Action action)
     {
