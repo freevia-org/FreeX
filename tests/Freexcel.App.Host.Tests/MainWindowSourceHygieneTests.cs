@@ -1620,7 +1620,8 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("CornerRadius=\"0,0,4,4\"");
         xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"3\"");
         xaml.Should().Contain("BorderBrush=\"Transparent\" BorderThickness=\"0\"");
-        xaml.Should().Contain("Width=\"27\" Height=\"27\"");
+        xaml.Should().Contain("Width=\"18\" Height=\"18\"");
+        xaml.Should().Contain("VerticalAlignment=\"Center\" VerticalContentAlignment=\"Center\"");
         xaml.Should().Contain("FontFamily=\"Segoe UI\"");
         xaml.Should().Contain("<Setter Property=\"FontWeight\" Value=\"SemiBold\"/>");
         xaml.Should().Contain("Panel.ZIndex=\"7\"");
