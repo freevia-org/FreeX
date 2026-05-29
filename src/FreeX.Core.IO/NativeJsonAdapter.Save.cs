@@ -54,7 +54,7 @@ public sealed partial class NativeJsonAdapter
                     var metadata = workbook.TryGetNamedRangeMetadata(pair.Key, out var savedMetadata)
                         ? savedMetadata
                         : NamedRangeMetadata.WorkbookScope;
-                    return sheet is null || pair.Value.End.Sheet != sheet.Id
+                    return sheet is null || !IsValidRangeOnSheet(pair.Value, sheet.Id)
                         ? null
                         : new NamedRangeDto
                         {
@@ -238,7 +238,7 @@ public sealed partial class NativeJsonAdapter
                 ColumnPageBreaks = s.ColumnPageBreaks.Where(columnBreak => columnBreak is >= 2 and <= CellAddress.MaxCol).ToList(),
                 ColumnPageBreaksMetadata = FromWorksheetPageBreaksMetadata(s.ColumnPageBreaksMetadata),
                 MergedRegions = s.MergedRegions
-                    .Where(range => range.Start.Sheet == s.Id && range.End.Sheet == s.Id)
+                    .Where(range => IsValidRangeOnSheet(range, s.Id))
                     .Select(range => range.ToString())
                     .ToList(),
                 Comments = s.Comments
@@ -254,7 +254,7 @@ public sealed partial class NativeJsonAdapter
                     .Select(pair => ToHyperlinkDto(s, pair))
                     .ToList(),
                 AllowEditRanges = s.AllowEditRanges
-                    .Where(range => range.Start.Sheet == s.Id && range.End.Sheet == s.Id)
+                    .Where(range => IsValidRangeOnSheet(range, s.Id))
                     .Select(range => range.ToString())
                     .ToList(),
                 BackgroundImage = ToWorksheetBackgroundDto(s.BackgroundImage),
@@ -313,4 +313,8 @@ public sealed partial class NativeJsonAdapter
         address.Sheet == sheetId &&
         NativeJsonValueSanitizer.IsValidRowIndex(address.Row) &&
         NativeJsonValueSanitizer.IsValidColumnIndex(address.Col);
+
+    private static bool IsValidRangeOnSheet(GridRange range, SheetId sheetId) =>
+        IsValidAddressOnSheet(range.Start, sheetId) &&
+        IsValidAddressOnSheet(range.End, sheetId);
 }

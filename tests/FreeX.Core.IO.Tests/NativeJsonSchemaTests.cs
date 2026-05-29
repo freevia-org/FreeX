@@ -356,6 +356,45 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_SkipsOutOfBoundsNativeJsonRanges()
+    {
+        var workbook = new Workbook("InvalidRanges");
+        var sheet = workbook.AddSheet("Sheet1");
+        var validRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2));
+        var invalidRowRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow + 1, 2));
+        var invalidColumnRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, CellAddress.MaxCol + 1));
+
+        workbook.DefineNamedRange("ValidRange", validRange);
+        workbook.NamedRanges["InvalidRange"] = invalidRowRange;
+        sheet.AddMergedRegion(validRange);
+        sheet.AddMergedRegion(invalidRowRange);
+        sheet.AllowEditRanges.Add(validRange);
+        sheet.AllowEditRanges.Add(invalidColumnRange);
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        using var document = JsonDocument.Parse(stream.ToArray());
+
+        var root = document.RootElement;
+        var namedRange = root.GetProperty("NamedRanges").EnumerateArray()
+            .Should().ContainSingle().Subject;
+        namedRange.GetProperty("Name").GetString().Should().Be("ValidRange");
+        namedRange.GetProperty("Range").GetString().Should().Be("A1:B2");
+
+        var sheetJson = root.GetProperty("Sheets").EnumerateArray().Single();
+        sheetJson.GetProperty("MergedRegions").EnumerateArray()
+            .Should().ContainSingle().Which.GetString().Should().Be("A1:B2");
+        sheetJson.GetProperty("AllowEditRanges").EnumerateArray()
+            .Should().ContainSingle().Which.GetString().Should().Be("A1:B2");
+    }
+
+    [Fact]
     public void Load_RejectsUnsupportedFutureNativeJsonSchema()
     {
         const string futureJson = """
