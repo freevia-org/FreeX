@@ -159,10 +159,13 @@ public sealed partial class NativeJsonAdapter
     private static int ValidTopBottomRankOrDefault(int value) =>
         value is >= 1 and <= 1000 ? value : 10;
 
-    private static string ValidDateOccurringPeriodOrDefault(string? value) =>
-        value is "yesterday" or "today" or "tomorrow" or "last7Days" or
+    private static string ValidDateOccurringPeriodOrDefault(string? value)
+    {
+        var normalized = value?.Trim();
+        return normalized is "yesterday" or "today" or "tomorrow" or "last7Days" or
             "lastWeek" or "thisWeek" or "nextWeek" or
             "lastMonth" or "thisMonth" or "nextMonth"
-            ? value
+            ? normalized
             : "today";
+    }
 }
