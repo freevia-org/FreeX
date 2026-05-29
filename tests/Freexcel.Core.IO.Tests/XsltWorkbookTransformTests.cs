@@ -71,6 +71,31 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetOutputSettings_PreservesNamespacedCDataSections()
+    {
+        using var source = StreamFromString("<rows><row note=\"A &lt; B &amp; C\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:output method="xml" cdata-section-elements="ss:Data" omit-xml-declaration="yes" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet>
+                    <ss:Data><xsl:value-of select="row/@note" /></ss:Data>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should().Contain("<ss:Data><![CDATA[A < B & C]]></ss:Data>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetOutputEncoding_PreservesUtf16Output()
     {
         using var source = StreamFromString("<rows><row name=\"Delta\" /></rows>");
