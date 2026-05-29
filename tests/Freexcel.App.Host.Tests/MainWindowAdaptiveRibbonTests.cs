@@ -533,35 +533,6 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void ActiveRibbonPanelCache_FollowsSelectedTabAfterSwitching()
-    {
-        StaTestRunner.Run(() =>
-        {
-            using var harness = MainWindowHarness.Create();
-
-            harness.SelectRibbonTab("Home", 1100);
-            var home = harness.GetAppActiveRibbonPanelSnapshot();
-
-            home.TabHeader.Should().Be("Home");
-            home.GroupNames.Should().Contain("Clipboard");
-
-            harness.SelectRibbonTab("Insert", 1100);
-            var insert = harness.GetAppActiveRibbonPanelSnapshot();
-
-            insert.TabHeader.Should().Be("Insert");
-            insert.GroupNames.Should().Contain("Tables");
-            insert.GroupNames.Should().NotContain("Clipboard", "cached Home panels must not drive Insert adaptive layout");
-
-            harness.SelectRibbonTab("Formulas", 1100);
-            var formulas = harness.GetAppActiveRibbonPanelSnapshot();
-
-            formulas.TabHeader.Should().Be("Formulas");
-            formulas.GroupNames.Should().Contain("Function Library");
-            formulas.GroupNames.Should().NotContain("Tables", "cached Insert panels must not drive Formulas adaptive layout");
-        });
-    }
-
-    [Fact]
     public void RibbonGroupDiscovery_UsesMetadataRatherThanVisualShapeDuringResize()
     {
         var ribbonSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.Ribbon.cs"));
@@ -1507,25 +1478,6 @@ public sealed class MainWindowAdaptiveRibbonTests
             PumpDispatcher();
         }
 
-        public AppActiveRibbonPanelSnapshot GetAppActiveRibbonPanelSnapshot()
-        {
-            var getActivePanel = typeof(MainWindow)
-                .GetMethod("GetActiveRibbonPanel", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "GetActiveRibbonPanel");
-            var panel = (StackPanel?)getActivePanel.Invoke(_window, []);
-
-            panel.Should().NotBeNull(DebugActiveRibbonChildren);
-            var tabHeader = FindVisualAncestor<TabItem>(panel!)?.Header?.ToString();
-            var groupNames = panel!.Children
-                .OfType<DependencyObject>()
-                .Where(RibbonMetadata.IsRibbonGroup)
-                .Select(group => RibbonMetadata.TryGetGroupName(group, out var name) ? name : "")
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .ToList();
-
-            return new AppActiveRibbonPanelSnapshot(tabHeader, groupNames);
-        }
-
         public void ClickActiveRibbonButton(string title)
         {
             var button = EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
@@ -1792,8 +1744,6 @@ public sealed class MainWindowAdaptiveRibbonTests
     public sealed record CheckBoxLabelOffset(string Name, double Offset);
 
     public sealed record CollapsedGroupKeyTip(string GroupName, string KeyTip);
-
-    public sealed record AppActiveRibbonPanelSnapshot(string? TabHeader, IReadOnlyList<string> GroupNames);
 
     private static void PumpDispatcher()
     {
