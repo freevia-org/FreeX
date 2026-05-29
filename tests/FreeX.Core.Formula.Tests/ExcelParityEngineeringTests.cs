@@ -456,6 +456,8 @@ public sealed class ExcelParityEngineeringTests
     [InlineData("=IMCOT(0)", "#NUM!")]
     [InlineData("=IMCSC(0)", "#NUM!")]
     [InlineData("=IMCSCH(0)", "#NUM!")]
+    [InlineData("=IMEXP(1000)", "#NUM!")]
+    [InlineData("=IMCOSH(1000)", "#NUM!")]
     [InlineData("=IMPOWER(\"not complex\",2)", "#NUM!")]
     [InlineData("=IMPOWER(0,-1)", "#NUM!")]
     public void ComplexFunctions_ReturnExcelErrors(string formula, string error)
