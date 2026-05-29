@@ -5,20 +5,12 @@ namespace FreeX.App.Host;
 public static class CommentNavigationPlanner
 {
     public static List<CellAddress> OrderedCommentAddresses(IReadOnlyDictionary<CellAddress, string> comments) =>
-        comments.Keys
-            .OrderBy(address => address.Row)
-            .ThenBy(address => address.Col)
-            .ToList();
+        OrderAddresses(comments.Keys);
 
     public static List<CellAddress> OrderedCommentAddresses(
         IReadOnlyDictionary<CellAddress, string> comments,
         IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments) =>
-        comments.Keys
-            .Concat(threadedComments.Keys)
-            .Distinct()
-            .OrderBy(address => address.Row)
-            .ThenBy(address => address.Col)
-            .ToList();
+        OrderAddresses(comments.Keys.Concat(threadedComments.Keys).Distinct());
 
     public static CellAddress FindNext(IReadOnlyList<CellAddress> orderedComments, CellAddress current, bool previous)
     {
@@ -105,6 +97,12 @@ public static class CommentNavigationPlanner
         string.IsNullOrWhiteSpace(author)
             ? text
             : $"{author.Trim()}: {text}";
+
+    private static List<CellAddress> OrderAddresses(IEnumerable<CellAddress> addresses) =>
+        addresses
+            .OrderBy(address => address.Row)
+            .ThenBy(address => address.Col)
+            .ToList();
 
     private static int FindFirstAfter(IReadOnlyList<CellAddress> orderedComments, CellAddress current)
     {
