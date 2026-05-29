@@ -170,20 +170,13 @@ internal static class WpfTextContentExtractor
                 parts.Add(ExtractComboBoxSelectionText(comboBox));
                 return;
             case HeaderedContentControl headeredContentControl:
-                AppendJoinedInlineUiText(
-                    [
-                        ExtractInlineUiTextPart(headeredContentControl.Header),
-                        ExtractInlineUiTextPart(headeredContentControl.Content)
-                    ],
-                    parts);
+                AppendHeaderedContentControlText(headeredContentControl, parts);
                 return;
             case ContentControl contentControl:
                 AppendInlineUiText(contentControl.Content, parts);
                 return;
             case ItemsControl itemsControl:
-                AppendJoinedInlineUiText(
-                    itemsControl.Items.Cast<object?>().Select(ExtractInlineUiTextPart),
-                    parts);
+                AppendItemsControlText(itemsControl, parts);
                 return;
             case Panel panel:
                 foreach (UIElement child in panel.Children)
@@ -207,6 +200,23 @@ internal static class WpfTextContentExtractor
         var parts = new List<string>();
         AppendInlineUiText(value, parts);
         return string.Concat(parts);
+    }
+
+    private static void AppendHeaderedContentControlText(HeaderedContentControl control, List<string> parts)
+    {
+        AppendJoinedInlineUiText(
+            [
+                ExtractInlineUiTextPart(control.Header),
+                ExtractInlineUiTextPart(control.Content)
+            ],
+            parts);
+    }
+
+    private static void AppendItemsControlText(ItemsControl itemsControl, List<string> parts)
+    {
+        AppendJoinedInlineUiText(
+            itemsControl.Items.Cast<object?>().Select(ExtractInlineUiTextPart),
+            parts);
     }
 
     private static void AppendJoinedInlineUiText(IEnumerable<string> values, List<string> parts)
