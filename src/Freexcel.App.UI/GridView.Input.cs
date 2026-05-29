@@ -102,7 +102,14 @@ public partial class GridView
 
         if (_resizeTarget == ResizeTarget.Column)
         {
-            var col = FindColMetric(Viewport!.ColMetrics, _resizeIndex);
+            if (Viewport is null)
+            {
+                Cursor = Cursors.SizeWE;
+                e.Handled = true;
+                return;
+            }
+
+            var col = FindColMetric(Viewport.ColMetrics, _resizeIndex);
             if (col is null)
             {
                 Cursor = Cursors.SizeWE;
@@ -119,7 +126,14 @@ public partial class GridView
         }
         else if (_resizeTarget == ResizeTarget.Row)
         {
-            var row = FindRowMetric(Viewport!.RowMetrics, _resizeIndex);
+            if (Viewport is null)
+            {
+                Cursor = Cursors.SizeNS;
+                e.Handled = true;
+                return;
+            }
+
+            var row = FindRowMetric(Viewport.RowMetrics, _resizeIndex);
             if (row is null)
             {
                 Cursor = Cursors.SizeNS;
