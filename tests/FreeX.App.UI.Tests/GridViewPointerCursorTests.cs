@@ -207,6 +207,23 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void SplitPaneDividerHoverCursorTakesPriorityBeforeResizeHitTesting()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Input.cs"));
+        var hoverCursorBlock = source[
+            source.IndexOf("var splitHandle = Viewport is null ? SplitDividerHandle.None : HitTestSplitDividerHandle(Viewport, pos);", StringComparison.Ordinal)..
+            source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
+
+        hoverCursorBlock.Should().Contain("if (splitHandle != SplitDividerHandle.None)");
+        hoverCursorBlock.Should().Contain("Cursor = splitHandle == SplitDividerHandle.Intersection ? Cursors.SizeAll");
+        hoverCursorBlock.Should().Contain("splitHandle == SplitDividerHandle.Vertical ? Cursors.SizeWE");
+        hoverCursorBlock.Should().Contain(": Cursors.SizeNS;");
+        hoverCursorBlock.IndexOf("if (splitHandle != SplitDividerHandle.None)", StringComparison.Ordinal)
+            .Should().BeLessThan(hoverCursorBlock.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SplitPaneDividerMouseUpRaisesMoveEventAndClearsCaptureState()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
