@@ -47,8 +47,8 @@ public sealed class HelpCommandSourceTests
         source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, \"Check for Updates\")");
         source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), \"Feedback\")");
         source.Should().Contain("AppInfo.AboutText");
-        source.Should().Contain("AppDiagnostics.CreateSnapshot(");
-        source.Should().Contain("Clipboard.SetText(text);");
+        source.Should().Contain("AppIssueReporter.CreateDiagnosticsText(context)");
+        source.Should().Contain("Clipboard.SetText(diagnosticsText);");
         source.Should().Contain("UseShellExecute = true");
         source.Should().Contain("ShowOwnedMessage(");
     }

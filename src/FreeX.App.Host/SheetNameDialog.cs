@@ -25,6 +25,8 @@ public sealed class SheetNameDialog : Window
         ShowInTaskbar = false;
         _nameBox.Text = currentName;
         AutomationProperties.SetName(_nameBox, "Sheet name");
+        AutomationProperties.SetAutomationId(_nameBox, "SheetNameBox");
+        AutomationProperties.SetHelpText(_nameBox, "Enter a worksheet name up to 31 characters.");
         Content = ObjectSizeDialog.CreateSingleInputContent("Sheet _name:", _nameBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
