@@ -67,7 +67,7 @@ public partial class MainWindow
                 Background = System.Windows.Media.Brushes.White,
                 BorderThickness = new System.Windows.Thickness(2),
                 BorderBrush = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(33, 115, 70)),
+                    System.Windows.Media.Color.FromRgb(15, 109, 140)),
                 IsHitTestVisible = false,
                 Visibility = Visibility.Collapsed
             };
