@@ -37,6 +37,33 @@ public sealed class GridViewContextMenuTests
     }
 
     [Fact]
+    public void GridViewRightClick_IgnoresContextMenuWhileCapturedDragIsActive()
+    {
+        var inputSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "Freexcel.App.UI", "GridView.Input.cs"));
+        var rightClickBlock = inputSource[
+            inputSource.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)..
+            inputSource.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal)];
+
+        rightClickBlock.Should().Contain("_objectDragKind != ObjectDragKind.None");
+        rightClickBlock.Should().Contain("_marginDragEdge.HasValue");
+        rightClickBlock.Should().Contain("_splitDividerDragHandle != SplitDividerHandle.None");
+        rightClickBlock.Should().Contain("_splitPaneScrollbarDragging");
+        rightClickBlock.Should().Contain("_autofillDragging");
+        rightClickBlock.Should().Contain("_resizeTarget != ResizeTarget.None");
+        rightClickBlock.Should().Contain("e.Handled = true;");
+        rightClickBlock.IndexOf("_objectDragKind != ObjectDragKind.None", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(rightClickBlock.IndexOf("HitTestPivotChartFieldButton", StringComparison.Ordinal));
+        rightClickBlock.IndexOf("_objectDragKind != ObjectDragKind.None", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(rightClickBlock.IndexOf("ContextMenuRequested?.Invoke", StringComparison.Ordinal));
+        rightClickBlock.IndexOf("e.Handled = true;", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(rightClickBlock.IndexOf("HitTestPivotChartFieldButton", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void GridViewDoubleClickResizeBorder_RoutesToAutoFitEventsBeforeDragResize()
     {
         var inputSource = File.ReadAllText(FindWorkspaceFile(
