@@ -39,13 +39,27 @@ public static class SheetTabListPlanner
 
         groupedSheetIds.RemoveWhere(id => workbook.GetSheet(id)?.IsHidden != false);
 
-        var visibleSheets = sheets.Where(sheet => !sheet.IsHidden).ToList();
-        var activeVisibleIndex = visibleSheets.FindIndex(sheet => sheet.Id == currentSheetId);
-        var tabs = new List<SheetTabViewModel>(visibleSheets.Count);
-        for (var index = 0; index < visibleSheets.Count; index++)
+        var visibleSheetCount = 0;
+        var activeVisibleIndex = -1;
+        for (var index = 0; index < sheets.Count; index++)
         {
-            var sheet = visibleSheets[index];
+            var sheet = sheets[index];
+            if (sheet.IsHidden)
+                continue;
 
+            if (sheet.Id == currentSheetId)
+                activeVisibleIndex = visibleSheetCount;
+
+            visibleSheetCount++;
+        }
+
+        var tabs = new List<SheetTabViewModel>(visibleSheetCount);
+        var visibleIndex = 0;
+        for (var index = 0; index < sheets.Count; index++)
+        {
+            var sheet = sheets[index];
+            if (sheet.IsHidden)
+                continue;
 
             if (groupedSheetIds.Count == 0 && sheet.Id == currentSheetId)
                 groupedSheetIds.Add(sheet.Id);
@@ -54,9 +68,11 @@ public static class SheetTabListPlanner
             {
                 IsActive = sheet.Id == currentSheetId,
                 IsGrouped = groupedSheetIds.Contains(sheet.Id),
-                IsLeftSideCoveredByActive = activeVisibleIndex >= 0 && index == activeVisibleIndex + 1,
-                IsRightSideCoveredByActive = activeVisibleIndex >= 0 && index == activeVisibleIndex - 1
+                IsLeftSideCoveredByActive = activeVisibleIndex >= 0 && visibleIndex == activeVisibleIndex + 1,
+                IsRightSideCoveredByActive = activeVisibleIndex >= 0 && visibleIndex == activeVisibleIndex - 1
             });
+
+            visibleIndex++;
         }
 
         return new SheetTabListPlan(currentSheetId, tabs);
