@@ -1,10 +1,11 @@
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FluentAssertions;
+using Xunit.Abstractions;
 
 namespace FreeX.Core.Formula.Tests;
 
-public class FormulaSerializerTests
+public class FormulaSerializerTests(ITestOutputHelper output)
 {
     private static string RoundTrip(string formula)
     {
@@ -54,6 +55,26 @@ public class FormulaSerializerTests
 
     [Fact]
     public void Serialize_SheetQualifiedRef() => RoundTrip("=Sheet2!A1").Should().Be("Sheet2!A1");
+
+    [Fact]
+    public void Serialize_SheetQualifiedRef_KeepsFastPathAllocationBounded()
+    {
+        var node = new CellRefNode("A", 1, SheetName: "Sheet2");
+        const int iterations = 10_000;
+        FormulaSerializer.Serialize(node).Should().Be("Sheet2!A1");
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < iterations; i++)
+            FormulaSerializer.Serialize(node);
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        output.WriteLine($"FORMULA_SERIALIZER_SHEET_REF allocated_bytes={allocatedBytes:N0} iterations={iterations:N0}");
+        allocatedBytes.Should().BeLessThan(1_900_000);
+    }
 
     [Fact]
     public void Serialize_QuotedSheetQualifiedRef_WithSpace() => RoundTrip("='My Sheet'!A1").Should().Be("'My Sheet'!A1");
