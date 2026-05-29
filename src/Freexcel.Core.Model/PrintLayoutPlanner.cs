@@ -31,12 +31,13 @@ public static class PrintLayoutPlanner
             ? Math.Min((uint)titleRows.Count, rowsPerPage - 1)
             : 0;
         var bodyRowsPerPage = Math.Max(1u, rowsPerPage - titleRowsOnPage);
-        var pages = new List<PrintPageRowPlan>();
-        for (var index = 0; index < bodyRows.Count; index += (int)bodyRowsPerPage)
+        var bodyRowsPerPageCount = ToPageItemCount(bodyRowsPerPage);
+        var pages = new List<PrintPageRowPlan>(GetPageCount(bodyRows.Count, bodyRowsPerPageCount));
+        for (var index = 0; index < bodyRows.Count; index += bodyRowsPerPageCount)
         {
             pages.Add(new PrintPageRowPlan(
                 titleRows,
-                bodyRows.Skip(index).Take((int)bodyRowsPerPage).ToList()));
+                CopyPageValues(bodyRows, index, bodyRowsPerPageCount)));
         }
 
         if (pages.Count == 0 && titleRows.Count > 0)
@@ -66,12 +67,13 @@ public static class PrintLayoutPlanner
             ? Math.Min((uint)titleColumns.Count, columnsPerPage - 1)
             : 0;
         var bodyColumnsPerPage = Math.Max(1u, columnsPerPage - titleColumnsOnPage);
-        var pages = new List<PrintPageColumnPlan>();
-        for (var index = 0; index < bodyColumns.Count; index += (int)bodyColumnsPerPage)
+        var bodyColumnsPerPageCount = ToPageItemCount(bodyColumnsPerPage);
+        var pages = new List<PrintPageColumnPlan>(GetPageCount(bodyColumns.Count, bodyColumnsPerPageCount));
+        for (var index = 0; index < bodyColumns.Count; index += bodyColumnsPerPageCount)
         {
             pages.Add(new PrintPageColumnPlan(
                 titleColumns,
-                bodyColumns.Skip(index).Take((int)bodyColumnsPerPage).ToList()));
+                CopyPageValues(bodyColumns, index, bodyColumnsPerPageCount)));
         }
 
         if (pages.Count == 0 && titleColumns.Count > 0)
@@ -128,5 +130,21 @@ public static class PrintLayoutPlanner
         }
 
         return titleColumns;
+    }
+
+    private static int ToPageItemCount(uint itemsPerPage) =>
+        itemsPerPage > int.MaxValue ? int.MaxValue : (int)itemsPerPage;
+
+    private static int GetPageCount(int itemCount, int itemsPerPage) =>
+        itemCount == 0 ? 0 : ((itemCount - 1) / itemsPerPage) + 1;
+
+    private static List<uint> CopyPageValues(List<uint> values, int startIndex, int maxCount)
+    {
+        var count = Math.Min(maxCount, values.Count - startIndex);
+        var pageValues = new List<uint>(count);
+        for (var offset = 0; offset < count; offset++)
+            pageValues.Add(values[startIndex + offset]);
+
+        return pageValues;
     }
 }
