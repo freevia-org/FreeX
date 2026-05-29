@@ -33,6 +33,7 @@ src/Freexcel.App.Host/Resources/CommandIcons/
 
 # Local isolated worktrees
 .worktrees/
+.claude/
 
 # Diagnostic capture scripts and screenshots
 capture_*.ps1
