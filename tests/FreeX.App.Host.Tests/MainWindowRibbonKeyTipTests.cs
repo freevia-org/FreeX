@@ -294,7 +294,7 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.SelectedRibbonTabHeader.Should().Be("View");
             harness.KeyTipScope.Should().Be("Menu");
             harness.ActiveMenuItemGestureText("Freeze Panes").Should().Be("F");
-            harness.ActiveMenuItemGestureText("Unfreeze All").Should().Be("U");
+            harness.ActiveMenuItemGestureText("Unfreeze Panes").Should().Be("U");
             harness.HandleKeyTip(Key.Escape);
 
             harness.OpenRibbonMenu(Key.W, Key.Q);
@@ -651,7 +651,7 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.ActiveMenuIsOpen.Should().BeFalse();
 
             harness.OpenRibbonMenu(Key.W, Key.F, Key.P);
-            harness.ActiveMenuItemGestureText("Unfreeze All").Should().Be("U");
+            harness.ActiveMenuItemGestureText("Unfreeze Panes").Should().Be("U");
             harness.HandleKeyTip(Key.U);
 
             harness.ActiveSheetFrozenPanes.Should().Be((0u, 0u));
