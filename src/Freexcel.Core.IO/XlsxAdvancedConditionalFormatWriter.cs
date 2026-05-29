@@ -193,7 +193,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     rule.Add(new XElement(worksheetNs + "formula", cf.FormulaText));
                 break;
             case CfRuleType.DateOccurring:
-                rule.SetAttributeValue("timePeriod", string.IsNullOrWhiteSpace(cf.DateOccurringPeriod) ? "today" : cf.DateOccurringPeriod);
+                rule.SetAttributeValue("timePeriod", string.IsNullOrWhiteSpace(cf.DateOccurringPeriod) ? "today" : cf.DateOccurringPeriod.Trim());
                 if (!string.IsNullOrWhiteSpace(cf.FormulaText))
                     rule.Add(new XElement(worksheetNs + "formula", cf.FormulaText));
                 break;

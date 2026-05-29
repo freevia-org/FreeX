@@ -5091,6 +5091,36 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_DateOccurringConditionalFormat_TrimsTimePeriod()
+    {
+        var workbook = new Workbook("DateCfTrimXlsxTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DateOccurring,
+            Priority = 1,
+            DateOccurringPeriod = "  last7Days  "
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var rule = XDocument.Load(reader)
+            .Descendants(worksheetNs + "cfRule")
+            .Should()
+            .ContainSingle(element => (string?)element.Attribute("type") == "timePeriod")
+            .Subject;
+
+        rule.Attribute("timePeriod")?.Value.Should().Be("last7Days");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_ConditionalFormat_LongTailDifferentialStyle_Survives()
     {
         var workbook = new Workbook("LongTailCfDxfXlsxTest");
