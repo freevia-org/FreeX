@@ -2311,7 +2311,7 @@
                                             <MenuItem Header="Count All"     local:RibbonTooltip.KeyTip="T" Click="AutoSumCountAllMenuItem_Click"/>
                                             <MenuItem Header="Max"           local:RibbonTooltip.KeyTip="X" Click="AutoSumMaxMenuItem_Click"/>
                                             <MenuItem Header="Min"           local:RibbonTooltip.KeyTip="M" Click="AutoSumMinMenuItem_Click"/>
-                                            <MenuItem Header="More…"         local:RibbonTooltip.KeyTip="F" Click="AutoSumMoreMenuItem_Click"/>
+                                            <MenuItem Header="More Functions..." local:RibbonTooltip.KeyTip="F" Click="AutoSumMoreMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
