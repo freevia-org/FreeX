@@ -146,7 +146,8 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=COTH(0)")]
     [InlineData("=CSC(0)")]
     [InlineData("=CSCH(0)")]
-    public void ReciprocalTrigZeroDenominator_ReturnsDivByZero(string formula)
+    [InlineData("=LOG(100,1)")]
+    public void MathTrigDivideByZeroDomains_ReturnsDivByZero(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.DivByZero);
     }

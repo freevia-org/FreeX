@@ -302,7 +302,8 @@ public static partial class BuiltInFunctions
     {
         var n = ToNumber(value);
         if (!double.IsFinite(n) || !double.IsFinite(base_)) return ErrorValue.Num;
-        if (n <= 0 || base_ <= 0 || base_ == 1) return ErrorValue.Num;
+        if (n <= 0 || base_ <= 0) return ErrorValue.Num;
+        if (base_ == 1) return ErrorValue.DivByZero;
         return NumberResult(Math.Log(n) / Math.Log(base_));
     }
 
