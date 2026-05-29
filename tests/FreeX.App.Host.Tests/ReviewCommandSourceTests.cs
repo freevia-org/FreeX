@@ -49,7 +49,7 @@ public sealed class ReviewCommandSourceTests
     [Theory]
     [InlineData("Protect Sheet", "PS", "ProtectSheetBtn_Click")]
     [InlineData("Protect Workbook", "PW", "ProtectWorkbookBtn_Click")]
-    [InlineData("Allow Edit Ranges", "AR", "AllowEditRangesBtn_Click")]
+    [InlineData("Allow Users to Edit Ranges", "AR", "AllowEditRangesBtn_Click")]
     [InlineData("Share Workbook", "SH", "ShareWorkbookBtn_Click")]
     public void ReviewProtectButtons_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
@@ -82,6 +82,8 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("SheetProtectionWorkflow.CreateCommand(sheet, result)");
         source.Should().Contain("WorkbookProtectionWorkflow.CreateCommand(_workbook, pwd)");
         source.Should().Contain("new AllowEditRangeDialog(");
+        source.Should().Contain("TryExecuteCommand(command, \"Allow Users to Edit Ranges\")");
+        source.Should().Contain("_messageService.ShowInfo(successMessage, \"Allow Users to Edit Ranges\")");
         source.Should().Contain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
         source.Should().Contain("_shareService.ShareFileAsync(this, _currentFilePath, _workbook.Name)");
     }

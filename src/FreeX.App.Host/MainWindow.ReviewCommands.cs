@@ -352,10 +352,10 @@ public partial class MainWindow
         if (command is null || successMessage is null)
             return;
 
-        if (!TryExecuteCommand(command, "Allow Edit Ranges"))
+        if (!TryExecuteCommand(command, "Allow Users to Edit Ranges"))
             return;
 
-        _messageService.ShowInfo(successMessage, "Allow Edit Ranges");
+        _messageService.ShowInfo(successMessage, "Allow Users to Edit Ranges");
     }
 
     private void ApplyAllowEditRangeSelection(AllowEditRangeDialog? dialog, AllowEditRangeSelectionRequest request)
