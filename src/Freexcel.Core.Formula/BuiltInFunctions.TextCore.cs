@@ -91,9 +91,8 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue valueError) return valueError;
         if (countValue is ErrorValue countError) return countError;
         var rawCount = ToNumber(countValue);
-        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
+        if (!double.IsFinite(rawCount) || rawCount < 0 || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
-        if (count < 0) return ErrorValue.Value;
         return LeftScalar(value, count);
     }
 
@@ -127,9 +126,8 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue valueError) return valueError;
         if (countValue is ErrorValue countError) return countError;
         var rawCount = ToNumber(countValue);
-        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
+        if (!double.IsFinite(rawCount) || rawCount < 0 || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
-        if (count < 0) return ErrorValue.Value;
         return RightScalar(value, count);
     }
 
@@ -154,9 +152,8 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue valueError) return valueError;
         if (countValue is ErrorValue countError) return countError;
         var rawCount = ToNumber(countValue);
-        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
+        if (!double.IsFinite(rawCount) || rawCount < 0 || rawCount > int.MaxValue) return ErrorValue.Value;
         var byteCount = (int)rawCount;
-        if (byteCount < 0) return ErrorValue.Value;
 
         var text = ToText(value);
         return fromRight
