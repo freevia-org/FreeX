@@ -301,6 +301,26 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetTextOutputEncoding_PreservesUtf16Output()
+    {
+        using var source = StreamFromString("<rows><row name=\"Juliet\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="text" encoding="utf-16" />
+              <xsl:template match="/rows">
+                <xsl:value-of select="row/@name" />
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        var bytes = transformed.ToArray();
+        bytes.Should().StartWith(Encoding.Unicode.GetPreamble());
+        Encoding.Unicode.GetString(bytes).Should().Contain("Juliet");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetHtmlOutput_PreservesHtmlSerialization()
     {
         using var source = StreamFromString("<rows><row name=\"April\" /></rows>");
