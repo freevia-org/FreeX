@@ -1099,11 +1099,21 @@ public partial class MainWindow
     {
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
-        var sheet = _workbook.GetSheet(tab.Id);
+        ColorSheetTab(tab.Id);
+    }
+
+    private void ColorCurrentSheetTab()
+    {
+        ColorSheetTab(_currentSheetId);
+    }
+
+    private void ColorSheetTab(SheetId sheetId)
+    {
+        var sheet = _workbook.GetSheet(sheetId);
         if (!TryShowColorPicker("Tab Color", sheet?.TabColor ?? new CellColor(33, 115, 70), allowNoColor: true, out var tabColor))
             return;
 
-        if (!TryExecuteCommand(new SetSheetTabColorCommand(tab.Id, tabColor), "Tab Color"))
+        if (!TryExecuteCommand(new SetSheetTabColorCommand(sheetId, tabColor), "Tab Color"))
             return;
         RefreshSheetTabs();
     }

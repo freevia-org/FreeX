@@ -516,18 +516,12 @@ public sealed class ExcelParityEngineeringTests
     }
 
     [Theory]
-    [InlineData("=BITLSHIFT(1,2.9)", 4)]
-    [InlineData("=BITRSHIFT(8,1.9)", 4)]
-    public void BitShiftFunctions_TruncateFractionalShiftAmount(string formula, double expected)
-    {
-        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
-    }
-
-    [Theory]
     [InlineData("=BITAND(-1,1)")]
     [InlineData("=BITOR(1.5,1)")]
+    [InlineData("=BITLSHIFT(1,2.9)")]
     [InlineData("=BITLSHIFT(1,54)")]
     [InlineData("=BITLSHIFT(281474976710655,1)")]
+    [InlineData("=BITRSHIFT(8,1.9)")]
     [InlineData("=BITRSHIFT(281474976710656,1)")]
     public void BitFunctions_InvalidArguments_ReturnNum(string formula)
     {
