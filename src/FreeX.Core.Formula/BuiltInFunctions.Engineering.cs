@@ -223,7 +223,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue ConvertScalar(ScalarValue numberValue, string from, string to)
     {
         double n = ToNumber(numberValue);
-        if (!double.IsFinite(n)) return ErrorValue.Value;
+        if (!double.IsFinite(n)) return ErrorValue.Num;
 
         if (!TryResolveUnit(from, out var fromCat, out var fromFactor)) return ErrorValue.NA;
         if (!TryResolveUnit(to, out var toCat, out var toFactor)) return ErrorValue.NA;
