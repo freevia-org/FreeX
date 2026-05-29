@@ -1,5 +1,6 @@
 using System.Text;
 using System.Xml;
+using System.Xml.Linq;
 using System.Xml.Xsl;
 using FluentAssertions;
 
@@ -309,6 +310,20 @@ public sealed class XsltWorkbookTransformTests
         var xml = reader.ReadToEnd();
         xml.Should().Contain("<?freexcel keep=\"true\"?>");
         xml.Should().Contain("<!--keep me-->");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_IdentityTransform_PreservesCDataTextValue()
+    {
+        using var source = StreamFromString("<rows><formula><![CDATA[A1<B1 && C1>D1]]></formula></rows>");
+        using var stylesheet = IdentityStylesheet();
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        var xml = reader.ReadToEnd();
+        XDocument.Parse(xml).Root?.Element("formula")?.Value.Should().Be("A1<B1 && C1>D1");
+        xml.Should().Contain("<formula>A1&lt;B1 &amp;&amp; C1&gt;D1</formula>");
     }
 
     [Fact]
