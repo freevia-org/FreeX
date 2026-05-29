@@ -128,6 +128,24 @@ public sealed class MenuKeyTipAssignerTests
         });
     }
 
+    [Fact]
+    public void AssignsDeterministicFallbackKeyTipsAfterSingleDigitRangeIsExhausted()
+    {
+        RunSta(() =>
+        {
+            var items = Enumerable.Range(0, 12)
+                .Select(_ => new MenuItem { Header = "" })
+                .ToList();
+
+            MenuKeyTipAssigner.AssignUniqueKeyTips(items);
+
+            var keyTips = items.Select(RibbonTooltip.GetKeyTip).ToList();
+            keyTips.Take(9).Should().Equal(Enumerable.Range(1, 9).Select(index => index.ToString()));
+            keyTips.Skip(9).Should().Equal("AA", "AB", "AC");
+            keyTips.Should().OnlyHaveUniqueItems();
+        });
+    }
+
     private static void RunSta(Action action)
     {
         Exception? exception = null;

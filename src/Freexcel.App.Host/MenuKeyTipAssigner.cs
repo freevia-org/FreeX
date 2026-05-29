@@ -52,7 +52,13 @@ public static class MenuKeyTipAssigner
                 return candidate;
         }
 
-        return Guid.NewGuid().ToString("N")[..2].ToUpperInvariant();
+        foreach (var candidate in EnumerateFallbackKeyTips())
+        {
+            if (IsAvailable(candidate, used))
+                return candidate;
+        }
+
+        throw new InvalidOperationException("Unable to assign a unique menu keytip.");
     }
 
     private static string NormalizeKeyTip(string? keyTip) =>
@@ -83,4 +89,24 @@ public static class MenuKeyTipAssigner
 
     private static bool IsTypeableKeyTip(string keyTip) =>
         keyTip.All(IsTypeableKeyTipCharacter);
+
+    private static IEnumerable<string> EnumerateFallbackKeyTips()
+    {
+        const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+        foreach (var first in alphabet)
+        {
+            foreach (var second in alphabet)
+                yield return $"{first}{second}";
+        }
+
+        foreach (var first in alphabet)
+        {
+            foreach (var second in alphabet)
+            {
+                foreach (var third in alphabet)
+                    yield return $"{first}{second}{third}";
+            }
+        }
+    }
 }
