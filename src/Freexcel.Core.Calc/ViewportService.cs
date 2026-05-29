@@ -21,6 +21,7 @@ public sealed partial class ViewportService : IViewportService
         var rowMetrics = BuildFrozenAwareRowMetrics(sheet, request.TopRow, request.AvailableHeight);
         var colMetrics = BuildFrozenAwareColMetrics(sheet, request.LeftCol, request.AvailableWidth);
         var hasAnyCellComments = HasAnyCellComments(sheet);
+        var hasAnyStyleOnlyCells = sheet.HasStyleOnlyCells;
 
         // Pre-compute CF rule order and aggregates once per frame rather than per cell.
         var cfContext = BuildConditionalFormatContext(sheet);
@@ -61,6 +62,9 @@ public sealed partial class ViewportService : IViewportService
                 }
                 else
                 {
+                    if (!hasAnyStyleOnlyCells && !hasAnyCellComments)
+                        continue;
+
                     var styleOnlyId = sheet.GetStyleOnly(rowMetric.Row, colMetric.Col);
                     var addr = new CellAddress(sheetId, rowMetric.Row, colMetric.Col);
                     if (styleOnlyId.HasValue)
@@ -194,19 +198,20 @@ public sealed partial class ViewportService : IViewportService
     {
         var cells = new List<DisplayCell>();
         var seen = new HashSet<(uint Row, uint Col)>();
+        var hasAnyStyleOnlyCells = sheet.HasStyleOnlyCells;
 
         foreach (var row in topRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells);
             foreach (var column in topRightColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells);
         }
 
         foreach (var row in bottomLeftRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells);
         }
 
         return cells;
@@ -223,7 +228,8 @@ public sealed partial class ViewportService : IViewportService
         int targetWidthCharacters,
         bool includeFormulas,
         CfEvaluationContext cfContext,
-        bool hasAnyCellComments)
+        bool hasAnyCellComments,
+        bool hasAnyStyleOnlyCells)
     {
         if (!seen.Add((row, col)))
             return;
@@ -231,6 +237,9 @@ public sealed partial class ViewportService : IViewportService
         var cell = sheet.GetCell(row, col);
         if (cell is null)
         {
+            if (!hasAnyStyleOnlyCells && !hasAnyCellComments)
+                return;
+
             var styleOnlyId = sheet.GetStyleOnly(row, col);
             if (!styleOnlyId.HasValue)
                 return;
