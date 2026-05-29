@@ -21,6 +21,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static readonly XName SpreadsheetHrefScreenTipAttribute = SpreadsheetNs + "HRefScreenTip";
     private static readonly XName SpreadsheetAuthorAttribute = SpreadsheetNs + "Author";
     private static readonly XName SpreadsheetVisibleAttribute = SpreadsheetNs + "Visible";
+    private static readonly XName SpreadsheetHeightAttribute = SpreadsheetNs + "Height";
+    private static readonly XName SpreadsheetHiddenAttribute = SpreadsheetNs + "Hidden";
 
     public string Extension => ".xml";
     public string FormatName => "XML Spreadsheet 2003";
@@ -142,6 +144,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             if (rowIndex > CellAddress.MaxRow)
                 break;
 
+            ReadRowLayout(sheet, rowElement, rowIndex);
+
             var columnIndex = 1u;
             foreach (var cellElement in rowElement.Elements(SpreadsheetNs + "Cell"))
             {
@@ -176,6 +180,22 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
             rowIndex++;
         }
+    }
+
+    private static void ReadRowLayout(Sheet sheet, XElement rowElement, uint rowIndex)
+    {
+        if (double.TryParse(
+                rowElement.Attribute(SpreadsheetHeightAttribute)?.Value,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var height) &&
+            IsPositiveFinite(height))
+        {
+            sheet.RowHeights[rowIndex] = height;
+        }
+
+        if (ReadBoolean(rowElement.Attribute(SpreadsheetHiddenAttribute)?.Value ?? "", out var hidden) && hidden)
+            sheet.HiddenRows.Add(rowIndex);
     }
 
     private static Cell ReadCell(XElement cellElement)
@@ -299,9 +319,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             ToWorksheetVisibilityAttribute(sheet),
             new XElement(
                 SpreadsheetNs + "Table",
-                EnumerateXmlCells(sheet)
-                    .GroupBy(entry => entry.Row)
-                    .Select(ToRowElement)));
+                ToRowElements(sheet)));
 
     private static XAttribute? ToWorksheetVisibilityAttribute(Sheet sheet)
     {
@@ -402,14 +420,46 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         sheet.GetMergeRegion(address) is { } mergeRange &&
         (mergeRange.Start.Row != address.Row || mergeRange.Start.Col != address.Col);
 
-    private static XElement ToRowElement(IGrouping<uint, SpreadsheetXmlCell> row)
+    private static IEnumerable<XElement> ToRowElements(Sheet sheet)
     {
-        var rowElement = new XElement(SpreadsheetNs + "Row", new XAttribute(SpreadsheetIndexAttribute, row.Key));
-        foreach (var cell in row.OrderBy(entry => entry.Col))
+        var cellsByRow = EnumerateXmlCells(sheet)
+            .GroupBy(entry => entry.Row)
+            .ToDictionary(group => group.Key, group => group.OrderBy(cell => cell.Col).ToList());
+
+        var rowIndexes = cellsByRow.Keys
+            .Concat(sheet.RowHeights.Keys.Where(IsValidRowLayoutIndex))
+            .Concat(sheet.HiddenRows.Where(IsValidRowLayoutIndex))
+            .Distinct()
+            .OrderBy(row => row);
+
+        foreach (var rowIndex in rowIndexes)
+            yield return ToRowElement(sheet, rowIndex, cellsByRow.GetValueOrDefault(rowIndex) ?? []);
+    }
+
+    private static XElement ToRowElement(Sheet sheet, uint rowIndex, IEnumerable<SpreadsheetXmlCell> cells)
+    {
+        var rowElement = new XElement(
+            SpreadsheetNs + "Row",
+            new XAttribute(SpreadsheetIndexAttribute, rowIndex),
+            ToRowHeightAttribute(sheet, rowIndex),
+            sheet.HiddenRows.Contains(rowIndex) ? new XAttribute(SpreadsheetHiddenAttribute, "1") : null);
+
+        foreach (var cell in cells)
             rowElement.Add(ToCellElement(cell));
 
         return rowElement;
     }
+
+    private static XAttribute? ToRowHeightAttribute(Sheet sheet, uint rowIndex) =>
+        sheet.RowHeights.TryGetValue(rowIndex, out var height) && IsPositiveFinite(height)
+            ? new XAttribute(SpreadsheetHeightAttribute, height.ToString("R", CultureInfo.InvariantCulture))
+            : null;
+
+    private static bool IsValidRowLayoutIndex(uint rowIndex) =>
+        rowIndex is >= 1 and <= CellAddress.MaxRow;
+
+    private static bool IsPositiveFinite(double value) =>
+        value > 0 && !double.IsNaN(value) && !double.IsInfinity(value);
 
     private static XElement ToCellElement(SpreadsheetXmlCell cell)
     {
