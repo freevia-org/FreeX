@@ -60,7 +60,7 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Time, "sec", 1);
         Add(UnitCategory.Time, "s", 1);
         Add(UnitCategory.Time, "min", 60);
-        Add(UnitCategory.Time, "mn", 2629800);
+        Add(UnitCategory.Time, "mn", 60);
         Add(UnitCategory.Time, "hr", 3600);
         Add(UnitCategory.Time, "day", 86400);
         Add(UnitCategory.Time, "d", 86400);
