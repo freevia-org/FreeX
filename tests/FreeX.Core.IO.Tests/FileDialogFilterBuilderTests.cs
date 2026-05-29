@@ -12,7 +12,7 @@ public sealed class FileDialogFilterBuilderTests
         var adapters = new IFileAdapter[]
         {
             new FakeAdapter([
-                new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: false, CanSave: false)
+                new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: false, CanSave: false)
             ])
         };
 
@@ -26,7 +26,7 @@ public sealed class FileDialogFilterBuilderTests
         var adapters = new IFileAdapter[]
         {
             new FakeAdapter([
-                new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: true, CanSave: false)
+                new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
             ])
         };
 
@@ -40,9 +40,9 @@ public sealed class FileDialogFilterBuilderTests
         var adapters = new IFileAdapter[]
         {
             new FakeAdapter([
-                new FileFormatDescriptor(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true),
-                new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: true, CanSave: false),
-                new FileFormatDescriptor(".xltx", "Excel Template", CanOpen: true, CanSave: false, OpensAsTemplate: true)
+                new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+                new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false),
+                new FileFormatDescriptor(".xltx", "XLTX Template", CanOpen: true, CanSave: false, OpensAsTemplate: true)
             ]),
             new FakeAdapter([
                 new FileFormatDescriptor(".csv", "CSV (Comma-separated values)", CanOpen: true, CanSave: true)
@@ -53,9 +53,9 @@ public sealed class FileDialogFilterBuilderTests
 
         filter.Should().Be(
             "All supported files (*.xlsx;*.xlsm;*.xltx;*.csv)|*.xlsx;*.xlsm;*.xltx;*.csv|" +
-            "Excel Workbook (*.xlsx)|*.xlsx|" +
-            "Excel Macro-Enabled Workbook (*.xlsm)|*.xlsm|" +
-            "Excel Template (*.xltx)|*.xltx|" +
+            "XLSX Workbook (*.xlsx)|*.xlsx|" +
+            "XLSM Macro-Enabled Workbook (*.xlsm)|*.xlsm|" +
+            "XLTX Template (*.xltx)|*.xltx|" +
             "CSV (Comma-separated values) (*.csv)|*.csv|" +
             "All files (*.*)|*.*");
     }
@@ -66,11 +66,11 @@ public sealed class FileDialogFilterBuilderTests
         var adapters = new IFileAdapter[]
         {
             new FakeAdapter([
-                new FileFormatDescriptor(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true)
+                new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true)
             ]),
             new FakeAdapter([
-                new FileFormatDescriptor(".XLSX", "Excel Workbook Alias", CanOpen: true, CanSave: false),
-                new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: true, CanSave: false)
+                new FileFormatDescriptor(".XLSX", "XLSX Workbook Alias", CanOpen: true, CanSave: false),
+                new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
             ])
         };
 
@@ -85,16 +85,16 @@ public sealed class FileDialogFilterBuilderTests
         var adapters = new IFileAdapter[]
         {
             new FakeAdapter([
-                new FileFormatDescriptor(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true),
-                new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: true, CanSave: false)
+                new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+                new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
             ]),
             new FakeAdapter([
-                new FileFormatDescriptor(".xls", "Excel 97-2003 Workbook", CanOpen: true, CanSave: false)
+                new FileFormatDescriptor(".xls", "XLS 97-2003 Workbook", CanOpen: true, CanSave: false)
             ])
         };
 
         FileDialogFilterBuilder.BuildSaveFilter(adapters)
-            .Should().Be("Excel Workbook (*.xlsx)|*.xlsx");
+            .Should().Be("XLSX Workbook (*.xlsx)|*.xlsx");
     }
 
     [Fact]
@@ -120,9 +120,9 @@ public sealed class FileDialogFilterBuilderTests
             [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter()]);
 
         filter.Should().Contain("*.xlsx;*.xlsm;*.xltx;*.xltm;*.xls;*.xlsb;*.xlt;*.csv;*.xml;*.fxl");
-        filter.Should().Contain("Excel Binary Workbook (*.xlsb)|*.xlsb");
-        filter.Should().Contain("Excel 97-2003 Template (*.xlt)|*.xlt");
-        filter.Should().Contain("Excel Macro-Enabled Template (*.xltm)|*.xltm");
+        filter.Should().Contain("XLSB Binary Workbook (*.xlsb)|*.xlsb");
+        filter.Should().Contain("XLT 97-2003 Template (*.xlt)|*.xlt");
+        filter.Should().Contain("XLTM Macro-Enabled Template (*.xltm)|*.xltm");
         filter.Should().Contain("XML Spreadsheet 2003 (*.xml)|*.xml");
         filter.Should().Contain("FreeX Workbook (*.fxl)|*.fxl");
     }
@@ -133,21 +133,21 @@ public sealed class FileDialogFilterBuilderTests
         var filter = FileDialogFilterBuilder.BuildSaveFilter(
             [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter()]);
 
-        filter.Should().Be("Excel Workbook (*.xlsx)|*.xlsx|CSV (Comma-separated values) (*.csv)|*.csv|XML Spreadsheet 2003 (*.xml)|*.xml|FreeX Workbook (*.fxl)|*.fxl");
-        filter.Should().NotContain("Excel Macro-Enabled Workbook (*.xlsm)|*.xlsm");
-        filter.Should().NotContain("Excel Template (*.xltx)|*.xltx");
-        filter.Should().NotContain("Excel Macro-Enabled Template (*.xltm)|*.xltm");
-        filter.Should().NotContain("Excel 97-2003 Workbook (*.xls)|*.xls");
-        filter.Should().NotContain("Excel Binary Workbook (*.xlsb)|*.xlsb");
-        filter.Should().NotContain("Excel 97-2003 Template (*.xlt)|*.xlt");
+        filter.Should().Be("XLSX Workbook (*.xlsx)|*.xlsx|CSV (Comma-separated values) (*.csv)|*.csv|XML Spreadsheet 2003 (*.xml)|*.xml|FreeX Workbook (*.fxl)|*.fxl");
+        filter.Should().NotContain("XLSM Macro-Enabled Workbook (*.xlsm)|*.xlsm");
+        filter.Should().NotContain("XLTX Template (*.xltx)|*.xltx");
+        filter.Should().NotContain("XLTM Macro-Enabled Template (*.xltm)|*.xltm");
+        filter.Should().NotContain("XLS 97-2003 Workbook (*.xls)|*.xls");
+        filter.Should().NotContain("XLSB Binary Workbook (*.xlsb)|*.xlsb");
+        filter.Should().NotContain("XLT 97-2003 Template (*.xlt)|*.xlt");
     }
 
     [Fact]
     public void FindOpenAdapter_ResolvesAliasesCaseInsensitively()
     {
         var adapter = new FakeAdapter([
-            new FileFormatDescriptor(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true),
-            new FileFormatDescriptor(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: true, CanSave: false)
+            new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+            new FileFormatDescriptor(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false)
         ]);
 
         var result = FileDialogFilterBuilder.FindOpenAdapter([adapter], " XLSM ", out var format);

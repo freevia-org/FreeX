@@ -26,7 +26,7 @@ public sealed class HeavyWorkbookRetestTests
             sourcePath,
             adapter,
             ".xlsx",
-            new FileFormatDescriptor(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true),
+            new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
             new ImmediateProgress<OpenProgressUpdate>(openProgress.Add));
         openStopwatch.Stop();
 

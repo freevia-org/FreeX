@@ -7,12 +7,12 @@ namespace FreeX.Core.IO;
 public sealed class LegacyXlsFileAdapter : IFileAdapter
 {
     public string Extension => ".xls";
-    public string FormatName => "Excel 97-2003 Workbook";
+    public string FormatName => "XLS 97-2003 Workbook";
     public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
     [
-        new(".xls", "Excel 97-2003 Workbook", CanOpen: true, CanSave: false),
-        new(".xlsb", "Excel Binary Workbook", CanOpen: true, CanSave: false),
-        new(".xlt", "Excel 97-2003 Template", CanOpen: true, CanSave: false, OpensAsTemplate: true)
+        new(".xls", "XLS 97-2003 Workbook", CanOpen: true, CanSave: false),
+        new(".xlsb", "XLSB Binary Workbook", CanOpen: true, CanSave: false),
+        new(".xlt", "XLT 97-2003 Template", CanOpen: true, CanSave: false, OpensAsTemplate: true)
     ];
 
     public Workbook Load(Stream stream)
@@ -49,7 +49,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
     }
 
     public void Save(Workbook workbook, Stream stream) =>
-        throw new NotSupportedException("Legacy .xls files are currently open-only. Use Save As Excel Workbook instead.");
+        throw new NotSupportedException("Legacy .xls files are currently open-only. Use Save As XLSX Workbook instead.");
 
     private static ScalarValue MapValue(object? value) =>
         value switch

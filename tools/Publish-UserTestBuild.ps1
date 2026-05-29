@@ -369,6 +369,11 @@ Local diagnostics:
 Trademark notice:
   FreeX is not affiliated with, endorsed by, or sponsored by Microsoft.
   Microsoft Excel is a trademark of Microsoft Corporation.
+
+Legal and privacy notices:
+  https://github.com/tony-xmelon/FreeX/blob/main/docs/LEGAL_NOTICES.md
+  https://github.com/tony-xmelon/FreeX/blob/main/docs/PRIVACY.md
+  https://github.com/tony-xmelon/FreeX/blob/main/THIRD_PARTY_NOTICES.md
 "@
 Set-Content -LiteralPath $readmePath -Value $readme -Encoding ASCII
 

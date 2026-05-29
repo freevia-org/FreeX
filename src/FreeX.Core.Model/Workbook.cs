@@ -272,7 +272,7 @@ public sealed class Workbook
         _sheetById[sheet.Id] = sheet;
     }
 
-    /// <summary>Return an Excel-compatible validation error for a sheet name, or null when valid.</summary>
+    /// <summary>Return an XLSX-compatible validation error for a sheet name, or null when valid.</summary>
     public string? ValidateSheetName(string name, SheetId? exceptSheetId = null)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -301,7 +301,7 @@ public sealed class Workbook
             throw new ArgumentException(error, nameof(name));
     }
 
-    /// <summary>Return an Excel-compatible validation error for a named range name, or null when valid.</summary>
+    /// <summary>Return an XLSX-compatible validation error for a named range name, or null when valid.</summary>
     public string? ValidateNamedRangeName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
