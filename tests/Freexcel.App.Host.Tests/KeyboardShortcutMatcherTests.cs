@@ -98,6 +98,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.OemPlus, Key.None, ModifierKeys.Control | ModifierKeys.Shift, true)]
     [InlineData(Key.None, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Shift, true)]
     [InlineData(Key.Add, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.System, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    [InlineData(Key.System, Key.Add, ModifierKeys.Control | ModifierKeys.Alt, false)]
     [InlineData(Key.C, Key.OemPlus, ModifierKeys.Control, false)]
     [InlineData(Key.C, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Shift, false)]
     public void IsCtrlPlus_RecognizesExcelInsertShortcut(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
@@ -111,6 +113,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.None, Key.OemMinus, ModifierKeys.Control, true)]
     [InlineData(Key.System, Key.OemMinus, ModifierKeys.Control, true)]
     [InlineData(Key.Subtract, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.System, Key.OemMinus, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    [InlineData(Key.System, Key.Subtract, ModifierKeys.Control | ModifierKeys.Alt, false)]
     [InlineData(Key.C, Key.OemMinus, ModifierKeys.Control, false)]
     public void IsCtrlMinus_RecognizesExcelDeleteShortcut(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
     {
