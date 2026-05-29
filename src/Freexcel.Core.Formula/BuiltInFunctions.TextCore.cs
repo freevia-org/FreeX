@@ -997,8 +997,11 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue ReptText(string text, int times)
     {
-        if ((long)text.Length * times > 32767) return ErrorValue.Value;
-        var sb = new System.Text.StringBuilder();
+        var outputLength = (long)text.Length * times;
+        if (outputLength > 32767) return ErrorValue.Value;
+        if (outputLength == 0) return new TextValue("");
+
+        var sb = new System.Text.StringBuilder((int)outputLength);
         for (int i = 0; i < times; i++) sb.Append(text);
         return new TextValue(sb.ToString());
     }
