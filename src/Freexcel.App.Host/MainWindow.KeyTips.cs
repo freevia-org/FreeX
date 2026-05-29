@@ -102,6 +102,9 @@ public partial class MainWindow
             return;
         }
 
+        if (_ribbonKeyTipScope == RibbonKeyTipScope.Menu)
+            return;
+
         if (!HasVisibleCommandKeyTipPrefix(_ribbonKeyTipSequence))
             ExitRibbonKeyTipMode();
     }
