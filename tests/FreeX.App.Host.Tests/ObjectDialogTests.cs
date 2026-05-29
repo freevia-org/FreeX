@@ -1,6 +1,9 @@
 using FreeX.Core.Model;
 using FluentAssertions;
 using System.IO;
+using System.Reflection;
+using System.Windows.Automation;
+using System.Windows.Controls;
 
 namespace FreeX.App.Host.Tests;
 
@@ -642,7 +645,41 @@ public sealed class ObjectDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs"));
 
         source.Should().Contain("AutomationProperties.SetName(_displayBox, \"Text to display\");");
-        source.Should().Contain("AutomationProperties.SetName(_targetBox, \"Address\");");
+        source.Should().Contain("AutomationProperties.SetName(_targetBox, automationName);");
+    }
+
+    [Theory]
+    [InlineData(0, "_Address:", "Address", "Enter the file path or web page address for the hyperlink.")]
+    [InlineData(1, "Name of new _document:", "Name of new document", "Enter the name of the new document to create.")]
+    [InlineData(2, "Type the cell _reference:", "Cell reference or defined name", "Enter a cell reference or defined name in this workbook.")]
+    [InlineData(3, "_E-mail address:", "E-mail address", "Enter the email address for the hyperlink.")]
+    public void HyperlinkDialog_TargetFieldTracksSelectedLinkType(
+        int selectedIndex,
+        string expectedLabel,
+        string expectedAutomationName,
+        string expectedHelpText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new HyperlinkDialog();
+            try
+            {
+                var linkTypes = GetField<ListBox>(dialog, "_linkTypes");
+                var targetLabel = GetField<Label>(dialog, "_targetLabel");
+                var targetBox = GetField<TextBox>(dialog, "_targetBox");
+
+                linkTypes.SelectedIndex = selectedIndex;
+
+                targetLabel.Content.Should().Be(expectedLabel);
+                targetLabel.Target.Should().BeSameAs(targetBox);
+                AutomationProperties.GetName(targetBox).Should().Be(expectedAutomationName);
+                AutomationProperties.GetHelpText(targetBox).Should().Be(expectedHelpText);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -804,5 +841,13 @@ public sealed class ObjectDialogTests
             end = source.Length;
         end.Should().BeGreaterThan(start);
         return source[start..end];
+    }
+
+    private static T GetField<T>(object instance, string name)
+        where T : class
+    {
+        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
     }
 }

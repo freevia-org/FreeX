@@ -25,27 +25,33 @@ public static class AltTextTargetResolver
         if (selectedAddress is not { } address)
             return null;
 
-        if (preferredKind is null or AltTextObjectKind.Picture)
+        if (ShouldSearch(preferredKind, AltTextObjectKind.Picture))
         {
-            var picture = sheet.Pictures.LastOrDefault(item => item.Anchor.Row == address.Row && item.Anchor.Col == address.Col);
+            var picture = sheet.Pictures.LastOrDefault(item => IsAnchoredAt(item.Anchor, address));
             if (picture is not null)
                 return new AltTextObjectTarget(AltTextObjectKind.Picture, picture.Id, picture.Anchor, picture.AltText);
         }
 
-        if (preferredKind is null or AltTextObjectKind.Shape)
+        if (ShouldSearch(preferredKind, AltTextObjectKind.Shape))
         {
-            var shape = sheet.DrawingShapes.LastOrDefault(item => item.Anchor.Row == address.Row && item.Anchor.Col == address.Col);
+            var shape = sheet.DrawingShapes.LastOrDefault(item => IsAnchoredAt(item.Anchor, address));
             if (shape is not null)
                 return new AltTextObjectTarget(AltTextObjectKind.Shape, shape.Id, shape.Anchor, shape.AltText);
         }
 
-        if (preferredKind is null or AltTextObjectKind.TextBox)
+        if (ShouldSearch(preferredKind, AltTextObjectKind.TextBox))
         {
-            var textBox = sheet.TextBoxes.LastOrDefault(item => item.Anchor.Row == address.Row && item.Anchor.Col == address.Col);
+            var textBox = sheet.TextBoxes.LastOrDefault(item => IsAnchoredAt(item.Anchor, address));
             if (textBox is not null)
                 return new AltTextObjectTarget(AltTextObjectKind.TextBox, textBox.Id, textBox.Anchor, textBox.AltText);
         }
 
         return null;
     }
+
+    private static bool ShouldSearch(AltTextObjectKind? preferredKind, AltTextObjectKind kind) =>
+        preferredKind is null || preferredKind == kind;
+
+    private static bool IsAnchoredAt(CellAddress anchor, CellAddress selectedAddress) =>
+        anchor.Row == selectedAddress.Row && anchor.Col == selectedAddress.Col;
 }

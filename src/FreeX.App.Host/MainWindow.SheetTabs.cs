@@ -96,6 +96,12 @@ public partial class MainWindow
         RenameSheetFromTab(tab);
     }
 
+    private void RenameSheetFromTab(SheetTabViewModel tab)
+    {
+        _currentSheetId = tab.Id;
+        RenameSheet(tab.Id, tab.Name);
+    }
+
     private void AddSheetButton_Click(object sender, RoutedEventArgs e)
     {
         InsertNewSheet();
@@ -906,11 +912,6 @@ public partial class MainWindow
     {
         var tab = GetContextMenuTab(sender);
         if (tab == null) return;
-        RenameSheet(tab.Id, tab.Name);
-    }
-
-    private void RenameSheetFromTab(SheetTabViewModel tab)
-    {
         RenameSheet(tab.Id, tab.Name);
     }
 

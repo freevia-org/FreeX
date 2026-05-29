@@ -7,33 +7,39 @@ public static class MenuKeyTipAssigner
     public static void AssignUniqueKeyTips(IEnumerable<MenuItem> menuItems)
     {
         var items = menuItems.ToList();
-        var used = new List<string>();
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var item in items)
-        {
-            var existing = NormalizeKeyTip(RibbonTooltip.GetKeyTip(item));
-            if (string.IsNullOrWhiteSpace(existing))
-                continue;
-
-            if (IsTypeableKeyTip(existing) && IsAvailable(existing, used))
-            {
-                RibbonTooltip.SetKeyTip(item, existing);
-                used.Add(existing);
-                continue;
-            }
-
-            RibbonTooltip.SetKeyTip(item, "");
-        }
+            PreserveExistingKeyTip(item, used);
 
         foreach (var item in items)
-        {
-            if (!string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item)))
-                continue;
+            AssignMissingKeyTip(item, used);
+    }
 
-            var keyTip = CreateKeyTip(item.Header?.ToString(), used);
-            RibbonTooltip.SetKeyTip(item, keyTip);
-            used.Add(keyTip);
+    private static void PreserveExistingKeyTip(MenuItem item, HashSet<string> used)
+    {
+        var existing = NormalizeKeyTip(RibbonTooltip.GetKeyTip(item));
+        if (string.IsNullOrWhiteSpace(existing))
+            return;
+
+        if (IsTypeableKeyTip(existing) && IsAvailable(existing, used))
+        {
+            RibbonTooltip.SetKeyTip(item, existing);
+            used.Add(existing);
+            return;
         }
+
+        RibbonTooltip.SetKeyTip(item, "");
+    }
+
+    private static void AssignMissingKeyTip(MenuItem item, HashSet<string> used)
+    {
+        if (!string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(item)))
+            return;
+
+        var keyTip = CreateKeyTip(item.Header?.ToString(), used);
+        RibbonTooltip.SetKeyTip(item, keyTip);
+        used.Add(keyTip);
     }
 
     private static string CreateKeyTip(string? header, IReadOnlyCollection<string> used)
