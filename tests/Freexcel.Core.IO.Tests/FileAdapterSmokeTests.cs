@@ -5785,6 +5785,41 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_DropsInvalidConditionalFormatIconOverrides()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeInvalidIconOverrideLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 6,
+                  "Operator": 0,
+                  "IconOverrides": [
+                    { "IconSet": "3Arrows", "IconId": 2 },
+                    { "IconSet": "   ", "IconId": 0 },
+                    { "IconSet": "3TrafficLights1", "IconId": -1 }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.IconOverrides.Should().ContainSingle()
+            .Which.Should().Be(new CfIconOverride("3Arrows", 2));
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Save_SkipsInvalidConditionalFormatRules()
     {
         var workbook = new Workbook("CfNativeInvalidSave");
