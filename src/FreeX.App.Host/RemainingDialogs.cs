@@ -25,6 +25,8 @@ public sealed class ConditionalFormatThresholdDialog : Window
         ShowInTaskbar = false;
         _thresholdBox.Text = Result.ThresholdText;
         AutomationProperties.SetName(_thresholdBox, "Conditional format threshold");
+        AutomationProperties.SetAutomationId(_thresholdBox, "ConditionalFormatThresholdBox");
+        AutomationProperties.SetHelpText(_thresholdBox, "Enter the value for the conditional formatting rule threshold.");
         Content = ObjectSizeDialog.CreateSingleInputContent("Format cells greater _than:", _thresholdBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -91,6 +93,8 @@ public sealed class RowHeightDialog : Window
         ShowInTaskbar = false;
         _heightBox.Text = height.ToString(CultureInfo.InvariantCulture);
         AutomationProperties.SetName(_heightBox, "Row height");
+        AutomationProperties.SetAutomationId(_heightBox, "RowHeightBox");
+        AutomationProperties.SetHelpText(_heightBox, "Enter a row height from 0 to 409.5.");
         Content = ObjectSizeDialog.CreateSingleInputContent("Row _height:", _heightBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -153,6 +157,8 @@ public sealed class ColumnWidthDialog : Window
         ShowInTaskbar = false;
         _widthBox.Text = width.ToString(CultureInfo.InvariantCulture);
         AutomationProperties.SetName(_widthBox, "Column width");
+        AutomationProperties.SetAutomationId(_widthBox, "ColumnWidthBox");
+        AutomationProperties.SetHelpText(_widthBox, "Enter a column width from 0 to 255.");
         Content = ObjectSizeDialog.CreateSingleInputContent("Column _width:", _widthBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }

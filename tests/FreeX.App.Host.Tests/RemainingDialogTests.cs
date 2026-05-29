@@ -64,6 +64,16 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void ConditionalFormatThresholdDialog_FieldExposesAutomationMetadata()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed record RowHeightDialogResult");
+
+        source.Should().Contain("AutomationProperties.SetName(_thresholdBox, \"Conditional format threshold\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_thresholdBox, \"ConditionalFormatThresholdBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_thresholdBox, \"Enter the value for the conditional formatting rule threshold.\");");
+    }
+
+    [Fact]
     public void RowHeightDialog_TryCreateResult_RejectsNegativeHeights()
     {
         RowHeightDialog.TryCreateResult("-1", out _, out var error).Should().BeFalse();
@@ -98,6 +108,16 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_heightBox);");
+    }
+
+    [Fact]
+    public void RowHeightDialog_FieldExposesAutomationMetadata()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed record ColumnWidthDialogResult");
+
+        source.Should().Contain("AutomationProperties.SetName(_heightBox, \"Row height\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_heightBox, \"RowHeightBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_heightBox, \"Enter a row height from 0 to 409.5.\");");
     }
 
     [Theory]
@@ -152,6 +172,16 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_widthBox);");
+    }
+
+    [Fact]
+    public void ColumnWidthDialog_FieldExposesAutomationMetadata()
+    {
+        var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record __NoNextRemainingDialog");
+
+        source.Should().Contain("AutomationProperties.SetName(_widthBox, \"Column width\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_widthBox, \"ColumnWidthBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_widthBox, \"Enter a column width from 0 to 255.\");");
     }
 
     [Theory]
