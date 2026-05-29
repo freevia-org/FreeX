@@ -374,12 +374,25 @@ public sealed class MainWindowAdaptiveRibbonTests
             source.IndexOf("private void NormalizeRibbonSurfaceAfterTabSelection", StringComparison.Ordinal),
             source.IndexOf("private void ConfigureInsertRibbonSurface", StringComparison.Ordinal) -
             source.IndexOf("private void NormalizeRibbonSurfaceAfterTabSelection", StringComparison.Ordinal));
+        var staticNormalizer = source.Substring(
+            source.IndexOf("private void NormalizeStaticRibbonSurfaceForSelectedTabOnce", StringComparison.Ordinal),
+            source.IndexOf("private void NormalizeRibbonGroupMetadata", StringComparison.Ordinal) -
+            source.IndexOf("private void NormalizeStaticRibbonSurfaceForSelectedTabOnce", StringComparison.Ordinal));
+        var layoutChangeNormalizer = source.Substring(
+            source.IndexOf("private void NormalizeRibbonSurfaceAfterLayoutChange", StringComparison.Ordinal),
+            source.IndexOf("private void CompactRibbonSurfaceAfterResize", StringComparison.Ordinal) -
+            source.IndexOf("private void NormalizeRibbonSurfaceAfterLayoutChange", StringComparison.Ordinal));
 
         fields.Should().Contain("private readonly HashSet<TabItem> _normalizedRibbonStaticTabs = [];");
         source.Should().Contain("NormalizeStaticRibbonSurfaceForSelectedTabOnce();");
         source.Should().Contain("_normalizedRibbonStaticTabs.Add(tabItem)");
         source.Should().Contain("EnumerateRibbonStaticDescendants(root)");
         source.Should().Contain("NormalizeRibbonGroupMetadata(root);");
+        staticNormalizer.IndexOf("_normalizedRibbonStaticTabs.Add(tabItem)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(staticNormalizer.IndexOf("PrepareRibbonTabForImmediateCompaction(tabItem)", StringComparison.Ordinal));
+        layoutChangeNormalizer.Should().NotContain("PrepareSelectedRibbonTabForImmediateCompaction");
+        layoutChangeNormalizer.Should().NotContain("PrepareRibbonTabForImmediateCompaction");
         method.Should().Contain("DispatcherPriority.Send");
         method.Should().NotContain("DispatcherPriority.Loaded");
     }
