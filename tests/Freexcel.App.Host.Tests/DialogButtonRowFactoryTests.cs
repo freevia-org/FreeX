@@ -30,12 +30,14 @@ public sealed class DialogButtonRowFactoryTests
             ok.Margin.Should().Be(new Thickness(0, 0, 8, 0));
             ok.IsDefault.Should().BeTrue();
             AutomationProperties.GetName(ok).Should().Be("OK");
+            AutomationProperties.GetAcceleratorKey(ok).Should().Be("Alt+O");
 
             var cancel = row.Children[1].Should().BeOfType<Button>().Subject;
             cancel.Content.Should().Be("_Cancel");
             cancel.Width.Should().Be(72);
             cancel.IsCancel.Should().BeTrue();
             AutomationProperties.GetName(cancel).Should().Be("Cancel");
+            AutomationProperties.GetAcceleratorKey(cancel).Should().Be("Alt+C");
 
             ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             accepted.Should().Be(1);
@@ -65,6 +67,7 @@ public sealed class DialogButtonRowFactoryTests
             ok.IsDefault.Should().BeTrue();
             ok.IsCancel.Should().BeTrue();
             AutomationProperties.GetName(ok).Should().Be("OK");
+            AutomationProperties.GetAcceleratorKey(ok).Should().Be("Alt+O");
 
             ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             accepted.Should().Be(1);
@@ -84,6 +87,7 @@ public sealed class DialogButtonRowFactoryTests
             var ok = row.Children[0].Should().BeOfType<Button>().Subject;
             ok.Content.Should().Be("_Create");
             AutomationProperties.GetName(ok).Should().Be("Create");
+            AutomationProperties.GetAcceleratorKey(ok).Should().Be("Alt+C");
         });
     }
 }

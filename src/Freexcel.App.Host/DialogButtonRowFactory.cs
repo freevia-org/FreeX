@@ -22,6 +22,7 @@ internal static class DialogButtonRowFactory
             IsDefault = true
         };
         AutomationProperties.SetName(ok, CreateAutomationName(acceptContent));
+        SetAcceleratorKey(ok, acceptContent);
         ok.Click += (_, _) => accept();
         row.Children.Add(ok);
         var cancel = new Button
@@ -31,6 +32,7 @@ internal static class DialogButtonRowFactory
             IsCancel = true
         };
         AutomationProperties.SetName(cancel, "Cancel");
+        SetAcceleratorKey(cancel, "_Cancel");
         row.Children.Add(cancel);
         return row;
     }
@@ -51,6 +53,7 @@ internal static class DialogButtonRowFactory
             IsCancel = true
         };
         AutomationProperties.SetName(ok, CreateAutomationName(acceptContent));
+        SetAcceleratorKey(ok, acceptContent);
         ok.Click += (_, _) => accept();
         row.Children.Add(ok);
         return row;
@@ -58,4 +61,26 @@ internal static class DialogButtonRowFactory
 
     private static string CreateAutomationName(string content) =>
         content.Replace("_", string.Empty, StringComparison.Ordinal);
+
+    private static void SetAcceleratorKey(Button button, string content)
+    {
+        var accelerator = CreateAcceleratorKey(content);
+        if (!string.IsNullOrEmpty(accelerator))
+        {
+            AutomationProperties.SetAcceleratorKey(button, accelerator);
+        }
+    }
+
+    private static string CreateAcceleratorKey(string content)
+    {
+        for (var i = 0; i < content.Length - 1; i++)
+        {
+            if (content[i] == '_' && content[i + 1] != '_')
+            {
+                return "Alt+" + char.ToUpperInvariant(content[i + 1]);
+            }
+        }
+
+        return string.Empty;
+    }
 }
