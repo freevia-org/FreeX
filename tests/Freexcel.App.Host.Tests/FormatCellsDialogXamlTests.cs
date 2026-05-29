@@ -823,9 +823,7 @@ public sealed class FormatCellsDialogXamlTests
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a text rotation from -90 to 90 degrees, or 255 for vertical text.\", DlgTextRotationBox);");
         source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
-        source.Should().Contain("MessageBox.Show(");
-        source.Should().Contain("this,");
-        source.Should().Contain("MessageBoxImage.Warning");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
     }

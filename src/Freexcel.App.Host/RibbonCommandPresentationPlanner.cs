@@ -4,8 +4,8 @@ public static partial class RibbonCommandPresentationPlanner
 {
     public static RibbonCommandLayoutKind GetLayoutKind(string commandName, string label)
     {
-        var name = commandName.ToLowerInvariant();
-        var text = label.ToLowerInvariant();
+        var name = NormalizeCommandText(commandName);
+        var text = NormalizeCommandText(label);
 
         if (name.Contains("excluded") || text.Contains("excluded"))
             return RibbonCommandLayoutKind.Large;
@@ -24,7 +24,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (string.IsNullOrWhiteSpace(title))
             return false;
 
-        var name = title.ToLowerInvariant();
+        var name = NormalizeCommandText(title);
         if (!name.Contains("chart") &&
             !name.Contains("axis") &&
             !name.Contains("legend") &&
@@ -66,11 +66,6 @@ public static partial class RibbonCommandPresentationPlanner
                        "area" or
                        "radar" or
                        "stock";
-    }
-
-    public static bool TryParseCompactWidths(string tag, out double fullWidth, out double compactWidth)
-    {
-        return RibbonMetadata.TryParseCompactTag(tag, out fullWidth, out compactWidth);
     }
 
     private static bool IsInsertChartType(string name) =>
@@ -174,5 +169,7 @@ public static partial class RibbonCommandPresentationPlanner
         name.Contains("line sparkline") ||
         name.Contains("column sparkline") ||
         name.Contains("win/loss");
-}
 
+    private static string NormalizeCommandText(string? value) =>
+        value?.Trim().ToLowerInvariant() ?? "";
+}

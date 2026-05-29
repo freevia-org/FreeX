@@ -318,6 +318,15 @@ public static class XlsxFeatureInspector
                 continue;
             }
 
+            if (normalizedType.EndsWith("/rdrichvalue", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/rdrichvaluetypes", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/richvaluerel", StringComparison.Ordinal) ||
+                normalizedTarget.Contains("richdata/", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.LinkedDataTypes;
+                continue;
+            }
+
             if (normalizedType.EndsWith("/model", StringComparison.Ordinal))
             {
                 yield return XlsxUnsupportedFeatureKind.DataModel;
@@ -331,8 +340,16 @@ public static class XlsxFeatureInspector
                 continue;
             }
 
+            if (normalizedType.EndsWith("/revisionheaders", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/revisionlog", StringComparison.Ordinal))
+            {
+                yield return XlsxUnsupportedFeatureKind.TrackChanges;
+                continue;
+            }
+
             if (normalizedType.EndsWith("/control", StringComparison.Ordinal) ||
                 normalizedType.EndsWith("/activexcontrol", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/activexcontrolbinary", StringComparison.Ordinal) ||
                 normalizedType.EndsWith("/ctrlprop", StringComparison.Ordinal))
             {
                 yield return XlsxUnsupportedFeatureKind.FormControls;
@@ -372,6 +389,7 @@ public static class XlsxFeatureInspector
             }
 
             if (normalizedType.EndsWith("/webextension", StringComparison.Ordinal) ||
+                normalizedType.EndsWith("/webextensiontaskpanes", StringComparison.Ordinal) ||
                 normalizedType.EndsWith("/taskpane", StringComparison.Ordinal))
             {
                 yield return XlsxUnsupportedFeatureKind.OfficeAddIns;

@@ -440,7 +440,10 @@ public sealed class MainWindowSourceHygieneTests
 
         method.Should().Contain("try");
         method.Should().Contain("if (dialog.ShowDialog() != true)");
-        method.Should().Contain("ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(dialog.Result.ZoomPercent);");
+        method.Should().Contain("var zoomPercent = ZoomSelectionPlanner.CalculateDialogZoomPercent(");
+        method.Should().Contain("dialog.Result,");
+        method.Should().Contain("SheetGrid.SelectedRange?.ColCount ?? 1,");
+        method.Should().Contain("ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);");
         method.Should().Contain("finally");
         method.Should().Contain("FocusSheetGridIfNeeded();");
     }
@@ -1188,7 +1191,7 @@ public sealed class MainWindowSourceHygieneTests
         File.Exists(commandSourcePath).Should().BeTrue();
         var commandSource = File.ReadAllText(commandSourcePath);
 
-        mainSource.Should().NotContain("private static void ShowCommandError(");
+        mainSource.Should().NotContain("void ShowCommandError(");
         mainSource.Should().NotContain("private bool TryExecuteCommand(");
         mainSource.Should().NotContain("private IReadOnlyList<SheetId> CurrentGroupedEditSheetIds(");
         mainSource.Should().NotContain("private bool TryExecuteEditCells(");
@@ -1199,7 +1202,7 @@ public sealed class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void ExecuteRepeatLast(");
         mainSource.Should().NotContain("private IWorkbookCommand CreateSingleCellEditCommand(");
 
-        commandSource.Should().Contain("private static void ShowCommandError(");
+        commandSource.Should().Contain("private void ShowCommandError(");
         commandSource.Should().Contain("private bool TryExecuteCommand(");
         commandSource.Should().Contain("private IReadOnlyList<SheetId> CurrentGroupedEditSheetIds(");
         commandSource.Should().Contain("private bool TryExecuteEditCells(");
@@ -1239,7 +1242,7 @@ public sealed class MainWindowSourceHygieneTests
         dataFilterSource.Should().Contain("private void ValidationButton_Click(");
         dataFilterSource.Should().Contain("private void ClearFilterButton_Click(");
         dataFilterSource.Should().Contain("private void NamedRangesButton_Click(");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseCriterion");
+        dataFilterSource.Should().Contain("FilterPromptPlanner.TryPlan");
     }
 
     [Fact]
@@ -1433,7 +1436,7 @@ public sealed class MainWindowSourceHygieneTests
         iconResources.Should().Contain("FreexcelRibbonSmallLabel");
 
         source.Should().Contain("CreateRibbonCommandContent(commandName, label, layoutKind)");
-        source.Should().Contain("NormalizeExistingRibbonIconText();");
+        source.Should().Contain("NormalizeExistingRibbonIconText(root);");
         source.Should().Contain("GetRibbonIconAccentBrushes");
         source.Should().Contain("RibbonIconFactory.CreateCommandIcon(commandName, icon, iconSize, glyphBrush)");
         source.Should().Contain("ReplaceRibbonGlyphIcons(button.Content, button, tall)");
@@ -1594,22 +1597,43 @@ public sealed class MainWindowSourceHygieneTests
         navigationStart.Should().BeGreaterThanOrEqualTo(0);
         navigationEnd.Should().BeGreaterThan(navigationStart);
         var navigationSource = source[navigationStart..navigationEnd];
+        var viewportStart = source.IndexOf("private void UpdateSheetTabViewportWidth()", StringComparison.Ordinal);
+        var viewportEnd = source.IndexOf("private void UpdateSheetTabsScrollerClip()", viewportStart, StringComparison.Ordinal);
+        viewportStart.Should().BeGreaterThanOrEqualTo(0);
+        viewportEnd.Should().BeGreaterThan(viewportStart);
+        var viewportSource = source[viewportStart..viewportEnd];
 
-        xaml.Should().Contain("x:Name=\"SheetNavLeftBtn\" Grid.Column=\"1\"");
-        xaml.Should().Contain("x:Name=\"SheetTabsScroller\" Grid.Column=\"2\"");
+        xaml.Should().Contain("x:Name=\"SheetTabsChromeLayer\"");
+        xaml.Should().Contain("Grid.ColumnSpan=\"6\"");
+        xaml.Should().Contain("x:Name=\"SheetNavLeftBtn\" Grid.Column=\"0\"");
+        xaml.Should().Contain("x:Name=\"SheetTabsScroller\" Grid.Column=\"1\"");
+        xaml.Should().Contain("Grid.ColumnSpan=\"4\"");
+        xaml.Should().Contain("x:Name=\"SheetTabsScrollableContent\"");
         xaml.Should().Contain("HorizontalScrollBarVisibility=\"Hidden\"");
         xaml.Should().Contain("ScrollChanged=\"SheetTabsScroller_ScrollChanged\"");
         xaml.Should().Contain("SizeChanged=\"SheetTabsScroller_SizeChanged\"");
-        xaml.Should().Contain("x:Name=\"AddSheetButton\" Grid.Column=\"3\"");
-        xaml.Should().Contain("Padding=\"12,1,12,3\"");
-        xaml.Should().Contain("MinWidth=\"86\"");
+        xaml.Should().Contain("x:Name=\"AddSheetButton\" Content=\"+\"");
+        xaml.Should().Contain("Margin=\"0,0,0,1\"");
+        xaml.Should().Contain("Padding=\"0\"");
+        xaml.Should().Contain("Width=\"70\"");
+        xaml.Should().Contain("MinWidth=\"70\"");
         xaml.Should().Contain("MinHeight=\"27\"");
-        xaml.Should().Contain("Opacity=\"0.9\"");
+        xaml.Should().Contain("Opacity=\"1\"");
         xaml.Should().NotContain("x:Name=\"AddSheetButton\" Grid.Column=\"2\" Content=\"+\" Width=\"28\" Height=\"22\"");
         xaml.Should().Contain("CornerRadius=\"0,0,4,4\"");
-        xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"5\"");
-        xaml.Should().Contain("HorizontalAlignment=\"Right\"");
-        xaml.Should().Contain("<ScrollBar x:Name=\"HorizontalScroll\" Grid.Column=\"6\"");
+        xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"3\"");
+        xaml.Should().Contain("BorderBrush=\"Transparent\" BorderThickness=\"0\"");
+        xaml.Should().Contain("Width=\"18\" Height=\"27\"");
+        xaml.Should().Contain("Margin=\"0,1,0,0\"");
+        xaml.Should().Contain("VerticalAlignment=\"Top\" VerticalContentAlignment=\"Center\"");
+        xaml.Should().Contain("FontFamily=\"Segoe UI\"");
+        xaml.Should().Contain("<Setter Property=\"FontWeight\" Value=\"SemiBold\"/>");
+        xaml.Should().Contain("Panel.ZIndex=\"7\"");
+        xaml.Should().Contain("Panel.ZIndex=\"6\"");
+        xaml.Should().Contain("HorizontalAlignment=\"Right\" HorizontalContentAlignment=\"Center\"");
+        xaml.Should().Contain("<ScrollBar x:Name=\"HorizontalScroll\" Grid.Column=\"5\"");
+        xaml.Should().Contain("VerticalAlignment=\"Center\" Margin=\"0\"");
+        xaml.Should().Contain("MinWidth=\"180\"");
         xaml.IndexOf("x:Name=\"AddSheetButton\"", StringComparison.Ordinal)
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"SheetNavRightBtn\"", StringComparison.Ordinal));
         xaml.Should().Contain("Visibility=\"Hidden\"");
@@ -1618,11 +1642,23 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("UpdateSheetTabNavigation();");
         source.Should().Contain("private void UpdateSheetTabViewportWidth()");
         source.Should().Contain("Math.Min(tabContentWidth, available)");
+        source.Should().Contain("SheetTabMinimumHorizontalScrollbarWidth");
+        source.Should().Contain("preferredScrollbarWidth");
+        source.Should().Contain("CreateVisibleSheetTabClipGeometry");
+        source.Should().Contain("CreateScrollableSheetTabClipGeometry");
+        source.Should().Contain("AddSheetButton.Measure");
+        source.Should().Contain("SheetTabChromeBounds(AddSheetButton, SheetTabOverlapWidth)");
+        source.Should().Contain("add.Left + SheetTabOverlapWidth");
         source.Should().NotContain("available * 2 / 3");
         navigationSource.Should().Contain("SheetNavLeftBtn.Visibility");
         navigationSource.Should().Contain("SheetNavRightBtn.Visibility");
+        navigationSource.Should().Contain("SheetNavLeftBtn.Foreground");
+        navigationSource.Should().Contain("SheetNavRightBtn.Foreground");
+        navigationSource.Should().Contain("SheetNavLeftBtn.IsHitTestVisible");
+        navigationSource.Should().Contain("SheetNavRightBtn.IsHitTestVisible");
         navigationSource.Should().Contain(": Visibility.Hidden;");
         navigationSource.Should().NotContain(": Visibility.Collapsed;");
+        viewportSource.Should().NotContain("BringCurrentSheetTabIntoView();");
         source.Should().NotContain("SheetTabsScroller.HorizontalOffset - 80");
         source.Should().NotContain("SheetTabsScroller.HorizontalOffset + 80");
     }
@@ -2296,9 +2332,8 @@ public sealed class MainWindowSourceHygieneTests
 
         editingSource.Should().Contain("ApplyAutoFilterDialogResult(plan.Range, plan.FilterColumnOffset, dialog.Result, \"AutoFilter\")");
         dataFilterSource.Should().Contain("private bool ApplyAutoFilterDialogResult(");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseTopBottom");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseCriterion");
-        dataFilterSource.Should().Contain("FilterInputParser.TryParseAverage");
+        dataFilterSource.Should().Contain("FilterPromptPlanner.TryPlan");
+        dataFilterSource.Should().Contain("FilterInputParser.ParseAllowedValues");
     }
 
     [Fact]
@@ -2848,6 +2883,42 @@ public sealed class MainWindowSourceHygieneTests
         }
 
         throw new InvalidOperationException($"Could not find the end of {signature}.");
+    }
+
+    [Fact]
+    public void MainWindowCommandPartials_UseMessageServiceNotDirectMessageBox()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "Freexcel.App.Host", "MainWindow.xaml"))!;
+
+        // Verify the service wiring exists in the constructor.
+        var mainSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.xaml.cs"));
+        mainSource.Should().Contain("IUserMessageService messageService");
+        mainSource.Should().Contain("_messageService = messageService;");
+
+        // Each migrated partial must not call MessageBox.Show directly.
+        foreach (var partial in new[]
+        {
+            "MainWindow.CellsCommands.cs",
+            "MainWindow.ChartCommands.cs",
+            "MainWindow.CommandExecution.cs",
+            "MainWindow.DataCommands.cs",
+            "MainWindow.DataFilterCommands.cs",
+            "MainWindow.FormulaCommands.cs",
+            "MainWindow.HomeEditing.cs",
+            "MainWindow.PageLayout.cs",
+            "MainWindow.PivotChartCommands.cs",
+            "MainWindow.PivotCommands.cs",
+            "MainWindow.ReviewCommands.cs",
+            "MainWindow.ScenarioCommands.cs",
+            "MainWindow.SheetTabs.cs"
+        })
+        {
+            var partialPath = Path.Combine(appHostDirectory, partial);
+            if (!File.Exists(partialPath)) continue;
+            var partialSource = File.ReadAllText(partialPath);
+            partialSource.Should()
+                .NotContain("MessageBox.Show(", because: $"{partial} should delegate to _messageService");
+        }
     }
 
     private static int CountOccurrences(string source, string value)

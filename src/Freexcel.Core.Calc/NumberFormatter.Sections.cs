@@ -28,6 +28,9 @@ public static partial class NumberFormatter
     // Split format into sections separated by ';' that are not inside "" or []
     private static string[] SplitSections(string format)
     {
+        if (format.IndexOf(';') < 0)
+            return [format];
+
         var sections = new List<string>();
         var sb = new System.Text.StringBuilder();
         bool inQuote = false;

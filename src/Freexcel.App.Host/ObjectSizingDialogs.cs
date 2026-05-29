@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Freexcel.Core.Model;
 
@@ -31,6 +32,12 @@ public sealed class ObjectSizeDialog : Window
         ShowInTaskbar = false;
         _widthBox.Text = width.ToString(CultureInfo.InvariantCulture);
         _heightBox.Text = height.ToString(CultureInfo.InvariantCulture);
+        AutomationProperties.SetName(_heightBox, "Object height");
+        AutomationProperties.SetHelpText(_heightBox, "Enter the object's height.");
+        AutomationProperties.SetName(_widthBox, "Object width");
+        AutomationProperties.SetHelpText(_widthBox, "Enter the object's width.");
+        AutomationProperties.SetName(_lockAspectRatioBox, "Lock aspect ratio");
+        AutomationProperties.SetHelpText(_lockAspectRatioBox, "Keep the object's width and height proportional.");
         _widthBox.TextChanged += WidthBox_TextChanged;
         _heightBox.TextChanged += HeightBox_TextChanged;
         Content = CreateSizeContent(Accept);
@@ -71,12 +78,7 @@ public sealed class ObjectSizeDialog : Window
     {
         if (!TryParseSize($"{_widthBox.Text}x{_heightBox.Text}", out var result))
         {
-            MessageBox.Show(
-                this,
-                "Enter positive width and height values.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter positive width and height values.", Title);
             FocusInvalidSizeInput(ResolveInvalidSizeInput());
             return;
         }
@@ -197,6 +199,8 @@ public sealed class RotationDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _rotationBox.Text = degrees.ToString(CultureInfo.InvariantCulture);
+        AutomationProperties.SetName(_rotationBox, "Rotation degrees");
+        AutomationProperties.SetHelpText(_rotationBox, "Enter the object's rotation in degrees.");
         Content = ObjectSizeDialog.CreateSingleInputContent("_Degrees:", _rotationBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -207,20 +211,21 @@ public sealed class RotationDialog : Window
         if (!DrawingInputParser.TryParseRotationDegrees(input, out var value))
             return false;
 
-        result = new RotationDialogResult(value);
+        result = new RotationDialogResult(NormalizeRotationDegrees(value));
         return true;
+    }
+
+    internal static double NormalizeRotationDegrees(double value)
+    {
+        var normalized = value % 360;
+        return normalized < 0 ? normalized + 360 : normalized;
     }
 
     private void Accept()
     {
         if (!TryParseRotation(_rotationBox.Text, out var result))
         {
-            MessageBox.Show(
-                this,
-                "Enter a numeric rotation value.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter a numeric rotation value.", Title);
             FocusInvalidRotationInput();
             return;
         }
@@ -264,6 +269,14 @@ public sealed class PictureCropDialog : Window
         _cropTopBox.Text = DrawingInputParser.FormatCropPercent(picture.CropTop);
         _cropRightBox.Text = DrawingInputParser.FormatCropPercent(picture.CropRight);
         _cropBottomBox.Text = DrawingInputParser.FormatCropPercent(picture.CropBottom);
+        AutomationProperties.SetName(_cropLeftBox, "Crop left");
+        AutomationProperties.SetHelpText(_cropLeftBox, "Enter the left crop percentage.");
+        AutomationProperties.SetName(_cropTopBox, "Crop top");
+        AutomationProperties.SetHelpText(_cropTopBox, "Enter the top crop percentage.");
+        AutomationProperties.SetName(_cropRightBox, "Crop right");
+        AutomationProperties.SetHelpText(_cropRightBox, "Enter the right crop percentage.");
+        AutomationProperties.SetName(_cropBottomBox, "Crop bottom");
+        AutomationProperties.SetHelpText(_cropBottomBox, "Enter the bottom crop percentage.");
         Content = CreateCropContent(Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -287,12 +300,7 @@ public sealed class PictureCropDialog : Window
         var input = string.Join(", ", _cropLeftBox.Text, _cropTopBox.Text, _cropRightBox.Text, _cropBottomBox.Text);
         if (!TryCreateResult(input, out var result, out var error))
         {
-            MessageBox.Show(
-                this,
-                error ?? "Enter four crop percentages.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error ?? "Enter four crop percentages.", Title);
             FocusInvalidCropInput(ResolveInvalidCropInput(error));
             return;
         }

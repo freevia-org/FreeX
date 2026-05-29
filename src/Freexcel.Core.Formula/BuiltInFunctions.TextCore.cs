@@ -91,9 +91,8 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue valueError) return valueError;
         if (countValue is ErrorValue countError) return countError;
         var rawCount = ToNumber(countValue);
-        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
+        if (!double.IsFinite(rawCount) || rawCount < 0 || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
-        if (count < 0) return ErrorValue.Value;
         return LeftScalar(value, count);
     }
 
@@ -127,9 +126,8 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue valueError) return valueError;
         if (countValue is ErrorValue countError) return countError;
         var rawCount = ToNumber(countValue);
-        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
+        if (!double.IsFinite(rawCount) || rawCount < 0 || rawCount > int.MaxValue) return ErrorValue.Value;
         var count = (int)rawCount;
-        if (count < 0) return ErrorValue.Value;
         return RightScalar(value, count);
     }
 
@@ -154,9 +152,8 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue valueError) return valueError;
         if (countValue is ErrorValue countError) return countError;
         var rawCount = ToNumber(countValue);
-        if (!double.IsFinite(rawCount) || rawCount > int.MaxValue) return ErrorValue.Value;
+        if (!double.IsFinite(rawCount) || rawCount < 0 || rawCount > int.MaxValue) return ErrorValue.Value;
         var byteCount = (int)rawCount;
-        if (byteCount < 0) return ErrorValue.Value;
 
         var text = ToText(value);
         return fromRight
@@ -993,16 +990,18 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue valueError) return valueError;
         if (timesValue is ErrorValue timesError) return timesError;
         var timesD = ToNumber(timesValue);
-        if (!double.IsFinite(timesD) || timesD > int.MaxValue) return ErrorValue.Value;
+        if (!double.IsFinite(timesD) || timesD < 0 || timesD > int.MaxValue) return ErrorValue.Value;
         int times = (int)timesD;
-        if (times < 0) return ErrorValue.Value;
         return ReptText(ToText(value), times);
     }
 
     private static ScalarValue ReptText(string text, int times)
     {
-        if ((long)text.Length * times > 32767) return ErrorValue.Value;
-        var sb = new System.Text.StringBuilder();
+        var outputLength = (long)text.Length * times;
+        if (outputLength > 32767) return ErrorValue.Value;
+        if (outputLength == 0) return new TextValue("");
+
+        var sb = new System.Text.StringBuilder((int)outputLength);
         for (int i = 0; i < times; i++) sb.Append(text);
         return new TextValue(sb.ToString());
     }
@@ -1101,19 +1100,26 @@ public static partial class BuiltInFunctions
     private static ScalarValue ReplaceText(string text, int startNum, int numChars, string newText)
     {
         bool hasSurrogatePair = ContainsSurrogatePair(text);
+        int length = hasSurrogatePair ? CountTextElements(text) : text.Length;
+        if (startNum > length + 1) return ErrorValue.Value;
+
         int start = hasSurrogatePair
             ? TextElementIndexFromOneBasedPosition(text, startNum)
             : Math.Min(startNum - 1, text.Length);
         int end = hasSurrogatePair
             ? AdvanceTextElements(text, start, numChars)
-            : Math.Min(start + numChars, text.Length);
+            : start + Math.Min(numChars, text.Length - start);
         return TextResult(text[..start] + newText + text[end..]);
     }
 
     private static ScalarValue ReplaceBText(string text, int startByte, int numBytes, string newText)
     {
+        if (startByte > CountDbcsBytes(text) + 1) return ErrorValue.Value;
+
         int start = DbcsByteOffsetToUtf16Index(text, startByte - 1);
-        int end = DbcsByteOffsetToUtf16Index(text, startByte - 1 + numBytes);
+        int byteCount = CountDbcsBytes(text);
+        int endByteOffset = startByte - 1 + Math.Min(numBytes, byteCount - (startByte - 1));
+        int end = DbcsByteOffsetToUtf16Index(text, endByteOffset);
         return TextResult(text[..start] + newText + text[end..]);
     }
 
@@ -1175,6 +1181,7 @@ public static partial class BuiltInFunctions
         {
             ErrorValue e => e,
             TextValue t => TextResult(t.Value),
+            DirectTextLiteralValue t => TextResult(t.Value),
             _ => new TextValue("")
         };
 
@@ -1225,6 +1232,10 @@ public static partial class BuiltInFunctions
             double rawDec = ToNumber(decimalsValue);
             if (!double.IsFinite(rawDec) || rawDec > int.MaxValue || rawDec < int.MinValue) return ErrorValue.Num;
             dec = (int)rawDec;
+        }
+        else
+        {
+            dec = 0;
         }
         return FixedScalar(value, dec, noCommas);
     }

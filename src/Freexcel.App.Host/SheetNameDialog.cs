@@ -1,6 +1,8 @@
+using Freexcel.Core.Model;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Freexcel.App.Host;
 
@@ -8,8 +10,6 @@ public sealed record SheetNameDialogResult(string SheetName);
 
 public sealed class SheetNameDialog : Window
 {
-    private static readonly char[] InvalidSheetNameChars = [':', '\\', '/', '?', '*', '[', ']'];
-
     private readonly TextBox _nameBox = new();
 
     public SheetNameDialogResult Result { get; private set; }
@@ -46,7 +46,7 @@ public sealed class SheetNameDialog : Window
             return false;
         }
 
-        if (result.SheetName.IndexOfAny(InvalidSheetNameChars) >= 0)
+        if (Workbook.ContainsInvalidSheetNameCharacter(result.SheetName))
         {
             error = "Sheet name is invalid: it cannot contain : \\ / ? * [ or ].";
             return false;
@@ -76,8 +76,10 @@ public sealed class SheetNameDialog : Window
 
     private void ShowInvalidInputWarning(string message)
     {
-        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
-        DialogFocus.FocusAndSelect(_nameBox);
+        DialogMessageHelper.ShowWarning(this, message, Title);
+        _nameBox.Focus();
+        _nameBox.SelectAll();
+        Keyboard.Focus(_nameBox);
     }
 
     private void FocusInitialKeyboardTarget()

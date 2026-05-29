@@ -28,4 +28,29 @@ public sealed class BuiltInNumberFormatCatalogTests
     {
         BuiltInNumberFormatCatalog.ResolveNumberFormatIdForCode(formatCode).Should().Be(expected);
     }
+
+    [Fact]
+    public void CatalogLookups_UseStaticDictionariesInsteadOfLinearScans()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.Core.Model", "BuiltInNumberFormatCatalog.cs"));
+
+        source.Should().Contain("FormatCodesById.TryGetValue");
+        source.Should().Contain("NumberFormatIdsByCode.TryGetValue");
+        source.Should().NotContain("FirstOrDefault");
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine([dir, .. parts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new FileNotFoundException($"Could not find workspace file: {Path.Combine(parts)}");
+    }
 }

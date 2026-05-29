@@ -102,7 +102,14 @@ public partial class GridView
 
         if (_resizeTarget == ResizeTarget.Column)
         {
-            var col = FindColMetric(Viewport!.ColMetrics, _resizeIndex);
+            if (Viewport is null)
+            {
+                Cursor = Cursors.SizeWE;
+                e.Handled = true;
+                return;
+            }
+
+            var col = FindColMetric(Viewport.ColMetrics, _resizeIndex);
             if (col is null)
             {
                 Cursor = Cursors.SizeWE;
@@ -119,7 +126,14 @@ public partial class GridView
         }
         else if (_resizeTarget == ResizeTarget.Row)
         {
-            var row = FindRowMetric(Viewport!.RowMetrics, _resizeIndex);
+            if (Viewport is null)
+            {
+                Cursor = Cursors.SizeNS;
+                e.Handled = true;
+                return;
+            }
+
+            var row = FindRowMetric(Viewport.RowMetrics, _resizeIndex);
             if (row is null)
             {
                 Cursor = Cursors.SizeNS;
@@ -180,8 +194,22 @@ public partial class GridView
             columnHeaderHeight,
             edgeThreshold);
 
+    private bool HasActiveCapturedGridDrag() =>
+        _objectDragKind != ObjectDragKind.None ||
+        _marginDragEdge.HasValue ||
+        _splitDividerDragHandle != SplitDividerHandle.None ||
+        _splitPaneScrollbarDragging ||
+        _autofillDragging ||
+        _resizeTarget != ResizeTarget.None;
+
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
+        if (HasActiveCapturedGridDrag())
+        {
+            e.Handled = true;
+            return;
+        }
+
         var pos = e.GetPosition(this);
 
         // Check if clicking on an already-selected object's handles
@@ -349,6 +377,12 @@ public partial class GridView
 
     protected override void OnMouseRightButtonDown(MouseButtonEventArgs e)
     {
+        if (HasActiveCapturedGridDrag())
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (Viewport == null) { base.OnMouseRightButtonDown(e); return; }
         var pos = e.GetPosition(this);
         if (HitTestPivotChartFieldButton(Charts, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight) is { } pivotButton)
@@ -556,12 +590,7 @@ public partial class GridView
 
     protected override void OnMouseLeave(MouseEventArgs e)
     {
-        if (_objectDragKind == ObjectDragKind.None &&
-            !_autofillDragging &&
-            _resizeTarget == ResizeTarget.None &&
-            !_marginDragEdge.HasValue &&
-            _splitDividerDragHandle == SplitDividerHandle.None &&
-            !_splitPaneScrollbarDragging)
+        if (!HasActiveCapturedGridDrag())
             Cursor = null;
         base.OnMouseLeave(e);
     }

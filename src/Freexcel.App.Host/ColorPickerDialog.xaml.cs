@@ -94,12 +94,7 @@ public partial class ColorPickerDialog : Window
     {
         if (!TryParseColorText(CustomColorTextBox.Text, out var color))
         {
-            MessageBox.Show(
-                this,
-                "Enter a color as #RRGGBB or R, G, B.",
-                Title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Enter a color as #RRGGBB or R, G, B.", Title);
             FocusInvalidCustomColorInput();
             return;
         }

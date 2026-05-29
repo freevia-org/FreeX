@@ -61,7 +61,7 @@ public partial class MainWindow
         }
         else
         {
-            MessageBox.Show("Select the changing cells for the scenario.", "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("Select the changing cells for the scenario.", "Scenario Manager");
             return;
         }
 
@@ -81,8 +81,7 @@ public partial class MainWindow
         if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName), "Scenario Manager"))
             return;
 
-        MessageBox.Show(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count),
-            "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+        _messageService.ShowInfo(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count), "Scenario Manager");
     }
 
     private bool TryParseScenarioChangingCells(string? changingCellsText, out GridRange range)
@@ -99,7 +98,7 @@ public partial class MainWindow
     {
         if (_workbook.Scenarios.Count == 0)
         {
-            MessageBox.Show("No scenarios are saved in this workbook.", "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("No scenarios are saved in this workbook.", "Scenario Manager");
             return;
         }
 
@@ -145,12 +144,12 @@ public partial class MainWindow
     {
         if (_workbook.Scenarios.Count == 0)
         {
-            MessageBox.Show("No scenarios are saved in this workbook.", "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("No scenarios are saved in this workbook.", "Scenario Manager");
             return;
         }
 
         var message = ScenarioManagerPlanner.FormatScenarioList(_workbook.Scenarios);
-        MessageBox.Show(message, "Scenario Manager", MessageBoxButton.OK, MessageBoxImage.Information);
+        _messageService.ShowInfo(message, "Scenario Manager");
     }
 
     private IReadOnlyList<CellAddress> ParseScenarioResultCells(string? resultCellsText)

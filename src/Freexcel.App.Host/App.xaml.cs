@@ -7,6 +7,7 @@ using Freexcel.Core.Commands;
 using Freexcel.Core.Formula;
 using Freexcel.Core.Model;
 using Freexcel.Core.IO;
+using Freexcel.App.UI;
 
 namespace Freexcel.App.Host;
 
@@ -111,6 +112,9 @@ public partial class App : Application
             return new CommandBus(_ => new WorkbookCommandContext(wbRef.Current));
         });
 
+        // Message service
+        services.AddSingleton<IUserMessageService, WpfUserMessageService>();
+
         // UI
         services.AddTransient<MainWindow>();
     }
@@ -141,6 +145,8 @@ public partial class App : Application
         if (!CrashAnalyticsConsentPlanner.ShouldPrompt(options, crashAnalyticsOptions))
             return;
 
+        // Use MessageBox directly here: IUserMessageService is not yet available at this early
+        // startup point (before the main window is shown), so we fall back to a raw call.
         var result = MessageBox.Show(
             "Freexcel can send crash reports to help stabilize tester builds. Reports include app version, runtime, operating system, session ID, exception message, and stack trace. Workbook contents, formulas, filenames, and paths are not collected intentionally, but exception details can occasionally include sensitive values.\n\nSend crash reports for this tester build?",
             "Crash Reports",

@@ -234,7 +234,7 @@ public sealed partial class TextToColumnsDialog : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, ex.Message, Title);
             RefocusInvalidInputAfterWarning(ex.Message);
         }
     }

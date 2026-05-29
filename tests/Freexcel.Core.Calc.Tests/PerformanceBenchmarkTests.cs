@@ -167,6 +167,46 @@ public class PerformanceBenchmarkTests
     }
 
     [Fact]
+    public void Benchmark_ExactFormulaChainRecalcOrder_AvoidsPrecedentDedupeAllocation()
+    {
+        var graph = new DependencyGraph();
+        var sheetId = SheetId.New();
+        var root = new CellAddress(sheetId, 1, 1);
+        var previous = root;
+        const uint formulaCount = 1_000;
+        const int iterations = 100;
+
+        for (uint row = 2; row <= formulaCount + 1; row++)
+        {
+            var current = new CellAddress(sheetId, row, 1);
+            graph.SetDependencies(current, [previous]);
+            previous = current;
+        }
+
+        graph.GetRecalcOrder([root]);
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var plan = graph.GetRecalcOrder([root]);
+            if (plan.OrderedCells.Count != formulaCount || plan.CyclicCells.Count != 0)
+                throw new Xunit.Sdk.XunitException("Formula chain recalc order should include every downstream formula exactly once.");
+        }
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Exact formula chain recalc order: {iterations} iterations, {formulaCount:N0} formulas, " +
+            $"{sw.Elapsed.TotalMilliseconds:F2}ms, {allocated:N0} bytes allocated, " +
+            $"{allocated / iterations:N0} bytes/iteration");
+
+        (allocated / iterations).Should().BeLessThan(
+            240_000,
+            "exact-only formula chains should not allocate a dedupe HashSet for each formula precedent");
+    }
+
+    [Fact]
     public void Benchmark_IdleRecalcWithoutChangedOrVolatileCells_IsAllocationFree()
     {
         var workbook = new Workbook();
@@ -250,6 +290,76 @@ public class PerformanceBenchmarkTests
         insideReport.RecalculatedCells.Should().Contain(formula);
         outsideReport.RecalculatedCells.Should().NotContain(formula);
         rebuildAllocated.Should().BeLessThan(10_000_000);
+    }
+
+    [Fact]
+    public void Benchmark_SingleSectionNumberFormat_AvoidsSplitScaffoldingAllocation()
+    {
+        const int iterations = 10_000;
+        var value = new NumberValue(12345.678);
+
+        NumberFormatter.Format(value, "#,##0.00");
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var formatted = NumberFormatter.Format(value, "#,##0.00");
+            if (formatted != "12,345.68")
+                throw new Xunit.Sdk.XunitException("Single-section number format produced an unexpected value.");
+        }
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Single-section number format: {iterations:N0} iterations, {sw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{allocated:N0} bytes allocated, {allocated / iterations:N0} bytes/iteration");
+
+        (allocated / iterations).Should().BeLessThan(
+            850,
+            "single-section number formats should skip List/StringBuilder section-splitting scaffolding");
+    }
+
+    [Fact]
+    public void Benchmark_MultiSectionNumberFormat_StillHonorsQuotedSemicolons()
+    {
+        var positive = NumberFormatter.Format(new NumberValue(1), "0;[Red]-0;0;\"a;b\"@");
+        var negative = NumberFormatter.Format(new NumberValue(-1), "0;[Red]-0;0;\"a;b\"@");
+        var zero = NumberFormatter.Format(new NumberValue(0), "0;[Red]-0;0;\"a;b\"@");
+        var text = NumberFormatter.Format(new TextValue("x"), "0;[Red]-0;0;\"a;b\"@");
+
+        positive.Should().Be("1");
+        negative.Should().Be("-1");
+        zero.Should().Be("0");
+        text.Should().Be("a;bx");
+    }
+
+    [Fact]
+    public void Benchmark_SingleSectionDateTimeFormat_AvoidsSectionParsingAllocation()
+    {
+        const int iterations = 10_000;
+        var value = new DateTimeValue(new DateTime(2026, 5, 29, 15, 4, 5).ToOADate());
+
+        NumberFormatter.Format(value, "yyyy-mm-dd hh:mm:ss");
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var formatted = NumberFormatter.Format(value, "yyyy-mm-dd hh:mm:ss");
+            if (formatted != "2026-05-29 15:04:05")
+                throw new Xunit.Sdk.XunitException("Single-section date/time format produced an unexpected value.");
+        }
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Single-section date/time format: {iterations:N0} iterations, {sw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{allocated:N0} bytes allocated, {allocated / iterations:N0} bytes/iteration");
+
+        (allocated / iterations).Should().BeLessThan(
+            1_600,
+            "single-section date/time formats should skip section array and parsed-section scaffolding");
     }
 
     /// <summary>

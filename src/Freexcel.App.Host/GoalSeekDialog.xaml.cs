@@ -51,7 +51,7 @@ public partial class GoalSeekDialog : Window
                 out var input,
                 out var error))
         {
-            MessageBox.Show(this, error, "Goal Seek", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, error, "Goal Seek");
             FocusInvalidInput(error);
             return;
         }

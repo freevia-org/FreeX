@@ -163,6 +163,16 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_ExtractColonDelimitedToken_ExtractsConsistentPart()
+    {
+        var result = FlashFillService.Fill(
+            [("08:15", "08"), ("14:45", "14")],
+            ["19:30"]);
+
+        result.Should().BeEquivalentTo(["19"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_ExtractSemicolonDelimitedToken_ReturnsNullWhenRemainingDelimiterIsMissing()
     {
         var result = FlashFillService.Fill(
@@ -422,6 +432,19 @@ public sealed class FlashFillServiceTests
             ["alan-turing@contoso.com"]);
 
         result.Should().BeEquivalentTo(["Alan Turing"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmailDisplayName_ConvertsMixedSeparatorUserNameToProperName()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada.lovelace_smith@contoso.com", "Ada Lovelace Smith"),
+                ("grace-hopper_murray@example.org", "Grace Hopper Murray")
+            ],
+            ["alan.turing-mathison@test.net"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing Mathison"], o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -927,6 +950,19 @@ public sealed class FlashFillServiceTests
             ["Katherine Coleman Johnson"]);
 
         result.Should().BeEquivalentTo(["C."], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNames_ExtractsLastNameAcrossVariableTokenCounts()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", "Lovelace"),
+                ("Grace Hopper", "Hopper")
+            ],
+            ["Katherine Coleman Johnson"]);
+
+        result.Should().BeEquivalentTo(["Johnson"], o => o.WithStrictOrdering());
     }
 
     [Fact]

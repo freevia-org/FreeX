@@ -154,7 +154,7 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().Contain("UpdateSelectionCommands");
         source.Should().Contain("EditButton.IsEnabled = hasSelection");
         source.Should().Contain("DeleteButton.IsEnabled = hasSelection");
-        source.Should().Contain("MessageBoxButton.YesNo");
+        source.Should().Contain("DialogMessageHelper.AskYesNo(this,");
         source.Should().Contain("Delete the name");
         source.Should().Contain("RefersToPickerButton_Click");
         source.Should().Contain("RefersToBox.SelectAll()");
@@ -229,12 +229,12 @@ public sealed class NamedRangeDialogXamlTests
     {
         var source = ReadNamedRangeDialogSource();
 
-        source.Should().Contain("MessageBox.Show(this, \"Select a named range to edit.\"");
-        source.Should().Contain("MessageBox.Show(this, \"Please enter a name.\"");
-        source.Should().Contain("MessageBox.Show(this,");
-        source.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not define named range.\"");
-        source.Should().Contain("MessageBox.Show(this, \"Select a named range to delete.\"");
-        source.Should().Contain("MessageBox.Show(this, outcome.ErrorMessage ?? \"Could not delete.\"");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Select a named range to edit.\"");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Please enter a name.\"");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not define named range.\"");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Select a named range to delete.\"");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not delete.\"");
     }
 
     [Fact]

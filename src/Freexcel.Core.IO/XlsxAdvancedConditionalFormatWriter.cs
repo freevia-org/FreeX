@@ -162,13 +162,15 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             {
                 var thresholdXmls = GetIconSetThresholds(cf)
                     .Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value, threshold.GreaterThanOrEqual));
-                var overrideXmls = cf.IconOverrides.Select(o => new XElement(
-                    worksheetNs + "cfIcon",
-                    new XAttribute("iconSet", o.IconSet),
-                    new XAttribute("iconId", o.IconId.ToString(CultureInfo.InvariantCulture))));
+                var overrideXmls = cf.IconOverrides
+                    .Where(IsValidIconOverride)
+                    .Select(o => new XElement(
+                        worksheetNs + "cfIcon",
+                        new XAttribute("iconSet", o.IconSet.Trim()),
+                        new XAttribute("iconId", o.IconId.ToString(CultureInfo.InvariantCulture))));
                 rule.Add(AddConditionalFormatPayloadNativeMetadata(new XElement(
                     worksheetNs + "iconSet",
-                    new XAttribute("iconSet", string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle),
+                    new XAttribute("iconSet", string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle.Trim()),
                     new XAttribute("showValue", cf.IconSetShowValue ? "1" : "0"),
                     new XAttribute("reverse", cf.IconSetReverse ? "1" : "0"),
                     thresholdXmls,
@@ -193,7 +195,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     rule.Add(new XElement(worksheetNs + "formula", cf.FormulaText));
                 break;
             case CfRuleType.DateOccurring:
-                rule.SetAttributeValue("timePeriod", string.IsNullOrWhiteSpace(cf.DateOccurringPeriod) ? "today" : cf.DateOccurringPeriod);
+                rule.SetAttributeValue("timePeriod", XlsxAdvancedConditionalFormatMetadata.NormalizeDateOccurringPeriod(cf.DateOccurringPeriod));
                 if (!string.IsNullOrWhiteSpace(cf.FormulaText))
                     rule.Add(new XElement(worksheetNs + "formula", cf.FormulaText));
                 break;
@@ -276,6 +278,9 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 new CfThresholdModel(CfThresholdType.Percent, "33"),
                 new CfThresholdModel(CfThresholdType.Percent, "67")
             ];
+
+    private static bool IsValidIconOverride(CfIconOverride icon) =>
+        !string.IsNullOrWhiteSpace(icon.IconSet) && icon.IconId >= 0;
 
     private static bool TrySetNativeAttributeIfMissing(XElement element, string name, string value)
     {

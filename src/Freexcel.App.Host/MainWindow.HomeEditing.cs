@@ -53,7 +53,7 @@ public partial class MainWindow
     private void FillPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void FillDownMenuItem_Click(object sender, RoutedEventArgs e)
         => ExecuteFillCells(FillCellsDirection.Down);
@@ -98,9 +98,10 @@ public partial class MainWindow
         var startValue = sheet.GetValue(range.Start.Row, range.Start.Col);
         if (startValue is not NumberValue and not DateTimeValue)
         {
-            MessageBox.Show("Select a numeric or date cell to start a series.", "Fill Series", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowWarning("Select a numeric or date cell to start a series.", "Fill Series");
             return;
         }
+
 
         var dialog = new FillSeriesStepDialog { Owner = this };
         if (dialog.ShowDialog() != true)
@@ -178,7 +179,7 @@ public partial class MainWindow
     private void SortFilterPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void SortAZMenuItem_Click(object sender, RoutedEventArgs e)    => SortAscButton_Click(sender, e);
     private void SortZAMenuItem_Click(object sender, RoutedEventArgs e)    => SortDescButton_Click(sender, e);
@@ -190,7 +191,7 @@ public partial class MainWindow
     private void FindSelectPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void FindFindMenuItem_Click(object sender, RoutedEventArgs e)       => FindButton_Click(sender, e);
     private void FindReplaceMenuItem_Click(object sender, RoutedEventArgs e)    => ReplaceButton_Click(sender, e);
@@ -259,7 +260,7 @@ public partial class MainWindow
         if (matches.Count == 0)
         {
             if (showEmptyMessage)
-                MessageBox.Show("No cells found.", "Go To Special", MessageBoxButton.OK, MessageBoxImage.Information);
+                _messageService.ShowInfo("No cells found.", "Go To Special");
             return;
         }
 
@@ -279,7 +280,7 @@ public partial class MainWindow
     private void ClearPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void ClearAllMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -294,6 +295,8 @@ public partial class MainWindow
                         [
                             new ClearContentsCommand(sheetId, currentRange),
                             new ApplyStyleCommand(sheetId, currentRange, CellStyleDiffPlanner.ClearFormatsDiff()),
+                            new ClearConditionalFormatsCommand(sheetId, currentRange),
+                            new ClearDataValidationCommand(sheetId, currentRange),
                             new ClearCommentsCommand(sheetId, currentRange),
                             new ClearHyperlinksCommand(sheetId, currentRange)
                         ]);

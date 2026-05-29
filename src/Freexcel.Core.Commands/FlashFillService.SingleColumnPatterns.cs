@@ -5,7 +5,7 @@ namespace Freexcel.Core.Commands;
 public static partial class FlashFillService
 {
     // Delimiters tried in order for extract-by-delimiter and initials patterns.
-    private static readonly char[] Delimiters = [' ', ',', ';', '|', '-', '_', '@', '.', '/', '\\'];
+    private static readonly char[] Delimiters = [' ', ',', ';', ':', '|', '-', '_', '@', '.', '/', '\\'];
     private static readonly string[] LabelValueSeparators = [":", "=", "->", "=>", "-", "/", "|"];
     private static readonly HashSet<string> KnownNameTitles = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -241,17 +241,14 @@ public static partial class FlashFillService
         if (userName.Length == 0)
             return false;
 
-        var separator = userName.Contains('.', StringComparison.Ordinal)
-            ? '.'
-            : userName.Contains('_', StringComparison.Ordinal)
-                ? '_'
-                : userName.Contains('-', StringComparison.Ordinal)
-                    ? '-'
-                    : '\0';
-        if (separator == '\0')
+        if (!userName.Contains('.', StringComparison.Ordinal) &&
+            !userName.Contains('_', StringComparison.Ordinal) &&
+            !userName.Contains('-', StringComparison.Ordinal))
+        {
             return false;
+        }
 
-        var parts = userName.Split(separator, StringSplitOptions.RemoveEmptyEntries);
+        var parts = userName.Split(['.', '_', '-'], StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length < 2 || parts.Any(part => part.Any(char.IsDigit)))
             return false;
 
@@ -412,6 +409,25 @@ public static partial class FlashFillService
             return source => TrySplitWhitespaceTokens(source, out var tokens) ? GetFirstInitial(tokens[1]) + "." : null;
 
         return null;
+    }
+
+    private static Func<string, string?>? TryFinalWhitespaceToken(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        var exampleTokens = new List<string[]>(examples.Count);
+        foreach (var (source, expected) in examples)
+        {
+            if (!TrySplitVariableWhitespaceTokens(source, out var tokens) || expected != tokens[^1])
+                return null;
+
+            exampleTokens.Add(tokens);
+        }
+
+        if (exampleTokens.Select(tokens => tokens[0]).Distinct(StringComparer.Ordinal).Count() == 1)
+            return null;
+
+        return source => TrySplitVariableWhitespaceTokens(source, out var tokens)
+            ? tokens[^1]
+            : null;
     }
 
     private static Func<string, string?>? TryKnownTitleRemoval(IReadOnlyList<(string Source, string Expected)> examples)
@@ -704,6 +720,12 @@ public static partial class FlashFillService
     {
         tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         return tokens.Length == 3 && tokens.All(token => token.Length > 0);
+    }
+
+    private static bool TrySplitVariableWhitespaceTokens(string source, out string[] tokens)
+    {
+        tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length >= 2 && tokens.All(token => token.Length > 0);
     }
 
     private static string ExtractDigits(string value) =>

@@ -255,6 +255,6 @@ public sealed class ErrorCheckingDialog : Window
             ? $"{issue.ErrorCode}\n\n{issue.Description}\n\nUse Show Calculation Steps to trace the formula, Ignore Error to suppress this issue, or Edit in Formula Bar to correct the formula."
             : "Select an issue to see its description and available correction actions.";
 
-        MessageBox.Show(this, message, "Error Checking Help", MessageBoxButton.OK, MessageBoxImage.Information);
+        DialogMessageHelper.ShowInfo(this, message, "Error Checking Help");
     }
 }

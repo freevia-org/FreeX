@@ -106,6 +106,105 @@ public sealed class PerformanceReviewMeasurementTests
         });
     }
 
+    [Fact]
+    public void Benchmark_ViewportNoCommentsFastPath_ReportsTiming()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        for (uint row = 1; row <= 120; row++)
+        {
+            for (uint col = 1; col <= 40; col++)
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * col));
+        }
+
+        var service = new ViewportService();
+        var request = new ViewportRequest(1, 1, 2_600, 3_000, IncludeObjects: false);
+        for (var i = 0; i < 5; i++)
+            service.GetViewport(workbook, sheet.Id, request);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(80);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        ViewportModel? viewport = null;
+        for (var i = 0; i < 80; i++)
+        {
+            var step = Stopwatch.StartNew();
+            viewport = service.GetViewport(workbook, sheet.Id, request);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var result = MeasurementResult.From(
+            timings,
+            total.Elapsed.TotalMilliseconds,
+            GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+
+        Console.WriteLine(
+            "PERF VIEWPORT_NO_COMMENTS_FAST_PATH " +
+            $"steps={result.StepCount} cells={viewport!.Cells.Count:N0} " +
+            $"total_ms={result.TotalMilliseconds:F2} mean_ms={result.MeanMilliseconds:F2} " +
+            $"p95_ms={result.P95Milliseconds:F2} max_ms={result.MaxMilliseconds:F2} " +
+            $"allocated_bytes={result.AllocatedBytes:N0}");
+
+        result.StepCount.Should().Be(80);
+        viewport.Cells.Should().HaveCount(4_800);
+        viewport.Cells.Should().OnlyContain(cell => !cell.HasComment);
+        result.TotalMilliseconds.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_SparseViewportEmptyCellFastPath_ReportsTiming()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 60, 20), new NumberValue(1_200));
+        sheet.SetCell(new CellAddress(sheet.Id, 120, 40), new NumberValue(4_800));
+
+        var service = new ViewportService();
+        var request = new ViewportRequest(1, 1, 2_600, 3_000, IncludeObjects: false);
+        for (var i = 0; i < 5; i++)
+            service.GetViewport(workbook, sheet.Id, request);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(80);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        ViewportModel? viewport = null;
+        for (var i = 0; i < 80; i++)
+        {
+            var step = Stopwatch.StartNew();
+            viewport = service.GetViewport(workbook, sheet.Id, request);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var result = MeasurementResult.From(
+            timings,
+            total.Elapsed.TotalMilliseconds,
+            GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+
+        Console.WriteLine(
+            "PERF SPARSE_VIEWPORT_EMPTY_CELL_FAST_PATH " +
+            $"steps={result.StepCount} cells={viewport!.Cells.Count:N0} " +
+            $"total_ms={result.TotalMilliseconds:F2} mean_ms={result.MeanMilliseconds:F2} " +
+            $"p95_ms={result.P95Milliseconds:F2} max_ms={result.MaxMilliseconds:F2} " +
+            $"allocated_bytes={result.AllocatedBytes:N0}");
+
+        result.StepCount.Should().Be(80);
+        viewport.Cells.Should().HaveCount(3);
+        result.TotalMilliseconds.Should().BeGreaterThan(0);
+    }
+
     private sealed class RibbonResizeHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -198,7 +297,8 @@ public sealed class PerformanceReviewMeasurementTests
                 new RecalcEngine(graph, evaluator),
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
-                workbook);
+                workbook,
+                NullUserMessageService.Instance);
 
             window.Width = 1500;
             window.Height = 720;
@@ -273,7 +373,8 @@ public sealed class PerformanceReviewMeasurementTests
                 new RecalcEngine(graph, evaluator),
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
-                workbook)
+                workbook,
+                NullUserMessageService.Instance)
             {
                 Width = 1280,
                 Height = 720
@@ -358,7 +459,8 @@ public sealed class PerformanceReviewMeasurementTests
                 new RecalcEngine(graph, evaluator),
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
-                workbook)
+                workbook,
+                NullUserMessageService.Instance)
             {
                 Width = 1280,
                 Height = 720

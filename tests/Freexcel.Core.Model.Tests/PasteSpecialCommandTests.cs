@@ -148,6 +148,57 @@ public sealed class PasteSpecialCommandTests
     }
 
     [Fact]
+    public void PasteSpecialCellsCommand_AddOperationTreatsDatesAsExcelSerials()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var dest = new CellAddress(sheet.Id, 3, 3);
+        var startDate = DateTimeValue.FromDateTime(new DateTime(2026, 5, 29));
+        sheet.SetCell(dest, startDate);
+        var source = new[]
+        {
+            (new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(2)))
+        };
+
+        var command = new PasteSpecialCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            source,
+            dest,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(dest).Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 31)));
+    }
+
+    [Fact]
+    public void PasteSpecialCellsCommand_AddOperationTreatsBooleansAsExcelNumbers()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var dest = new CellAddress(sheet.Id, 3, 3);
+        sheet.SetCell(dest, new NumberValue(10));
+        var source = new[]
+        {
+            (new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new BoolValue(true)))
+        };
+
+        var command = new PasteSpecialCellsCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1)),
+            source,
+            dest,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(dest).Should().Be(new NumberValue(11));
+    }
+
+    [Fact]
     public void PasteSpecialCellsCommand_RejectsInvalidOperation()
     {
         var wb = new Workbook("test");
@@ -361,7 +412,12 @@ public sealed class PasteSpecialCommandTests
         var ctx = new SimpleCtx(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 3, 2);
-        sheet.ThreadedComments[source] = new ThreadedComment("copy me", "Quinn");
+        var sourceReplies = new List<CommentReply> { new("first", "User") };
+        sheet.ThreadedComments[source] = new ThreadedComment("copy me", "Quinn")
+        {
+            Replies = sourceReplies,
+            IsResolved = true
+        };
         sheet.ThreadedComments[destination] = new ThreadedComment("old", "Codex");
 
         var command = new PasteCommentsCommand(
@@ -372,11 +428,23 @@ public sealed class PasteSpecialCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        sheet.ThreadedComments[destination].Should().Be(new ThreadedComment("copy me", "Quinn"));
+        var pasted = sheet.ThreadedComments[destination];
+        pasted.Text.Should().Be("copy me");
+        pasted.Author.Should().Be("Quinn");
+        pasted.IsResolved.Should().BeTrue();
+        pasted.Replies.Should().Equal(new CommentReply("first", "User"));
+        pasted.Should().NotBeSameAs(sheet.ThreadedComments[source]);
+
+        sourceReplies.Add(new CommentReply("late source edit", "User"));
+        sheet.ThreadedComments[destination].Replies.Should().Equal(new CommentReply("first", "User"));
 
         command.Revert(ctx);
 
-        sheet.ThreadedComments[destination].Should().Be(new ThreadedComment("old", "Codex"));
+        var restored = sheet.ThreadedComments[destination];
+        restored.Text.Should().Be("old");
+        restored.Author.Should().Be("Codex");
+        restored.IsResolved.Should().BeFalse();
+        restored.Replies.Should().BeEmpty();
     }
 
     [Fact]

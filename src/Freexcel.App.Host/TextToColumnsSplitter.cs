@@ -110,11 +110,14 @@ internal static class TextToColumnsSplitter
 
     public static string[] SplitFixedWidthText(string text, IReadOnlyList<int> breakPositions)
     {
+        if (breakPositions.Count == 0)
+            return [text];
+
         var positions = NormalizeBreakPositions(breakPositions);
         if (positions.Count == 0)
             return [text];
 
-        var parts = new List<string>();
+        var parts = new List<string>(positions.Count + 1);
         var start = 0;
         foreach (var position in positions)
         {

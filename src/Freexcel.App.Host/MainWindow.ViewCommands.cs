@@ -126,7 +126,7 @@ public partial class MainWindow
     private void ArrangeAllPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
 
     private void ArrangeAllContextMenu_Opened(object sender, RoutedEventArgs e)
@@ -158,7 +158,7 @@ public partial class MainWindow
     private void FreezePanesPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void FreezeAtSelectionMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -260,7 +260,7 @@ public partial class MainWindow
     private void ZoomPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void ZoomPresetMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -279,7 +279,13 @@ public partial class MainWindow
             if (dialog.ShowDialog() != true)
                 return;
 
-            ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(dialog.Result.ZoomPercent);
+            var zoomPercent = ZoomSelectionPlanner.CalculateDialogZoomPercent(
+                dialog.Result,
+                SheetGrid.ActualWidth,
+                SheetGrid.ActualHeight,
+                SheetGrid.SelectedRange?.ColCount ?? 1,
+                SheetGrid.SelectedRange?.RowCount ?? 1);
+            ZoomSlider.Value = Freexcel.App.UI.ZoomLevelMapper.ZoomPercentToSlider(zoomPercent);
         }
         finally
         {

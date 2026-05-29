@@ -825,6 +825,18 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void CountifAndSumif_TextNumericCriteria_CompareNumericCellsByValue()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)),
+            (2, 1, new NumberValue(1.0)), (2, 2, new NumberValue(20)),
+            (3, 1, new NumberValue(2)), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=COUNTIF(A1:A3,\"1.0\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SUMIF(A1:A3,\"1.0\",B1:B3)", sheet).Should().Be(new NumberValue(30));
+    }
+
+    [Fact]
     public void Countif_GreaterThanCriteria()
     {
         var sheet = MakeSheet(
@@ -842,6 +854,19 @@ public class FunctionLibraryTests
             (2, 1, new TextValue("banana")),
             (3, 1, new TextValue("apple")));
         _eval.Evaluate("=COUNTIF(A1:A3,\"apple\")", sheet).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void CountifAndSumif_TextErrorCriteriaMatchErrorCells()
+    {
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.NA), (1, 2, new NumberValue(10)),
+            (2, 1, ErrorValue.Value), (2, 2, new NumberValue(20)),
+            (3, 1, new TextValue("#N/A")), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=COUNTIF(A1:A3,\"#N/A\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=COUNTIF(A1:A3,\"#VALUE!\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SUMIF(A1:A3,\"#N/A\",B1:B3)", sheet).Should().Be(new NumberValue(40));
     }
 
     [Fact]
@@ -1133,6 +1158,16 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet((1, 1, new TextValue("abcdef")), (1, 2, new TextValue("1E309")));
         _eval.Evaluate("=RIGHT(A1,B1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Theory]
+    [InlineData("=LEFT(\"abc\",-0.5)")]
+    [InlineData("=RIGHT(\"abc\",-0.5)")]
+    [InlineData("=LEFTB(\"A\u754cB\",-0.5)")]
+    [InlineData("=RIGHTB(\"A\u754cB\",-0.5)")]
+    public void LeftAndRight_NegativeFractionalNumChars_ReturnValueError(string formula)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -1846,6 +1881,13 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=REPT(\"x\",0)", sheet).Should().Be(new TextValue(""));
+    }
+
+    [Fact]
+    public void Rept_NegativeFractionalTimes_ReturnsValueError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=REPT(\"x\",-0.5)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -2785,6 +2827,13 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=FLOOR(2.9,-1)", sheet).Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Floor_NegativeNumberPositiveSignificance_ReturnsNumError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=FLOOR(-2.9,1)", sheet).Should().Be(ErrorValue.Num);
     }
 
     [Fact]
@@ -5800,6 +5849,17 @@ public class FunctionLibraryTests
             .Should().Be(new TextValue("Hello Excel"));
 
     [Fact]
+    public void Replace_NumCharsBeyondRemainingText_ReplacesThroughEnd()
+    {
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=REPLACE(\"abcdef\",3,2147483647,\"X\")", sheet)
+            .Should().Be(new TextValue("abX"));
+        _eval.Evaluate("=REPLACEB(\"A\u754cB\",2,2147483647,\"X\")", sheet)
+            .Should().Be(new TextValue("AX"));
+    }
+
+    [Fact]
     public void Replace_RangeOldTextArgument_SpillsElementwise()
     {
         var sheet = MakeSheet(
@@ -5888,6 +5948,14 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=REPLACE(\"abc\",1,-1,\"x\")", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void Replace_StartNumPastAppendBoundary_ReturnsValueError()
+    {
+        var sheet = MakeSheet();
+        _eval.Evaluate("=REPLACE(\"abc\",5,0,\"x\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=REPLACEB(\"A\u754cB\",6,0,\"x\")", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -6061,6 +6129,18 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void T_ArrayTextLiteral_ReturnsTextElement()
+    {
+        var result = _eval.Evaluate("=T({\"hello\",42})", MakeSheet())
+            .Should().BeOfType<RangeValue>().Subject;
+
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(2);
+        result.At(1, 1).Should().Be(new TextValue("hello"));
+        result.At(1, 2).Should().Be(new TextValue(""));
+    }
+
+    [Fact]
     public void Hyperlink_ReturnsDisplayTextWhenFriendlyNameIsProvided()
     {
         _eval.Evaluate("=HYPERLINK(\"https://example.com\",\"Example\")", MakeSheet())
@@ -6142,6 +6222,13 @@ public class FunctionLibraryTests
     [Fact] public void Fixed_TwoDecimals_ReturnsFormatted() =>
         _eval.Evaluate("=FIXED(1234.567,2,TRUE)", MakeSheet())
             .Should().Be(new TextValue("1234.57"));
+
+    [Fact]
+    public void Fixed_BlankDecimalsSlot_UsesZeroDecimals()
+    {
+        _eval.Evaluate("=FIXED(1234.5,)", MakeSheet())
+            .Should().Be(new TextValue("1,235"));
+    }
 
     [Fact]
     public void FixedDollarTAndEncodeUrl_RangeArgument_SpillElementwise()
@@ -8910,6 +8997,11 @@ public class FunctionLibraryTests
     public void Numbervalue_MultiCharacterSeparators_UseFirstCharacterLikeExcel() =>
         _eval.Evaluate("=NUMBERVALUE(\"1.234,56\",\",ignored\",\".ignored\")", MakeSheet())
             .Should().Be(new NumberValue(1234.56));
+
+    [Fact]
+    public void Numbervalue_GroupSeparatorAfterDecimal_ReturnsValueError() =>
+        _eval.Evaluate("=NUMBERVALUE(\"1.234,56\",\".\",\",\")", MakeSheet())
+            .Should().Be(ErrorValue.Value);
 
     [Theory]
     [InlineData("=NUMBERVALUE(\"1\t234\")")]

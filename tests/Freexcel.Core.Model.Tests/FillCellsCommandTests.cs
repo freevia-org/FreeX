@@ -119,6 +119,56 @@ public sealed class FillCellsCommandTests
     }
 
     [Fact]
+    public void FillDown_FromStyleOnlyBlankSource_CopiesFormattingAndUndoRestoresTargetStyleOnly()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 2, 1);
+        var sourceStyle = workbook.RegisterStyle(new CellStyle { Bold = true });
+        var targetStyle = workbook.RegisterStyle(new CellStyle { Italic = true });
+        sheet.SetStyleOnly(source.Row, source.Col, sourceStyle);
+        sheet.SetStyleOnly(target.Row, target.Col, targetStyle);
+        var context = new SimpleCommandContext(workbook);
+
+        var command = new FillCellsCommand(
+            sheet.Id,
+            new GridRange(source, target),
+            FillCellsDirection.Down);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.GetCell(target).Should().BeNull();
+        sheet.GetStyleOnly(target.Row, target.Col).Should().Be(sourceStyle);
+
+        command.Revert(context);
+
+        sheet.GetCell(target).Should().BeNull();
+        sheet.GetStyleOnly(target.Row, target.Col).Should().Be(targetStyle);
+    }
+
+    [Fact]
+    public void FillRight_FromPlainBlankSource_ClearsTargetStyleOnlyFormatting()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var source = new CellAddress(sheet.Id, 1, 1);
+        var target = new CellAddress(sheet.Id, 1, 2);
+        var targetStyle = workbook.RegisterStyle(new CellStyle { Italic = true });
+        sheet.SetStyleOnly(target.Row, target.Col, targetStyle);
+
+        var command = new FillCellsCommand(
+            sheet.Id,
+            new GridRange(source, target),
+            FillCellsDirection.Right);
+
+        command.Apply(new SimpleCommandContext(workbook)).Success.Should().BeTrue();
+
+        sheet.GetCell(target).Should().BeNull();
+        sheet.GetStyleOnly(target.Row, target.Col).Should().BeNull();
+    }
+
+    [Fact]
     public void FillDown_RejectsLockedTargetsOnProtectedSheet()
     {
         var workbook = new Workbook("test");

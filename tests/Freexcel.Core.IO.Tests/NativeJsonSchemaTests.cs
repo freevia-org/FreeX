@@ -89,6 +89,224 @@ public sealed class NativeJsonSchemaTests
         migratedDocument.RootElement.GetProperty("FileFormat").GetString().Should().Be("Freexcel.NativeJsonWorkbook");
     }
 
+    [Theory]
+    [InlineData("""{ "Name": "LegacyWithoutSheets" }""")]
+    [InlineData("""{ "Name": "LegacyWithNoValidSheets", "Sheets": [ { "Name": "" }, null ] }""")]
+    public void Load_AddsDefaultSheetWhenNativeJsonHasNoValidSheets(string json)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        workbook.Sheets.Should().ContainSingle();
+        workbook.GetSheetAt(0).Name.Should().Be("Sheet1");
+    }
+
+    [Fact]
+    public void Load_NormalizesInvalidBlankDuplicateAndLongNativeJsonSheetNames()
+    {
+        const string json = """
+            {
+              "Name": "MalformedSheetNames",
+              "Sheets": [
+                { "Name": "'Bad:/?*[]Name'" },
+                { "Name": "bad:/?*[]name" },
+                { "Name": "   " },
+                { "Name": "''" },
+                { "Name": "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890" }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal(
+            "Bad______Name",
+            "bad______name (1)",
+            "Sheet3",
+            "Sheet",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345");
+        workbook.Sheets.Select(sheet => sheet.Name).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void Load_ResolvesMetadataReferencesToNormalizedNativeJsonSheetNames()
+    {
+        const string json = """
+            {
+              "Name": "MalformedSheetReferences",
+              "Sheets": [
+                {
+                  "Name": "'Bad:/?*[]Name'",
+                  "Cells": [
+                    { "Address": "A1", "Value": "42", "ValueType": "n" }
+                  ]
+                }
+              ],
+              "NamedRanges": [
+                { "Name": "Input", "SheetName": "'Bad:/?*[]Name'", "Range": "A1:A1" }
+              ],
+              "WatchedCells": [
+                { "SheetName": "'Bad:/?*[]Name'", "Address": "A1" }
+              ],
+              "Scenarios": [
+                {
+                  "Name": "Scenario 1",
+                  "ChangingCells": [
+                    { "SheetName": "'Bad:/?*[]Name'", "Address": "A1", "Value": "99", "ValueType": "n" }
+                  ]
+                }
+              ],
+              "CustomViews": [
+                {
+                  "Name": "View 1",
+                  "Sheets": [
+                    { "SheetName": "'Bad:/?*[]Name'", "ZoomPercent": 125 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Bad______Name");
+        workbook.NamedRanges["Input"].Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 1)));
+        workbook.WatchedCells.Should().ContainSingle().Which.Should().Be(new CellAddress(sheet.Id, 1, 1));
+        workbook.Scenarios.Should().ContainSingle()
+            .Which.ChangingCells.Should().ContainSingle()
+            .Which.Address.Should().Be(new CellAddress(sheet.Id, 1, 1));
+        workbook.CustomViews.Should().ContainSingle()
+            .Which.Sheets.Should().ContainSingle()
+            .Which.SheetName.Should().Be("Bad______Name");
+    }
+
+    [Fact]
+    public void Load_RevalidatesWorkbookViewSheetIndexesAfterSkippingNullNativeJsonSheets()
+    {
+        const string json = """
+            {
+              "Name": "MalformedWorkbookView",
+              "ActiveSheetIndex": 1,
+              "FirstVisibleSheetIndex": 1,
+              "Sheets": [
+                { "Name": "Sheet1" },
+                null
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        workbook.Sheets.Should().ContainSingle();
+        workbook.ActiveSheetIndex.Should().BeNull();
+        workbook.FirstVisibleSheetIndex.Should().BeNull();
+    }
+
+    [Fact]
+    public void Load_DropsUnresolvableNativeJsonCustomViewSheetReferences()
+    {
+        const string json = """
+            {
+              "Name": "CustomViewSheetReferences",
+              "Sheets": [
+                { "Name": "Loaded" }
+              ],
+              "CustomViews": [
+                {
+                  "Name": "Mixed",
+                  "Sheets": [
+                    { "SheetName": "Loaded", "ZoomPercent": 110 },
+                    { "SheetName": "Missing", "ZoomPercent": 125 }
+                  ]
+                },
+                {
+                  "Name": "OnlyMissing",
+                  "Sheets": [
+                    { "SheetName": "Missing", "ZoomPercent": 140 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        var view = workbook.CustomViews.Should().ContainSingle().Which;
+        view.Name.Should().Be("Mixed");
+        var sheetState = view.Sheets.Should().ContainSingle().Which;
+        sheetState.SheetName.Should().Be("Loaded");
+        sheetState.ZoomPercent.Should().Be(110);
+    }
+
+    [Fact]
+    public void Load_DropsInvalidNativeJsonPrintTitleRanges()
+    {
+        const string json = """
+            {
+              "Name": "PrintTitleRanges",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "PrintTitleRows": { "Start": 0, "End": 2 },
+                  "PrintTitleColumns": { "Start": 2, "End": 1 }
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.PrintTitleRows.Should().BeNull();
+        sheet.PrintTitleColumns.Should().BeNull();
+    }
+
+    [Fact]
+    public void Load_UsesCurrentStreamPositionAndLeavesInputStreamOpen()
+    {
+        using var stream = PositionedStreamFromString("ignored", """
+            {
+              "Name": "Offset",
+              "Sheets": [
+                { "Name": "Sheet1" }
+              ]
+            }
+            """);
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        workbook.Name.Should().Be("Offset");
+        workbook.GetSheetAt(0).Name.Should().Be("Sheet1");
+        stream.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Save_UsesCurrentStreamPositionAndLeavesOutputStreamOpen()
+    {
+        var workbook = new Workbook("OffsetSave");
+        workbook.AddSheet("Sheet1");
+        var prefixBytes = Encoding.UTF8.GetBytes("ignored");
+        using var stream = new MemoryStream();
+        stream.Write(prefixBytes);
+
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        stream.CanWrite.Should().BeTrue();
+        stream.ToArray().Take(prefixBytes.Length).Should().Equal(prefixBytes);
+        using var document = JsonDocument.Parse(stream.ToArray().AsMemory(prefixBytes.Length));
+        document.RootElement.GetProperty("Name").GetString().Should().Be("OffsetSave");
+        document.RootElement.GetProperty("FileFormat").GetString().Should().Be("Freexcel.NativeJsonWorkbook");
+    }
+
     [Fact]
     public void Load_RejectsUnsupportedFutureNativeJsonSchema()
     {
@@ -187,6 +405,15 @@ public sealed class NativeJsonSchemaTests
         var workbook = new NativeJsonAdapter().Load(stream);
 
         workbook.GetSheetAt(0).GetCell(1, 1)!.Value.Should().Be(new TextValue("not-bool"));
+    }
+
+    private static MemoryStream PositionedStreamFromString(string prefix, string value)
+    {
+        var prefixBytes = Encoding.UTF8.GetBytes(prefix);
+        var valueBytes = Encoding.UTF8.GetBytes(value);
+        var stream = new MemoryStream(prefixBytes.Concat(valueBytes).ToArray());
+        stream.Position = prefixBytes.Length;
+        return stream;
     }
 
     private static string FindWorkspaceFile(params string[] parts)

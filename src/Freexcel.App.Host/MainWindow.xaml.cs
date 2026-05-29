@@ -7,6 +7,7 @@ using Freexcel.Core.Calc;
 using Freexcel.Core.IO;
 using System.Collections.Generic;
 using System.ComponentModel;
+using Freexcel.App.UI;
 
 namespace Freexcel.App.Host;
 
@@ -19,11 +20,19 @@ public partial class MainWindow : Window
     private const double MaximizedSafeInsetDip = 8.0;
     private const double SheetTabNavScrollAmount = 140.0;
     private const double SheetTabScrollEpsilon = 0.5;
+    private const double SheetTabMinimumViewportWidth = 80.0;
+    private const double SheetTabMinimumHorizontalScrollbarWidth = 180.0;
+    private const double SheetTabPreferredHorizontalScrollbarRatio = 0.36;
+    private const double SheetTabPreferredHorizontalScrollbarMaxWidth = 420.0;
+    private const double SheetTabOverlapWidth = 16.0;
+    private const double SheetTabGridRuleTop = 0.5;
+    private const double SheetTabGridRuleStrokeThickness = 1.0;
     private const int ResizeViewportRefreshDelayMilliseconds = 140;
 
     private readonly ILogger<MainWindow> _logger;
     private readonly IViewportService _viewportService;
     private readonly ICommandBus _commandBus;
+    private readonly IUserMessageService _messageService;
     private readonly RecalcEngine _recalcEngine;
     private readonly IEnumerable<IFileAdapter> _fileAdapters;
     private readonly IAppDiagnostics? _diagnostics;
@@ -80,6 +89,7 @@ public partial class MainWindow : Window
     private bool _formulaBarExpanded;
     private bool _ribbonCompact;
     private bool _normalizingRibbonSurface;
+    private readonly HashSet<TabItem> _normalizedRibbonStaticTabs = [];
     private string? _ribbonAdaptiveMeasurementCacheKey;
     private IReadOnlyList<RibbonAdaptiveGroup>? _ribbonAdaptiveGroupCache;
     private double _ribbonAdaptiveFixedChromeWidthCache;
@@ -89,15 +99,37 @@ public partial class MainWindow : Window
     private bool _ribbonResizeNormalizationRequired = true;
     private string? _lastRibbonAdaptiveAppliedStateKey;
     private string? _ribbonAdaptiveControlCacheKey;
+    private readonly Dictionary<TabItem, StackPanel> _ribbonAdaptiveActivePanelCacheByTab = [];
     private StackPanel? _ribbonAdaptiveControlCachePanel;
     private ScrollViewer? _ribbonAdaptiveScrollViewerCache;
     private IReadOnlyList<FrameworkElement>? _ribbonAdaptiveGroupControlCache;
     private IReadOnlyList<Button>? _ribbonAdaptiveCollapsedButtonCache;
+    private string? _ribbonCompactSnapshotCacheKey;
+    private IReadOnlyList<RibbonCompactGroupSnapshot>? _ribbonCompactGroupSnapshotCache;
     private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;
     private string? _lastRibbonCollapsedFootprintMode;
     private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
+    private readonly Dictionary<string, bool> _ribbonMeasuredOverflowCache = [];
     private bool _ribbonAdaptiveStateDiffInvalidated;
-    private bool _ribbonResizeCompactFallbackPending;
+    private int _ribbonAdaptiveMeasurementInvalidationCount;
+    private int _ribbonAdaptiveGroupMeasurementCount;
+    private int _ribbonCompactSnapshotCaptureCount;
+    private int _ribbonResizeThresholdRebuildCount;
+    private int _ribbonMeasuredOverflowMeasurementCount;
+    private int _ribbonCorrectedStateCacheHitCount;
+    private int _ribbonAppliedStateSkipCount;
+    private bool _ribbonFallbackPending;
+    private RibbonFallbackWork _ribbonFallbackWork;
+    private int _ribbonFallbackRequestCount;
+    private int _ribbonFallbackPostedCount;
+    private int _ribbonFallbackExecutedCount;
+    private int _ribbonFallbackForcedNormalizeCount;
+    private int _ribbonFallbackForcedCompactCount;
+    private RibbonFallbackWork _lastRibbonFallbackRequestedWork;
+    private RibbonFallbackWork _lastRibbonFallbackMergedWork;
+    private RibbonFallbackWork _lastRibbonFallbackExecutedWork;
+    private bool _suppressRibbonSelectionChangedNormalization;
+    private bool _ribbonResizeCompactionPendingOnExit;
     private bool _resizeViewportRefreshPending;
     private bool _isInWindowResizeMoveLoop;
     private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;
@@ -141,6 +173,7 @@ public partial class MainWindow : Window
         IEnumerable<IFileAdapter> fileAdapters,
         WorkbookRef workbookRef,
         Workbook workbook,
+        IUserMessageService messageService,
         IAppDiagnostics? diagnostics = null,
         AppDiagnosticsMetadata? diagnosticsMetadata = null,
         AppDiagnosticsOptions? diagnosticsOptions = null)
@@ -148,6 +181,7 @@ public partial class MainWindow : Window
         _logger = logger;
         _viewportService = viewportService;
         _commandBus = commandBus;
+        _messageService = messageService;
         _recalcEngine = recalcEngine;
         _fileAdapters = fileAdapters;
         _diagnostics = diagnostics;

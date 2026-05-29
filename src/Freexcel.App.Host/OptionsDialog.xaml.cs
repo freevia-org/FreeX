@@ -181,7 +181,7 @@ public partial class OptionsDialog : Window
 
     private bool ShowInvalidInputWarning(string message, Control target)
     {
-        MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        DialogMessageHelper.ShowWarning(this, message, Title);
         target.Focus();
         if (target is TextBox textBox)
             textBox.SelectAll();
@@ -210,7 +210,7 @@ public partial class OptionsDialog : Window
         ShowDeferredOptionsMessage(DeferredCommandMessages.TrustCenterSettings());
 
     private void ShowDeferredOptionsMessage(DeferredCommandMessage message) =>
-        MessageBox.Show(this, message.Body, message.Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        DialogMessageHelper.ShowInfo(this, message.Body, message.Title);
 
     private void PopulateErrorCheckingRules()
     {

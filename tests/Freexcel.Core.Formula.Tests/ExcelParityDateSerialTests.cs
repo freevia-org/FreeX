@@ -49,11 +49,11 @@ public sealed class ExcelParityDateSerialTests
     }
 
     [Theory]
-    [InlineData("=DATE(1900,0,31)")]
-    [InlineData("=DATE(1900,-1,62)")]
-    public void Date_ReturnsNumWhenMonthUnderflowReachesSerialZero(string formula)
+    [InlineData("=DATE(1900,0,31)", 0)]
+    [InlineData("=DATE(1900,-1,62)", 1)]
+    public void Date_AllowsMonthUnderflowWhenRolloverReachesValidExcelSerial(string formula, double expected)
     {
-        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }
 
     [Theory]
@@ -65,6 +65,9 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=MONTH(0)", 1)]
     [InlineData("=DAY(0)", 0)]
     [InlineData("=WEEKDAY(0)", 7)]
+    [InlineData("=YEAR(0.5)", 1900)]
+    [InlineData("=MONTH(0.5)", 1)]
+    [InlineData("=DAY(0.5)", 0)]
     [InlineData("=WEEKNUM(0)", 0)]
     [InlineData("=ISOWEEKNUM(0)", 52)]
     [InlineData("=YEAR(59)", 1900)]
@@ -123,6 +126,8 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=DATEVALUE(\"2/29/1900\")", 60)]
     [InlineData("=DATEVALUE(\"1900-02-29\")", 60)]
     [InlineData("=DATEVALUE(\"3/1/1900\")", 61)]
+    [InlineData("=DATEVALUE(\"January 2024\")", 45292)]
+    [InlineData("=DATEVALUE(\"Jan-2024\")", 45292)]
     [InlineData("=DATEVALUE(\"2024-01-15\")", 45306)]
     [InlineData("=DATEVALUE(\"1/2/2024 6:00 AM\")", 45293)]
     public void DateValue_ReturnsExcelSerialNumbers(string formula, double expected)
@@ -162,8 +167,11 @@ public sealed class ExcelParityDateSerialTests
 
     [Theory]
     [InlineData("=TIME(1.9,2.9,3.9)", 0.0430902777777778)]
+    [InlineData("=TIME(32767.9,0,0)", 0.291666666666667)]
+    [InlineData("=TIME(0,32767.9,0)", 0.754861111111111)]
     [InlineData("=TIME(25,61,61)", 0.0847337962962964)]
     [InlineData("=TIME(0,0,32767)", 0.379247685185185)]
+    [InlineData("=TIME(0,0,32767.9)", 0.379247685185185)]
     public void Time_TruncatesComponentsAndWrapsWithinDay(string formula, double expected)
     {
         var result = _eval.Evaluate(formula, Sheet()).Should().BeOfType<NumberValue>().Subject;
@@ -270,6 +278,7 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=WEEKNUM(DATE(1900,1,1),21)", 52)]
     [InlineData("=WEEKNUM(DATE(1900,1,7),21)", 1)]
     [InlineData("=WEEKNUM(DATE(1900,1,8),21)", 1)]
+    [InlineData("=WEEKNUM(0,21)", 52)]
     public void Weeknum_UsesExcelSerialWeekdays(string formula, double expected)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));

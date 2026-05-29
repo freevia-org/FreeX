@@ -52,6 +52,14 @@ public sealed class ExcelParityModernTextTests
     }
 
     [Theory]
+    [InlineData("=TEXTBEFORE(1/0,NA())")]
+    [InlineData("=TEXTAFTER(1/0,NA())")]
+    public void TextBeforeAfter_DirectTextArgumentErrorTakesPrecedenceOverDelimiterErrors(string formula)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.DivByZero);
+    }
+
+    [Theory]
     [InlineData("=TEXTBEFORE(\"alpha\",\"a\",0)")]
     [InlineData("=TEXTAFTER(\"alpha\",\"a\",0)")]
     [InlineData("=TEXTBEFORE(\"alpha\",\"a\",6)")]
@@ -87,6 +95,16 @@ public sealed class ExcelParityModernTextTests
     [InlineData("=FINDB(\"\u754c\",\"A\u754cB\")", 2)]
     [InlineData("=SEARCHB(\"?B\",\"A\u754cB\")", 2)]
     public void ByteTextFunctions_CountDbcsCharactersAsTwoBytes(string formula, double expected)
+    {
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Theory]
+    [InlineData("=SEARCH(\"~*\",\"a*b\")", 2)]
+    [InlineData("=SEARCH(\"~~\",\"a~b\")", 2)]
+    [InlineData("=SEARCHB(\"~*\",\"A*\u754c\")", 2)]
+    [InlineData("=SEARCHB(\"~~\",\"A~\u754c\")", 2)]
+    public void SearchFunctions_TildeEscapesWildcardCharacters(string formula, double expected)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }

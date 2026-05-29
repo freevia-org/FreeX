@@ -12,6 +12,8 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue TextBeforeAfter(IReadOnlyList<ScalarValue> args, bool before)
     {
+        if (args[0] is ErrorValue textError) return textError;
+
         if (!TryTextBeforeAfterOptions(args, out var options, out var optionsError))
             return optionsError;
 

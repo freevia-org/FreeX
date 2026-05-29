@@ -132,14 +132,14 @@ internal sealed class NameDefinitionDialog : Window
     {
         if (string.IsNullOrWhiteSpace(_nameBox.Text))
         {
-            MessageBox.Show(this, "Please enter a name.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Please enter a name.", Title);
             FocusNameInput();
             return;
         }
 
         if (!_isValidRange(_refersToBox.Text.Trim()))
         {
-            MessageBox.Show(this, "Invalid range format. Use: SheetName!A1:B10 or A1:B10", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, "Invalid range format. Use: SheetName!A1:B10 or A1:B10", Title);
             FocusRefersToInput();
             return;
         }

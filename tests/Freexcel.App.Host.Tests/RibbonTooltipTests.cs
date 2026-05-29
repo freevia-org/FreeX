@@ -32,6 +32,34 @@ public sealed class RibbonTooltipTests
     }
 
     [Fact]
+    public void KeyTip_OnMenuItem_NormalizesDisplayedInputGestureText()
+    {
+        RunSta(() =>
+        {
+            var menuItem = new MenuItem();
+
+            RibbonTooltip.SetKeyTip(menuItem, " H ");
+
+            RibbonTooltip.GetKeyTip(menuItem).Should().Be(" H ");
+            menuItem.InputGestureText.Should().Be("H");
+        });
+    }
+
+    [Fact]
+    public void KeyTip_OnMenuItem_ClearsInputGestureTextWhenCleared()
+    {
+        RunSta(() =>
+        {
+            var menuItem = new MenuItem();
+            RibbonTooltip.SetKeyTip(menuItem, "A");
+
+            RibbonTooltip.SetKeyTip(menuItem, "");
+
+            menuItem.InputGestureText.Should().Be("");
+        });
+    }
+
+    [Fact]
     public void Title_OnFrameworkElement_SetsAutomationNameWhenMissing()
     {
         RunSta(() =>
@@ -73,6 +101,167 @@ public sealed class RibbonTooltipTests
 
             RibbonTooltip.TryOpenSubmenuForKeyTip(menu, "H").Should().BeTrue();
             parent.IsSubmenuOpen.Should().BeTrue();
+            menu.IsOpen = false;
+        });
+    }
+
+    [Fact]
+    public void TryOpenSubmenuForKeyTip_NormalizesWhitespace()
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Highlight Cells Rules" };
+            RibbonTooltip.SetKeyTip(parent, " H ");
+            parent.Items.Add(new MenuItem { Header = "Greater Than..." });
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, " h ", out var openedSubmenu).Should().BeTrue();
+            openedSubmenu.Should().BeSameAs(parent);
+            parent.IsSubmenuOpen.Should().BeTrue();
+            menu.IsOpen = false;
+        });
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void TryOpenSubmenuForKeyTip_IgnoresBlankInput(string keyTip)
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Highlight Cells Rules" };
+            RibbonTooltip.SetKeyTip(parent, "H");
+            parent.Items.Add(new MenuItem { Header = "Greater Than..." });
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, keyTip, out var openedSubmenu).Should().BeFalse();
+            openedSubmenu.Should().BeNull();
+            parent.IsSubmenuOpen.Should().BeFalse();
+            menu.IsOpen = false;
+        });
+    }
+
+    [Fact]
+    public void TryOpenSubmenuForKeyTip_IgnoresNonMenuItemsWhileSearchingNestedItems()
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Highlight Cells Rules" };
+            var child = new MenuItem { Header = "Greater Than..." };
+            RibbonTooltip.SetKeyTip(child, "GT");
+            child.Items.Add(new MenuItem { Header = "Format Rule..." });
+            parent.Items.Add(new Separator());
+            parent.Items.Add("recent command header");
+            parent.Items.Add(child);
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, "GT", out var openedSubmenu).Should().BeTrue();
+            openedSubmenu.Should().BeSameAs(child);
+            child.IsSubmenuOpen.Should().BeTrue();
+            menu.IsOpen = false;
+        });
+    }
+
+    [Fact]
+    public void TryOpenSubmenuForKeyTip_OpensAncestorSubmenusForNestedMatches()
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Color Scales" };
+            var child = new MenuItem { Header = "More Rules" };
+            var grandchild = new MenuItem { Header = "Custom Scale..." };
+            RibbonTooltip.SetKeyTip(grandchild, "CS");
+            grandchild.Items.Add(new MenuItem { Header = "Format Rule..." });
+            child.Items.Add(grandchild);
+            parent.Items.Add(child);
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, "CS", out var openedSubmenu).Should().BeTrue();
+            openedSubmenu.Should().BeSameAs(grandchild);
+            parent.IsSubmenuOpen.Should().BeTrue();
+            child.IsSubmenuOpen.Should().BeTrue();
+            grandchild.IsSubmenuOpen.Should().BeTrue();
+            menu.IsOpen = false;
+        });
+    }
+
+    [Fact]
+    public void TryOpenSubmenuForKeyTip_RestoresSubmenuStateWhenNoNestedMatch()
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Color Scales" };
+            var child = new MenuItem { Header = "More Rules" };
+            RibbonTooltip.SetKeyTip(child, "MR");
+            child.Items.Add(new MenuItem { Header = "Format Rule..." });
+            parent.Items.Add(child);
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, "ZZ", out var openedSubmenu).Should().BeFalse();
+
+            openedSubmenu.Should().BeNull();
+            parent.IsSubmenuOpen.Should().BeFalse("a failed nested keytip probe should not leave ancestors expanded");
+            child.IsSubmenuOpen.Should().BeFalse("a failed nested keytip probe should restore child submenu state");
+            menu.IsOpen = false;
+        });
+    }
+
+    [Fact]
+    public void TryOpenSubmenuForKeyTip_PreservesPreviouslyOpenSubmenuWhenNoNestedMatch()
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Color Scales" };
+            var child = new MenuItem { Header = "More Rules" };
+            RibbonTooltip.SetKeyTip(child, "MR");
+            child.Items.Add(new MenuItem { Header = "Format Rule..." });
+            parent.Items.Add(child);
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+            parent.IsSubmenuOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, "ZZ", out var openedSubmenu).Should().BeFalse();
+
+            openedSubmenu.Should().BeNull();
+            parent.IsSubmenuOpen.Should().BeTrue("failed keytip probing should restore submenus that were already open");
+            child.IsSubmenuOpen.Should().BeFalse();
+            menu.IsOpen = false;
+        });
+    }
+
+    [Fact]
+    public void TryOpenSubmenuForKeyTip_IgnoresDisabledSubmenus()
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Disabled Menu", IsEnabled = false };
+            RibbonTooltip.SetKeyTip(parent, "D");
+            parent.Items.Add(new MenuItem { Header = "Child" });
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, "D", out var openedSubmenu).Should().BeFalse();
+            openedSubmenu.Should().BeNull();
+            parent.IsSubmenuOpen.Should().BeFalse();
             menu.IsOpen = false;
         });
     }

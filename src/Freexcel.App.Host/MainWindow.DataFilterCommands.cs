@@ -106,7 +106,7 @@ public partial class MainWindow
     {
         if (_lastAutoFilterRange is not { } range || _lastAutoFilterCommandFactory is null)
         {
-            MessageBox.Show("Apply a filter before using Reapply.", "Reapply Filter", MessageBoxButton.OK, MessageBoxImage.Information);
+            _messageService.ShowInfo("Apply a filter before using Reapply.", "Reapply Filter");
             return;
         }
 
@@ -178,28 +178,23 @@ public partial class MainWindow
 
         if (!string.IsNullOrWhiteSpace(filterText))
         {
-            var parsed = FilterPromptPlanner.TryPlan(value, out var plan, out var error);
-            if (!parsed)
+            if (!FilterPromptPlanner.TryPlan(value, out var promptPlan, out var promptError) || promptPlan is null)
             {
-                MessageBox.Show(error ?? "Enter a supported filter criterion.",
-                    title, MessageBoxButton.OK, MessageBoxImage.Warning);
+                _messageService.ShowWarning(promptError ?? "Enter a supported filter criterion.", title);
                 return false;
             }
 
-            if (plan is not null && plan.Kind != FilterPromptPlanKind.AllowedValues)
-            {
-                if (!TryExecuteRememberedAutoFilterCommand(
-                        "Filter",
-                        range,
-                        currentRange => plan.CreateCommand(_currentSheetId, currentRange, filterColOffset)))
-                    return false;
-                return true;
-            }
+            if (!TryExecuteRememberedAutoFilterCommand(
+                    "Filter",
+                    range,
+                    currentRange => promptPlan.CreateCommand(_currentSheetId, currentRange, filterColOffset)))
+                return false;
+            return true;
         }
 
         if (string.IsNullOrWhiteSpace(filterText) && result.SelectedValues.Count == 0)
         {
-            MessageBox.Show("Select at least one filter item.", title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            _messageService.ShowWarning("Select at least one filter item.", title);
             return false;
         }
 
@@ -220,7 +215,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            MessageBox.Show("Select a range first.", "CF Rule");
+            _messageService.ShowWarning("Select a range first.", "CF Rule");
             return;
         }
 
@@ -416,4 +411,5 @@ public partial class MainWindow
         dlg.ShowDialog();
         UpdateViewport();
     }
+
 }

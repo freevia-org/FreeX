@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.IO.Compression;
 using System.Globalization;
+using System.Reflection;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using FluentAssertions;
@@ -1623,12 +1624,27 @@ public partial class FileAdapterSmokeTests
         {
             Type = (ChartType)99,
             DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            BlankDisplayMode = (ChartBlankDisplayMode)99,
+            XAxisPosition = (ChartAxisPosition)99,
+            YAxisPosition = (ChartAxisPosition)99,
             XAxisNumberFormat = (ChartDataLabelNumberFormat)99,
             XAxisMajorTickStyle = (ChartAxisTickStyle)99,
             XAxisMinorTickStyle = (ChartAxisTickStyle)99,
+            XAxisTickLabelPosition = (ChartAxisTickLabelPosition)99,
+            XAxisLabelAlignment = (ChartAxisLabelAlignment)99,
+            XAxisBaseTimeUnit = (ChartDateAxisUnit)99,
+            XAxisMajorTimeUnit = (ChartDateAxisUnit)99,
+            XAxisMinorTimeUnit = (ChartDateAxisUnit)99,
+            XAxisCrosses = (ChartAxisCrosses)99,
+            XAxisCrossBetween = (ChartAxisCrossBetween)99,
+            XAxisDisplayUnit = (ChartAxisDisplayUnit)99,
             YAxisNumberFormat = (ChartDataLabelNumberFormat)99,
             YAxisMajorTickStyle = (ChartAxisTickStyle)99,
             YAxisMinorTickStyle = (ChartAxisTickStyle)99,
+            YAxisTickLabelPosition = (ChartAxisTickLabelPosition)99,
+            YAxisCrosses = (ChartAxisCrosses)99,
+            YAxisCrossBetween = (ChartAxisCrossBetween)99,
+            YAxisDisplayUnit = (ChartAxisDisplayUnit)99,
             LegendPosition = (ChartLegendPosition)99,
             DataLabelPosition = (ChartDataLabelPosition)99,
             DataLabelSeparator = (ChartDataLabelSeparator)99,
@@ -1653,12 +1669,27 @@ public partial class FileAdapterSmokeTests
 
         var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         chart.Type.Should().Be(ChartType.Column);
+        chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Gap);
+        chart.XAxisPosition.Should().Be(ChartAxisPosition.Bottom);
+        chart.YAxisPosition.Should().Be(ChartAxisPosition.Left);
         chart.XAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
         chart.XAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
         chart.XAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        chart.XAxisTickLabelPosition.Should().Be(ChartAxisTickLabelPosition.NextTo);
+        chart.XAxisLabelAlignment.Should().Be(ChartAxisLabelAlignment.Center);
+        chart.XAxisBaseTimeUnit.Should().BeNull();
+        chart.XAxisMajorTimeUnit.Should().BeNull();
+        chart.XAxisMinorTimeUnit.Should().BeNull();
+        chart.XAxisCrosses.Should().Be(ChartAxisCrosses.AutoZero);
+        chart.XAxisCrossBetween.Should().BeNull();
+        chart.XAxisDisplayUnit.Should().BeNull();
         chart.YAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
         chart.YAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
         chart.YAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        chart.YAxisTickLabelPosition.Should().Be(ChartAxisTickLabelPosition.NextTo);
+        chart.YAxisCrosses.Should().Be(ChartAxisCrosses.AutoZero);
+        chart.YAxisCrossBetween.Should().BeNull();
+        chart.YAxisDisplayUnit.Should().BeNull();
         chart.LegendPosition.Should().Be(ChartLegendPosition.Right);
         chart.DataLabelPosition.Should().Be(ChartDataLabelPosition.BestFit);
         chart.DataLabelSeparator.Should().Be(ChartDataLabelSeparator.Comma);
@@ -3001,6 +3032,108 @@ public partial class FileAdapterSmokeTests
         shape.GetProperty("Width").GetDouble().Should().Be(120);
         shape.GetProperty("Height").GetDouble().Should().Be(70);
         shape.GetProperty("RotationDegrees").GetDouble().Should().Be(5);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_SkipsCrossSheetVisualObjects()
+    {
+        var workbook = new Workbook("ObjectCrossSheetSaveTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var otherSheet = workbook.AddSheet("Other");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            LinkedSourceRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 2, 2)),
+            Width = 90,
+            Height = 60
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(otherSheet.Id, 2, 2),
+            Width = 90,
+            Height = 60
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            LinkedSourceRange = new GridRange(
+                new CellAddress(otherSheet.Id, 1, 1),
+                new CellAddress(otherSheet.Id, 2, 2)),
+            Width = 90,
+            Height = 60
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 2),
+            Text = "Note"
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(otherSheet.Id, 4, 2),
+            Text = "Other"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 5, 2)
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(otherSheet.Id, 5, 2)
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var sheetJson = document.RootElement.GetProperty("Sheets")[0];
+        sheetJson.GetProperty("Pictures").EnumerateArray()
+            .Should().ContainSingle()
+            .Which.GetProperty("Anchor").GetString().Should().Be("B2");
+        sheetJson.GetProperty("TextBoxes").EnumerateArray()
+            .Should().ContainSingle()
+            .Which.GetProperty("Anchor").GetString().Should().Be("B4");
+        sheetJson.GetProperty("DrawingShapes").EnumerateArray()
+            .Should().ContainSingle()
+            .Which.GetProperty("Anchor").GetString().Should().Be("B5");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_SkipsCrossSheetCharts()
+    {
+        var workbook = new Workbook("ChartCrossSheetSaveTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var otherSheet = workbook.AddSheet("Other");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 2)),
+            Title = "On Sheet"
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = new GridRange(
+                new CellAddress(otherSheet.Id, 1, 1),
+                new CellAddress(otherSheet.Id, 3, 2)),
+            Title = "Other Sheet"
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var sheetJson = document.RootElement.GetProperty("Sheets")[0];
+        var chart = sheetJson.GetProperty("Charts").EnumerateArray()
+            .Should().ContainSingle()
+            .Subject;
+        chart.GetProperty("Title").GetString().Should().Be("On Sheet");
+        chart.GetProperty("DataRange").GetString().Should().Be("A1:B3");
     }
 
     [Fact]
@@ -4923,6 +5056,98 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_ConditionalFormatIconSetNames_AreTrimmed()
+    {
+        var workbook = new Workbook("CfIconSetTrim");
+        var sheet = workbook.AddSheet("S1");
+        for (uint row = 1; row <= 3; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+        var format = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+            RuleType = CfRuleType.IconSet,
+            Priority = 1,
+            IconSetStyle = "  3TrafficLights1  "
+        };
+        format.IconOverrides.Add(new CfIconOverride("  3Arrows  ", 2));
+        sheet.ConditionalFormats.Add(format);
+
+        using var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var iconSet = worksheetXml.Descendants(worksheetNs + "iconSet").Should().ContainSingle().Subject;
+
+        iconSet.Attribute("iconSet")?.Value.Should().Be("3TrafficLights1");
+        iconSet.Element(worksheetNs + "cfIcon")?.Attribute("iconSet")?.Value.Should().Be("3Arrows");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_ConditionalFormatIconSet_DropsInvalidIconOverrides()
+    {
+        var workbook = new Workbook("CfIconOverrideInvalidSave");
+        var sheet = workbook.AddSheet("S1");
+        for (uint row = 1; row <= 3; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+        var format = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+            RuleType = CfRuleType.IconSet,
+            Priority = 1,
+            IconSetStyle = "3TrafficLights1"
+        };
+        format.IconOverrides.AddRange([
+            new CfIconOverride("3Arrows", 2),
+            new CfIconOverride("   ", 0),
+            new CfIconOverride("3TrafficLights1", -1)
+        ]);
+        sheet.ConditionalFormats.Add(format);
+
+        using var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var icon = worksheetXml.Descendants(worksheetNs + "cfIcon").Should().ContainSingle().Subject;
+
+        icon.Attribute("iconSet")?.Value.Should().Be("3Arrows");
+        icon.Attribute("iconId")?.Value.Should().Be("2");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_ConditionalFormatIconSetNames_AreTrimmed()
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = new XDocument(
+            new XElement(worksheetNs + "worksheet",
+                new XElement(worksheetNs + "conditionalFormatting",
+                    new XAttribute("sqref", "A1:A3"),
+                    new XElement(worksheetNs + "cfRule",
+                        new XAttribute("type", "iconSet"),
+                        new XAttribute("priority", "1"),
+                        new XElement(worksheetNs + "iconSet",
+                            new XAttribute("iconSet", "  3TrafficLights1  "),
+                            new XElement(worksheetNs + "cfvo", new XAttribute("type", "percent"), new XAttribute("val", "0")),
+                            new XElement(worksheetNs + "cfIcon", new XAttribute("iconSet", "  3Arrows  "), new XAttribute("iconId", "2")),
+                            new XElement(worksheetNs + "cfIcon", new XAttribute("iconSet", "   "), new XAttribute("iconId", "0")),
+                            new XElement(worksheetNs + "cfIcon", new XAttribute("iconSet", "3TrafficLights1"), new XAttribute("iconId", "-1")))))));
+
+        var loadedRule = InvokeReadAdvancedConditionalFormats(worksheetXml, worksheetNs)
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        loadedRule.IconSetStyle.Should().Be("3TrafficLights1");
+        loadedRule.IconOverrides.Should().ContainSingle()
+            .Which.Should().Be(new CfIconOverride("3Arrows", 2));
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadSave_RoundTripsAdvancedConditionalFormatNativeMetadata()
     {
         var workbook = new Workbook("CfNativeMetadata");
@@ -5088,6 +5313,110 @@ public partial class FileAdapterSmokeTests
         loadedFormats.Should().Contain(format => format.RuleType == CfRuleType.DateOccurring && format.DateOccurringPeriod == "last7Days");
         loadedFormats.Should().Contain(format => format.RuleType == CfRuleType.DuplicateValues);
         loadedFormats.Should().Contain(format => format.RuleType == CfRuleType.NoErrors);
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_DateOccurringConditionalFormat_TrimsTimePeriod()
+    {
+        var workbook = new Workbook("DateCfTrimXlsxTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DateOccurring,
+            Priority = 1,
+            DateOccurringPeriod = "  last7Days  "
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var rule = XDocument.Load(reader)
+            .Descendants(worksheetNs + "cfRule")
+            .Should()
+            .ContainSingle(element => (string?)element.Attribute("type") == "timePeriod")
+            .Subject;
+
+        rule.Attribute("timePeriod")?.Value.Should().Be("last7Days");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_DateOccurringConditionalFormat_DefaultsInvalidTimePeriod()
+    {
+        var workbook = new Workbook("DateCfInvalidXlsxTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DateOccurring,
+            Priority = 1,
+            DateOccurringPeriod = "not-a-period"
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var rule = XDocument.Load(reader)
+            .Descendants(worksheetNs + "cfRule")
+            .Should()
+            .ContainSingle(element => (string?)element.Attribute("type") == "timePeriod")
+            .Subject;
+
+        rule.Attribute("timePeriod")?.Value.Should().Be("today");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_DateOccurringConditionalFormat_TrimsTimePeriod()
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = new XDocument(
+            new XElement(worksheetNs + "worksheet",
+                new XElement(worksheetNs + "conditionalFormatting",
+                    new XAttribute("sqref", "A1:A5"),
+                    new XElement(worksheetNs + "cfRule",
+                        new XAttribute("type", "timePeriod"),
+                        new XAttribute("priority", "1"),
+                        new XAttribute("timePeriod", "  last7Days  ")))));
+
+        var loadedRule = InvokeReadAdvancedConditionalFormats(worksheetXml, worksheetNs)
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        loadedRule.RuleType.Should().Be(CfRuleType.DateOccurring);
+        loadedRule.DateOccurringPeriod.Should().Be("last7Days");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_DateOccurringConditionalFormat_DefaultsInvalidTimePeriod()
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = new XDocument(
+            new XElement(worksheetNs + "worksheet",
+                new XElement(worksheetNs + "conditionalFormatting",
+                    new XAttribute("sqref", "A1:A5"),
+                    new XElement(worksheetNs + "cfRule",
+                        new XAttribute("type", "timePeriod"),
+                        new XAttribute("priority", "1"),
+                        new XAttribute("timePeriod", "not-a-period")))));
+
+        var loadedRule = InvokeReadAdvancedConditionalFormats(worksheetXml, worksheetNs)
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        loadedRule.RuleType.Should().Be(CfRuleType.DateOccurring);
+        loadedRule.DateOccurringPeriod.Should().Be("today");
     }
 
     [Fact]
@@ -5398,6 +5727,52 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_SkipsCrossSheetDataValidationRanges()
+    {
+        var workbook = new Workbook("DvCrossSheetRangeSaveTest");
+        var sheet = workbook.AddSheet("S1");
+        var otherSheet = workbook.AddSheet("S2");
+        var validation = new DataValidation
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            Type = DvType.List,
+            Formula1 = "Apple,Banana,Cherry",
+            AlertStyle = DvAlertStyle.Information
+        };
+        validation.AdditionalRanges.Add(new GridRange(
+            new CellAddress(sheet.Id, 1, 2),
+            new CellAddress(sheet.Id, 5, 2)));
+        validation.AdditionalRanges.Add(new GridRange(
+            new CellAddress(otherSheet.Id, 1, 3),
+            new CellAddress(otherSheet.Id, 5, 3)));
+        sheet.DataValidations.Add(validation);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(otherSheet.Id, 1, 4),
+                new CellAddress(otherSheet.Id, 5, 4)),
+            Type = DvType.List,
+            Formula1 = "Apple,Banana,Cherry",
+            AlertStyle = DvAlertStyle.Information
+        });
+
+        var ms = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        var validationElement = worksheetXml.Root!
+            .Element(worksheetNs + "dataValidations")!
+            .Element(worksheetNs + "dataValidation")!;
+        validationElement.Attribute("sqref")!.Value.Should().Be("A1:B5");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_DataValidationRule_Survives()
     {
         var workbook = new Workbook("DvNativeTest");
@@ -5510,6 +5885,82 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_SkipsDataValidationsWithInvalidRanges()
+    {
+        const string json = """
+        {
+          "Name": "DvNativeInvalidRangeLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "DataValidations": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "Type": 5,
+                  "Operator": 0,
+                  "AlertStyle": 1,
+                  "Formula1": "09:00",
+                  "Formula2": "17:30"
+                },
+                {
+                  "AppliesTo": "not-a-range",
+                  "Type": 5,
+                  "Operator": 0,
+                  "AlertStyle": 1,
+                  "Formula1": "08:00",
+                  "Formula2": "18:00"
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var validation = loaded.GetSheetAt(0).DataValidations.Should().ContainSingle().Subject;
+        validation.AppliesTo.ToString().Should().Be("A1:A5");
+        validation.Formula1.Should().Be("09:00");
+        validation.Formula2.Should().Be("17:30");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_DropsInvalidDataValidationAdditionalRanges()
+    {
+        const string json = """
+        {
+          "Name": "DvNativeAdditionalRanges",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "DataValidations": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "AdditionalRanges": [ "B1:B5", "NotARange", "C1:C5" ],
+                  "Type": 5,
+                  "Operator": 0,
+                  "AlertStyle": 1,
+                  "Formula1": "09:00",
+                  "Formula2": "17:30"
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var validation = loaded.GetSheetAt(0).DataValidations.Should().ContainSingle().Subject;
+        validation.AppliesTo.ToString().Should().Be("A1:A5");
+        validation.AdditionalRanges.Select(range => range.ToString()).Should().Equal("B1:B5", "C1:C5");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Save_SkipsInvalidDataValidationRules()
     {
         var workbook = new Workbook("DvNativeInvalidSave");
@@ -5563,6 +6014,58 @@ public partial class FileAdapterSmokeTests
 
         validations.Should().ContainSingle();
         validations[0].GetProperty("Type").GetInt32().Should().Be((int)DvType.Time);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_SkipsCrossSheetDataValidationRanges()
+    {
+        var workbook = new Workbook("DvNativeCrossSheetSave");
+        var sheet = workbook.AddSheet("S1");
+        var otherSheet = workbook.AddSheet("S2");
+        var validRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 5, 1));
+        var otherSheetRange = new GridRange(
+            new CellAddress(otherSheet.Id, 1, 1),
+            new CellAddress(otherSheet.Id, 5, 1));
+        var validRule = new DataValidation
+        {
+            AppliesTo = validRange,
+            Type = DvType.Time,
+            Operator = DvOperator.Between,
+            AlertStyle = DvAlertStyle.Warning,
+            Formula1 = "09:00",
+            Formula2 = "17:30"
+        };
+        validRule.AdditionalRanges.Add(new GridRange(
+            new CellAddress(sheet.Id, 1, 3),
+            new CellAddress(sheet.Id, 5, 3)));
+        validRule.AdditionalRanges.Add(otherSheetRange);
+        sheet.DataValidations.Add(validRule);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = otherSheetRange,
+            Type = DvType.Time,
+            Operator = DvOperator.Between,
+            AlertStyle = DvAlertStyle.Warning
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var validations = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("DataValidations")
+            .EnumerateArray()
+            .ToList();
+
+        validations.Should().ContainSingle();
+        validations[0].GetProperty("AppliesTo").GetString().Should().Be("A1:A5");
+        validations[0].GetProperty("AdditionalRanges").EnumerateArray()
+            .Should().ContainSingle()
+            .Which.GetString().Should().Be("C1:C5");
     }
 
     [Fact]
@@ -5670,6 +6173,49 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_ConditionalFormat_ColorScaleThresholds_Survive()
+    {
+        var workbook = new Workbook("CfColorScaleNativeJson");
+        var sheet = workbook.AddSheet("S1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.ColorScale,
+            Operator = CfOperator.Equal,
+            UseThreeColorScale = true,
+            MinThresholdType = CfThresholdType.Number,
+            MinThresholdValue = "10",
+            MinThresholdGreaterThanOrEqual = false,
+            MidThresholdType = CfThresholdType.Percentile,
+            MidThresholdValue = "50",
+            MidThresholdGreaterThanOrEqual = true,
+            MaxThresholdType = CfThresholdType.Formula,
+            MaxThresholdValue = "$B$1",
+            MaxThresholdGreaterThanOrEqual = false
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.MinThresholdType.Should().Be(CfThresholdType.Number);
+        rule.MinThresholdValue.Should().Be("10");
+        rule.MinThresholdGreaterThanOrEqual.Should().BeFalse();
+        rule.MidThresholdType.Should().Be(CfThresholdType.Percentile);
+        rule.MidThresholdValue.Should().Be("50");
+        rule.MidThresholdGreaterThanOrEqual.Should().BeTrue();
+        rule.MaxThresholdType.Should().Be(CfThresholdType.Formula);
+        rule.MaxThresholdValue.Should().Be("$B$1");
+        rule.MaxThresholdGreaterThanOrEqual.Should().BeFalse();
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_SkipsInvalidConditionalFormatRules()
     {
         const string json = """
@@ -5710,6 +6256,188 @@ public partial class FileAdapterSmokeTests
         var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
         rule.RuleType.Should().Be(CfRuleType.CellValue);
         rule.Operator.Should().Be(CfOperator.GreaterThan);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_SkipsConditionalFormatsWithInvalidRanges()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeInvalidRangeLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 0,
+                  "Operator": 2,
+                  "Value1": "5"
+                },
+                {
+                  "AppliesTo": "not-a-range",
+                  "RuleType": 0,
+                  "Operator": 2,
+                  "Value1": "10"
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.AppliesTo.Start.ToA1().Should().Be("A1");
+        rule.AppliesTo.End.ToA1().Should().Be("A5");
+        rule.Value1.Should().Be("5");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_SanitizesInvalidConditionalFormatThresholdTypes()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeInvalidThresholdLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 6,
+                  "Operator": 0,
+                  "MinThresholdType": 999,
+                  "MidThresholdType": 999,
+                  "MaxThresholdType": 999,
+                  "DataBarMinThresholdType": 999,
+                  "DataBarMaxThresholdType": 999,
+                  "IconSetThresholds": [
+                    { "Type": 999, "Value": "bad" },
+                    { "Type": 3, "Value": "50" }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.MinThresholdType.Should().Be(CfThresholdType.Min);
+        rule.MidThresholdType.Should().Be(CfThresholdType.Percentile);
+        rule.MaxThresholdType.Should().Be(CfThresholdType.Max);
+        rule.DataBarMinThresholdType.Should().Be(CfThresholdType.Min);
+        rule.DataBarMaxThresholdType.Should().Be(CfThresholdType.Max);
+        rule.IconSetThresholds.Should().ContainSingle()
+            .Which.Should().Be(new CfThresholdModel(CfThresholdType.Percent, "50"));
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_DropsInvalidConditionalFormatIconOverrides()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeInvalidIconOverrideLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 6,
+                  "Operator": 0,
+                  "IconOverrides": [
+                    { "IconSet": "3Arrows", "IconId": 2 },
+                    { "IconSet": "   ", "IconId": 0 },
+                    { "IconSet": "3TrafficLights1", "IconId": -1 }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.IconOverrides.Should().ContainSingle()
+            .Which.Should().Be(new CfIconOverride("3Arrows", 2));
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_TrimsConditionalFormatIconSetNames()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeTrimmedIconSetLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 6,
+                  "Operator": 0,
+                  "IconSetStyle": "  3TrafficLights1  ",
+                  "IconOverrides": [
+                    { "IconSet": "  3Arrows  ", "IconId": 2 }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.IconSetStyle.Should().Be("3TrafficLights1");
+        rule.IconOverrides.Should().ContainSingle()
+            .Which.Should().Be(new CfIconOverride("3Arrows", 2));
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_TrimsConditionalFormatIconSetNames()
+    {
+        var workbook = new Workbook("CfNativeTrimmedIconSetSave");
+        var sheet = workbook.AddSheet("S1");
+        var format = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.IconSet,
+            Operator = CfOperator.Equal,
+            IconSetStyle = "  3TrafficLights1  "
+        };
+        format.IconOverrides.Add(new CfIconOverride("  3Arrows  ", 2));
+        sheet.ConditionalFormats.Add(format);
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var savedFormat = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")[0];
+
+        savedFormat.GetProperty("IconSetStyle").GetString().Should().Be("3TrafficLights1");
+        savedFormat.GetProperty("IconOverrides")[0].GetProperty("IconSet").GetString().Should().Be("3Arrows");
     }
 
     [Fact]
@@ -5758,6 +6486,357 @@ public partial class FileAdapterSmokeTests
         formats.Should().ContainSingle();
         formats[0].GetProperty("RuleType").GetInt32().Should().Be((int)CfRuleType.CellValue);
         formats[0].GetProperty("Operator").GetInt32().Should().Be((int)CfOperator.GreaterThan);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_SanitizesInvalidConditionalFormatThresholdState()
+    {
+        var workbook = new Workbook("CfNativeInvalidThresholdSave");
+        var sheet = workbook.AddSheet("S1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 5, 1));
+        var format = new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.IconSet,
+            Operator = CfOperator.Equal,
+            DataBarMinThresholdType = (CfThresholdType)999,
+            DataBarMaxThresholdType = (CfThresholdType)999
+        };
+        format.IconSetThresholds.AddRange([
+            new CfThresholdModel((CfThresholdType)999, "bad"),
+            new CfThresholdModel(CfThresholdType.Percent, "50")
+        ]);
+        sheet.ConditionalFormats.Add(format);
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var savedFormat = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")[0];
+
+        savedFormat.GetProperty("DataBarMinThresholdType").GetInt32().Should().Be((int)CfThresholdType.Min);
+        savedFormat.GetProperty("DataBarMaxThresholdType").GetInt32().Should().Be((int)CfThresholdType.Max);
+        savedFormat.GetProperty("IconSetThresholds").EnumerateArray()
+            .Should().ContainSingle()
+            .Which.GetProperty("Type").GetInt32().Should().Be((int)CfThresholdType.Percent);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_DropsInvalidConditionalFormatDataBarLengths()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeInvalidDataBarLengthLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 2,
+                  "Operator": 0,
+                  "DataBarMinLength": -1,
+                  "DataBarMaxLength": 101
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var rule = loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle().Subject;
+        rule.DataBarMinLength.Should().BeNull();
+        rule.DataBarMaxLength.Should().BeNull();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_NormalizesConditionalFormatDataBarAxisPosition()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeDataBarAxisPositionLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 2,
+                  "Operator": 0,
+                  "DataBarAxisPosition": "  middle  "
+                },
+                {
+                  "AppliesTo": "B1:B5",
+                  "RuleType": 2,
+                  "Operator": 0,
+                  "DataBarAxisPosition": "invalid"
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        var rules = loaded.GetSheetAt(0).ConditionalFormats;
+        rules[0].DataBarAxisPosition.Should().Be("middle");
+        rules[1].DataBarAxisPosition.Should().BeNull();
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_DropsInvalidConditionalFormatDataBarLengths()
+    {
+        var workbook = new Workbook("CfNativeInvalidDataBarLengthSave");
+        var sheet = workbook.AddSheet("S1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DataBar,
+            Operator = CfOperator.Equal,
+            DataBarMinLength = -1,
+            DataBarMaxLength = 101
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var savedFormat = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")[0];
+
+        savedFormat.GetProperty("DataBarMinLength").ValueKind.Should().Be(JsonValueKind.Null);
+        savedFormat.GetProperty("DataBarMaxLength").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_NormalizesConditionalFormatDataBarAxisPosition()
+    {
+        var workbook = new Workbook("CfNativeDataBarAxisPositionSave");
+        var sheet = workbook.AddSheet("S1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 5, 1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.DataBar,
+            Operator = CfOperator.Equal,
+            DataBarAxisPosition = "  middle  "
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            RuleType = CfRuleType.DataBar,
+            Operator = CfOperator.Equal,
+            DataBarAxisPosition = "invalid"
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var formats = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")
+            .EnumerateArray()
+            .ToList();
+
+        formats[0].GetProperty("DataBarAxisPosition").GetString().Should().Be("middle");
+        formats[1].GetProperty("DataBarAxisPosition").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_DefaultsInvalidConditionalFormatTopBottomRank()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeInvalidTopBottomRankLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 4,
+                  "Operator": 0,
+                  "TopBottomRank": 0
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle()
+            .Which.TopBottomRank.Should().Be(10);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_DefaultsInvalidConditionalFormatTopBottomRank()
+    {
+        var workbook = new Workbook("CfNativeInvalidTopBottomRankSave");
+        var sheet = workbook.AddSheet("S1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.Top10,
+            Operator = CfOperator.Equal,
+            TopBottomRank = 1001
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+
+        document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")[0]
+            .GetProperty("TopBottomRank")
+            .GetInt32()
+            .Should().Be(10);
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_DefaultsInvalidConditionalFormatDateOccurringPeriod()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeInvalidDatePeriodLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 13,
+                  "Operator": 0,
+                  "DateOccurringPeriod": "not-a-period"
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle()
+            .Which.DateOccurringPeriod.Should().Be("today");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Load_TrimsConditionalFormatDateOccurringPeriod()
+    {
+        const string json = """
+        {
+          "Name": "CfNativeTrimmedDatePeriodLoad",
+          "Sheets": [
+            {
+              "Name": "S1",
+              "ConditionalFormats": [
+                {
+                  "AppliesTo": "A1:A5",
+                  "RuleType": 13,
+                  "Operator": 0,
+                  "DateOccurringPeriod": "  last7Days  "
+                }
+              ]
+            }
+          ]
+        }
+        """;
+
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(ms);
+
+        loaded.GetSheetAt(0).ConditionalFormats.Should().ContainSingle()
+            .Which.DateOccurringPeriod.Should().Be("last7Days");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_DefaultsInvalidConditionalFormatDateOccurringPeriod()
+    {
+        var workbook = new Workbook("CfNativeInvalidDatePeriodSave");
+        var sheet = workbook.AddSheet("S1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DateOccurring,
+            Operator = CfOperator.Equal,
+            DateOccurringPeriod = "not-a-period"
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+
+        document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")[0]
+            .GetProperty("DateOccurringPeriod")
+            .GetString()
+            .Should().Be("today");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_TrimsConditionalFormatDateOccurringPeriod()
+    {
+        var workbook = new Workbook("CfNativeTrimmedDatePeriodSave");
+        var sheet = workbook.AddSheet("S1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DateOccurring,
+            Operator = CfOperator.Equal,
+            DateOccurringPeriod = "  last7Days  "
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+
+        document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("ConditionalFormats")[0]
+            .GetProperty("DateOccurringPeriod")
+            .GetString()
+            .Should().Be("last7Days");
     }
 
     [Fact]
@@ -17509,6 +18588,11 @@ public partial class FileAdapterSmokeTests
                 ["customFilterColumnFlag"] = "keep",
                 ["invalid filterColumn attr"] = "skip"
             }));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            -1,
+            ["Invalid"],
+            IncludeBlank: false,
+            NativeFilterXmls: []));
 
         var saved = new MemoryStream();
         var save = () => new XlsxFileAdapter().Save(workbook, saved);
@@ -17526,6 +18610,7 @@ public partial class FileAdapterSmokeTests
         autoFilter.Element(worksheetNs + "extLst").Should().NotBeNull();
         var filterColumns = autoFilter.Elements(worksheetNs + "filterColumn").ToArray();
         filterColumns.Should().HaveCount(2);
+        filterColumns.Select(column => column.Attribute("colId")?.Value).Should().NotContain("-1");
         var valueFilterColumn = filterColumns.Single(column => column.Attribute("colId")?.Value == "0");
         valueFilterColumn.Attribute("customFilterColumnFlag")!.Value.Should().Be("keep");
         valueFilterColumn.Attributes().Select(attribute => attribute.Name.LocalName).Should().NotContain("invalid filterColumn attr");
@@ -17778,6 +18863,39 @@ public partial class FileAdapterSmokeTests
         iconFilterColumn.IconFilter.IconId.Should().Be(1);
         iconFilterColumn.IconFilter.NativeAttributes.Should().Contain("customIconFilterFlag", "keep");
         iconFilterColumn.NativeAttributes.Should().Contain("customFilterColumnFlag6", "keep");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_Save_SkipsInvalidWorksheetAutoFilterColumns()
+    {
+        var workbook = new Workbook("WorksheetAutoFilterInvalidColumnNativeJsonTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:B3", null);
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            ["A"],
+            IncludeBlank: false,
+            NativeFilterXmls: []));
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            -1,
+            ["Invalid"],
+            IncludeBlank: false,
+            NativeFilterXmls: []));
+
+        var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+        stream.Position = 0;
+
+        using var document = JsonDocument.Parse(stream);
+        var columns = document.RootElement
+            .GetProperty("Sheets")[0]
+            .GetProperty("AutoFilter")
+            .GetProperty("FilterColumns")
+            .EnumerateArray()
+            .ToList();
+
+        columns.Should().ContainSingle();
+        columns[0].GetProperty("ColumnId").GetInt32().Should().Be(0);
     }
 
     [Fact]
@@ -24014,6 +25132,19 @@ public partial class FileAdapterSmokeTests
                 .ToList();
         }
         catch { return []; }
+    }
+
+    private static IReadOnlyList<ConditionalFormat> InvokeReadAdvancedConditionalFormats(
+        XDocument worksheetXml,
+        XNamespace worksheetNs)
+    {
+        var method = typeof(XlsxFileAdapter).GetMethod(
+            "ReadAdvancedConditionalFormats",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        method.Should().NotBeNull();
+        return (IReadOnlyList<ConditionalFormat>)method!.Invoke(
+            null,
+            [worksheetXml, worksheetNs, Array.Empty<CellStyle>()])!;
     }
 
     /// <summary>Adds an attribute to the NativeXmlPreserveBag entry for the given key.

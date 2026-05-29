@@ -5,14 +5,18 @@ namespace Freexcel.Core.IO;
 
 public sealed partial class XlsxFileAdapter
 {
-    private sealed record XlsxSourcePackage(byte[] Buffer, int Offset, int Count, string ModelFingerprint)
+    private sealed record XlsxSourcePackage(byte[] Buffer, int Offset, int Count, string? ModelFingerprint)
     {
+        private const int FingerprintCellLimit = 10_000;
+
         public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook)
         {
-            var fingerprint = CreateModelFingerprint(workbook);
+            var fingerprint = ShouldCaptureModelFingerprint(workbook)
+                ? CreateModelFingerprint(workbook)
+                : null;
             if (stream.TryGetBuffer(out var buffer))
             {
-                var copiedBytes = buffer.AsSpan(0, buffer.Count).ToArray();
+                var copiedBytes = buffer.AsSpan(buffer.Offset, buffer.Count).ToArray();
                 return new XlsxSourcePackage(copiedBytes, 0, copiedBytes.Length, fingerprint);
             }
 
@@ -27,6 +31,7 @@ public sealed partial class XlsxFileAdapter
         public MemoryStream OpenRead() => new(Buffer, Offset, Count, writable: false);
 
         public bool Matches(Workbook workbook) =>
+            ModelFingerprint is not null &&
             string.Equals(ModelFingerprint, CreateModelFingerprint(workbook), StringComparison.Ordinal);
 
         public void CopyTo(Stream stream)
@@ -43,11 +48,26 @@ public sealed partial class XlsxFileAdapter
                 stream.Position = Count;
         }
 
+        private static bool ShouldCaptureModelFingerprint(Workbook workbook)
+        {
+            var cellCount = 0;
+            foreach (var sheet in workbook.Sheets)
+            {
+                cellCount += sheet.CellCount;
+                if (cellCount > FingerprintCellLimit)
+                    return false;
+            }
+
+            return true;
+        }
+
         private static string CreateModelFingerprint(Workbook workbook)
         {
-            using var stream = new MemoryStream();
+            using var hash = SHA256.Create();
+            using var stream = new CryptoStream(Stream.Null, hash, CryptoStreamMode.Write, leaveOpen: true);
             new NativeJsonAdapter().Save(workbook, stream);
-            return Convert.ToHexString(SHA256.HashData(stream.GetBuffer().AsSpan(0, (int)stream.Length)));
+            stream.FlushFinalBlock();
+            return Convert.ToHexString(hash.Hash ?? []);
         }
     }
 }

@@ -15,17 +15,17 @@ public partial class MainWindow
     private void InsertPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void DeletePickerBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
     private void FormatPickerBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
-        { cm.PlacementTarget = btn; cm.IsOpen = true; }
+            OpenRibbonContextMenu(btn, cm);
     }
 
     private void InsertCellsMenuItem_Click(object sender, RoutedEventArgs e)
@@ -106,8 +106,8 @@ public partial class MainWindow
     private void DeleteSheetMenuItem_Click(object sender, RoutedEventArgs e)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null || _workbook.Sheets.Count <= 1) { MessageBox.Show("Cannot delete the only sheet."); return; }
-        if (MessageBox.Show($"Delete '{sheet.Name}'?", "Delete Sheet", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        if (sheet is null || _workbook.Sheets.Count <= 1) { _messageService.ShowWarning("Cannot delete the only sheet.", "Delete Sheet"); return; }
+        if (!_messageService.AskYesNo($"Delete '{sheet.Name}'?", "Delete Sheet")) return;
         var outcome = _commandBus.Execute(_workbook.Id, new RemoveSheetCommand(_currentSheetId));
         if (!outcome.Success)
         {

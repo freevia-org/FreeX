@@ -70,7 +70,6 @@ public static partial class BuiltInFunctions
         if (year >= 0 && year < 1900)
             year += 1900;
         if (year < 0 || year > 9999) return ErrorValue.Num;
-        if (year == 1900 && month < 1) return ErrorValue.Num;
         try
         {
             var dt = new DateTime(year, 1, 1)
@@ -341,9 +340,9 @@ public static partial class BuiltInFunctions
     {
         double rawH = ToNumber(hourValue);
         if (!double.IsFinite(rawH) || !double.IsFinite(rawM) || !double.IsFinite(rawS)) return ErrorValue.Num;
-        if (rawH < 0 || rawM < 0 || rawS < 0) return ErrorValue.Num;
-        if (rawH > 32767 || rawM > 32767 || rawS > 32767) return ErrorValue.Num;
         int h = (int)rawH, m = (int)rawM, s = (int)rawS;
+        if (h < 0 || m < 0 || s < 0) return ErrorValue.Num;
+        if (h > 32767 || m > 32767 || s > 32767) return ErrorValue.Num;
         double frac = (h * 3600 + m * 60 + s) / 86400.0;
         return new NumberValue(frac - Math.Floor(frac));
     }
@@ -379,6 +378,8 @@ public static partial class BuiltInFunctions
         var text = ToText(value);
         if (TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out _)) return new NumberValue(60);
         if (!TextHasDateComponent(text)) return ErrorValue.Value;
+        if (TryParseMonthYearDateValueText(text, out var monthYearDate))
+            return new NumberValue(DateToSerial(monthYearDate));
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(Math.Floor(DateToSerial(dt)));
@@ -392,6 +393,14 @@ public static partial class BuiltInFunctions
     private static bool TextHasDateComponent(string text) =>
         DateTimeTextHasDateSeparatorRegex.IsMatch(text) ||
         DateTimeTextHasMonthNameRegex.IsMatch(text);
+
+    private static bool TryParseMonthYearDateValueText(string text, out DateTime dt) =>
+        DateTime.TryParseExact(
+            text.Trim(),
+            ["MMMM yyyy", "MMM yyyy", "MMMM, yyyy", "MMM, yyyy", "MMMM-yyyy", "MMM-yyyy"],
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out dt);
 
     private static bool TryParseExcelFakeLeapDayValueText(string text, CultureInfo culture, out double serial)
     {
@@ -456,10 +465,10 @@ public static partial class BuiltInFunctions
     private static ScalarValue WeeknumScalar(ScalarValue value, int returnType)
     {
         if (!TryOADateToDateTime(value, out var dt)) return ErrorValue.Num;
-        if (Math.Floor(ToNumber(value)) == 0)
-            return new NumberValue(0);
         if (returnType == 21)
             return new NumberValue(ExcelIsoWeeknum(dt));
+        if (Math.Floor(ToNumber(value)) == 0)
+            return new NumberValue(0);
 
         int firstDay = returnType switch
         {

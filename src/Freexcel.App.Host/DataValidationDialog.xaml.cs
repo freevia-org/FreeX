@@ -177,7 +177,7 @@ public partial class DataValidationDialog : Window
         if (!TryValidateCriteriaInputs(typeTag, opTag, Formula1Box.Text, Formula2Box.Text, out var criteriaError))
         {
             LastValidationError = criteriaError;
-            MessageBox.Show(this, criteriaError, Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogMessageHelper.ShowWarning(this, criteriaError, Title);
             FocusInvalidCriteriaInput(typeTag, opTag);
             return;
         }

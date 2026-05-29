@@ -69,8 +69,12 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=MULTINOMIAL(2,3,4)", 1260)]
     [InlineData("=ODD(1.2)", 3)]
     [InlineData("=ODD(-1.2)", -3)]
+    [InlineData("=COMBIN(1030,1)", 1030)]
+    [InlineData("=COMBIN(1030,0)", 1)]
     [InlineData("=COMBINA(4,3)", 20)]
     [InlineData("=COMBINA(10,3)", 220)]
+    [InlineData("=COMBINA(1030,1)", 1030)]
+    [InlineData("=COMBINA(1030,0)", 1)]
     [InlineData("=PERMUT(5,2)", 20)]
     [InlineData("=PERMUTATIONA(3,2)", 9)]
     [InlineData("=PERMUTATIONA(2,2)", 4)]
@@ -185,6 +189,21 @@ public sealed class ExcelParityMathTrigTests
     {
         Number("=MROUND(6.05,0.1)").Should().BeApproximately(6.1, 1e-12);
         Number("=MROUND(-6.05,-0.1)").Should().BeApproximately(-6.1, 1e-12);
+    }
+
+    [Fact]
+    public void GcdAndLcm_RangeArgumentsScanAllReferencedCellsLikeExcel()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(12)),
+            (2, 1, new NumberValue(18)),
+            (3, 1, new TextValue("ignored")),
+            (4, 1, new BoolValue(true)),
+            (1, 2, new NumberValue(4)),
+            (2, 2, new NumberValue(6)));
+
+        Number("=GCD(A1:A4)", sheet).Should().Be(6);
+        Number("=LCM(B1:B2)", sheet).Should().Be(12);
     }
 
     [Fact]

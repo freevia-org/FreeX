@@ -14,6 +14,7 @@ public partial class MainWindow
     private void SelectRow(uint row)
     {
         HideValidationDropdown();
+        ClearCommentPreview();
         const uint maxCol = 16_384;
         _selectionAnchor = new CellAddress(_currentSheetId, row, 1);
         _selectionCursor = new CellAddress(_currentSheetId, row, maxCol);
@@ -30,6 +31,7 @@ public partial class MainWindow
     private void SelectColumn(uint col)
     {
         HideValidationDropdown();
+        ClearCommentPreview();
         const uint maxRow = 1_048_576;
         _selectionAnchor = new CellAddress(_currentSheetId, 1, col);
         _selectionCursor = new CellAddress(_currentSheetId, maxRow, col);
@@ -47,6 +49,7 @@ public partial class MainWindow
     private void SelectAll()
     {
         HideValidationDropdown();
+        ClearCommentPreview();
         const uint maxRow = 1_048_576;
         const uint maxCol = 16_384;
         _selectionAnchor = new CellAddress(_currentSheetId, 1, 1);
@@ -63,6 +66,9 @@ public partial class MainWindow
 
     private void SheetGrid_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Left)
+            return;
+
         var pos = e.GetPosition(SheetGrid);
         const double colHeaderH = Freexcel.App.UI.GridView.ColHeaderHeight;
         double rowHeaderW = SheetGrid.ActualRowHeaderWidth;
@@ -78,6 +84,7 @@ public partial class MainWindow
             if (pos.X < rowHeaderW && pos.Y < colHeaderH)
             {
                 SelectAll();
+                e.Handled = true;
                 return;
             }
             // Column header: select entire column
@@ -90,19 +97,28 @@ public partial class MainWindow
                     {
                         if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
                         {
+                            HideValidationDropdown();
+                            ClearCommentPreview();
                             uint anchorCol = _selectionAnchor.Value.Col;
                             _selectionCursor = new CellAddress(_currentSheetId, 1_048_576, cm.Col);
+                            SheetGrid.SelectedRanges = null;
                             SheetGrid.SelectedRange = new GridRange(
                                 new CellAddress(_currentSheetId, 1, Math.Min(anchorCol, cm.Col)),
                                 new CellAddress(_currentSheetId, 1_048_576, Math.Max(anchorCol, cm.Col)));
                             var c1 = FormatColumnReference(Math.Min(anchorCol, cm.Col));
                             var c2 = FormatColumnReference(Math.Max(anchorCol, cm.Col));
                             CellAddressBox.Text = c1 == c2 ? $"{c1}:{c1}" : $"{c1}:{c2}";
+                            var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+                            FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
+                            SheetGrid.Focus();
+                            RefreshToolbar();
+                            RefreshStatusBar();
                         }
                         else
                         {
                             SelectColumn(cm.Col);
                         }
+                        e.Handled = true;
                         return;
                     }
                 }
@@ -116,19 +132,28 @@ public partial class MainWindow
                 {
                     if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
                     {
+                        HideValidationDropdown();
+                        ClearCommentPreview();
                         uint anchorRow = _selectionAnchor.Value.Row;
                         _selectionCursor = new CellAddress(_currentSheetId, rm.Row, 16_384);
+                        SheetGrid.SelectedRanges = null;
                         SheetGrid.SelectedRange = new GridRange(
                             new CellAddress(_currentSheetId, Math.Min(anchorRow, rm.Row), 1),
                             new CellAddress(_currentSheetId, Math.Max(anchorRow, rm.Row), 16_384));
                         var r1 = Math.Min(anchorRow, rm.Row);
                         var r2 = Math.Max(anchorRow, rm.Row);
                         CellAddressBox.Text = r1 == r2 ? $"{r1}:{r1}" : $"{r1}:{r2}";
+                        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+                        FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
+                        SheetGrid.Focus();
+                        RefreshToolbar();
+                        RefreshStatusBar();
                     }
                     else
                     {
                         SelectRow(rm.Row);
                     }
+                    e.Handled = true;
                     return;
                 }
             }
@@ -148,10 +173,11 @@ public partial class MainWindow
             return;
         }
 
-        _activeSplitPaneRegion = Freexcel.App.UI.GridView.HitTestSplitPaneRegion(viewport, pos);
         var hitAddress = Freexcel.App.UI.GridView.HitTestViewportCell(viewport, _currentSheetId, pos);
         if (hitAddress is { } newAddr)
         {
+            _activeSplitPaneRegion = Freexcel.App.UI.GridView.HitTestSplitPaneRegion(viewport, pos);
+
             if (TryApplyFormulaRangeSelection(newAddr, extendSelection: (Keyboard.Modifiers & ModifierKeys.Shift) != 0))
             {
                 _dragSelectActive = true;
@@ -179,6 +205,7 @@ public partial class MainWindow
                     (selectedRange.Start != selectedRange.End || e.ClickCount > 1))
                 {
                     TryApplyFormatPainter(selectedRange);
+                    UpdateCommentPreview(newAddr);
                     e.Handled = true;
                     return;
                 }
@@ -202,6 +229,7 @@ public partial class MainWindow
 
             if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0 && _selectionAnchor.HasValue)
             {
+                HideValidationDropdown();
                 ExtendSelection(_selectionAnchor.Value, newAddr);
             }
             else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
@@ -233,6 +261,8 @@ public partial class MainWindow
                     SheetGrid.CaptureMouse();
                 }
             }
+
+            e.Handled = true;
         }
     }
 
@@ -712,6 +742,9 @@ public partial class MainWindow
 
     private void ExtendSelection(CellAddress anchor, CellAddress to)
     {
+        HideValidationDropdown();
+        ClearCommentPreview();
+
         _selectionCursor = to;
         SheetGrid.SelectedRanges = null;
         SheetGrid.SelectedRange = new GridRange(
@@ -725,6 +758,9 @@ public partial class MainWindow
 
     private void AddOrMoveAdditionalSelection(CellAddress target, bool extendSelection)
     {
+        HideValidationDropdown();
+        ClearCommentPreview();
+
         var ranges = SheetGrid.SelectedRanges is { Count: > 0 }
             ? SheetGrid.SelectedRanges.ToList()
             : SheetGrid.SelectedRange is { } currentRange ? [currentRange] : [];
@@ -783,7 +819,7 @@ public partial class MainWindow
     {
         var pos = e.GetPosition(SheetGrid);
         var hitAddr = HitTestCell(pos);
-        if (!_dragSelectActive || e.LeftButton != MouseButtonState.Pressed)
+        if (!_dragSelectActive)
         {
             if (hitAddr.HasValue)
                 UpdateCommentPreview(hitAddr.Value);
@@ -792,7 +828,25 @@ public partial class MainWindow
             return;
         }
 
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            _formatPainterTargetSelectionActive = false;
+            _dragSelectActive = false;
+            _dragSelectAddsAdditionalRange = false;
+            SheetGrid.ReleaseMouseCapture();
+            CompleteDragSelectionStatusRefresh();
+            if (hitAddr.HasValue)
+                UpdateCommentPreview(hitAddr.Value);
+            else
+                ClearCommentPreview();
+            e.Handled = true;
+            return;
+        }
+
+        e.Handled = true;
         RequestSelectionDragAutoScroll(pos);
+        if (!hitAddr.HasValue)
+            ClearCommentPreview();
 
         if (_selectionAnchor is not { } anchor) return;
         if (hitAddr.HasValue && GetFormulaRangeEntryEditor() is not null)
@@ -837,6 +891,12 @@ public partial class MainWindow
 
     private void SheetGrid_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Left)
+            return;
+
+        var pos = e.GetPosition(SheetGrid);
+        var hitAddr = HitTestCell(pos);
+
         if (_formatPainterTargetSelectionActive)
         {
             _formatPainterTargetSelectionActive = false;
@@ -847,6 +907,10 @@ public partial class MainWindow
 
             if (SheetGrid.SelectedRange is { } selectedRange)
                 TryApplyFormatPainter(selectedRange);
+            if (hitAddr.HasValue)
+                UpdateCommentPreview(hitAddr.Value);
+            else
+                ClearCommentPreview();
 
             e.Handled = true;
             return;
@@ -857,6 +921,10 @@ public partial class MainWindow
         _dragSelectAddsAdditionalRange = false;
         SheetGrid.ReleaseMouseCapture();
         CompleteDragSelectionStatusRefresh();
+        if (hitAddr.HasValue)
+            UpdateCommentPreview(hitAddr.Value);
+        else
+            ClearCommentPreview();
         if (_borderDrawMode != BorderDrawMode.None && SheetGrid.SelectedRange is { } borderDrawRange)
         {
             ApplyBorderDrawMode(borderDrawRange);
@@ -864,6 +932,7 @@ public partial class MainWindow
             return;
         }
         GetFormulaRangeEntryEditor()?.Focus();
+        e.Handled = true;
     }
 
 }

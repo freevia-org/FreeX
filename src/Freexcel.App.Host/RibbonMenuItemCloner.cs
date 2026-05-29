@@ -153,7 +153,11 @@ internal static class RibbonMenuItemCloner
         clonedItem.IsEnabled = sourceItem.IsEnabled;
         clonedItem.IsCheckable = sourceItem.IsCheckable;
         clonedItem.IsChecked = sourceItem.IsChecked;
-        clonedItem.InputGestureText = sourceItem.InputGestureText;
+
+        var keyTip = RibbonTooltip.GetKeyTip(sourceItem);
+        RibbonTooltip.SetKeyTip(clonedItem, keyTip ?? "");
+        if (string.IsNullOrWhiteSpace(keyTip))
+            clonedItem.InputGestureText = sourceItem.InputGestureText;
 
         SynchronizeClonedMenuItems(sourceItem.Items, clonedItem.Items);
     }

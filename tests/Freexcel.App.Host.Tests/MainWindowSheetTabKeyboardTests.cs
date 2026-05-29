@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -37,7 +38,7 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
-    public void AddSheetGhostTab_SitsBetweenVisibleTabsAndRightNavigation()
+    public void AddSheetGhostTab_LivesInScrollableTabStripAndExposesKeyboardAutomation()
     {
         StaTestRunner.Run(() =>
         {
@@ -49,17 +50,18 @@ public sealed class MainWindowSheetTabKeyboardTests
             window.UpdateLayout();
 
             var scroller = (FrameworkElement)window.FindName("SheetTabsScroller");
+            var scrollableContent = (FrameworkElement)window.FindName("SheetTabsScrollableContent");
             var addSheet = (FrameworkElement)window.FindName("AddSheetButton");
-            var rightNav = (FrameworkElement)window.FindName("SheetNavRightBtn");
 
             var scrollerBounds = BoundsRelativeToWindow(scroller, window);
             var addBounds = BoundsRelativeToWindow(addSheet, window);
-            var rightNavBounds = BoundsRelativeToWindow(rightNav, window);
 
-            addBounds.Left.Should().BeLessThan(scrollerBounds.Right, "the ghost tab intentionally overlaps the clipped tab viewport so it reads as the next tab");
-            addBounds.Right.Should().BeGreaterThan(scrollerBounds.Right);
-            rightNavBounds.Left.Should().BeGreaterThan(addBounds.Right);
-            rightNavBounds.Left.Should().BeGreaterThan(addBounds.Right + 20);
+            addSheet.Parent.Should().BeSameAs(scrollableContent, "the ghost tab should scroll and clip with the sheet tabs instead of reserving fixed space");
+            addSheet.Focusable.Should().BeTrue();
+            AutomationProperties.GetName(addSheet).Should().Be("Insert Sheet");
+            AutomationProperties.GetHelpText(addSheet).Should().Be("Add a new sheet to the workbook.");
+            addBounds.Left.Should().BeGreaterThanOrEqualTo(scrollerBounds.Left);
+            addBounds.Left.Should().BeLessThan(scrollerBounds.Right, "the ghost tab should be inside the clipped tab viewport so it can slide under the right arrow");
             addSheet.ActualWidth.Should().BeGreaterThan(34);
             addSheet.ActualHeight.Should().BeGreaterThan(20);
         });
@@ -148,7 +150,8 @@ public sealed class MainWindowSheetTabKeyboardTests
                 new RecalcEngine(graph, evaluator),
                 [],
                 workbookRef,
-                workbook)
+                workbook,
+                NullUserMessageService.Instance)
             {
                 WindowState = WindowState.Normal,
                 Width = 1280,

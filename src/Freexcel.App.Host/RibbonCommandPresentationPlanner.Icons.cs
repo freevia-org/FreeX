@@ -4,7 +4,7 @@ public static partial class RibbonCommandPresentationPlanner
 {
     public static RibbonCommandIcon GetIcon(string commandName)
     {
-        var name = commandName.ToLowerInvariant();
+        var name = NormalizeCommandText(commandName);
 
         if (name.Contains("diagnostics")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("save")) return new(RibbonCommandIconKind.Save);
@@ -209,7 +209,7 @@ public static partial class RibbonCommandPresentationPlanner
 
     public static RibbonCommandIcon GetGroupIcon(string groupName)
     {
-        var name = groupName.ToLowerInvariant();
+        var name = NormalizeCommandText(groupName);
 
         if (name.Contains("clipboard")) return new(RibbonCommandIconKind.Paste);
         if (name.Contains("font")) return new(RibbonCommandIconKind.Font);

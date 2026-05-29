@@ -352,6 +352,47 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Fact]
+    public void Profiles_ResolveSelectedTabHeaderWhenRequiredGroupsAreHidden()
+    {
+        var groupNames = new[] { "Get & Transform Data", "Sort & Filter", "Data Tools" };
+
+        RibbonAdaptiveTabProfiles.ResolveProfileName(groupNames)
+            .Should()
+            .BeNull("the reduced group set no longer carries the old required group-name signature");
+        RibbonAdaptiveTabProfiles.ResolveProfileName(groupNames, selectedTabHeader: "Data")
+            .Should()
+            .Be("Data");
+    }
+
+    [Fact]
+    public void ApplyBreakpointOverrides_UsesSelectedTabHeaderWhenInsertOptionalGroupsAreHidden()
+    {
+        var groupNames = new[] { "Tables", "Charts", "Links" };
+
+        var states = RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(
+            1120,
+            groupNames,
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray(),
+            selectedTabHeader: "Insert");
+
+        states[Array.IndexOf(groupNames, "Tables")].Should().Be(RibbonAdaptiveGroupState.SmallWithLabels);
+        states[Array.IndexOf(groupNames, "Charts")].Should().Be(RibbonAdaptiveGroupState.Full);
+        states[Array.IndexOf(groupNames, "Links")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Fact]
+    public void Profiles_ExposeTabHeaderBreakpointsWhenRequiredGroupsAreHidden()
+    {
+        var thresholds = RibbonAdaptiveTabProfiles.GetBreakpointThresholds(
+            ["Get & Transform Data", "Sort & Filter", "Data Tools"],
+            selectedTabHeader: "Data");
+
+        thresholds.Should().Contain([700, 760, 900, 1120, 1320]);
+        thresholds.Should().BeInAscendingOrder();
+        thresholds.Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
     public void Profiles_ExposeTabAndCollapsedPresentationBreakpointsForResizeGate()
     {
         var thresholds = RibbonAdaptiveTabProfiles.GetBreakpointThresholds(

@@ -35,12 +35,119 @@ public sealed class RibbonAdaptiveLayoutEngineTests
             .Be(RibbonAdaptiveGroupState.Collapsed);
         layout.States[Array.IndexOf(groups.Select(group => group.Name).ToArray(), "Data Tools")]
             .Should()
-            .Be(RibbonAdaptiveGroupState.Full);
+            .Be(RibbonAdaptiveGroupState.IconOnly);
         layout.States[Array.IndexOf(groups.Select(group => group.Name).ToArray(), "Forecast")]
             .Should()
             .Be(RibbonAdaptiveGroupState.Full);
         layout.PlannedWidth.Should().BeLessThanOrEqualTo(1120);
         layout.RequiresMeasuredCorrection.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Plan_AppliesDataRuntimeVisibilityStateBeforeMeasuringPlannedWidth()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Get & Transform Data", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Queries & Connections", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Data Types", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Sort & Filter", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Data Tools", 300, 200, 70, 40),
+            new RibbonAdaptiveGroup("Forecast", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Outline", 100, 80, 60, 40)
+        };
+
+        var layout = RibbonAdaptiveLayoutEngine.Plan(900, groups, fixedChromeWidth: 20);
+
+        layout.States.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.IconOnly,
+            RibbonAdaptiveGroupState.IconOnly,
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Collapsed);
+        layout.PlannedWidth.Should().Be(470);
+        layout.RequiresMeasuredCorrection.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Plan_UsesSelectedTabHeaderWhenOptionalDataGroupsAreHidden()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Get & Transform Data", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Sort & Filter", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Data Tools", 300, 200, 70, 40)
+        };
+
+        RibbonAdaptiveLayoutEngine.Plan(900, groups, fixedChromeWidth: 20)
+            .States
+            .Should()
+            .Equal(
+                RibbonAdaptiveGroupState.Full,
+                RibbonAdaptiveGroupState.Collapsed,
+                RibbonAdaptiveGroupState.Collapsed);
+
+        var layout = RibbonAdaptiveLayoutEngine.Plan(900, groups, fixedChromeWidth: 20, selectedTabHeader: "Data");
+
+        layout.States.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.IconOnly,
+            RibbonAdaptiveGroupState.IconOnly);
+        layout.PlannedWidth.Should().Be(250);
+        layout.RequiresMeasuredCorrection.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Plan_AppliesInsertRuntimeVisibilityStateBeforeMeasuringPlannedWidth()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Tables", 650, 90, 60, 40),
+            new RibbonAdaptiveGroup("Illustrations", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Add-ins", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Charts", 260, 180, 100, 40)
+        };
+
+        var layout = RibbonAdaptiveLayoutEngine.Plan(900, groups, fixedChromeWidth: 20);
+
+        layout.States.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Collapsed);
+        layout.PlannedWidth.Should().Be(850);
+        layout.RequiresMeasuredCorrection.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildResizeThresholds_UsesRuntimeVisibilityStatesFromPurePlan()
+    {
+        var dataGroups = new[]
+        {
+            new RibbonAdaptiveGroup("Get & Transform Data", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Queries & Connections", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Data Types", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Sort & Filter", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Data Tools", 300, 200, 70, 40),
+            new RibbonAdaptiveGroup("Forecast", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Outline", 100, 80, 60, 40)
+        };
+        var insertGroups = new[]
+        {
+            new RibbonAdaptiveGroup("Tables", 650, 90, 60, 40),
+            new RibbonAdaptiveGroup("Illustrations", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Add-ins", 100, 80, 60, 40),
+            new RibbonAdaptiveGroup("Charts", 260, 180, 100, 40)
+        };
+
+        RibbonAdaptiveLayoutEngine.BuildResizeThresholds(dataGroups, fixedChromeWidth: 20)
+            .Should()
+            .Contain(470);
+        RibbonAdaptiveLayoutEngine.BuildResizeThresholds(insertGroups, fixedChromeWidth: 20)
+            .Should()
+            .Contain(290);
     }
 
     [Fact]

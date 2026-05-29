@@ -34,7 +34,7 @@ public sealed class SymbolPickerDialogSourceTests
         var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("ShowInvalidCharacterCodeWarning(selectedCode);");
-        source.Should().Contain("MessageBox.Show(this, \"Enter a valid Unicode character code.\", Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Enter a valid Unicode character code.\", Title);");
         source.Should().Contain("selectedCode.Focus();");
         source.Should().Contain("selectedCode.SelectAll();");
         source.Should().Contain("Keyboard.Focus(selectedCode);");

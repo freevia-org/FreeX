@@ -2,6 +2,7 @@ using System.Reflection;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FluentAssertions;
 using Freexcel.Core.Calc;
@@ -107,6 +108,35 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void CommandKeyTipCandidates_AreReusedDuringScopeAndRefreshedOnReentry()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+            harness.VisibleCommandKeyTips("ZZ").Should().BeEmpty();
+
+            using var dynamicCommand = harness.AddHomeRibbonCommandButton("ZZ", "Late Test Command");
+
+            harness.VisibleCommandKeyTips("ZZ")
+                .Should()
+                .BeEmpty("an active command keytip pass should reuse the candidates captured when its overlay was shown");
+
+            harness.HandleKeyTip(Key.Z);
+            harness.KeyTipScope.Should().Be("None", "the late command should not extend the active cached command scope");
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+
+            harness.VisibleCommandKeyTips("ZZ")
+                .Should()
+                .ContainSingle("Late Test Command", "a fresh keytip pass should refresh visible command candidates");
+        });
+    }
+
+    [Fact]
     public void DirectAltTopLevelKeyTips_OpenTabsAndBackstage()
     {
         RunSta(() =>
@@ -156,6 +186,35 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.ActiveCellBold.Should().BeTrue();
             harness.UndoQatIsEnabled.Should().BeTrue();
             harness.RedoQatIsEnabled.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void DirectAltQatKeyTips_NormalizeAttachedKeyTipMetadata()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectActiveCell();
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+            harness.HandleKeyTip(Key.D1);
+            harness.ActiveCellBold.Should().BeTrue();
+
+            var originalKeyTip = harness.SetButtonKeyTip("UndoQatBtn", " 2 ");
+
+            try
+            {
+                harness.HandleDirectTopLevelKeyTip(Key.D2).Should().BeTrue();
+
+                harness.ActiveCellBold.Should().BeFalse();
+                harness.KeyTipScope.Should().Be("None");
+            }
+            finally
+            {
+                harness.SetButtonKeyTip("UndoQatBtn", originalKeyTip ?? "");
+            }
         });
     }
 
@@ -1275,6 +1334,42 @@ public sealed class MainWindowRibbonKeyTipTests
             PumpDispatcher();
         }
 
+        public string? SetButtonKeyTip(string name, string keyTip)
+        {
+            var button = (_window.FindName(name) as ButtonBase)
+                ?? throw new InvalidOperationException($"Button {name} was not found.");
+            var originalKeyTip = RibbonTooltip.GetKeyTip(button);
+            RibbonTooltip.SetKeyTip(button, keyTip);
+            PumpDispatcher();
+            return originalKeyTip;
+        }
+
+        public IDisposable AddHomeRibbonCommandButton(string keyTip, string title)
+        {
+            var panel = (_window.FindName("HomeRibbonPanel") as Panel)
+                ?? throw new InvalidOperationException("HomeRibbonPanel was not found.");
+            var button = new Button
+            {
+                Content = title,
+                Width = 96,
+                Height = 28,
+                IsEnabled = true
+            };
+            RibbonTooltip.SetTitle(button, title);
+            RibbonTooltip.SetKeyTip(button, keyTip);
+
+            panel.Children.Add(button);
+            _window.UpdateLayout();
+            PumpDispatcher();
+
+            return new DisposableAction(() =>
+            {
+                panel.Children.Remove(button);
+                _window.UpdateLayout();
+                PumpDispatcher();
+            });
+        }
+
         public void AddNote(uint row, uint col, string text)
         {
             var sheet = _workbook.Sheets[0];
@@ -1388,7 +1483,8 @@ public sealed class MainWindowRibbonKeyTipTests
                 new RecalcEngine(graph, evaluator),
                 [],
                 workbookRef,
-                workbook);
+                workbook,
+                NullUserMessageService.Instance);
 
             window.WindowState = WindowState.Normal;
             window.Width = 2400;
@@ -1567,6 +1663,21 @@ public sealed class MainWindowRibbonKeyTipTests
         }
 
         private sealed record SharedMainWindowSession(MainWindow Window, WorkbookRef WorkbookRef);
+
+        private sealed class DisposableAction(Action dispose) : IDisposable
+        {
+            private Action? _dispose = dispose;
+
+            public void Dispose()
+            {
+                var disposeAction = _dispose;
+                if (disposeAction is null)
+                    return;
+
+                _dispose = null;
+                disposeAction();
+            }
+        }
 
         private static IEnumerable<MenuItem> EnumerateMenuItems(ItemsControl control)
         {

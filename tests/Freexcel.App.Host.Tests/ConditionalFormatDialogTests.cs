@@ -697,7 +697,7 @@ public sealed class ConditionalFormatDialogTests
         source.Should().Contain("ShowInvalidInputWarning(\"Enter a maximum value for this conditional formatting rule.\", _value2Box);");
         source.Should().Contain("ShowInvalidInputWarning(\"Enter text for this conditional formatting rule.\", _value1Box);");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox? target)");
-        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning)");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
     }

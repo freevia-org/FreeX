@@ -114,6 +114,29 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void CalculateRowHeaderWidth_UsesLastVisibleRowWithoutMetricScan()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.cs"));
+        var calculateRowHeaderWidth = source[
+            source.IndexOf("public static double CalculateRowHeaderWidth", StringComparison.Ordinal)..
+            source.IndexOf("private const double ResizeHitZone", StringComparison.Ordinal)];
+
+        calculateRowHeaderWidth.Should().Contain("viewport.RowMetrics[^1].Row");
+        calculateRowHeaderWidth.Should().NotContain("foreach (var row in viewport.RowMetrics)");
+        calculateRowHeaderWidth.Should().NotContain(".Max(");
+        GridView.CalculateRowHeaderWidth(null).Should().Be(GridView.RowHeaderWidth);
+        GridView.CalculateRowHeaderWidth(new ViewportModel([], [], [])).Should().Be(GridView.RowHeaderWidth);
+        GridView.CalculateRowHeaderWidth(new ViewportModel(
+            [],
+            [new RowMetric(999, 20, 0), new RowMetric(1_000, 20, 20)],
+            [])).Should().Be(36);
+        GridView.CalculateRowHeaderWidth(new ViewportModel(
+            [],
+            [new RowMetric(999_999, 20, 0), new RowMetric(1_000_000, 20, 20)],
+            [])).Should().Be(54);
+    }
+
+    [Fact]
     public void RenderSparklines_AvoidsEmptyRenderAllocations()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Overlays.Sparklines.cs"));
@@ -176,6 +199,22 @@ public sealed class GridViewRenderPerformanceTests
         continuation.Should().Contain("dc.DrawRectangle(Brushes.White, null");
         continuation.Should().NotContain("UpdateViewport");
         continuation.Should().NotContain("Viewport =");
+    }
+
+    [Fact]
+    public void LiveResizeContinuation_ReusesPixelsPerDipForSyntheticHeaders()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "Freexcel.App.UI", "GridView.Rendering.cs"));
+        var continuation = rendering[
+            rendering.IndexOf("private void RenderLiveResizeContinuation", StringComparison.Ordinal)..
+            rendering.IndexOf("private void RenderSplitPaneCells", StringComparison.Ordinal)];
+
+        continuation.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
+        continuation.Should().Contain("RenderLiveResizeColumnContinuation(dc, gridRight, gridTop, pixelsPerDip);");
+        continuation.Should().Contain("RenderLiveResizeRowContinuation(dc, gridLeft, gridRight, gridBottom, pixelsPerDip);");
+        continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatColumnHeader(++lastColumn, UseR1C1ReferenceStyle), headerRect, pixelsPerDip);");
+        continuation.Should().Contain("DrawLiveResizeHeaderText(dc, (++lastRow).ToString(CultureInfo.InvariantCulture), headerRect, pixelsPerDip);");
+        continuation.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip);");
     }
 
     [Fact]
@@ -255,7 +294,9 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCellBackgroundBase", StringComparison.Ordinal)..
             source.IndexOf("private static Dictionary<(uint Row, uint Col), CellStyle>", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("RenderCellBackgroundBase(dc);");
+        renderCells.Should().Contain("var rowHeaderWidth = ActualRowHeaderWidth;");
+        renderCells.Should().Contain("var columnHeaderHeight = EffectiveColHeaderHeight;");
+        renderCells.Should().Contain("RenderCellBackgroundBase(dc, rowHeaderWidth, columnHeaderHeight);");
         renderCells.Should().Contain("if (bg is null && !merge.HasValue)");
         renderCells.Should().Contain("continue;");
         backgroundBase.Should().Contain("dc.DrawRectangle(Brushes.White, null, rect);");
@@ -373,8 +414,11 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("if (target != ResizeTarget.None)", StringComparison.Ordinal)..
             source.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)];
 
-        resizeMove.Should().Contain("FindColMetric(Viewport!.ColMetrics, _resizeIndex)");
-        resizeMove.Should().Contain("FindRowMetric(Viewport!.RowMetrics, _resizeIndex)");
+        resizeMove.Should().Contain("if (Viewport is null)");
+        resizeMove.Should().Contain("FindColMetric(Viewport.ColMetrics, _resizeIndex)");
+        resizeMove.Should().Contain("FindRowMetric(Viewport.RowMetrics, _resizeIndex)");
+        resizeMove.Should().NotContain("Viewport!.ColMetrics");
+        resizeMove.Should().NotContain("Viewport!.RowMetrics");
         resizeMove.Should().NotContain("FirstOrDefault");
         resizeStart.Should().Contain("FindColMetric(Viewport!.ColMetrics, index)");
         resizeStart.Should().Contain("FindRowMetric(Viewport!.RowMetrics, index)");

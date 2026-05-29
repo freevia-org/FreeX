@@ -60,6 +60,34 @@ public sealed class RibbonKeyTipRoutingTests
     }
 
     [Fact]
+    public void CommandRouting_NormalizesWhitespaceInKeyTips()
+    {
+        RunSta(() =>
+        {
+            var button = CreateButton(" FX ");
+
+            RibbonKeyTipRouting.ResolveKeyTipElement([button], " f ").Should().BeNull(
+                "F remains a prefix while the full command keytip is still pending");
+            RibbonKeyTipRouting.HasKeyTipPrefix([button], " f ").Should().BeTrue();
+            RibbonKeyTipRouting.ResolveKeyTipElement([button], " fx ").Should().BeSameAs(button);
+        });
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void CommandRouting_IgnoresBlankKeyTipInput(string keyTip)
+    {
+        RunSta(() =>
+        {
+            var button = CreateButton("A");
+
+            RibbonKeyTipRouting.ResolveKeyTipElement([button], keyTip).Should().BeNull();
+            RibbonKeyTipRouting.HasKeyTipPrefix([button], keyTip).Should().BeFalse();
+        });
+    }
+
+    [Fact]
     public void ResolveMenuItem_WaitsWhenNestedLongerPrefixExists()
     {
         RunSta(() =>
@@ -125,6 +153,53 @@ public sealed class RibbonKeyTipRoutingTests
             parent.Items.Add(CreateMenuItem("TA"));
 
             RibbonKeyTipRouting.HasMenuItemKeyTipPrefix([parent], "TA").Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void MenuRouting_NormalizesWhitespaceInNestedKeyTips()
+    {
+        RunSta(() =>
+        {
+            var parent = CreateMenuItem(" H ");
+            var child = CreateMenuItem(" HG ");
+            parent.Items.Add(child);
+
+            RibbonKeyTipRouting.ResolveMenuItem([parent], " h ").Should().BeNull(
+                "parent menu keytips should still wait for padded nested choices after normalization");
+            RibbonKeyTipRouting.HasMenuItemKeyTipPrefix([parent], " hg ").Should().BeTrue();
+            RibbonKeyTipRouting.ResolveMenuItem([parent], " hg ").Should().BeSameAs(child);
+        });
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void MenuRouting_IgnoresBlankKeyTipInput(string keyTip)
+    {
+        RunSta(() =>
+        {
+            var item = CreateMenuItem("A");
+
+            RibbonKeyTipRouting.ResolveMenuItem([item], keyTip).Should().BeNull();
+            RibbonKeyTipRouting.HasMenuItemKeyTipPrefix([item], keyTip).Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void ResolveMenuItem_IgnoresNonMenuItemsWhileSearchingNestedKeyTips()
+    {
+        RunSta(() =>
+        {
+            var parent = CreateMenuItem("H");
+            var child = CreateMenuItem("HG");
+            parent.Items.Add(new Separator());
+            parent.Items.Add("recent command header");
+            parent.Items.Add(child);
+
+            var resolved = RibbonKeyTipRouting.ResolveMenuItem([parent], "HG");
+
+            resolved.Should().BeSameAs(child);
         });
     }
 

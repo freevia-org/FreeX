@@ -74,6 +74,12 @@ public static partial class NumberFormatter
             };
         }
 
+        if (value is DateTimeValue dateTimeValue &&
+            TryFormatSimpleDateTime(dateTimeValue.Value, formatString, targetWidthCharacters, out var simpleDateTime))
+        {
+            return simpleDateTime;
+        }
+
         var sections = SplitSections(formatString);
 
         return value switch
@@ -94,6 +100,25 @@ public static partial class NumberFormatter
 
     // ── Number formatting ─────────────────────────────────────────────────────
 
+    private static bool TryFormatSimpleDateTime(
+        double oaDate,
+        string formatString,
+        int? targetWidthCharacters,
+        out FormatResult result)
+    {
+        if (formatString.IndexOf(';') >= 0 ||
+            (formatString.Length > 0 && formatString[0] == '['))
+        {
+            result = new FormatResult("");
+            return false;
+        }
+
+        var text = FormatDateTime(oaDate, formatString);
+        text = ApplyAccountingTargetWidth(text, formatString, targetWidthCharacters);
+        result = new FormatResult(text);
+        return true;
+    }
+
     private static FormatResult FormatNumber(
         double value,
         string[] sections,
@@ -101,6 +126,15 @@ public static partial class NumberFormatter
         WorkbookIndexedColorPalette? indexedColors,
         WorkbookTheme? theme)
     {
+        if (sections.Length == 1 && (sections[0].Length == 0 || sections[0][0] != '['))
+        {
+            var singleSectionText = sections[0] == ""
+                ? ""
+                : ApplyNumericFormat(value, sections[0]);
+            singleSectionText = ApplyAccountingTargetWidth(singleSectionText, sections[0], targetWidthCharacters);
+            return new FormatResult(singleSectionText);
+        }
+
         var parsedSections = sections.Select(section => ParseSection(section, indexedColors, theme)).ToArray();
         bool hasConditions = parsedSections.Any(section => section.Condition is not null);
 

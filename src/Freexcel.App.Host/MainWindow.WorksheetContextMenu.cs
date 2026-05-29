@@ -17,6 +17,9 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } selectedRange || !selectedRange.Contains(actualAddr))
             SetActiveCell(actualAddr);
 
+        HideValidationDropdown();
+        ClearCommentPreview();
+
         var targetKind = GetWorksheetContextMenuTargetKind(actualAddr);
         var state = GetWorksheetContextMenuState(actualAddr);
         var menu = new ContextMenu();

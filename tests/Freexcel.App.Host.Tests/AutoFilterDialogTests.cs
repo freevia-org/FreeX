@@ -421,9 +421,8 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("new CellFillColorFilterCommand");
         source.Should().Contain("new CellNoFillColorFilterCommand");
         source.Should().Contain("new CellFontColorFilterCommand");
-        source.Should().Contain("var parsed = FilterPromptPlanner.TryPlan(value, out var plan, out var error)");
-        source.Should().Contain("plan.Kind != FilterPromptPlanKind.AllowedValues");
-        source.Should().Contain("plan.CreateCommand(_currentSheetId, currentRange, filterColOffset)");
+        source.Should().Contain("FilterPromptPlanner.TryPlan");
+        source.Should().Contain("promptPlan.CreateCommand");
     }
 
     [Fact]
@@ -564,7 +563,7 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter the first value for the between filter.\", _betweenMinBox);");
         source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter the second value for the between filter.\", _betweenMaxBox);");
         source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter a valid top or bottom count.\", _topBottomCountBox);");
-        source.Should().Contain("MessageBox.Show(this, message, Title, MessageBoxButton.OK, MessageBoxImage.Warning);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
     }

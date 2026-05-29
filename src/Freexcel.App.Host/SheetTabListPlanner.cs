@@ -39,7 +39,22 @@ public static class SheetTabListPlanner
 
         groupedSheetIds.RemoveWhere(id => workbook.GetSheet(id)?.IsHidden != false);
 
-        var tabs = new List<SheetTabViewModel>(sheets.Count);
+        var visibleSheetCount = 0;
+        var activeVisibleIndex = -1;
+        for (var index = 0; index < sheets.Count; index++)
+        {
+            var sheet = sheets[index];
+            if (sheet.IsHidden)
+                continue;
+
+            if (sheet.Id == currentSheetId)
+                activeVisibleIndex = visibleSheetCount;
+
+            visibleSheetCount++;
+        }
+
+        var tabs = new List<SheetTabViewModel>(visibleSheetCount);
+        var visibleIndex = 0;
         for (var index = 0; index < sheets.Count; index++)
         {
             var sheet = sheets[index];
@@ -52,8 +67,12 @@ public static class SheetTabListPlanner
             tabs.Add(new SheetTabViewModel(sheet.Id, sheet.Name, sheet.TabColor)
             {
                 IsActive = sheet.Id == currentSheetId,
-                IsGrouped = groupedSheetIds.Contains(sheet.Id)
+                IsGrouped = groupedSheetIds.Contains(sheet.Id),
+                IsLeftSideCoveredByActive = activeVisibleIndex >= 0 && visibleIndex == activeVisibleIndex + 1,
+                IsRightSideCoveredByActive = activeVisibleIndex >= 0 && visibleIndex == activeVisibleIndex - 1
             });
+
+            visibleIndex++;
         }
 
         return new SheetTabListPlan(currentSheetId, tabs);

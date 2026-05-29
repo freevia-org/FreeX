@@ -269,6 +269,10 @@ public sealed partial class NativeJsonAdapter
         DrawingAnchorKind = chart.DrawingAnchorKind
     };
 
+    private static bool IsChartOnSheet(ChartModel chart, SheetId sheetId) =>
+        chart.DataRange.Start.Sheet == sheetId &&
+        chart.DataRange.End.Sheet == sheetId;
+
     private static ChartSurfaceFormatDto? FromChartSurfaceFormat(ChartSurfaceFormatModel? format) =>
         format is null
             ? null

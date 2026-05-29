@@ -77,8 +77,13 @@ public partial class GridView : FrameworkElement
 
     public double EffectiveColHeaderHeight => ShowHeaders ? ColHeaderHeight : 0.0;
 
-    public static double CalculateRowHeaderWidth(ViewportModel? viewport) =>
-        viewport?.RowMetrics.Max(r => (uint?)r.Row) switch
+    public static double CalculateRowHeaderWidth(ViewportModel? viewport)
+    {
+        var maxRow = viewport?.RowMetrics.Count > 0
+            ? viewport.RowMetrics[^1].Row
+            : 0u;
+
+        return maxRow switch
         {
             >= 1_000_000 => 54,
             >= 100_000   => 48,
@@ -86,6 +91,7 @@ public partial class GridView : FrameworkElement
             >= 1_000     => 36,
             _            => RowHeaderWidth,
         };
+    }
 
     private const double ResizeHitZone = 4;
     private const double SplitDividerHitZone = 4;

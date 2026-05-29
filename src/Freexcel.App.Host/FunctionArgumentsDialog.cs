@@ -182,8 +182,9 @@ public sealed partial class FunctionArgumentsDialog : Window
 
     private void ShowFunctionHelp()
     {
-        MessageBox.Show(this, $"{_functionName}()\n\n{string.Join(Environment.NewLine, _arguments.Select(argument => $"{argument.Name}: {argument.Description}"))}",
-            "Function Help", MessageBoxButton.OK, MessageBoxImage.Information);
+        DialogMessageHelper.ShowInfo(this,
+            $"{_functionName}()\n\n{string.Join(Environment.NewLine, _arguments.Select(argument => $"{argument.Name}: {argument.Description}"))}",
+            "Function Help");
     }
 
     private void FocusInitialKeyboardTarget()

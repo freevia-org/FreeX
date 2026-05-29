@@ -23,6 +23,7 @@ public sealed class ExcelParityCoercionEdgeTests
 
     [Theory]
     [InlineData("=\"50%\"+0", 0.5)]
+    [InlineData("=\"50%%\"+0", 0.005)]
     [InlineData("=0+\"$1,234.50\"", 1234.5)]
     [InlineData("=\"1/2/2024\"+1", 45294)]
     [InlineData("=\"1:30 PM\"*24", 13.5)]
@@ -33,6 +34,12 @@ public sealed class ExcelParityCoercionEdgeTests
     public void RichNumericText_IsCoercedByScalarMathAndOperators(string formula, double expected)
     {
         _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
+    }
+
+    [Fact]
+    public void Value_ParsesMultipleTrailingPercentSignsLikeExcel()
+    {
+        _eval.Evaluate("=VALUE(\"50%%\")", Sheet()).Should().Be(new NumberValue(0.005));
     }
 
     [Fact]

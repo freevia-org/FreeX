@@ -32,6 +32,7 @@ public partial class MainWindow
         if (msg == WM_ENTERSIZEMOVE)
         {
             _isInWindowResizeMoveLoop = true;
+            _ribbonResizeCompactionPendingOnExit = false;
             _resizeViewportRefreshPending = true;
             _resizeViewportRefreshTimer?.Stop();
             SheetGrid.IsLiveResizing = true;
@@ -39,7 +40,7 @@ public partial class MainWindow
         else if (msg == WM_EXITSIZEMOVE && _isInWindowResizeMoveLoop)
         {
             _isInWindowResizeMoveLoop = false;
-            NormalizeRibbonSurfaceAfterLayoutChange();
+            CompleteRibbonResizeCompaction();
             CompleteViewportResizeRefresh();
         }
 
