@@ -5346,6 +5346,36 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_DateOccurringConditionalFormat_DefaultsInvalidTimePeriod()
+    {
+        var workbook = new Workbook("DateCfInvalidXlsxTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DateOccurring,
+            Priority = 1,
+            DateOccurringPeriod = "not-a-period"
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("xl/worksheets/sheet1.xml")!.Open());
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var rule = XDocument.Load(reader)
+            .Descendants(worksheetNs + "cfRule")
+            .Should()
+            .ContainSingle(element => (string?)element.Attribute("type") == "timePeriod")
+            .Subject;
+
+        rule.Attribute("timePeriod")?.Value.Should().Be("today");
+    }
+
+    [Fact]
     public void XlsxAdapter_Load_DateOccurringConditionalFormat_TrimsTimePeriod()
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -5365,6 +5395,28 @@ public partial class FileAdapterSmokeTests
 
         loadedRule.RuleType.Should().Be(CfRuleType.DateOccurring);
         loadedRule.DateOccurringPeriod.Should().Be("last7Days");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Load_DateOccurringConditionalFormat_DefaultsInvalidTimePeriod()
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = new XDocument(
+            new XElement(worksheetNs + "worksheet",
+                new XElement(worksheetNs + "conditionalFormatting",
+                    new XAttribute("sqref", "A1:A5"),
+                    new XElement(worksheetNs + "cfRule",
+                        new XAttribute("type", "timePeriod"),
+                        new XAttribute("priority", "1"),
+                        new XAttribute("timePeriod", "not-a-period")))));
+
+        var loadedRule = InvokeReadAdvancedConditionalFormats(worksheetXml, worksheetNs)
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        loadedRule.RuleType.Should().Be(CfRuleType.DateOccurring);
+        loadedRule.DateOccurringPeriod.Should().Be("today");
     }
 
     [Fact]
