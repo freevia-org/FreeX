@@ -361,7 +361,12 @@ public sealed class PasteSpecialCommandTests
         var ctx = new SimpleCtx(wb);
         var source = new CellAddress(sheet.Id, 1, 1);
         var destination = new CellAddress(sheet.Id, 3, 2);
-        sheet.ThreadedComments[source] = new ThreadedComment("copy me", "Quinn");
+        var sourceReplies = new List<CommentReply> { new("first", "User") };
+        sheet.ThreadedComments[source] = new ThreadedComment("copy me", "Quinn")
+        {
+            Replies = sourceReplies,
+            IsResolved = true
+        };
         sheet.ThreadedComments[destination] = new ThreadedComment("old", "Codex");
 
         var command = new PasteCommentsCommand(
@@ -372,11 +377,23 @@ public sealed class PasteSpecialCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        sheet.ThreadedComments[destination].Should().Be(new ThreadedComment("copy me", "Quinn"));
+        var pasted = sheet.ThreadedComments[destination];
+        pasted.Text.Should().Be("copy me");
+        pasted.Author.Should().Be("Quinn");
+        pasted.IsResolved.Should().BeTrue();
+        pasted.Replies.Should().Equal(new CommentReply("first", "User"));
+        pasted.Should().NotBeSameAs(sheet.ThreadedComments[source]);
+
+        sourceReplies.Add(new CommentReply("late source edit", "User"));
+        sheet.ThreadedComments[destination].Replies.Should().Equal(new CommentReply("first", "User"));
 
         command.Revert(ctx);
 
-        sheet.ThreadedComments[destination].Should().Be(new ThreadedComment("old", "Codex"));
+        var restored = sheet.ThreadedComments[destination];
+        restored.Text.Should().Be("old");
+        restored.Author.Should().Be("Codex");
+        restored.IsResolved.Should().BeFalse();
+        restored.Replies.Should().BeEmpty();
     }
 
     [Fact]
