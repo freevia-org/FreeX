@@ -322,6 +322,39 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void HitTestSplitDividerHandle_StaysInsideRenderedControlBounds()
+    {
+        var viewport = SplitViewport();
+        const double actualWidth = 500;
+        const double actualHeight = 300;
+
+        GridView.HitTestSplitDividerHandle(
+                viewport,
+                new Point(actualWidth + 10, GridView.ColHeaderHeight + 58),
+                actualWidth,
+                actualHeight)
+            .Should().Be(SplitDividerHandle.None);
+        GridView.HitTestSplitDividerHandle(
+                viewport,
+                new Point(GridView.RowHeaderWidth + 208, actualHeight + 10),
+                actualWidth,
+                actualHeight)
+            .Should().Be(SplitDividerHandle.None);
+        GridView.HitTestSplitDividerHandle(
+                viewport,
+                new Point(actualWidth, GridView.ColHeaderHeight + 58),
+                actualWidth,
+                actualHeight)
+            .Should().Be(SplitDividerHandle.Horizontal);
+        GridView.HitTestSplitDividerHandle(
+                viewport,
+                new Point(GridView.RowHeaderWidth + 208, actualHeight),
+                actualWidth,
+                actualHeight)
+            .Should().Be(SplitDividerHandle.Vertical);
+    }
+
+    [Fact]
     public void CalculateSplitDividerDragTarget_MapsReleasePositionToSplitRowAndColumn()
     {
         var viewport = SplitViewport();

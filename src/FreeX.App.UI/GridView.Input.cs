@@ -167,7 +167,9 @@ public partial class GridView
                 return;
             }
 
-            var splitHandle = Viewport is null ? SplitDividerHandle.None : HitTestSplitDividerHandle(Viewport, pos);
+            var splitHandle = Viewport is null
+                ? SplitDividerHandle.None
+                : HitTestSplitDividerHandle(Viewport, pos, ActualWidth, ActualHeight);
             if (splitHandle != SplitDividerHandle.None)
             {
                 Cursor = splitHandle == SplitDividerHandle.Intersection ? Cursors.SizeAll
@@ -327,7 +329,7 @@ public partial class GridView
             }
         }
 
-        if (Viewport is not null && HitTestSplitDividerHandle(Viewport, pos) is { } splitHandle &&
+        if (Viewport is not null && HitTestSplitDividerHandle(Viewport, pos, ActualWidth, ActualHeight) is { } splitHandle &&
             splitHandle != SplitDividerHandle.None)
         {
             _splitDividerDragHandle = splitHandle;
