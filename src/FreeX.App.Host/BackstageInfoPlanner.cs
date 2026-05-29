@@ -37,15 +37,14 @@ public static class BackstageInfoPlanner
     }
 
     private static string FormatAccessibilitySummary(int issueCount) =>
-        issueCount == 0
-            ? "No accessibility issues found"
-            : issueCount == 1
-                ? "1 issue found"
-                : $"{issueCount} issues found";
+        FormatIssueSummary(issueCount, "No accessibility issues found");
 
     private static string FormatFormulaErrorSummary(int issueCount) =>
+        FormatIssueSummary(issueCount, "No formula errors found");
+
+    private static string FormatIssueSummary(int issueCount, string emptySummary) =>
         issueCount == 0
-            ? "No formula errors found"
+            ? emptySummary
             : issueCount == 1
                 ? "1 issue found"
                 : $"{issueCount} issues found";
