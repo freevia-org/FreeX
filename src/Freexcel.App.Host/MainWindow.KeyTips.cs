@@ -133,24 +133,10 @@ public partial class MainWindow
         UpdateRibbonLayoutIfNeeded(RootGrid);
         KeyTipOverlay.Children.Clear();
 
-        foreach (var element in EnumerateVisualDescendants(RootGrid).OfType<FrameworkElement>())
+        foreach (var element in GetVisibleKeyTipElements(scope))
         {
-            if (ReferenceEquals(element, KeyTipOverlay) ||
-                !element.IsVisible ||
-                element.ActualWidth <= 0 ||
-                element.ActualHeight <= 0 ||
-                (scope == RibbonKeyTipScope.Commands && IsStartScreenVisible() && !IsInsideStartScreenOverlay(element)) ||
-                (scope == RibbonKeyTipScope.Commands && IsInsideUnselectedTabItem(element)))
-            {
-                continue;
-            }
-
-            if (!ShouldShowKeyTipElement(element, scope) ||
-                !IsEnabledKeyTipTarget(element))
-                continue;
-
             var keyTip = RibbonTooltip.GetKeyTip(element);
-            if (string.IsNullOrWhiteSpace(keyTip))
+            if (keyTip is null)
                 continue;
 
             Point origin;
@@ -414,71 +400,89 @@ public partial class MainWindow
                 .Select(RibbonTooltip.GetKeyTip));
 
     private IEnumerable<FrameworkElement> GetRoutableKeyTipElements(RibbonKeyTipScope scope)
+        => GetVisibleKeyTipElements(scope);
+
+    private IEnumerable<FrameworkElement> GetVisibleKeyTipElements(RibbonKeyTipScope scope)
     {
         var seen = new HashSet<FrameworkElement>();
-        foreach (var element in GetVisibleKeyTipElements(scope))
+        foreach (var element in EnumerateKeyTipCandidateElements(scope))
         {
-            if (seen.Add(element))
-                yield return element;
-        }
-
-        if (scope != RibbonKeyTipScope.Commands || RibbonTabs?.SelectedItem is not TabItem selectedTab)
-            yield break;
-
-        foreach (var element in EnumerateVisualDescendants(selectedTab).OfType<FrameworkElement>())
-        {
-            if (!IsRoutableSelectedTabKeyTipElement(element, scope, seen))
-                continue;
-
-            yield return element;
-        }
-
-        foreach (var element in EnumerateLogicalDescendants(selectedTab).OfType<FrameworkElement>())
-        {
-            if (!IsRoutableSelectedTabKeyTipElement(element, scope, seen))
+            if (!seen.Add(element) ||
+                !IsVisibleKeyTipElement(element, scope))
                 continue;
 
             yield return element;
         }
     }
 
-    private bool IsRoutableSelectedTabKeyTipElement(
-        FrameworkElement element,
-        RibbonKeyTipScope scope,
-        ISet<FrameworkElement> seen) =>
-        seen.Add(element) &&
+    private IEnumerable<FrameworkElement> EnumerateKeyTipCandidateElements(RibbonKeyTipScope scope)
+    {
+        if (scope == RibbonKeyTipScope.TopLevel)
+        {
+            if (RibbonTabs is not null)
+            {
+                foreach (var tabItem in RibbonTabs.Items.OfType<TabItem>())
+                    yield return tabItem;
+            }
+
+            foreach (var quickAccessButton in EnumerateQuickAccessKeyTipButtons())
+                yield return quickAccessButton;
+
+            yield break;
+        }
+
+        if (scope == RibbonKeyTipScope.Commands &&
+            IsStartScreenVisible() &&
+            StartScreenOverlay is not null)
+        {
+            foreach (var element in EnumerateKeyTipCandidateDescendants(StartScreenOverlay))
+                yield return element;
+
+            yield break;
+        }
+
+        if (scope == RibbonKeyTipScope.Commands &&
+            RibbonTabs?.SelectedItem is TabItem selectedTab)
+        {
+            var selectedRoot = selectedTab.Content as DependencyObject ?? selectedTab;
+            foreach (var element in EnumerateKeyTipCandidateDescendants(selectedRoot))
+                yield return element;
+
+            yield break;
+        }
+
+        if (RootGrid is not null)
+        {
+            foreach (var element in EnumerateKeyTipCandidateDescendants(RootGrid))
+                yield return element;
+        }
+    }
+
+    private IEnumerable<FrameworkElement> EnumerateQuickAccessKeyTipButtons()
+    {
+        if (SaveQatBtn is not null)
+            yield return SaveQatBtn;
+        if (UndoQatBtn is not null)
+            yield return UndoQatBtn;
+        if (RedoQatBtn is not null)
+            yield return RedoQatBtn;
+    }
+
+    private static IEnumerable<FrameworkElement> EnumerateKeyTipCandidateDescendants(DependencyObject root) =>
+        EnumerateVisualDescendants(root)
+            .Concat(EnumerateLogicalDescendants(root))
+            .OfType<FrameworkElement>();
+
+    private bool IsVisibleKeyTipElement(FrameworkElement element, RibbonKeyTipScope scope) =>
         !ReferenceEquals(element, KeyTipOverlay) &&
         element.IsVisible &&
         element.ActualWidth > 0 &&
         element.ActualHeight > 0 &&
+        (scope != RibbonKeyTipScope.Commands || !IsStartScreenVisible() || IsInsideStartScreenOverlay(element)) &&
         (scope != RibbonKeyTipScope.Commands || !IsInsideUnselectedTabItem(element)) &&
         ShouldShowKeyTipElement(element, scope) &&
-            !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element)) &&
-            IsEnabledKeyTipTarget(element);
-
-    private IEnumerable<FrameworkElement> GetVisibleKeyTipElements(RibbonKeyTipScope scope)
-    {
-        if (RootGrid == null)
-            yield break;
-
-        foreach (var element in EnumerateVisualDescendants(RootGrid).OfType<FrameworkElement>())
-        {
-            if (ReferenceEquals(element, KeyTipOverlay) ||
-                !element.IsVisible ||
-                element.ActualWidth <= 0 ||
-                element.ActualHeight <= 0 ||
-                (scope == RibbonKeyTipScope.Commands && IsStartScreenVisible() && !IsInsideStartScreenOverlay(element)) ||
-                (scope == RibbonKeyTipScope.Commands && IsInsideUnselectedTabItem(element)) ||
-                !ShouldShowKeyTipElement(element, scope) ||
-                !IsEnabledKeyTipTarget(element) ||
-                string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element)))
-            {
-                continue;
-            }
-
-            yield return element;
-        }
-    }
+        IsEnabledKeyTipTarget(element) &&
+        !string.IsNullOrWhiteSpace(RibbonTooltip.GetKeyTip(element));
 
     private bool IsStartScreenVisible() =>
         StartScreenOverlay?.Visibility == Visibility.Visible;
