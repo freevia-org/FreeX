@@ -189,20 +189,19 @@ public static class FillSeriesPlanner
     private static double AddMonths(double value, int months, bool preserveEndOfMonth)
     {
         var date = DateTime.FromOADate(value).AddMonths(months);
-        if (preserveEndOfMonth)
-            date = new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month), date.Hour, date.Minute, date.Second, date.Millisecond, date.Kind);
-
-        return date.ToOADate();
+        return PreserveEndOfMonth(date, preserveEndOfMonth).ToOADate();
     }
 
     private static double AddYears(double value, int years, bool preserveEndOfMonth)
     {
         var date = DateTime.FromOADate(value).AddYears(years);
-        if (preserveEndOfMonth)
-            date = new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month), date.Hour, date.Minute, date.Second, date.Millisecond, date.Kind);
-
-        return date.ToOADate();
+        return PreserveEndOfMonth(date, preserveEndOfMonth).ToOADate();
     }
+
+    private static DateTime PreserveEndOfMonth(DateTime date, bool preserveEndOfMonth) =>
+        preserveEndOfMonth
+            ? new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month), date.Hour, date.Minute, date.Second, date.Millisecond, date.Kind)
+            : date;
 
     private static double AddWeekdays(double value, int weekdays)
     {
