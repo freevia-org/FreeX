@@ -2328,12 +2328,12 @@
                                                 local:RibbonTooltip.Description="Browse and insert financial functions like PMT, NPV, and IRR."/>
                                         <Button Content="Logical"  Width="56" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaLogicalBtn_Click"
                                                 local:RibbonMetadata.DropdownMenuButton="True"
-                                                local:RibbonTooltip.Title="Logical Functions"
+                                                local:RibbonTooltip.Title="Logical"
                                                 local:RibbonTooltip.KeyTip="L"
                                                 local:RibbonTooltip.Description="Browse and insert logical functions like IF, AND, OR, and NOT."/>
                                         <Button Content="Text"     Width="48" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaTextBtn_Click"
                                                 local:RibbonMetadata.DropdownMenuButton="True"
-                                                local:RibbonTooltip.Title="Text Functions"
+                                                local:RibbonTooltip.Title="Text"
                                                 local:RibbonTooltip.KeyTip="TF"
                                                 local:RibbonTooltip.Description="Browse and insert text manipulation functions like LEFT, MID, and TRIM."/>
                                         <Button Content="Date"     Width="48" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaDateBtn_Click"
