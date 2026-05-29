@@ -27,25 +27,25 @@ public static partial class KeyboardShortcutMatcher
     public static bool TryGetGridShortcut(Key key, ModifierKeys modifiers, out KeyboardGridShortcut shortcut)
     {
         shortcut = default;
-        if (modifiers == ModifierKeys.Control && key is Key.D9 or Key.NumPad9)
+        if (modifiers == ModifierKeys.Control && key is (Key.D9 or Key.NumPad9))
         {
             shortcut = KeyboardGridShortcut.HideRows;
             return true;
         }
 
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is Key.D9 or Key.NumPad9)
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is (Key.D9 or Key.NumPad9))
         {
             shortcut = KeyboardGridShortcut.UnhideRows;
             return true;
         }
 
-        if (modifiers == ModifierKeys.Control && key is Key.D0 or Key.NumPad0)
+        if (modifiers == ModifierKeys.Control && key is (Key.D0 or Key.NumPad0))
         {
             shortcut = KeyboardGridShortcut.HideColumns;
             return true;
         }
 
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is Key.D0 or Key.NumPad0)
+        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is (Key.D0 or Key.NumPad0))
         {
             shortcut = KeyboardGridShortcut.UnhideColumns;
             return true;
@@ -76,7 +76,7 @@ public static partial class KeyboardShortcutMatcher
         }
 
         if (modifiers == ModifierKeys.Control && key == Key.Multiply ||
-            modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is Key.Multiply or Key.D8)
+            modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is (Key.Multiply or Key.D8))
         {
             shortcut = KeyboardSelectionShortcut.SelectCurrentRegion;
             return true;
@@ -149,7 +149,7 @@ public static partial class KeyboardShortcutMatcher
             return true;
         }
 
-        if (key is Key.D5 or Key.NumPad5 && modifiers == ModifierKeys.Control)
+        if (key is (Key.D5 or Key.NumPad5) && modifiers == ModifierKeys.Control)
         {
             shortcut = FontToggleShortcut.Strikethrough;
             return true;

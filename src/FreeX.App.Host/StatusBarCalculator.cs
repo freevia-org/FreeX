@@ -8,10 +8,12 @@ public static class StatusBarCalculator
 {
     public readonly record struct Stats(double Sum, int Count, int NumericalCount, double? Average, double? Min, double? Max);
 
+    private static readonly Stats EmptyStats = new(0, 0, 0, null, null, null);
+
     public static Stats Calculate(Sheet sheet, GridRange range)
     {
         if (sheet.GetUsedRange() is not { } usedRange || !usedRange.Overlaps(range))
-            return new Stats(0, 0, 0, null, null, null);
+            return EmptyStats;
 
         double sum = 0;
         int count = 0;

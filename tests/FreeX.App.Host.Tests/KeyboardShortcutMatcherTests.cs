@@ -152,6 +152,20 @@ public sealed class KeyboardShortcutMatcherTests
     }
 
     [Theory]
+    [InlineData(Key.NumPad9, ModifierKeys.None)]
+    [InlineData(Key.NumPad9, ModifierKeys.Shift)]
+    [InlineData(Key.NumPad9, ModifierKeys.Alt)]
+    [InlineData(Key.NumPad0, ModifierKeys.None)]
+    [InlineData(Key.NumPad0, ModifierKeys.Shift)]
+    [InlineData(Key.NumPad0, ModifierKeys.Alt)]
+    public void TryGetGridShortcut_AliasKeysRequireExactModifiers(Key key, ModifierKeys modifiers)
+    {
+        var result = KeyboardShortcutMatcher.TryGetGridShortcut(key, modifiers, out _);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData(Key.Space, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectAll)]
     [InlineData(Key.Space, ModifierKeys.Control, KeyboardSelectionShortcut.SelectWholeColumns)]
     [InlineData(Key.Space, ModifierKeys.Shift, KeyboardSelectionShortcut.SelectWholeRows)]
@@ -166,6 +180,20 @@ public sealed class KeyboardShortcutMatcherTests
         result.Should().Be(expected is not null);
         if (expected is not null)
             shortcut.Should().Be(expected.Value);
+    }
+
+    [Theory]
+    [InlineData(Key.Multiply, ModifierKeys.None)]
+    [InlineData(Key.Multiply, ModifierKeys.Shift)]
+    [InlineData(Key.Multiply, ModifierKeys.Alt)]
+    [InlineData(Key.D8, ModifierKeys.None)]
+    [InlineData(Key.D8, ModifierKeys.Shift)]
+    [InlineData(Key.D8, ModifierKeys.Alt)]
+    public void TryGetSelectionShortcut_CurrentRegionKeysRequireExactModifiers(Key key, ModifierKeys modifiers)
+    {
+        var result = KeyboardShortcutMatcher.TryGetSelectionShortcut(key, modifiers, out _);
+
+        result.Should().BeFalse();
     }
 
     [Theory]
@@ -361,6 +389,23 @@ public sealed class KeyboardShortcutMatcherTests
     }
 
     [Theory]
+    [InlineData(Key.L, Key.None, ModifierKeys.None)]
+    [InlineData(Key.W, Key.None, ModifierKeys.None)]
+    [InlineData(Key.NumPad1, Key.None, ModifierKeys.None)]
+    [InlineData(Key.Add, Key.None, ModifierKeys.None)]
+    [InlineData(Key.Add, Key.None, ModifierKeys.Control)]
+    [InlineData(Key.P, Key.None, ModifierKeys.None)]
+    [InlineData(Key.Subtract, Key.None, ModifierKeys.None)]
+    [InlineData(Key.Subtract, Key.None, ModifierKeys.Control)]
+    [InlineData(Key.Decimal, Key.None, ModifierKeys.None)]
+    public void TryGetCommandShortcut_AliasKeysRequireExactModifiers(Key key, Key systemKey, ModifierKeys modifiers)
+    {
+        var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out _);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData(Key.Oem3, NumberFormatShortcut.General)]
     [InlineData(Key.D1, NumberFormatShortcut.Number)]
     [InlineData(Key.D2, NumberFormatShortcut.Time)]
@@ -423,6 +468,19 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.U, ModifierKeys.Control | ModifierKeys.Alt)]
     [InlineData(Key.U, ModifierKeys.Control | ModifierKeys.Shift)]
     public void TryGetFontToggleShortcut_DoesNotStealExtraModifierCombinations(Key key, ModifierKeys modifiers)
+    {
+        var result = KeyboardShortcutMatcher.TryGetFontToggleShortcut(key, modifiers, out _);
+
+        result.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(Key.NumPad2, ModifierKeys.None)]
+    [InlineData(Key.NumPad3, ModifierKeys.None)]
+    [InlineData(Key.NumPad4, ModifierKeys.None)]
+    [InlineData(Key.NumPad5, ModifierKeys.None)]
+    [InlineData(Key.NumPad5, ModifierKeys.Shift)]
+    public void TryGetFontToggleShortcut_AliasKeysRequireExactModifiers(Key key, ModifierKeys modifiers)
     {
         var result = KeyboardShortcutMatcher.TryGetFontToggleShortcut(key, modifiers, out _);
 
