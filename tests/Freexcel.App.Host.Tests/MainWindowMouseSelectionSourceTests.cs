@@ -283,6 +283,27 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void MouseContextMenuHidesValidationDropdownAfterSelectionAdjustment()
+    {
+        var contextMenuSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+
+        var contextMenuHandler = contextMenuSource[
+            contextMenuSource.IndexOf("private void OnGridContextMenuRequested", StringComparison.Ordinal)..
+            contextMenuSource.IndexOf("private void OnGridHeaderContextMenuRequested", StringComparison.Ordinal)];
+
+        contextMenuHandler.Should().Contain("SetActiveCell(actualAddr);");
+        contextMenuHandler.Should().Contain("HideValidationDropdown();");
+        contextMenuHandler.Should().Contain("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)");
+        contextMenuHandler.IndexOf("HideValidationDropdown();", StringComparison.Ordinal)
+            .Should()
+            .BeGreaterThan(contextMenuHandler.IndexOf("SetActiveCell(actualAddr);", StringComparison.Ordinal));
+        contextMenuHandler.IndexOf("HideValidationDropdown();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(contextMenuHandler.IndexOf("WorksheetContextMenuPlanner.BuildCommands(targetKind, state)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void MouseUpSelectionIgnoresNonLeftButtonsBeforeCompletingDrag()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
