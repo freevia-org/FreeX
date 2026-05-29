@@ -12,6 +12,12 @@ public sealed record AppIssueReportContext(
 
 public static partial class AppIssueReporter
 {
+    private const string WhatHappenedPrompt = "What happened?";
+    private const string WhatDidYouExpectPrompt = "What did you expect?";
+    private const string PrivacySensitiveDataList = "workbook contents, formulas, file paths, or private data";
+    private const string DiagnosticsPrivacyNote = $"Do not include {PrivacySensitiveDataList} unless you choose to share them.";
+    private const string IssuePrivacyNote = $"Please do not include {PrivacySensitiveDataList} unless you choose to share them.";
+
     public static AppIssueReportContext CreateContext(
         string issueBaseUrl,
         AppDiagnosticsMetadata metadata,
@@ -49,13 +55,14 @@ public static partial class AppIssueReporter
         builder.AppendLine();
         AppendDiagnosticsMetadata(builder, context);
         builder.AppendLine();
-        builder.AppendLine("What happened?");
+        builder.AppendLine(WhatHappenedPrompt);
         builder.AppendLine();
-        builder.AppendLine("What did you expect?");
+        builder.AppendLine(WhatDidYouExpectPrompt);
         builder.AppendLine();
         builder.AppendLine("Can you reproduce it? If yes, list the steps:");
         builder.AppendLine();
-        builder.AppendLine("Privacy note: Do not include workbook contents, formulas, file paths, or private data unless you choose to share them.");
+        builder.Append("Privacy note: ");
+        builder.AppendLine(DiagnosticsPrivacyNote);
         return builder.ToString().TrimEnd();
     }
 
@@ -74,17 +81,20 @@ public static partial class AppIssueReporter
         builder.AppendLine("## Diagnostics");
         AppendDiagnosticsMetadata(builder, context);
         builder.AppendLine();
-        builder.AppendLine("## What happened?");
+        AppendIssueSectionHeading(builder, WhatHappenedPrompt);
         builder.AppendLine();
-        builder.AppendLine("## What did you expect?");
+        AppendIssueSectionHeading(builder, WhatDidYouExpectPrompt);
         builder.AppendLine();
         builder.AppendLine("## Steps to reproduce");
         builder.AppendLine("1. ");
         builder.AppendLine();
         builder.AppendLine("## Privacy");
-        builder.AppendLine("Please do not include workbook contents, formulas, file paths, or private data unless you choose to share them.");
+        builder.AppendLine(IssuePrivacyNote);
         return builder.ToString();
     }
+
+    private static void AppendIssueSectionHeading(StringBuilder builder, string prompt) =>
+        builder.AppendLine($"## {prompt}");
 
     private static void AppendDiagnosticsMetadata(StringBuilder builder, AppIssueReportContext context)
     {

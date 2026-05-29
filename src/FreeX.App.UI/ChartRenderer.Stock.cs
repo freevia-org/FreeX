@@ -162,24 +162,38 @@ public static partial class ChartRenderer
         if (categories.Count == 0)
             return [];
 
-        var parsedDates = new List<DateTime>(categories.Count);
-        foreach (var category in categories)
+        var values = new double[categories.Count];
+        var minValue = double.PositiveInfinity;
+        var maxValue = double.NegativeInfinity;
+        for (var index = 0; index < categories.Count; index++)
         {
-            if (!TryParseStockDateCategory(category, out var parsed))
-                return Enumerable.Range(0, categories.Count).Select(static index => (double)index).ToArray();
+            if (!TryParseStockDateCategory(categories[index], out var parsed))
+                return BuildStockCategoryIndexes(categories.Count);
 
-            parsedDates.Add(parsed.Date);
+            var value = DateTimeAxis.ToDouble(parsed.Date);
+            values[index] = value;
+            if (value < minValue)
+                minValue = value;
+            if (value > maxValue)
+                maxValue = value;
         }
 
-        var values = parsedDates.Select(DateTimeAxis.ToDouble).ToArray();
         dateAxis = new DateTimeAxis
         {
             Position = AxisPosition.Bottom,
             StringFormat = "d",
             IntervalType = DateTimeIntervalType.Days,
-            Minimum = values.Min() - 0.5,
-            Maximum = values.Max() + 0.5
+            Minimum = minValue - 0.5,
+            Maximum = maxValue + 0.5
         };
+        return values;
+    }
+
+    private static double[] BuildStockCategoryIndexes(int count)
+    {
+        var values = new double[count];
+        for (var index = 0; index < values.Length; index++)
+            values[index] = index;
         return values;
     }
 

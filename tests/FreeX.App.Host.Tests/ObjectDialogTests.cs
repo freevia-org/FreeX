@@ -202,10 +202,13 @@ public sealed class ObjectDialogTests
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
 
         source.Should().Contain("AutomationProperties.SetName(_heightBox, \"Object height\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_heightBox, \"ObjectSizeHeightBox\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_heightBox, \"Enter the object's height.\");");
         source.Should().Contain("AutomationProperties.SetName(_widthBox, \"Object width\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_widthBox, \"ObjectSizeWidthBox\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_widthBox, \"Enter the object's width.\");");
         source.Should().Contain("AutomationProperties.SetName(_lockAspectRatioBox, \"Lock aspect ratio\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_lockAspectRatioBox, \"ObjectSizeLockAspectRatioCheckBox\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_lockAspectRatioBox, \"Keep the object's width and height proportional.\");");
     }
 
@@ -367,6 +370,7 @@ public sealed class ObjectDialogTests
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
 
         source.Should().Contain("AutomationProperties.SetName(_rotationBox, \"Rotation degrees\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_rotationBox, \"RotationDegreesBox\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_rotationBox, \"Enter the object's rotation in degrees.\");");
     }
 
@@ -420,12 +424,16 @@ public sealed class ObjectDialogTests
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class PictureCropDialog", "");
 
         source.Should().Contain("AutomationProperties.SetName(_cropLeftBox, \"Crop left\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_cropLeftBox, \"PictureCropLeftBox\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_cropLeftBox, \"Enter the left crop percentage.\");");
         source.Should().Contain("AutomationProperties.SetName(_cropTopBox, \"Crop top\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_cropTopBox, \"PictureCropTopBox\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_cropTopBox, \"Enter the top crop percentage.\");");
         source.Should().Contain("AutomationProperties.SetName(_cropRightBox, \"Crop right\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_cropRightBox, \"PictureCropRightBox\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_cropRightBox, \"Enter the right crop percentage.\");");
         source.Should().Contain("AutomationProperties.SetName(_cropBottomBox, \"Crop bottom\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_cropBottomBox, \"PictureCropBottomBox\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_cropBottomBox, \"Enter the bottom crop percentage.\");");
     }
 
