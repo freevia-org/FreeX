@@ -2559,7 +2559,7 @@
                                         <local:RibbonIcon Kind="Filter" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
                                     <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"
-                                            local:RibbonTooltip.Title="Clear Filter"
+                                            local:RibbonTooltip.Title="Clear"
                                             local:RibbonTooltip.KeyTip="C"
                                             local:RibbonTooltip.Description="Remove all active filters and show all rows in the current range.">
                                         <local:RibbonIcon Kind="Clear" IconSize="16" HorizontalAlignment="Center"/>
