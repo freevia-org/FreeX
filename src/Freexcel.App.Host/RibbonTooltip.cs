@@ -38,9 +38,19 @@ public static class RibbonTooltip
 
     public static bool TryOpenSubmenuForKeyTip(ItemsControl menu, string keyTip, out MenuItem? openedSubmenu)
     {
+        var normalizedKeyTip = NormalizeKeyTip(keyTip);
+        if (normalizedKeyTip is null)
+        {
+            openedSubmenu = null;
+            return false;
+        }
+
         foreach (var item in menu.Items.OfType<MenuItem>())
         {
-            if (string.Equals(GetKeyTip(item), keyTip, StringComparison.OrdinalIgnoreCase) &&
+            if (!item.IsEnabled)
+                continue;
+
+            if (string.Equals(NormalizeKeyTip(GetKeyTip(item)), normalizedKeyTip, StringComparison.OrdinalIgnoreCase) &&
                 item.Items.Count > 0)
             {
                 item.IsSubmenuOpen = true;
@@ -48,18 +58,32 @@ public static class RibbonTooltip
                 return true;
             }
 
-            if (TryOpenSubmenuForKeyTip(item, keyTip, out openedSubmenu))
+            var wasOpen = item.IsSubmenuOpen;
+            if (item.Items.Count > 0)
+                item.IsSubmenuOpen = true;
+
+            if (TryOpenSubmenuForKeyTip(item, normalizedKeyTip, out openedSubmenu))
+            {
+                item.IsSubmenuOpen = true;
+                if (openedSubmenu is not null)
+                    openedSubmenu.IsSubmenuOpen = true;
                 return true;
+            }
+
+            item.IsSubmenuOpen = wasOpen;
         }
 
         openedSubmenu = null;
         return false;
     }
 
+    private static string? NormalizeKeyTip(string? keyTip) =>
+        string.IsNullOrWhiteSpace(keyTip) ? null : keyTip.Trim();
+
     private static void OnKeyTipChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         if (d is MenuItem menuItem)
-            menuItem.InputGestureText = e.NewValue as string ?? "";
+            menuItem.InputGestureText = NormalizeKeyTip(e.NewValue as string) ?? "";
     }
 
     private static void OnChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

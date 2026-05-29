@@ -265,7 +265,11 @@ public static partial class RibbonIconFactory
         if (string.IsNullOrWhiteSpace(text))
             return string.Empty;
 
-        var lower = text.Trim().ToLowerInvariant().Replace("&amp;", "and", StringComparison.Ordinal);
+        var lower = text
+            .Trim()
+            .ToLowerInvariant()
+            .Replace("&amp;", "and", StringComparison.Ordinal)
+            .Replace("&", "and", StringComparison.Ordinal);
         var builder = new System.Text.StringBuilder(lower.Length);
         var pendingDash = false;
 

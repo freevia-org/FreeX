@@ -4,8 +4,10 @@ namespace Freexcel.Core.IO;
 
 public sealed partial class NativeJsonAdapter
 {
-    private static WorksheetRepeatRange? ToRepeatRange(RepeatRangeDto? dto) =>
-        dto is null ? null : new WorksheetRepeatRange(dto.Start, dto.End);
+    private static WorksheetRepeatRange? ToRepeatRange(RepeatRangeDto? dto, uint max) =>
+        dto is { Start: >= 1 } && dto.End >= dto.Start && dto.End <= max
+            ? new WorksheetRepeatRange(dto.Start, dto.End)
+            : null;
 
     private static RepeatRangeDto? FromRepeatRange(WorksheetRepeatRange? range) =>
         range is null ? null : new RepeatRangeDto { Start = range.Value.Start, End = range.Value.End };

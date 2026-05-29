@@ -98,6 +98,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.OemPlus, Key.None, ModifierKeys.Control | ModifierKeys.Shift, true)]
     [InlineData(Key.None, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Shift, true)]
     [InlineData(Key.Add, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.System, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    [InlineData(Key.System, Key.Add, ModifierKeys.Control | ModifierKeys.Alt, false)]
     [InlineData(Key.C, Key.OemPlus, ModifierKeys.Control, false)]
     [InlineData(Key.C, Key.OemPlus, ModifierKeys.Control | ModifierKeys.Shift, false)]
     public void IsCtrlPlus_RecognizesExcelInsertShortcut(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
@@ -111,6 +113,8 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.None, Key.OemMinus, ModifierKeys.Control, true)]
     [InlineData(Key.System, Key.OemMinus, ModifierKeys.Control, true)]
     [InlineData(Key.Subtract, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.System, Key.OemMinus, ModifierKeys.Control | ModifierKeys.Alt, false)]
+    [InlineData(Key.System, Key.Subtract, ModifierKeys.Control | ModifierKeys.Alt, false)]
     [InlineData(Key.C, Key.OemMinus, ModifierKeys.Control, false)]
     public void IsCtrlMinus_RecognizesExcelDeleteShortcut(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
     {
@@ -120,8 +124,10 @@ public sealed class KeyboardShortcutMatcherTests
     [Theory]
     [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Alt, true)]
     [InlineData(Key.System, Key.V, ModifierKeys.Control | ModifierKeys.Alt, true)]
+    [InlineData(Key.System, Key.V, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt, false)]
     [InlineData(Key.V, Key.None, ModifierKeys.Control, false)]
     [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false)]
+    [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt, false)]
     [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Alt, false)]
     [InlineData(Key.C, Key.V, ModifierKeys.Control | ModifierKeys.Alt, false)]
     public void IsPasteSpecialShortcut_RecognizesExcelCtrlAltVOnly(Key key, Key systemKey, ModifierKeys modifiers, bool expected)
@@ -149,6 +155,7 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.Space, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectAll)]
     [InlineData(Key.Space, ModifierKeys.Control, KeyboardSelectionShortcut.SelectWholeColumns)]
     [InlineData(Key.Space, ModifierKeys.Shift, KeyboardSelectionShortcut.SelectWholeRows)]
+    [InlineData(Key.Multiply, ModifierKeys.Control, KeyboardSelectionShortcut.SelectCurrentRegion)]
     [InlineData(Key.Multiply, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectCurrentRegion)]
     [InlineData(Key.D8, ModifierKeys.Control | ModifierKeys.Shift, KeyboardSelectionShortcut.SelectCurrentRegion)]
     [InlineData(Key.D8, ModifierKeys.Control, null)]
@@ -293,12 +300,57 @@ public sealed class KeyboardShortcutMatcherTests
 
     [Theory]
     [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.C, ModifierKeys.Control | ModifierKeys.Alt)]
     [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
     [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.X, ModifierKeys.Control | ModifierKeys.Alt)]
     [InlineData(Key.A, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.A, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.N, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.O, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.S, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.T, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.L, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.K, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.D, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.R, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.E, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.PageUp, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.PageDown, ModifierKeys.Control | ModifierKeys.Alt)]
     [InlineData(Key.Z, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
     [InlineData(Key.D8, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
     [InlineData(Key.Y, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.Y, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.Oem3, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemSemicolon, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemQuotes, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemOpenBrackets, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemCloseBrackets, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.P, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.L, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.V, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemSemicolon, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemQuotes, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemOpenBrackets, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.OemCloseBrackets, ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F1, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F2, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F3, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F4, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F4, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F6, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F6, ModifierKeys.Control)]
+    [InlineData(Key.System, Key.F6, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.System, Key.F6, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F9, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F10, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F10, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F11, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F11, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F12, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.F12, ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.Apps, ModifierKeys.Alt)]
     [InlineData(Key.Back, Key.None, ModifierKeys.Alt)]
     [InlineData(Key.Back, Key.None, ModifierKeys.Alt | ModifierKeys.Shift)]
     public void TryGetCommandShortcut_DoesNotStealExtraModifierCombinations(Key key, Key systemKey, ModifierKeys modifiers)
@@ -325,6 +377,24 @@ public sealed class KeyboardShortcutMatcherTests
 
         result.Should().BeTrue();
         shortcut.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.Oem3)]
+    [InlineData(Key.D1)]
+    [InlineData(Key.D2)]
+    [InlineData(Key.D3)]
+    [InlineData(Key.D4)]
+    [InlineData(Key.D5)]
+    [InlineData(Key.D6)]
+    public void TryGetNumberFormatShortcut_DoesNotStealAltModifiedChords(Key key)
+    {
+        var result = KeyboardShortcutMatcher.TryGetNumberFormatShortcut(
+            key,
+            ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt,
+            out _);
+
+        result.Should().BeFalse();
     }
 
     [Theory]
@@ -370,6 +440,19 @@ public sealed class KeyboardShortcutMatcherTests
         result.Should().Be(expected is not null);
         if (expected is not null)
             shortcut.Should().Be(expected.Value);
+    }
+
+    [Theory]
+    [InlineData(Key.D7)]
+    [InlineData(Key.OemMinus)]
+    public void TryGetBorderShortcut_DoesNotStealAltModifiedChords(Key key)
+    {
+        var result = KeyboardShortcutMatcher.TryGetBorderShortcut(
+            key,
+            ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt,
+            out _);
+
+        result.Should().BeFalse();
     }
 
     private static IEnumerable<(Key Key, ModifierKeys Modifiers)> EnumeratePhysicalChords()

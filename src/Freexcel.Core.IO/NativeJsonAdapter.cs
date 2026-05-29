@@ -60,10 +60,14 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             if (IsSupportedFormulaErrorCode(errorCode))
                 workbook.DisabledFormulaErrorCodes.Add(errorCode);
 
+        var loadedSheetsBySourceName = new Dictionary<string, Sheet>(StringComparer.OrdinalIgnoreCase);
+        var sheetIndex = 1;
         foreach (var sDto in dto.Sheets ?? [])
         {
-            if (string.IsNullOrEmpty(sDto?.Name)) continue;
-            var sheet = workbook.AddSheet(sDto.Name);
+            if (sDto is null) continue;
+            var sheet = workbook.AddSheet(UniqueSheetName(workbook, sDto.Name, sheetIndex++));
+            if (!string.IsNullOrWhiteSpace(sDto.Name))
+                loadedSheetsBySourceName.TryAdd(sDto.Name, sheet);
             sheet.IsHidden = sDto.IsHidden;
             sheet.TabColor = sDto.TabColor is { } tabColor ? ParseColor(tabColor) : null;
             sheet.IsProtected = sDto.IsProtected;
@@ -167,8 +171,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.PrintGridlines = sDto.PrintGridlines;
             sheet.PrintHeadings = sDto.PrintHeadings;
             sheet.PrintOptionsMetadata = ToWorksheetPrintOptionsMetadata(sDto.PrintOptionsMetadata);
-            sheet.PrintTitleRows = ToRepeatRange(sDto.PrintTitleRows);
-            sheet.PrintTitleColumns = ToRepeatRange(sDto.PrintTitleColumns);
+            sheet.PrintTitleRows = ToRepeatRange(sDto.PrintTitleRows, CellAddress.MaxRow);
+            sheet.PrintTitleColumns = ToRepeatRange(sDto.PrintTitleColumns, CellAddress.MaxCol);
             sheet.PageHeader = ToHeaderFooter(sDto.PageHeader);
             sheet.PageFooter = ToHeaderFooter(sDto.PageFooter);
             sheet.FirstPageHeader = ToHeaderFooter(sDto.FirstPageHeader);
@@ -329,6 +333,13 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             }
         }
 
+        if (workbook.Sheets.Count == 0)
+            workbook.AddSheet("Sheet1");
+
+        var maxLoadedSheetIndex = Math.Max(0, workbook.Sheets.Count - 1);
+        workbook.FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.FirstVisibleSheetIndex, maxLoadedSheetIndex);
+        workbook.ActiveSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.ActiveSheetIndex, maxLoadedSheetIndex);
+
         foreach (var namedRangeDto in dto.NamedRanges ?? [])
         {
             if (string.IsNullOrWhiteSpace(namedRangeDto?.Name) ||
@@ -338,7 +349,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 continue;
             }
 
-            var sheet = workbook.GetSheet(namedRangeDto.SheetName);
+            var sheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, namedRangeDto.SheetName);
             if (sheet is null)
                 continue;
 
@@ -358,9 +369,16 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         foreach (var viewDto in dto.CustomViews ?? [])
         {
             if (string.IsNullOrWhiteSpace(viewDto?.Name)) continue;
+            var sheets = (viewDto.Sheets ?? [])
+                .Select(sheetDto => ToWorksheetCustomViewState(sheetDto, workbook, loadedSheetsBySourceName))
+                .OfType<WorksheetCustomViewState>()
+                .ToList();
+            if (sheets.Count == 0)
+                continue;
+
             workbook.CustomViews.Add(new WorkbookCustomView(
                 viewDto.Name,
-                (viewDto.Sheets ?? []).Select(ToWorksheetCustomViewState).ToList(),
+                sheets,
                 string.IsNullOrWhiteSpace(viewDto.Id) ? null : viewDto.Id,
                 viewDto.IncludePrintSettings ?? true,
                 viewDto.IncludeHiddenRowsColumnsAndFilterSettings ?? true));
@@ -374,7 +392,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 continue;
             }
 
-            var sheet = workbook.Sheets.FirstOrDefault(s => s.Name == watchDto.SheetName);
+            var sheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, watchDto.SheetName);
             if (sheet is null)
                 continue;
 
@@ -399,7 +417,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     continue;
                 }
 
-                var sheet = workbook.Sheets.FirstOrDefault(s => s.Name == changeDto.SheetName);
+                var sheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, changeDto.SheetName);
                 if (sheet is null)
                     continue;
 
@@ -423,6 +441,42 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         }
 
         return workbook;
+    }
+
+    private static Sheet? ResolveLoadedSheet(
+        Workbook workbook,
+        IReadOnlyDictionary<string, Sheet> loadedSheetsBySourceName,
+        string sheetName) =>
+        workbook.GetSheet(sheetName) ??
+        (loadedSheetsBySourceName.TryGetValue(sheetName, out var sheet) ? sheet : null);
+
+    private static string UniqueSheetName(Workbook workbook, string? rawName, int index)
+    {
+        var baseName = string.IsNullOrWhiteSpace(rawName) ? $"Sheet{index}" : rawName;
+        baseName = SanitizeSheetName(baseName);
+        var candidate = baseName;
+        var suffix = 1;
+        while (workbook.ValidateSheetName(candidate) is not null)
+        {
+            var marker = $" ({suffix++})";
+            candidate = string.Concat(baseName.AsSpan(0, Math.Min(baseName.Length, 31 - marker.Length)), marker);
+        }
+
+        return candidate;
+    }
+
+    private static string SanitizeSheetName(string value)
+    {
+        Span<char> invalid = [':', '\\', '/', '?', '*', '[', ']'];
+        var builder = new System.Text.StringBuilder(value.Length);
+        foreach (var ch in value)
+            builder.Append(invalid.Contains(ch) ? '_' : ch);
+
+        var sanitized = builder.ToString().Trim('\'');
+        if (string.IsNullOrWhiteSpace(sanitized))
+            return "Sheet";
+
+        return sanitized.Length <= 31 ? sanitized : sanitized[..31];
     }
 
     private static string FormatColor(CellColor color) => NativeJsonColorMapper.FormatColor(color);

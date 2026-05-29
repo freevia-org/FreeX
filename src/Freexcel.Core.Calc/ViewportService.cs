@@ -20,6 +20,7 @@ public sealed partial class ViewportService : IViewportService
         var cells = new List<DisplayCell>();
         var rowMetrics = BuildFrozenAwareRowMetrics(sheet, request.TopRow, request.AvailableHeight);
         var colMetrics = BuildFrozenAwareColMetrics(sheet, request.LeftCol, request.AvailableWidth);
+        var hasAnyCellComments = HasAnyCellComments(sheet);
 
         // Pre-compute CF rule order and aggregates once per frame rather than per cell.
         var cfContext = BuildConditionalFormatContext(sheet);
@@ -55,7 +56,7 @@ public sealed partial class ViewportService : IViewportService
                         null,
                         style,
                         cfIcon,
-                        HasCellComment(sheet, addr)
+                        HasCellComment(sheet, addr, hasAnyCellComments)
                     ));
                 }
                 else
@@ -79,10 +80,10 @@ public sealed partial class ViewportService : IViewportService
                             null,
                             style,
                             cfIcon,
-                            HasCellComment(sheet, addr)
+                            HasCellComment(sheet, addr, hasAnyCellComments)
                         ));
                     }
-                    else if (HasCellComment(sheet, addr))
+                    else if (HasCellComment(sheet, addr, hasAnyCellComments))
                     {
                         cells.Add(new DisplayCell(
                             rowMetric.Row,
@@ -121,7 +122,7 @@ public sealed partial class ViewportService : IViewportService
                 sheet.SplitColumn,
                 splitTopRows,
                 splitLeftColumns,
-                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas, cfContext),
+                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas, cfContext, hasAnyCellComments),
                 topRightColumns,
                 bottomLeftRows)
             : null;
@@ -188,7 +189,8 @@ public sealed partial class ViewportService : IViewportService
         IReadOnlyList<RowMetric> bottomLeftRows,
         IReadOnlyList<ColMetric> topRightColumns,
         bool includeFormulas,
-        CfEvaluationContext cfContext)
+        CfEvaluationContext cfContext,
+        bool hasAnyCellComments)
     {
         var cells = new List<DisplayCell>();
         var seen = new HashSet<(uint Row, uint Col)>();
@@ -196,15 +198,15 @@ public sealed partial class ViewportService : IViewportService
         foreach (var row in topRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments);
             foreach (var column in topRightColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments);
         }
 
         foreach (var row in bottomLeftRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext);
+                AddDisplayCell(cells, seen, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments);
         }
 
         return cells;
@@ -220,7 +222,8 @@ public sealed partial class ViewportService : IViewportService
         uint col,
         int targetWidthCharacters,
         bool includeFormulas,
-        CfEvaluationContext cfContext)
+        CfEvaluationContext cfContext,
+        bool hasAnyCellComments)
     {
         if (!seen.Add((row, col)))
             return;
@@ -249,7 +252,7 @@ public sealed partial class ViewportService : IViewportService
                 null,
                 style,
                 cfIcon,
-                HasCellComment(sheet, addr)));
+                HasCellComment(sheet, addr, hasAnyCellComments)));
             return;
         }
 
@@ -274,13 +277,18 @@ public sealed partial class ViewportService : IViewportService
             null,
             style,
             cfIcon,
-            HasCellComment(sheet, addr)));
+            HasCellComment(sheet, addr, hasAnyCellComments)));
         }
     }
 
-    private static bool HasCellComment(Sheet sheet, CellAddress address) =>
-        sheet.Comments.ContainsKey(address) ||
-        sheet.ThreadedComments.ContainsKey(address);
+    private static bool HasAnyCellComments(Sheet sheet) =>
+        sheet.Comments.Count != 0 ||
+        sheet.ThreadedComments.Count != 0;
+
+    private static bool HasCellComment(Sheet sheet, CellAddress address, bool hasAnyCellComments) =>
+        hasAnyCellComments &&
+        (sheet.Comments.ContainsKey(address) ||
+         sheet.ThreadedComments.ContainsKey(address));
 
     // ── Conditional format evaluation ─────────────────────────────────────────
 

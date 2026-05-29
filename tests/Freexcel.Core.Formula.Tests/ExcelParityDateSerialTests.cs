@@ -49,11 +49,11 @@ public sealed class ExcelParityDateSerialTests
     }
 
     [Theory]
-    [InlineData("=DATE(1900,0,31)")]
-    [InlineData("=DATE(1900,-1,62)")]
-    public void Date_ReturnsNumWhenMonthUnderflowReachesSerialZero(string formula)
+    [InlineData("=DATE(1900,0,31)", 0)]
+    [InlineData("=DATE(1900,-1,62)", 1)]
+    public void Date_AllowsMonthUnderflowWhenRolloverReachesValidExcelSerial(string formula, double expected)
     {
-        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(expected));
     }
 
     [Theory]

@@ -6,7 +6,7 @@ namespace Freexcel.App.Host.Tests;
 public sealed class RibbonMetadataTests
 {
     [Fact]
-    public void RoleHelpers_ReadAttachedMetadataBeforeLegacyTags()
+    public void RoleHelpers_ReadAttachedMetadata()
     {
         StaTestRunner.Run(() =>
         {
@@ -25,18 +25,35 @@ public sealed class RibbonMetadataTests
     }
 
     [Fact]
-    public void RoleHelpers_FallBackToLegacyTagsForStaticXamlCompatibility()
+    public void RoleHelpers_AttachedMetadataOverridesConflictingLegacyTags()
     {
         StaTestRunner.Run(() =>
         {
-            RibbonMetadata.IsCommandLabel(new TextBlock { Tag = "RibbonLabel" }).Should().BeTrue();
-            RibbonMetadata.IsCommandIcon(new TextBlock { Tag = "RibbonIcon" }).Should().BeTrue();
-            RibbonMetadata.IsCollapsedGroupButton(new Button { Tag = "RibbonCollapsedGroupButton" }).Should().BeTrue();
+            var label = new TextBlock { Tag = "RibbonIcon" };
+            var icon = new TextBlock { Tag = "RibbonLabel" };
+            RibbonMetadata.SetRole(label, RibbonMetadataRole.CommandLabel);
+            RibbonMetadata.SetRole(icon, RibbonMetadataRole.CommandIcon);
+
+            RibbonMetadata.IsCommandLabel(label).Should().BeTrue();
+            RibbonMetadata.IsCommandIcon(label).Should().BeFalse();
+            RibbonMetadata.IsCommandIcon(icon).Should().BeTrue();
+            RibbonMetadata.IsCommandLabel(icon).Should().BeFalse();
         });
     }
 
     [Fact]
-    public void CompactWidths_ReadAttachedMetadataAndLegacyTags()
+    public void RoleHelpers_IgnoreLegacyTagsWithoutAttachedMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            RibbonMetadata.IsCommandLabel(new TextBlock { Tag = "RibbonLabel" }).Should().BeFalse();
+            RibbonMetadata.IsCommandIcon(new TextBlock { Tag = "RibbonIcon" }).Should().BeFalse();
+            RibbonMetadata.IsCollapsedGroupButton(new Button { Tag = "RibbonCollapsedGroupButton" }).Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void CompactWidths_ReadAttachedMetadataOnly()
     {
         StaTestRunner.Run(() =>
         {
@@ -49,14 +66,39 @@ public sealed class RibbonMetadataTests
 
             RibbonMetadata.TryGetCompactWidths(new Button { Tag = "RibbonCompact:58.5:30" }, out var legacyFull, out var legacyCompact)
                 .Should()
-                .BeTrue();
-            legacyFull.Should().Be(58.5);
-            legacyCompact.Should().Be(30);
+                .BeFalse();
+            legacyFull.Should().Be(0);
+            legacyCompact.Should().Be(0);
+        });
+    }
+
+    [Theory]
+    [InlineData(double.NaN, 24)]
+    [InlineData(74, double.NaN)]
+    [InlineData(double.PositiveInfinity, 24)]
+    [InlineData(74, double.PositiveInfinity)]
+    [InlineData(0, 24)]
+    [InlineData(74, 0)]
+    [InlineData(-74, 24)]
+    [InlineData(74, -24)]
+    [InlineData(24, 74)]
+    public void CompactWidths_RejectInvalidLayoutMetadata(double fullWidth, double compactWidth)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var button = new Button();
+            RibbonMetadata.SetCompactWidths(button, fullWidth, compactWidth);
+
+            RibbonMetadata.TryGetCompactWidths(button, out var actualFullWidth, out var actualCompactWidth)
+                .Should()
+                .BeFalse();
+            actualFullWidth.Should().Be(0);
+            actualCompactWidth.Should().Be(0);
         });
     }
 
     [Fact]
-    public void CommandContentLayout_ReadsAttachedMetadataAndLegacyTags()
+    public void CommandContentLayout_ReadsAttachedMetadataOnly()
     {
         StaTestRunner.Run(() =>
         {
@@ -68,8 +110,8 @@ public sealed class RibbonMetadataTests
 
             RibbonMetadata.TryGetCommandContentLayout(new Grid { Tag = "RibbonCommandContent:L" }, out var legacyLayout)
                 .Should()
-                .BeTrue();
-            legacyLayout.Should().Be(RibbonCommandContentLayout.Large);
+                .BeFalse();
+            legacyLayout.Should().Be(RibbonCommandContentLayout.None);
         });
     }
 
@@ -87,7 +129,7 @@ public sealed class RibbonMetadataTests
     }
 
     [Fact]
-    public void AttachedLayoutMetadata_TakesPrecedenceOverLegacyTags()
+    public void AttachedLayoutMetadata_IgnoresLegacyTags()
     {
         StaTestRunner.Run(() =>
         {
@@ -149,11 +191,16 @@ public sealed class RibbonMetadataTests
     }
 
     [Fact]
-    public void LegacyRibbonIconChevron_IsNotTreatedAsCommandIconForFootprintScaling()
+    public void CollapsedChevron_UsesAttachedRoleOnly()
     {
         StaTestRunner.Run(() =>
         {
             var chevron = new TextBlock { Tag = "RibbonIcon", Text = "\uE70D" };
+
+            RibbonMetadata.IsCommandIcon(chevron).Should().BeFalse();
+            RibbonMetadata.IsCollapsedChevron(chevron).Should().BeFalse();
+
+            RibbonMetadata.SetRole(chevron, RibbonMetadataRole.CollapsedChevron);
 
             RibbonMetadata.IsCommandIcon(chevron).Should().BeTrue();
             RibbonMetadata.IsCollapsedChevron(chevron).Should().BeTrue();

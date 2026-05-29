@@ -50,17 +50,23 @@ public sealed partial class NativeJsonAdapter
             MidColor = formatDto.MidColor,
             MaxColor = formatDto.MaxColor,
             UseThreeColorScale = formatDto.UseThreeColorScale,
+            MinThresholdType = ValidCfThresholdTypeOrDefault(formatDto.MinThresholdType, CfThresholdType.Min),
+            MinThresholdValue = formatDto.MinThresholdValue,
             MinThresholdGreaterThanOrEqual = formatDto.MinThresholdGreaterThanOrEqual,
+            MidThresholdType = ValidCfThresholdTypeOrDefault(formatDto.MidThresholdType, CfThresholdType.Percentile),
+            MidThresholdValue = formatDto.MidThresholdValue,
             MidThresholdGreaterThanOrEqual = formatDto.MidThresholdGreaterThanOrEqual,
+            MaxThresholdType = ValidCfThresholdTypeOrDefault(formatDto.MaxThresholdType, CfThresholdType.Max),
+            MaxThresholdValue = formatDto.MaxThresholdValue,
             MaxThresholdGreaterThanOrEqual = formatDto.MaxThresholdGreaterThanOrEqual,
             DataBarColor = formatDto.DataBarColor,
-            DataBarMinThresholdType = formatDto.DataBarMinThresholdType,
+            DataBarMinThresholdType = ValidCfThresholdTypeOrDefault(formatDto.DataBarMinThresholdType, CfThresholdType.Min),
             DataBarMinThresholdValue = formatDto.DataBarMinThresholdValue,
-            DataBarMaxThresholdType = formatDto.DataBarMaxThresholdType,
+            DataBarMaxThresholdType = ValidCfThresholdTypeOrDefault(formatDto.DataBarMaxThresholdType, CfThresholdType.Max),
             DataBarMaxThresholdValue = formatDto.DataBarMaxThresholdValue,
             DataBarShowValue = formatDto.DataBarShowValue,
-            DataBarMinLength = formatDto.DataBarMinLength,
-            DataBarMaxLength = formatDto.DataBarMaxLength,
+            DataBarMinLength = ValidDataBarLengthOrNull(formatDto.DataBarMinLength),
+            DataBarMaxLength = ValidDataBarLengthOrNull(formatDto.DataBarMaxLength),
             DataBarGradient = formatDto.DataBarGradient,
             DataBarBorder = formatDto.DataBarBorder,
             DataBarAxisPosition = formatDto.DataBarAxisPosition,
@@ -69,13 +75,13 @@ public sealed partial class NativeJsonAdapter
             DataBarNegativeBorderColor = formatDto.DataBarNegativeBorderColor,
             AboveAverage = formatDto.AboveAverage,
             FormulaText = formatDto.FormulaText,
-            IconSetStyle = formatDto.IconSetStyle,
+            IconSetStyle = NormalizeOptionalText(formatDto.IconSetStyle),
             IconSetShowValue = formatDto.IconSetShowValue,
             IconSetReverse = formatDto.IconSetReverse,
-            TopBottomRank = formatDto.TopBottomRank,
+            TopBottomRank = ValidTopBottomRankOrDefault(formatDto.TopBottomRank),
             TopBottomPercent = formatDto.TopBottomPercent,
             TextRuleText = formatDto.TextRuleText,
-            DateOccurringPeriod = formatDto.DateOccurringPeriod,
+            DateOccurringPeriod = ValidDateOccurringPeriodOrDefault(formatDto.DateOccurringPeriod),
             StopIfTrue = formatDto.StopIfTrue,
             NativeAttributes = formatDto.NativeAttributes,
             NativeChildXmls = formatDto.NativeChildXmls,
@@ -84,8 +90,11 @@ public sealed partial class NativeJsonAdapter
             NativeContainerAttributes = formatDto.NativeContainerAttributes,
             NativeContainerChildXmls = formatDto.NativeContainerChildXmls
         };
-        format.IconSetThresholds.AddRange(formatDto.IconSetThresholds ?? []);
-        format.IconOverrides.AddRange(formatDto.IconOverrides ?? []);
+        format.IconSetThresholds.AddRange((formatDto.IconSetThresholds ?? [])
+            .Where(threshold => Enum.IsDefined(threshold.Type)));
+        format.IconOverrides.AddRange((formatDto.IconOverrides ?? [])
+            .Select(NormalizeCfIconOverride)
+            .Where(IsValidCfIconOverride));
         return format;
     }
 
@@ -103,17 +112,23 @@ public sealed partial class NativeJsonAdapter
             MidColor = format.MidColor,
             MaxColor = format.MaxColor,
             UseThreeColorScale = format.UseThreeColorScale,
+            MinThresholdType = ValidCfThresholdTypeOrDefault(format.MinThresholdType, CfThresholdType.Min),
+            MinThresholdValue = format.MinThresholdValue,
             MinThresholdGreaterThanOrEqual = format.MinThresholdGreaterThanOrEqual,
+            MidThresholdType = ValidCfThresholdTypeOrDefault(format.MidThresholdType, CfThresholdType.Percentile),
+            MidThresholdValue = format.MidThresholdValue,
             MidThresholdGreaterThanOrEqual = format.MidThresholdGreaterThanOrEqual,
+            MaxThresholdType = ValidCfThresholdTypeOrDefault(format.MaxThresholdType, CfThresholdType.Max),
+            MaxThresholdValue = format.MaxThresholdValue,
             MaxThresholdGreaterThanOrEqual = format.MaxThresholdGreaterThanOrEqual,
             DataBarColor = format.DataBarColor,
-            DataBarMinThresholdType = format.DataBarMinThresholdType,
+            DataBarMinThresholdType = ValidCfThresholdTypeOrDefault(format.DataBarMinThresholdType, CfThresholdType.Min),
             DataBarMinThresholdValue = format.DataBarMinThresholdValue,
-            DataBarMaxThresholdType = format.DataBarMaxThresholdType,
+            DataBarMaxThresholdType = ValidCfThresholdTypeOrDefault(format.DataBarMaxThresholdType, CfThresholdType.Max),
             DataBarMaxThresholdValue = format.DataBarMaxThresholdValue,
             DataBarShowValue = format.DataBarShowValue,
-            DataBarMinLength = format.DataBarMinLength,
-            DataBarMaxLength = format.DataBarMaxLength,
+            DataBarMinLength = ValidDataBarLengthOrNull(format.DataBarMinLength),
+            DataBarMaxLength = ValidDataBarLengthOrNull(format.DataBarMaxLength),
             DataBarGradient = format.DataBarGradient,
             DataBarBorder = format.DataBarBorder,
             DataBarAxisPosition = format.DataBarAxisPosition,
@@ -122,15 +137,15 @@ public sealed partial class NativeJsonAdapter
             DataBarNegativeBorderColor = format.DataBarNegativeBorderColor,
             AboveAverage = format.AboveAverage,
             FormulaText = format.FormulaText,
-            IconSetStyle = format.IconSetStyle,
+            IconSetStyle = NormalizeOptionalText(format.IconSetStyle),
             IconSetShowValue = format.IconSetShowValue,
             IconSetReverse = format.IconSetReverse,
-            IconSetThresholds = [.. format.IconSetThresholds],
-            IconOverrides = [.. format.IconOverrides],
-            TopBottomRank = format.TopBottomRank,
+            IconSetThresholds = [.. format.IconSetThresholds.Where(threshold => Enum.IsDefined(threshold.Type))],
+            IconOverrides = [.. format.IconOverrides.Select(NormalizeCfIconOverride).Where(IsValidCfIconOverride)],
+            TopBottomRank = ValidTopBottomRankOrDefault(format.TopBottomRank),
             TopBottomPercent = format.TopBottomPercent,
             TextRuleText = format.TextRuleText,
-            DateOccurringPeriod = format.DateOccurringPeriod,
+            DateOccurringPeriod = ValidDateOccurringPeriodOrDefault(format.DateOccurringPeriod),
             StopIfTrue = format.StopIfTrue,
             NativeAttributes = format.NativeAttributes,
             NativeChildXmls = format.NativeChildXmls,
@@ -145,4 +160,32 @@ public sealed partial class NativeJsonAdapter
 
     private static bool IsSupportedConditionalFormat(ConditionalFormatDto format) =>
         Enum.IsDefined(format.RuleType) && Enum.IsDefined(format.Operator);
+
+    private static CfThresholdType ValidCfThresholdTypeOrDefault(CfThresholdType value, CfThresholdType fallback) =>
+        Enum.IsDefined(value) ? value : fallback;
+
+    private static bool IsValidCfIconOverride(CfIconOverride icon) =>
+        !string.IsNullOrWhiteSpace(icon.IconSet) && icon.IconId >= 0;
+
+    private static CfIconOverride NormalizeCfIconOverride(CfIconOverride icon) =>
+        icon with { IconSet = icon.IconSet?.Trim() ?? string.Empty };
+
+    private static string? NormalizeOptionalText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static int? ValidDataBarLengthOrNull(int? value) =>
+        value is >= 0 and <= 100 ? value : null;
+
+    private static int ValidTopBottomRankOrDefault(int value) =>
+        value is >= 1 and <= 1000 ? value : 10;
+
+    private static string ValidDateOccurringPeriodOrDefault(string? value)
+    {
+        var normalized = value?.Trim();
+        return normalized is "yesterday" or "today" or "tomorrow" or "last7Days" or
+            "lastWeek" or "thisWeek" or "nextWeek" or
+            "lastMonth" or "thisMonth" or "nextMonth"
+            ? normalized
+            : "today";
+    }
 }

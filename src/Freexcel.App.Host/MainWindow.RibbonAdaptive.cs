@@ -27,10 +27,13 @@ public partial class MainWindow
         var controlCacheKey = _ribbonAdaptiveControlCacheKey ??
             CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups);
         var collapsedButtons = GetCachedRibbonCollapsedGroupButtons(activePanel, groups, controlCacheKey);
+        var groupSnapshots = GetCachedRibbonCompactGroupSnapshots(groups, controlCacheKey);
         var availableWidth = GetRibbonAvailableWidth(activePanel);
         if (availableWidth <= 0)
             return;
 
+        var selectedTabHeader = GetRibbonAdaptiveTabHeader(activePanel);
+        _ribbonMeasuredOverflowCache.Clear();
         var cacheKey = controlCacheKey;
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups;
         double fixedChromeWidth;
@@ -43,51 +46,68 @@ public partial class MainWindow
         else
         {
             ApplyRibbonAdaptiveStates(
-                groups,
+                groupSnapshots,
                 collapsedButtons,
                 Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groups.Count).ToArray(),
                 previousStates: null);
             fixedChromeWidth = MeasureRibbonFixedChromeWidth(activePanel) + 24;
-            adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])).ToList();
+            _ribbonAdaptiveGroupMeasurementCount += groupSnapshots.Count;
+            adaptiveGroups = groupSnapshots
+                .Select((snapshot, index) => MeasureRibbonAdaptiveGroup(snapshot, collapsedButtons[index]))
+                .ToList();
             _ribbonAdaptiveMeasurementCacheKey = cacheKey;
             _ribbonAdaptiveGroupCache = adaptiveGroups;
             _ribbonAdaptiveFixedChromeWidthCache = fixedChromeWidth;
             _ribbonCorrectedStateCache.Clear();
+            _ribbonMeasuredOverflowCache.Clear();
         }
 
-        UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);
-        var layout = RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth);
-        var plannedStates = layout.States.ToArray();
+        UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth, selectedTabHeader);
+        if (_ribbonAdaptiveStateDiffInvalidated)
+            _ribbonMeasuredOverflowCache.Clear();
+
+        var layout = RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth, selectedTabHeader);
+        var layoutStates = layout.States.ToArray();
+        var plannedStates = layoutStates.ToArray();
 
         var correctionCacheKey = CreateRibbonCorrectionCacheKey(cacheKey, availableWidth, plannedStates);
-        if (_ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates))
+        var hasCachedCorrection = _ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates);
+        if (hasCachedCorrection)
+            _ribbonCorrectedStateCacheHitCount++;
+        var cachedCorrectionNeedsExpansion = false;
+        if (hasCachedCorrection && correctedStates is not null)
+        {
             plannedStates = correctedStates.ToArray();
+            cachedCorrectionNeedsExpansion = RibbonStatesAreMoreCollapsedThan(plannedStates, layoutStates);
+        }
 
         var appliedStateKey = CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates);
         if (!force &&
             !_ribbonAdaptiveStateDiffInvalidated &&
             string.Equals(_lastRibbonAdaptiveAppliedStateKey, appliedStateKey, StringComparison.Ordinal))
         {
+            _ribbonAppliedStateSkipCount++;
             return;
         }
 
         ApplyRibbonAdaptiveStates(
-            groups,
+            groupSnapshots,
             collapsedButtons,
             plannedStates,
             _ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates);
         SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
-        var requiresMeasuredCorrection = correctedStates is null || layout.RequiresMeasuredCorrection;
+        var requiresMeasuredCorrection = cachedCorrectionNeedsExpansion ||
+            layout.RequiresMeasuredCorrection &&
+            (!hasCachedCorrection || RibbonRowOverflowsMeasuredCached(activePanel, cacheKey, availableWidth, plannedStates));
         if (requiresMeasuredCorrection)
         {
-            ApplyRibbonMeasuredOverflowFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
-            ApplyRibbonMeasuredExpansionFallback(activePanel, groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
+            ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
+            ApplyRibbonMeasuredExpansionFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
         }
 
-        ApplyRibbonRuntimeVisibilityOverrides(groups, collapsedButtons, plannedStates, adaptiveGroups, availableWidth);
         SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
         appliedStateKey = CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates);
-        if (correctedStates is null)
+        if (!hasCachedCorrection || requiresMeasuredCorrection)
             _ribbonCorrectedStateCache[correctionCacheKey] = plannedStates.ToArray();
         _lastRibbonAdaptiveAppliedStateKey = appliedStateKey;
         _lastRibbonAdaptiveAppliedStates = plannedStates.ToArray();
@@ -95,6 +115,20 @@ public partial class MainWindow
 
         var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
         _ribbonCompact = compacted;
+    }
+
+    private static bool RibbonStatesAreMoreCollapsedThan(
+        IReadOnlyList<RibbonAdaptiveGroupState> states,
+        IReadOnlyList<RibbonAdaptiveGroupState> baselineStates)
+    {
+        var count = Math.Min(states.Count, baselineStates.Count);
+        for (var i = 0; i < count; i++)
+        {
+            if ((int)states[i] > (int)baselineStates[i])
+                return true;
+        }
+
+        return false;
     }
 
     private static IReadOnlyList<FrameworkElement> GetRibbonAdaptiveGroups(StackPanel activePanel) =>
@@ -119,10 +153,13 @@ public partial class MainWindow
         _ribbonAdaptiveGroupControlCache = groups;
         _ribbonAdaptiveControlCacheKey = null;
         _ribbonAdaptiveCollapsedButtonCache = null;
+        _ribbonCompactSnapshotCacheKey = null;
+        _ribbonCompactGroupSnapshotCache = null;
         _lastRibbonAdaptiveAppliedStateKey = null;
         _lastRibbonAdaptiveAppliedStates = null;
         _lastRibbonCollapsedFootprintMode = null;
         _ribbonCorrectedStateCache.Clear();
+        _ribbonMeasuredOverflowCache.Clear();
         return groups;
     }
 
@@ -148,6 +185,74 @@ public partial class MainWindow
         return collapsedButtons;
     }
 
+    private IReadOnlyList<RibbonCompactGroupSnapshot> GetCachedRibbonCompactGroupSnapshots(
+        IReadOnlyList<FrameworkElement> groups,
+        string controlCacheKey)
+    {
+        if (string.Equals(_ribbonCompactSnapshotCacheKey, controlCacheKey, StringComparison.Ordinal) &&
+            _ribbonCompactGroupSnapshotCache is not null &&
+            _ribbonCompactGroupSnapshotCache.Count == groups.Count)
+        {
+            return _ribbonCompactGroupSnapshotCache;
+        }
+
+        var snapshots = groups
+            .Select(CaptureRibbonCompactGroupSnapshot)
+            .ToList();
+        _ribbonCompactSnapshotCaptureCount += snapshots.Count;
+        _ribbonCompactSnapshotCacheKey = controlCacheKey;
+        _ribbonCompactGroupSnapshotCache = snapshots;
+        return snapshots;
+    }
+
+    private void InvalidateRibbonAdaptiveMeasurementCaches()
+    {
+        _ribbonAdaptiveMeasurementInvalidationCount++;
+        _ribbonAdaptiveMeasurementCacheKey = null;
+        _ribbonAdaptiveGroupCache = null;
+        _ribbonAdaptiveFixedChromeWidthCache = 0;
+        _ribbonResizeThresholdCacheKey = null;
+        _ribbonResizeThresholds = [];
+        _ribbonCompactSnapshotCacheKey = null;
+        _ribbonCompactGroupSnapshotCache = null;
+        _lastRibbonAdaptiveAppliedStateKey = null;
+        _lastRibbonAdaptiveAppliedStates = null;
+        _lastRibbonCollapsedFootprintMode = null;
+        _ribbonCorrectedStateCache.Clear();
+        _ribbonMeasuredOverflowCache.Clear();
+        _ribbonAdaptiveStateDiffInvalidated = true;
+    }
+
+    internal RibbonAdaptiveDiagnosticsSnapshot GetRibbonAdaptiveDiagnosticsForTests() =>
+        new(
+            _ribbonAdaptiveMeasurementInvalidationCount,
+            _ribbonAdaptiveGroupMeasurementCount,
+            _ribbonCompactSnapshotCaptureCount,
+            _ribbonResizeThresholdRebuildCount,
+            _ribbonMeasuredOverflowMeasurementCount,
+            _ribbonCorrectedStateCacheHitCount,
+            _ribbonAppliedStateSkipCount,
+            _ribbonAdaptiveMeasurementCacheKey,
+            _ribbonResizeThresholdCacheKey,
+            _ribbonCompactSnapshotCacheKey);
+
+    internal void ResetRibbonAdaptiveDiagnosticsForTests(bool resetSelectedStaticNormalization = false)
+    {
+        _ribbonAdaptiveMeasurementInvalidationCount = 0;
+        _ribbonAdaptiveGroupMeasurementCount = 0;
+        _ribbonCompactSnapshotCaptureCount = 0;
+        _ribbonResizeThresholdRebuildCount = 0;
+        _ribbonMeasuredOverflowMeasurementCount = 0;
+        _ribbonCorrectedStateCacheHitCount = 0;
+        _ribbonAppliedStateSkipCount = 0;
+
+        if (resetSelectedStaticNormalization &&
+            RibbonTabs?.SelectedItem is TabItem selectedTab)
+        {
+            _normalizedRibbonStaticTabs.Remove(selectedTab);
+        }
+    }
+
     private double GetRibbonAvailableWidth(StackPanel activePanel)
     {
         var ribbonScrollViewer = ReferenceEquals(_ribbonAdaptiveControlCachePanel, activePanel)
@@ -166,83 +271,79 @@ public partial class MainWindow
         return Math.Max(0, availableWidth ?? 0);
     }
 
-    private static void ApplyRibbonMeasuredOverflowFallback(
+    private static string GetRibbonAdaptiveTabHeader(DependencyObject element) =>
+        FindVisualAncestor<TabItem>(element)?.Header?.ToString() ?? "";
+
+    private void ApplyRibbonMeasuredOverflowFallback(
         StackPanel activePanel,
-        IReadOnlyList<FrameworkElement> groups,
+        IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
         IReadOnlyList<Button> collapsedButtons,
         RibbonAdaptiveGroupState[] plannedStates,
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
-        double availableWidth)
+        string measurementCacheKey,
+        double availableWidth,
+        string? selectedTabHeader)
     {
-        var protectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetFallbackProtectedGroupIndexes(adaptiveGroups, availableWidth);
-        while (RibbonRowOverflowsMeasured(activePanel, availableWidth) &&
+        var protectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetFallbackProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
+        var runtimeVisibilityProtectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
+        protectedGroupIndexes.UnionWith(runtimeVisibilityProtectedGroupIndexes);
+        while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates) &&
                RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
         {
-            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates, previousStates: null);
+            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
         }
 
-        while (RibbonRowOverflowsMeasured(activePanel, availableWidth) &&
-               RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false))
+        while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates) &&
+               RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false, runtimeVisibilityProtectedGroupIndexes))
         {
-            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates, previousStates: null);
+            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
         }
     }
 
-    private static void ApplyRibbonMeasuredExpansionFallback(
+    private void ApplyRibbonMeasuredExpansionFallback(
         StackPanel activePanel,
-        IReadOnlyList<FrameworkElement> groups,
+        IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
         IReadOnlyList<Button> collapsedButtons,
         RibbonAdaptiveGroupState[] plannedStates,
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
-        double availableWidth)
+        string measurementCacheKey,
+        double availableWidth,
+        string? selectedTabHeader)
     {
-        foreach (var index in RibbonAdaptiveLayoutEngine.GetExpandableGroupIndexes(adaptiveGroups, availableWidth))
+        foreach (var index in RibbonAdaptiveLayoutEngine.GetExpandableGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader))
         {
             var currentState = plannedStates[index];
             if (!RibbonAdaptiveLayoutEngine.TryGetNextExpandedState(currentState, out var expandedState))
                 continue;
 
             plannedStates[index] = expandedState;
-            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates, previousStates: null);
+            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
-            if (!RibbonRowOverflowsMeasured(activePanel, availableWidth))
+            if (!RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
                 continue;
 
             plannedStates[index] = currentState;
-            ApplyRibbonAdaptiveStates(groups, collapsedButtons, plannedStates, previousStates: null);
+            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
         }
     }
 
-    private static void ApplyRibbonRuntimeVisibilityOverrides(
-        IReadOnlyList<FrameworkElement> groups,
-        IReadOnlyList<Button> collapsedButtons,
-        RibbonAdaptiveGroupState[] plannedStates,
-        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
-        double availableWidth)
+    private bool RibbonRowOverflowsMeasuredCached(
+        StackPanel activePanel,
+        string measurementCacheKey,
+        double availableWidth,
+        IReadOnlyList<RibbonAdaptiveGroupState> states)
     {
-        var groupNames = adaptiveGroups.Select(group => group.Name).ToList();
-        foreach (var decision in RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityOverrides(availableWidth, groupNames))
-        {
-            if (decision.Index < 0 || decision.Index >= adaptiveGroups.Count)
-                continue;
+        var overflowCacheKey = CreateRibbonMeasuredOverflowCacheKey(measurementCacheKey, availableWidth, states);
+        if (_ribbonMeasuredOverflowCache.TryGetValue(overflowCacheKey, out var overflows))
+            return overflows;
 
-            if (decision.State == RibbonAdaptiveGroupState.Collapsed)
-            {
-                plannedStates[decision.Index] = RibbonAdaptiveGroupState.Collapsed;
-                groups[decision.Index].Visibility = Visibility.Collapsed;
-                collapsedButtons[decision.Index].Visibility = Visibility.Visible;
-            }
-            else if (decision.State == RibbonAdaptiveGroupState.IconOnly)
-            {
-                plannedStates[decision.Index] = RibbonAdaptiveGroupState.IconOnly;
-                groups[decision.Index].Visibility = Visibility.Visible;
-                collapsedButtons[decision.Index].Visibility = Visibility.Collapsed;
-                SetRibbonGroupCompact(groups[decision.Index], RibbonCompactLevel.IconOnly);
-            }
-        }
+        overflows = RibbonRowOverflowsMeasured(activePanel, availableWidth);
+        _ribbonMeasuredOverflowMeasurementCount++;
+        _ribbonMeasuredOverflowCache[overflowCacheKey] = overflows;
+        return overflows;
     }
 
     private static bool RibbonRowOverflowsMeasured(StackPanel activePanel, double availableWidth)
@@ -275,13 +376,27 @@ public partial class MainWindow
             Math.Round(availableWidth, 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
             string.Join(",", states.Select(state => ((int)state).ToString(System.Globalization.CultureInfo.InvariantCulture))));
 
+    private static string CreateRibbonMeasuredOverflowCacheKey(
+        string measurementCacheKey,
+        double availableWidth,
+        IReadOnlyList<RibbonAdaptiveGroupState> states)
+    {
+        var footprintMode = GetCollapsedRibbonFootprintMode(availableWidth);
+        return string.Join(
+            "|",
+            measurementCacheKey,
+            Math.Round(availableWidth, 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            footprintMode,
+            string.Join(",", states.Select(state => ((int)state).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+    }
+
     private static void ApplyRibbonAdaptiveStates(
-        IReadOnlyList<FrameworkElement> groups,
+        IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
         IReadOnlyList<Button> collapsedButtons,
         IReadOnlyList<RibbonAdaptiveGroupState> plannedStates,
         IReadOnlyList<RibbonAdaptiveGroupState>? previousStates)
     {
-        for (var i = 0; i < groups.Count; i++)
+        for (var i = 0; i < groupSnapshots.Count; i++)
         {
             if (previousStates is not null &&
                 i < previousStates.Count &&
@@ -291,21 +406,21 @@ public partial class MainWindow
             }
 
             collapsedButtons[i].Visibility = Visibility.Collapsed;
-            groups[i].Visibility = Visibility.Visible;
+            groupSnapshots[i].Group.Visibility = Visibility.Visible;
 
             switch (plannedStates[i])
             {
                 case RibbonAdaptiveGroupState.Full:
-                    SetRibbonGroupCompact(groups[i], RibbonCompactLevel.Full);
+                    ApplyRibbonGroupCompactSnapshot(groupSnapshots[i], RibbonCompactLevel.Full);
                     break;
                 case RibbonAdaptiveGroupState.SmallWithLabels:
-                    SetRibbonGroupCompact(groups[i], RibbonCompactLevel.SmallWithLabels);
+                    ApplyRibbonGroupCompactSnapshot(groupSnapshots[i], RibbonCompactLevel.SmallWithLabels);
                     break;
                 case RibbonAdaptiveGroupState.IconOnly:
-                    SetRibbonGroupCompact(groups[i], RibbonCompactLevel.IconOnly);
+                    ApplyRibbonGroupCompactSnapshot(groupSnapshots[i], RibbonCompactLevel.IconOnly);
                     break;
                 case RibbonAdaptiveGroupState.Collapsed:
-                    groups[i].Visibility = Visibility.Collapsed;
+                    groupSnapshots[i].Group.Visibility = Visibility.Collapsed;
                     collapsedButtons[i].Visibility = Visibility.Visible;
                     break;
             }
@@ -383,24 +498,24 @@ public partial class MainWindow
     private static string GetCollapsedRibbonFootprintMode(double availableWidth) =>
         RibbonCollapsedGroupPresentationPlanner.GetCacheKey(availableWidth);
 
-    private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(FrameworkElement group, Button collapsedButton)
+    private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(RibbonCompactGroupSnapshot snapshot, Button collapsedButton)
     {
-        var name = GetRibbonGroupName(group);
-        var fullWidth = MeasureRibbonGroupWidth(group, RibbonCompactLevel.Full);
-        var smallWidth = MeasureRibbonGroupWidth(group, RibbonCompactLevel.SmallWithLabels);
-        var iconWidth = MeasureRibbonGroupWidth(group, RibbonCompactLevel.IconOnly);
+        var name = GetRibbonGroupName(snapshot.Group);
+        var fullWidth = MeasureRibbonGroupWidth(snapshot, RibbonCompactLevel.Full);
+        var smallWidth = MeasureRibbonGroupWidth(snapshot, RibbonCompactLevel.SmallWithLabels);
+        var iconWidth = MeasureRibbonGroupWidth(snapshot, RibbonCompactLevel.IconOnly);
         collapsedButton.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var collapsedWidth = Math.Max(48, collapsedButton.DesiredSize.Width);
-        SetRibbonGroupCompact(group, RibbonCompactLevel.Full);
+        ApplyRibbonGroupCompactSnapshot(snapshot, RibbonCompactLevel.Full);
 
         return new RibbonAdaptiveGroup(name, fullWidth, smallWidth, iconWidth, collapsedWidth);
     }
 
-    private static double MeasureRibbonGroupWidth(FrameworkElement group, RibbonCompactLevel level)
+    private static double MeasureRibbonGroupWidth(RibbonCompactGroupSnapshot snapshot, RibbonCompactLevel level)
     {
-        SetRibbonGroupCompact(group, level);
-        group.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        return Math.Max(0, group.DesiredSize.Width);
+        ApplyRibbonGroupCompactSnapshot(snapshot, level);
+        snapshot.Group.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return Math.Max(0, snapshot.Group.DesiredSize.Width);
     }
 
     private static double MeasureRibbonFixedChromeWidth(StackPanel panel)
@@ -424,7 +539,7 @@ public partial class MainWindow
 
     private static string CreateRibbonAdaptiveMeasurementCacheKey(StackPanel activePanel, IReadOnlyList<FrameworkElement> groups)
     {
-        var tabName = FindVisualAncestor<TabItem>(activePanel)?.Header?.ToString() ?? "";
+        var tabName = GetRibbonAdaptiveTabHeader(activePanel);
         return string.Join(
             "|",
             tabName,
@@ -435,7 +550,8 @@ public partial class MainWindow
     private void UpdateRibbonResizeThresholdCache(
         string cacheKey,
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
-        double fixedChromeWidth)
+        double fixedChromeWidth,
+        string? selectedTabHeader)
     {
         if (string.Equals(_ribbonResizeThresholdCacheKey, cacheKey, StringComparison.Ordinal) &&
             _ribbonResizeThresholds.Count > 0)
@@ -444,73 +560,66 @@ public partial class MainWindow
         }
 
         _ribbonResizeThresholdCacheKey = cacheKey;
-        _ribbonResizeThresholds = RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth);
+        _ribbonResizeThresholdRebuildCount++;
+        _ribbonResizeThresholds = RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth, selectedTabHeader);
     }
 
     private static List<Button> EnsureRibbonCollapsedGroupButtons(StackPanel panel, IReadOnlyList<FrameworkElement> groups)
     {
         var buttons = new List<Button>(groups.Count);
-        var groupNames = groups
+        var expectedGroupNames = groups
             .Select(GetRibbonGroupName)
             .ToHashSet(StringComparer.Ordinal);
+        var reusableButtonsByGroupName = new Dictionary<string, Button>(StringComparer.Ordinal);
+        var buttonsToRemove = new List<Button>();
+        var keyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        for (var i = panel.Children.Count - 1; i >= 0; i--)
+        foreach (var button in panel.Children.OfType<Button>().Where(IsRibbonCollapsedGroupButton))
         {
-            if (panel.Children[i] is not Button button || !IsRibbonCollapsedGroupButton(button))
-                continue;
-
             var title = RibbonTooltip.GetTitle(button) ?? "";
-            if (!groupNames.Contains(title))
-                panel.Children.RemoveAt(i);
+            if (!expectedGroupNames.Contains(title) ||
+                !reusableButtonsByGroupName.TryAdd(title, button))
+            {
+                buttonsToRemove.Add(button);
+                continue;
+            }
+
+            var keyTip = RibbonTooltip.GetKeyTip(button);
+            if (!string.IsNullOrWhiteSpace(keyTip))
+                keyTips.Add(keyTip!);
         }
 
-        var keyTips = panel.Children
-            .OfType<Button>()
-            .Where(IsRibbonCollapsedGroupButton)
-            .Select(RibbonTooltip.GetKeyTip)
-            .Where(keyTip => !string.IsNullOrWhiteSpace(keyTip))
-            .Select(keyTip => keyTip!)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var button in buttonsToRemove)
+            panel.Children.Remove(button);
+
         foreach (var group in groups)
         {
             var groupName = GetRibbonGroupName(group);
-            var button = FindReusableCollapsedGroupButton(panel, groupName) ??
-                CreateRibbonCollapsedGroupButton(group, keyTips);
+            if (!reusableButtonsByGroupName.TryGetValue(groupName, out var button))
+            {
+                button = CreateRibbonCollapsedGroupButton(group, keyTips);
+                reusableButtonsByGroupName[groupName] = button;
+            }
 
             var currentIndex = panel.Children.IndexOf(button);
             var groupIndex = panel.Children.IndexOf(group);
-            if (currentIndex >= 0)
+            var targetIndex = groupIndex + 1;
+            if (currentIndex != targetIndex)
             {
-                if (currentIndex != groupIndex + 1)
+                if (currentIndex >= 0)
                 {
                     panel.Children.RemoveAt(currentIndex);
-                    groupIndex = panel.Children.IndexOf(group);
-                    panel.Children.Insert(groupIndex + 1, button);
+                    if (currentIndex < targetIndex)
+                        targetIndex--;
                 }
-            }
-            else
-            {
-                panel.Children.Insert(groupIndex + 1, button);
+
+                panel.Children.Insert(targetIndex, button);
             }
 
             buttons.Add(button);
         }
 
         return buttons;
-    }
-
-    private static Button? FindReusableCollapsedGroupButton(StackPanel panel, string groupName)
-    {
-        foreach (var child in panel.Children.OfType<Button>())
-        {
-            if (IsRibbonCollapsedGroupButton(child) &&
-                string.Equals(RibbonTooltip.GetTitle(child), groupName, StringComparison.Ordinal))
-            {
-                return child;
-            }
-        }
-
-        return null;
     }
 
     private static bool IsRibbonCollapsedGroupButton(FrameworkElement element) =>
@@ -542,7 +651,7 @@ public partial class MainWindow
             Padding = new Thickness(3, 2, 3, 2),
             VerticalAlignment = System.Windows.VerticalAlignment.Top,
             Visibility = Visibility.Collapsed,
-            ContextMenu = CreateCollapsedRibbonGroupMenu(group),
+            ContextMenu = CreateLazyCollapsedRibbonGroupMenu(group),
             Content = new StackPanel
             {
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
@@ -600,11 +709,28 @@ public partial class MainWindow
         button.SizeChanged += (_, _) => layer.Update(button);
     }
 
-    private static ContextMenu CreateCollapsedRibbonGroupMenu(FrameworkElement group)
+    private static ContextMenu CreateLazyCollapsedRibbonGroupMenu(FrameworkElement group)
     {
-        var menu = new ContextMenu();
-        var added = new HashSet<ButtonBase>();
+        var menu = new ContextMenu { Tag = group };
+        menu.Opened += (_, _) =>
+        {
+            EnsureCollapsedRibbonGroupMenuItems(menu);
+            SynchronizeCollapsedRibbonTopLevelMenuItems(menu.Items);
+        };
+        return menu;
+    }
 
+    private static void EnsureCollapsedRibbonGroupMenuItems(ContextMenu menu)
+    {
+        if (menu.Items.Count > 0 || menu.Tag is not FrameworkElement group)
+            return;
+
+        PopulateCollapsedRibbonGroupMenu(menu, group);
+    }
+
+    private static void PopulateCollapsedRibbonGroupMenu(ContextMenu menu, FrameworkElement group)
+    {
+        var added = new HashSet<ButtonBase>();
         foreach (var button in EnumerateVisualDescendants(group).OfType<ButtonBase>())
         {
             if (button.Visibility != Visibility.Visible)
@@ -625,9 +751,6 @@ public partial class MainWindow
                 IsEnabled = false
             });
         }
-
-        menu.Opened += (_, _) => SynchronizeCollapsedRibbonMenuItems(menu.Items);
-        return menu;
     }
 
     private static MenuItem? CreateMenuItemForRibbonButton(ButtonBase button)
@@ -702,18 +825,12 @@ public partial class MainWindow
         return LogicalTreeHelper.GetParent(element);
     }
 
-    private static void SynchronizeCollapsedRibbonMenuItems(ItemCollection items)
+    private static void SynchronizeCollapsedRibbonTopLevelMenuItems(ItemCollection items)
     {
         foreach (var item in items.OfType<MenuItem>())
         {
             if (item.Tag is ButtonBase sourceButton)
-            {
                 item.IsEnabled = sourceButton.IsEnabled;
-                if (sourceButton.ContextMenu is { } sourceMenu)
-                    SynchronizeClonedMenuItems(sourceMenu.Items, item.Items);
-            }
-
-            SynchronizeCollapsedRibbonMenuItems(item.Items);
         }
     }
 
@@ -774,14 +891,17 @@ public partial class MainWindow
         if (RibbonTabs.SelectedItem is not TabItem tabItem)
             return null;
 
+        if (TryGetCachedActiveRibbonPanel(tabItem, out var cachedPanel))
+            return cachedPanel;
+
         if (string.Equals(tabItem.Header?.ToString(), "Home", StringComparison.Ordinal) &&
             HomeRibbonPanel is not null)
         {
-            return HomeRibbonPanel;
+            return CacheActiveRibbonPanel(tabItem, HomeRibbonPanel);
         }
 
         var contentRoot = GetRibbonTabContentRoot(tabItem);
-        return EnumerateVisualDescendants(contentRoot)
+        var activePanel = EnumerateVisualDescendants(contentRoot)
             .Concat(EnumerateLogicalDescendants(contentRoot))
             .OfType<StackPanel>()
             .Distinct()
@@ -790,6 +910,34 @@ public partial class MainWindow
             .OrderByDescending(panel => panel.Children.OfType<DependencyObject>().Count(RibbonMetadata.IsRibbonGroup))
             .FirstOrDefault(panel => panel.Orientation == Orientation.Horizontal &&
                                      panel.Children.OfType<DependencyObject>().Any(RibbonMetadata.IsRibbonGroup));
+        return CacheActiveRibbonPanel(tabItem, activePanel);
+    }
+
+    private bool TryGetCachedActiveRibbonPanel(TabItem tabItem, out StackPanel? activePanel)
+    {
+        if (_ribbonAdaptiveActivePanelCacheByTab.TryGetValue(tabItem, out var cachedPanel) &&
+            cachedPanel.IsVisible &&
+            ReferenceEquals(FindVisualAncestor<TabItem>(cachedPanel), tabItem))
+        {
+            activePanel = cachedPanel;
+            return true;
+        }
+
+        _ribbonAdaptiveActivePanelCacheByTab.Remove(tabItem);
+        activePanel = null;
+        return false;
+    }
+
+    private StackPanel? CacheActiveRibbonPanel(TabItem tabItem, StackPanel? activePanel)
+    {
+        if (activePanel is null)
+        {
+            _ribbonAdaptiveActivePanelCacheByTab.Remove(tabItem);
+            return null;
+        }
+
+        _ribbonAdaptiveActivePanelCacheByTab[tabItem] = activePanel;
+        return activePanel;
     }
 
     private static DependencyObject GetRibbonTabContentRoot(TabItem tabItem) =>
@@ -800,6 +948,61 @@ public partial class MainWindow
         Full,
         SmallWithLabels,
         IconOnly
+    }
+
+    private enum RibbonFallbackWork
+    {
+        None,
+        CompactOnly,
+        NormalizeSurface
+    }
+
+    private sealed class RibbonCompactGroupSnapshot(
+        FrameworkElement group,
+        IReadOnlyList<TextBlock> commandLabels,
+        IReadOnlyList<RibbonCompactButtonSnapshot> buttons)
+    {
+        public FrameworkElement Group { get; } = group;
+        public IReadOnlyList<TextBlock> CommandLabels { get; } = commandLabels;
+        public IReadOnlyList<RibbonCompactButtonSnapshot> Buttons { get; } = buttons;
+    }
+
+    private sealed class RibbonCompactButtonSnapshot(
+        ButtonBase button,
+        bool isCheckOrRadioButton,
+        FrameworkElement? content,
+        bool hasContentLayout,
+        RibbonCommandContentLayout contentLayout,
+        bool isLargeButton,
+        bool hasCompactWidths,
+        double fullWidth,
+        double compactWidth,
+        IReadOnlyList<TextBlock> labels,
+        IReadOnlyList<StackPanel> horizontalStacks,
+        Grid? smallGrid,
+        ColumnDefinition? smallSpacerColumn,
+        StackPanel? largeStack,
+        Border? largeIconSlot,
+        FrameworkElement? largeIconChild,
+        TextBlock? largeLabelBlock)
+    {
+        public ButtonBase Button { get; } = button;
+        public bool IsCheckOrRadioButton { get; } = isCheckOrRadioButton;
+        public FrameworkElement? Content { get; } = content;
+        public bool HasContentLayout { get; } = hasContentLayout;
+        public RibbonCommandContentLayout ContentLayout { get; } = contentLayout;
+        public bool IsLargeButton { get; } = isLargeButton;
+        public bool HasCompactWidths { get; } = hasCompactWidths;
+        public double FullWidth { get; } = fullWidth;
+        public double CompactWidth { get; } = compactWidth;
+        public IReadOnlyList<TextBlock> Labels { get; } = labels;
+        public IReadOnlyList<StackPanel> HorizontalStacks { get; } = horizontalStacks;
+        public Grid? SmallGrid { get; } = smallGrid;
+        public ColumnDefinition? SmallSpacerColumn { get; } = smallSpacerColumn;
+        public StackPanel? LargeStack { get; } = largeStack;
+        public Border? LargeIconSlot { get; } = largeIconSlot;
+        public FrameworkElement? LargeIconChild { get; } = largeIconChild;
+        public TextBlock? LargeLabelBlock { get; } = largeLabelBlock;
     }
 
     private sealed class RibbonCollapsedGroupChevronAdorner : Adorner
@@ -860,117 +1063,201 @@ public partial class MainWindow
             AdornedElement.RenderSize is { Width: > 0, Height: > 0 };
     }
 
-    private static void SetRibbonGroupCompact(FrameworkElement group, RibbonCompactLevel level)
+    private static RibbonCompactGroupSnapshot CaptureRibbonCompactGroupSnapshot(FrameworkElement group)
     {
-        foreach (var element in EnumerateVisualDescendants(group).OfType<FrameworkElement>())
+        var elements = EnumerateVisualDescendants(group)
+            .OfType<FrameworkElement>()
+            .ToList();
+        var commandLabels = elements
+            .OfType<TextBlock>()
+            .Where(RibbonMetadata.IsCommandLabel)
+            .ToList();
+        var buttons = elements
+            .OfType<ButtonBase>()
+            .Select(CaptureRibbonCompactButtonSnapshot)
+            .ToList();
+
+        return new RibbonCompactGroupSnapshot(group, commandLabels, buttons);
+    }
+
+    private static RibbonCompactButtonSnapshot CaptureRibbonCompactButtonSnapshot(ButtonBase button)
+    {
+        var descendants = EnumerateVisualDescendants(button)
+            .OfType<FrameworkElement>()
+            .ToList();
+        var content = button.Content as FrameworkElement;
+        var contentLayout = RibbonCommandContentLayout.None;
+        var hasContentLayout = content is not null &&
+            RibbonMetadata.TryGetCommandContentLayout(content, out contentLayout);
+        var isLargeButton = hasContentLayout && contentLayout == RibbonCommandContentLayout.Large;
+        var hasCompactWidths = RibbonMetadata.TryGetCompactWidths(button, out var fullWidth, out var compactWidth);
+        var labels = descendants
+            .OfType<TextBlock>()
+            .Where(IsRibbonButtonLabel)
+            .ToList();
+        var horizontalStacks = descendants
+            .OfType<StackPanel>()
+            .Where(stack => stack.Orientation == Orientation.Horizontal)
+            .ToList();
+        var smallGrid = hasContentLayout && contentLayout == RibbonCommandContentLayout.Small
+            ? content as Grid
+            : null;
+        var smallSpacerColumn = GetRibbonSmallButtonSpacerColumn(smallGrid);
+        var largeStack = isLargeButton ? content as StackPanel : null;
+        var largeIconSlot = largeStack?.Children
+            .OfType<Border>()
+            .FirstOrDefault(RibbonMetadata.IsCommandIcon);
+        var largeLabelBlock = largeStack?.Children
+            .OfType<TextBlock>()
+            .FirstOrDefault(RibbonMetadata.IsCommandLabel);
+        var largeIconChild = largeIconSlot?.Child as FrameworkElement;
+
+        return new RibbonCompactButtonSnapshot(
+            button,
+            button is CheckBox or RadioButton,
+            content,
+            hasContentLayout,
+            contentLayout,
+            isLargeButton,
+            hasCompactWidths,
+            fullWidth,
+            compactWidth,
+            labels,
+            horizontalStacks,
+            smallGrid,
+            smallSpacerColumn,
+            largeStack,
+            largeIconSlot,
+            largeIconChild,
+            largeLabelBlock);
+    }
+
+    private static ColumnDefinition? GetRibbonSmallButtonSpacerColumn(Grid? contentGrid)
+    {
+        if (contentGrid is null)
+            return null;
+
+        var spacerColumn = contentGrid.ColumnDefinitions
+            .Cast<ColumnDefinition>()
+            .FirstOrDefault(RibbonMetadata.IsCommandSpacer);
+        if (spacerColumn is null && contentGrid.ColumnDefinitions.Count >= 2)
+            spacerColumn = contentGrid.ColumnDefinitions[1];
+
+        return spacerColumn;
+    }
+
+    private static void SetRibbonGroupCompact(FrameworkElement group, RibbonCompactLevel level) =>
+        ApplyRibbonGroupCompactSnapshot(CaptureRibbonCompactGroupSnapshot(group), level);
+
+    private static void ApplyRibbonGroupCompactSnapshot(RibbonCompactGroupSnapshot snapshot, RibbonCompactLevel level)
+    {
+        foreach (var label in snapshot.CommandLabels)
+            label.Visibility = level == RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
+
+        foreach (var buttonSnapshot in snapshot.Buttons)
         {
-            if (element is TextBlock label &&
-                RibbonMetadata.IsCommandLabel(label))
+            if (buttonSnapshot.HasCompactWidths)
             {
-                label.Visibility = level == RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
-                continue;
-            }
-
-            if (element is ButtonBase button)
-            {
-                var isLargeButton = button.Content is DependencyObject contentRoot &&
-                    RibbonMetadata.TryGetCommandContentLayout(contentRoot, out var layout) &&
-                    layout == RibbonCommandContentLayout.Large;
-
-                if (RibbonMetadata.TryGetCompactWidths(button, out var fullWidth, out var compactWidth))
+                buttonSnapshot.Button.Width = level switch
                 {
-                    button.Width = level switch
-                    {
-                        RibbonCompactLevel.Full => fullWidth,
-                        RibbonCompactLevel.SmallWithLabels => isLargeButton ? double.NaN : fullWidth,
-                        _ => compactWidth
-                    };
-                }
-
-                SetRibbonButtonCompact(button, level);
+                    RibbonCompactLevel.Full => buttonSnapshot.FullWidth,
+                    RibbonCompactLevel.SmallWithLabels => buttonSnapshot.IsLargeButton ? double.NaN : buttonSnapshot.FullWidth,
+                    _ => buttonSnapshot.CompactWidth
+                };
             }
+
+            ApplyRibbonButtonCompactSnapshot(buttonSnapshot, level);
         }
     }
 
-    private static void SetRibbonButtonCompact(ButtonBase button, RibbonCompactLevel level)
+    private static void SetRibbonButtonCompact(ButtonBase button, RibbonCompactLevel level) =>
+        ApplyRibbonButtonCompactSnapshot(CaptureRibbonCompactButtonSnapshot(button), level);
+
+    private static void ApplyRibbonButtonCompactSnapshot(RibbonCompactButtonSnapshot snapshot, RibbonCompactLevel level)
     {
-        if (button is CheckBox or RadioButton)
+        if (snapshot.IsCheckOrRadioButton)
         {
-            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
-            if (button.Content is FrameworkElement content)
-                content.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+            snapshot.Button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
+            if (snapshot.Content is not null)
+                snapshot.Content.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
             return;
         }
 
-        foreach (var textBlock in EnumerateVisualDescendants(button).OfType<TextBlock>())
-        {
-            if (IsRibbonButtonLabel(textBlock))
-                textBlock.Visibility = level == RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
-        }
+        foreach (var label in snapshot.Labels)
+            label.Visibility = level == RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
 
-        var contentLayout = RibbonCommandContentLayout.None;
-        var hasContentLayout = button.Content is DependencyObject contentRoot &&
-            RibbonMetadata.TryGetCommandContentLayout(contentRoot, out contentLayout);
-        bool isSmallOrMedium = contentLayout is RibbonCommandContentLayout.Small or RibbonCommandContentLayout.Medium;
-
-        if (button.Content is Grid smallGrid &&
-            hasContentLayout &&
-            contentLayout == RibbonCommandContentLayout.Small)
+        var isSmallOrMedium = snapshot.ContentLayout is RibbonCommandContentLayout.Small or RibbonCommandContentLayout.Medium;
+        if (snapshot.HasContentLayout &&
+            snapshot.ContentLayout == RibbonCommandContentLayout.Small &&
+            snapshot.SmallGrid is not null)
         {
-            ApplySmallButtonCompactLayout(smallGrid, button, level);
+            ApplySmallButtonCompactLayout(snapshot, level);
         }
 
         if (!isSmallOrMedium)
         {
-            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
+            snapshot.Button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
 
-            if (button.Content is FrameworkElement content)
-                content.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+            if (snapshot.Content is not null)
+                snapshot.Content.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
 
-            foreach (var stack in EnumerateVisualDescendants(button).OfType<StackPanel>())
-            {
-                if (stack.Orientation == Orientation.Horizontal)
-                    stack.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
-            }
+            foreach (var stack in snapshot.HorizontalStacks)
+                stack.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
         }
 
-        if (button.Content is StackPanel largeStack &&
-            hasContentLayout &&
-            contentLayout == RibbonCommandContentLayout.Large)
+        if (snapshot.HasContentLayout &&
+            snapshot.ContentLayout == RibbonCommandContentLayout.Large &&
+            snapshot.LargeStack is not null)
         {
-            ApplyLargeButtonCompactLayout(largeStack, button, level);
+            ApplyLargeButtonCompactLayout(snapshot, level);
         }
     }
 
     private static void ApplySmallButtonCompactLayout(
         Grid contentGrid,
         ButtonBase button,
+        RibbonCompactLevel level) =>
+        ApplySmallButtonCompactLayout(
+            new RibbonCompactButtonSnapshot(
+                button,
+                button is CheckBox or RadioButton,
+                contentGrid,
+                hasContentLayout: true,
+                RibbonCommandContentLayout.Small,
+                isLargeButton: false,
+                hasCompactWidths: false,
+                fullWidth: 0,
+                compactWidth: 0,
+                [],
+                [],
+                contentGrid,
+                GetRibbonSmallButtonSpacerColumn(contentGrid),
+                null,
+                null,
+                null,
+                null),
+            level);
+
+    private static void ApplySmallButtonCompactLayout(
+        RibbonCompactButtonSnapshot snapshot,
         RibbonCompactLevel level)
     {
-        var spacerColumn = contentGrid.ColumnDefinitions
-            .Cast<ColumnDefinition>()
-            .FirstOrDefault(RibbonMetadata.IsCommandSpacer);
-        if (spacerColumn is null && contentGrid.ColumnDefinitions.Count >= 2)
+        if (snapshot.SmallSpacerColumn is not null)
         {
-            spacerColumn = contentGrid.ColumnDefinitions[1];
-        }
-
-        if (spacerColumn is not null)
-        {
-            spacerColumn.Width = level == RibbonCompactLevel.IconOnly
+            snapshot.SmallSpacerColumn.Width = level == RibbonCompactLevel.IconOnly
                 ? new GridLength(0)
                 : new GridLength(5);
         }
 
         if (level == RibbonCompactLevel.IconOnly)
         {
-            contentGrid.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
-            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
+            snapshot.SmallGrid!.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+            snapshot.Button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
         }
         else
         {
-            contentGrid.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
-            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
+            snapshot.SmallGrid!.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+            snapshot.Button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
         }
     }
 
@@ -983,50 +1270,78 @@ public partial class MainWindow
         var labelBlock = contentStack.Children
             .OfType<TextBlock>()
             .FirstOrDefault(RibbonMetadata.IsCommandLabel);
-        if (iconSlot is null || labelBlock is null)
+
+        ApplyLargeButtonCompactLayout(
+            new RibbonCompactButtonSnapshot(
+                button,
+                button is CheckBox or RadioButton,
+                contentStack,
+                hasContentLayout: true,
+                RibbonCommandContentLayout.Large,
+                isLargeButton: true,
+                hasCompactWidths: false,
+                fullWidth: 0,
+                compactWidth: 0,
+                [],
+                [],
+                null,
+                null,
+                contentStack,
+                iconSlot,
+                iconSlot?.Child as FrameworkElement,
+                labelBlock),
+            level);
+    }
+
+    private static void ApplyLargeButtonCompactLayout(
+        RibbonCompactButtonSnapshot snapshot, RibbonCompactLevel level)
+    {
+        if (snapshot.LargeStack is null ||
+            snapshot.LargeIconSlot is null ||
+            snapshot.LargeLabelBlock is null)
         {
             return;
         }
 
         if (level == RibbonCompactLevel.Full)
         {
-            contentStack.Orientation = Orientation.Vertical;
-            contentStack.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
-            button.Height = 76;
-            iconSlot.Width = 34;
-            iconSlot.Height = 34;
-            iconSlot.Margin = new Thickness(0, 0, 0, 2);
-            if (iconSlot.Child is FrameworkElement iconChild)
+            snapshot.LargeStack.Orientation = Orientation.Vertical;
+            snapshot.LargeStack.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+            snapshot.Button.Height = 76;
+            snapshot.LargeIconSlot.Width = 34;
+            snapshot.LargeIconSlot.Height = 34;
+            snapshot.LargeIconSlot.Margin = new Thickness(0, 0, 0, 2);
+            if (snapshot.LargeIconChild is not null)
             {
-                iconChild.Width = 32;
-                iconChild.Height = 32;
+                snapshot.LargeIconChild.Width = 32;
+                snapshot.LargeIconChild.Height = 32;
             }
-            labelBlock.TextWrapping = TextWrapping.Wrap;
-            labelBlock.MaxWidth = 96;
-            labelBlock.TextTrimming = TextTrimming.None;
-            labelBlock.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
-            labelBlock.TextAlignment = TextAlignment.Center;
-            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
+            snapshot.LargeLabelBlock.TextWrapping = TextWrapping.Wrap;
+            snapshot.LargeLabelBlock.MaxWidth = 96;
+            snapshot.LargeLabelBlock.TextTrimming = TextTrimming.None;
+            snapshot.LargeLabelBlock.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+            snapshot.LargeLabelBlock.TextAlignment = TextAlignment.Center;
+            snapshot.Button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Center;
         }
         else
         {
-            contentStack.Orientation = Orientation.Horizontal;
-            contentStack.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
-            button.Height = 48;
-            iconSlot.Width = 24;
-            iconSlot.Height = 24;
-            iconSlot.Margin = new Thickness(0, 0, 5, 0);
-            if (iconSlot.Child is FrameworkElement iconChild)
+            snapshot.LargeStack.Orientation = Orientation.Horizontal;
+            snapshot.LargeStack.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+            snapshot.Button.Height = 48;
+            snapshot.LargeIconSlot.Width = 24;
+            snapshot.LargeIconSlot.Height = 24;
+            snapshot.LargeIconSlot.Margin = new Thickness(0, 0, 5, 0);
+            if (snapshot.LargeIconChild is not null)
             {
-                iconChild.Width = 24;
-                iconChild.Height = 24;
+                snapshot.LargeIconChild.Width = 24;
+                snapshot.LargeIconChild.Height = 24;
             }
-            labelBlock.TextWrapping = TextWrapping.NoWrap;
-            labelBlock.MaxWidth = 90;
-            labelBlock.TextTrimming = TextTrimming.CharacterEllipsis;
-            labelBlock.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
-            labelBlock.TextAlignment = TextAlignment.Left;
-            button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
+            snapshot.LargeLabelBlock.TextWrapping = TextWrapping.NoWrap;
+            snapshot.LargeLabelBlock.MaxWidth = 90;
+            snapshot.LargeLabelBlock.TextTrimming = TextTrimming.CharacterEllipsis;
+            snapshot.LargeLabelBlock.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+            snapshot.LargeLabelBlock.TextAlignment = TextAlignment.Left;
+            snapshot.Button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
         }
     }
 

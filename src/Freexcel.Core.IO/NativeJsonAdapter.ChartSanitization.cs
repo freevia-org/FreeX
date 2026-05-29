@@ -10,6 +10,7 @@ public sealed partial class NativeJsonAdapter
         chart.ChartDefaultFontSize = Math.Clamp(chart.ChartDefaultFontSize, 6, 72);
         chart.ChartTitleFontSize = Math.Clamp(chart.ChartTitleFontSize, 6, 72);
         chart.AxisTitleFontSize = Math.Clamp(chart.AxisTitleFontSize, 6, 72);
+        chart.BlankDisplayMode = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.BlankDisplayMode, ChartBlankDisplayMode.Gap);
         if (!ChartTypeSupport.SupportsAxes(chart.Type))
         {
             chart.XAxisTitle = null;
@@ -41,6 +42,14 @@ public sealed partial class NativeJsonAdapter
         chart.XAxisGridlineThickness = Math.Clamp(chart.XAxisGridlineThickness, 0.25, 10);
         chart.XAxisMajorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisMajorTickStyle, ChartAxisTickStyle.Outside);
         chart.XAxisMinorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisMinorTickStyle, ChartAxisTickStyle.None);
+        chart.XAxisTickLabelPosition = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisTickLabelPosition, ChartAxisTickLabelPosition.NextTo);
+        chart.XAxisLabelAlignment = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisLabelAlignment, ChartAxisLabelAlignment.Center);
+        chart.XAxisBaseTimeUnit = NativeJsonValueSanitizer.ValidNullableEnumOrNull(chart.XAxisBaseTimeUnit);
+        chart.XAxisMajorTimeUnit = NativeJsonValueSanitizer.ValidNullableEnumOrNull(chart.XAxisMajorTimeUnit);
+        chart.XAxisMinorTimeUnit = NativeJsonValueSanitizer.ValidNullableEnumOrNull(chart.XAxisMinorTimeUnit);
+        chart.XAxisCrosses = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisCrosses, ChartAxisCrosses.AutoZero);
+        chart.XAxisCrossBetween = NativeJsonValueSanitizer.ValidNullableEnumOrNull(chart.XAxisCrossBetween);
+        chart.XAxisDisplayUnit = NativeJsonValueSanitizer.ValidNullableEnumOrNull(chart.XAxisDisplayUnit);
         chart.XAxisLabelFontSize = Math.Clamp(chart.XAxisLabelFontSize, 6, 72);
         chart.XAxisLabelAngle = Math.Clamp(chart.XAxisLabelAngle, -90, 90);
         chart.XAxisLabelSkip = Math.Max(0, chart.XAxisLabelSkip);
@@ -54,6 +63,10 @@ public sealed partial class NativeJsonAdapter
         chart.YAxisGridlineThickness = Math.Clamp(chart.YAxisGridlineThickness, 0.25, 10);
         chart.YAxisMajorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisMajorTickStyle, ChartAxisTickStyle.Outside);
         chart.YAxisMinorTickStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisMinorTickStyle, ChartAxisTickStyle.None);
+        chart.YAxisTickLabelPosition = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisTickLabelPosition, ChartAxisTickLabelPosition.NextTo);
+        chart.YAxisCrosses = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisCrosses, ChartAxisCrosses.AutoZero);
+        chart.YAxisCrossBetween = NativeJsonValueSanitizer.ValidNullableEnumOrNull(chart.YAxisCrossBetween);
+        chart.YAxisDisplayUnit = NativeJsonValueSanitizer.ValidNullableEnumOrNull(chart.YAxisDisplayUnit);
         chart.YAxisLabelFontSize = Math.Clamp(chart.YAxisLabelFontSize, 6, 72);
         chart.YAxisLabelAngle = Math.Clamp(chart.YAxisLabelAngle, -90, 90);
         chart.YAxisLineThickness = Math.Clamp(chart.YAxisLineThickness, 0.5, 10);
@@ -62,6 +75,8 @@ public sealed partial class NativeJsonAdapter
         if (!ChartTypeSupport.SupportsYAxisBounds(chart.Type))
             ClearYAxisBounds(chart);
         chart.LegendPosition = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.LegendPosition, ChartLegendPosition.Right);
+        chart.XAxisPosition = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.XAxisPosition, ChartAxisPosition.Bottom);
+        chart.YAxisPosition = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.YAxisPosition, ChartAxisPosition.Left);
         chart.DataLabelPosition = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelPosition, ChartDataLabelPosition.BestFit);
         chart.DataLabelSeparator = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelSeparator, ChartDataLabelSeparator.Comma);
         chart.DataLabelNumberFormat = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.DataLabelNumberFormat, ChartDataLabelNumberFormat.General);

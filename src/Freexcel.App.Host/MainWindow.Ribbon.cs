@@ -17,15 +17,9 @@ public partial class MainWindow
     private const string RibbonDropdownMenuHoverPartName = "PART_RibbonDropdownMenuHover";
     private const string RibbonDropdownContentPartName = "PART_RibbonDropdownContent";
 
-    private void NormalizeRibbonCommandButtons()
+    private void NormalizeRibbonCommandButtons(RibbonStaticSurfaceSnapshot surface)
     {
-        if (RibbonTabs is null)
-            return;
-
-        foreach (var button in EnumerateVisualDescendants(RibbonTabs)
-                     .Concat(EnumerateLogicalDescendants(RibbonTabs))
-                     .OfType<ButtonBase>()
-                     .Distinct())
+        foreach (var button in surface.ButtonBases)
         {
             if (button is CheckBox or RadioButton)
                 continue;
@@ -41,7 +35,7 @@ public partial class MainWindow
                 button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(label));
             var fullWidth = button.Width is > 0 ? button.Width : Math.Max(button.ActualWidth, 64);
             var compactWidth = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium ? 38 : 24;
-            SetRibbonCompactWidthTag(button, fullWidth, compactWidth);
+            SetRibbonCompactWidths(button, fullWidth, compactWidth);
 
             button.Content = CreateRibbonCommandContent(commandName, label, layoutKind);
             button.HorizontalContentAlignment = layoutKind is RibbonCommandLayoutKind.Small
@@ -58,16 +52,7 @@ public partial class MainWindow
         _normalizingRibbonSurface = true;
         try
         {
-            NormalizeRibbonGroupMetadata();
-            NormalizeRibbonCommandButtons();
-            NormalizeExistingRibbonIconText();
-            ConfigureInsertRibbonSurface();
-            NormalizeRibbonCommandGroups();
-            NormalizeRibbonMenuButtons();
-            AlignRibbonIconColumns();
-            HideRibbonScrollBars();
-            ApplyToolbarDropdownWhiteBackgrounds();
-            _ribbonAdaptiveStateDiffInvalidated = true;
+            NormalizeStaticRibbonSurfaceForSelectedTabOnce();
             UpdateRibbonCompactMode(force: forceCompact);
         }
         finally
@@ -76,15 +61,32 @@ public partial class MainWindow
         }
     }
 
-    private void NormalizeRibbonGroupMetadata()
+    private void NormalizeStaticRibbonSurfaceForSelectedTabOnce()
     {
-        if (RibbonTabs is null)
+        if (RibbonTabs?.SelectedItem is not TabItem tabItem)
             return;
 
-        foreach (var group in EnumerateVisualDescendants(RibbonTabs)
-                     .Concat(EnumerateLogicalDescendants(RibbonTabs))
-                     .OfType<Grid>()
-                     .Distinct())
+        if (!_normalizedRibbonStaticTabs.Add(tabItem))
+            return;
+
+        PrepareRibbonTabForImmediateCompaction(tabItem, forceLayout: true);
+        var root = GetRibbonTabContentRoot(tabItem);
+        var surface = CaptureRibbonStaticSurface(root);
+        NormalizeRibbonGroupMetadata(surface);
+        NormalizeRibbonCommandButtons(surface);
+        NormalizeExistingRibbonIconText(surface);
+        ConfigureInsertRibbonSurface(surface);
+        NormalizeRibbonCommandGroups(surface);
+        NormalizeRibbonMenuButtons(surface);
+        AlignRibbonIconColumns(surface);
+        HideRibbonScrollBars(root, surface);
+        ApplyToolbarDropdownWhiteBackgrounds(surface);
+        InvalidateRibbonAdaptiveMeasurementCaches();
+    }
+
+    private void NormalizeRibbonGroupMetadata(RibbonStaticSurfaceSnapshot surface)
+    {
+        foreach (var group in surface.Grids)
         {
             if (!RibbonMetadata.IsRibbonGroup(group) ||
                 RibbonMetadata.TryGetGroupName(group, out _))
@@ -114,24 +116,21 @@ public partial class MainWindow
         return false;
     }
 
-    private void HideRibbonScrollBars()
+    private void HideRibbonScrollBars(DependencyObject root, RibbonStaticSurfaceSnapshot surface)
     {
-        if (RibbonTabs is null)
-            return;
+        if (root is FrameworkElement element &&
+            FindVisualAncestor<ScrollViewer>(element) is { } owningScrollViewer)
+        {
+            owningScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
+        }
 
-        foreach (var scrollViewer in EnumerateVisualDescendants(RibbonTabs).OfType<ScrollViewer>())
+        foreach (var scrollViewer in surface.ScrollViewers)
             scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden;
     }
 
-    private void NormalizeRibbonMenuButtons()
+    private void NormalizeRibbonMenuButtons(RibbonStaticSurfaceSnapshot surface)
     {
-        if (RibbonTabs is null)
-            return;
-
-        foreach (var button in EnumerateVisualDescendants(RibbonTabs)
-                     .Concat(EnumerateLogicalDescendants(RibbonTabs))
-                     .OfType<ButtonBase>()
-                     .Distinct())
+        foreach (var button in surface.ButtonBases)
         {
             if (RibbonMetadata.IsCollapsedGroupButton(button) ||
                 button.ContextMenu is null && !RibbonMetadata.IsDropdownMenuButton(button))
@@ -182,7 +181,7 @@ public partial class MainWindow
             button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(text));
         var fullWidth = button.Width is > 0 ? button.Width : Math.Max(button.ActualWidth, 64);
         var compactWidth = layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium ? 38 : 24;
-        SetRibbonCompactWidthTag(button, fullWidth, compactWidth);
+        SetRibbonCompactWidths(button, fullWidth, compactWidth);
 
         var content = CreateRibbonCommandContent(commandName, text, layoutKind);
         button.Content = content;
@@ -604,10 +603,57 @@ public partial class MainWindow
         }
     }
 
+    private static IEnumerable<DependencyObject> EnumerateRibbonStaticDescendants(DependencyObject root) =>
+        EnumerateVisualDescendants(root)
+            .Concat(EnumerateLogicalDescendants(root))
+            .Distinct();
+
+    private static RibbonStaticSurfaceSnapshot CaptureRibbonStaticSurface(DependencyObject root)
+    {
+        var descendants = EnumerateRibbonStaticDescendants(root).ToList();
+        return new RibbonStaticSurfaceSnapshot(descendants);
+    }
+
+    private sealed class RibbonStaticSurfaceSnapshot
+    {
+        public RibbonStaticSurfaceSnapshot(IReadOnlyList<DependencyObject> descendants)
+        {
+            Descendants = descendants;
+            ButtonBases = descendants.OfType<ButtonBase>().ToList();
+            Buttons = descendants.OfType<Button>().ToList();
+            Grids = descendants.OfType<Grid>().ToList();
+            StackPanels = descendants.OfType<StackPanel>().ToList();
+            ComboBoxes = descendants.OfType<ComboBox>().ToList();
+            ScrollViewers = descendants.OfType<ScrollViewer>().ToList();
+        }
+
+        public IReadOnlyList<DependencyObject> Descendants { get; }
+        public IReadOnlyList<ButtonBase> ButtonBases { get; }
+        public IReadOnlyList<Button> Buttons { get; }
+        public IReadOnlyList<Grid> Grids { get; }
+        public IReadOnlyList<StackPanel> StackPanels { get; }
+        public IReadOnlyList<ComboBox> ComboBoxes { get; }
+        public IReadOnlyList<ScrollViewer> ScrollViewers { get; }
+    }
+
     private void NormalizeRibbonSurfaceAfterTabSelection()
     {
         _ribbonResizeNormalizationRequired = true;
-        NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true);
+        NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: true, scheduleFallback: true);
+    }
+
+    private void ChangeRibbonSelectionWithoutTabNormalization(Action changeSelection)
+    {
+        var previous = _suppressRibbonSelectionChangedNormalization;
+        _suppressRibbonSelectionChangedNormalization = true;
+        try
+        {
+            changeSelection();
+        }
+        finally
+        {
+            _suppressRibbonSelectionChangedNormalization = previous;
+        }
     }
 
     private void NormalizeRibbonSurfaceAfterResize()
@@ -618,46 +664,109 @@ public partial class MainWindow
         CompactRibbonSurfaceAfterResize(scheduleFallback: !_isInWindowResizeMoveLoop);
     }
 
-    private void NormalizeRibbonSurfaceAfterLayoutChange(bool prepareSelectedTab = false)
-        => NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab, scheduleFallback: true);
+    private void NormalizeRibbonSurfaceAfterLayoutChange()
+        => NormalizeRibbonSurfaceAfterLayoutChange(prepareSelectedTab: false, scheduleFallback: true);
 
     private void NormalizeRibbonSurfaceAfterLayoutChange(bool prepareSelectedTab, bool scheduleFallback)
     {
         if (prepareSelectedTab)
             PrepareSelectedRibbonTabForImmediateCompaction();
-        NormalizeRibbonSurface(forceCompact: true);
-        if (!scheduleFallback)
-            return;
 
-        Dispatcher.BeginInvoke(
-            (Action)(() =>
-            {
-                if (prepareSelectedTab)
-                    PrepareSelectedRibbonTabForImmediateCompaction();
-                NormalizeRibbonSurface(forceCompact: true);
-            }),
-            DispatcherPriority.Send);
+        NormalizeRibbonSurface(forceCompact: true);
+        if (scheduleFallback)
+            QueueRibbonFallback(RibbonFallbackWork.NormalizeSurface);
     }
 
     private void CompactRibbonSurfaceAfterResize(bool scheduleFallback)
     {
         UpdateRibbonCompactMode(force: true);
-        if (!scheduleFallback || _ribbonResizeCompactFallbackPending)
+        if (scheduleFallback)
+        {
+            QueueRibbonFallback(RibbonFallbackWork.CompactOnly);
+        }
+        else
+        {
+            _ribbonResizeCompactionPendingOnExit = true;
+        }
+    }
+
+    private void QueueRibbonFallback(RibbonFallbackWork work)
+    {
+        if (work == RibbonFallbackWork.None)
             return;
 
-        _ribbonResizeCompactFallbackPending = true;
+        _ribbonFallbackRequestCount++;
+        _lastRibbonFallbackRequestedWork = work;
+        _ribbonFallbackWork = MergeRibbonFallbackWork(_ribbonFallbackWork, work);
+        _lastRibbonFallbackMergedWork = _ribbonFallbackWork;
+        if (_ribbonFallbackPending)
+            return;
+
+        _ribbonFallbackPending = true;
+        _ribbonFallbackPostedCount++;
         Dispatcher.BeginInvoke(
             (Action)(() =>
             {
-                _ribbonResizeCompactFallbackPending = false;
-                UpdateRibbonCompactMode(force: true);
+                var pendingWork = _ribbonFallbackWork;
+                _ribbonFallbackWork = RibbonFallbackWork.None;
+                _ribbonFallbackPending = false;
+                _ribbonFallbackExecutedCount++;
+                _lastRibbonFallbackExecutedWork = pendingWork;
+
+                if (pendingWork == RibbonFallbackWork.NormalizeSurface)
+                {
+                    _ribbonFallbackForcedNormalizeCount++;
+                    NormalizeRibbonSurface(forceCompact: true);
+                }
+                else if (pendingWork == RibbonFallbackWork.CompactOnly)
+                {
+                    _ribbonFallbackForcedCompactCount++;
+                    UpdateRibbonCompactMode(force: true);
+                }
             }),
             DispatcherPriority.Send);
     }
 
+    internal RibbonFallbackDiagnosticsSnapshot GetRibbonFallbackDiagnosticsForTests() =>
+        new(
+            _ribbonFallbackRequestCount,
+            _ribbonFallbackPostedCount,
+            _ribbonFallbackExecutedCount,
+            _ribbonFallbackForcedNormalizeCount,
+            _ribbonFallbackForcedCompactCount,
+            _lastRibbonFallbackRequestedWork.ToString(),
+            _lastRibbonFallbackMergedWork.ToString(),
+            _lastRibbonFallbackExecutedWork.ToString(),
+            _ribbonFallbackPending,
+            _ribbonResizeCompactionPendingOnExit);
+
+    internal void ResetRibbonFallbackDiagnosticsForTests()
+    {
+        _ribbonFallbackRequestCount = 0;
+        _ribbonFallbackPostedCount = 0;
+        _ribbonFallbackExecutedCount = 0;
+        _ribbonFallbackForcedNormalizeCount = 0;
+        _ribbonFallbackForcedCompactCount = 0;
+        _lastRibbonFallbackRequestedWork = RibbonFallbackWork.None;
+        _lastRibbonFallbackMergedWork = RibbonFallbackWork.None;
+        _lastRibbonFallbackExecutedWork = RibbonFallbackWork.None;
+    }
+
+    private static RibbonFallbackWork MergeRibbonFallbackWork(RibbonFallbackWork current, RibbonFallbackWork requested) =>
+        current == RibbonFallbackWork.NormalizeSurface || requested == RibbonFallbackWork.NormalizeSurface
+            ? RibbonFallbackWork.NormalizeSurface
+            : current == RibbonFallbackWork.CompactOnly || requested == RibbonFallbackWork.CompactOnly
+                ? RibbonFallbackWork.CompactOnly
+                : RibbonFallbackWork.None;
+
     private void CompleteRibbonResizeCompaction()
     {
-        CompactRibbonSurfaceAfterResize(scheduleFallback: true);
+        if (_ribbonResizeCompactionPendingOnExit)
+        {
+            _ribbonResizeCompactionPendingOnExit = false;
+            QueueRibbonFallback(RibbonFallbackWork.CompactOnly);
+        }
+
         var width = GetCurrentRibbonResizeWidth();
         if (width > 0 && !double.IsNaN(width))
             _lastRibbonResizeWidth = width;
@@ -747,28 +856,39 @@ public partial class MainWindow
         if (RibbonTabs?.SelectedItem is not TabItem tabItem)
             return;
 
+        PrepareRibbonTabForImmediateCompaction(tabItem);
+    }
+
+    private static void PrepareRibbonTabForImmediateCompaction(TabItem tabItem, bool forceLayout = false)
+    {
         tabItem.ApplyTemplate();
         if (tabItem.Content is FrameworkElement content)
         {
             content.ApplyTemplate();
-            content.UpdateLayout();
+            UpdateRibbonLayoutIfNeeded(content, force: forceLayout);
         }
     }
 
-    private void ConfigureInsertRibbonSurface()
+    private static void UpdateRibbonLayoutIfNeeded(FrameworkElement element, bool force = false)
     {
-        var insertTab = RibbonTabs?.Items
-            .OfType<TabItem>()
-            .FirstOrDefault(item => string.Equals(item.Header?.ToString(), "Insert", StringComparison.Ordinal));
+        if (force ||
+            !element.IsMeasureValid ||
+            !element.IsArrangeValid ||
+            (element.IsVisible && (element.ActualWidth <= 0 || element.ActualHeight <= 0)))
+        {
+            element.UpdateLayout();
+        }
+    }
 
-        if (insertTab is null)
+    private void ConfigureInsertRibbonSurface(RibbonStaticSurfaceSnapshot surface)
+    {
+        if (RibbonTabs?.SelectedItem is not TabItem selectedTab ||
+            !string.Equals(selectedTab.Header?.ToString(), "Insert", StringComparison.Ordinal))
+        {
             return;
+        }
 
-        var contentRoot = GetRibbonTabContentRoot(insertTab);
-        foreach (var button in EnumerateVisualDescendants(contentRoot)
-                     .Concat(EnumerateLogicalDescendants(contentRoot))
-                     .OfType<Button>()
-                     .Distinct())
+        foreach (var button in surface.Buttons)
         {
             var title = GetRibbonButtonTitleOrLabel(button);
             var groupName = FindRibbonOwningGroupName(button);
@@ -838,12 +958,9 @@ public partial class MainWindow
         return null;
     }
 
-    private void AlignRibbonIconColumns()
+    private void AlignRibbonIconColumns(RibbonStaticSurfaceSnapshot surface)
     {
-        if (RibbonTabs is null)
-            return;
-
-        foreach (var stack in EnumerateVisualDescendants(RibbonTabs).OfType<StackPanel>())
+        foreach (var stack in surface.StackPanels)
         {
             if (RibbonMetadata.TryGetCommandContentLayout(stack, out _))
                 continue;
@@ -880,12 +997,9 @@ public partial class MainWindow
         }
     }
 
-    private void NormalizeExistingRibbonIconText()
+    private void NormalizeExistingRibbonIconText(RibbonStaticSurfaceSnapshot surface)
     {
-        if (RibbonTabs is null)
-            return;
-
-        foreach (var button in EnumerateVisualDescendants(RibbonTabs).OfType<ButtonBase>())
+        foreach (var button in surface.ButtonBases)
         {
             if (TryNormalizeHomeCompactIconButton(button))
                 continue;
@@ -948,7 +1062,7 @@ public partial class MainWindow
 
         element.Width = 26;
         element.Height = 26;
-        SetRibbonCompactWidthTag(button, 26, 24);
+        SetRibbonCompactWidths(button, 26, 24);
         element.Margin = new Thickness(1, 0, 1, 0);
         if (button is Control control)
             control.Padding = new Thickness(1);
@@ -977,7 +1091,7 @@ public partial class MainWindow
 
         element.Width = GetSmallRibbonCommandWidth(commandName);
         element.Height = 24;
-        SetRibbonCompactWidthTag(button, element.Width, 24);
+        SetRibbonCompactWidths(button, element.Width, 24);
         if (button is Control control)
             control.Padding = new Thickness(4, 2, 4, 2);
         button.Content = CreateRibbonCommandContent(commandName, commandName, RibbonCommandLayoutKind.Small);
@@ -1005,7 +1119,6 @@ public partial class MainWindow
     {
         if (RibbonTabs is null ||
             button is not Button commandButton ||
-            FindVisualAncestor<TabControl>(commandButton) != RibbonTabs ||
             IsRibbonCollapsedGroupButton(commandButton) ||
             IsRibbonCommandContent(commandButton.Content) ||
             (!ContainsUnreplacedRibbonIcon(commandButton.Content) &&
@@ -1034,7 +1147,7 @@ public partial class MainWindow
             if (!hadUnreplacedIcon && hadRibbonCommandLabel)
                 commandButton.Width = Math.Max(commandButton.Width, GetIconLabelRowRibbonCommandWidth(label));
         }
-        SetRibbonCompactWidthTag(
+        SetRibbonCompactWidths(
             commandButton,
             commandButton.Width is > 0 ? commandButton.Width : Math.Max(commandButton.ActualWidth, 64),
             layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium ? 38 : 24);
@@ -1105,7 +1218,7 @@ public partial class MainWindow
             var tallLabel = FindRibbonContentLabel(button.Content) ?? GetRibbonButtonTitleOrLabel(button);
             element.Width = Math.Max(element.Width is > 0 ? element.Width : 0, GetLargeRibbonCommandWidth(tallLabel));
             element.Height = Math.Max(element.Height is > 0 ? element.Height : 0, 76);
-            SetRibbonCompactWidthTag(button, element.Width, 38);
+            SetRibbonCompactWidths(button, element.Width, 38);
             return;
         }
 
@@ -1124,10 +1237,10 @@ public partial class MainWindow
 
         element.Width = Math.Max(element.Width is > 0 ? element.Width : 0, minWidth);
         element.Height = Math.Max(element.Height is > 0 ? element.Height : 0, 24);
-        SetRibbonCompactWidthTag(button, element.Width, 24);
+        SetRibbonCompactWidths(button, element.Width, 24);
     }
 
-    private static void SetRibbonCompactWidthTag(ButtonBase button, double fullWidth, double compactWidth)
+    private static void SetRibbonCompactWidths(ButtonBase button, double fullWidth, double compactWidth)
     {
         RibbonMetadata.SetCompactWidths(button, fullWidth, compactWidth);
     }
@@ -1341,12 +1454,9 @@ public partial class MainWindow
         }
     }
 
-    private void ApplyToolbarDropdownWhiteBackgrounds()
+    private void ApplyToolbarDropdownWhiteBackgrounds(RibbonStaticSurfaceSnapshot surface)
     {
-        if (RibbonTabs is null)
-            return;
-
-        foreach (var comboBox in EnumerateVisualDescendants(RibbonTabs).OfType<ComboBox>())
+        foreach (var comboBox in surface.ComboBoxes)
         {
             comboBox.Background = Brushes.White;
             comboBox.Foreground = Brushes.Black;
@@ -1555,21 +1665,14 @@ public partial class MainWindow
         }
     }
 
-    private void NormalizeRibbonCommandGroups()
+    private void NormalizeRibbonCommandGroups(RibbonStaticSurfaceSnapshot surface)
     {
-        if (RibbonTabs is null)
-            return;
-
-        NormalizeRibbonCommandColumns();
+        NormalizeRibbonCommandColumns(surface);
     }
 
-    private void NormalizeRibbonCommandColumns()
+    private void NormalizeRibbonCommandColumns(RibbonStaticSurfaceSnapshot surface)
     {
-        if (RibbonTabs is null)
-            return;
-
-        var panels = EnumerateVisualDescendants(RibbonTabs)
-            .OfType<StackPanel>()
+        var panels = surface.StackPanels
             .Where(panel => panel != HomeRibbonPanel &&
                             panel.Orientation == Orientation.Vertical &&
                             FindVisualAncestor<ButtonBase>(panel) is null)
@@ -1632,7 +1735,7 @@ public partial class MainWindow
         var label = FindRibbonContentLabel(button.Content) ?? commandName;
         button.Height = 24;
         button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(label));
-        SetRibbonCompactWidthTag(button, button.Width, 24);
+        SetRibbonCompactWidths(button, button.Width, 24);
         button.Padding = new Thickness(4, 2, 4, 2);
         button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
         button.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;

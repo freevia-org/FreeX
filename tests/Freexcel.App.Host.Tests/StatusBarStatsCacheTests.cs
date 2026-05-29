@@ -30,6 +30,26 @@ public sealed class StatusBarStatsCacheTests
     }
 
     [Fact]
+    public void GetOrCalculate_ReusesStatsWhenSheetRangeAndRevisionAreUnchanged()
+    {
+        var cache = new StatusBarStatsCache();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(7)));
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow, 1));
+
+        var first = cache.GetOrCalculate(sheet, range, revision: 4);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(8)));
+        var second = cache.GetOrCalculate(sheet, range, revision: 4);
+        var third = cache.GetOrCalculate(sheet, range, revision: 5);
+
+        first.Should().Be(new StatusBarCalculator.Stats(7, 1, 1, 7, 7, 7));
+        second.Should().Be(first);
+        third.Should().Be(new StatusBarCalculator.Stats(8, 1, 1, 8, 8, 8));
+    }
+
+    [Fact]
     public void GetOrCreate_RecalculatesWhenRevisionChanges()
     {
         var cache = new StatusBarStatsCache();

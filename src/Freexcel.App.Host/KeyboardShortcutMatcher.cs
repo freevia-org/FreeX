@@ -75,7 +75,8 @@ public static partial class KeyboardShortcutMatcher
             return true;
         }
 
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is Key.Multiply or Key.D8)
+        if (modifiers == ModifierKeys.Control && key == Key.Multiply ||
+            modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key is Key.Multiply or Key.D8)
         {
             shortcut = KeyboardSelectionShortcut.SelectCurrentRegion;
             return true;

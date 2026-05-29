@@ -421,9 +421,8 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("new CellFillColorFilterCommand");
         source.Should().Contain("new CellNoFillColorFilterCommand");
         source.Should().Contain("new CellFontColorFilterCommand");
-        source.Should().Contain("FilterInputParser.TryParseCriterion");
-        source.Should().Contain("FilterInputParser.TryParseTopBottom");
-        source.Should().Contain("FilterInputParser.TryParseAverage");
+        source.Should().Contain("FilterPromptPlanner.TryPlan");
+        source.Should().Contain("promptPlan.CreateCommand");
     }
 
     [Fact]

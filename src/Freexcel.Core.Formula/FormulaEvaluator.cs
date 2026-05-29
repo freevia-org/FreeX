@@ -30,7 +30,7 @@ public sealed class FormulaEvaluator
     {
         "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "COUNTA", "AND", "OR", "CONCAT",
         "STDEV", "MEDIAN",
-        "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "XOR",
+        "PRODUCT", "SUMSQ", "SUMX2MY2", "SUMX2PY2", "SUMXMY2", "XOR", "GCD", "LCM",
         "VAR", "VAR.S", "VARA", "VARP", "VAR.P", "VARPA", "STDEVP", "STDEV.P", "STDEVA", "STDEVPA",
         "GEOMEAN", "HARMEAN", "AVEDEV",
         "MODE", "MODE.SNGL",
@@ -1700,6 +1700,8 @@ public sealed class FormulaEvaluator
         {
             CellRefNode cell  => new BoolValue(cell.SheetName is null || context.SheetExists(cell.SheetName)),
             RangeRefNode rng  => new BoolValue(rng.SheetName is null || context.SheetExists(rng.SheetName)),
+            FullColumnRangeRefNode col => new BoolValue(col.SheetName is null || context.SheetExists(col.SheetName)),
+            FullRowRangeRefNode row => new BoolValue(row.SheetName is null || context.SheetExists(row.SheetName)),
             NamedRangeNode nm => new BoolValue(context.TryResolveNamedRange(nm.Name) is not null),
             FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT"
                 => EvaluateReferenceReturningIsRef(fn, context),
@@ -1749,6 +1751,10 @@ public sealed class FormulaEvaluator
                 : context.TryGetCell(rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
             return new BoolValue(cell?.HasFormula == true);
         }
+        if (arg is FullColumnRangeRefNode fullColumnRangeRef)
+            return EvaluateIsFormula(new FunctionCallNode(node.FunctionName, [ToRangeRef(fullColumnRangeRef)]), context);
+        if (arg is FullRowRangeRefNode fullRowRangeRef)
+            return EvaluateIsFormula(new FunctionCallNode(node.FunctionName, [ToRangeRef(fullRowRangeRef)]), context);
         if (arg is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
         {
             var reference = EvaluateReferenceReturningFunction(fn, context);
@@ -1782,6 +1788,24 @@ public sealed class FormulaEvaluator
             cell = rangeRef.SheetName is not null
                 ? context.TryGetCell(rangeRef.SheetName, rangeRef.Start.Row, rangeRef.Start.ColumnNumber)
                 : context.TryGetCell(rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
+        }
+        else if (arg is FullColumnRangeRefNode fullColumnRangeRef)
+        {
+            var range = ToRangeRef(fullColumnRangeRef);
+            if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+                return ErrorValue.Ref;
+            cell = range.SheetName is not null
+                ? context.TryGetCell(range.SheetName, range.Start.Row, range.Start.ColumnNumber)
+                : context.TryGetCell(range.Start.Row, range.Start.ColumnNumber);
+        }
+        else if (arg is FullRowRangeRefNode fullRowRangeRef)
+        {
+            var range = ToRangeRef(fullRowRangeRef);
+            if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+                return ErrorValue.Ref;
+            cell = range.SheetName is not null
+                ? context.TryGetCell(range.SheetName, range.Start.Row, range.Start.ColumnNumber)
+                : context.TryGetCell(range.Start.Row, range.Start.ColumnNumber);
         }
         else if (arg is NamedRangeNode nm)
         {

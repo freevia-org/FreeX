@@ -34,6 +34,18 @@ public sealed class RibbonKeyTipModeTests
         mode.IsActive.Should().BeFalse();
     }
 
+    [Fact]
+    public void HandleTopLevelKey_IgnoresUnsupportedKeyAndKeepsModeActive()
+    {
+        var mode = new RibbonKeyTipMode();
+        mode.Enter();
+
+        var result = mode.HandleTopLevelKey(Key.Tab);
+
+        result.Should().Be(RibbonKeyTipModeResult.Ignored);
+        mode.IsActive.Should().BeTrue("unsupported keys should not consume a pending standalone Alt keytip mode");
+    }
+
     [Theory]
     [InlineData(Key.D1, "1")]
     [InlineData(Key.NumPad3, "3")]

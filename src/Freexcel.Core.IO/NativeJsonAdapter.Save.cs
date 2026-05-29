@@ -258,17 +258,29 @@ public sealed partial class NativeJsonAdapter
                     .Select(range => range.ToString())
                     .ToList(),
                 BackgroundImage = ToWorksheetBackgroundDto(s.BackgroundImage),
-                Pictures = s.Pictures.Select(NativeJsonVisualDtoMapper.FromPicture).ToList(),
-                TextBoxes = s.TextBoxes.Select(NativeJsonVisualDtoMapper.FromTextBox).ToList(),
-                DrawingShapes = s.DrawingShapes.Select(NativeJsonVisualDtoMapper.FromDrawingShape).ToList(),
+                Pictures = s.Pictures
+                    .Where(picture => NativeJsonVisualDtoMapper.IsPictureOnSheet(picture, s.Id))
+                    .Select(NativeJsonVisualDtoMapper.FromPicture)
+                    .ToList(),
+                TextBoxes = s.TextBoxes
+                    .Where(textBox => NativeJsonVisualDtoMapper.IsTextBoxOnSheet(textBox, s.Id))
+                    .Select(NativeJsonVisualDtoMapper.FromTextBox)
+                    .ToList(),
+                DrawingShapes = s.DrawingShapes
+                    .Where(shape => NativeJsonVisualDtoMapper.IsDrawingShapeOnSheet(shape, s.Id))
+                    .Select(NativeJsonVisualDtoMapper.FromDrawingShape)
+                    .ToList(),
                 Sparklines = s.Sparklines
                     .Where(sparkline => IsSparklineOnSheet(sparkline, s.Id) && Enum.IsDefined(sparkline.Kind))
                     .Select(ToSparklineDto)
                     .ToList(),
-                Charts = s.Charts.Select(ToChartDto).ToList(),
+                Charts = s.Charts
+                    .Where(chart => IsChartOnSheet(chart, s.Id))
+                    .Select(ToChartDto)
+                    .ToList(),
                 DataValidations = s.DataValidations
-                    .Where(IsSupportedDataValidation)
-                    .Select(ToDataValidationDto)
+                    .Where(validation => IsDataValidationOnSheet(validation, s.Id) && IsSupportedDataValidation(validation))
+                    .Select(validation => ToDataValidationDto(validation, s.Id))
                     .ToList(),
                 ConditionalFormats = ToConditionalFormatDtos(s.ConditionalFormats, s.Id),
                 Cells = s.EnumerateCells().Select(entry => new CellDto

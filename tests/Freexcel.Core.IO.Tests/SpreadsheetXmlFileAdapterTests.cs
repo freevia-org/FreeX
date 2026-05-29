@@ -74,6 +74,30 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_NormalizesInvalidBlankDuplicateAndLongWorksheetNames()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="'Bad:/?*[]Name'"><ss:Table/></ss:Worksheet>
+              <ss:Worksheet ss:Name="bad:/?*[]name"><ss:Table/></ss:Worksheet>
+              <ss:Worksheet ss:Name="   "><ss:Table/></ss:Worksheet>
+              <ss:Worksheet ss:Name="''"><ss:Table/></ss:Worksheet>
+              <ss:Worksheet ss:Name="ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"><ss:Table/></ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal(
+            "Bad______Name",
+            "bad______name (1)",
+            "Sheet3",
+            "Sheet",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345");
+        workbook.Sheets.Select(sheet => sheet.Name).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
     public void Load_ReadsSpreadsheetMlMergeAcrossAndMergeDown()
     {
         using var stream = StreamFromString("""
@@ -306,6 +330,49 @@ public sealed class SpreadsheetXmlFileAdapterTests
         loadedSheet.HyperlinkMetadata[loadedExternalAddress].ScreenTip.Should().Be("Open report");
         loadedSheet.Hyperlinks[loadedMailAddress].Should().Be("mailto:team@example.com");
         loadedSheet.HyperlinkMetadata[loadedMailAddress].LinkType.Should().Be(HyperlinkTargetKind.EmailAddress);
+    }
+
+    [Fact]
+    public void Load_UsesCurrentStreamPositionAndLeavesInputStreamOpen()
+    {
+        using var stream = PositionedStreamFromString("ignored", """
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Offset">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="String">Gamma</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Offset");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Gamma"));
+        stream.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Save_UsesCurrentStreamPositionAndLeavesOutputStreamOpen()
+    {
+        var workbook = new Workbook("OffsetSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Gamma"));
+        var prefixBytes = Encoding.UTF8.GetBytes("ignored");
+        using var stream = new MemoryStream();
+        stream.Write(prefixBytes);
+
+        new SpreadsheetXmlFileAdapter().Save(workbook, stream);
+
+        stream.CanWrite.Should().BeTrue();
+        stream.ToArray().Take(prefixBytes.Length).Should().Equal(prefixBytes);
+        stream.Position = prefixBytes.Length;
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        document.Descendants(ss + "Data").Single().Value.Should().Be("Gamma");
     }
 
     [Fact]

@@ -1,4 +1,4 @@
-﻿<Window x:Class="Freexcel.App.Host.MainWindow"
+<Window x:Class="Freexcel.App.Host.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -47,7 +47,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 0  Title bar / Quick Access Toolbar
              ═══════════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="0" Background="{StaticResource FreexcelTitleBarBrush}" BorderBrush="{StaticResource FreexcelGreenDarkBrush}"
+        <Border x:Name="TitleBarRoot" Grid.Row="0" Background="{StaticResource FreexcelTitleBarBrush}" BorderBrush="{StaticResource FreexcelGreenDarkBrush}"
                 BorderThickness="0,0,0,1" Padding="6,3">
             <DockPanel>
                 <!-- App icon -->
@@ -285,7 +285,7 @@
                                     <StackPanel>
                                         <local:RibbonIcon Kind="Paste" IconSize="22"
                                                           HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Paste" Tag="RibbonLabel" FontSize="10" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                        <TextBlock Text="Paste" local:RibbonMetadata.Role="CommandLabel" FontSize="10" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </Button>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Top" Margin="2,1,0,0">
@@ -319,7 +319,7 @@
                                         <StackPanel Orientation="Horizontal">
                                             <local:RibbonIcon Kind="FormatPainter" IconSize="11"
                                                               VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                            <TextBlock Text="Format Painter" Tag="RibbonLabel" VerticalAlignment="Center" FontSize="10"/>
+                                            <TextBlock Text="Format Painter" local:RibbonMetadata.Role="CommandLabel" VerticalAlignment="Center" FontSize="10"/>
                                         </StackPanel>
                                     </Button>
                                 </StackPanel>
@@ -755,7 +755,7 @@
                                                 <Path Data="M 2 7 L 7 3 M 2 7 L 7 11 M 18 7 L 13 3 M 18 7 L 13 11"
                                                       Stroke="#111" StrokeThickness="1"/>
                                             </Grid>
-                                            <TextBlock Text="Merge &amp; Center" Tag="RibbonLabel" FontSize="10"/>
+                                            <TextBlock Text="Merge &amp; Center" local:RibbonMetadata.Role="CommandLabel" FontSize="10"/>
                                         </StackPanel>
                                     </Button>
                                 </StackPanel>
@@ -854,7 +854,7 @@
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,2,0">
                                 <!-- Conditional Formatting -->
-                                <Button Width="94" Height="76" Margin="1,0" Tag="RibbonCompact:94:36"
+                                <Button Width="94" Height="76" Margin="1,0" local:RibbonMetadata.CompactFullWidth="94" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonTallButton}" Click="CfPickerBtn_Click"
                                         local:RibbonTooltip.Title="Conditional Formatting"
                                         local:RibbonTooltip.KeyTip="L"
@@ -919,12 +919,12 @@
                                     <StackPanel HorizontalAlignment="Center">
                                         <local:RibbonIcon Kind="Theme" IconSize="20"
                                                           HorizontalAlignment="Center" Margin="0,5,0,3"/>
-                                        <TextBlock Text="Conditional" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Formatting" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Conditional" local:RibbonMetadata.Role="CommandLabel" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Formatting" local:RibbonMetadata.Role="CommandLabel" FontSize="9" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 <!-- Format as Table -->
-                                <Button Width="78" Height="76" Margin="1,0" Tag="RibbonCompact:78:36"
+                                <Button Width="78" Height="76" Margin="1,0" local:RibbonMetadata.CompactFullWidth="78" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonTallButton}" Click="FormatTableBtn_Click"
                                         local:RibbonTooltip.Title="Format as Table"
                                         local:RibbonTooltip.KeyTip="T"
@@ -935,12 +935,12 @@
                                     <StackPanel HorizontalAlignment="Center">
                                         <local:RibbonIcon Kind="Table" IconSize="20"
                                                           HorizontalAlignment="Center" Margin="0,5,0,3"/>
-                                        <TextBlock Text="Format as" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Table" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Format as" local:RibbonMetadata.Role="CommandLabel" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Table" local:RibbonMetadata.Role="CommandLabel" FontSize="9" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 <!-- Cell Styles -->
-                                <Button Width="66" Height="76" Margin="1,0" Tag="RibbonCompact:66:36"
+                                <Button Width="66" Height="76" Margin="1,0" local:RibbonMetadata.CompactFullWidth="66" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonTallButton}" Click="CellStylesBtn_Click"
                                         local:RibbonTooltip.Title="Cell Styles"
                                         local:RibbonTooltip.KeyTip="J"
@@ -977,8 +977,8 @@
                                     <StackPanel HorizontalAlignment="Center">
                                         <local:RibbonIcon Kind="Color" IconSize="20"
                                                           HorizontalAlignment="Center" Margin="0,5,0,3"/>
-                                        <TextBlock Text="Cell" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Styles" Tag="RibbonLabel" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Cell" local:RibbonMetadata.Role="CommandLabel" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Styles" local:RibbonMetadata.Role="CommandLabel" FontSize="9" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
@@ -996,7 +996,7 @@
                                 <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Margin="0,0,2,0">
-                                <Button Style="{StaticResource RibbonCommandButton}" Height="24" Tag="RibbonCompact:92:24"
+                                <Button Style="{StaticResource RibbonCommandButton}" Height="24" local:RibbonMetadata.CompactFullWidth="92" local:RibbonMetadata.CompactWidth="24"
                                         Click="InsertPickerBtn_Click"
                                         local:RibbonTooltip.Title="Insert"
                                         local:RibbonTooltip.KeyTip="I"
@@ -1012,10 +1012,10 @@
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                         <local:RibbonIcon Kind="Insert" IconSize="11"
                                                           VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                        <TextBlock Text="Insert" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Insert" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Style="{StaticResource RibbonCommandButton}" Height="24" Tag="RibbonCompact:92:24"
+                                <Button Style="{StaticResource RibbonCommandButton}" Height="24" local:RibbonMetadata.CompactFullWidth="92" local:RibbonMetadata.CompactWidth="24"
                                         Click="DeletePickerBtn_Click"
                                         local:RibbonTooltip.Title="Delete"
                                         local:RibbonTooltip.KeyTip="D"
@@ -1031,10 +1031,10 @@
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                         <local:RibbonIcon Kind="Delete" IconSize="11"
                                                           VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                        <TextBlock Text="Delete" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Delete" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Style="{StaticResource RibbonCommandButton}" Height="24" Tag="RibbonCompact:92:24"
+                                <Button Style="{StaticResource RibbonCommandButton}" Height="24" local:RibbonMetadata.CompactFullWidth="92" local:RibbonMetadata.CompactWidth="24"
                                         Click="FormatPickerBtn_Click"
                                         local:RibbonTooltip.Title="Format"
                                         local:RibbonTooltip.KeyTip="O"
@@ -1059,7 +1059,7 @@
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                         <local:RibbonIcon Kind="FormatPainter" IconSize="11"
                                                           VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                        <TextBlock Text="Format" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Format" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
@@ -1083,7 +1083,7 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <!-- AutoSum: tall left button -->
-                                <Button Grid.Column="0" Width="64" Height="76" Margin="1,0,3,0" Tag="RibbonCompact:64:36"
+                                <Button Grid.Column="0" Width="64" Height="76" Margin="1,0,3,0" local:RibbonMetadata.CompactFullWidth="64" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonTallButton}" Click="AutoSumPickerBtn_Click"
                                         local:RibbonTooltip.Title="AutoSum"
                                         local:RibbonTooltip.KeyTip="U"
@@ -1102,7 +1102,7 @@
                                     </Button.ContextMenu>
                                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <local:RibbonIcon Kind="Sum" IconSize="22" HorizontalAlignment="Center" Margin="0,4,0,1"/>
-                                        <TextBlock Text="AutoSum" Tag="RibbonLabel" FontSize="10" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="AutoSum" local:RibbonMetadata.Role="CommandLabel" FontSize="10" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 <!-- Right: 2×2 grid of Fill/Clear/Sort&Filter/Find&Select -->
@@ -1116,7 +1116,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <!-- Fill -->
-                                    <Button Grid.Row="0" Grid.Column="0" Width="74" Height="30" Margin="1,1" Tag="RibbonCompact:74:30"
+                                    <Button Grid.Row="0" Grid.Column="0" Width="74" Height="30" Margin="1,1" local:RibbonMetadata.CompactFullWidth="74" local:RibbonMetadata.CompactWidth="30"
                                             Style="{StaticResource RibbonBtn}" Click="FillPickerBtn_Click"
                                             local:RibbonTooltip.Title="Fill"
                                             local:RibbonTooltip.KeyTip="FI"
@@ -1135,11 +1135,11 @@
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <local:RibbonIcon Kind="Fill" IconSize="18"
                                                               VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                            <TextBlock Text="Fill" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Fill" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                     <!-- Clear -->
-                                    <Button Grid.Row="0" Grid.Column="1" Width="74" Height="30" Margin="1,1" Tag="RibbonCompact:74:30"
+                                    <Button Grid.Row="0" Grid.Column="1" Width="74" Height="30" Margin="1,1" local:RibbonMetadata.CompactFullWidth="74" local:RibbonMetadata.CompactWidth="30"
                                             Style="{StaticResource RibbonBtn}" Click="ClearPickerBtn_Click"
                                             local:RibbonTooltip.Title="Clear"
                                             local:RibbonTooltip.KeyTip="E"
@@ -1156,11 +1156,11 @@
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <local:RibbonIcon Kind="Clear" IconSize="18"
                                                               VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                            <TextBlock Text="Clear" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Clear" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                     <!-- Sort & Filter -->
-                                    <Button Grid.Row="1" Grid.Column="0" Width="88" Height="30" Margin="1,1" Tag="RibbonCompact:88:30"
+                                    <Button Grid.Row="1" Grid.Column="0" Width="88" Height="30" Margin="1,1" local:RibbonMetadata.CompactFullWidth="88" local:RibbonMetadata.CompactWidth="30"
                                             Style="{StaticResource RibbonBtn}" Click="SortFilterPickerBtn_Click"
                                             local:RibbonTooltip.Title="Sort &amp; Filter"
                                             local:RibbonTooltip.KeyTip="S"
@@ -1179,11 +1179,11 @@
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <local:RibbonIcon Kind="Sort" IconSize="18"
                                                               VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                            <TextBlock Text="Sort &amp; Filter" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Sort &amp; Filter" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                     <!-- Find & Select -->
-                                    <Button Grid.Row="1" Grid.Column="1" Width="96" Height="30" Margin="1,1" Tag="RibbonCompact:96:30"
+                                    <Button Grid.Row="1" Grid.Column="1" Width="96" Height="30" Margin="1,1" local:RibbonMetadata.CompactFullWidth="96" local:RibbonMetadata.CompactWidth="30"
                                             Style="{StaticResource RibbonBtn}" Click="FindSelectPickerBtn_Click"
                                             local:RibbonTooltip.Title="Find &amp; Select"
                                             local:RibbonTooltip.KeyTip="FD"
@@ -1200,7 +1200,7 @@
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <local:RibbonIcon Kind="Search" IconSize="18"
                                                               VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                            <TextBlock Text="Find &amp; Select" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Find &amp; Select" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                 </Grid>
@@ -1893,17 +1893,17 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Bring Forward" Width="72" Height="64" Margin="1,0" Tag="RibbonCompact:72:36"
+                                <Button Content="Bring Forward" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonBtn}" Click="BringForwardBtn_Click"
                                         local:RibbonTooltip.Title="Bring Forward"
                                         local:RibbonTooltip.KeyTip="BF"
                                         local:RibbonTooltip.Description="Move the selected shape one step closer to the front."/>
-                                <Button Content="Send Backward" Width="72" Height="64" Margin="1,0" Tag="RibbonCompact:72:36"
+                                <Button Content="Send Backward" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonBtn}" Click="SendBackwardBtn_Click"
                                         local:RibbonTooltip.Title="Send Backward"
                                         local:RibbonTooltip.KeyTip="SB"
                                         local:RibbonTooltip.Description="Move the selected shape one step closer to the back."/>
-                                <Button Content="Selection Pane" Width="72" Height="64" Margin="1,0" Tag="RibbonCompact:72:36"
+                                <Button Content="Selection Pane" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonBtn}" Click="SelectionPaneBtn_Click"
                                         local:RibbonTooltip.Title="Selection Pane"
                                         local:RibbonTooltip.KeyTip="SP"
@@ -2246,17 +2246,17 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Bring Forward" Width="72" Height="64" Margin="1,0" Tag="RibbonCompact:72:36"
+                                <Button Content="Bring Forward" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonBtn}" Click="BringForwardBtn_Click"
                                         local:RibbonTooltip.Title="Bring Forward"
                                         local:RibbonTooltip.KeyTip="BF"
                                         local:RibbonTooltip.Description="Move the selected shape one step closer to the front."/>
-                                <Button Content="Send Backward" Width="72" Height="64" Margin="1,0" Tag="RibbonCompact:72:36"
+                                <Button Content="Send Backward" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonBtn}" Click="SendBackwardBtn_Click"
                                         local:RibbonTooltip.Title="Send Backward"
                                         local:RibbonTooltip.KeyTip="SB"
                                         local:RibbonTooltip.Description="Move the selected shape one step closer to the back."/>
-                                <Button Content="Selection Pane" Width="72" Height="64" Margin="1,0" Tag="RibbonCompact:72:36"
+                                <Button Content="Selection Pane" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
                                         Style="{StaticResource RibbonBtn}" Click="SelectionPaneBtn_Click"
                                         local:RibbonTooltip.Title="Selection Pane"
                                         local:RibbonTooltip.KeyTip="SP"
@@ -2538,13 +2538,13 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Vertical">
-                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"
+                                    <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="SortAscButton_Click"
                                             local:RibbonTooltip.Title="Sort A to Z"
                                             local:RibbonTooltip.KeyTip="SA"
                                             local:RibbonTooltip.Description="Sort the selected column from smallest to largest (A to Z).">
                                         <local:RibbonIcon Kind="SortAscending" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
-                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"
+                                    <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="SortDescButton_Click"
                                             local:RibbonTooltip.Title="Sort Z to A"
                                             local:RibbonTooltip.KeyTip="SD"
                                             local:RibbonTooltip.Description="Sort the selected column from largest to smallest (Z to A).">
@@ -2552,13 +2552,13 @@
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
-                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="FilterButton_Click"
+                                    <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="FilterButton_Click"
                                             local:RibbonTooltip.Title="Filter"
                                             local:RibbonTooltip.KeyTip="T"
                                             local:RibbonTooltip.Description="Enable dropdown filters on each column to show only the rows you want.">
                                         <local:RibbonIcon Kind="Filter" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
-                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"
+                                    <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"
                                             local:RibbonTooltip.Title="Clear Filter"
                                             local:RibbonTooltip.KeyTip="C"
                                             local:RibbonTooltip.Description="Remove all active filters and show all rows in the current range.">
@@ -2566,7 +2566,7 @@
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
-                                    <Button Width="76" Height="22" Margin="1,1" Tag="RibbonCompact:76:24" Style="{StaticResource RibbonBtn}" Click="AdvancedFilterBtn_Click"
+                                    <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="AdvancedFilterBtn_Click"
                                             local:RibbonTooltip.Title="Advanced Filter"
                                             local:RibbonTooltip.KeyTip="A"
                                             local:RibbonTooltip.Description="Filter a list using an Excel-style criteria range, optionally copying matching rows elsewhere.">
@@ -2587,19 +2587,19 @@
                                             local:RibbonTooltip.Title="Text to Columns"
                                             local:RibbonTooltip.KeyTip="E"
                                             local:RibbonTooltip.Description="Split text in one column into multiple columns using a delimiter such as a comma or space.">
-                                        <TextBlock Text="Text to Columns" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Text to Columns" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                     <Button Width="124" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FlashFillMenuItem_Click"
                                             local:RibbonTooltip.Title="Flash Fill"
                                             local:RibbonTooltip.KeyTip="FF"
                                             local:RibbonTooltip.Description="Automatically fill values from examples in adjacent columns.">
-                                        <TextBlock Text="Flash Fill" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Flash Fill" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                     <Button Width="124" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveDuplicatesBtn_Click"
                                             local:RibbonTooltip.Title="Remove Duplicates"
                                             local:RibbonTooltip.KeyTip="M"
                                             local:RibbonTooltip.Description="Delete duplicate rows from the selected range.">
-                                        <TextBlock Text="Remove Duplicates" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Remove Duplicates" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
@@ -2607,13 +2607,13 @@
                                             local:RibbonTooltip.Title="Data Validation"
                                             local:RibbonTooltip.KeyTip="V"
                                             local:RibbonTooltip.Description="Control what data can be entered in the selected cells.">
-                                        <TextBlock Text="Data Validation" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Data Validation" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                     <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ConsolidateBtn_Click"
                                             local:RibbonTooltip.Title="Consolidate"
                                             local:RibbonTooltip.KeyTip="N"
                                             local:RibbonTooltip.Description="Combine values from multiple ranges into a single summary range.">
-                                        <TextBlock Text="Consolidate" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Consolidate" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
@@ -3282,7 +3282,7 @@
                                             local:RibbonTooltip.Title="Contact Support"
                                             local:RibbonTooltip.KeyTip="CS"
                                             local:RibbonTooltip.Description="Contact support for Freexcel. In-app support is not yet implemented.">
-                                        <TextBlock Text="Contact Support" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Contact Support" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
@@ -3290,13 +3290,13 @@
                                             local:RibbonTooltip.Title="Show Training"
                                             local:RibbonTooltip.KeyTip="TR"
                                             local:RibbonTooltip.Description="Open Freexcel training content. Training content is not yet implemented.">
-                                        <TextBlock Text="Show Training" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Show Training" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                     <Button Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                             local:RibbonTooltip.Title="What's New"
                                             local:RibbonTooltip.KeyTip="WN"
                                             local:RibbonTooltip.Description="Show recent Freexcel updates. What's New content is not yet implemented.">
-                                        <TextBlock Text="What's New" Tag="RibbonLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="What's New" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
@@ -3405,8 +3405,11 @@
                            Panel.ZIndex="15">
                     <Border x:Name="GridBottomRuleSpacer"
                             DockPanel.Dock="Left"
-                            Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"/>
-                    <Border BorderThickness="0"/>
+                            Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"
+                            BorderBrush="{StaticResource FreexcelGreenBrush}"
+                            BorderThickness="0,0,0,1"/>
+                    <Border BorderBrush="{StaticResource FreexcelGreenBrush}"
+                            BorderThickness="0,0,0,1"/>
                 </DockPanel>
                 <!-- Inline cell edit overlay: a Canvas with a positioned TextBox -->
                 <Canvas x:Name="EditOverlay"
@@ -3728,47 +3731,89 @@
         <Border Grid.Row="4" Panel.ZIndex="5" Background="{StaticResource FreexcelSheetSurfaceBrush}" BorderBrush="{StaticResource FreexcelBorderBrush}"
                 BorderThickness="0" Padding="0">
             <Grid x:Name="SheetTabsRowGrid"
+                  Background="{StaticResource FreexcelSheetSurfaceBrush}"
                   SizeChanged="SheetTabsRowGrid_SizeChanged">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <Border x:Name="SheetTabsLeadingSpacer" Grid.Column="0"
                         Width="{Binding ActualRowHeaderWidth, ElementName=SheetGrid}"
-                        BorderBrush="{StaticResource FreexcelBorderStrongBrush}"
-                        BorderThickness="0,0,0,1"
-                        IsHitTestVisible="False"/>
-
-                <Border Grid.Column="2" Grid.ColumnSpan="5"
-                        BorderBrush="{StaticResource FreexcelGreenBrush}"
-                        BorderThickness="0"
+                        Height="27"
+                        Margin="0,1,0,0"
                         VerticalAlignment="Top"
-                        Panel.ZIndex="0"
+                        Panel.ZIndex="4"
+                        Background="{StaticResource FreexcelSheetSurfaceBrush}"
+                        BorderBrush="Transparent"
+                        BorderThickness="0"
                         IsHitTestVisible="False"/>
 
-                <Button x:Name="SheetNavLeftBtn" Grid.Column="1" Content="&lt;" Width="20" Height="20" Padding="0"
-                        FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
-                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="2,2,0,0"
+                <Canvas x:Name="SheetTabsChromeLayer"
+                        Grid.Column="0"
+                        Grid.ColumnSpan="6"
+                        Height="28"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Top"
+                        Panel.ZIndex="1"
+                        ClipToBounds="False"
+                        SnapsToDevicePixels="True"
+                        IsHitTestVisible="False"/>
+
+                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="27" Height="27" Padding="0,0,0,2"
+                        FontSize="17" Background="{StaticResource FreexcelSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
+                        Foreground="{StaticResource FreexcelGreenDarkBrush}"
+                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,1,0,0"
+                        HorizontalAlignment="Right" HorizontalContentAlignment="Center"
+                        VerticalAlignment="Stretch" VerticalContentAlignment="Center"
+                        Panel.ZIndex="7"
                         local:RibbonTooltip.Title="Scroll Tabs Left"
                         local:RibbonTooltip.KeyTip="SL"
-                        local:RibbonTooltip.Description="Scroll the sheet tab list to the left."/>
+                        local:RibbonTooltip.Description="Scroll the sheet tab list to the left.">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="NavHitArea"
+                                    Background="{TemplateBinding Background}">
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                  RecognizesAccessKey="True"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="NavHitArea" Property="Background" Value="#EAF4EF"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="NavHitArea" Property="Background" Value="#D9ECE2"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
 
                 <!-- Sheet tabs in a clipped, scrollbar-free viewport -->
-                <ScrollViewer x:Name="SheetTabsScroller" Grid.Column="2"
+                <ScrollViewer x:Name="SheetTabsScroller" Grid.Column="1"
+                              Grid.ColumnSpan="4"
                               Margin="0,0,0,0"
-                              Panel.ZIndex="2"
+                              Panel.ZIndex="3"
+                              ClipToBounds="True"
+                              HorizontalAlignment="Left"
+                              FocusVisualStyle="{x:Null}"
                               HorizontalScrollBarVisibility="Hidden"
                               VerticalScrollBarVisibility="Disabled"
                               ScrollChanged="SheetTabsScroller_ScrollChanged"
                               SizeChanged="SheetTabsScroller_SizeChanged"
                               Loaded="SheetTabsScroller_Loaded">
-                        <ItemsControl x:Name="SheetTabsControl">
+                    <StackPanel x:Name="SheetTabsScrollableContent"
+                                Orientation="Horizontal"
+                                ClipToBounds="False">
+                        <ItemsControl x:Name="SheetTabsControl"
+                                      FocusVisualStyle="{x:Null}"
+                                      Panel.ZIndex="4">
                             <ItemsControl.ItemContainerStyle>
                                 <Style TargetType="ContentPresenter">
                                     <Setter Property="Panel.ZIndex" Value="0"/>
@@ -3795,6 +3840,7 @@
                                           AutomationProperties.Name="{Binding Name}"
                                           AutomationProperties.AutomationId="{Binding Name}"
                                           AutomationProperties.HelpText="Select this sheet. Right-click or press Shift+F10 for sheet tab options."
+                                          FocusVisualStyle="{x:Null}"
                                           MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
                                           MouseMove="SheetTab_MouseMove"
                                           MouseLeftButtonUp="SheetTab_MouseLeftButtonUp"
@@ -3869,6 +3915,7 @@
                                                 Height="26"
                                                 VerticalAlignment="Top"
                                                 Panel.ZIndex="4"
+                                                Visibility="Collapsed"
                                                 IsHitTestVisible="False">
                                             <Path x:Name="TabOutline"
                                                   Data="M 1,0 C 5,0 8,3 8,8 L 8,22 C 8,24 10,26 12,26 L 88,26 C 90,26 92,24 92,22 L 92,8 C 92,3 95,0 99,0"
@@ -3896,22 +3943,22 @@
                                             </Border.Style>
                                         </Border>
                                         <Border x:Name="TabBorder"
-                                                CornerRadius="0,0,4,4" Padding="12,1,12,3"
+                                                CornerRadius="0,0,4,4" Padding="12,3,12,1"
                                                 Margin="8,0,8,0"
                                                 Panel.ZIndex="2">
                                             <Border.Style>
                                                 <Style TargetType="Border">
-                                                    <Setter Property="Background"      Value="{Binding TabBrush}"/>
+                                                    <Setter Property="Background"      Value="Transparent"/>
                                                     <Setter Property="BorderBrush"     Value="{StaticResource FreexcelBorderStrongBrush}"/>
                                                     <Setter Property="BorderThickness" Value="0"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                            <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
+                                                            <Setter Property="Background"      Value="Transparent"/>
                                                             <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
                                                             <Setter Property="BorderThickness" Value="0"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                            <Setter Property="Background"      Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
+                                                            <Setter Property="Background"      Value="Transparent"/>
                                                             <Setter Property="BorderBrush"     Value="{StaticResource FreexcelGreenBrush}"/>
                                                             <Setter Property="BorderThickness" Value="0"/>
                                                         </DataTrigger>
@@ -3924,26 +3971,29 @@
                                                         <RowDefinition Height="Auto"/>
                                                         <RowDefinition Height="0"/>
                                                     </Grid.RowDefinitions>
-                                                    <TextBlock Text="{Binding Name}" FontSize="13">
+                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontFamily="Segoe UI">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
-                                                                <Setter Property="FontWeight" Value="Normal"/>
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsGrouped}" Value="True">
-                                                                        <Setter Property="FontWeight" Value="SemiBold"/>
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                                                        <Setter Property="FontWeight" Value="SemiBold"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
+                                                                <Setter Property="FontWeight" Value="SemiBold"/>
                                                             </Style>
                                                         </TextBlock.Style>
                                                     </TextBlock>
                                                 </Grid>
                                             </Grid>
                                         </Border>
+                                        <Border x:Name="TabFocusCue"
+                                                Margin="14,4,14,5"
+                                                BorderBrush="{StaticResource FreexcelGreenDarkBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="2"
+                                                Panel.ZIndex="8"
+                                                Visibility="Collapsed"
+                                                IsHitTestVisible="False"/>
                                     </Grid>
                                     <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsKeyboardFocusWithin, ElementName=TabChrome}" Value="True">
+                                            <Setter TargetName="TabFocusCue" Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
                                         <DataTrigger Binding="{Binding IsGrouped}" Value="True">
                                             <Setter TargetName="TabOutline" Property="Stroke" Value="{StaticResource FreexcelGreenBrush}"/>
                                         </DataTrigger>
@@ -3954,118 +4004,113 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <Button x:Name="AddSheetButton" Content="+" Width="70" MinWidth="70" MinHeight="27"
+                                FontSize="17" FontWeight="SemiBold" Margin="0,0,0,1" Padding="0"
+                                Background="Transparent" BorderBrush="Transparent" BorderThickness="0"
+                                Foreground="{StaticResource FreexcelGreenBrush}" Opacity="1"
+                                VerticalAlignment="Top" Cursor="Hand"
+                                Panel.ZIndex="3"
+                                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                AutomationProperties.Name="Insert Sheet"
+                                AutomationProperties.HelpText="Add a new sheet to the workbook."
+                                Click="AddSheetButton_Click"
+                                local:RibbonTooltip.Title="Insert Sheet"
+                                local:RibbonTooltip.KeyTip="IS"
+                                local:RibbonTooltip.Description="Add a new sheet to the workbook.">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Grid x:Name="GhostTabRoot"
+                                          Background="Transparent"
+                                          Opacity="{TemplateBinding Opacity}">
+                                        <Border x:Name="GhostTabChrome"
+                                                Background="Transparent"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="0"
+                                                CornerRadius="0,0,4,4"
+                                                Margin="0"
+                                                Panel.ZIndex="2"
+                                                SnapsToDevicePixels="True">
+                                            <TextBlock Text="+"
+                                                       FontSize="{TemplateBinding FontSize}"
+                                                       FontWeight="{TemplateBinding FontWeight}"
+                                                       Foreground="{TemplateBinding Foreground}"
+                                                       LineHeight="18"
+                                                       LineStackingStrategy="BlockLineHeight"
+                                                       Margin="0,1,0,0"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center">
+                                                <TextBlock.RenderTransform>
+                                                    <TranslateTransform X="-8"/>
+                                                </TextBlock.RenderTransform>
+                                            </TextBlock>
+                                        </Border>
+                                    </Grid>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="GhostTabChrome" Property="Opacity" Value="1"/>
+                                            <Setter TargetName="GhostTabChrome" Property="Background" Value="Transparent"/>
+                                            <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreexcelGreenBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="GhostTabChrome" Property="Opacity" Value="1"/>
+                                            <Setter TargetName="GhostTabChrome" Property="Background" Value="Transparent"/>
+                                            <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreexcelGreenDarkBrush}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                    </StackPanel>
                 </ScrollViewer>
 
-                <Button x:Name="AddSheetButton" Grid.Column="3" Content="+" MinWidth="86" MinHeight="27"
-                        FontSize="17" FontWeight="SemiBold" Margin="-32,0,0,1" Padding="12,1,12,3"
-                        Background="#F1F8F4" BorderBrush="#B8D8C6" BorderThickness="1,0,1,1"
-                        Foreground="{StaticResource FreexcelGreenBrush}" Opacity="0.9"
-                        VerticalAlignment="Top" Cursor="Hand"
-                        Panel.ZIndex="0"
-                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                        AutomationProperties.Name="Insert Sheet"
-                        AutomationProperties.HelpText="Add a new sheet to the workbook."
-                        Click="AddSheetButton_Click"
-                        local:RibbonTooltip.Title="Insert Sheet"
-                        local:RibbonTooltip.KeyTip="IS"
-                        local:RibbonTooltip.Description="Add a new sheet to the workbook.">
+                <Canvas x:Name="SheetTabsOverlayLayer"
+                        Grid.Column="0"
+                        Grid.ColumnSpan="6"
+                        Height="28"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Top"
+                        Panel.ZIndex="9"
+                        ClipToBounds="False"
+                        SnapsToDevicePixels="True"
+                        IsHitTestVisible="False"/>
+
+                <Button x:Name="SheetNavRightBtn" Grid.Column="3" Content="&gt;"
+                        Width="27" Height="27" Padding="0,0,0,2"
+                        FontSize="17" Background="{StaticResource FreexcelSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
+                        Foreground="{StaticResource FreexcelGreenDarkBrush}"
+                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,1,0,0"
+                        HorizontalAlignment="Right" HorizontalContentAlignment="Center"
+                        VerticalAlignment="Stretch" VerticalContentAlignment="Center"
+                        Panel.ZIndex="7"
+                        local:RibbonTooltip.Title="Scroll Tabs Right"
+                        local:RibbonTooltip.KeyTip="SR"
+                        local:RibbonTooltip.Description="Scroll the sheet tab list to the right.">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Grid x:Name="GhostTabRoot" Opacity="{TemplateBinding Opacity}">
-                                <Path Data="M 0,0 A 8,8 0 0 1 8,8 L 8,22 A 4,4 0 0 0 12,26"
-                                      Stroke="{StaticResource FreexcelGreenBrush}"
-                                      StrokeThickness="1.25"
-                                      StrokeStartLineCap="Round"
-                                      StrokeEndLineCap="Round"
-                                      StrokeLineJoin="Round"
-                                      Panel.ZIndex="3"
-                                      SnapsToDevicePixels="True"
-                                      Visibility="Collapsed"
-                                      IsHitTestVisible="False"/>
-                                <Path Data="M 4,12 L 4,22 A 4,4 0 0 1 0,26"
-                                      HorizontalAlignment="Right"
-                                      Stroke="{Binding ElementName=GhostTabChrome, Path=BorderBrush}"
-                                      StrokeThickness="1.25"
-                                      StrokeStartLineCap="Round"
-                                      StrokeEndLineCap="Round"
-                                      StrokeLineJoin="Round"
-                                      Opacity="0.75"
-                                      Panel.ZIndex="3"
-                                      SnapsToDevicePixels="True"
-                                      Visibility="Collapsed"
-                                      IsHitTestVisible="False"/>
-                                <Canvas Height="26"
-                                        VerticalAlignment="Top"
-                                        Panel.ZIndex="3"
-                                        IsHitTestVisible="False">
-                                    <Path Data="M 92,8 L 92,22 C 92,24 90,26 88,26 L 12,26"
-                                          Width="{Binding ActualWidth, ElementName=GhostTabRoot}"
-                                          Height="26"
-                                          Stretch="Fill"
-                                          Stroke="{Binding ElementName=GhostTabChrome, Path=BorderBrush}"
-                                          StrokeThickness="1.25"
-                                          StrokeStartLineCap="Round"
-                                          StrokeEndLineCap="Round"
-                                          StrokeLineJoin="Round"
-                                          Opacity="0.9"
-                                          SnapsToDevicePixels="True"/>
-                                </Canvas>
-                                <Border Height="1.25"
-                                        VerticalAlignment="Bottom"
-                                        Margin="12,0,12,0"
-                                        Background="{Binding ElementName=GhostTabChrome, Path=BorderBrush}"
-                                        Panel.ZIndex="3"
-                                        Visibility="Collapsed"
-                                        IsHitTestVisible="False"/>
-                                <Border x:Name="GhostTabChrome"
-                                        Background="{TemplateBinding Background}"
-                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                        BorderThickness="0"
-                                        CornerRadius="0,0,4,4"
-                                        Margin="16,0,8,0"
-                                        SnapsToDevicePixels="True">
-                                    <Grid>
-                                    <ContentPresenter Margin="16,0,8,1"
-                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-                                    </Grid>
-                                </Border>
-                            </Grid>
+                            <Border x:Name="NavHitArea"
+                                    Background="{TemplateBinding Background}">
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                  RecognizesAccessKey="True"/>
+                            </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="GhostTabChrome" Property="Opacity" Value="1"/>
-                                    <Setter TargetName="GhostTabChrome" Property="Background" Value="{StaticResource FreexcelGreenSoftBrush}"/>
-                                    <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreexcelGreenBrush}"/>
+                                    <Setter TargetName="NavHitArea" Property="Background" Value="#EAF4EF"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="GhostTabChrome" Property="Opacity" Value="1"/>
-                                    <Setter TargetName="GhostTabChrome" Property="Background" Value="{StaticResource FreexcelRibbonSurfaceBrush}"/>
-                                    <Setter TargetName="GhostTabChrome" Property="BorderBrush" Value="{StaticResource FreexcelGreenDarkBrush}"/>
+                                    <Setter TargetName="NavHitArea" Property="Background" Value="#D9ECE2"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
 
-                <Border Grid.Column="3"
-                        BorderBrush="{StaticResource FreexcelGreenBrush}"
-                        BorderThickness="0,1,0,0"
-                        VerticalAlignment="Top"
-                        Panel.ZIndex="6"
-                        IsHitTestVisible="False"/>
-
-                <Button x:Name="SheetNavRightBtn" Grid.Column="5" Content="&gt;" Width="20" Height="20" Padding="0"
-                        FontSize="11" Background="Transparent" BorderBrush="{StaticResource FreexcelBorderStrongBrush}" BorderThickness="1"
-                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="2,2,0,0"
-                        HorizontalAlignment="Right"
-                        local:RibbonTooltip.Title="Scroll Tabs Right"
-                        local:RibbonTooltip.KeyTip="SR"
-                        local:RibbonTooltip.Description="Scroll the sheet tab list to the right."/>
-
                 <!-- Horizontal scrollbar (Excel-style, right of sheet tabs) -->
-                <ScrollBar x:Name="HorizontalScroll" Grid.Column="6"
+                <ScrollBar x:Name="HorizontalScroll" Grid.Column="5"
                            Orientation="Horizontal" Minimum="1" Maximum="16384" Value="1"
-                           SmallChange="1" VerticalAlignment="Center" Margin="2,0"
+                           SmallChange="1" VerticalAlignment="Center" Margin="0"
+                           MinWidth="180"
                            AutomationProperties.Name="Horizontal Worksheet Scroll Bar"
                            AutomationProperties.HelpText="Scroll worksheet columns"/>
             </Grid>
@@ -4074,7 +4119,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 5  Status bar
              ═══════════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="5" Panel.ZIndex="6" Background="{StaticResource FreexcelStatusSurfaceBrush}" Padding="8,3"
+        <Border x:Name="StatusBarRoot" Grid.Row="5" Panel.ZIndex="6" Background="{StaticResource FreexcelStatusSurfaceBrush}" Padding="8,3"
                 ClipToBounds="True">
             <Grid x:Name="StatusBarGrid" ClipToBounds="True">
                 <Grid.ColumnDefinitions>
@@ -4149,9 +4194,8 @@
                         <ColumnDefinition Width="38"/>
                     </Grid.ColumnDefinitions>
                     <Button x:Name="StatusZoomOutButton" Grid.Column="0" Content="−" Width="22" Height="22"
-                            Background="Transparent" BorderThickness="0"
+                            Style="{StaticResource StatusBarZoomButtonStyle}"
                             Foreground="White" FontSize="18" Padding="0"
-                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
                             local:RibbonTooltip.Title="Zoom Out"
                             local:RibbonTooltip.KeyTip="SZ"/>
@@ -4164,9 +4208,8 @@
                             TickPlacement="BottomRight" Ticks="100" IsSnapToTickEnabled="False"
                             ValueChanged="ZoomSlider_ValueChanged"/>
                     <Button x:Name="StatusZoomInButton" Grid.Column="4" Content="+" Width="22" Height="22"
-                            Background="Transparent" BorderThickness="0"
+                            Style="{StaticResource StatusBarZoomButtonStyle}"
                             Foreground="White" FontSize="18" Padding="0"
-                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomInBtn_Click"
                             local:RibbonTooltip.Title="Zoom In"
                             local:RibbonTooltip.KeyTip="SX"/>

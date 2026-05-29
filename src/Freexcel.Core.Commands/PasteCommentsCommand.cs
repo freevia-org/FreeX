@@ -56,9 +56,9 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
         {
             var destination = MapDestination(source, _sourceRange, _destination, _transpose);
             _previousThreaded[destination] = targetSheet.ThreadedComments.TryGetValue(destination, out var oldComment)
-                ? oldComment
+                ? CloneThreadedComment(oldComment)
                 : null;
-            targetSheet.ThreadedComments[destination] = comment;
+            targetSheet.ThreadedComments[destination] = CloneThreadedComment(comment);
             affected.Add(destination);
         }
 
@@ -84,9 +84,12 @@ public sealed class PasteCommentsCommand : IWorkbookCommand
             if (comment is null)
                 sheet.ThreadedComments.Remove(address);
             else
-                sheet.ThreadedComments[address] = comment;
+                sheet.ThreadedComments[address] = CloneThreadedComment(comment);
         }
     }
+
+    private static ThreadedComment CloneThreadedComment(ThreadedComment comment) =>
+        comment with { Replies = comment.Replies.ToList() };
 
     private static CellAddress MapDestination(
         CellAddress source,

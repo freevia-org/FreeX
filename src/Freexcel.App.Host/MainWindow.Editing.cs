@@ -859,9 +859,19 @@ public partial class MainWindow
             if (item is TabItem { Header: string tabHeader } &&
                 string.Equals(tabHeader, header, StringComparison.OrdinalIgnoreCase))
             {
-                RibbonTabs.SelectedItem = item;
-                RibbonTabs.UpdateLayout();
-                NormalizeRibbonSurface(forceCompact: true);
+                var selectionChanged = !ReferenceEquals(RibbonTabs.SelectedItem, item);
+                if (selectionChanged)
+                {
+                    ChangeRibbonSelectionWithoutTabNormalization(() => RibbonTabs.SelectedItem = item);
+                    UpdateRibbonLayoutIfNeeded(RibbonTabs, force: true);
+                    NormalizeRibbonSurfaceAfterTabSelection();
+                }
+                else
+                {
+                    UpdateRibbonLayoutIfNeeded(RibbonTabs);
+                    NormalizeRibbonSurface(forceCompact: true);
+                }
+
                 return true;
             }
         }
