@@ -22,31 +22,13 @@ public static class WatchWindowService
     }
 
     public static int AddWatches(Workbook workbook, GridRange range)
-    {
-        var added = 0;
-        foreach (var address in range.AllCells())
-        {
-            if (AddWatch(workbook, address))
-                added++;
-        }
-
-        return added;
-    }
+        => CountChangedWatches(range, address => AddWatch(workbook, address));
 
     public static bool RemoveWatch(Workbook workbook, CellAddress address) =>
         workbook.WatchedCells.Remove(address);
 
     public static int RemoveWatches(Workbook workbook, GridRange range)
-    {
-        var removed = 0;
-        foreach (var address in range.AllCells())
-        {
-            if (RemoveWatch(workbook, address))
-                removed++;
-        }
-
-        return removed;
-    }
+        => CountChangedWatches(range, address => RemoveWatch(workbook, address));
 
     public static IReadOnlyList<CellAddress> GetDeleteTargets(
         IEnumerable<CellAddress> selectedAddresses,
@@ -104,4 +86,16 @@ public static class WatchWindowService
         BlankValue => "",
         _ => value.ToString() ?? ""
     };
+
+    private static int CountChangedWatches(GridRange range, Func<CellAddress, bool> updateWatch)
+    {
+        var changed = 0;
+        foreach (var address in range.AllCells())
+        {
+            if (updateWatch(address))
+                changed++;
+        }
+
+        return changed;
+    }
 }

@@ -49,10 +49,10 @@ public static class BorderShortcutService
     {
         var border = CreateBorder(style, color);
         return new StyleDiff(
-            BorderTop: address.Row == range.Start.Row ? border : null,
-            BorderRight: address.Col == range.End.Col ? border : null,
-            BorderBottom: address.Row == range.End.Row ? border : null,
-            BorderLeft: address.Col == range.Start.Col ? border : null);
+            BorderTop: BorderWhen(address.Row == range.Start.Row, border),
+            BorderRight: BorderWhen(address.Col == range.End.Col, border),
+            BorderBottom: BorderWhen(address.Row == range.End.Row, border),
+            BorderLeft: BorderWhen(address.Col == range.Start.Col, border));
     }
 
     public static StyleDiff GetInsideBorderDiff(GridRange range, CellAddress address) =>
@@ -62,10 +62,10 @@ public static class BorderShortcutService
     {
         var border = CreateBorder(style, color);
         return new StyleDiff(
-            BorderTop: address.Row > range.Start.Row ? border : null,
-            BorderRight: address.Col < range.End.Col ? border : null,
-            BorderBottom: address.Row < range.End.Row ? border : null,
-            BorderLeft: address.Col > range.Start.Col ? border : null);
+            BorderTop: BorderWhen(address.Row > range.Start.Row, border),
+            BorderRight: BorderWhen(address.Col < range.End.Col, border),
+            BorderBottom: BorderWhen(address.Row < range.End.Row, border),
+            BorderLeft: BorderWhen(address.Col > range.Start.Col, border));
     }
 
     public static StyleDiff GetTopAndBottomBorderDiff(GridRange range, CellAddress address, BorderStyle bottomStyle) =>
@@ -81,8 +81,8 @@ public static class BorderShortcutService
         var topBorder = CreateBorder(topStyle, color);
         var bottomBorder = CreateBorder(bottomStyle, color);
         return new StyleDiff(
-            BorderTop: address.Row == range.Start.Row ? topBorder : null,
-            BorderBottom: address.Row == range.End.Row ? bottomBorder : null);
+            BorderTop: BorderWhen(address.Row == range.Start.Row, topBorder),
+            BorderBottom: BorderWhen(address.Row == range.End.Row, bottomBorder));
     }
 
     public static StyleDiff GetClearBorderDiff() => new(
@@ -98,4 +98,7 @@ public static class BorderShortcutService
         diff.BorderLeft is not null;
 
     private static CellBorder CreateBorder(BorderStyle style, CellColor color) => new(style, color);
+
+    private static CellBorder? BorderWhen(bool condition, CellBorder border) =>
+        condition ? border : null;
 }
