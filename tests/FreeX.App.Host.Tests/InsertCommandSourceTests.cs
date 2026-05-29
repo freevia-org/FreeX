@@ -10,7 +10,7 @@ public sealed class InsertCommandSourceTests
     [InlineData("Comment", "Comment", "C2", "InsertCommentBtn_Click")]
     [InlineData("Text Box", "Text Box", "TX", "DrawTextBtn_Click")]
     [InlineData("Header &amp; Footer", "Header &amp; Footer", "HF", "HeaderFooterBtn_Click")]
-    [InlineData("Insert Symbol", "Symbol", "SY", "SymbolPickerBtn_Click")]
+    [InlineData("Symbol", "Symbol", "SY", "SymbolPickerBtn_Click")]
     public void InsertTextLinkCommentAndSymbolCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string content,

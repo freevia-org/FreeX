@@ -60,7 +60,7 @@ public sealed class RibbonTabParityTests
         ExtractGroupXaml(insertTab, "Comments").Should().Contain("local:RibbonTooltip.Title=\"Comment\"");
         ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonTooltip.Title=\"Text Box\"");
         ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonTooltip.Title=\"Header &amp; Footer\"");
-        ExtractGroupXaml(insertTab, "Symbols").Should().Contain("local:RibbonTooltip.Title=\"Insert Symbol\"");
+        ExtractGroupXaml(insertTab, "Symbols").Should().Contain("local:RibbonTooltip.Title=\"Symbol\"");
     }
 
     [Fact]
