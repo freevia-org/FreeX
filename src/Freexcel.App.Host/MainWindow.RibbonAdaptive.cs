@@ -477,67 +477,59 @@ public partial class MainWindow
     private static List<Button> EnsureRibbonCollapsedGroupButtons(StackPanel panel, IReadOnlyList<FrameworkElement> groups)
     {
         var buttons = new List<Button>(groups.Count);
-        var groupNames = groups
+        var expectedGroupNames = groups
             .Select(GetRibbonGroupName)
             .ToHashSet(StringComparer.Ordinal);
+        var reusableButtonsByGroupName = new Dictionary<string, Button>(StringComparer.Ordinal);
+        var buttonsToRemove = new List<Button>();
+        var keyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        for (var i = panel.Children.Count - 1; i >= 0; i--)
+        foreach (var button in panel.Children.OfType<Button>().Where(IsRibbonCollapsedGroupButton))
         {
-            if (panel.Children[i] is not Button button || !IsRibbonCollapsedGroupButton(button))
-                continue;
-
             var title = RibbonTooltip.GetTitle(button) ?? "";
-            if (!groupNames.Contains(title))
-                panel.Children.RemoveAt(i);
+            if (!expectedGroupNames.Contains(title) ||
+                !reusableButtonsByGroupName.TryAdd(title, button))
+            {
+                buttonsToRemove.Add(button);
+                continue;
+            }
+
+            var keyTip = RibbonTooltip.GetKeyTip(button);
+            if (!string.IsNullOrWhiteSpace(keyTip))
+                keyTips.Add(keyTip!);
         }
 
-        var keyTips = panel.Children
-            .OfType<Button>()
-            .Where(IsRibbonCollapsedGroupButton)
-            .Select(RibbonTooltip.GetKeyTip)
-            .Where(keyTip => !string.IsNullOrWhiteSpace(keyTip))
-            .Select(keyTip => keyTip!)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var button in buttonsToRemove)
+            panel.Children.Remove(button);
+
         foreach (var group in groups)
         {
             var groupName = GetRibbonGroupName(group);
-            var button = FindReusableCollapsedGroupButton(panel, groupName) ??
-                CreateRibbonCollapsedGroupButton(group, keyTips);
+            if (!reusableButtonsByGroupName.TryGetValue(groupName, out var button))
+            {
+                button = CreateRibbonCollapsedGroupButton(group, keyTips);
+                reusableButtonsByGroupName[groupName] = button;
+            }
 
             var currentIndex = panel.Children.IndexOf(button);
             var groupIndex = panel.Children.IndexOf(group);
-            if (currentIndex >= 0)
+            var targetIndex = groupIndex + 1;
+            if (currentIndex != targetIndex)
             {
-                if (currentIndex != groupIndex + 1)
+                if (currentIndex >= 0)
                 {
                     panel.Children.RemoveAt(currentIndex);
-                    groupIndex = panel.Children.IndexOf(group);
-                    panel.Children.Insert(groupIndex + 1, button);
+                    if (currentIndex < targetIndex)
+                        targetIndex--;
                 }
-            }
-            else
-            {
-                panel.Children.Insert(groupIndex + 1, button);
+
+                panel.Children.Insert(targetIndex, button);
             }
 
             buttons.Add(button);
         }
 
         return buttons;
-    }
-
-    private static Button? FindReusableCollapsedGroupButton(StackPanel panel, string groupName)
-    {
-        foreach (var child in panel.Children.OfType<Button>())
-        {
-            if (IsRibbonCollapsedGroupButton(child) &&
-                string.Equals(RibbonTooltip.GetTitle(child), groupName, StringComparison.Ordinal))
-            {
-                return child;
-            }
-        }
-
-        return null;
     }
 
     private static bool IsRibbonCollapsedGroupButton(FrameworkElement element) =>
