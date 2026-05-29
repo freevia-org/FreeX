@@ -24,6 +24,18 @@ public sealed class RibbonCommandPresentationPlannerTests
     }
 
     [Theory]
+    [InlineData(" PivotTable ", " PivotTable ", RibbonCommandLayoutKind.Large)]
+    [InlineData(" Table ", " Table ", RibbonCommandLayoutKind.Large)]
+    [InlineData(" Center ", " Center ", RibbonCommandLayoutKind.Small)]
+    public void GetLayoutKind_NormalizesCommandAndLabelWhitespace(
+        string commandName,
+        string label,
+        RibbonCommandLayoutKind expected)
+    {
+        RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label).Should().Be(expected);
+    }
+
+    [Theory]
     [InlineData("Axis Options", true)]
     [InlineData("Legend", true)]
     [InlineData("Column Chart", false)]
@@ -68,6 +80,17 @@ public sealed class RibbonCommandPresentationPlannerTests
         var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
 
         icon.Kind.Should().Be(expectedKind);
+    }
+
+    [Theory]
+    [InlineData(" PivotTable ", RibbonCommandIconKind.PivotTable)]
+    [InlineData(" Table ", RibbonCommandIconKind.Table)]
+    [InlineData(" Center ", RibbonCommandIconKind.Align)]
+    public void GetIcon_NormalizesCommandWhitespaceBeforeExactMappings(
+        string commandName,
+        RibbonCommandIconKind expectedKind)
+    {
+        RibbonCommandPresentationPlanner.GetIcon(commandName).Kind.Should().Be(expectedKind);
     }
 
     [Theory]
@@ -143,6 +166,18 @@ public sealed class RibbonCommandPresentationPlannerTests
         var icon = RibbonCommandPresentationPlanner.GetGroupIcon(groupName);
 
         icon.Kind.Should().Be(expectedKind);
+    }
+
+    [Theory]
+    [InlineData(" Tools ", RibbonCommandIconKind.Search)]
+    [InlineData(" Pens ", RibbonCommandIconKind.Line)]
+    [InlineData(" Show ", RibbonCommandIconKind.View)]
+    [InlineData(" Layout ", RibbonCommandIconKind.Page)]
+    public void GetGroupIcon_NormalizesGroupWhitespaceBeforeExactMappings(
+        string groupName,
+        RibbonCommandIconKind expectedKind)
+    {
+        RibbonCommandPresentationPlanner.GetGroupIcon(groupName).Kind.Should().Be(expectedKind);
     }
 
     [Theory]
