@@ -993,9 +993,8 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue valueError) return valueError;
         if (timesValue is ErrorValue timesError) return timesError;
         var timesD = ToNumber(timesValue);
-        if (!double.IsFinite(timesD) || timesD > int.MaxValue) return ErrorValue.Value;
+        if (!double.IsFinite(timesD) || timesD < 0 || timesD > int.MaxValue) return ErrorValue.Value;
         int times = (int)timesD;
-        if (times < 0) return ErrorValue.Value;
         return ReptText(ToText(value), times);
     }
 
