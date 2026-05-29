@@ -893,6 +893,9 @@ public partial class MainWindow
         if (e.ChangedButton != MouseButton.Left)
             return;
 
+        var pos = e.GetPosition(SheetGrid);
+        var hitAddr = HitTestCell(pos);
+
         if (_formatPainterTargetSelectionActive)
         {
             _formatPainterTargetSelectionActive = false;
@@ -913,6 +916,10 @@ public partial class MainWindow
         _dragSelectAddsAdditionalRange = false;
         SheetGrid.ReleaseMouseCapture();
         CompleteDragSelectionStatusRefresh();
+        if (hitAddr.HasValue)
+            UpdateCommentPreview(hitAddr.Value);
+        else
+            ClearCommentPreview();
         if (_borderDrawMode != BorderDrawMode.None && SheetGrid.SelectedRange is { } borderDrawRange)
         {
             ApplyBorderDrawMode(borderDrawRange);
