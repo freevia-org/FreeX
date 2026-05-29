@@ -749,6 +749,8 @@ public partial class MainWindow
 
     private void AddOrMoveAdditionalSelection(CellAddress target, bool extendSelection)
     {
+        HideValidationDropdown();
+
         var ranges = SheetGrid.SelectedRanges is { Count: > 0 }
             ? SheetGrid.SelectedRanges.ToList()
             : SheetGrid.SelectedRange is { } currentRange ? [currentRange] : [];
