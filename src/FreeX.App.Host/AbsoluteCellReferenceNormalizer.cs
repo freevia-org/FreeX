@@ -12,26 +12,40 @@ internal static class AbsoluteCellReferenceNormalizer
         var index = 0;
         var write = 0;
 
-        if (value[index] == '$')
-            index++;
+        ConsumeOptionalAbsoluteMarker(value, ref index);
 
-        var columnStart = index;
-        while (index < value.Length && char.IsLetter(value[index]))
-            buffer[write++] = value[index++];
-
-        if (index == columnStart)
+        if (!ConsumeColumn(value, buffer, ref index, ref write))
             return null;
 
-        if (index < value.Length && value[index] == '$')
-            index++;
+        ConsumeOptionalAbsoluteMarker(value, ref index);
 
-        var rowStart = index;
-        while (index < value.Length && char.IsDigit(value[index]))
-            buffer[write++] = value[index++];
-
-        if (index == rowStart || index != value.Length)
+        if (!ConsumeRow(value, buffer, ref index, ref write) || index != value.Length)
             return null;
 
         return new string(buffer[..write]);
+    }
+
+    private static void ConsumeOptionalAbsoluteMarker(ReadOnlySpan<char> value, ref int index)
+    {
+        if (index < value.Length && value[index] == '$')
+            index++;
+    }
+
+    private static bool ConsumeColumn(ReadOnlySpan<char> value, Span<char> buffer, ref int index, ref int write)
+    {
+        var start = index;
+        while (index < value.Length && char.IsLetter(value[index]))
+            buffer[write++] = value[index++];
+
+        return index != start;
+    }
+
+    private static bool ConsumeRow(ReadOnlySpan<char> value, Span<char> buffer, ref int index, ref int write)
+    {
+        var start = index;
+        while (index < value.Length && char.IsDigit(value[index]))
+            buffer[write++] = value[index++];
+
+        return index != start;
     }
 }
