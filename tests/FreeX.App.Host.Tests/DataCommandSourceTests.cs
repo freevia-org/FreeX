@@ -11,6 +11,7 @@ public sealed class DataCommandSourceTests
     [InlineData("Filter", "T", "FilterButton_Click")]
     [InlineData("Clear", "C", "ClearFilterButton_Click")]
     [InlineData("Advanced", "A", "AdvancedFilterBtn_Click")]
+    [InlineData("Reapply", "R", "FilterReapplyMenuItem_Click")]
     public void DataSortAndFilterCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string keyTip,
@@ -37,6 +38,7 @@ public sealed class DataCommandSourceTests
         filterSource.Should().Contain("new FilterCommand(_currentSheetId, currentRange, filterColOffset, allowedValues: allowedValues)");
         filterSource.Should().Contain("private void ClearFilterButton_Click(object sender, RoutedEventArgs e)");
         filterSource.Should().Contain("ClearRememberedAutoFilterCommand();");
+        filterSource.Should().Contain("private void ReapplyAutoFilter()");
 
         dataSource.Should().Contain("new AdvancedFilterDialog(");
         dataSource.Should().Contain("() => new AdvancedFilterCommand(");

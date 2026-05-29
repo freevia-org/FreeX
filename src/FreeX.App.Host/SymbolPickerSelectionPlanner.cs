@@ -8,10 +8,10 @@ public static class SymbolPickerSelectionPlanner
 {
     public static SymbolPickerSelection CreateSelection(string symbol)
     {
-        var safeSymbol = symbol ?? "";
+        var safeSymbol = NormalizeSymbol(symbol);
         return new SymbolPickerSelection(
             safeSymbol,
-            safeSymbol.Length == 1 ? safeSymbol[0] : '\0',
+            GetSelectedChar(safeSymbol),
             FormatCodeText(safeSymbol));
     }
 
@@ -26,8 +26,7 @@ public static class SymbolPickerSelectionPlanner
         if (string.IsNullOrEmpty(value))
             return "";
 
-        var rune = value.EnumerateRunes().FirstOrDefault();
-        return rune == default ? "" : rune.Value.ToString("X4");
+        return GetFirstRuneCodeText(value);
     }
 
     public static IReadOnlyList<string> PromoteRecentSymbol(
@@ -43,5 +42,16 @@ public static class SymbolPickerSelectionPlanner
             .Prepend(selectedSymbol)
             .Take(capacity)
             .ToArray();
+    }
+
+    private static string NormalizeSymbol(string? symbol) => symbol ?? "";
+
+    private static char GetSelectedChar(string symbol) =>
+        symbol.Length == 1 ? symbol[0] : '\0';
+
+    private static string GetFirstRuneCodeText(string value)
+    {
+        var rune = value.EnumerateRunes().FirstOrDefault();
+        return rune == default ? "" : rune.Value.ToString("X4");
     }
 }
