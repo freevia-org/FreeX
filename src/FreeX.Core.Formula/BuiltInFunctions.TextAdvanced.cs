@@ -139,7 +139,7 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue e) return e;
         var n = ToNumber(value);
         if (!double.IsFinite(n)) return ErrorValue.Value;
-        int code = (int)n;
+        int code = (int)Math.Truncate(n);
         if (code <= 0 || code > 255) return ErrorValue.Value;
         return new TextValue(ExcelAnsiCodeToChar(code).ToString());
     }
