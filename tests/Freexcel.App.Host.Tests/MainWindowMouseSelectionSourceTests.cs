@@ -410,8 +410,14 @@ public sealed class MainWindowMouseSelectionSourceTests
 
         completedDrag.Should().Contain("SheetGrid.ReleaseMouseCapture();");
         completedDrag.Should().Contain("CompleteDragSelectionStatusRefresh();");
+        completedDrag.Should().Contain("if (hitAddr.HasValue)");
+        completedDrag.Should().Contain("UpdateCommentPreview(hitAddr.Value);");
+        completedDrag.Should().Contain("ClearCommentPreview();");
         completedDrag.Should().Contain("GetFormulaRangeEntryEditor()?.Focus();");
         completedDrag.Should().Contain("e.Handled = true;");
+        completedDrag.IndexOf("CompleteDragSelectionStatusRefresh();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(completedDrag.IndexOf("UpdateCommentPreview(hitAddr.Value);", StringComparison.Ordinal));
         completedDrag.LastIndexOf("e.Handled = true;", StringComparison.Ordinal)
             .Should()
             .BeGreaterThan(completedDrag.IndexOf("GetFormulaRangeEntryEditor()?.Focus();", StringComparison.Ordinal));
