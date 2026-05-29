@@ -372,6 +372,23 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_IdentityTransform_PreservesNamespacedElementsAndAttributes()
+    {
+        using var source = StreamFromString("<fx:rows xmlns:fx=\"urn:freexcel:test\"><fx:row fx:name=\"Golf\" /></fx:rows>");
+        using var stylesheet = IdentityStylesheet();
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        var xml = reader.ReadToEnd();
+        var document = XDocument.Parse(xml);
+        document.Root?.Name.Should().Be(XName.Get("rows", "urn:freexcel:test"));
+        document.Root?.Elements().Single().Name.Should().Be(XName.Get("row", "urn:freexcel:test"));
+        document.Root?.Elements().Single().Attribute(XName.Get("name", "urn:freexcel:test"))?.Value.Should().Be("Golf");
+        xml.Should().Contain("xmlns:fx=\"urn:freexcel:test\"");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_IdentityTransform_PreservesCDataTextValue()
     {
         using var source = StreamFromString("<rows><formula><![CDATA[A1<B1 && C1>D1]]></formula></rows>");
