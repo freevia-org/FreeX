@@ -103,6 +103,34 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_NormalizesInvalidBlankDuplicateAndLongNativeJsonSheetNames()
+    {
+        const string json = """
+            {
+              "Name": "MalformedSheetNames",
+              "Sheets": [
+                { "Name": "'Bad:/?*[]Name'" },
+                { "Name": "bad:/?*[]name" },
+                { "Name": "   " },
+                { "Name": "''" },
+                { "Name": "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890" }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        workbook.Sheets.Select(sheet => sheet.Name).Should().Equal(
+            "Bad______Name",
+            "bad______name (1)",
+            "Sheet3",
+            "Sheet",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ12345");
+        workbook.Sheets.Select(sheet => sheet.Name).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
     public void Load_UsesCurrentStreamPositionAndLeavesInputStreamOpen()
     {
         using var stream = PositionedStreamFromString("ignored", """
