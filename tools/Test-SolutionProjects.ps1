@@ -23,17 +23,37 @@ function Normalize-RelativePath {
     return $Path.Replace("\", "/")
 }
 
-function Get-RelativeRepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
+function Get-RelativePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootPath,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
 
-    $rootPath = [System.IO.Path]::GetFullPath($repoRoot)
-    if (-not $rootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
-        $rootPath += [System.IO.Path]::DirectorySeparatorChar
+    $fullRootPath = [System.IO.Path]::GetFullPath($RootPath)
+    if (-not $fullRootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+        $fullRootPath += [System.IO.Path]::DirectorySeparatorChar
     }
 
-    $rootUri = New-Object System.Uri($rootPath)
+    $rootUri = New-Object System.Uri($fullRootPath)
     $pathUri = New-Object System.Uri([System.IO.Path]::GetFullPath($Path))
     return [System.Uri]::UnescapeDataString($rootUri.MakeRelativeUri($pathUri).ToString())
+}
+
+function Test-IsIgnoredProjectPath {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.FileInfo]$ProjectFile,
+        [Parameter(Mandatory = $true)][string]$RelativePath
+    )
+
+    if ($ProjectFile.Name -like "*_wpftmp.csproj") {
+        return $true
+    }
+
+    $segments = $RelativePath -split "/"
+    return $segments -contains "bin" -or
+        $segments -contains "obj" -or
+        $segments -contains ".git" -or
+        $segments -contains ".worktrees"
 }
 
 $resolvedProjectRoot = Resolve-RepoPath $ProjectRoot
@@ -47,6 +67,7 @@ if (-not (Test-Path -LiteralPath $resolvedSolutionPath -PathType Leaf)) {
 }
 
 [xml]$solutionXml = Get-Content -LiteralPath $resolvedSolutionPath -Raw
+$solutionRoot = Split-Path -Parent $resolvedSolutionPath
 $solutionProjectPaths = @(
     $solutionXml.Solution.Folder.Project |
         ForEach-Object { Normalize-RelativePath ([string]$_.Path) } |
@@ -59,7 +80,12 @@ if ($solutionProjectPaths.Count -eq 0) {
 
 $discoveredProjectPaths = @(
     Get-ChildItem -LiteralPath $resolvedProjectRoot -Filter "*.csproj" -File -Recurse |
-        ForEach-Object { Normalize-RelativePath (Get-RelativeRepoPath $_.FullName) } |
+        ForEach-Object {
+            $relativePath = Normalize-RelativePath (Get-RelativePath -RootPath $resolvedProjectRoot -Path $_.FullName)
+            if (-not (Test-IsIgnoredProjectPath -ProjectFile $_ -RelativePath $relativePath)) {
+                $relativePath
+            }
+        } |
         Where-Object { $_.StartsWith("src/") -or $_.StartsWith("tests/") } |
         Sort-Object -Unique
 )
@@ -72,7 +98,7 @@ $missingFromSolution = @(
 $missingOnDisk = @(
     $solutionProjectPaths |
         Where-Object {
-            $projectPath = Join-Path $repoRoot $_
+            $projectPath = Join-Path $solutionRoot $_
             -not (Test-Path -LiteralPath $projectPath -PathType Leaf)
         }
 )
