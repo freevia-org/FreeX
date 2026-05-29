@@ -8603,6 +8603,18 @@ public class FunctionLibraryTests
         _eval.Evaluate("=CODE(\"\")", MakeSheet()).Should().Be(ErrorValue.Value);
     }
 
+    [Theory]
+    [InlineData("=CHAR(65.9)", "A")]
+    [InlineData("=CHAR(255.9)", "\u00FF")]
+    public void Char_TruncatesFractionalCodeBeforeDomainCheck(string formula, string expected) =>
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+
+    [Theory]
+    [InlineData("=CHAR(0.9)")]
+    [InlineData("=CHAR(256.9)")]
+    public void Char_TruncatedCodeOutsideExcelDomainReturnsValue(string formula) =>
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Value);
+
     [Fact]
     public void CharAndCode_RangeArguments_SpillElementwise()
     {
