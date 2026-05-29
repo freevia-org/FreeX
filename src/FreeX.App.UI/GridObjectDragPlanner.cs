@@ -76,13 +76,19 @@ public static class GridObjectDragPlanner
         foreach (var row in viewport.RowMetrics)
         {
             var top = row.TopOffset + columnHeaderHeight;
-            if (position.Y < top || position.Y >= top + row.Height)
+            if (position.Y < top)
+                break;
+
+            if (position.Y >= top + row.Height)
                 continue;
 
             foreach (var column in viewport.ColMetrics)
             {
                 var left = column.LeftOffset + rowHeaderWidth;
-                if (position.X >= left && position.X < left + column.Width)
+                if (position.X < left)
+                    break;
+
+                if (position.X < left + column.Width)
                     return new CellAddress(default, row.Row, column.Col);
             }
         }

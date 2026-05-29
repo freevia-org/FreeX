@@ -529,6 +529,22 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void GridObjectDragPlanner_StopsAnchorHitScansOnceSortedMetricsPassPointer()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridObjectDragPlanner.cs"));
+        var anchorHitTest = source[
+            source.IndexOf("public static CellAddress? HitTestAnchorCell", StringComparison.Ordinal)..];
+
+        anchorHitTest.Should().Contain("foreach (var row in viewport.RowMetrics)");
+        anchorHitTest.Should().Contain("foreach (var column in viewport.ColMetrics)");
+        anchorHitTest.Should().Contain("if (position.Y < top)");
+        anchorHitTest.Should().Contain("break;");
+        anchorHitTest.Should().Contain("if (position.X < left)");
+        anchorHitTest.Should().Contain("return new CellAddress(default, row.Row, column.Col);");
+    }
+
+    [Fact]
     public void SelectedDrawingObjectAnchor_UsesCurrentSelectedObject()
     {
         RunOnStaThread(() =>
