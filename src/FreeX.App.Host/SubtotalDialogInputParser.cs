@@ -49,14 +49,26 @@ public static class SubtotalDialogInputParser
     private static IReadOnlyList<uint> ParseColumnOffsets(string input)
     {
         var offsets = new List<uint>();
-        foreach (var part in input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var part in SplitColumnOffsetParts(input))
         {
-            if (!uint.TryParse(part, out var offset))
+            if (!TryAddColumnOffset(offsets, part))
                 return [];
-            if (!offsets.Contains(offset))
-                offsets.Add(offset);
         }
 
         return offsets;
+    }
+
+    private static string[] SplitColumnOffsetParts(string input) =>
+        input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static bool TryAddColumnOffset(List<uint> offsets, string part)
+    {
+        if (!uint.TryParse(part, out var offset))
+            return false;
+
+        if (!offsets.Contains(offset))
+            offsets.Add(offset);
+
+        return true;
     }
 }
