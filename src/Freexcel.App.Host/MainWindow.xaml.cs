@@ -102,6 +102,7 @@ public partial class MainWindow : Window
     private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;
     private string? _lastRibbonCollapsedFootprintMode;
     private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
+    private readonly Dictionary<string, bool> _ribbonMeasuredOverflowCache = [];
     private bool _ribbonAdaptiveStateDiffInvalidated;
     private bool _ribbonFallbackPending;
     private RibbonFallbackWork _ribbonFallbackWork;
