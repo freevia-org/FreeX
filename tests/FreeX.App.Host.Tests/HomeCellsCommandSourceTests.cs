@@ -40,6 +40,8 @@ public sealed class HomeCellsCommandSourceTests
     [InlineData("Hide Columns", "D", "FormatHideColMenuItem_Click")]
     [InlineData("Unhide Columns", "N", "FormatUnhideColMenuItem_Click")]
     [InlineData("Rename Sheet", "R", "FormatRenameSheetMenuItem_Click")]
+    [InlineData("Hide Sheet", "S", "FormatHideSheetMenuItem_Click")]
+    [InlineData("Unhide Sheet...", "T", "FormatUnhideSheetMenuItem_Click")]
     [InlineData("Protect Sheet...", "P", "FormatProtectSheetMenuItem_Click")]
     [InlineData("Lock Cell", "L", "FormatLockCellMenuItem_Click")]
     [InlineData("Format Cells...", "F", "FormatCellsMenuItem_Click")]
@@ -78,12 +80,32 @@ public sealed class HomeCellsCommandSourceTests
         source.Should().Contain("RowColumnDimensionPlanner.CreateRowsHiddenCommand(sheetId, currentRange, hidden)");
         source.Should().Contain("RowColumnDimensionPlanner.CreateColumnsHiddenCommand(sheetId, currentRange, hidden)");
         source.Should().Contain("private void FormatRenameSheetMenuItem_Click(object sender, RoutedEventArgs e) => RenameCurrentSheet();");
+        source.Should().Contain("private void FormatHideSheetMenuItem_Click(object sender, RoutedEventArgs e) => HideCurrentSheet();");
+        source.Should().Contain("private void FormatUnhideSheetMenuItem_Click(object sender, RoutedEventArgs e) => UnhideSheet();");
         source.Should().Contain("private void FormatProtectSheetMenuItem_Click(object sender, RoutedEventArgs e) { ProtectSheetBtn_Click(sender, e); }");
         source.Should().Contain("ApplyStyleDiff(new StyleDiff(Locked: !style.Locked))");
         source.Should().Contain("private void FormatCellsMenuItem_Click(object sender, RoutedEventArgs e) => OpenFormatCellsDialog();");
         source.Should().Contain("private void OpenFormatCellsDialog(FormatCellsDialogTab initialTab = FormatCellsDialogTab.Number)");
         source.Should().Contain("FormatCellsMergePlanner.IsSelectionMerged(sheet, range)");
         source.Should().Contain("FormatCellsMergePlanner.CreateMergeCommands(sheet, sheetId, sheetRange, shouldMerge)");
+    }
+
+    [Fact]
+    public void SheetVisibilityCommands_ShareSheetTabVisibilityWorkflow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+
+        source.Should().Contain("private void SheetCtxHide_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("HideSheet(tab.Id);");
+        source.Should().Contain("private void SheetCtxUnhide_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("UnhideSheet();");
+        source.Should().Contain("private void HideCurrentSheet()");
+        source.Should().Contain("HideSheet(_currentSheetId);");
+        source.Should().Contain("private void HideSheet(SheetId sheetId)");
+        source.Should().Contain("new SetSheetHiddenCommand(sheetId, hidden: true)");
+        source.Should().Contain("private void UnhideSheet()");
+        source.Should().Contain("new UnhideSheetDialog(hiddenSheets.Select(sheet => sheet.Name))");
+        source.Should().Contain("new SetSheetHiddenCommand(sheet.Id, hidden: false)");
     }
 
     private static string ExtractButtonElementByClickHandler(string xaml, string clickHandler)
