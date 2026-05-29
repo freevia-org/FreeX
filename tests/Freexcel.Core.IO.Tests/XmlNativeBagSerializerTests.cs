@@ -197,6 +197,27 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void ApplyToElement_PreservedChildXml_ReplacesChildrenInNativeOrder()
+    {
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            [
+                "<first id=\"1\" />",
+                "<second id=\"2\"><leaf /></second>",
+                "<third id=\"3\" />"
+            ]);
+        var target = new XElement(
+            "root",
+            new XElement("old", new XAttribute("id", "0")));
+
+        var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, []);
+
+        changed.Should().BeTrue();
+        target.ToString(SaveOptions.DisableFormatting)
+            .Should().Be("<root><first id=\"1\" /><second id=\"2\"><leaf /></second><third id=\"3\" /></root>");
+    }
+
+    [Fact]
     public void ApplyToElement_PreservedChildXml_RetainsCommentsAndProcessingInstructions()
     {
         var childXml = "<ext><?freexcel keep=\"true\"?><!--keep me--><inner /></ext>";
