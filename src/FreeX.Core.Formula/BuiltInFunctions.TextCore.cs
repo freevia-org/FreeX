@@ -481,7 +481,10 @@ public static partial class BuiltInFunctions
     }
 
     private static ScalarValue TextResult(string text) =>
-        text.Length > 32767 ? ErrorValue.Value : new TextValue(text);
+        ExceedsExcelTextLimit(text) ? ErrorValue.Value : new TextValue(text);
+
+    private static bool ExceedsExcelTextLimit(string text) =>
+        (ContainsSurrogatePair(text) ? CountTextElements(text) : text.Length) > 32767;
 
     private static ScalarValue Find(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {

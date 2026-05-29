@@ -1474,6 +1474,24 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Substitute_ResultWithSurrogatePairsAtExcelCellLimit_ReturnsText()
+    {
+        var text = string.Concat(Enumerable.Repeat("😀", 32767));
+        var sheet = MakeSheet((1, 1, new TextValue(text)));
+
+        _eval.Evaluate("=SUBSTITUTE(A1,\"😀\",\"😀\",1)", sheet).Should().Be(new TextValue(text));
+    }
+
+    [Fact]
+    public void Substitute_ResultWithSurrogatePairsLongerThanExcelCellLimit_ReturnsValueError()
+    {
+        var text = string.Concat(Enumerable.Repeat("😀", 32768));
+        var sheet = MakeSheet((1, 1, new TextValue(text)));
+
+        _eval.Evaluate("=SUBSTITUTE(A1,\"x\",\"y\",1)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
     public void Substitute_UnchangedResultLongerThanExcelCellLimit_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue(new string('x', 32768))));
