@@ -167,17 +167,22 @@ public partial class GridView
                 return;
             }
 
+            var splitHandle = Viewport is null ? SplitDividerHandle.None : HitTestSplitDividerHandle(Viewport, pos);
+            if (splitHandle != SplitDividerHandle.None)
+            {
+                Cursor = splitHandle == SplitDividerHandle.Intersection ? Cursors.SizeAll
+                       : splitHandle == SplitDividerHandle.Vertical ? Cursors.SizeWE
+                       : Cursors.SizeNS;
+                return;
+            }
+
             var (target, _, _) = HitTestResize(pos);
             var marginGuide = HitTestPageMarginGuide(pos);
-            var splitHandle = Viewport is null ? SplitDividerHandle.None : HitTestSplitDividerHandle(Viewport, pos);
             var splitScrollbarHit = Viewport is null
                 ? null
                 : HitTestSplitPaneScrollbar(CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight), pos);
             Cursor = target == ResizeTarget.Column ? Cursors.SizeWE
                    : target == ResizeTarget.Row    ? Cursors.SizeNS
-                   : splitHandle == SplitDividerHandle.Intersection ? Cursors.SizeAll
-                   : splitHandle == SplitDividerHandle.Vertical ? Cursors.SizeWE
-                   : splitHandle == SplitDividerHandle.Horizontal ? Cursors.SizeNS
                    : splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Horizontal ? Cursors.SizeWE
                    : splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Vertical ? Cursors.SizeNS
                    : marginGuide is WorksheetPageMarginEdge.Left or WorksheetPageMarginEdge.Right ? Cursors.SizeWE
