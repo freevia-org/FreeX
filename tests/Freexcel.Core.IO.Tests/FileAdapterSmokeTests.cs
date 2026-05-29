@@ -1624,12 +1624,27 @@ public partial class FileAdapterSmokeTests
         {
             Type = (ChartType)99,
             DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            BlankDisplayMode = (ChartBlankDisplayMode)99,
+            XAxisPosition = (ChartAxisPosition)99,
+            YAxisPosition = (ChartAxisPosition)99,
             XAxisNumberFormat = (ChartDataLabelNumberFormat)99,
             XAxisMajorTickStyle = (ChartAxisTickStyle)99,
             XAxisMinorTickStyle = (ChartAxisTickStyle)99,
+            XAxisTickLabelPosition = (ChartAxisTickLabelPosition)99,
+            XAxisLabelAlignment = (ChartAxisLabelAlignment)99,
+            XAxisBaseTimeUnit = (ChartDateAxisUnit)99,
+            XAxisMajorTimeUnit = (ChartDateAxisUnit)99,
+            XAxisMinorTimeUnit = (ChartDateAxisUnit)99,
+            XAxisCrosses = (ChartAxisCrosses)99,
+            XAxisCrossBetween = (ChartAxisCrossBetween)99,
+            XAxisDisplayUnit = (ChartAxisDisplayUnit)99,
             YAxisNumberFormat = (ChartDataLabelNumberFormat)99,
             YAxisMajorTickStyle = (ChartAxisTickStyle)99,
             YAxisMinorTickStyle = (ChartAxisTickStyle)99,
+            YAxisTickLabelPosition = (ChartAxisTickLabelPosition)99,
+            YAxisCrosses = (ChartAxisCrosses)99,
+            YAxisCrossBetween = (ChartAxisCrossBetween)99,
+            YAxisDisplayUnit = (ChartAxisDisplayUnit)99,
             LegendPosition = (ChartLegendPosition)99,
             DataLabelPosition = (ChartDataLabelPosition)99,
             DataLabelSeparator = (ChartDataLabelSeparator)99,
@@ -1654,12 +1669,27 @@ public partial class FileAdapterSmokeTests
 
         var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         chart.Type.Should().Be(ChartType.Column);
+        chart.BlankDisplayMode.Should().Be(ChartBlankDisplayMode.Gap);
+        chart.XAxisPosition.Should().Be(ChartAxisPosition.Bottom);
+        chart.YAxisPosition.Should().Be(ChartAxisPosition.Left);
         chart.XAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
         chart.XAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
         chart.XAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        chart.XAxisTickLabelPosition.Should().Be(ChartAxisTickLabelPosition.NextTo);
+        chart.XAxisLabelAlignment.Should().Be(ChartAxisLabelAlignment.Center);
+        chart.XAxisBaseTimeUnit.Should().BeNull();
+        chart.XAxisMajorTimeUnit.Should().BeNull();
+        chart.XAxisMinorTimeUnit.Should().BeNull();
+        chart.XAxisCrosses.Should().Be(ChartAxisCrosses.AutoZero);
+        chart.XAxisCrossBetween.Should().BeNull();
+        chart.XAxisDisplayUnit.Should().BeNull();
         chart.YAxisNumberFormat.Should().Be(ChartDataLabelNumberFormat.General);
         chart.YAxisMajorTickStyle.Should().Be(ChartAxisTickStyle.Outside);
         chart.YAxisMinorTickStyle.Should().Be(ChartAxisTickStyle.None);
+        chart.YAxisTickLabelPosition.Should().Be(ChartAxisTickLabelPosition.NextTo);
+        chart.YAxisCrosses.Should().Be(ChartAxisCrosses.AutoZero);
+        chart.YAxisCrossBetween.Should().BeNull();
+        chart.YAxisDisplayUnit.Should().BeNull();
         chart.LegendPosition.Should().Be(ChartLegendPosition.Right);
         chart.DataLabelPosition.Should().Be(ChartDataLabelPosition.BestFit);
         chart.DataLabelSeparator.Should().Be(ChartDataLabelSeparator.Comma);
