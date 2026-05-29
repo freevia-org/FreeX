@@ -20,10 +20,11 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e0) return e0;
         var infoType = ToText(args[0]).Trim().ToLowerInvariant();
 
-        // Resolve reference: use args[1] when present; otherwise default to A1.
+        // Resolve reference: use args[1] when present; otherwise use the formula cell.
         // We don't have access to the original AST node here, so we read the
         // computed scalar/range (built by the evaluator's standard arg expansion).
-        uint row = 1, col = 1;
+        uint row = ctx.CurrentCellAddress?.Row ?? 1;
+        uint col = ctx.CurrentCellAddress?.Col ?? 1;
         ScalarValue cellValue = BlankValue.Instance;
         var sheet = ctx.CurrentSheet;
         if (args.Count >= 2)
