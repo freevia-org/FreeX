@@ -75,7 +75,7 @@ public sealed partial class NativeJsonAdapter
             TopBottomRank = ValidTopBottomRankOrDefault(formatDto.TopBottomRank),
             TopBottomPercent = formatDto.TopBottomPercent,
             TextRuleText = formatDto.TextRuleText,
-            DateOccurringPeriod = formatDto.DateOccurringPeriod,
+            DateOccurringPeriod = ValidDateOccurringPeriodOrDefault(formatDto.DateOccurringPeriod),
             StopIfTrue = formatDto.StopIfTrue,
             NativeAttributes = formatDto.NativeAttributes,
             NativeChildXmls = formatDto.NativeChildXmls,
@@ -131,7 +131,7 @@ public sealed partial class NativeJsonAdapter
             TopBottomRank = ValidTopBottomRankOrDefault(format.TopBottomRank),
             TopBottomPercent = format.TopBottomPercent,
             TextRuleText = format.TextRuleText,
-            DateOccurringPeriod = format.DateOccurringPeriod,
+            DateOccurringPeriod = ValidDateOccurringPeriodOrDefault(format.DateOccurringPeriod),
             StopIfTrue = format.StopIfTrue,
             NativeAttributes = format.NativeAttributes,
             NativeChildXmls = format.NativeChildXmls,
@@ -158,4 +158,11 @@ public sealed partial class NativeJsonAdapter
 
     private static int ValidTopBottomRankOrDefault(int value) =>
         value is >= 1 and <= 1000 ? value : 10;
+
+    private static string ValidDateOccurringPeriodOrDefault(string? value) =>
+        value is "yesterday" or "today" or "tomorrow" or "last7Days" or
+            "lastWeek" or "thisWeek" or "nextWeek" or
+            "lastMonth" or "thisMonth" or "nextMonth"
+            ? value
+            : "today";
 }
