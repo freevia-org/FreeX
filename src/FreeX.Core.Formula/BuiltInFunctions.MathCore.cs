@@ -661,7 +661,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue TrigScalar(ScalarValue value, Func<double, double> func)
     {
         var n = ToNumber(value);
-        if (!double.IsFinite(n)) return ErrorValue.Num;
+        if (!double.IsFinite(n) || Math.Abs(n) >= TrigInputLimit) return ErrorValue.Num;
         return new NumberValue(func(n));
     }
 
