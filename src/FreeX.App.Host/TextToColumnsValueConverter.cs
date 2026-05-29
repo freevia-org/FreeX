@@ -4,6 +4,10 @@ namespace FreeX.App.Host;
 
 internal static class TextToColumnsValueConverter
 {
+    private static readonly DatePartOrder DateOrderMDY = new(MonthIndex: 0, DayIndex: 1, YearIndex: 2);
+    private static readonly DatePartOrder DateOrderDMY = new(MonthIndex: 1, DayIndex: 0, YearIndex: 2);
+    private static readonly DatePartOrder DateOrderYMD = new(MonthIndex: 1, DayIndex: 2, YearIndex: 0);
+
     public static ScalarValue ConvertValue(
         string text,
         TextToColumnsColumnFormat columnFormat,
@@ -11,9 +15,9 @@ internal static class TextToColumnsValueConverter
         columnFormat switch
         {
             TextToColumnsColumnFormat.Text => new TextValue(text),
-            TextToColumnsColumnFormat.DateMDY when TryParseDate(text, [0, 1, 2], out var date) => new DateTimeValue(date.ToOADate()),
-            TextToColumnsColumnFormat.DateDMY when TryParseDate(text, [1, 0, 2], out var date) => new DateTimeValue(date.ToOADate()),
-            TextToColumnsColumnFormat.DateYMD when TryParseDate(text, [1, 2, 0], out var date) => new DateTimeValue(date.ToOADate()),
+            TextToColumnsColumnFormat.DateMDY when TryParseDate(text, DateOrderMDY, out var date) => new DateTimeValue(date.ToOADate()),
+            TextToColumnsColumnFormat.DateDMY when TryParseDate(text, DateOrderDMY, out var date) => new DateTimeValue(date.ToOADate()),
+            TextToColumnsColumnFormat.DateYMD when TryParseDate(text, DateOrderYMD, out var date) => new DateTimeValue(date.ToOADate()),
             _ when TryParseNumber(text, advancedOptions, out var number) => new NumberValue(number),
             _ => new TextValue(text)
         };
@@ -40,15 +44,15 @@ internal static class TextToColumnsValueConverter
             out number);
     }
 
-    private static bool TryParseDate(string text, int[] monthDayYearOrder, out DateTime date)
+    private static bool TryParseDate(string text, DatePartOrder partOrder, out DateTime date)
     {
         date = default;
         var parts = text
             .Split(['/', '-', '.'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 3 ||
-            !int.TryParse(parts[monthDayYearOrder[0]], out var month) ||
-            !int.TryParse(parts[monthDayYearOrder[1]], out var day) ||
-            !int.TryParse(parts[monthDayYearOrder[2]], out var year))
+            !int.TryParse(parts[partOrder.MonthIndex], out var month) ||
+            !int.TryParse(parts[partOrder.DayIndex], out var day) ||
+            !int.TryParse(parts[partOrder.YearIndex], out var year))
         {
             return false;
         }
@@ -66,4 +70,6 @@ internal static class TextToColumnsValueConverter
             return false;
         }
     }
+
+    private readonly record struct DatePartOrder(int MonthIndex, int DayIndex, int YearIndex);
 }
