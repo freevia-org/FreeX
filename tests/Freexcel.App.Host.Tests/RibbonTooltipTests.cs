@@ -92,6 +92,48 @@ public sealed class RibbonTooltipTests
     }
 
     [Fact]
+    public void TryOpenSubmenuForKeyTip_NormalizesWhitespace()
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Highlight Cells Rules" };
+            RibbonTooltip.SetKeyTip(parent, " H ");
+            parent.Items.Add(new MenuItem { Header = "Greater Than..." });
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, " h ", out var openedSubmenu).Should().BeTrue();
+            openedSubmenu.Should().BeSameAs(parent);
+            parent.IsSubmenuOpen.Should().BeTrue();
+            menu.IsOpen = false;
+        });
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void TryOpenSubmenuForKeyTip_IgnoresBlankInput(string keyTip)
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Highlight Cells Rules" };
+            RibbonTooltip.SetKeyTip(parent, "H");
+            parent.Items.Add(new MenuItem { Header = "Greater Than..." });
+
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(menu, keyTip, out var openedSubmenu).Should().BeFalse();
+            openedSubmenu.Should().BeNull();
+            parent.IsSubmenuOpen.Should().BeFalse();
+            menu.IsOpen = false;
+        });
+    }
+
+    [Fact]
     public void TryOpenSubmenuForKeyTip_IgnoresNonMenuItemsWhileSearchingNestedItems()
     {
         RunSta(() =>
