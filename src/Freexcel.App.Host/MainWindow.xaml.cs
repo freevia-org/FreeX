@@ -98,6 +98,8 @@ public partial class MainWindow : Window
     private ScrollViewer? _ribbonAdaptiveScrollViewerCache;
     private IReadOnlyList<FrameworkElement>? _ribbonAdaptiveGroupControlCache;
     private IReadOnlyList<Button>? _ribbonAdaptiveCollapsedButtonCache;
+    private string? _ribbonCompactSnapshotCacheKey;
+    private IReadOnlyList<RibbonCompactGroupSnapshot>? _ribbonCompactGroupSnapshotCache;
     private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;
     private string? _lastRibbonCollapsedFootprintMode;
     private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
