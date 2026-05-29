@@ -32,6 +32,7 @@ public partial class MainWindow
         if (availableWidth <= 0)
             return;
 
+        var selectedTabHeader = GetRibbonAdaptiveTabHeader(activePanel);
         _ribbonMeasuredOverflowCache.Clear();
         var cacheKey = controlCacheKey;
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups;
@@ -60,11 +61,11 @@ public partial class MainWindow
             _ribbonMeasuredOverflowCache.Clear();
         }
 
-        UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);
+        UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth, selectedTabHeader);
         if (_ribbonAdaptiveStateDiffInvalidated)
             _ribbonMeasuredOverflowCache.Clear();
 
-        var layout = RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth);
+        var layout = RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth, selectedTabHeader);
         var layoutStates = layout.States.ToArray();
         var plannedStates = layoutStates.ToArray();
 
@@ -96,8 +97,8 @@ public partial class MainWindow
             (!hasCachedCorrection || RibbonRowOverflowsMeasuredCached(activePanel, cacheKey, availableWidth, plannedStates));
         if (requiresMeasuredCorrection)
         {
-            ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth);
-            ApplyRibbonMeasuredExpansionFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth);
+            ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
+            ApplyRibbonMeasuredExpansionFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
         }
 
         SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
@@ -234,6 +235,9 @@ public partial class MainWindow
         return Math.Max(0, availableWidth ?? 0);
     }
 
+    private static string GetRibbonAdaptiveTabHeader(DependencyObject element) =>
+        FindVisualAncestor<TabItem>(element)?.Header?.ToString() ?? "";
+
     private void ApplyRibbonMeasuredOverflowFallback(
         StackPanel activePanel,
         IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
@@ -241,10 +245,11 @@ public partial class MainWindow
         RibbonAdaptiveGroupState[] plannedStates,
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
         string measurementCacheKey,
-        double availableWidth)
+        double availableWidth,
+        string? selectedTabHeader)
     {
-        var protectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetFallbackProtectedGroupIndexes(adaptiveGroups, availableWidth);
-        var runtimeVisibilityProtectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, availableWidth);
+        var protectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetFallbackProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
+        var runtimeVisibilityProtectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
         protectedGroupIndexes.UnionWith(runtimeVisibilityProtectedGroupIndexes);
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates) &&
                RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
@@ -268,9 +273,10 @@ public partial class MainWindow
         RibbonAdaptiveGroupState[] plannedStates,
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
         string measurementCacheKey,
-        double availableWidth)
+        double availableWidth,
+        string? selectedTabHeader)
     {
-        foreach (var index in RibbonAdaptiveLayoutEngine.GetExpandableGroupIndexes(adaptiveGroups, availableWidth))
+        foreach (var index in RibbonAdaptiveLayoutEngine.GetExpandableGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader))
         {
             var currentState = plannedStates[index];
             if (!RibbonAdaptiveLayoutEngine.TryGetNextExpandedState(currentState, out var expandedState))
@@ -496,7 +502,7 @@ public partial class MainWindow
 
     private static string CreateRibbonAdaptiveMeasurementCacheKey(StackPanel activePanel, IReadOnlyList<FrameworkElement> groups)
     {
-        var tabName = FindVisualAncestor<TabItem>(activePanel)?.Header?.ToString() ?? "";
+        var tabName = GetRibbonAdaptiveTabHeader(activePanel);
         return string.Join(
             "|",
             tabName,
@@ -507,7 +513,8 @@ public partial class MainWindow
     private void UpdateRibbonResizeThresholdCache(
         string cacheKey,
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
-        double fixedChromeWidth)
+        double fixedChromeWidth,
+        string? selectedTabHeader)
     {
         if (string.Equals(_ribbonResizeThresholdCacheKey, cacheKey, StringComparison.Ordinal) &&
             _ribbonResizeThresholds.Count > 0)
@@ -516,7 +523,7 @@ public partial class MainWindow
         }
 
         _ribbonResizeThresholdCacheKey = cacheKey;
-        _ribbonResizeThresholds = RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth);
+        _ribbonResizeThresholds = RibbonAdaptiveLayoutEngine.BuildResizeThresholds(adaptiveGroups, fixedChromeWidth, selectedTabHeader);
     }
 
     private static List<Button> EnsureRibbonCollapsedGroupButtons(StackPanel panel, IReadOnlyList<FrameworkElement> groups)
