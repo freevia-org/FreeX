@@ -146,7 +146,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.AutoFilter = ToWorksheetAutoFilter(sDto.AutoFilter, sheet.Id);
             sheet.SmartTags = ToWorksheetSmartTags(sDto.SmartTags);
             sheet.DataConsolidation = ToWorksheetDataConsolidation(sDto.DataConsolidation);
-            sheet.SortState = ToWorksheetSortState(sDto.SortState);
+            sheet.SortState = ToWorksheetSortState(sDto.SortState, sheet.Id);
             sheet.SingleXmlCells = ToWorksheetSingleXmlCells(sDto.SingleXmlCells);
             sheet.CellWatchesMetadata = ToWorksheetCellWatchesMetadata(sDto.CellWatchesMetadata);
             sheet.IgnoredErrorsMetadata = ToWorksheetIgnoredErrorsMetadata(sDto.IgnoredErrorsMetadata);
