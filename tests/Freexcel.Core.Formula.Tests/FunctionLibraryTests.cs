@@ -1160,6 +1160,16 @@ public class FunctionLibraryTests
         _eval.Evaluate("=RIGHT(A1,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
+    [Theory]
+    [InlineData("=LEFT(\"abc\",-0.5)")]
+    [InlineData("=RIGHT(\"abc\",-0.5)")]
+    [InlineData("=LEFTB(\"A\u754cB\",-0.5)")]
+    [InlineData("=RIGHTB(\"A\u754cB\",-0.5)")]
+    public void LeftAndRight_NegativeFractionalNumChars_ReturnValueError(string formula)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Value);
+    }
+
     [Fact]
     public void LeftAndRight_PreserveSurrogatePairAtBoundary()
     {
