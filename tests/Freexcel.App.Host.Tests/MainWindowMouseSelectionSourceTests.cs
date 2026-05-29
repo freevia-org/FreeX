@@ -445,6 +445,30 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void FormatPainterMouseDownImmediateApplyRefreshesCommentPreviewBeforeReturning()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "Freexcel.App.Host", "MainWindow.Selection.cs"));
+
+        var mouseDown = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal)];
+        var formatPainterImmediateApply = mouseDown[
+            mouseDown.IndexOf("if (_formatPainterActive)", StringComparison.Ordinal)..
+            mouseDown.IndexOf("SetActiveCell(newAddr);", StringComparison.Ordinal)];
+
+        formatPainterImmediateApply.Should().Contain("TryApplyFormatPainter(selectedRange);");
+        formatPainterImmediateApply.Should().Contain("UpdateCommentPreview(newAddr);");
+        formatPainterImmediateApply.Should().Contain("e.Handled = true;");
+        formatPainterImmediateApply.IndexOf("TryApplyFormatPainter(selectedRange);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(formatPainterImmediateApply.IndexOf("UpdateCommentPreview(newAddr);", StringComparison.Ordinal));
+        formatPainterImmediateApply.IndexOf("UpdateCommentPreview(newAddr);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(formatPainterImmediateApply.IndexOf("e.Handled = true;", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void MouseDownUpdatesActiveSplitPaneRegionOnlyAfterCellHit()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
