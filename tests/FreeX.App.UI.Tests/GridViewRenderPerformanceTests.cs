@@ -545,24 +545,81 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void SplitPaneCellLayoutPlanner_BuildsMetricLookupsAndOccupiedCellsWithoutLinqPipelines()
+    public void SplitPaneCellLayoutPlanner_BuildsMetricLookupsAndLazyOccupiedCellsWithoutLinqPipelines()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
         var calculateLayouts = source[
             source.IndexOf("public static IReadOnlyList<SplitPaneCellLayout> CalculateLayouts", StringComparison.Ordinal)..
             source.IndexOf("private static bool CanOverflowSplitPaneText", StringComparison.Ordinal)];
+        var buildOccupiedCells = source[
+            source.IndexOf("private static HashSet<(uint Row, uint Col)> BuildOccupiedCells", StringComparison.Ordinal)..
+            source.IndexOf("private static double SumEmptyOverflowColumnWidths", StringComparison.Ordinal)];
 
         calculateLayouts.Should().Contain("BuildRowLookup(topRows)");
         calculateLayouts.Should().Contain("BuildRowLookup(bottomLeftRows)");
         calculateLayouts.Should().Contain("BuildColumnLookup(leftColumns)");
         calculateLayouts.Should().Contain("BuildColumnLookup(topRightColumns)");
         calculateLayouts.Should().Contain("ResolveSplitPaneRegion(isTopPane, isLeftPane)");
+        calculateLayouts.Should().Contain("new List<SplitPaneCellLayout>(cells.Count)");
+        calculateLayouts.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
+        calculateLayouts.Should().Contain("occupied ??= BuildOccupiedCells(cells)");
         calculateLayouts.Should().Contain("foreach (var cell in cells)");
-        calculateLayouts.Should().Contain("occupied.Add((cell.Row, cell.Col))");
+        calculateLayouts.Should().NotContain("occupied.Add((cell.Row, cell.Col))");
+        buildOccupiedCells.Should().Contain("occupied.Add((cell.Row, cell.Col))");
         calculateLayouts.Should().NotContain(".ToDictionary(");
         calculateLayouts.Should().NotContain(".Where(");
         calculateLayouts.Should().NotContain(".Select(");
+    }
+
+    [Fact]
+    public void SplitPaneCellLayoutPlanner_NumericCellsSkipOverflowOccupancyAllocation()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
+
+        source.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
+        source.Should().Contain("occupied ??= BuildOccupiedCells(cells);");
+
+        var sheetId = SheetId.New();
+        var cells = new List<DisplayCell>();
+        for (uint col = 1; col <= 80; col++)
+            cells.Add(new DisplayCell(1, col, new NumberValue(col), col.ToString(), null, StyleId.Default, null, null));
+
+        var viewport = new ViewportModel(
+            cells,
+            [new RowMetric(1, 18, 0)],
+            Enumerable.Range(1, 80)
+                .Select(index => new ColMetric((uint)index, 64, (index - 1) * 64))
+                .ToList(),
+            SplitPanes: new SplitPaneState(
+                2,
+                2,
+                [new RowMetric(1, 18, 0)],
+                Enumerable.Range(1, 80)
+                    .Select(index => new ColMetric((uint)index, 64, (index - 1) * 64))
+                    .ToList(),
+                cells));
+
+        var mergedRegions = new[]
+        {
+            new GridRange(
+                new CellAddress(sheetId, 1, 1),
+                new CellAddress(sheetId, 1, 2))
+        };
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        var layouts = SplitPaneCellLayoutPlanner.CalculateLayouts(viewport, mergedRegions);
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        layouts.Should().HaveCount(79);
+        allocatedBytes.Should().BeLessThan(
+            45_000,
+            "numeric split-pane cells cannot overflow, so the occupied-cell HashSet should stay unallocated");
     }
 
     [Fact]

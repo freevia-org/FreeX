@@ -410,7 +410,10 @@ public partial class GridView
             foreach (var cm in Viewport.ColMetrics)
             {
                 double left = cm.LeftOffset + ActualRowHeaderWidth;
-                if (pos.X >= left && pos.X < left + cm.Width)
+                if (pos.X < left)
+                    break;
+
+                if (pos.X < left + cm.Width)
                 {
                     HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Column, cm.Col, pos);
                     e.Handled = true;
@@ -427,7 +430,10 @@ public partial class GridView
             foreach (var rm in Viewport.RowMetrics)
             {
                 double top = rm.TopOffset + EffectiveColHeaderHeight;
-                if (pos.Y >= top && pos.Y < top + rm.Height)
+                if (pos.Y < top)
+                    break;
+
+                if (pos.Y < top + rm.Height)
                 {
                     HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Row, rm.Row, pos);
                     e.Handled = true;
