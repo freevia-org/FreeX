@@ -527,7 +527,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue BitShiftScalar(ScalarValue numberValue, ScalarValue shiftValue, bool leftShift)
     {
         if (!TryGetBitInteger(numberValue, out var number)) return ErrorValue.Num;
-        if (!TryGetEngineeringTruncatedInteger(shiftValue, out var shift) || Math.Abs(shift) > 53) return ErrorValue.Num;
+        if (!TryGetEngineeringInteger(shiftValue, out var shift) || Math.Abs(shift) > 53) return ErrorValue.Num;
 
         bool effectiveLeft = leftShift ? shift >= 0 : shift < 0;
         int bits = (int)Math.Abs(shift);
