@@ -216,11 +216,7 @@ public sealed class RecalcEngine
     public RecalcReport RecalculateAllFormulas(Workbook workbook)
     {
         RebuildFormulaDependencies(workbook);
-        var formulaCells = workbook.Sheets
-            .SelectMany(sheet => sheet.EnumerateCells())
-            .Where(entry => entry.Cell.HasFormula)
-            .Select(entry => entry.Address)
-            .ToList();
+        var formulaCells = CollectFormulaCells(workbook);
 
         return Recalculate(workbook, formulaCells);
     }
@@ -233,13 +229,48 @@ public sealed class RecalcEngine
         if (sheet is null)
             return new RecalcReport([], [], []);
 
-        var formulaCells = sheet.EnumerateCells()
-            .Where(entry => entry.Cell.HasFormula)
-            .Select(entry => entry.Address)
-            .ToList();
+        var formulaCells = CollectFormulaCells(sheet);
 
         var report = Recalculate(workbook, formulaCells);
         return FilterReportForSheet(report, sheetId);
+    }
+
+    private static List<CellAddress> CollectFormulaCells(Workbook workbook)
+    {
+        var formulaCellCount = 0;
+        foreach (var sheet in workbook.Sheets)
+            formulaCellCount += sheet.FormulaCellCount;
+
+        if (formulaCellCount == 0)
+            return [];
+
+        var formulaCells = new List<CellAddress>(formulaCellCount);
+        foreach (var sheet in workbook.Sheets)
+            AddFormulaCells(sheet, formulaCells);
+
+        return formulaCells;
+    }
+
+    private static List<CellAddress> CollectFormulaCells(Sheet sheet)
+    {
+        if (!sheet.HasFormulas)
+            return [];
+
+        var formulaCells = new List<CellAddress>(sheet.FormulaCellCount);
+        AddFormulaCells(sheet, formulaCells);
+        return formulaCells;
+    }
+
+    private static void AddFormulaCells(Sheet sheet, List<CellAddress> formulaCells)
+    {
+        if (!sheet.HasFormulas)
+            return;
+
+        foreach (var (address, cell) in sheet.EnumerateCells())
+        {
+            if (cell.HasFormula)
+                formulaCells.Add(address);
+        }
     }
 
     private static RecalcReport FilterReportForSheet(RecalcReport report, SheetId sheetId)
