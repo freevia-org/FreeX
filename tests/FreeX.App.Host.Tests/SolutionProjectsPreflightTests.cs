@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -92,9 +93,10 @@ public sealed class SolutionProjectsPreflightTests
 
             var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
+            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("missing from solution");
-            (result.Output + result.Error).Should().Contain("src/Missing/Missing.csproj");
+            combinedOutput.Should().Contain("missing from solution");
+            combinedOutput.Should().Contain("src/Missing/Missing.csproj");
         }
         finally
         {
@@ -126,9 +128,10 @@ public sealed class SolutionProjectsPreflightTests
 
             var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
 
+            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("references missing project");
-            (result.Output + result.Error).Should().Contain("src/Missing/Missing.csproj");
+            combinedOutput.Should().Contain("references missing project");
+            combinedOutput.Should().Contain("src/Missing/Missing.csproj");
         }
         finally
         {
@@ -157,6 +160,8 @@ public sealed class SolutionProjectsPreflightTests
 
         return new PowerShellResult(process.ExitCode, output, error);
     }
+
+    private static string NormalizeWhitespace(string text) => Regex.Replace(text, "\\s+", " ");
 
     private sealed record PowerShellResult(int ExitCode, string Output, string Error);
 }
