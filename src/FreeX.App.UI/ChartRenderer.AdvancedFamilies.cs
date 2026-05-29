@@ -33,7 +33,9 @@ public static partial class ChartRenderer
         values.Sort((a, b) => b.Value.CompareTo(a.Value));
         if (values.Count == 0) return model;
 
-        double total = values.Sum(v => v.Value);
+        var total = 0.0;
+        for (var index = 0; index < values.Count; index++)
+            total += values[index].Value;
 
         var bars = new RectangleBarSeries { FillColor = OxyColor.FromRgb(68, 114, 196) };
         var cumulativeLine = new LineSeries
@@ -120,12 +122,34 @@ public static partial class ChartRenderer
                 double iqr = q3 - q1;
                 double lowerFence = q1 - 1.5 * iqr;
                 double upperFence = q3 + 1.5 * iqr;
-                double lowerWhisker = colValues.FirstOrDefault(v => v >= lowerFence, colValues[0]);
-                double upperWhisker = colValues.LastOrDefault(v => v <= upperFence, colValues[^1]);
-                var outlierList = colValues.Where(v => v < lowerFence || v > upperFence).ToList();
+                var lowerWhisker = colValues[0];
+                for (var index = 0; index < colValues.Count; index++)
+                {
+                    if (colValues[index] >= lowerFence)
+                    {
+                        lowerWhisker = colValues[index];
+                        break;
+                    }
+                }
+
+                var upperWhisker = colValues[^1];
+                for (var index = colValues.Count - 1; index >= 0; index--)
+                {
+                    if (colValues[index] <= upperFence)
+                    {
+                        upperWhisker = colValues[index];
+                        break;
+                    }
+                }
 
                 var item = new BoxPlotItem(boxIndex, lowerWhisker, q1, median, q3, upperWhisker);
-                foreach (var o in outlierList) item.Outliers.Add(o);
+                for (var index = 0; index < colValues.Count; index++)
+                {
+                    var value = colValues[index];
+                    if (value < lowerFence || value > upperFence)
+                        item.Outliers.Add(value);
+                }
+
                 boxSeries.Items.Add(item);
             }
             boxIndex++;
@@ -175,7 +199,10 @@ public static partial class ChartRenderer
 
         if (values.Count == 0) return model;
 
-        double total = values.Sum(v => v.Value);
+        var total = 0.0;
+        for (var index = 0; index < values.Count; index++)
+            total += values[index].Value;
+
         double x = 0;
 
         for (int i = 0; i < values.Count; i++)
@@ -270,7 +297,13 @@ public static partial class ChartRenderer
 
         if (values.Count == 0) return model;
 
-        double maxVal = values.Max(v => v.Value);
+        var maxVal = 0.0;
+        for (var index = 0; index < values.Count; index++)
+        {
+            if (values[index].Value > maxVal)
+                maxVal = values[index].Value;
+        }
+
         if (maxVal == 0) return model;
 
         for (int i = 0; i < values.Count; i++)
