@@ -336,6 +336,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         if (workbook.Sheets.Count == 0)
             workbook.AddSheet("Sheet1");
 
+        var maxLoadedSheetIndex = Math.Max(0, workbook.Sheets.Count - 1);
+        workbook.FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.FirstVisibleSheetIndex, maxLoadedSheetIndex);
+        workbook.ActiveSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.ActiveSheetIndex, maxLoadedSheetIndex);
+
         foreach (var namedRangeDto in dto.NamedRanges ?? [])
         {
             if (string.IsNullOrWhiteSpace(namedRangeDto?.Name) ||
