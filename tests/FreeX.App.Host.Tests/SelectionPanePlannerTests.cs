@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.Core.Model;
+using System.Diagnostics;
 using System.IO;
 
 namespace FreeX.App.Host.Tests;
@@ -252,6 +253,82 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialog_FilterItems_ReturnsOriginalListForDefaultView()
+    {
+        var items = new[]
+        {
+            DialogState(SelectionPaneObjectKind.Picture, "Logo", isVisible: true),
+            DialogState(SelectionPaneObjectKind.Shape, "Process Box", isVisible: false)
+        };
+
+        var filtered = SelectionPaneDialogStatePlanner.FilterItems(items, " ", "");
+
+        filtered.Should().BeSameAs(items);
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_PlannerAvoidsLinqScaffoldingInRepeatedStatePaths()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "SelectionPaneDialog.Planning.cs"));
+
+        var filterItems = SourceMethod(
+            source,
+            "public static IReadOnlyList<SelectionPaneDialogItemState> FilterItems",
+            "public static SelectionPaneDialogReorderPlan? PlanMove");
+        var createVisibilityChanges = SourceMethod(
+            source,
+            "public static IReadOnlyList<SelectionPaneVisibilityChange> CreateVisibilityChanges",
+            "public static IReadOnlyList<SelectionPaneRenameChange> CreateRenameChanges");
+        var createRenameChanges = SourceMethod(
+            source,
+            "public static IReadOnlyList<SelectionPaneRenameChange> CreateRenameChanges",
+            "public static SelectionPaneDialogResult CreateResult");
+
+        filterItems.Should().NotContain(".Where(");
+        filterItems.Should().NotContain(".ToList(");
+        createVisibilityChanges.Should().NotContain(".Where(");
+        createVisibilityChanges.Should().NotContain(".Select(");
+        createVisibilityChanges.Should().NotContain("states[item.Id]");
+        createRenameChanges.Should().NotContain(".Where(");
+        createRenameChanges.Should().NotContain(".Select(");
+        createRenameChanges.Should().NotContain("names[item.Id]");
+    }
+
+    [Fact]
+    public void Benchmark_SelectionPaneDefaultFilter_AvoidsCopyAllocation()
+    {
+        const int itemCount = 10_000;
+        var items = Enumerable.Range(0, itemCount)
+            .Select(index => DialogState(SelectionPaneObjectKind.Picture, $"Picture {index}", isVisible: true))
+            .ToArray();
+
+        SelectionPaneDialogStatePlanner.FilterItems(items, "", "All").Should().BeSameAs(items);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        for (var index = 0; index < 1_000; index++)
+        {
+            if (!ReferenceEquals(SelectionPaneDialogStatePlanner.FilterItems(items, "", "All"), items))
+                throw new InvalidOperationException("Default Selection Pane filtering should return the source list.");
+        }
+
+        stopwatch.Stop();
+
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Console.WriteLine(
+            $"Selection pane default filter: {stopwatch.Elapsed.TotalMilliseconds:F2}ms, {allocated:N0} bytes for 1000 runs");
+
+        allocated.Should().BeLessThan(200_000);
+    }
+
+    [Fact]
     public void SelectionPaneDialog_PlannerUsesIndexedLookupsForStateProjection()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find(
@@ -472,6 +549,9 @@ public sealed class SelectionPanePlannerTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SelectionPaneDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SelectionPaneDialog.State.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SelectionPaneDialog.Planning.cs")));
+
+    private static string SourceMethod(string source, string start, string end) =>
+        source[source.IndexOf(start, StringComparison.Ordinal)..source.IndexOf(end, StringComparison.Ordinal)];
 
     private static SelectionPaneDialogItemState DialogState(
         SelectionPaneObjectKind kind,
