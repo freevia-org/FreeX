@@ -248,7 +248,11 @@ public sealed class RemainingDialogTests
         var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
 
         source.Should().Contain("AutomationProperties.SetName(_stepBox, \"Step value\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_stepBox, \"FillSeriesStepValueBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_stepBox, \"Enter the amount to increment each value in the series.\");");
         source.Should().Contain("AutomationProperties.SetName(_stopBox, \"Stop value\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_stopBox, \"FillSeriesStopValueBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_stopBox, \"Enter the optional final value for the series.\");");
     }
 
     [Fact]
