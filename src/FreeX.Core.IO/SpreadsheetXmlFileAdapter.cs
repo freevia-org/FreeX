@@ -19,6 +19,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static readonly XName SpreadsheetMergeDownAttribute = SpreadsheetNs + "MergeDown";
     private static readonly XName SpreadsheetHrefAttribute = SpreadsheetNs + "HRef";
     private static readonly XName SpreadsheetHrefScreenTipAttribute = SpreadsheetNs + "HRefScreenTip";
+    private static readonly XName SpreadsheetAuthorAttribute = SpreadsheetNs + "Author";
 
     public string Extension => ".xml";
     public string FormatName => "XML Spreadsheet 2003";
@@ -128,6 +129,9 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                         GetHyperlinkBookmark(hyperlinkTarget));
                 }
 
+                if (ReadComment(cellElement) is { } comment)
+                    sheet.Comments[address] = comment;
+
                 var mergeAcross = ReadMergeExtent(cellElement, SpreadsheetMergeAcrossAttribute);
                 if (TryReadMergeRange(sheet.Id, rowIndex, columnIndex, cellElement, mergeAcross, out var mergeRange))
                     sheet.AddMergedRegion(mergeRange);
@@ -175,6 +179,13 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             "Error" when text.Length > 0 => new ErrorValue(text),
             _ => new TextValue(text)
         };
+    }
+
+    private static string? ReadComment(XElement cellElement)
+    {
+        var commentElement = cellElement.Element(SpreadsheetNs + "Comment");
+        var text = commentElement?.Element(SpreadsheetNs + "Data")?.Value;
+        return string.IsNullOrWhiteSpace(text) ? null : text;
     }
 
     private static bool ReadBoolean(string text, out bool value)
@@ -275,8 +286,9 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             mergeStarts.TryGetValue((address.Row, address.Col), out var mergeRange);
             sheet.Hyperlinks.TryGetValue(address, out var hyperlinkTarget);
             sheet.HyperlinkMetadata.TryGetValue(address, out var hyperlinkMetadata);
+            sheet.Comments.TryGetValue(address, out var comment);
             emitted.Add((address.Row, address.Col));
-            cells.Add(new SpreadsheetXmlCell(address.Row, address.Col, cell, mergeRange, hyperlinkTarget, hyperlinkMetadata));
+            cells.Add(new SpreadsheetXmlCell(address.Row, address.Col, cell, mergeRange, hyperlinkTarget, hyperlinkMetadata, comment));
         }
 
         foreach (var (address, hyperlinkTarget) in sheet.Hyperlinks
@@ -289,6 +301,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
             mergeStarts.TryGetValue((address.Row, address.Col), out var mergeRange);
             sheet.HyperlinkMetadata.TryGetValue(address, out var hyperlinkMetadata);
+            sheet.Comments.TryGetValue(address, out var comment);
             emitted.Add((address.Row, address.Col));
             cells.Add(new SpreadsheetXmlCell(
                 address.Row,
@@ -296,7 +309,28 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 Cell.FromValue(BlankValue.Instance),
                 mergeRange,
                 hyperlinkTarget,
-                hyperlinkMetadata));
+                hyperlinkMetadata,
+                comment));
+        }
+
+        foreach (var (address, comment) in sheet.Comments
+                     .Where(entry => !emitted.Contains((entry.Key.Row, entry.Key.Col)))
+                     .OrderBy(entry => entry.Key.Row)
+                     .ThenBy(entry => entry.Key.Col))
+        {
+            if (IsCoveredByMergeNonAnchor(sheet, address))
+                continue;
+
+            mergeStarts.TryGetValue((address.Row, address.Col), out var mergeRange);
+            emitted.Add((address.Row, address.Col));
+            cells.Add(new SpreadsheetXmlCell(
+                address.Row,
+                address.Col,
+                Cell.FromValue(BlankValue.Instance),
+                mergeRange,
+                HyperlinkTarget: null,
+                HyperlinkMetadata: null,
+                Comment: comment));
         }
 
         foreach (var mergeRange in sheet.MergedRegions
@@ -310,7 +344,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 Cell.FromValue(BlankValue.Instance),
                 mergeRange,
                 HyperlinkTarget: null,
-                HyperlinkMetadata: null));
+                HyperlinkMetadata: null,
+                Comment: null));
         }
 
         foreach (var cell in cells.OrderBy(cell => cell.Row).ThenBy(cell => cell.Col))
@@ -353,6 +388,14 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
         if (cell.Cell.Value is not BlankValue)
             element.Add(ToDataElement(cell.Cell.Value));
+
+        if (!string.IsNullOrWhiteSpace(cell.Comment))
+        {
+            element.Add(new XElement(
+                SpreadsheetNs + "Comment",
+                new XAttribute(SpreadsheetAuthorAttribute, "FreeX"),
+                new XElement(SpreadsheetNs + "Data", cell.Comment)));
+        }
 
         return element;
     }
@@ -423,5 +466,6 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         Cell Cell,
         GridRange? MergeRange,
         string? HyperlinkTarget,
-        HyperlinkMetadata? HyperlinkMetadata);
+        HyperlinkMetadata? HyperlinkMetadata,
+        string? Comment);
 }

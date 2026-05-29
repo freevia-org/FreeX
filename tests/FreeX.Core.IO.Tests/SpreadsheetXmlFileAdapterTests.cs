@@ -162,6 +162,34 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsSpreadsheetMlCellComments()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Notes">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell>
+                      <ss:Data ss:Type="String">Needs review</ss:Data>
+                      <ss:Comment ss:Author="Finance">
+                        <ss:Data>Check &amp; approve total</ss:Data>
+                      </ss:Comment>
+                    </ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.GetCell(address)!.Value.Should().Be(new TextValue("Needs review"));
+        sheet.Comments[address].Should().Be("Check & approve total");
+    }
+
+    [Fact]
     public void Load_AdvancesImplicitCellIndexPastMergeAcrossSpan()
     {
         using var stream = StreamFromString("""
@@ -330,6 +358,37 @@ public sealed class SpreadsheetXmlFileAdapterTests
         loadedSheet.HyperlinkMetadata[loadedExternalAddress].ScreenTip.Should().Be("Open report");
         loadedSheet.Hyperlinks[loadedMailAddress].Should().Be("mailto:team@example.com");
         loadedSheet.HyperlinkMetadata[loadedMailAddress].LinkType.Should().Be(HyperlinkTargetKind.EmailAddress);
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsSpreadsheetMlCellComments()
+    {
+        var workbook = new Workbook("XmlNotes");
+        var sheet = workbook.AddSheet("Notes");
+        var valueAddress = new CellAddress(sheet.Id, 1, 1);
+        var noteOnlyAddress = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(valueAddress, new TextValue("Total"));
+        sheet.Comments[valueAddress] = "Check < & > total";
+        sheet.Comments[noteOnlyAddress] = "Standalone note";
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var comments = document.Descendants(ss + "Comment").ToList();
+        comments.Should().HaveCount(2);
+        comments.All(comment => comment.Attribute(ss + "Author")?.Value == "FreeX").Should().BeTrue();
+        comments.Select(comment => comment.Element(ss + "Data")?.Value)
+            .Should().BeEquivalentTo("Check < & > total", "Standalone note");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.Comments[new CellAddress(loadedSheet.Id, 1, 1)].Should().Be("Check < & > total");
+        loadedSheet.Comments[new CellAddress(loadedSheet.Id, 2, 2)].Should().Be("Standalone note");
     }
 
     [Fact]
