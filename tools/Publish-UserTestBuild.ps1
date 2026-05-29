@@ -90,6 +90,10 @@ $publishDir = if ($PublishMode -eq "SingleFile") {
 }
 $artifactExePath = Join-Path $artifactRoot "$artifactName.exe"
 $artifactMsixPath = Join-Path $artifactRoot "$artifactName.msix"
+$artifactExeHashPath = "$artifactExePath.sha256"
+$artifactMsixHashPath = "$artifactMsixPath.sha256"
+$zipPath = Join-Path $artifactRoot "$artifactName.zip"
+$zipHashPath = "$zipPath.sha256"
 
 if (Test-Path -LiteralPath $publishDir) {
     Remove-Item -LiteralPath $publishDir -Recurse -Force
@@ -97,8 +101,20 @@ if (Test-Path -LiteralPath $publishDir) {
 if ($PublishMode -eq "SingleFile" -and (Test-Path -LiteralPath $artifactExePath)) {
     Remove-Item -LiteralPath $artifactExePath -Force
 }
+if ($PublishMode -eq "SingleFile" -and (Test-Path -LiteralPath $artifactExeHashPath)) {
+    Remove-Item -LiteralPath $artifactExeHashPath -Force
+}
 if ($PublishMode -eq "Msix" -and (Test-Path -LiteralPath $artifactMsixPath)) {
     Remove-Item -LiteralPath $artifactMsixPath -Force
+}
+if ($PublishMode -eq "Msix" -and (Test-Path -LiteralPath $artifactMsixHashPath)) {
+    Remove-Item -LiteralPath $artifactMsixHashPath -Force
+}
+if ($PublishMode -eq "Folder" -and (Test-Path -LiteralPath $zipPath)) {
+    Remove-Item -LiteralPath $zipPath -Force
+}
+if ($PublishMode -eq "Folder" -and (Test-Path -LiteralPath $zipHashPath)) {
+    Remove-Item -LiteralPath $zipHashPath -Force
 }
 
 New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
@@ -154,10 +170,10 @@ $runtimeUrl = "https://dotnet.microsoft.com/download/dotnet/10.0"
 if ($PublishMode -eq "SingleFile") {
     Move-Item -LiteralPath $launchExePath -Destination $artifactExePath
     $hash = Get-FileHash -LiteralPath $artifactExePath -Algorithm SHA256
-    Set-Content -LiteralPath "$artifactExePath.sha256" -Value "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $artifactExePath)" -Encoding ASCII
+    Set-Content -LiteralPath $artifactExeHashPath -Value "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $artifactExePath)" -Encoding ASCII
     Remove-Item -LiteralPath $publishDir -Recurse -Force
     Write-Host "Created $artifactExePath"
-    Write-Host "Created $artifactExePath.sha256"
+    Write-Host "Created $artifactExeHashPath"
     exit 0
 }
 
@@ -263,9 +279,9 @@ if ($PublishMode -eq "Msix") {
     }
 
     $hash = Get-FileHash -LiteralPath $artifactMsixPath -Algorithm SHA256
-    Set-Content -LiteralPath "$artifactMsixPath.sha256" -Value "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $artifactMsixPath)" -Encoding ASCII
+    Set-Content -LiteralPath $artifactMsixHashPath -Value "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $artifactMsixPath)" -Encoding ASCII
     Write-Host "Created $artifactMsixPath"
-    Write-Host "Created $artifactMsixPath.sha256"
+    Write-Host "Created $artifactMsixHashPath"
     exit 0
 }
 
@@ -352,21 +368,15 @@ Local diagnostics:
 "@
 Set-Content -LiteralPath $readmePath -Value $readme -Encoding ASCII
 
-$zipPath = Join-Path $artifactRoot "$artifactName.zip"
-if (Test-Path -LiteralPath $zipPath) {
-    Remove-Item -LiteralPath $zipPath -Force
-}
-
 Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
 
 if (-not (Test-Path -LiteralPath $zipPath)) {
     throw "Compress-Archive did not create $zipPath"
 }
 
-$hashPath = "$zipPath.sha256"
 $hash = Get-FileHash -LiteralPath $zipPath -Algorithm SHA256
-Set-Content -LiteralPath $hashPath -Value "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $zipPath)" -Encoding ASCII
+Set-Content -LiteralPath $zipHashPath -Value "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $zipPath)" -Encoding ASCII
 
 Write-Host "Created $publishDir"
 Write-Host "Created $zipPath"
-Write-Host "Created $hashPath"
+Write-Host "Created $zipHashPath"
