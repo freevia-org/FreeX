@@ -121,6 +121,26 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_SourceEncoding_ReadsUtf16Input()
+    {
+        using var source = Utf16StreamFromString("<?xml version=\"1.0\" encoding=\"utf-16\"?><rows><row name=\"Echo\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/rows">
+                <worksheet>
+                  <cell><xsl:value-of select="row/@name" /></cell>
+                </worksheet>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should().Contain("<cell>Echo</cell>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetOutputDeclaration_PreservesStandaloneFlag()
     {
         using var source = StreamFromString("<rows><row name=\"Echo\" /></rows>");
@@ -806,6 +826,9 @@ public sealed class XsltWorkbookTransformTests
 
     private static MemoryStream StreamFromString(string value) =>
         new(Encoding.UTF8.GetBytes(value));
+
+    private static MemoryStream Utf16StreamFromString(string value) =>
+        new(Encoding.Unicode.GetPreamble().Concat(Encoding.Unicode.GetBytes(value)).ToArray());
 
     private static Stream NonSeekableStreamFromString(string value) =>
         new NonSeekableReadStream(StreamFromString(value));
