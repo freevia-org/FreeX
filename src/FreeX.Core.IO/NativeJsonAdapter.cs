@@ -143,7 +143,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.SplitColumn = sheet.FrozenRows > 0 || sheet.FrozenCols > 0
                 ? null
                 : NativeJsonValueSanitizer.ValidColumnPaneOrNull(sDto.SplitColumn);
-            sheet.AutoFilter = ToWorksheetAutoFilter(sDto.AutoFilter);
+            sheet.AutoFilter = ToWorksheetAutoFilter(sDto.AutoFilter, sheet.Id);
             sheet.SmartTags = ToWorksheetSmartTags(sDto.SmartTags);
             sheet.DataConsolidation = ToWorksheetDataConsolidation(sDto.DataConsolidation);
             sheet.SortState = ToWorksheetSortState(sDto.SortState);

@@ -174,7 +174,7 @@ public sealed partial class NativeJsonAdapter
                 SplitColumn = NativeJsonValueSanitizer.ValidFrozenRowsOrZero(s.FrozenRows) > 0 || NativeJsonValueSanitizer.ValidFrozenColumnsOrZero(s.FrozenCols) > 0
                     ? null
                     : NativeJsonValueSanitizer.ValidColumnPaneOrNull(s.SplitColumn),
-                AutoFilter = ToWorksheetAutoFilterDto(s.AutoFilter),
+                AutoFilter = ToWorksheetAutoFilterDto(s.AutoFilter, s.Id),
                 SmartTags = ToWorksheetSmartTagsDto(s.SmartTags),
                 DataConsolidation = ToWorksheetDataConsolidationDto(s.DataConsolidation),
                 SortState = ToWorksheetSortStateDto(s.SortState),
