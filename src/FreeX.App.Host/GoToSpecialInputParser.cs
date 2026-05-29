@@ -11,7 +11,7 @@ public static class GoToSpecialInputParser
             "formula" or "formulas" => GoToSpecialKind.Formulas,
             "comment" or "comments" => GoToSpecialKind.Comments,
             "validation" or "data validation" => GoToSpecialKind.DataValidation,
-            "visible" or "visible cells" => GoToSpecialKind.VisibleCellsOnly,
+            "visible" or "visible cells" or "visible cells only" => GoToSpecialKind.VisibleCellsOnly,
             "row differences" or "row difference" => GoToSpecialKind.RowDifferences,
             "column differences" or "column difference" => GoToSpecialKind.ColumnDifferences,
             "current region" => GoToSpecialKind.CurrentRegion,

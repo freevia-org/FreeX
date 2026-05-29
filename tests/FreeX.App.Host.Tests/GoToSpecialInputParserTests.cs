@@ -17,6 +17,7 @@ public sealed class GoToSpecialInputParserTests
     [InlineData("data validation", GoToSpecialKind.DataValidation)]
     [InlineData("visible", GoToSpecialKind.VisibleCellsOnly)]
     [InlineData("visible cells", GoToSpecialKind.VisibleCellsOnly)]
+    [InlineData("visible cells only", GoToSpecialKind.VisibleCellsOnly)]
     [InlineData("row differences", GoToSpecialKind.RowDifferences)]
     [InlineData("column differences", GoToSpecialKind.ColumnDifferences)]
     [InlineData("current region", GoToSpecialKind.CurrentRegion)]
