@@ -102,6 +102,7 @@ foreach ($marker in @(
     "accessibility_screen_reader:",
     "accessibility_uia_catalog:",
     "accessibility_known_issues:",
+    "contents: write",
     "TestResults/tests.trx",
     "Public-preview promotion requires completed accessibility gate inputs",
     "gh release create",
