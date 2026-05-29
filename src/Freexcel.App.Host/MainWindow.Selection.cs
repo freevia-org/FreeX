@@ -205,6 +205,7 @@ public partial class MainWindow
                     (selectedRange.Start != selectedRange.End || e.ClickCount > 1))
                 {
                     TryApplyFormatPainter(selectedRange);
+                    UpdateCommentPreview(newAddr);
                     e.Handled = true;
                     return;
                 }
