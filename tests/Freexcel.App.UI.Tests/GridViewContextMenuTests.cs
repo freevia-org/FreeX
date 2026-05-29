@@ -45,17 +45,12 @@ public sealed class GridViewContextMenuTests
             inputSource.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)..
             inputSource.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal)];
 
-        rightClickBlock.Should().Contain("_objectDragKind != ObjectDragKind.None");
-        rightClickBlock.Should().Contain("_marginDragEdge.HasValue");
-        rightClickBlock.Should().Contain("_splitDividerDragHandle != SplitDividerHandle.None");
-        rightClickBlock.Should().Contain("_splitPaneScrollbarDragging");
-        rightClickBlock.Should().Contain("_autofillDragging");
-        rightClickBlock.Should().Contain("_resizeTarget != ResizeTarget.None");
+        rightClickBlock.Should().Contain("if (HasActiveCapturedGridDrag())");
         rightClickBlock.Should().Contain("e.Handled = true;");
-        rightClickBlock.IndexOf("_objectDragKind != ObjectDragKind.None", StringComparison.Ordinal)
+        rightClickBlock.IndexOf("if (HasActiveCapturedGridDrag())", StringComparison.Ordinal)
             .Should()
             .BeLessThan(rightClickBlock.IndexOf("HitTestPivotChartFieldButton", StringComparison.Ordinal));
-        rightClickBlock.IndexOf("_objectDragKind != ObjectDragKind.None", StringComparison.Ordinal)
+        rightClickBlock.IndexOf("if (HasActiveCapturedGridDrag())", StringComparison.Ordinal)
             .Should()
             .BeLessThan(rightClickBlock.IndexOf("ContextMenuRequested?.Invoke", StringComparison.Ordinal));
         rightClickBlock.IndexOf("e.Handled = true;", StringComparison.Ordinal)
