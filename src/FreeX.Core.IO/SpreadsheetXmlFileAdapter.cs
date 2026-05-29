@@ -20,6 +20,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static readonly XName SpreadsheetHrefAttribute = SpreadsheetNs + "HRef";
     private static readonly XName SpreadsheetHrefScreenTipAttribute = SpreadsheetNs + "HRefScreenTip";
     private static readonly XName SpreadsheetAuthorAttribute = SpreadsheetNs + "Author";
+    private static readonly XName SpreadsheetVisibleAttribute = SpreadsheetNs + "Visible";
 
     public string Extension => ".xml";
     public string FormatName => "XML Spreadsheet 2003";
@@ -44,6 +45,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 worksheetElement.Attribute(SpreadsheetNameAttribute)?.Value,
                 sheetIndex++);
             var sheet = workbook.AddSheet(sheetName);
+            ReadWorksheetVisibility(sheet, worksheetElement);
             ReadWorksheet(sheet, worksheetElement);
         }
 
@@ -92,6 +94,14 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         };
         using var reader = XmlReader.Create(stream, settings);
         return XDocument.Load(reader, LoadOptions.PreserveWhitespace);
+    }
+
+    private static void ReadWorksheetVisibility(Sheet sheet, XElement worksheetElement)
+    {
+        var visibility = worksheetElement.Attribute(SpreadsheetVisibleAttribute)?.Value;
+        sheet.IsVeryHidden = string.Equals(visibility, "SheetVeryHidden", StringComparison.OrdinalIgnoreCase);
+        sheet.IsHidden = sheet.IsVeryHidden ||
+                         string.Equals(visibility, "SheetHidden", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ReadWorksheet(Sheet sheet, XElement worksheetElement)
@@ -229,8 +239,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         if (mergeAcross == 0 && mergeDown == 0)
             return false;
 
-        if (column > CellAddress.MaxCol - mergeAcross ||
-            row > CellAddress.MaxRow - mergeDown)
+        if (mergeAcross > CellAddress.MaxCol - column ||
+            mergeDown > CellAddress.MaxRow - row)
         {
             return false;
         }
@@ -251,8 +261,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
     private static uint AdvanceColumnIndex(uint columnIndex, uint mergeAcross)
     {
-        if (mergeAcross >= CellAddress.MaxCol || columnIndex > CellAddress.MaxCol - mergeAcross)
-            return CellAddress.MaxCol + 1;
+        if (mergeAcross > CellAddress.MaxCol - columnIndex)
+            return columnIndex + 1;
 
         return columnIndex + mergeAcross + 1;
     }
@@ -261,11 +271,22 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         new(
             SpreadsheetNs + "Worksheet",
             new XAttribute(SpreadsheetNameAttribute, sheet.Name),
+            ToWorksheetVisibilityAttribute(sheet),
             new XElement(
                 SpreadsheetNs + "Table",
                 EnumerateXmlCells(sheet)
                     .GroupBy(entry => entry.Row)
                     .Select(ToRowElement)));
+
+    private static XAttribute? ToWorksheetVisibilityAttribute(Sheet sheet)
+    {
+        if (sheet.IsVeryHidden)
+            return new XAttribute(SpreadsheetVisibleAttribute, "SheetVeryHidden");
+
+        return sheet.IsHidden
+            ? new XAttribute(SpreadsheetVisibleAttribute, "SheetHidden")
+            : null;
+    }
 
     private static IEnumerable<SpreadsheetXmlCell> EnumerateXmlCells(Sheet sheet)
     {
