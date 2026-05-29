@@ -18,6 +18,7 @@ public sealed class RepositoryPreflightTests
         script.Should().Contain("Test-DotNetProjectReferences.ps1");
         script.Should().Contain("Test-SolutionProjects.ps1");
         script.Should().Contain("Test-GeneratedDocs.ps1");
+        script.Should().Contain("Test-ConflictMarkers.ps1");
         script.Should().Contain("Repository preflight checks passed.");
     }
 
@@ -51,6 +52,7 @@ public sealed class RepositoryPreflightTests
         output.Should().Contain("Running .NET project references preflight...");
         output.Should().Contain("Running solution projects preflight...");
         output.Should().Contain("Running generated docs preflight...");
+        output.Should().Contain("Running Git conflict markers preflight...");
         output.Should().Contain("Repository preflight checks passed.");
     }
 
