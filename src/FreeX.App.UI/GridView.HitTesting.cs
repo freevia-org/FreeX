@@ -84,6 +84,9 @@ public partial class GridView
                 continue;
 
             var rect = new Rect(chart.Left + rowHeaderWidth, chart.Top + columnHeaderHeight, chart.Width, chart.Height);
+            if (!ContainsInclusive(rect, pos))
+                continue;
+
             var topButton = new Rect(rect.Left + 6, rect.Top + 6, Math.Min(150, Math.Max(80, rect.Width - 12)), 24);
             if (chart.ShowPivotChartReportFilterButtons && ContainsInclusive(topButton, pos))
                 return (chart, string.IsNullOrWhiteSpace(chart.PivotTableName) ? "PivotTable" : chart.PivotTableName!);
