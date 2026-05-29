@@ -3005,6 +3005,72 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Save_SkipsCrossSheetVisualObjects()
+    {
+        var workbook = new Workbook("ObjectCrossSheetSaveTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var otherSheet = workbook.AddSheet("Other");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            LinkedSourceRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 2, 2)),
+            Width = 90,
+            Height = 60
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(otherSheet.Id, 2, 2),
+            Width = 90,
+            Height = 60
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            LinkedSourceRange = new GridRange(
+                new CellAddress(otherSheet.Id, 1, 1),
+                new CellAddress(otherSheet.Id, 2, 2)),
+            Width = 90,
+            Height = 60
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 2),
+            Text = "Note"
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(otherSheet.Id, 4, 2),
+            Text = "Other"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 5, 2)
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(otherSheet.Id, 5, 2)
+        });
+
+        var ms = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, ms);
+        ms.Position = 0;
+
+        using var document = JsonDocument.Parse(ms);
+        var sheetJson = document.RootElement.GetProperty("Sheets")[0];
+        sheetJson.GetProperty("Pictures").EnumerateArray()
+            .Should().ContainSingle()
+            .Which.GetProperty("Anchor").GetString().Should().Be("B2");
+        sheetJson.GetProperty("TextBoxes").EnumerateArray()
+            .Should().ContainSingle()
+            .Which.GetProperty("Anchor").GetString().Should().Be("B4");
+        sheetJson.GetProperty("DrawingShapes").EnumerateArray()
+            .Should().ContainSingle()
+            .Which.GetProperty("Anchor").GetString().Should().Be("B5");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_Sparklines()
     {
         var workbook = new Workbook("SparklineNativeTest");

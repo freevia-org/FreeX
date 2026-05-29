@@ -258,9 +258,18 @@ public sealed partial class NativeJsonAdapter
                     .Select(range => range.ToString())
                     .ToList(),
                 BackgroundImage = ToWorksheetBackgroundDto(s.BackgroundImage),
-                Pictures = s.Pictures.Select(NativeJsonVisualDtoMapper.FromPicture).ToList(),
-                TextBoxes = s.TextBoxes.Select(NativeJsonVisualDtoMapper.FromTextBox).ToList(),
-                DrawingShapes = s.DrawingShapes.Select(NativeJsonVisualDtoMapper.FromDrawingShape).ToList(),
+                Pictures = s.Pictures
+                    .Where(picture => NativeJsonVisualDtoMapper.IsPictureOnSheet(picture, s.Id))
+                    .Select(NativeJsonVisualDtoMapper.FromPicture)
+                    .ToList(),
+                TextBoxes = s.TextBoxes
+                    .Where(textBox => NativeJsonVisualDtoMapper.IsTextBoxOnSheet(textBox, s.Id))
+                    .Select(NativeJsonVisualDtoMapper.FromTextBox)
+                    .ToList(),
+                DrawingShapes = s.DrawingShapes
+                    .Where(shape => NativeJsonVisualDtoMapper.IsDrawingShapeOnSheet(shape, s.Id))
+                    .Select(NativeJsonVisualDtoMapper.FromDrawingShape)
+                    .ToList(),
                 Sparklines = s.Sparklines
                     .Where(sparkline => IsSparklineOnSheet(sparkline, s.Id) && Enum.IsDefined(sparkline.Kind))
                     .Select(ToSparklineDto)

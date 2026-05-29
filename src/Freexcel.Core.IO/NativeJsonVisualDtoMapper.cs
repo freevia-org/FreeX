@@ -35,6 +35,12 @@ internal static class NativeJsonVisualDtoMapper
         }).ToList()
     };
 
+    public static bool IsPictureOnSheet(PictureModel picture, SheetId sheetId) =>
+        picture.Anchor.Sheet == sheetId &&
+        (picture.LinkedSourceRange is not { } linkedSourceRange ||
+         linkedSourceRange.Start.Sheet == sheetId &&
+         linkedSourceRange.End.Sheet == sheetId);
+
     public static PictureModel? ToPicture(PictureDto? pictureDto, SheetId sheetId)
     {
         if (pictureDto?.Anchor is null)
@@ -96,6 +102,9 @@ internal static class NativeJsonVisualDtoMapper
         AltText = textBox.AltText
     };
 
+    public static bool IsTextBoxOnSheet(TextBoxModel textBox, SheetId sheetId) =>
+        textBox.Anchor.Sheet == sheetId;
+
     public static TextBoxModel? ToTextBox(TextBoxDto? textBoxDto, SheetId sheetId)
     {
         if (textBoxDto?.Anchor is null)
@@ -144,6 +153,9 @@ internal static class NativeJsonVisualDtoMapper
         Title = shape.Title,
         AltText = shape.AltText
     };
+
+    public static bool IsDrawingShapeOnSheet(DrawingShapeModel shape, SheetId sheetId) =>
+        shape.Anchor.Sheet == sheetId;
 
     public static DrawingShapeModel? ToDrawingShape(DrawingShapeDto? shapeDto, SheetId sheetId)
     {
