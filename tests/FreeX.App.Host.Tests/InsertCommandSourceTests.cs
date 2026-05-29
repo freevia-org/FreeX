@@ -31,8 +31,8 @@ public sealed class InsertCommandSourceTests
     }
 
     [Theory]
-    [InlineData("Link", "Link", "K", "InsertLinkBtn_Click")]
-    [InlineData("New Comment", "Comment", "C2", "InsertCommentBtn_Click")]
+    [InlineData("Insert Link", "Link", "K", "InsertLinkBtn_Click")]
+    [InlineData("Comment", "Comment", "C2", "InsertCommentBtn_Click")]
     [InlineData("Text Box", "Text Box", "TX", "DrawTextBtn_Click")]
     [InlineData("Header &amp; Footer", "Header &amp; Footer", "HF", "HeaderFooterBtn_Click")]
     [InlineData("Symbol", "Symbol", "SY", "SymbolPickerBtn_Click")]

@@ -171,7 +171,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("alt text")) return new(RibbonCommandIconKind.TextBox);
         if (name.Contains("previous")) return new(RibbonCommandIconKind.Previous);
         if (name.Contains("next")) return new(RibbonCommandIconKind.Next);
-        if (name.Contains("allow edit") || name.Contains("allow users") || name.Contains("protect")) return new(RibbonCommandIconKind.Protect, RibbonCommandIconAccent.Protect);
+        if (name.Contains("allow edit") || name.Contains("allow users") || name.Contains("edit range") || name.Contains("protect")) return new(RibbonCommandIconKind.Protect, RibbonCommandIconAccent.Protect);
         if (name.Contains("share")) return new(RibbonCommandIconKind.Share, RibbonCommandIconAccent.Data);
         if (name.Contains("hide ink")) return new(RibbonCommandIconKind.Previous);
 

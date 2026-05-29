@@ -10,8 +10,8 @@ public sealed class FormulaCommandSourceTests
     [InlineData("AutoSum", "U", "FormulasAutoSumPickerBtn_Click")]
     [InlineData("Recently Used", "RU", "InsertFunctionBtn_Click")]
     [InlineData("Financial", "Y", "FormulaFinancialBtn_Click")]
-    [InlineData("Logical", "L", "FormulaLogicalBtn_Click")]
-    [InlineData("Text", "TF", "FormulaTextBtn_Click")]
+    [InlineData("Logical Functions", "L", "FormulaLogicalBtn_Click")]
+    [InlineData("Text Functions", "TF", "FormulaTextBtn_Click")]
     [InlineData("Date &amp; Time", "DT", "FormulaDateBtn_Click")]
     [InlineData("Lookup &amp; Reference", "K", "FormulaLookupBtn_Click")]
     [InlineData("Math &amp; Trig", "MT", "FormulaMathBtn_Click")]
@@ -21,7 +21,7 @@ public sealed class FormulaCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractCommandElementByTitle(ReadMainWindowXaml(), title, handler);
+        var button = ExtractCommandElementByTitle(ReadFormulasTabXaml(), title, handler);
 
         button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -85,6 +85,17 @@ public sealed class FormulaCommandSourceTests
 
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+
+    private static string ReadFormulasTabXaml()
+    {
+        var xaml = ReadMainWindowXaml();
+        var start = xaml.IndexOf("<TabItem Header=\"Formulas\"", StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, "the Formulas ribbon tab should be present");
+
+        var end = xaml.IndexOf("<TabItem Header=\"Data\"", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start, "the Data ribbon tab should follow the Formulas ribbon tab");
+        return xaml[start..end];
+    }
 
     private static string ExtractCommandElementByTitle(string xaml, string title, string? handler = null)
     {
