@@ -69,6 +69,10 @@ $scale = $dpi / 96.0
 Write-Host "Screen DPI: $dpi  Scale: $scale"
 
 $exe = Join-Path $repoRoot "src\FreeX.App.Host\bin\Release\net10.0-windows10.0.19041.0\FreeX.App.Host.exe"
+if (-not (Test-Path -LiteralPath $exe)) {
+    throw "FreeX executable was not found at $exe. Build the Release host before running tools\screenshot_ribbon.ps1."
+}
+
 $proc = Start-Process -FilePath $exe -PassThru
 Write-Host "Launched PID $($proc.Id)"
 

@@ -20,13 +20,7 @@ public static class AutoFitPlanner
         var plans = new List<AutoFitSizePlan>();
         for (var row = bounds.Value.Start.Row; row <= bounds.Value.End.Row; row++)
         {
-            var texts = new List<string>();
-            for (var col = bounds.Value.Start.Col; col <= bounds.Value.End.Col; col++)
-            {
-                if (getDisplayText(row, col) is { } text)
-                    texts.Add(text);
-            }
-
+            var texts = CollectRowTexts(row, bounds.Value, getDisplayText);
             plans.Add(new AutoFitSizePlan(row, AutoFitSizingService.EstimateRowHeight(texts, defaultHeight)));
         }
 
@@ -46,13 +40,7 @@ public static class AutoFitPlanner
         var plans = new List<AutoFitSizePlan>();
         for (var col = bounds.Value.Start.Col; col <= bounds.Value.End.Col; col++)
         {
-            var texts = new List<string>();
-            for (var row = bounds.Value.Start.Row; row <= bounds.Value.End.Row; row++)
-            {
-                if (getDisplayText(row, col) is { } text)
-                    texts.Add(text);
-            }
-
+            var texts = CollectColumnTexts(col, bounds.Value, getDisplayText);
             plans.Add(new AutoFitSizePlan(col, AutoFitSizingService.EstimateColumnWidth(texts, defaultWidth)));
         }
 
@@ -88,6 +76,36 @@ public static class AutoFitPlanner
         }
 
         return selection;
+    }
+
+    private static List<string> CollectRowTexts(
+        uint row,
+        GridRange bounds,
+        Func<uint, uint, string?> getDisplayText)
+    {
+        var texts = new List<string>();
+        for (var col = bounds.Start.Col; col <= bounds.End.Col; col++)
+        {
+            if (getDisplayText(row, col) is { } text)
+                texts.Add(text);
+        }
+
+        return texts;
+    }
+
+    private static List<string> CollectColumnTexts(
+        uint col,
+        GridRange bounds,
+        Func<uint, uint, string?> getDisplayText)
+    {
+        var texts = new List<string>();
+        for (var row = bounds.Start.Row; row <= bounds.End.Row; row++)
+        {
+            if (getDisplayText(row, col) is { } text)
+                texts.Add(text);
+        }
+
+        return texts;
     }
 
     private enum AutoFitAxis
