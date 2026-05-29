@@ -338,6 +338,24 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void ApplyToElement_MatchingChildXmlWithWhitespaceText_DoesNotReportChange()
+    {
+        var childXml = "<ext><inner>  spaced  </inner><inner xml:space=\"preserve\"> keep  </inner></ext>";
+        var bagValue = XmlNativeBagSerializer.Serialize(
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            [childXml]);
+        var target = new XElement(
+            "root",
+            XElement.Parse(childXml, LoadOptions.PreserveWhitespace));
+
+        var changed = XmlNativeBagSerializer.ApplyToElement(target, bagValue, []);
+
+        changed.Should().BeFalse();
+        target.ToString(SaveOptions.DisableFormatting)
+            .Should().Be("<root><ext><inner>  spaced  </inner><inner xml:space=\"preserve\"> keep  </inner></ext></root>");
+    }
+
+    [Fact]
     public void ApplyToElement_PreservedChildXml_RemovesStaleNonElementChildNodes()
     {
         var bagValue = XmlNativeBagSerializer.Serialize(
