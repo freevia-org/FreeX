@@ -344,7 +344,9 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue ExpScalar(ScalarValue value)
     {
-        var result = Math.Exp(ToNumber(value));
+        var n = ToNumber(value);
+        if (!double.IsFinite(n)) return ErrorValue.Num;
+        var result = Math.Exp(n);
         if (double.IsNaN(result) || double.IsInfinity(result)) return ErrorValue.Num;
         return new NumberValue(result);
     }
