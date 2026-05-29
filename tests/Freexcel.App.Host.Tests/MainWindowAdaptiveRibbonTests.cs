@@ -494,6 +494,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         fields.Should().Contain("private bool _ribbonResizeCompactFallbackPending;");
         source.Should().Contain("CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups)");
         source.Should().Contain("_ribbonAdaptiveGroupCache");
+        source.Should().Contain("SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);");
         source.Should().Contain("MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])");
         source.Should().Contain("UpdateRibbonResizeThresholdCache(cacheKey, adaptiveGroups, fixedChromeWidth);");
         source.Should().Contain("RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth)");

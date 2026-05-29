@@ -47,6 +47,7 @@ public partial class MainWindow
                 collapsedButtons,
                 Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groups.Count).ToArray(),
                 previousStates: null);
+            SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
             fixedChromeWidth = MeasureRibbonFixedChromeWidth(activePanel) + 24;
             adaptiveGroups = groups.Select((group, index) => MeasureRibbonAdaptiveGroup(group, collapsedButtons[index])).ToList();
             _ribbonAdaptiveMeasurementCacheKey = cacheKey;
