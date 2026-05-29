@@ -81,13 +81,15 @@ internal static class SortDialogPlanner
 
     public static IReadOnlyList<SortKey> BuildSortKeys(IEnumerable<SortDialogLevel> levels)
     {
-        return NormalizeLevels(levels)
-            .Select(level =>
-            {
-                var sortOn = SortOnFromLabel(level.SortOn);
-                return new SortKey(level.ColumnOffset, level.Ascending, sortOn, TargetColorFromText(level.TargetColor, sortOn));
-            })
-            .ToList();
+        var normalized = NormalizeLevels(levels);
+        var keys = new List<SortKey>(normalized.Count);
+        foreach (var level in normalized)
+        {
+            var sortOn = SortOnFromLabel(level.SortOn);
+            keys.Add(new SortKey(level.ColumnOffset, level.Ascending, sortOn, TargetColorFromText(level.TargetColor, sortOn)));
+        }
+
+        return keys;
     }
 
     public static IReadOnlyList<SortDirectionChoice> BuildOrderChoices(string? sortOn) =>
@@ -100,9 +102,11 @@ internal static class SortDialogPlanner
         uint columnOffset = 0,
         bool ascending = true)
     {
-        return NormalizeLevels(levels)
-            .Append(new SortDialogLevel(columnOffset, ascending))
-            .ToList();
+        var normalized = NormalizeLevels(levels);
+        var updated = new List<SortDialogLevel>(normalized.Count + 1);
+        updated.AddRange(normalized);
+        updated.Add(new SortDialogLevel(columnOffset, ascending));
+        return updated;
     }
 
     public static IReadOnlyList<SortDialogLevel> RemoveLevel(IEnumerable<SortDialogLevel> levels, int index)
@@ -271,18 +275,27 @@ internal static class SortDialogPlanner
 
     public static IReadOnlyList<SortDialogLevel> NormalizeLevels(IEnumerable<SortDialogLevel>? levels)
     {
+        if (levels is IReadOnlyList<SortDialogLevel> { Count: > 0 } existingLevels)
+            return existingLevels;
+
         var normalized = levels?.ToList() ?? [];
         return normalized.Count == 0 ? [new SortDialogLevel(0, true)] : normalized;
     }
 
     public static IReadOnlyList<SortColumnChoice> NormalizeColumnChoices(IEnumerable<SortColumnChoice>? choices)
     {
+        if (choices is IReadOnlyList<SortColumnChoice> { Count: > 0 } existingChoices)
+            return existingChoices;
+
         var normalized = choices?.ToList() ?? [];
         return normalized.Count == 0 ? [new SortColumnChoice("Column A", 0)] : normalized;
     }
 
     public static IReadOnlyList<SortColorChoice> NormalizeColorChoices(IEnumerable<SortColorChoice>? choices)
     {
+        if (choices is IReadOnlyList<SortColorChoice> { Count: > 0 } existingChoices)
+            return existingChoices;
+
         var normalized = choices?.ToList() ?? [];
         return normalized.Count == 0 ? [new SortColorChoice("")] : normalized;
     }
@@ -300,8 +313,17 @@ internal static class SortDialogPlanner
         return workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
     }
 
-    private static IReadOnlyList<SortColorChoice> BuildColorChoices(SortedSet<string> colors) =>
-        [new SortColorChoice(""), .. colors.Select(color => new SortColorChoice(color))];
+    private static IReadOnlyList<SortColorChoice> BuildColorChoices(SortedSet<string> colors)
+    {
+        var choices = new List<SortColorChoice>(colors.Count + 1)
+        {
+            new("")
+        };
+        foreach (var color in colors)
+            choices.Add(new SortColorChoice(color));
+
+        return choices;
+    }
 
     private static string GetHeaderLabel(Sheet sheet, GridRange range, uint offset, string fallbackColumnName)
     {
