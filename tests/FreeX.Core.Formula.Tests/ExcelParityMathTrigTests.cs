@@ -282,6 +282,17 @@ public sealed class ExcelParityMathTrigTests
     }
 
     [Fact]
+    public void SumSq_CountsDirectLogicalValuesButIgnoresReferencedLogicalValues()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new BoolValue(true)),
+            (2, 1, new NumberValue(2)));
+
+        Number("=SUMSQ(TRUE,2)").Should().Be(5);
+        Number("=SUMSQ(A1:A2)", sheet).Should().Be(4);
+    }
+
+    [Fact]
     public void SumXFunctions_ReturnNAForShapeMismatchAndPropagateErrors()
     {
         var sheet = MakeSheet(
