@@ -29,6 +29,8 @@ public sealed class ZoomDialog : Window
         ShowInTaskbar = false;
         _zoomBox.Text = currentZoomPercent.ToString(CultureInfo.InvariantCulture);
         AutomationProperties.SetName(_zoomBox, "Custom zoom percent");
+        AutomationProperties.SetAutomationId(_zoomBox, "ZoomCustomPercentBox");
+        AutomationProperties.SetHelpText(_zoomBox, "Enter a whole zoom percentage from 10 to 400.");
         _zoomBox.GotKeyboardFocus += (_, _) => _customZoomButton.IsChecked = true;
         Content = CreateZoomContent(currentZoomPercent);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
