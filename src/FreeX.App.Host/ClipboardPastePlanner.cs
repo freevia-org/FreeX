@@ -36,16 +36,21 @@ public static class ClipboardPastePlanner
         if (!isCut || mode == PasteMode.Formats || keepColumnWidths)
             return false;
 
-        var pastedRows = options.Transpose ? sourceRange.ColCount : sourceRange.RowCount;
-        var pastedCols = options.Transpose ? sourceRange.RowCount : sourceRange.ColCount;
-        var pastedRange = new GridRange(
-            targetRange.Start,
-            new CellAddress(
-                targetRange.Start.Sheet,
-                targetRange.Start.Row + pastedRows - 1,
-                targetRange.Start.Col + pastedCols - 1));
+        var pastedRange = CreatePastedRange(sourceRange, targetRange.Start, options.Transpose);
 
         return !sourceRange.Overlaps(pastedRange);
+    }
+
+    private static GridRange CreatePastedRange(GridRange sourceRange, CellAddress targetStart, bool transpose)
+    {
+        var pastedRows = transpose ? sourceRange.ColCount : sourceRange.RowCount;
+        var pastedCols = transpose ? sourceRange.RowCount : sourceRange.ColCount;
+        return new GridRange(
+            targetStart,
+            new CellAddress(
+                targetStart.Sheet,
+                targetStart.Row + pastedRows - 1,
+                targetStart.Col + pastedCols - 1));
     }
 }
 
