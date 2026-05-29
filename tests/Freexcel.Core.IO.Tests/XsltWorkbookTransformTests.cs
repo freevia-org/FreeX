@@ -141,6 +141,27 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetEncoding_ReadsUtf16Input()
+    {
+        using var source = StreamFromString("<rows><row name=\"Foxtrot\" /></rows>");
+        using var stylesheet = Utf16StreamFromString("""
+            <?xml version="1.0" encoding="utf-16"?>
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/rows">
+                <worksheet>
+                  <cell><xsl:value-of select="row/@name" /></cell>
+                </worksheet>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should().Contain("<cell>Foxtrot</cell>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetOutputDeclaration_PreservesStandaloneFlag()
     {
         using var source = StreamFromString("<rows><row name=\"Echo\" /></rows>");
