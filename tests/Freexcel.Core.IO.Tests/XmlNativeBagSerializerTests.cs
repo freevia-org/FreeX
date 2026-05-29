@@ -75,6 +75,22 @@ public sealed class XmlNativeBagSerializerTests
     }
 
     [Fact]
+    public void Deserialize_NamespaceDeclarations_DoesNotReturnDeclarationsAsNativeAttributes()
+    {
+        const string bagValue = """
+            <e xmlns="urn:freexcel:default" xmlns:fx="urn:freexcel:test" fx:flag="keep" plainFlag="plain"><fx:child /></e>
+            """;
+
+        var (roundTripAttrs, roundTripChildren) = XmlNativeBagSerializer.Deserialize(bagValue);
+
+        roundTripAttrs.Should().ContainKey(XName.Get("flag", "urn:freexcel:test").ToString()).WhoseValue.Should().Be("keep");
+        roundTripAttrs.Should().ContainKey("plainFlag").WhoseValue.Should().Be("plain");
+        roundTripAttrs.Keys.Should().NotContain(["xmlns", "{http://www.w3.org/2000/xmlns/}fx"]);
+        roundTripChildren.Should().ContainSingle()
+            .Which.Should().Be("<fx:child xmlns:fx=\"urn:freexcel:test\" />");
+    }
+
+    [Fact]
     public void ApplyToElement_NativeAttributes_DoesNotOverwriteModeledAttributes()
     {
         var bagValue = XmlNativeBagSerializer.Serialize(
