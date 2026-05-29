@@ -146,15 +146,24 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
         if (!TryNumber(destination, out var left) || !TryNumber(source, out var right))
             return ErrorValue.Value;
 
-        return operation switch
+        var result = operation switch
         {
-            PasteSpecialOperation.Add => new NumberValue(left + right),
-            PasteSpecialOperation.Subtract => new NumberValue(left - right),
-            PasteSpecialOperation.Multiply => new NumberValue(left * right),
-            PasteSpecialOperation.Divide when Math.Abs(right) < 0.000000000001 => ErrorValue.DivByZero,
-            PasteSpecialOperation.Divide => new NumberValue(left / right),
-            _ => source
+            PasteSpecialOperation.Add => left + right,
+            PasteSpecialOperation.Subtract => left - right,
+            PasteSpecialOperation.Multiply => left * right,
+            PasteSpecialOperation.Divide when Math.Abs(right) < 0.000000000001 => double.NaN,
+            PasteSpecialOperation.Divide => left / right,
+            _ => double.NaN
         };
+
+        if (double.IsNaN(result))
+            return operation == PasteSpecialOperation.Divide && Math.Abs(right) < 0.000000000001
+                ? ErrorValue.DivByZero
+                : source;
+
+        return ShouldPreserveDateValue(destination, source, operation)
+            ? new DateTimeValue(result)
+            : new NumberValue(result);
     }
 
     private static bool TryNumber(ScalarValue value, out double number)
@@ -162,6 +171,18 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
         if (value is NumberValue n)
         {
             number = n.Value;
+            return true;
+        }
+
+        if (value is DateTimeValue dateTime)
+        {
+            number = dateTime.Value;
+            return true;
+        }
+
+        if (value is BoolValue boolean)
+        {
+            number = boolean.Value ? 1 : 0;
             return true;
         }
 
@@ -173,5 +194,17 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
 
         number = 0;
         return false;
+    }
+
+    private static bool ShouldPreserveDateValue(
+        ScalarValue destination,
+        ScalarValue source,
+        PasteSpecialOperation operation)
+    {
+        if (destination is not DateTimeValue)
+            return false;
+
+        return operation is PasteSpecialOperation.Add or PasteSpecialOperation.Subtract &&
+            source is not DateTimeValue;
     }
 }
