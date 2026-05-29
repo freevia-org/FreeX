@@ -5214,6 +5214,28 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Load_DateOccurringConditionalFormat_TrimsTimePeriod()
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var worksheetXml = new XDocument(
+            new XElement(worksheetNs + "worksheet",
+                new XElement(worksheetNs + "conditionalFormatting",
+                    new XAttribute("sqref", "A1:A5"),
+                    new XElement(worksheetNs + "cfRule",
+                        new XAttribute("type", "timePeriod"),
+                        new XAttribute("priority", "1"),
+                        new XAttribute("timePeriod", "  last7Days  ")))));
+
+        var loadedRule = InvokeReadAdvancedConditionalFormats(worksheetXml, worksheetNs)
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        loadedRule.RuleType.Should().Be(CfRuleType.DateOccurring);
+        loadedRule.DateOccurringPeriod.Should().Be("last7Days");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_ConditionalFormat_LongTailDifferentialStyle_Survives()
     {
         var workbook = new Workbook("LongTailCfDxfXlsxTest");
