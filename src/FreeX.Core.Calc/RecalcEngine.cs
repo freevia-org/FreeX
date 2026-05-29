@@ -239,10 +239,62 @@ public sealed class RecalcEngine
             .ToList();
 
         var report = Recalculate(workbook, formulaCells);
-        return new RecalcReport(
-            report.RecalculatedCells.Where(addr => addr.Sheet.Equals(sheetId)).ToList(),
-            report.Errors.Where(error => error.Cell.Sheet.Equals(sheetId)).ToList(),
-            report.CyclicCells.Where(addr => addr.Sheet.Equals(sheetId)).ToList());
+        return FilterReportForSheet(report, sheetId);
+    }
+
+    private static RecalcReport FilterReportForSheet(RecalcReport report, SheetId sheetId)
+    {
+        if (AllCellsAreOnSheet(report.RecalculatedCells, sheetId) &&
+            AllErrorsAreOnSheet(report.Errors, sheetId) &&
+            AllCellsAreOnSheet(report.CyclicCells, sheetId))
+        {
+            return report;
+        }
+
+        var recalculated = new List<CellAddress>();
+        foreach (var address in report.RecalculatedCells)
+        {
+            if (address.Sheet.Equals(sheetId))
+                recalculated.Add(address);
+        }
+
+        var errors = new List<(CellAddress Cell, string Error)>();
+        foreach (var error in report.Errors)
+        {
+            if (error.Cell.Sheet.Equals(sheetId))
+                errors.Add(error);
+        }
+
+        var cyclic = new List<CellAddress>();
+        foreach (var address in report.CyclicCells)
+        {
+            if (address.Sheet.Equals(sheetId))
+                cyclic.Add(address);
+        }
+
+        return new RecalcReport(recalculated, errors, cyclic);
+    }
+
+    private static bool AllCellsAreOnSheet(IReadOnlyList<CellAddress> addresses, SheetId sheetId)
+    {
+        for (var i = 0; i < addresses.Count; i++)
+        {
+            if (!addresses[i].Sheet.Equals(sheetId))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool AllErrorsAreOnSheet(IReadOnlyList<(CellAddress Cell, string Error)> errors, SheetId sheetId)
+    {
+        for (var i = 0; i < errors.Count; i++)
+        {
+            if (!errors[i].Cell.Sheet.Equals(sheetId))
+                return false;
+        }
+
+        return true;
     }
 
     private static bool ContainsVolatileFunction(FormulaNode node)
