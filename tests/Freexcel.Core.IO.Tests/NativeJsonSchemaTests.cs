@@ -187,6 +187,29 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_RevalidatesWorkbookViewSheetIndexesAfterSkippingNullNativeJsonSheets()
+    {
+        const string json = """
+            {
+              "Name": "MalformedWorkbookView",
+              "ActiveSheetIndex": 1,
+              "FirstVisibleSheetIndex": 1,
+              "Sheets": [
+                { "Name": "Sheet1" },
+                null
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        workbook.Sheets.Should().ContainSingle();
+        workbook.ActiveSheetIndex.Should().BeNull();
+        workbook.FirstVisibleSheetIndex.Should().BeNull();
+    }
+
+    [Fact]
     public void Load_UsesCurrentStreamPositionAndLeavesInputStreamOpen()
     {
         using var stream = PositionedStreamFromString("ignored", """
