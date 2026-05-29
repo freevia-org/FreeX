@@ -67,7 +67,7 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("ShowDeferredChartFamilyMessage();");
         source.Should().Contain("new AddChartCommand(_currentSheetId, currentRange, type, \"Chart\")");
         source.Should().Contain("private void DeferredChartFamilyMenuItem_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("Map charts are retained when opening XLSX files");
+        source.Should().Contain("This chart family is retained when opening XLSX files");
         source.Should().Contain("private void ChangeChartTypeBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new ChangeChartTypeDialog(chart.Type)");
         source.Should().Contain("new ChangeChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType)");
