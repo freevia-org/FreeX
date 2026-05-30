@@ -126,6 +126,11 @@ foreach ($workflow in $workflows) {
             $stepBlock -notmatch "(?m)^\s*persist-credentials:\s*false\s*(?:#.*)?$") {
             $errors.Add("$($workflow.Name): actions/checkout steps must set persist-credentials: false.")
         }
+
+        if ($stepBlock -match "(?m)^\s*uses:\s+actions/upload-artifact@v\d+\s*(?:#.*)?$" -and
+            $stepBlock -notmatch "(?m)^\s*if-no-files-found:\s*(?:error|warn)\s*(?:#.*)?$") {
+            $errors.Add("$($workflow.Name): actions/upload-artifact steps must set if-no-files-found to error or warn.")
+        }
     }
 
     foreach ($match in [regex]::Matches($content, "(?m)^\s*(?:-\s*)?uses:\s+([^\s#]+)")) {

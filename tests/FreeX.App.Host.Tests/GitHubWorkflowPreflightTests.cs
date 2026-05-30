@@ -17,6 +17,7 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("self-hosted");
         script.Should().Contain("timeout-minutes");
         script.Should().Contain("persist-credentials: false");
+        script.Should().Contain("if-no-files-found");
         script.Should().Contain("workflow must declare top-level permissions explicitly");
         script.Should().Contain("workflow must not request write-all permissions");
         script.Should().Contain("must be pinned to an explicit major version");
@@ -71,6 +72,50 @@ public sealed class GitHubWorkflowPreflightTests
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("must declare timeout-minutes");
+            (result.Output + result.Error).Should().Contain("broken.yml");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenUploadArtifactOmitsMissingFilePolicy()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-workflow-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(tempDirectory, "broken.yml"),
+                """
+                name: Broken
+
+                on:
+                  workflow_dispatch:
+
+                permissions:
+                  contents: read
+
+                jobs:
+                  build:
+                    runs-on: windows-latest
+                    timeout-minutes: 5
+                    steps:
+                      - name: Upload release artifact
+                        uses: actions/upload-artifact@v7
+                        with:
+                          name: freex-release
+                          path: artifacts/upload/*.exe
+                """);
+            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{tempDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("actions/upload-artifact steps must set if-no-files-found to error or warn");
             (result.Output + result.Error).Should().Contain("broken.yml");
         }
         finally
