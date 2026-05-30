@@ -577,16 +577,28 @@ public sealed class GridViewDrawingObjectThemeTests
 
         GridObjectDragPlanner.HitTestHandle(new Point(start.Left, start.Top), start)
             .Should().Be(ObjectDragKind.None);
+        GridObjectDragPlanner.IsUnsupportedHandleZone(new Point(start.Left, start.Top), start)
+            .Should().BeTrue();
         GridObjectDragPlanner.HitTestHandle(new Point(start.Left + start.Width / 2, start.Top), start)
             .Should().Be(ObjectDragKind.None);
+        GridObjectDragPlanner.IsUnsupportedHandleZone(new Point(start.Left + start.Width / 2, start.Top), start)
+            .Should().BeTrue();
         GridObjectDragPlanner.HitTestHandle(new Point(start.Left, start.Top + start.Height / 2), start)
             .Should().Be(ObjectDragKind.None);
+        GridObjectDragPlanner.IsUnsupportedHandleZone(new Point(start.Left, start.Top + start.Height / 2), start)
+            .Should().BeTrue();
         GridObjectDragPlanner.HitTestHandle(new Point(start.Right, start.Top), start)
             .Should().Be(ObjectDragKind.ResizeE);
+        GridObjectDragPlanner.IsUnsupportedHandleZone(new Point(start.Right, start.Top), start)
+            .Should().BeFalse();
         GridObjectDragPlanner.HitTestHandle(new Point(start.Left, start.Bottom), start)
             .Should().Be(ObjectDragKind.ResizeS);
+        GridObjectDragPlanner.IsUnsupportedHandleZone(new Point(start.Left, start.Bottom), start)
+            .Should().BeFalse();
         GridObjectDragPlanner.HitTestHandle(new Point(start.Left + 16, start.Top + 16), start)
             .Should().Be(ObjectDragKind.Move);
+        GridObjectDragPlanner.IsUnsupportedHandleZone(new Point(start.Left + 16, start.Top + 16), start)
+            .Should().BeFalse();
     }
 
     [Fact]
