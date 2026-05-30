@@ -17,8 +17,12 @@ public static class FileFormatResolver
     public static string SafeFileTypeFromExtension(string extension)
     {
         var normalizedExtension = NormalizeExtension(extension);
-        return normalizedExtension.Length > 1
-            ? normalizedExtension[1..].ToLowerInvariant()
+        if (normalizedExtension.Length <= 1)
+            return "unknown";
+
+        var token = normalizedExtension[1..];
+        return token.All(char.IsLetterOrDigit)
+            ? token.ToLowerInvariant()
             : "unknown";
     }
 
