@@ -1315,6 +1315,14 @@ public class FunctionLibraryTests
         _eval.Evaluate("=PROPER(\"hello world\")", sheet).Should().Be(new TextValue("Hello World"));
     }
 
+    [Theory]
+    [InlineData("=PROPER(\"2-way street\")", "2-Way Street")]
+    [InlineData("=PROPER(\"76BudGet\")", "76Budget")]
+    public void Proper_CapitalizesLettersAfterNonLettersLikeExcel(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
+    }
+
     [Fact]
     public void Upper_ResultLongerThanExcelCellLimit_ReturnsValueError()
     {
