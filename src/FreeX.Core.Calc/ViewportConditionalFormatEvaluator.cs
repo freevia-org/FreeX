@@ -36,12 +36,8 @@ internal static class ViewportConditionalFormatEvaluator
         if (sheet.ConditionalFormats.Count == 0)
             return EmptyContext;
 
-        var rulesByPriority = sheet.ConditionalFormats
-            .OrderBy(cf => cf.Priority)
-            .ToArray();
-        var iconRulesByPriority = rulesByPriority
-            .Where(cf => cf.RuleType == CfRuleType.IconSet)
-            .ToArray();
+        var rulesByPriority = CopyRulesByPriority(sheet.ConditionalFormats);
+        var iconRulesByPriority = CopyIconRulesByPriority(rulesByPriority);
 
         return new CfEvaluationContext(
             rulesByPriority,
@@ -49,6 +45,53 @@ internal static class ViewportConditionalFormatEvaluator
             PrecomputeAggregates(sheet),
             PrecomputeFormulaCaches(sheet));
     }
+
+    private static ConditionalFormat[] CopyRulesByPriority(IReadOnlyList<ConditionalFormat> rules)
+    {
+        var indexedRules = new IndexedConditionalFormat[rules.Count];
+        for (var i = 0; i < rules.Count; i++)
+            indexedRules[i] = new IndexedConditionalFormat(rules[i], i);
+
+        Array.Sort(indexedRules, static (left, right) =>
+        {
+            var priorityOrder = left.Rule.Priority.CompareTo(right.Rule.Priority);
+            return priorityOrder != 0
+                ? priorityOrder
+                : left.Index.CompareTo(right.Index);
+        });
+
+        var sortedRules = new ConditionalFormat[indexedRules.Length];
+        for (var i = 0; i < indexedRules.Length; i++)
+            sortedRules[i] = indexedRules[i].Rule;
+
+        return sortedRules;
+    }
+
+    private static ConditionalFormat[] CopyIconRulesByPriority(IReadOnlyList<ConditionalFormat> rulesByPriority)
+    {
+        var iconRuleCount = 0;
+        for (var i = 0; i < rulesByPriority.Count; i++)
+        {
+            if (rulesByPriority[i].RuleType == CfRuleType.IconSet)
+                iconRuleCount++;
+        }
+
+        if (iconRuleCount == 0)
+            return EmptyRules;
+
+        var iconRules = new ConditionalFormat[iconRuleCount];
+        var iconIndex = 0;
+        for (var i = 0; i < rulesByPriority.Count; i++)
+        {
+            var rule = rulesByPriority[i];
+            if (rule.RuleType == CfRuleType.IconSet)
+                iconRules[iconIndex++] = rule;
+        }
+
+        return iconRules;
+    }
+
+    private readonly record struct IndexedConditionalFormat(ConditionalFormat Rule, int Index);
 
     public static CellStyle? Evaluate(
         Sheet sheet,
