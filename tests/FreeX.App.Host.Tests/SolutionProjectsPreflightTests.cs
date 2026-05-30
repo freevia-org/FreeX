@@ -16,6 +16,7 @@ public sealed class SolutionProjectsPreflightTests
         script.Should().Contain("SelectNodes(\"//*[local-name()='Project']\")");
         script.Should().Contain("*_wpftmp.csproj");
         script.Should().Contain("$segments -contains \".worktrees\"");
+        script.Should().Contain("Solution project path escapes solution root");
         script.Should().Contain("Project missing from solution");
         script.Should().Contain("Solution references missing project");
         script.Should().Contain("Validated $($solutionProjectPaths.Count) solution project entry(s).");
@@ -96,6 +97,41 @@ public sealed class SolutionProjectsPreflightTests
 
             result.ExitCode.Should().Be(0, result.Error);
             result.Output.Should().Contain("Validated 1 solution project entry(s).");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SolutionProjectsPreflight_FailsWhenSolutionProjectPathEscapesSolutionRoot()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
+        var solutionRoot = Path.Combine(tempDirectory, "repo");
+        Directory.CreateDirectory(solutionRoot);
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "external"));
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(solutionRoot, "FreeX.slnx"),
+                """
+                <Solution>
+                  <Folder Name="/src/">
+                    <Project Path="../external/Outside.csproj" />
+                  </Folder>
+                </Solution>
+                """);
+            File.WriteAllText(Path.Combine(tempDirectory, "external", "Outside.csproj"), "<Project />");
+
+            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{solutionRoot}\" -SolutionPath \"{Path.Combine(solutionRoot, "FreeX.slnx")}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("escapes solution root");
+            (result.Output + result.Error).Should().Contain("../external/Outside.csproj");
         }
         finally
         {
