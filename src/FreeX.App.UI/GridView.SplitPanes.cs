@@ -162,8 +162,9 @@ public partial class GridView
 
     public static IReadOnlyList<SplitPaneCellLayout> CalculateSplitPaneCellLayouts(
         ViewportModel viewport,
-        IReadOnlyList<GridRange>? mergedRegions = null) =>
-        SplitPaneCellLayoutPlanner.CalculateLayouts(viewport, mergedRegions);
+        IReadOnlyList<GridRange>? mergedRegions = null,
+        CellAddress? editingCell = null) =>
+        SplitPaneCellLayoutPlanner.CalculateLayouts(viewport, mergedRegions, editingCell);
 
     public static CellAddress? HitTestViewportCell(ViewportModel viewport, SheetId sheetId, Point pos)
     {
