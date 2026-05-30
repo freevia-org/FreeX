@@ -22,16 +22,19 @@ internal sealed record CfFormulaCache(
 
 internal static class ViewportConditionalFormatEvaluator
 {
+    private static readonly ConditionalFormat[] EmptyRules = [];
+    private static readonly Dictionary<ConditionalFormat, CfAggregateCache> EmptyAggregates = new(ReferenceEqualityComparer.Instance);
+    private static readonly Dictionary<ConditionalFormat, CfFormulaCache> EmptyFormulas = new(ReferenceEqualityComparer.Instance);
+    private static readonly CfEvaluationContext EmptyContext = new(
+        EmptyRules,
+        EmptyRules,
+        EmptyAggregates,
+        EmptyFormulas);
+
     public static CfEvaluationContext BuildContext(Sheet sheet)
     {
         if (sheet.ConditionalFormats.Count == 0)
-        {
-            return new CfEvaluationContext(
-                [],
-                [],
-                new Dictionary<ConditionalFormat, CfAggregateCache>(ReferenceEqualityComparer.Instance),
-                new Dictionary<ConditionalFormat, CfFormulaCache>(ReferenceEqualityComparer.Instance));
-        }
+            return EmptyContext;
 
         var rulesByPriority = sheet.ConditionalFormats
             .OrderBy(cf => cf.Priority)

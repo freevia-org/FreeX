@@ -59,6 +59,22 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void ConditionalFormatContext_NoRulesReusesStaticEmptyContext()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var buildContext = source[
+            source.IndexOf("public static CfEvaluationContext BuildContext", StringComparison.Ordinal)..
+            source.IndexOf("var rulesByPriority", StringComparison.Ordinal)];
+
+        source.Should().Contain("private static readonly CfEvaluationContext EmptyContext");
+        buildContext.Should().Contain("return EmptyContext;");
+        buildContext.Should().NotContain("new CfEvaluationContext(");
+        buildContext.Should().NotContain("new Dictionary<ConditionalFormat, CfAggregateCache>");
+        buildContext.Should().NotContain("new Dictionary<ConditionalFormat, CfFormulaCache>");
+    }
+
+    [Fact]
     public void ConditionalFormatEvaluation_DoesNotRunLinqRangeFiltersPerDisplayedCell()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
