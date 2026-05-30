@@ -1992,7 +1992,22 @@ public partial class FileAdapterSmokeTests
                 <a:objectDefaults xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
                     <a:spDef/>
                 </a:objectDefaults>
-                """);
+                """)
+            .WithSupplementalMetadata(
+                [
+                    new WorkbookThemeAlternateColorScheme(
+                        "Json Alternate",
+                        new Dictionary<WorkbookThemeColorSlot, CellColor>
+                        {
+                            [WorkbookThemeColorSlot.Accent1] = new(17, 34, 51)
+                        },
+                        """
+                        <a:clrScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Json Alternate">
+                            <a:accent1><a:srgbClr val="112233"/></a:accent1>
+                        </a:clrScheme>
+                        """)
+                ],
+                hasObjectDefaults: true);
 
         var adapter = new NativeJsonAdapter();
         using var ms = new MemoryStream();
@@ -2008,6 +2023,10 @@ public partial class FileAdapterSmokeTests
         loaded.Theme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
         loaded.Theme.GetColor(WorkbookThemeColorSlot.Hyperlink).Should().Be(new CellColor(1, 99, 193));
         loaded.Theme.NativeThemeSupplementXml.Should().Contain("objectDefaults");
+        loaded.Theme.HasObjectDefaults.Should().BeTrue();
+        loaded.Theme.AlternateColorSchemes.Should().ContainSingle()
+            .Which.GetColor(WorkbookThemeColorSlot.Accent1)
+            .Should().Be(new CellColor(17, 34, 51));
     }
 
     [Fact]

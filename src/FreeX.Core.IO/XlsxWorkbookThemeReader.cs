@@ -50,7 +50,11 @@ public static class XlsxWorkbookThemeReader
         var theme = WorkbookTheme.Office
             .WithName(themeXml.Root?.Attribute("name")?.Value ?? WorkbookTheme.Office.Name);
 
-        theme = theme.WithNativeThemeSupplementXml(ReadThemeSupplementXml(themeXml.Root, drawingNs));
+        theme = theme
+            .WithNativeThemeSupplementXml(ReadThemeSupplementXml(themeXml.Root, drawingNs))
+            .WithSupplementalMetadata(
+                ReadAlternateColorSchemes(themeXml.Root, drawingNs),
+                themeXml.Root?.Element(drawingNs + "objectDefaults") is not null);
 
         var themeElements = themeXml.Root?.Element(drawingNs + "themeElements");
         if (themeElements is null)
@@ -117,5 +121,44 @@ public static class XlsxWorkbookThemeReader
         return supplementElements.Length == 0
             ? null
             : string.Concat(supplementElements);
+    }
+
+    private static IReadOnlyList<WorkbookThemeAlternateColorScheme> ReadAlternateColorSchemes(
+        XElement? themeElement,
+        XNamespace drawingNs)
+    {
+        if (themeElement is null)
+            return [];
+
+        return themeElement
+            .Element(drawingNs + "extraClrSchemeLst")?
+            .Elements(drawingNs + "extraClrScheme")
+            .Select(element => ReadAlternateColorScheme(element, drawingNs))
+            .Where(scheme => scheme is not null)
+            .Select(scheme => scheme!)
+            .ToArray()
+            ?? [];
+    }
+
+    private static WorkbookThemeAlternateColorScheme? ReadAlternateColorScheme(
+        XElement extraColorScheme,
+        XNamespace drawingNs)
+    {
+        var colorScheme = extraColorScheme.Element(drawingNs + "clrScheme");
+        if (colorScheme is null)
+            return null;
+
+        var colors = new Dictionary<WorkbookThemeColorSlot, CellColor>();
+        foreach (var (slot, elementName) in ThemeColorElements)
+        {
+            if (ReadThemeColor(colorScheme.Element(drawingNs + elementName), drawingNs) is { } color)
+                colors[slot] = color;
+        }
+
+        var name = colorScheme.Attribute("name")?.Value;
+        return new WorkbookThemeAlternateColorScheme(
+            string.IsNullOrWhiteSpace(name) ? "Alternate Colors" : name.Trim(),
+            colors,
+            colorScheme.ToString(SaveOptions.DisableFormatting));
     }
 }

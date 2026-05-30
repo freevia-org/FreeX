@@ -44,6 +44,24 @@ public sealed class WorkbookThemeTests
             .BeNull();
     }
 
+    [Fact]
+    public void WorkbookTheme_WithSupplementalMetadata_CapturesAlternateSchemesAndObjectDefaults()
+    {
+        var alternate = new WorkbookThemeAlternateColorScheme(
+            "Alternate",
+            new Dictionary<WorkbookThemeColorSlot, CellColor>
+            {
+                [WorkbookThemeColorSlot.Accent1] = new(1, 2, 3)
+            });
+
+        var theme = WorkbookTheme.Office.WithSupplementalMetadata([alternate], hasObjectDefaults: true);
+
+        theme.HasObjectDefaults.Should().BeTrue();
+        theme.AlternateColorSchemes.Should().ContainSingle()
+            .Which.GetColor(WorkbookThemeColorSlot.Accent1)
+            .Should().Be(new CellColor(1, 2, 3));
+    }
+
     [Theory]
     [InlineData(100, 150, 200, 0.0, 100, 150, 200)]
     [InlineData(100, 150, 200, 0.5, 178, 202, 228)]
