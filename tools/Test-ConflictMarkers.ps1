@@ -1,6 +1,6 @@
 param(
-    [string[]]$SearchRoots = @(".github", "docs", "release", "src", "tests", "tools"),
-    [string[]]$TextExtensions = @(".cs", ".csproj", ".props", ".targets", ".xaml", ".xml", ".resx", ".json", ".md", ".ps1", ".yml", ".yaml", ".config", ".ruleset")
+    [string[]]$SearchRoots = @("AGENTS.md", "Directory.Build.props", "FreeX.slnx", "THIRD_PARTY_NOTICES.md", ".github", "docs", "release", "src", "tests", "tools"),
+    [string[]]$TextExtensions = @(".cs", ".csproj", ".props", ".targets", ".slnx", ".xaml", ".xml", ".resx", ".json", ".md", ".ps1", ".yml", ".yaml", ".config", ".ruleset")
 )
 
 $ErrorActionPreference = "Stop"

@@ -11,7 +11,8 @@ public sealed class ConflictMarkersPreflightTests
     {
         var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1"));
 
-        script.Should().Contain("[string[]]$SearchRoots = @(\".github\", \"docs\", \"release\", \"src\", \"tests\", \"tools\")");
+        script.Should().Contain("[string[]]$SearchRoots = @(\"AGENTS.md\", \"Directory.Build.props\", \"FreeX.slnx\", \"THIRD_PARTY_NOTICES.md\", \".github\", \"docs\", \"release\", \"src\", \"tests\", \"tools\")");
+        script.Should().Contain("\".slnx\"");
         script.Should().Contain("$conflictMarkerPattern = '^(<<<<<<<|=======|>>>>>>>)($|[ <].*)'");
         script.Should().Contain("Git conflict marker validation failed");
         script.Should().Contain("Validated $($candidateFiles.Count) text file(s) for Git conflict markers.");
@@ -48,6 +49,29 @@ public sealed class ConflictMarkersPreflightTests
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
             (result.Output + result.Error).Should().Contain("broken.cs");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ConflictMarkersPreflight_FailsWhenSolutionContainsConflictMarker()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-conflict-marker-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDirectory, "broken.slnx"), $"<Solution>{Environment.NewLine}<<<<<<< HEAD{Environment.NewLine}</Solution>");
+            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ConflictMarkers.ps1");
+
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-SearchRoots \"{tempDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("Git conflict marker validation failed");
+            (result.Output + result.Error).Should().Contain("broken.slnx");
         }
         finally
         {
