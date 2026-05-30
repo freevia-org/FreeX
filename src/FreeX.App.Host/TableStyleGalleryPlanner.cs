@@ -23,6 +23,17 @@ public static class TableStyleGalleryPlanner
         return options[Math.Clamp(index, 0, options.Count - 1)];
     }
 
+    public static bool TryGetOption(string? styleName, out TableStyleGalleryOption option)
+    {
+        option = null!;
+        if (string.IsNullOrWhiteSpace(styleName))
+            return false;
+
+        option = GetOptions().FirstOrDefault(candidate =>
+            string.Equals(candidate.StyleName, styleName, StringComparison.OrdinalIgnoreCase))!;
+        return option is not null;
+    }
+
     private static IEnumerable<TableStyleGalleryOption> CreateLightStyles()
     {
         var accents = new[]

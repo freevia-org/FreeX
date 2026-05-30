@@ -1,9 +1,7 @@
-using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -158,17 +156,28 @@ public partial class MainWindow
         bool? hasAutoFilter = null,
         bool? totalsRowShown = null)
     {
-        if (!TryExecuteCommand(
-                new ConfigureStructuredTableStyleOptionsCommand(
-                    _currentSheetId,
-                    table.Id,
-                    showFirstColumn ?? table.ShowFirstColumn,
-                    showLastColumn ?? table.ShowLastColumn,
-                    showRowStripes ?? table.ShowRowStripes,
-                    showColumnStripes ?? table.ShowColumnStripes,
-                    hasAutoFilter: hasAutoFilter,
-                    totalsRowShown: totalsRowShown),
-                "Table Style Options"))
+        IWorkbookCommand command = TableStyleGalleryPlanner.TryGetOption(table.StyleName, out var option)
+            ? new ApplyStructuredTableStyleCommand(
+                _currentSheetId,
+                table.Id,
+                option.Banding,
+                showFirstColumn: showFirstColumn,
+                showLastColumn: showLastColumn,
+                showRowStripes: showRowStripes,
+                showColumnStripes: showColumnStripes,
+                hasAutoFilter: hasAutoFilter,
+                totalsRowShown: totalsRowShown)
+            : new ConfigureStructuredTableStyleOptionsCommand(
+                _currentSheetId,
+                table.Id,
+                showFirstColumn ?? table.ShowFirstColumn,
+                showLastColumn ?? table.ShowLastColumn,
+                showRowStripes ?? table.ShowRowStripes,
+                showColumnStripes ?? table.ShowColumnStripes,
+                hasAutoFilter: hasAutoFilter,
+                totalsRowShown: totalsRowShown);
+
+        if (!TryExecuteCommand(command, "Table Style Options"))
             return;
 
         UpdateViewport();
@@ -180,52 +189,16 @@ public partial class MainWindow
             return;
 
         var option = TableStyleGalleryPlanner.GetOption(variant);
-        var commands = new List<IWorkbookCommand>
-        {
-            new ConfigureStructuredTableStyleOptionsCommand(
-                _currentSheetId,
-                table.Id,
-                table.ShowFirstColumn,
-                table.ShowLastColumn,
-                table.ShowRowStripes,
-                table.ShowColumnStripes,
-                option.StyleName,
-                updateStyleName: true)
-        };
-
-        for (var row = table.Range.Start.Row; row <= table.Range.End.Row; row++)
-        {
-            commands.Add(new ApplyStyleCommand(
-                _currentSheetId,
-                new GridRange(
-                    new CellAddress(_currentSheetId, row, table.Range.Start.Col),
-                    new CellAddress(_currentSheetId, row, table.Range.End.Col)),
-                CreateStructuredTableStyleRowDiff(table, option.Banding, row)));
-        }
-
-        if (!TryExecuteCommand(new CompositeWorkbookCommand("Table Style", commands), "Table Style"))
+        if (!TryExecuteCommand(
+                new ApplyStructuredTableStyleCommand(
+                    _currentSheetId,
+                    table.Id,
+                    option.Banding,
+                    option.StyleName,
+                    updateStyleName: true),
+                "Table Style"))
             return;
 
         UpdateViewport();
-    }
-
-    private static StyleDiff CreateStructuredTableStyleRowDiff(
-        StructuredTableModel table,
-        StructuredTableStyleBanding banding,
-        uint row)
-    {
-        if (row == table.Range.Start.Row)
-        {
-            return new StyleDiff(
-                FillColor: banding.HeaderFill,
-                FontColor: banding.HeaderFontColor,
-                Bold: true);
-        }
-
-        var dataRowOffset = row - table.Range.Start.Row;
-        return new StyleDiff(
-            FillColor: dataRowOffset % 2 == 1 ? banding.EvenRowFill : banding.OddRowFill,
-            FontColor: CellColor.Black,
-            Bold: false);
     }
 }
