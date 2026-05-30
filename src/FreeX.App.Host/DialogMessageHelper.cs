@@ -10,16 +10,46 @@ namespace FreeX.App.Host;
 /// </summary>
 internal static class DialogMessageHelper
 {
-    public static void ShowError(Window owner, string? message, string title = "Error") =>
-        MessageBox.Show(owner, message ?? string.Empty, title, MessageBoxButton.OK, MessageBoxImage.Error);
+    private const string DefaultErrorTitle = "Error";
+    private const string DefaultWarningTitle = "Warning";
+    private const string DefaultInformationTitle = "Information";
+    private const string DefaultConfirmTitle = "Confirm";
 
-    public static void ShowWarning(Window owner, string? message, string title = "Warning") =>
-        MessageBox.Show(owner, message ?? string.Empty, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+    public static void ShowError(Window owner, string? message, string title = DefaultErrorTitle) =>
+        MessageBox.Show(
+            owner,
+            message ?? string.Empty,
+            ResolveDefaultTitle(title, DefaultErrorTitle, UiText.ErrorTitle),
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
 
-    public static void ShowInfo(Window owner, string? message, string title = "Information") =>
-        MessageBox.Show(owner, message ?? string.Empty, title, MessageBoxButton.OK, MessageBoxImage.Information);
+    public static void ShowWarning(Window owner, string? message, string title = DefaultWarningTitle) =>
+        MessageBox.Show(
+            owner,
+            message ?? string.Empty,
+            ResolveDefaultTitle(title, DefaultWarningTitle, UiText.WarningTitle),
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
 
-    public static bool AskYesNo(Window owner, string? message, string title = "Confirm") =>
-        MessageBox.Show(owner, message ?? string.Empty, title, MessageBoxButton.YesNo, MessageBoxImage.Question)
+    public static void ShowInfo(Window owner, string? message, string title = DefaultInformationTitle) =>
+        MessageBox.Show(
+            owner,
+            message ?? string.Empty,
+            ResolveDefaultTitle(title, DefaultInformationTitle, UiText.InformationTitle),
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+
+    public static bool AskYesNo(Window owner, string? message, string title = DefaultConfirmTitle) =>
+        MessageBox.Show(
+            owner,
+            message ?? string.Empty,
+            ResolveDefaultTitle(title, DefaultConfirmTitle, UiText.ConfirmTitle),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question)
             == MessageBoxResult.Yes;
+
+    private static string ResolveDefaultTitle(string title, string defaultTitle, string localizedTitle) =>
+        string.Equals(title, defaultTitle, StringComparison.Ordinal)
+            ? localizedTitle
+            : title;
 }

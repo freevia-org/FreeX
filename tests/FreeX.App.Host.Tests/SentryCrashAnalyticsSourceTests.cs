@@ -1,5 +1,6 @@
 using System.IO;
 using FluentAssertions;
+using FreeX.App.Host;
 
 namespace FreeX.App.Host.Tests;
 
@@ -20,8 +21,9 @@ public sealed class SentryCrashAnalyticsSourceTests
 
         source.Should().Contain("AppCrashAnalyticsOptions.CreateDefault(options.CrashAnalyticsEnabled)");
         source.Should().Contain("PromptForCrashAnalyticsConsentIfNeeded(options, crashAnalyticsOptions)");
-        source.Should().Contain("exception message, and stack trace");
-        source.Should().Contain("exception details can occasionally include sensitive values");
+        source.Should().Contain("UiText.Get(\"Startup_CrashReportsConsentPrompt\")");
+        UiText.Get("Startup_CrashReportsConsentPrompt").Should().Contain("exception message, and stack trace");
+        UiText.Get("Startup_CrashReportsConsentPrompt").Should().Contain("exception details can occasionally include sensitive values");
         source.Should().Contain("AddSingleton<ICrashAnalytics, SentryCrashAnalytics>()");
         source.Should().Contain("crashAnalytics.Initialize(crashAnalyticsOptions, diagnosticsMetadata)");
     }
