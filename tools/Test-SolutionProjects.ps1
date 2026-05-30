@@ -82,6 +82,15 @@ if ($solutionProjectPaths.Count -eq 0) {
     throw "No project entries were found in $resolvedSolutionPath"
 }
 
+$duplicateSolutionProjectPaths = @(
+    $solutionXml.SelectNodes("//*[local-name()='Project']") |
+        ForEach-Object { Normalize-RelativePath ([string]$_.Path) } |
+        Group-Object { $_.ToUpperInvariant() } |
+        Where-Object { $_.Count -gt 1 } |
+        ForEach-Object { $_.Group[0] } |
+        Sort-Object
+)
+
 $escapedSolutionProjectPaths = @(
     $solutionProjectPaths |
         Where-Object {
@@ -117,6 +126,12 @@ $missingOnDisk = @(
         }
 )
 
+if ($duplicateSolutionProjectPaths.Count -gt 0) {
+    foreach ($projectPath in $duplicateSolutionProjectPaths) {
+        Write-Error "Duplicate solution project entry: $projectPath" -ErrorAction Continue
+    }
+}
+
 if ($escapedSolutionProjectPaths.Count -gt 0) {
     foreach ($projectPath in $escapedSolutionProjectPaths) {
         Write-Error "Solution project path escapes solution root: $projectPath" -ErrorAction Continue
@@ -135,7 +150,7 @@ if ($missingOnDisk.Count -gt 0) {
     }
 }
 
-if ($escapedSolutionProjectPaths.Count -gt 0 -or $missingFromSolution.Count -gt 0 -or $missingOnDisk.Count -gt 0) {
+if ($duplicateSolutionProjectPaths.Count -gt 0 -or $escapedSolutionProjectPaths.Count -gt 0 -or $missingFromSolution.Count -gt 0 -or $missingOnDisk.Count -gt 0) {
     throw "Solution project validation failed."
 }
 

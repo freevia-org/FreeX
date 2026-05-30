@@ -16,6 +16,7 @@ public sealed class SolutionProjectsPreflightTests
         script.Should().Contain("SelectNodes(\"//*[local-name()='Project']\")");
         script.Should().Contain("*_wpftmp.csproj");
         script.Should().Contain("$segments -contains \".worktrees\"");
+        script.Should().Contain("Duplicate solution project entry");
         script.Should().Contain("Solution project path escapes solution root");
         script.Should().Contain("Project missing from solution");
         script.Should().Contain("Solution references missing project");
@@ -97,6 +98,41 @@ public sealed class SolutionProjectsPreflightTests
 
             result.ExitCode.Should().Be(0, result.Error);
             result.Output.Should().Contain("Validated 1 solution project entry(s).");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SolutionProjectsPreflight_FailsWhenSolutionContainsDuplicateProjectEntry()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Duplicate"));
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(tempDirectory, "FreeX.slnx"),
+                """
+                <Solution>
+                  <Folder Name="/src/">
+                    <Project Path="src/Duplicate/Duplicate.csproj" />
+                    <Project Path="src/Duplicate/Duplicate.csproj" />
+                  </Folder>
+                </Solution>
+                """);
+            File.WriteAllText(Path.Combine(tempDirectory, "src", "Duplicate", "Duplicate.csproj"), "<Project />");
+
+            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
+
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -SolutionPath \"{Path.Combine(tempDirectory, "FreeX.slnx")}\"");
+
+            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
+            result.ExitCode.Should().NotBe(0);
+            combinedOutput.Should().Contain("Duplicate solution project entry");
+            combinedOutput.Should().Contain("src/Duplicate/Duplicate.csproj");
         }
         finally
         {
