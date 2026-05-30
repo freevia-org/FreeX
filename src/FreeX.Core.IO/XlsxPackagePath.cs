@@ -133,11 +133,44 @@ public static class XlsxPackagePath
             : $"{candidate}{extension}";
     }
 
-    private static string UnescapePathSegments(string path) =>
-        string.Join('/', path.Split('/').Select(UnescapePathSegment));
+    private static string UnescapePathSegments(string path)
+    {
+        if (!path.Contains('%', StringComparison.Ordinal))
+            return path;
 
-    private static string EscapePathSegments(string path) =>
-        string.Join('/', path.Split('/').Select(EscapePathSegment));
+        return string.Join('/', path.Split('/').Select(UnescapePathSegment));
+    }
+
+    private static string EscapePathSegments(string path)
+    {
+        if (!PathNeedsEscaping(path))
+            return path;
+
+        return string.Join('/', path.Split('/').Select(EscapePathSegment));
+    }
+
+    private static bool PathNeedsEscaping(string path)
+    {
+        for (var i = 0; i < path.Length; i++)
+        {
+            var value = path[i];
+            if (value == '/' || IsSafeRelationshipPathCharacter(value))
+                continue;
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsSafeRelationshipPathCharacter(char value) =>
+        value is >= 'A' and <= 'Z'
+            or >= 'a' and <= 'z'
+            or >= '0' and <= '9'
+            or '.'
+            or '-'
+            or '_'
+            or '~';
 
     private static string UnescapePathSegment(string segment)
     {

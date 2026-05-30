@@ -58,6 +58,26 @@ public sealed class XlsxPackagePathTests
         XlsxPackagePath.NormalizeZipPath(path).Should().Be(expected);
     }
 
+    [Fact]
+    public void RelationshipPathEscaping_FastPathsSafeTargetsBeforeSplittingSegments()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "XlsxPackagePath.cs"));
+        var escapingHelpers = source[
+            source.IndexOf("private static string UnescapePathSegments", StringComparison.Ordinal)..
+            source.IndexOf("private static string UnescapePathSegment(string segment)", StringComparison.Ordinal)];
+
+        escapingHelpers.Should().Contain("if (!path.Contains('%', StringComparison.Ordinal))");
+        escapingHelpers.Should().Contain("if (!PathNeedsEscaping(path))");
+        escapingHelpers.Should().Contain("private static bool PathNeedsEscaping(string path)");
+        escapingHelpers.IndexOf("if (!path.Contains('%', StringComparison.Ordinal))", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(escapingHelpers.IndexOf("path.Split('/').Select(UnescapePathSegment)", StringComparison.Ordinal));
+        escapingHelpers.IndexOf("if (!PathNeedsEscaping(path))", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(escapingHelpers.IndexOf("path.Split('/').Select(EscapePathSegment)", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("xl/media/image1.jpeg", "image/jpeg")]
     [InlineData("xl/media/image1.bmp", "image/bmp")]
@@ -87,5 +107,24 @@ public sealed class XlsxPackagePathTests
     public void GetWorksheetBackgroundMediaFileName_UsesSafeNamesOrFallback(string? fileName, int index, string extension, string expected)
     {
         XlsxPackagePath.GetWorksheetBackgroundMediaFileName(fileName, index, extension).Should().Be(expected);
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var pathParts = new string[parts.Length + 1];
+            pathParts[0] = directory.FullName;
+            Array.Copy(parts, 0, pathParts, 1, parts.Length);
+
+            var candidate = Path.Combine(pathParts);
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(string.Join(Path.DirectorySeparatorChar, parts));
     }
 }
