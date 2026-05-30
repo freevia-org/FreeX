@@ -287,87 +287,76 @@ internal static class PdfDocumentExporter
 
     private static void DrawVectorOverlays(XGraphics gfx, FixedPage page)
     {
+        var pageTransform = CreatePageTransform(0, 0);
         foreach (UIElement child in page.Children)
-            DrawVectorOverlays(gfx, child, 0, 0);
+            DrawVectorOverlays(gfx, child, pageTransform);
     }
 
-    private static void DrawVectorOverlays(XGraphics gfx, UIElement element, double parentX, double parentY)
+    private static void DrawVectorOverlays(XGraphics gfx, UIElement element, Matrix parentTransform)
     {
         if (element.Visibility != Visibility.Visible)
             return;
 
-        var x = parentX + ReadLeft(element);
-        var y = parentY + ReadTop(element);
-
-        if (element is FrameworkElement frameworkElement)
-        {
-            x += frameworkElement.Margin.Left;
-            y += frameworkElement.Margin.Top;
-        }
-
-        var renderTranslation = ReadSimpleTranslation(element.RenderTransform);
-        x += renderTranslation.X;
-        y += renderTranslation.Y;
+        var elementTransform = CreateElementTransform(element, parentTransform);
 
         if (element is VisualHost { Visual: DrawingVisual drawingVisual })
-            DrawVectorDrawing(gfx, drawingVisual.Drawing, CreatePageTransform(x, y));
+            DrawVectorDrawing(gfx, drawingVisual.Drawing, elementTransform, opacity: 1.0);
 
         if (element is Panel panel)
         {
             foreach (UIElement child in panel.Children)
-                DrawVectorOverlays(gfx, child, x, y);
+                DrawVectorOverlays(gfx, child, elementTransform);
         }
         else if (element is Decorator { Child: UIElement decoratorChild })
         {
-            DrawVectorOverlays(gfx, decoratorChild, x, y);
+            DrawVectorOverlays(gfx, decoratorChild, elementTransform);
         }
         else if (element is ContentControl { Content: UIElement contentChild })
         {
-            DrawVectorOverlays(gfx, contentChild, x, y);
+            DrawVectorOverlays(gfx, contentChild, elementTransform);
         }
 
         if (element is HeaderedContentControl { Header: UIElement headerChild })
-            DrawVectorOverlays(gfx, headerChild, x, y);
+            DrawVectorOverlays(gfx, headerChild, elementTransform);
 
         if (element is ItemsControl itemsControlWithElementItems)
         {
             foreach (var item in WpfTextContentExtractor.EnumerateVisibleItemElements(itemsControlWithElementItems))
-                DrawVectorOverlays(gfx, item, x, y);
+                DrawVectorOverlays(gfx, item, elementTransform);
         }
     }
 
-    private static void DrawVectorDrawing(XGraphics gfx, Drawing drawing, Matrix transform)
+    private static void DrawVectorDrawing(XGraphics gfx, Drawing drawing, Matrix transform, double opacity)
     {
+        if (opacity <= 0)
+            return;
+
         switch (drawing)
         {
             case DrawingGroup group:
-                var groupTransform = transform;
-                if (group.Transform is not null && group.Transform != Transform.Identity)
-                    groupTransform.Append(group.Transform.Value);
-
+                var groupTransform = CreateDrawingTransform(transform, group.Transform);
+                var groupOpacity = opacity * CoerceOpacity(group.Opacity);
                 foreach (var child in group.Children)
-                    DrawVectorDrawing(gfx, child, groupTransform);
+                    DrawVectorDrawing(gfx, child, groupTransform, groupOpacity);
                 break;
             case GeometryDrawing geometryDrawing:
-                DrawVectorGeometry(gfx, geometryDrawing, transform);
+                DrawVectorGeometry(gfx, geometryDrawing, transform, opacity);
                 break;
         }
     }
 
-    private static void DrawVectorGeometry(XGraphics gfx, GeometryDrawing drawing, Matrix transform)
+    private static void DrawVectorGeometry(XGraphics gfx, GeometryDrawing drawing, Matrix transform, double opacity)
     {
         if (drawing.Geometry is null)
             return;
 
-        var brush = TryCreateBrush(drawing.Brush);
-        var pen = TryCreatePen(drawing.Pen);
+        var geometryTransform = CreateDrawingTransform(transform, drawing.Geometry.Transform);
+        var brush = TryCreateBrush(drawing.Brush, drawing.Geometry.Bounds, geometryTransform, opacity);
+        var pen = TryCreatePen(drawing.Pen, geometryTransform, opacity);
         if (brush is null && pen is null)
             return;
 
         var geometry = drawing.Geometry.Clone();
-        var geometryTransform = transform;
-        if (geometry.Transform is not null && geometry.Transform != Transform.Identity)
-            geometryTransform.Append(geometry.Transform.Value);
         geometry.Transform = new MatrixTransform(geometryTransform);
 
         var pathGeometry = geometry.GetFlattenedPathGeometry();
@@ -381,23 +370,217 @@ internal static class PdfDocumentExporter
     private static Matrix CreatePageTransform(double x, double y) =>
         new(72.0 / StandardDpi, 0, 0, 72.0 / StandardDpi, x * 72.0 / StandardDpi, y * 72.0 / StandardDpi);
 
-    private static XSolidBrush? TryCreateBrush(Brush? brush)
+    private static Matrix CreateElementTransform(UIElement element, Matrix parentTransform)
     {
-        if (brush is not SolidColorBrush solid)
-            return null;
+        var elementTransform = Matrix.Identity;
+        if (TryGetFiniteMatrix(element.RenderTransform, out var renderTransform) && !renderTransform.IsIdentity)
+        {
+            var origin = GetRenderTransformOrigin(element);
+            if (!IsZeroPoint(origin))
+                AppendTranslation(ref elementTransform, -origin.X, -origin.Y);
 
-        var color = solid.Color;
-        return new XSolidBrush(XColor.FromArgb(color.A, color.R, color.G, color.B));
+            elementTransform.Append(renderTransform);
+
+            if (!IsZeroPoint(origin))
+                AppendTranslation(ref elementTransform, origin.X, origin.Y);
+        }
+
+        var x = ReadLeft(element);
+        var y = ReadTop(element);
+        if (element is FrameworkElement frameworkElement)
+        {
+            x += frameworkElement.Margin.Left;
+            y += frameworkElement.Margin.Top;
+        }
+
+        AppendTranslation(ref elementTransform, x, y);
+        elementTransform.Append(parentTransform);
+        return elementTransform;
     }
 
-    private static XPen? TryCreatePen(System.Windows.Media.Pen? pen)
+    private static Matrix CreateDrawingTransform(Matrix parentTransform, Transform? drawingTransform)
+    {
+        if (!TryGetFiniteMatrix(drawingTransform, out var localTransform) || localTransform.IsIdentity)
+            return parentTransform;
+
+        localTransform.Append(parentTransform);
+        return localTransform;
+    }
+
+    private static void AppendTranslation(ref Matrix matrix, double x, double y) =>
+        matrix.Append(new Matrix(1, 0, 0, 1, x, y));
+
+    private static Point GetRenderTransformOrigin(UIElement element)
+    {
+        if (element is not FrameworkElement frameworkElement)
+            return default;
+
+        var origin = frameworkElement.RenderTransformOrigin;
+        if (IsZero(origin.X) && IsZero(origin.Y))
+            return default;
+
+        var width = ResolveFiniteLength(frameworkElement.ActualWidth, frameworkElement.RenderSize.Width);
+        var height = ResolveFiniteLength(frameworkElement.ActualHeight, frameworkElement.RenderSize.Height);
+        if (width <= 0 || height <= 0)
+            return default;
+
+        return new Point(origin.X * width, origin.Y * height);
+    }
+
+    private static double ResolveFiniteLength(double preferred, double fallback)
+    {
+        if (IsFinite(preferred) && preferred > 0)
+            return preferred;
+
+        return IsFinite(fallback) && fallback > 0 ? fallback : 0;
+    }
+
+    private static XBrush? TryCreateBrush(Brush? brush, Rect geometryBounds, Matrix transform, double opacity)
+    {
+        return brush switch
+        {
+            SolidColorBrush solid => new XSolidBrush(ToXColor(solid.Color, opacity * solid.Opacity)),
+            LinearGradientBrush linear => TryCreateLinearGradientBrush(linear, geometryBounds, transform, opacity),
+            _ => null
+        };
+    }
+
+    private static XBrush? TryCreateLinearGradientBrush(
+        LinearGradientBrush brush,
+        Rect geometryBounds,
+        Matrix transform,
+        double opacity)
+    {
+        if (brush.GradientStops.Count == 0 ||
+            brush.SpreadMethod != GradientSpreadMethod.Pad ||
+            HasNonIdentityTransform(brush.Transform) ||
+            HasNonIdentityTransform(brush.RelativeTransform))
+        {
+            return null;
+        }
+
+        var stops = brush.GradientStops
+            .OrderBy(stop => stop.Offset)
+            .ToArray();
+        if (stops.Length == 1)
+            return new XSolidBrush(ToXColor(stops[0].Color, opacity * brush.Opacity));
+
+        if (brush.MappingMode == BrushMappingMode.RelativeToBoundingBox && !IsUsableRect(geometryBounds))
+            return null;
+
+        var start = ResolveGradientPoint(brush.StartPoint, geometryBounds, brush.MappingMode);
+        var end = ResolveGradientPoint(brush.EndPoint, geometryBounds, brush.MappingMode);
+        if (!IsFinite(start) || !IsFinite(end) || AreClose(start, end))
+            return null;
+
+        start = transform.Transform(start);
+        end = transform.Transform(end);
+        if (!IsFinite(start) || !IsFinite(end) || AreClose(start, end))
+            return null;
+
+        return new XLinearGradientBrush(
+            new XPoint(start.X, start.Y),
+            new XPoint(end.X, end.Y),
+            ToXColor(stops[0].Color, opacity * brush.Opacity),
+            ToXColor(stops[^1].Color, opacity * brush.Opacity));
+    }
+
+    private static Point ResolveGradientPoint(Point point, Rect geometryBounds, BrushMappingMode mappingMode)
+    {
+        if (mappingMode == BrushMappingMode.Absolute)
+            return point;
+
+        return new Point(
+            geometryBounds.X + point.X * geometryBounds.Width,
+            geometryBounds.Y + point.Y * geometryBounds.Height);
+    }
+
+    private static bool HasNonIdentityTransform(Transform transform) =>
+        transform != Transform.Identity &&
+        (!TryGetFiniteMatrix(transform, out var matrix) || !matrix.IsIdentity);
+
+    private static XPen? TryCreatePen(System.Windows.Media.Pen? pen, Matrix transform, double opacity)
     {
         if (pen is null || pen.Thickness <= 0 || pen.Brush is not SolidColorBrush solid)
             return null;
 
-        var color = solid.Color;
-        return new XPen(XColor.FromArgb(color.A, color.R, color.G, color.B), pen.Thickness * 72.0 / StandardDpi);
+        var width = pen.Thickness * EstimateStrokeScale(transform);
+        if (!IsFinite(width) || width <= 0)
+            return null;
+
+        return new XPen(ToXColor(solid.Color, opacity * solid.Opacity), width);
     }
+
+    private static double EstimateStrokeScale(Matrix transform)
+    {
+        var scaleX = Math.Sqrt(transform.M11 * transform.M11 + transform.M12 * transform.M12);
+        var scaleY = Math.Sqrt(transform.M21 * transform.M21 + transform.M22 * transform.M22);
+        var scale = (scaleX + scaleY) / 2.0;
+
+        return IsFinite(scale) && scale > 0
+            ? scale
+            : 72.0 / StandardDpi;
+    }
+
+    private static XColor ToXColor(Color color, double opacity)
+    {
+        var alpha = (int)Math.Round(color.A * CoerceOpacity(opacity), MidpointRounding.AwayFromZero);
+        return XColor.FromArgb(alpha, color.R, color.G, color.B);
+    }
+
+    private static double CoerceOpacity(double opacity)
+    {
+        if (double.IsNaN(opacity))
+            return 1.0;
+
+        return Math.Clamp(opacity, 0.0, 1.0);
+    }
+
+    private static bool TryGetFiniteMatrix(Transform? transform, out Matrix matrix)
+    {
+        if (transform is null || transform == Transform.Identity)
+        {
+            matrix = Matrix.Identity;
+            return true;
+        }
+
+        matrix = transform.Value;
+        return IsFinite(matrix);
+    }
+
+    private static bool IsFinite(Matrix matrix) =>
+        IsFinite(matrix.M11) &&
+        IsFinite(matrix.M12) &&
+        IsFinite(matrix.M21) &&
+        IsFinite(matrix.M22) &&
+        IsFinite(matrix.OffsetX) &&
+        IsFinite(matrix.OffsetY);
+
+    private static bool IsFinite(Point point) =>
+        IsFinite(point.X) &&
+        IsFinite(point.Y);
+
+    private static bool IsFinite(double value) =>
+        !double.IsNaN(value) && !double.IsInfinity(value);
+
+    private static bool IsUsableRect(Rect rect) =>
+        IsFinite(rect.X) &&
+        IsFinite(rect.Y) &&
+        IsFinite(rect.Width) &&
+        IsFinite(rect.Height) &&
+        rect.Width > 0 &&
+        rect.Height > 0;
+
+    private static bool AreClose(Point first, Point second) =>
+        IsZero(first.X - second.X) &&
+        IsZero(first.Y - second.Y);
+
+    private static bool IsZeroPoint(Point point) =>
+        IsZero(point.X) &&
+        IsZero(point.Y);
+
+    private static bool IsZero(double value) =>
+        Math.Abs(value) < 0.000001;
 
     private static double ReadLeft(UIElement element)
     {
@@ -410,61 +593,6 @@ internal static class PdfDocumentExporter
         var top = Canvas.GetTop(element);
         return double.IsNaN(top) ? 0 : top;
     }
-
-    private static Vector ReadSimpleTranslation(Transform? transform)
-    {
-        return TryReadSimpleTranslation(transform, out var translation)
-            ? translation
-            : default;
-    }
-
-    private static bool TryReadSimpleTranslation(Transform? transform, out Vector translation)
-    {
-        if (transform is null || transform == Transform.Identity)
-        {
-            translation = default;
-            return true;
-        }
-
-        switch (transform)
-        {
-            case TranslateTransform translate:
-                translation = new Vector(translate.X, translate.Y);
-                return true;
-            case MatrixTransform matrixTransform when IsOffsetOnly(matrixTransform.Matrix):
-                translation = new Vector(matrixTransform.Matrix.OffsetX, matrixTransform.Matrix.OffsetY);
-                return true;
-            case TransformGroup group:
-                return TryReadSimpleTranslation(group, out translation);
-            default:
-                translation = default;
-                return false;
-        }
-    }
-
-    private static bool TryReadSimpleTranslation(TransformGroup group, out Vector translation)
-    {
-        var result = new Vector();
-        foreach (var child in group.Children)
-        {
-            if (!TryReadSimpleTranslation(child, out var childTranslation))
-            {
-                translation = default;
-                return false;
-            }
-
-            result += childTranslation;
-        }
-
-        translation = result;
-        return true;
-    }
-
-    private static bool IsOffsetOnly(Matrix matrix) =>
-        matrix.M11 == 1 &&
-        matrix.M12 == 0 &&
-        matrix.M21 == 0 &&
-        matrix.M22 == 1;
 
     private static void AddLinkAnnotations(PdfPage pdfPage, FixedPage fixedPage)
     {

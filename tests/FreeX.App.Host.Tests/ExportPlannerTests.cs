@@ -1286,6 +1286,66 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_AppliesVisualHostRenderTransformsToVectorContent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateTransformedVectorGeometryDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                var content = ReadDecodedPageContent(pdf.Pages[0]);
+                content.Should().Contain("18 63 m");
+                content.Should().Contain("48 40.5 l");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_WritesLinearGradientGeometryAsPdfShading()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateGradientVectorGeometryDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                var pdfBytes = Encoding.ASCII.GetString(File.ReadAllBytes(path));
+                pdfBytes.Should().Contain("/ShadingType 2");
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                var content = ReadDecodedPageContent(pdf.Pages[0]);
+                content.Should().Contain("/Pattern cs");
+                content.Should().Contain(" scn");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesLinkAnnotationsForPrintedWorksheetHyperlinks()
     {
         StaTestRunner.Run(() =>
@@ -2694,6 +2754,75 @@ public class ExportPlannerTests
             dc.DrawGeometry(
                 Brushes.Red,
                 new System.Windows.Media.Pen(Brushes.Blue, 2),
+                new RectangleGeometry(new Rect(8, 10, 40, 20)));
+        }
+
+        var host = new VisualHost { Visual = visual };
+        Canvas.SetLeft(host, 12);
+        Canvas.SetTop(host, 14);
+        page.Children.Add(host);
+
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateTransformedVectorGeometryDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(160, 120);
+        var page = new FixedPage
+        {
+            Width = 160,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            dc.DrawGeometry(
+                Brushes.Green,
+                null,
+                new RectangleGeometry(new Rect(10, 10, 20, 10)));
+        }
+
+        var host = new VisualHost
+        {
+            Visual = visual,
+            RenderTransform = new ScaleTransform(2, 3)
+        };
+        Canvas.SetLeft(host, 4);
+        Canvas.SetTop(host, 6);
+        page.Children.Add(host);
+
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
+    }
+
+    private static FixedDocument CreateGradientVectorGeometryDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(160, 120);
+        var page = new FixedPage
+        {
+            Width = 160,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            var brush = new LinearGradientBrush(
+                Colors.Red,
+                Colors.Blue,
+                new Point(0, 0),
+                new Point(1, 0));
+            dc.DrawGeometry(
+                brush,
+                null,
                 new RectangleGeometry(new Rect(8, 10, 40, 20)));
         }
 
