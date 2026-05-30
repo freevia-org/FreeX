@@ -501,9 +501,11 @@ public sealed class GridViewDrawingObjectThemeTests
                 GridObjectDragPlanner.MinimumObjectSize));
 
         var inputSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Input.cs"));
+        var mouseUpStart = inputSource.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
+        mouseUpStart.Should().BeGreaterThanOrEqualTo(0);
         var mouseUpObjectCommit = inputSource[
-            inputSource.IndexOf("if (_objectDragKind != ObjectDragKind.None)", StringComparison.Ordinal)..
-            inputSource.IndexOf("if (_marginDragEdge.HasValue)", StringComparison.Ordinal)];
+            inputSource.IndexOf("if (_objectDragKind != ObjectDragKind.None)", mouseUpStart, StringComparison.Ordinal)..
+            inputSource.IndexOf("if (_marginDragEdge.HasValue)", mouseUpStart, StringComparison.Ordinal)];
 
         mouseUpObjectCommit.Should().Contain("GridObjectDragPlanner.MinimumObjectSize");
         mouseUpObjectCommit.Should().NotContain("Math.Max(8");
