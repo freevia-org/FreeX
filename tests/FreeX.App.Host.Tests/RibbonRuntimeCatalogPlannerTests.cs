@@ -14,6 +14,8 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         surfaces.Select(surface => surface.CommandTitle).Should().Equal(
             "Format as Table",
             "Number Format Dropdown",
+            "Conditional Formatting Data Bars",
+            "Conditional Formatting Color Scales",
             "Conditional Formatting Icon Sets",
             "Themes",
             "PivotTable Styles");
@@ -26,6 +28,14 @@ public sealed class RibbonRuntimeCatalogPlannerTests
             .Should()
             .Equal("Formats", "Actions");
 
+        Surface(surfaces, "Conditional Formatting Data Bars").Groups.Select(group => (group.Name, group.Items.Count))
+            .Should()
+            .Equal(("Gradient Fill", 6), ("Solid Fill", 6));
+
+        Surface(surfaces, "Conditional Formatting Color Scales").Groups.Select(group => (group.Name, group.Items.Count))
+            .Should()
+            .Equal(("3-Color Scale", 6), ("2-Color Scale", 4));
+
         Surface(surfaces, "Conditional Formatting Icon Sets").Groups.Select(group => (group.Name, group.Items.Count))
             .Should()
             .Equal(("Directional", 6), ("Shapes", 6), ("Indicators", 2), ("Ratings", 4));
@@ -33,6 +43,14 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         Surface(surfaces, "Themes").Groups.Select(group => group.Name)
             .Should()
             .Equal("Themes", "Colors", "Fonts", "Effects");
+
+        Surface(surfaces, "Themes").Groups.Select(group => (group.Name, Items: string.Join("|", group.Items)))
+            .Should()
+            .Equal(
+                ("Themes", "Office|FreeX Colorful|Grayscale|Customize..."),
+                ("Colors", "Office|FreeX Colorful|Grayscale|Customize Colors..."),
+                ("Fonts", "Office|Arial|Times New Roman|Customize Fonts..."),
+                ("Effects", "Office|Subtle|Refined|Customize Effects..."));
 
         Surface(surfaces, "PivotTable Styles").Groups.Select(group => (group.Name, group.Items.Count))
             .Should()
@@ -64,7 +82,17 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         Surface(surfaces, "Format as Table").ItemCount.Should().Be(TableStyleGalleryPlanner.GetOptions().Count);
         Surface(surfaces, "Number Format Dropdown").ItemCount.Should()
             .Be(HomeNumberFormatDropdownPlanner.Options.Count);
+        Surface(surfaces, "Conditional Formatting Data Bars").ItemCount.Should()
+            .Be(ConditionalFormatPresetGalleryPlanner.DataBarOptions.Count);
+        Surface(surfaces, "Conditional Formatting Color Scales").ItemCount.Should()
+            .Be(ConditionalFormatPresetGalleryPlanner.ColorScaleOptions.Count);
         Surface(surfaces, "Conditional Formatting Icon Sets").ItemCount.Should().Be(ConditionalFormatIconSetPlanner.Options.Count);
+        Surface(surfaces, "Themes").ItemCount.Should().Be(
+            WorkbookThemeCatalog.ThemePresets.Count +
+            WorkbookThemeCatalog.ColorPresets.Count +
+            WorkbookThemeCatalog.FontPresets.Count +
+            WorkbookThemeCatalog.EffectPresets.Count);
+        Surface(surfaces, "Themes").Source.Should().Be(nameof(WorkbookThemeCatalog));
         Surface(surfaces, "PivotTable Styles").ItemCount.Should().Be(PivotStyleCatalog.BuiltInStyleNames.Length);
     }
 
