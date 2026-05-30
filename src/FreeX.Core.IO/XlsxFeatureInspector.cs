@@ -290,111 +290,122 @@ public static class XlsxFeatureInspector
             if (string.IsNullOrWhiteSpace(type))
                 continue;
 
-            var normalizedType = type.Trim().ToLowerInvariant();
-            var normalizedTarget = target?.Replace('\\', '/').Trim().ToLowerInvariant() ?? string.Empty;
+            var normalizedType = type.Trim();
+            var normalizedTarget = NormalizeRelationshipTarget(target);
 
-            if (normalizedType.EndsWith("/vbaproject", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/vbaproject", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.Macros;
                 continue;
             }
 
-            if (normalizedType.Contains("/digital-signature/", StringComparison.Ordinal))
+            if (normalizedType.Contains("/digital-signature/", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.DigitalSignatures;
                 continue;
             }
 
-            if (normalizedType.EndsWith("/querytable", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/connections", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/querytable", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/connections", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.PowerQuery;
                 continue;
             }
 
-            if (normalizedType.EndsWith("/webpublishitems", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/webpublishitems", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.LiveWebQueries;
                 continue;
             }
 
-            if (normalizedType.EndsWith("/rdrichvalue", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/rdrichvaluetypes", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/richvaluerel", StringComparison.Ordinal) ||
-                normalizedTarget.Contains("richdata/", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/rdrichvalue", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/rdrichvaluetypes", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/richvaluerel", StringComparison.OrdinalIgnoreCase) ||
+                normalizedTarget.Contains("richdata/", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.LinkedDataTypes;
                 continue;
             }
 
-            if (normalizedType.EndsWith("/model", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/model", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.DataModel;
                 continue;
             }
 
-            if (normalizedType.EndsWith("/threadedcomment", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/person", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/threadedcomment", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/person", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.ThreadedComments;
                 continue;
             }
 
-            if (normalizedType.EndsWith("/revisionheaders", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/revisionlog", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/revisionheaders", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/revisionlog", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.TrackChanges;
                 continue;
             }
 
-            if (normalizedType.EndsWith("/control", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/activexcontrol", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/activexcontrolbinary", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/ctrlprop", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/control", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/activexcontrol", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/activexcontrolbinary", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/ctrlprop", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.FormControls;
                 continue;
             }
 
-            if (normalizedType.EndsWith("/oleobject", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/package", StringComparison.Ordinal) &&
-                normalizedTarget.Contains("embeddings/", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/oleobject", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/package", StringComparison.OrdinalIgnoreCase) &&
+                normalizedTarget.Contains("embeddings/", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.EmbeddedObjects;
                 continue;
             }
 
-            if (normalizedType.EndsWith("/customui", StringComparison.Ordinal) ||
-                normalizedType.Contains("/ui/extensibility", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/customui", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.Contains("/ui/extensibility", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.CustomRibbonUi;
                 continue;
             }
 
-            if (normalizedType.EndsWith("/diagramdata", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/diagramlayout", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/diagramquickstyle", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/diagramcolors", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/diagramdata", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/diagramlayout", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/diagramquickstyle", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/diagramcolors", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.SmartArtDiagrams;
                 continue;
             }
 
-            if (normalizedType.EndsWith("/chartsheet", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/dialogsheet", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/xlmacrosheet", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/chartsheet", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/dialogsheet", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/xlmacrosheet", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.UnsupportedSheetTypes;
                 continue;
             }
 
-            if (normalizedType.EndsWith("/webextension", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/webextensiontaskpanes", StringComparison.Ordinal) ||
-                normalizedType.EndsWith("/taskpane", StringComparison.Ordinal))
+            if (normalizedType.EndsWith("/webextension", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/webextensiontaskpanes", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/taskpane", StringComparison.OrdinalIgnoreCase))
             {
                 yield return XlsxUnsupportedFeatureKind.OfficeAddIns;
             }
         }
+    }
+
+    private static string NormalizeRelationshipTarget(string? target)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+            return string.Empty;
+
+        var trimmed = target.Trim();
+        return trimmed.Contains('\\', StringComparison.Ordinal)
+            ? trimmed.Replace('\\', '/')
+            : trimmed;
     }
 
     private static bool IsSupportedChartPart(ZipArchiveEntry entry)
