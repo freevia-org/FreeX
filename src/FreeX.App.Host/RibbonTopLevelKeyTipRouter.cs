@@ -2,28 +2,34 @@ namespace FreeX.App.Host;
 
 public static class RibbonTopLevelKeyTipRouter
 {
-    public static RibbonTopLevelKeyTipAction? Resolve(string keyTip)
+    public static RibbonTopLevelKeyTipAction? Resolve(
+        string keyTip,
+        IEnumerable<RibbonTopLevelKeyTipEntry> entries)
     {
         if (string.IsNullOrWhiteSpace(keyTip))
             return null;
 
-        return keyTip.Trim().ToUpperInvariant() switch
+        var normalizedKeyTip = NormalizeKeyTip(keyTip);
+        var candidates = entries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Header) &&
+                            !string.IsNullOrWhiteSpace(entry.KeyTip))
+            .ToList();
+
+        foreach (var entry in candidates)
         {
-            "F" => RibbonTopLevelKeyTipAction.BackstageFile,
-            "H" => RibbonTopLevelKeyTipAction.RibbonTab("Home"),
-            "N" => RibbonTopLevelKeyTipAction.RibbonTab("Insert"),
-            "J" => RibbonTopLevelKeyTipAction.RibbonTab("Draw"),
-            "P" => RibbonTopLevelKeyTipAction.RibbonTab("Page Layout"),
-            "M" => RibbonTopLevelKeyTipAction.RibbonTab("Formulas"),
-            "A" => RibbonTopLevelKeyTipAction.RibbonTab("Data"),
-            "D" => RibbonTopLevelKeyTipAction.RibbonTab("Data"),
-            "R" => RibbonTopLevelKeyTipAction.RibbonTab("Review"),
-            "W" => RibbonTopLevelKeyTipAction.RibbonTab("View"),
-            "JA" => RibbonTopLevelKeyTipAction.RibbonTab("PivotTable Analyze"),
-            "JD" => RibbonTopLevelKeyTipAction.RibbonTab("Design"),
-            "Y" => RibbonTopLevelKeyTipAction.RibbonTab("Help"),
-            _ => null
-        };
+            if (string.Equals(NormalizeKeyTip(entry.KeyTip!), normalizedKeyTip, StringComparison.OrdinalIgnoreCase))
+                return CreateAction(entry.Header);
+        }
+
+        if (string.Equals(normalizedKeyTip, "D", StringComparison.OrdinalIgnoreCase))
+        {
+            var dataEntry = candidates.FirstOrDefault(entry =>
+                string.Equals(entry.Header, "Data", StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(dataEntry.Header))
+                return RibbonTopLevelKeyTipAction.RibbonTab(dataEntry.Header);
+        }
+
+        return null;
     }
 
     public static bool HasLongerKeyTipPrefix(string keyTipPrefix, IEnumerable<string?> keyTips)
@@ -35,11 +41,21 @@ public static class RibbonTopLevelKeyTipRouter
         return keyTips
             .Where(keyTip => !string.IsNullOrWhiteSpace(keyTip))
             .Any(keyTip =>
-                keyTip!.Trim() is { } candidate &&
+                NormalizeKeyTip(keyTip!) is { } candidate &&
                 candidate.Length > normalizedPrefix.Length &&
                 candidate.StartsWith(normalizedPrefix, StringComparison.OrdinalIgnoreCase));
     }
+
+    private static RibbonTopLevelKeyTipAction CreateAction(string header) =>
+        string.Equals(header, "File", StringComparison.OrdinalIgnoreCase)
+            ? RibbonTopLevelKeyTipAction.BackstageFile
+            : RibbonTopLevelKeyTipAction.RibbonTab(header);
+
+    private static string NormalizeKeyTip(string keyTip) =>
+        keyTip.Trim().ToUpperInvariant();
 }
+
+public readonly record struct RibbonTopLevelKeyTipEntry(string Header, string? KeyTip);
 
 public readonly record struct RibbonTopLevelKeyTipAction(
     RibbonTopLevelKeyTipActionKind Kind,
