@@ -333,6 +333,7 @@ public sealed class RibbonTabParityTests
             "Copy Diagnostics",
             "Check for Updates",
             "About FreeX",
+            "Legal Notices",
             "Contact Support",
             "Show Training",
             "What's New");

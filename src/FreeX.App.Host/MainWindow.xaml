@@ -3259,14 +3259,22 @@
                                                                   local:RibbonTooltip.Title="About FreeX"
                                                                   local:RibbonTooltip.KeyTip="AB"
                                                                   local:RibbonTooltip.Description="View version and license information about FreeX."/>
-                                    <Button Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                    <local:AutomationInvokeButton x:Name="HelpLegalNoticesButton"
+                                                                  Content="Legal Notices" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="LegalNoticesBtn_Click"
+                                                                  AutomationProperties.Name="Legal Notices"
+                                                                  AutomationProperties.AutomationId="HelpLegalNoticesButton"
+                                                                  AutomationProperties.HelpText="Open legal, privacy, and third-party notices packaged with FreeX."
+                                                                  local:RibbonTooltip.Title="Legal Notices"
+                                                                  local:RibbonTooltip.KeyTip="LN"
+                                                                  local:RibbonTooltip.Description="View legal, privacy, and third-party notices packaged with FreeX."/>
+                                </StackPanel>
+                                <StackPanel Orientation="Vertical">
+                                    <Button Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                             local:RibbonTooltip.Title="Contact Support"
                                             local:RibbonTooltip.KeyTip="CS"
                                             local:RibbonTooltip.Description="Contact support for FreeX. In-app support is not yet implemented.">
                                         <TextBlock Text="Contact Support" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
-                                </StackPanel>
-                                <StackPanel Orientation="Vertical">
                                     <Button Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                             local:RibbonTooltip.Title="Show Training"
                                             local:RibbonTooltip.KeyTip="TR"
