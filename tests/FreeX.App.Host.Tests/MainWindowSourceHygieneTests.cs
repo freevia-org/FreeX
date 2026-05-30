@@ -102,7 +102,7 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void AppChrome_DoesNotUseLegacyFreexcelGreenThemeConstants()
+    public void AppChrome_DoesNotUseLegacyGreenThemeConstants()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
         var legacyFragments = new[]
@@ -128,7 +128,7 @@ public sealed class MainWindowSourceHygieneTests
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        offenders.Should().BeEmpty("old Freexcel-green chrome should use the shared FreeX theme resources or #0F6D8C accent instead");
+        offenders.Should().BeEmpty("legacy green chrome should use the shared FreeX theme resources or #0F6D8C accent instead");
     }
 
     [Fact]
@@ -755,8 +755,10 @@ public sealed class MainWindowSourceHygieneTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
 
         source.Should().Contain("private void OpenExternalHelpLink(string url, string title)");
-        source.Should().Contain("UseShellExecute = true");
-        source.Should().Contain("catch (Exception ex)");
+        // External links route through the single guarded launcher (scheme allowlist enforced there),
+        // so the raw shell launch must NOT live in this file anymore.
+        source.Should().Contain("ExternalUrlLauncher.Open(url)");
+        source.Should().NotContain("UseShellExecute");
         source.Should().Contain("ShowOwnedMessage(");
         source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, \"Help Online\")");
         source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, \"Check for Updates\")");
