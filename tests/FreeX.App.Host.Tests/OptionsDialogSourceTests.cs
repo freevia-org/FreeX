@@ -4,7 +4,6 @@ using System.Windows.Controls;
 using System.Xml.Linq;
 using FreeX.App.Host;
 using FluentAssertions;
-using FreeX.App.Host;
 
 namespace FreeX.App.Host.Tests;
 
