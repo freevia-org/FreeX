@@ -151,6 +151,9 @@ public sealed partial class UiTestCatalogInventoryTests
         row.Should().Contain("FREEX_SS_TOUR_WIDTHS");
         row.Should().Contain($"{plannedCaptureCount} planned captures");
         row.Should().Contain($"{plannedCaptureCount * RibbonScreenshotTourPlanner.BurstPhases.Count} burst-phase captures");
+        row.Should().Contain("ribbon_screenshot_tour_manifest.json");
+        row.Should().Contain("resize breakpoint");
+        row.Should().Contain("deletes only the currently requested plan");
     }
 
     [Theory]

@@ -4,6 +4,18 @@ internal sealed record RibbonScreenshotTourTab(string Header, string FileName);
 
 internal sealed record RibbonScreenshotTourWidth(string Label, double? WindowWidth);
 
+internal static class RibbonScreenshotTourWidthExtensions
+{
+    public static string EvidencePurpose(this RibbonScreenshotTourWidth width) =>
+        width.WindowWidth switch
+        {
+            null => "Maximized baseline before resize pressure.",
+            >= 1100 => "Wide ribbon breakpoint before most command groups collapse.",
+            >= 900 => "Medium ribbon breakpoint where grouped commands begin to compress.",
+            _ => "Narrow ribbon breakpoint for overflow and compact command layouts."
+        };
+}
+
 internal sealed record RibbonScreenshotTourPhase(string Label, string? FileNameSuffix);
 
 internal sealed record RibbonScreenshotTourCapture(

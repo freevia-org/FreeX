@@ -74,13 +74,8 @@ public sealed class CommandInventoryDocumentTests
         var inventory = LoadInventory();
 
         inventory.SchemaVersion.Should().Be(1);
-        if (HasCommandRows(inventory))
-        {
-            inventory.CommandSurfaceRows.Select(section => section.Name).Should().BeEquivalentTo(
-                inventory.CommandSurfaceTabs.Select(tab => tab.Name));
-            inventory.MenuToolbarRows.Select(section => section.Name).Should().BeEquivalentTo(
-                inventory.MenuToolbarTabs.Select(tab => tab.Name));
-        }
+        AssertCommandRows(inventory.CommandSurfaceRows, inventory.CommandSurfaceTabs, "Command");
+        AssertCommandRows(inventory.MenuToolbarRows, inventory.MenuToolbarTabs, "Item");
 
         inventory.KeyTips.TopLevelTabs.Should().ContainEquivalentOf(new KeyTipExpectation("Home", "H"));
         inventory.KeyTips.TopLevelTabs.Should().ContainEquivalentOf(new KeyTipExpectation("Insert", "N"));
@@ -93,9 +88,6 @@ public sealed class CommandInventoryDocumentTests
     public void CommandSurfaceFileBackstageRows_AreGeneratedFromInventory()
     {
         var inventory = LoadInventory();
-        if (!HasCommandRows(inventory))
-            return;
-
         var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
         var section = inventory.CommandSurfaceRows.Single(section => section.Name == "File/Backstage");
 
@@ -107,9 +99,6 @@ public sealed class CommandInventoryDocumentTests
     public void MenuToolbarFileBackstageRows_AreGeneratedFromInventory()
     {
         var inventory = LoadInventory();
-        if (!HasCommandRows(inventory))
-            return;
-
         var doc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "MENU_TOOLBAR_PARITY.md"));
         var section = inventory.MenuToolbarRows.Single(section => section.Name == "File/Backstage");
 
@@ -121,9 +110,6 @@ public sealed class CommandInventoryDocumentTests
     public void QuickAccessToolbarRows_AreGeneratedFromInventory()
     {
         var inventory = LoadInventory();
-        if (!HasCommandRows(inventory))
-            return;
-
         var commandSurfaceDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
         var menuToolbarDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "MENU_TOOLBAR_PARITY.md"));
         var commandSurfaceSection = inventory.CommandSurfaceRows.Single(section => section.Name == "QAT");
@@ -139,9 +125,6 @@ public sealed class CommandInventoryDocumentTests
     public void HomeRows_AreGeneratedFromInventory()
     {
         var inventory = LoadInventory();
-        if (!HasCommandRows(inventory))
-            return;
-
         var commandSurfaceDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"));
         var menuToolbarDoc = File.ReadAllText(WorkspaceFileLocator.Find("docs", "MENU_TOOLBAR_PARITY.md"));
         var commandSurfaceSection = inventory.CommandSurfaceRows.Single(section => section.Name == "Home");
@@ -189,8 +172,51 @@ public sealed class CommandInventoryDocumentTests
         };
     }
 
-    private static bool HasCommandRows(CommandInventory inventory) =>
-        inventory.CommandSurfaceRows.Count > 0 && inventory.MenuToolbarRows.Count > 0;
+    private static void AssertCommandRows(
+        IReadOnlyList<CommandInventoryCommandSection> sections,
+        IReadOnlyList<CommandInventoryTab> tabs,
+        string expectedItemColumn)
+    {
+        var allowedStatuses = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Implemented",
+            "Partial",
+            "Not Implemented",
+            "Deferred",
+            "Excluded"
+        };
+
+        sections.Should().NotBeEmpty();
+        sections.Select(section => section.Name).Should().Equal(tabs.Select(tab => tab.Name));
+
+        foreach (var section in sections)
+        {
+            section.ItemColumn.Should().Be(expectedItemColumn);
+            var hasRows = section.Rows is { Count: > 0 };
+            var hasGroups = section.Groups is { Count: > 0 };
+            hasRows.Should().NotBe(hasGroups, $"{section.Name} should use either flat rows or grouped rows, not both");
+
+            var rows = GetRows(section).ToArray();
+            rows.Should().NotBeEmpty($"{section.Name} should have explicit command rows");
+            rows.Select(row => row.Name).Should().OnlyHaveUniqueItems($"{section.Name} command rows should be unambiguous");
+            rows.Should().OnlyContain(row => !string.IsNullOrWhiteSpace(row.Name));
+            rows.Should().OnlyContain(row => allowedStatuses.Contains(row.Status), $"{section.Name} should use a known command status");
+            rows.Where(row => row.Status is "Partial" or "Deferred")
+                .Should()
+                .OnlyContain(row => !string.IsNullOrWhiteSpace(row.Notes), $"{section.Name} partial/deferred rows should explain the remaining gap");
+
+            foreach (var group in section.Groups ?? [])
+            {
+                group.Heading.Should().NotBeNullOrWhiteSpace();
+                group.Rows.Should().NotBeEmpty($"{section.Name}/{group.Heading} should have command rows");
+            }
+        }
+    }
+
+    private static IEnumerable<CommandInventoryCommandRow> GetRows(CommandInventoryCommandSection section) =>
+        section.Groups is { Count: > 0 }
+            ? section.Groups.SelectMany(group => group.Rows)
+            : section.Rows ?? [];
 
     private static string ExtractGeneratedBlock(string doc, string marker)
     {
