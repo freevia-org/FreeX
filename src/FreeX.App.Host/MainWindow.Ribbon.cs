@@ -690,6 +690,7 @@ public partial class MainWindow
             PrepareSelectedRibbonTabForImmediateCompaction();
 
         NormalizeRibbonSurface(forceCompact: true);
+        UpdateActiveRibbonLayoutBeforeFirstFrame();
         if (scheduleFallback)
             QueueRibbonFallback(RibbonFallbackWork.NormalizeSurface);
     }
@@ -703,6 +704,7 @@ public partial class MainWindow
         }
 
         UpdateRibbonCompactMode(force: true);
+        UpdateActiveRibbonLayoutBeforeFirstFrame();
         QueueRibbonFallback(RibbonFallbackWork.CompactOnly);
     }
 
@@ -733,11 +735,13 @@ public partial class MainWindow
                 {
                     _ribbonFallbackForcedNormalizeCount++;
                     NormalizeRibbonSurface(forceCompact: true);
+                    UpdateActiveRibbonLayoutBeforeFirstFrame();
                 }
                 else if (pendingWork == RibbonFallbackWork.CompactOnly)
                 {
                     _ribbonFallbackForcedCompactCount++;
                     UpdateRibbonCompactMode(force: false);
+                    UpdateActiveRibbonLayoutBeforeFirstFrame();
                 }
             }),
             DispatcherPriority.Render);
@@ -750,6 +754,7 @@ public partial class MainWindow
             _ribbonFallbackExecutedCount,
             _ribbonFallbackForcedNormalizeCount,
             _ribbonFallbackForcedCompactCount,
+            _ribbonFirstFrameLayoutUpdateCount,
             _lastRibbonFallbackRequestedWork.ToString(),
             _lastRibbonFallbackMergedWork.ToString(),
             _lastRibbonFallbackExecutedWork.ToString(),
@@ -763,6 +768,7 @@ public partial class MainWindow
         _ribbonFallbackExecutedCount = 0;
         _ribbonFallbackForcedNormalizeCount = 0;
         _ribbonFallbackForcedCompactCount = 0;
+        _ribbonFirstFrameLayoutUpdateCount = 0;
         _lastRibbonFallbackRequestedWork = RibbonFallbackWork.None;
         _lastRibbonFallbackMergedWork = RibbonFallbackWork.None;
         _lastRibbonFallbackExecutedWork = RibbonFallbackWork.None;
@@ -780,6 +786,8 @@ public partial class MainWindow
         if (_ribbonResizeCompactionPendingOnExit)
         {
             _ribbonResizeCompactionPendingOnExit = false;
+            UpdateRibbonCompactMode(force: true);
+            UpdateActiveRibbonLayoutBeforeFirstFrame();
             QueueRibbonFallback(RibbonFallbackWork.CompactOnly);
         }
 
@@ -893,6 +901,26 @@ public partial class MainWindow
             (element.IsVisible && (element.ActualWidth <= 0 || element.ActualHeight <= 0)))
         {
             element.UpdateLayout();
+        }
+    }
+
+    private void UpdateActiveRibbonLayoutBeforeFirstFrame()
+    {
+        if (RibbonTabs?.SelectedItem is not TabItem tabItem)
+            return;
+
+        if (GetRibbonTabContentRoot(tabItem) is FrameworkElement content)
+        {
+            content.ApplyTemplate();
+            content.UpdateLayout();
+            _ribbonFirstFrameLayoutUpdateCount++;
+            return;
+        }
+
+        if (GetActiveRibbonPanel() is { } activePanel)
+        {
+            activePanel.UpdateLayout();
+            _ribbonFirstFrameLayoutUpdateCount++;
         }
     }
 
