@@ -4210,6 +4210,8 @@
                       MinWidth="214" Height="24"
                       Background="{StaticResource FreeXStatusSurfaceBrush}"
                       Panel.ZIndex="1"
+                      KeyboardNavigation.TabNavigation="Cycle"
+                      KeyboardNavigation.ControlTabNavigation="Cycle"
                       SnapsToDevicePixels="True"
                       UseLayoutRounding="True">
                     <Grid.ColumnDefinitions>
