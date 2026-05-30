@@ -14,16 +14,16 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void DialogList_ExposesAccessibleName()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("CustomViewsDialog.xaml");
 
-        xaml.Should().Contain("AutomationProperties.Name=\"Custom views\"");
-        xaml.Should().Contain("AutomationProperties.HelpText=\"Shows saved workbook views");
+        xaml.Should().Contain($"AutomationProperties.Name=\"{UiText.Get("CustomViews_CustomViews")}\"");
+        xaml.Should().Contain($"AutomationProperties.HelpText=\"{UiText.Get("CustomViews_ShowsSavedWorkbookViewsThatCanBeShownOrDeleted")}");
     }
 
     [Fact]
     public void ShowButton_IsDefaultDialogAction()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("CustomViewsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var showButton = document
@@ -72,7 +72,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void Dialog_ExposesKeyboardAccessKeys()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("CustomViewsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         document.Descendants(presentation + "GroupBox")
@@ -88,7 +88,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void DialogList_ShowsPrintAndFilterSettingIndicators()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("CustomViewsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         document.Descendants(presentation + "GridViewColumn")
@@ -125,9 +125,9 @@ public sealed class CustomViewsDialogXamlTests
     {
         var dialogSource = ReadCustomViewsDialogSource();
 
-        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not apply custom view.\",");
-        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not save custom view.\",");
-        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not delete custom view.\",");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get(\"CustomViews_ApplyFailedMessage\"),");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get(\"CustomViews_SaveFailedMessage\"),");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get(\"CustomViews_DeleteFailedMessage\"),");
     }
 
     [Fact]

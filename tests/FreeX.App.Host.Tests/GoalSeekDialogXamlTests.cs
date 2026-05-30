@@ -13,7 +13,7 @@ public sealed class GoalSeekDialogXamlTests
     [Fact]
     public void Dialog_ExposesAccessKeyedInputLabelsAndButtons()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("GoalSeekDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         AssertLabelTargets(document, presentation, "_Set cell:", "SetCellBox");
@@ -76,7 +76,7 @@ public sealed class GoalSeekDialogXamlTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekDialog.xaml.cs"));
 
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, error, \"Goal Seek\");");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, error, UiText.Get(\"GoalSeek_GoalSeek\"));");
         source.Should().Contain("FocusInvalidInput(error);");
         source.Should().Contain("private void FocusInvalidInput(string error)");
         source.Should().Contain("DialogFocus.FocusAndSelect(target);");

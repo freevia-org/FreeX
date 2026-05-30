@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using FreeX.Core.Model;
@@ -51,7 +52,7 @@ public partial class GoalSeekDialog : Window
                 out var input,
                 out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error, "Goal Seek");
+            DialogMessageHelper.ShowWarning(this, error, UiText.Get("GoalSeek_GoalSeek"));
             FocusInvalidInput(error);
             return;
         }
@@ -72,12 +73,17 @@ public partial class GoalSeekDialog : Window
 
     private TextBox ResolveInvalidInputTarget(string error)
     {
-        if (string.Equals(error, "Please enter the Set cell address.", StringComparison.Ordinal) ||
+        if (string.Equals(error, UiText.Get("GoalSeek_SetCellRequiredMessage"), StringComparison.Ordinal) ||
             !CellAddress.TryParse(SetCellBox.Text.Trim(), _sheetId, out _))
             return SetCellBox;
 
-        if (error.Contains("valid number", StringComparison.Ordinal))
+        var targetInput = ToValueBox.Text.Trim();
+        if ((!double.TryParse(targetInput, NumberStyles.Any, CultureInfo.CurrentCulture, out var targetValue) &&
+             !double.TryParse(targetInput, NumberStyles.Any, CultureInfo.InvariantCulture, out targetValue)) ||
+            !double.IsFinite(targetValue))
+        {
             return ToValueBox;
+        }
 
         return ChangingCellBox;
     }

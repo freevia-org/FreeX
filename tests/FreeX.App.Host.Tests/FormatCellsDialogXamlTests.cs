@@ -19,7 +19,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_ContainsSupportedExcelTabs()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var tab in new[] { "_Number", "_Alignment", "_Font", "F_ill", "_Border", "_Protection" })
         {
@@ -30,7 +30,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_ExposesKeyboardAccessKeysForTabsAndButtons()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var tab in new[] { "_Number", "_Alignment", "_Font", "F_ill", "_Border", "_Protection" })
             xaml.Should().Contain($"<TabItem Header=\"{tab}\"");
@@ -42,7 +42,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_ExposesKeyboardAccessKeysForSupportedOptionControls()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var content in new[]
         {
@@ -110,7 +110,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_ContainsControlsForSupportedStyleFields()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var controlName in new[]
         {
@@ -135,7 +135,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_ContainsColorPickerButtonsForColorFields()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var controlName in new[]
         {
@@ -156,23 +156,23 @@ public sealed class FormatCellsDialogXamlTests
     {
         var source = ReadFormatCellsDialogSource();
 
-        source.Should().Contain("PickColorInto(DlgFontColorBox, allowNoColor: false, \"Font Color\")");
-        source.Should().Contain("PickColorInto(DlgFillColorBox, allowNoColor: true, \"Fill Color\")");
-        source.Should().Contain("PickColorInto(DlgFillPatternColorBox, allowNoColor: true, \"Pattern Color\")");
+        source.Should().Contain("PickColorInto(DlgFontColorBox, allowNoColor: false, UiText.Get(\"FormatCells_FontColorTitle\"))");
+        source.Should().Contain("PickColorInto(DlgFillColorBox, allowNoColor: true, UiText.Get(\"FormatCells_FillColorTitle\"))");
+        source.Should().Contain("PickColorInto(DlgFillPatternColorBox, allowNoColor: true, UiText.Get(\"FormatCells_PatternColorTitle\"))");
         source.Should().Contain("Title = title");
 
         var borderSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.Border.cs"));
-        borderSource.Should().Contain("PickColorInto(DlgBorderLineColorBox, allowNoColor: false, \"Border Color\")");
-        borderSource.Should().Contain("PickColorInto(DlgBorderTopColorBox, allowNoColor: false, \"Top Border Color\")");
-        borderSource.Should().Contain("PickColorInto(DlgBorderRightColorBox, allowNoColor: false, \"Right Border Color\")");
-        borderSource.Should().Contain("PickColorInto(DlgBorderBottomColorBox, allowNoColor: false, \"Bottom Border Color\")");
-        borderSource.Should().Contain("PickColorInto(DlgBorderLeftColorBox, allowNoColor: false, \"Left Border Color\")");
+        borderSource.Should().Contain("PickColorInto(DlgBorderLineColorBox, allowNoColor: false, UiText.Get(\"FormatCells_BorderColorTitle\"))");
+        borderSource.Should().Contain("PickColorInto(DlgBorderTopColorBox, allowNoColor: false, UiText.Get(\"FormatCells_TopBorderColorTitle\"))");
+        borderSource.Should().Contain("PickColorInto(DlgBorderRightColorBox, allowNoColor: false, UiText.Get(\"FormatCells_RightBorderColorTitle\"))");
+        borderSource.Should().Contain("PickColorInto(DlgBorderBottomColorBox, allowNoColor: false, UiText.Get(\"FormatCells_BottomBorderColorTitle\"))");
+        borderSource.Should().Contain("PickColorInto(DlgBorderLeftColorBox, allowNoColor: false, UiText.Get(\"FormatCells_LeftBorderColorTitle\"))");
     }
 
     [Fact]
     public void FormatCellsDialog_ExposesShrinkToFitAndMapsItIntoStyleDiff()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         xaml.Should().Contain("x:Name=\"DlgShrinkToFitCheck\"");
         xaml.ShouldContainLocalizedAttribute("Content", "S_hrink to fit");
@@ -183,7 +183,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_AlignmentTab_LabelsEditableControlsWithAccessKeyTargets()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var content in new[]
         {
@@ -347,7 +347,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_NumberTab_UsesExcelLikeCategoryAndSampleLayout()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         xaml.Should().Contain("x:Name=\"NumberCategoryList\"");
         xaml.ShouldContainLocalizedAttribute("Content", "_Category:");
@@ -361,7 +361,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_NumberTab_LabelsEditableControlsWithAccessKeyTargets()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var content in new[]
         {
@@ -395,7 +395,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_BorderTab_UsesExcelLikePresetLineColorAndPreviewLayout()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var text in new[]
         {
@@ -427,7 +427,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_BorderTab_ExposesAccessKeysForPresetPreviewAndDetailsControls()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var content in new[]
         {
@@ -446,7 +446,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_BorderTab_LabelsLineControlsWithAccessKeyTargets()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var target in new[]
         {
@@ -459,7 +459,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_BorderTab_LabelsIndividualSideStyleControlsWithAccessKeyTargets()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var target in new[]
         {
@@ -474,7 +474,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_BorderTab_NamesIndividualSideColorInputsForAccessibility()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var name in new[]
         {
@@ -489,7 +489,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_FillTab_ExposesBackgroundPatternControlsAndSamplePreview()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
         var source = ReadFormatCellsDialogSource();
 
         foreach (var text in new[]
@@ -518,7 +518,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_FillAndBorderTabs_ExposeExcelLikeColorSwatchesAndPreviews()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var expected in new[]
         {
@@ -537,7 +537,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_FillTab_UsesExcelLikePalettePatternAndSampleAreas()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var expected in new[]
         {
@@ -557,7 +557,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_BorderTab_UsesExcelLikeLineListPaletteAndUnclippedPreview()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var expected in new[]
         {
@@ -580,7 +580,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_FillTab_LabelsEditableControlsWithAccessKeyTargets()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var target in new[]
         {
@@ -594,7 +594,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_FontTab_ExposesStyleUnderlineEffectsAndSamplePreview()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var text in new[]
         {
@@ -618,7 +618,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_FontTab_ExposesFontColorSwatchesAndPreviewUpdate()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var expected in new[]
         {
@@ -661,7 +661,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_FontTab_NormalFontResetsModeledFontFields()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
         xaml.Should().Contain("x:Name=\"DlgNormalFontCheck\" Content=\"_Normal font\"");
         xaml.Should().Contain("Checked=\"DlgNormalFontCheck_Checked\"");
 
@@ -718,7 +718,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_FontTab_DoesNotDuplicateFontStyleAndUnderlineControlsAsEffects()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         xaml.Should().NotContain("Content=\"_Bold\"");
         xaml.Should().NotContain("Content=\"_Italic\"");
@@ -733,7 +733,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_ProtectionTab_ExposesLockedHiddenAndExcelProtectionExplanation()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         xaml.Should().Contain("x:Name=\"DlgLockedCheck\" Content=\"_Locked\"");
         xaml.Should().Contain("x:Name=\"DlgHiddenCheck\" Content=\"_Hidden\"");
@@ -743,7 +743,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_FontTab_LabelsEditableControlsWithAccessKeyTargets()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         foreach (var content in new[]
         {
@@ -759,7 +759,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_FontTab_UsesEditableFontNameCombo()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         xaml.Should().Contain("x:Name=\"DlgFontNameBox\"");
         xaml.Should().Contain("IsEditable=\"True\"");
@@ -820,7 +820,7 @@ public sealed class FormatCellsDialogXamlTests
     {
         var source = ReadFormatCellsDialogSource();
 
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a text rotation from -90 to 90 degrees, or 255 for vertical text.\", DlgTextRotationBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidTextRotationMessage\"), DlgTextRotationBox);");
         source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
@@ -833,7 +833,7 @@ public sealed class FormatCellsDialogXamlTests
     {
         var source = ReadFormatCellsDialogSource();
 
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive font size.\", DlgFontSizeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidFontSizeMessage\"), DlgFontSizeBox);");
         source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, ComboBox target)");
     }
@@ -843,7 +843,7 @@ public sealed class FormatCellsDialogXamlTests
     {
         var source = ReadFormatCellsDialogSource();
 
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter an indent level from 0 to 15.\", DlgIndentLevelBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidIndentLevelMessage\"), DlgIndentLevelBox);");
         source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;");
     }
 
@@ -853,9 +853,9 @@ public sealed class FormatCellsDialogXamlTests
         var source = ReadFormatCellsDialogSource();
 
         source.Should().Contain("if (!ValidateNumberInputs())");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter decimal places from 0 to 30.\", NumberDecimalPlacesBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidDecimalPlacesMessage\"), NumberDecimalPlacesBox);");
         source.Should().Contain("FormatCellsInputParser.IsSupportedCustomNumberFormat(NumberFormatCombo.Text)");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a valid custom number format.\", NumberFormatCombo);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidCustomNumberFormatMessage\"), NumberFormatCombo);");
         source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;");
     }
 
@@ -865,7 +865,7 @@ public sealed class FormatCellsDialogXamlTests
         var source = ReadFormatCellsDialogSource();
 
         source.Should().Contain("if (!TryParseRequiredColor(DlgFontColorBox.Text, out var fontColor))");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a font color as #RRGGBB or R, G, B.\", DlgFontColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidFontColorMessage\"), DlgFontColorBox);");
         source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;");
     }
 
@@ -875,9 +875,9 @@ public sealed class FormatCellsDialogXamlTests
         var source = ReadFormatCellsDialogSource();
 
         source.Should().Contain("if (!TryParseOptionalColor(DlgFillColorBox.Text, out var fillColor))");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a fill color as #RRGGBB or R, G, B, or leave it blank.\", DlgFillColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidFillColorMessage\"), DlgFillColorBox);");
         source.Should().Contain("if (!TryParseOptionalColor(DlgFillPatternColorBox.Text, out var fillPatternColor))");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a pattern color as #RRGGBB or R, G, B, or leave it blank.\", DlgFillPatternColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidPatternColorMessage\"), DlgFillPatternColorBox);");
         source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;");
     }
 
@@ -887,11 +887,11 @@ public sealed class FormatCellsDialogXamlTests
         var source = ReadFormatCellsDialogSource();
 
         source.Should().Contain("if (!ValidateBorderInputs())");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a border color as #RRGGBB or R, G, B.\", DlgBorderLineColorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a top border color as #RRGGBB or R, G, B.\", DlgBorderTopColorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a right border color as #RRGGBB or R, G, B.\", DlgBorderRightColorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a bottom border color as #RRGGBB or R, G, B.\", DlgBorderBottomColorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a left border color as #RRGGBB or R, G, B.\", DlgBorderLeftColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidBorderColorMessage\"), DlgBorderLineColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidTopBorderColorMessage\"), DlgBorderTopColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidRightBorderColorMessage\"), DlgBorderRightColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidBottomBorderColorMessage\"), DlgBorderBottomColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"FormatCells_InvalidLeftBorderColorMessage\"), DlgBorderLeftColorBox);");
         source.Should().Contain("Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;");
     }
 
@@ -1016,7 +1016,7 @@ public sealed class FormatCellsDialogXamlTests
     [Fact]
     public void FormatCellsDialog_FontTab_KeepsSuperscriptAndSubscriptMutuallyExclusive()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
 
         xaml.Should().Contain("Checked=\"DlgSuperscriptCheck_Checked\"");
         xaml.Should().Contain("Checked=\"DlgSubscriptCheck_Checked\"");
@@ -1061,7 +1061,11 @@ public sealed class FormatCellsDialogXamlTests
     {
         var source = ReadFormatCellsDialogSource();
 
-        source.Should().Contain("\"None\", \"Single\", \"Double\", \"Single Accounting\", \"Double Accounting\"");
+        source.Should().Contain("UiText.Get(\"FormatCells_UnderlineNone\")");
+        source.Should().Contain("UiText.Get(\"FormatCells_UnderlineSingle\")");
+        source.Should().Contain("UiText.Get(\"FormatCells_UnderlineDouble\")");
+        source.Should().Contain("UiText.Get(\"FormatCells_UnderlineSingleAccounting\")");
+        source.Should().Contain("UiText.Get(\"FormatCells_UnderlineDoubleAccounting\")");
     }
 
     [Theory]

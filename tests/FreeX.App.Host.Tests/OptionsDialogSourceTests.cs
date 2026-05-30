@@ -10,7 +10,7 @@ public sealed class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_ExposesPersistedViewOptions()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
 
         xaml.Should().Contain("<ListBoxItem Content=\"_View\"/>");
@@ -34,7 +34,7 @@ public sealed class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_ExposesKeyboardAccessKeysForTabsFieldsAndButtons()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("OptionsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         document.Descendants(presentation + "ListBoxItem")
@@ -103,7 +103,7 @@ public sealed class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_ExposesStableAutomationMetadataForCategoriesAndActions()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
 
         xaml.Should().Contain("AutomationProperties.Name=\"Options categories\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"OptionsCategoryList\"");
@@ -122,9 +122,9 @@ public sealed class OptionsDialogSourceTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
 
         source.Should().Contain("OptionsInputParser.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize)");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive default font size.\", OptDefaultFontSize);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Options_InvalidDefaultFontSizeMessage\"), OptDefaultFontSize);");
         source.Should().Contain("OptionsInputParser.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount)");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter the number of sheets to include from 1 to 255.\", OptSheetCount);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Options_InvalidSheetCountMessage\"), OptSheetCount);");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, Control target)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("if (target is TextBox textBox)");
@@ -139,7 +139,7 @@ public sealed class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_ExposesExcelLikeAdvancedAndDisplayAffordances()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
 
         xaml.Should().Contain("x:Name=\"PanelAdvanced\"");
@@ -182,7 +182,7 @@ public sealed class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_ExposesQuickAccessToolbarCustomizationAsDeferredAffordance()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
         var deferredMessages = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DeferredCommandMessages.cs"));
 
@@ -193,7 +193,7 @@ public sealed class OptionsDialogSourceTests
         xaml.Should().Contain("x:Name=\"QuickAccessResetButton\"");
         xaml.Should().Contain("Click=\"QuickAccessResetButton_Click\"");
 
-        source.Should().Contain("PanelQuickAccessToolbar.Visibility = selected == \"_Quick Access Toolbar\" ? Visibility.Visible : Visibility.Collapsed;");
+        source.Should().Contain("PanelQuickAccessToolbar.Visibility = selectedIndex == 8 ? Visibility.Visible : Visibility.Collapsed;");
         source.Should().Contain("DeferredCommandMessages.QuickAccessToolbarReset()");
 
         deferredMessages.Should().Contain("DeferredCommand_QuickAccessToolbar_Body");
@@ -206,7 +206,7 @@ public sealed class OptionsDialogSourceTests
     [Fact]
     public void OptionsDialog_MoveAfterEnterToggleControlsDirectionEnabledState()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
 
         xaml.Should().Contain("Checked=\"MoveAfterEnter_Changed\"");

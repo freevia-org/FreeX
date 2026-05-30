@@ -14,7 +14,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupDialog_ExposesKeyboardAccessKeysForTabsOptionsAndButtons()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
 
         foreach (var header in new[]
         {
@@ -109,7 +109,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageTab_UsesExcelLikeScalingChoices()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PageSetupDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -131,7 +131,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageTab_DisablesInactiveScalingInputsByMode()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
 
         xaml.Should().Contain("Checked=\"ScalingMode_Changed\"");
@@ -144,7 +144,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void HeaderFooterTab_ReusesSupportedPresetAndCustomDialogConcepts()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PageSetupDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -186,7 +186,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void SheetTab_ExposesCurrentSelectionRangePickerButtonsForPrintRanges()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -311,7 +311,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupDialogInvalidPrintArea_SelectsSheetTabPrintAreaBox()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
 
         xaml.Should().Contain("x:Name=\"PageSetupTabs\"");
@@ -336,7 +336,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupDialogInvalidPageTabNumber_SelectsPageTabInvalidBox()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
 
         xaml.Should().Contain("x:Name=\"PageTab\"");
@@ -350,7 +350,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupDialogInvalidMargin_SelectsMarginsTabInvalidBox()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
 
         xaml.Should().Contain("x:Name=\"MarginsTab\"");
@@ -379,7 +379,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void Footer_ExposesExcelPrintActionsAndPrinterOptionsAction()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
         var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
 

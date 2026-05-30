@@ -85,9 +85,8 @@ public sealed class ColorPickerDialogTests
     [Fact]
     public void DialogXaml_ExposesExcelLikePaletteSectionsAndPreview()
     {
-        var xamlPath = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ColorPickerDialog.xaml");
-        var xaml = File.ReadAllText(xamlPath);
-        var document = XDocument.Load(xamlPath);
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("ColorPickerDialog.xaml");
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("ColorPickerDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         xaml.Should().Contain("<TabControl");
@@ -112,7 +111,7 @@ public sealed class ColorPickerDialogTests
     [Fact]
     public void DialogXaml_ExposesKeyboardAccessKeysForCustomColorAndButtons()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ColorPickerDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("ColorPickerDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var label = document
@@ -144,12 +143,12 @@ public sealed class ColorPickerDialogTests
                 var standardButton = FindSwatchButton(standardPanel, new CellColor(0xFF, 0x00, 0x00));
                 var spectrumButton = FindSwatchButton(spectrumPanel, new CellColor(0x00, 0xFF, 0x00));
 
-                AutomationProperties.GetName(themeButton).Should().Be("Accent 1 swatch #4472C4");
-                AutomationProperties.GetName(standardButton).Should().Be("Standard color swatch #FF0000");
-                AutomationProperties.GetName(spectrumButton).Should().Be("Custom spectrum color swatch #00FF00");
-                AutomationProperties.GetHelpText(themeButton).Should().Be("Select this color swatch.");
-                AutomationProperties.GetName(slider).Should().Be("Custom color luminosity");
-                AutomationProperties.GetHelpText(slider).Should().Be("Adjust the brightness of the selected custom color.");
+                AutomationProperties.GetName(themeButton).Should().Be(UiText.Format("ColorPicker_GroupSwatchAutomationName", "Accent 1", "#4472C4"));
+                AutomationProperties.GetName(standardButton).Should().Be(UiText.Format("ColorPicker_GroupSwatchAutomationName", UiText.Get("ColorPicker_StandardColorGroup"), "#FF0000"));
+                AutomationProperties.GetName(spectrumButton).Should().Be(UiText.Format("ColorPicker_GroupSwatchAutomationName", UiText.Get("ColorPicker_CustomSpectrumColorGroup"), "#00FF00"));
+                AutomationProperties.GetHelpText(themeButton).Should().Be(UiText.Get("ColorPicker_SwatchHelpText"));
+                AutomationProperties.GetName(slider).Should().Be(UiText.Get("ColorPicker_CustomColorLuminosity"));
+                AutomationProperties.GetHelpText(slider).Should().Be(UiText.Get("ColorPicker_AdjustTheBrightnessOfTheSelectedCustomColor"));
             }
             finally
             {
@@ -174,7 +173,7 @@ public sealed class ColorPickerDialogTests
     [Fact]
     public void DialogXaml_CustomTab_LabelsRgbAndHexInputsLikeExcelMoreColors()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ColorPickerDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("ColorPickerDialog.xaml");
 
         foreach (var expected in new[]
         {
@@ -193,7 +192,7 @@ public sealed class ColorPickerDialogTests
     [Fact]
     public void InvalidCustomColor_SelectsCustomTabAndFocusesHexInput()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ColorPickerDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("ColorPickerDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ColorPickerDialog.xaml.cs"));
 
         xaml.Should().Contain("<TabControl x:Name=\"ColorTabs\"");

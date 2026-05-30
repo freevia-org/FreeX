@@ -1,7 +1,8 @@
 <Window x:Class="FreeX.App.Host.PageSetupDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Page Setup"
+        xmlns:local="clr-namespace:FreeX.App.Host"
+        Title="{local:Loc Key=PageSetup_PageSetup}"
         Width="600" Height="560"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
@@ -13,7 +14,7 @@
         </Grid.RowDefinitions>
 
         <TabControl x:Name="PageSetupTabs" Grid.Row="0">
-            <TabItem x:Name="PageTab" Header="_Page">
+            <TabItem x:Name="PageTab" Header="{local:Loc Key=PageSetup_Page}">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -27,20 +28,20 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <Label Grid.Row="0" Grid.Column="0" Content="_Orientation:" Target="{Binding ElementName=OrientationBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="0" Grid.Column="0" Content="{local:Loc Key=PageSetup_Orientation}" Target="{Binding ElementName=OrientationBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <ComboBox x:Name="OrientationBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8">
-                        <ComboBoxItem Content="Portrait" Tag="Portrait"/>
-                        <ComboBoxItem Content="Landscape" Tag="Landscape"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Portrait}" Tag="Portrait"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Landscape}" Tag="Landscape"/>
                     </ComboBox>
 
-                    <Label Grid.Row="1" Grid.Column="0" Content="_Paper size:" Target="{Binding ElementName=PaperSizeBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=PageSetup_PaperSize}" Target="{Binding ElementName=PaperSizeBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <ComboBox x:Name="PaperSizeBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
-                        <ComboBoxItem Content="Letter (8.5 x 11)" Tag="Letter"/>
-                        <ComboBoxItem Content="A4 (210 x 297 mm)" Tag="A4"/>
-                        <ComboBoxItem Content="Legal (8.5 x 14)" Tag="Legal"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Letter85X11}" Tag="Letter"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_A4210X297Mm}" Tag="A4"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Legal85X14}" Tag="Legal"/>
                     </ComboBox>
 
-                    <GroupBox Grid.Row="2" Grid.ColumnSpan="2" Header="Scaling" Margin="0,2,0,8">
+                    <GroupBox Grid.Row="2" Grid.ColumnSpan="2" Header="{local:Loc Key=PageSetup_Scaling}" Margin="0,2,0,8">
                         <Grid Margin="8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -56,26 +57,26 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
-                            <RadioButton x:Name="AdjustToRadioButton" Grid.Row="0" Grid.Column="0" Content="_Adjust to:" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,8" Checked="ScalingMode_Changed" Unchecked="ScalingMode_Changed"/>
+                            <RadioButton x:Name="AdjustToRadioButton" Grid.Row="0" Grid.Column="0" Content="{local:Loc Key=PageSetup_AdjustTo}" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,8" Checked="ScalingMode_Changed" Unchecked="ScalingMode_Changed"/>
                             <TextBox x:Name="ScalePercentBox" Grid.Row="0" Grid.Column="1" Margin="0,0,6,8"/>
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="% normal size" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{local:Loc Key=PageSetup_NormalSize}" VerticalAlignment="Center" Margin="0,0,0,8"/>
 
-                            <RadioButton x:Name="FitToRadioButton" Grid.Row="1" Grid.Column="0" Content="_Fit to:" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,0" Checked="ScalingMode_Changed" Unchecked="ScalingMode_Changed"/>
+                            <RadioButton x:Name="FitToRadioButton" Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=PageSetup_FitTo}" GroupName="ScalingMode" VerticalAlignment="Center" Margin="0,0,8,0" Checked="ScalingMode_Changed" Unchecked="ScalingMode_Changed"/>
                             <TextBox x:Name="FitPagesWideBox" Grid.Row="1" Grid.Column="1" Margin="0,0,6,0"/>
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="page(s) wide by" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{local:Loc Key=PageSetup_PageSWideBy}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <TextBox x:Name="FitPagesTallBox" Grid.Row="1" Grid.Column="3" Margin="0,0,6,0"/>
-                            <TextBlock Grid.Row="1" Grid.Column="4" Text="tall" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="1" Grid.Column="4" Text="{local:Loc Key=PageSetup_Tall}" VerticalAlignment="Center"/>
                         </Grid>
                     </GroupBox>
 
-                    <Label Grid.Row="3" Grid.Column="0" Content="First _page number:" Target="{Binding ElementName=FirstPageNumberBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="3" Grid.Column="0" Content="{local:Loc Key=PageSetup_FirstPageNumber}" Target="{Binding ElementName=FirstPageNumberBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="FirstPageNumberBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"/>
-                    <Label Grid.Row="4" Grid.Column="0" Content="Print _quality:" Target="{Binding ElementName=PrintQualityBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="4" Grid.Column="0" Content="{local:Loc Key=PageSetup_PrintQuality}" Target="{Binding ElementName=PrintQualityBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="PrintQualityBox" Grid.Row="4" Grid.Column="1" Margin="0,0,0,8"/>
                 </Grid>
             </TabItem>
 
-            <TabItem x:Name="MarginsTab" Header="_Margins">
+            <TabItem x:Name="MarginsTab" Header="{local:Loc Key=PageSetup_Margins}">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -93,24 +94,24 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <Label Grid.Row="0" Grid.Column="0" Content="_Left:" Target="{Binding ElementName=LeftMarginBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="0" Grid.Column="0" Content="{local:Loc Key=PageSetup_Left}" Target="{Binding ElementName=LeftMarginBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="LeftMarginBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"/>
-                    <Label Grid.Row="1" Grid.Column="0" Content="_Right:" Target="{Binding ElementName=RightMarginBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=PageSetup_Right}" Target="{Binding ElementName=RightMarginBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="RightMarginBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/>
-                    <Label Grid.Row="2" Grid.Column="0" Content="_Top:" Target="{Binding ElementName=TopMarginBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=PageSetup_Top}" Target="{Binding ElementName=TopMarginBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="TopMarginBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"/>
-                    <Label Grid.Row="3" Grid.Column="0" Content="_Bottom:" Target="{Binding ElementName=BottomMarginBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="3" Grid.Column="0" Content="{local:Loc Key=PageSetup_Bottom}" Target="{Binding ElementName=BottomMarginBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="BottomMarginBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"/>
-                    <Label Grid.Row="4" Grid.Column="0" Content="_Header:" Target="{Binding ElementName=HeaderMarginBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="4" Grid.Column="0" Content="{local:Loc Key=PageSetup_Header}" Target="{Binding ElementName=HeaderMarginBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="HeaderMarginBox" Grid.Row="4" Grid.Column="1" Margin="0,0,0,8"/>
-                    <Label Grid.Row="5" Grid.Column="0" Content="_Footer:" Target="{Binding ElementName=FooterMarginBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="5" Grid.Column="0" Content="{local:Loc Key=PageSetup_Footer}" Target="{Binding ElementName=FooterMarginBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="FooterMarginBox" Grid.Row="5" Grid.Column="1" Margin="0,0,0,8"/>
-                    <CheckBox x:Name="CenterHorizontallyBox" Grid.Row="6" Grid.Column="1" Content="_Center horizontally" Margin="0,4,0,8"/>
-                    <CheckBox x:Name="CenterVerticallyBox" Grid.Row="7" Grid.Column="1" Content="Center _vertically"/>
+                    <CheckBox x:Name="CenterHorizontallyBox" Grid.Row="6" Grid.Column="1" Content="{local:Loc Key=PageSetup_CenterHorizontally}" Margin="0,4,0,8"/>
+                    <CheckBox x:Name="CenterVerticallyBox" Grid.Row="7" Grid.Column="1" Content="{local:Loc Key=PageSetup_CenterVertically}"/>
                 </Grid>
             </TabItem>
 
-            <TabItem Header="_Header/Footer">
+            <TabItem Header="{local:Loc Key=PageSetup_HeaderFooter}">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -126,39 +127,39 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <Label Grid.Row="0" Grid.Column="0" Content="_Header preset:" Target="{Binding ElementName=HeaderPresetBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="0" Grid.Column="0" Content="{local:Loc Key=PageSetup_HeaderPreset}" Target="{Binding ElementName=HeaderPresetBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <ComboBox x:Name="HeaderPresetBox" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8" SelectionChanged="HeaderPresetBox_SelectionChanged">
-                        <ComboBoxItem Content="(none)" Tag=""/>
-                        <ComboBoxItem Content="Page 1" Tag="&amp;[Page]"/>
-                        <ComboBoxItem Content="Page 1 of ?" Tag="Page &amp;[Page] of &amp;[Pages]"/>
-                        <ComboBoxItem Content="Sheet1" Tag="&amp;[Tab]"/>
-                        <ComboBoxItem Content="Book1" Tag="&amp;[File]"/>
-                        <ComboBoxItem Content="Book1.xlsx" Tag="&amp;[File]"/>
-                        <ComboBoxItem Content="Book1.xlsx, Sheet1" Tag="&amp;[File], &amp;[Tab]"/>
-                        <ComboBoxItem Content="Confidential, Page 1" Tag="Confidential, Page &amp;[Page]"/>
-                        <ComboBoxItem Content="Date, Page 1" Tag="&amp;[Date], Page &amp;[Page]"/>
-                        <ComboBoxItem Content="Sheet name" Tag="&amp;[Tab]"/>
-                        <ComboBoxItem Content="File name" Tag="&amp;[File]"/>
-                        <ComboBoxItem Content="File path" Tag="&amp;[Path]&amp;[File]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_None}" Tag=""/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Page1}" Tag="&amp;[Page]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Page1Of}" Tag="Page &amp;[Page] of &amp;[Pages]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Sheet1}" Tag="&amp;[Tab]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Book1}" Tag="&amp;[File]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Book1Xlsx}" Tag="&amp;[File]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Book1XlsxSheet1}" Tag="&amp;[File], &amp;[Tab]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_ConfidentialPage1}" Tag="Confidential, Page &amp;[Page]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_DatePage1}" Tag="&amp;[Date], Page &amp;[Page]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_SheetName}" Tag="&amp;[Tab]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_FileName}" Tag="&amp;[File]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_FilePath}" Tag="&amp;[Path]&amp;[File]"/>
                     </ComboBox>
 
-                    <Label Grid.Row="1" Grid.Column="0" Content="_Footer preset:" Target="{Binding ElementName=FooterPresetBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=PageSetup_FooterPreset}" Target="{Binding ElementName=FooterPresetBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <ComboBox x:Name="FooterPresetBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" SelectionChanged="FooterPresetBox_SelectionChanged">
-                        <ComboBoxItem Content="(none)" Tag=""/>
-                        <ComboBoxItem Content="Page 1" Tag="&amp;[Page]"/>
-                        <ComboBoxItem Content="Page 1 of ?" Tag="Page &amp;[Page] of &amp;[Pages]"/>
-                        <ComboBoxItem Content="Sheet1" Tag="&amp;[Tab]"/>
-                        <ComboBoxItem Content="Book1" Tag="&amp;[File]"/>
-                        <ComboBoxItem Content="Book1.xlsx" Tag="&amp;[File]"/>
-                        <ComboBoxItem Content="Book1.xlsx, Sheet1" Tag="&amp;[File], &amp;[Tab]"/>
-                        <ComboBoxItem Content="Date" Tag="&amp;[Date]"/>
-                        <ComboBoxItem Content="Time" Tag="&amp;[Time]"/>
-                        <ComboBoxItem Content="Date, Page 1" Tag="&amp;[Date], Page &amp;[Page]"/>
-                        <ComboBoxItem Content="File path" Tag="&amp;[Path]&amp;[File]"/>
-                        <ComboBoxItem Content="File name" Tag="&amp;[File]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_None}" Tag=""/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Page1}" Tag="&amp;[Page]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Page1Of}" Tag="Page &amp;[Page] of &amp;[Pages]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Sheet1}" Tag="&amp;[Tab]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Book1}" Tag="&amp;[File]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Book1Xlsx}" Tag="&amp;[File]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Book1XlsxSheet1}" Tag="&amp;[File], &amp;[Tab]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Date}" Tag="&amp;[Date]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Time}" Tag="&amp;[Time]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_DatePage1}" Tag="&amp;[Date], Page &amp;[Page]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_FilePath}" Tag="&amp;[Path]&amp;[File]"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_FileName}" Tag="&amp;[File]"/>
                     </ComboBox>
 
-                    <GroupBox Grid.Row="2" Grid.ColumnSpan="2" Header="Preview" Margin="0,2,0,10">
+                    <GroupBox Grid.Row="2" Grid.ColumnSpan="2" Header="{local:Loc Key=PageSetup_Preview}" Margin="0,2,0,10">
                         <Grid Margin="8">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -168,28 +169,28 @@
                                 <ColumnDefinition Width="72"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Header:" FontWeight="SemiBold" Margin="0,0,8,6"/>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{local:Loc Key=PageSetup_Header2}" FontWeight="SemiBold" Margin="0,0,8,6"/>
                             <TextBlock x:Name="HeaderPreviewText" Grid.Row="0" Grid.Column="1" TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Footer:" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{local:Loc Key=PageSetup_Footer2}" FontWeight="SemiBold" Margin="0,0,8,0"/>
                             <TextBlock x:Name="FooterPreviewText" Grid.Row="1" Grid.Column="1" TextTrimming="CharacterEllipsis"/>
                         </Grid>
                     </GroupBox>
 
                     <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,12">
-                        <Button x:Name="CustomHeaderButton" Content="Custom _Header..." Width="128" Margin="0,0,8,0" Click="CustomHeaderFooterButton_Click"/>
-                        <Button x:Name="CustomFooterButton" Content="Custom _Footer..." Width="128" Click="CustomHeaderFooterButton_Click"/>
+                        <Button x:Name="CustomHeaderButton" Content="{local:Loc Key=PageSetup_CustomHeader}" Width="128" Margin="0,0,8,0" Click="CustomHeaderFooterButton_Click"/>
+                        <Button x:Name="CustomFooterButton" Content="{local:Loc Key=PageSetup_CustomFooter}" Width="128" Click="CustomHeaderFooterButton_Click"/>
                     </StackPanel>
 
-                    <CheckBox x:Name="DifferentFirstPageBox" Grid.Row="4" Grid.Column="1" Content="_Different first page" Margin="0,0,0,8"/>
-                    <CheckBox x:Name="DifferentOddEvenBox" Grid.Row="5" Grid.Column="1" Content="Different _odd and even pages" Margin="0,0,0,8"/>
+                    <CheckBox x:Name="DifferentFirstPageBox" Grid.Row="4" Grid.Column="1" Content="{local:Loc Key=PageSetup_DifferentFirstPage}" Margin="0,0,0,8"/>
+                    <CheckBox x:Name="DifferentOddEvenBox" Grid.Row="5" Grid.Column="1" Content="{local:Loc Key=PageSetup_DifferentOddAndEvenPages}" Margin="0,0,0,8"/>
                     <StackPanel Grid.Row="6" Grid.Column="1">
-                        <CheckBox x:Name="ScaleWithDocumentBox" Content="_Scale with document" Margin="0,0,0,8"/>
-                        <CheckBox x:Name="AlignWithMarginsBox" Content="_Align with page margins"/>
+                        <CheckBox x:Name="ScaleWithDocumentBox" Content="{local:Loc Key=PageSetup_ScaleWithDocument}" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="AlignWithMarginsBox" Content="{local:Loc Key=PageSetup_AlignWithPageMargins}"/>
                     </StackPanel>
                 </Grid>
             </TabItem>
 
-            <TabItem x:Name="SheetTab" Header="_Sheet">
+            <TabItem x:Name="SheetTab" Header="{local:Loc Key=PageSetup_Sheet}">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -209,45 +210,45 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <Label Grid.Row="0" Grid.Column="0" Content="Print _area:" Target="{Binding ElementName=PrintAreaBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                    <Label Grid.Row="0" Grid.Column="0" Content="{local:Loc Key=PageSetup_PrintArea}" Target="{Binding ElementName=PrintAreaBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="PrintAreaBox" Grid.Row="0" Grid.Column="1" Margin="0,0,6,8"/>
                     <Button x:Name="PrintAreaPickerButton" Grid.Row="0" Grid.Column="2" Content="..." Width="24" Height="22" Margin="0,0,0,8"
                             Tag="PrintAreaBox" Click="RangePickerButton_Click"
-                            ToolTip="Collapse dialog and select the print area."
-                            AutomationProperties.Name="Select print area"/>
-                    <Label Grid.Row="1" Grid.Column="0" Content="_Rows to repeat at top:" Target="{Binding ElementName=RowsRepeatBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                            ToolTip="{local:Loc Key=PageSetup_CollapseDialogAndSelectThePrintArea}"
+                            AutomationProperties.Name="{local:Loc Key=PageSetup_SelectPrintArea}"/>
+                    <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=PageSetup_RowsToRepeatAtTop}" Target="{Binding ElementName=RowsRepeatBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="RowsRepeatBox" Grid.Row="1" Grid.Column="1" Margin="0,0,6,8"/>
                     <Button x:Name="RowsRepeatPickerButton" Grid.Row="1" Grid.Column="2" Content="..." Width="24" Height="22" Margin="0,0,0,8"
                             Tag="RowsRepeatBox" Click="RangePickerButton_Click"
-                            ToolTip="Collapse dialog and select rows to repeat at top."
-                            AutomationProperties.Name="Select rows to repeat"/>
-                    <Label Grid.Row="2" Grid.Column="0" Content="_Columns to repeat at left:" Target="{Binding ElementName=ColumnsRepeatBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
+                            ToolTip="{local:Loc Key=PageSetup_CollapseDialogAndSelectRowsToRepeatAtTop}"
+                            AutomationProperties.Name="{local:Loc Key=PageSetup_SelectRowsToRepeat}"/>
+                    <Label Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=PageSetup_ColumnsToRepeatAtLeft}" Target="{Binding ElementName=ColumnsRepeatBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="ColumnsRepeatBox" Grid.Row="2" Grid.Column="1" Margin="0,0,6,8"/>
                     <Button x:Name="ColumnsRepeatPickerButton" Grid.Row="2" Grid.Column="2" Content="..." Width="24" Height="22" Margin="0,0,0,8"
                             Tag="ColumnsRepeatBox" Click="RangePickerButton_Click"
-                            ToolTip="Collapse dialog and select columns to repeat at left."
-                            AutomationProperties.Name="Select columns to repeat"/>
-                    <CheckBox x:Name="PrintGridlinesBox" Grid.Row="3" Grid.Column="1" Content="_Print gridlines" Margin="0,0,0,8"/>
-                    <CheckBox x:Name="PrintHeadingsBox" Grid.Row="4" Grid.Column="1" Content="Print row and column _headings" Margin="0,0,0,8"/>
-                    <Label Grid.Row="5" Grid.Column="0" Content="Pa_ge order:" Target="{Binding ElementName=PageOrderBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            ToolTip="{local:Loc Key=PageSetup_CollapseDialogAndSelectColumnsToRepeatAtLeft}"
+                            AutomationProperties.Name="{local:Loc Key=PageSetup_SelectColumnsToRepeat}"/>
+                    <CheckBox x:Name="PrintGridlinesBox" Grid.Row="3" Grid.Column="1" Content="{local:Loc Key=PageSetup_PrintGridlines}" Margin="0,0,0,8"/>
+                    <CheckBox x:Name="PrintHeadingsBox" Grid.Row="4" Grid.Column="1" Content="{local:Loc Key=PageSetup_PrintRowAndColumnHeadings}" Margin="0,0,0,8"/>
+                    <Label Grid.Row="5" Grid.Column="0" Content="{local:Loc Key=PageSetup_PageOrder}" Target="{Binding ElementName=PageOrderBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <ComboBox x:Name="PageOrderBox" Grid.Row="5" Grid.Column="1">
-                        <ComboBoxItem Content="Down, then over" Tag="DownThenOver"/>
-                        <ComboBoxItem Content="Over, then down" Tag="OverThenDown"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_DownThenOver}" Tag="DownThenOver"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_OverThenDown}" Tag="OverThenDown"/>
                     </ComboBox>
-                    <CheckBox x:Name="PrintBlackAndWhiteBox" Grid.Row="6" Grid.Column="1" Content="_Black and white" Margin="0,8,0,8"/>
-                    <CheckBox x:Name="PrintDraftQualityBox" Grid.Row="7" Grid.Column="1" Content="_Draft quality"/>
-                    <Label Grid.Row="8" Grid.Column="0" Content="Cell _errors as:" Target="{Binding ElementName=PrintErrorValueBox}" Padding="0" VerticalAlignment="Center" Margin="0,8,8,0"/>
+                    <CheckBox x:Name="PrintBlackAndWhiteBox" Grid.Row="6" Grid.Column="1" Content="{local:Loc Key=PageSetup_BlackAndWhite}" Margin="0,8,0,8"/>
+                    <CheckBox x:Name="PrintDraftQualityBox" Grid.Row="7" Grid.Column="1" Content="{local:Loc Key=PageSetup_DraftQuality}"/>
+                    <Label Grid.Row="8" Grid.Column="0" Content="{local:Loc Key=PageSetup_CellErrorsAs}" Target="{Binding ElementName=PrintErrorValueBox}" Padding="0" VerticalAlignment="Center" Margin="0,8,8,0"/>
                     <ComboBox x:Name="PrintErrorValueBox" Grid.Row="8" Grid.Column="1" Margin="0,8,0,0">
-                        <ComboBoxItem Content="Displayed" Tag="Displayed"/>
-                        <ComboBoxItem Content="Blank" Tag="Blank"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Displayed}" Tag="Displayed"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_Blank}" Tag="Blank"/>
                         <ComboBoxItem Content="--" Tag="Dash"/>
-                        <ComboBoxItem Content="#N/A" Tag="NotAvailable"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_NotAvailable}" Tag="NotAvailable"/>
                     </ComboBox>
-                    <Label Grid.Row="9" Grid.Column="0" Content="Co_mments:" Target="{Binding ElementName=PrintCommentsBox}" Padding="0" VerticalAlignment="Center" Margin="0,8,8,0"/>
+                    <Label Grid.Row="9" Grid.Column="0" Content="{local:Loc Key=PageSetup_Comments}" Target="{Binding ElementName=PrintCommentsBox}" Padding="0" VerticalAlignment="Center" Margin="0,8,8,0"/>
                     <ComboBox x:Name="PrintCommentsBox" Grid.Row="9" Grid.Column="1" Margin="0,8,0,0">
-                        <ComboBoxItem Content="None" Tag="None"/>
-                        <ComboBoxItem Content="At end of sheet" Tag="AtEnd"/>
-                        <ComboBoxItem Content="As displayed on sheet" Tag="AsDisplayed"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_None2}" Tag="None"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_AtEndOfSheet}" Tag="AtEnd"/>
+                        <ComboBoxItem Content="{local:Loc Key=PageSetup_AsDisplayedOnSheet}" Tag="AsDisplayed"/>
                     </ComboBox>
                 </Grid>
             </TabItem>
@@ -255,13 +256,13 @@
 
         <DockPanel Grid.Row="1" Margin="0,12,0,0">
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" HorizontalAlignment="Left">
-                <Button Content="_Print..." Width="86" Margin="0,0,8,0" Click="PrintButton_Click"/>
-                <Button Content="Print Pre_view" Width="104" Margin="0,0,8,0" Click="PrintPreviewButton_Click"/>
-                <Button Content="_Options..." Width="86" Click="OptionsButton_Click"/>
+                <Button Content="{local:Loc Key=PageSetup_Print}" Width="86" Margin="0,0,8,0" Click="PrintButton_Click"/>
+                <Button Content="{local:Loc Key=PageSetup_PrintPreview}" Width="104" Margin="0,0,8,0" Click="PrintPreviewButton_Click"/>
+                <Button Content="{local:Loc Key=PageSetup_Options}" Width="86" Click="OptionsButton_Click"/>
             </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="_OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
-                <Button Content="_Cancel" Width="72" IsCancel="True"/>
+                <Button Content="{local:Loc Key=Common_Ok}" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
+                <Button Content="{local:Loc Key=Common_Cancel}" Width="72" IsCancel="True"/>
             </StackPanel>
         </DockPanel>
     </Grid>

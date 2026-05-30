@@ -57,7 +57,7 @@ public sealed partial class CustomViewsDialog : Window
         var outcome = _commandBus.Execute(_workbook.Id, new ApplyCustomViewCommand(vm.Name));
         if (!outcome.Success)
         {
-            DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? "Could not apply custom view.", "Custom Views");
+            DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("CustomViews_ApplyFailedMessage"), UiText.Get("CustomViews_CustomViews"));
             FocusViewsList();
             return;
         }
@@ -81,7 +81,7 @@ public sealed partial class CustomViewsDialog : Window
             dialog.Result.IncludeHiddenRowsColumnsAndFilterSettings));
         if (!outcome.Success)
         {
-            DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? "Could not save custom view.", "Custom Views");
+            DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("CustomViews_SaveFailedMessage"), UiText.Get("CustomViews_CustomViews"));
             FocusViewsList();
             return;
         }
@@ -97,7 +97,7 @@ public sealed partial class CustomViewsDialog : Window
         var outcome = _commandBus.Execute(_workbook.Id, new DeleteCustomViewCommand(vm.Name));
         if (!outcome.Success)
         {
-            DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? "Could not delete custom view.", "Custom Views");
+            DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("CustomViews_DeleteFailedMessage"), UiText.Get("CustomViews_CustomViews"));
             FocusViewsList();
         }
         else

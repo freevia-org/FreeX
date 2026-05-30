@@ -94,7 +94,7 @@ public partial class ColorPickerDialog : Window
     {
         if (!TryParseColorText(CustomColorTextBox.Text, out var color))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a color as #RRGGBB or R, G, B.", Title);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("ColorPicker_InvalidColorMessage"), Title);
             FocusInvalidCustomColorInput();
             return;
         }
@@ -129,10 +129,10 @@ public partial class ColorPickerDialog : Window
         }
 
         foreach (var swatch in BuildStandardSwatches())
-            StandardColorsPanel.Children.Add(CreateSwatchButton(swatch, "Standard color"));
+            StandardColorsPanel.Children.Add(CreateSwatchButton(swatch, UiText.Get("ColorPicker_StandardColorGroup")));
 
         foreach (var swatch in BuildCustomSpectrumSwatches())
-            CustomSpectrumPanel.Children.Add(CreateSwatchButton(swatch, "Custom spectrum color"));
+            CustomSpectrumPanel.Children.Add(CreateSwatchButton(swatch, UiText.Get("ColorPicker_CustomSpectrumColorGroup")));
     }
 
     private Button CreateSwatchButton(ColorPickerSwatch swatch, string? groupName = null)
@@ -146,11 +146,11 @@ public partial class ColorPickerDialog : Window
             Background = ToBrush(swatch.Color),
             BorderBrush = Brushes.Gray,
             BorderThickness = new Thickness(1),
-            ToolTip = groupName is null ? swatch.Hex : $"{groupName} {swatch.Hex}",
+            ToolTip = groupName is null ? swatch.Hex : UiText.Format("ColorPicker_GroupSwatchToolTip", groupName, swatch.Hex),
             Tag = swatch.Color
         };
         AutomationProperties.SetName(button, CreateSwatchAutomationName(swatch, groupName));
-        AutomationProperties.SetHelpText(button, "Select this color swatch.");
+        AutomationProperties.SetHelpText(button, UiText.Get("ColorPicker_SwatchHelpText"));
         button.Click += SwatchButton_Click;
         _initialFocusButton ??= button;
         if (SelectedColor == swatch.Color)
@@ -159,7 +159,9 @@ public partial class ColorPickerDialog : Window
     }
 
     private static string CreateSwatchAutomationName(ColorPickerSwatch swatch, string? groupName) =>
-        groupName is null ? $"Color swatch {swatch.Hex}" : $"{groupName} swatch {swatch.Hex}";
+        groupName is null
+            ? UiText.Format("ColorPicker_ColorSwatchAutomationName", swatch.Hex)
+            : UiText.Format("ColorPicker_GroupSwatchAutomationName", groupName, swatch.Hex);
 
     private void FocusInitialKeyboardTarget()
     {
