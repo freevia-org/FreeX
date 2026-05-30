@@ -122,6 +122,7 @@ public sealed class RibbonIconFactorySvgTests
     [InlineData("Add Watch", "add-watch", "watch-add")]
     [InlineData("Delete Watch", "delete-watch", "watch-delete")]
     [InlineData("Reapply", "reapply", "reapply-filter")]
+    [InlineData("100%", "100", "zoom-to-100")]
     [InlineData("Pick From Drop-down List...", "pick-from-drop-down-list", "pick-from-dropdown")]
     public void CommandIconSlugAliases_NormalizePlainAmpersands(
         string commandName,

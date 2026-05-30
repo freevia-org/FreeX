@@ -6,10 +6,10 @@ namespace FreeX.App.Host.Tests;
 public sealed class RibbonCollapsedGroupPresentationPlannerTests
 {
     [Theory]
-    [InlineData(760, "Captionless", 44, Visibility.Collapsed, 9, 40, 18, "captionless")]
-    [InlineData(761, "Compact", 44, Visibility.Visible, 9, 40, 18, "compact")]
-    [InlineData(920, "Compact", 44, Visibility.Visible, 9, 40, 18, "compact")]
-    [InlineData(921, "Normal", 64, Visibility.Visible, 10, 60, 22, "normal")]
+    [InlineData(760, "Captionless", 44, Visibility.Collapsed, 12, 40, 18, "captionless")]
+    [InlineData(761, "Compact", 44, Visibility.Visible, 12, 40, 18, "compact")]
+    [InlineData(920, "Compact", 44, Visibility.Visible, 12, 40, 18, "compact")]
+    [InlineData(921, "Normal", 64, Visibility.Visible, 12, 60, 22, "normal")]
     public void CreateFootprint_MapsExcelWidthBandsToCollapsedGroupPresentation(
         double availableWidth,
         string expectedMode,

@@ -33,6 +33,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("increase indent")) return new(RibbonCommandIconKind.Align);
         if (name.Contains("merge")) return new(RibbonCommandIconKind.Merge);
         if (name.Contains("wrap")) return new(RibbonCommandIconKind.Wrap);
+        if (name == "100%") return new(RibbonCommandIconKind.Zoom);
         if (name.Contains("page orientation")) return new(RibbonCommandIconKind.Page);
         if (name.Contains("orientation")) return new(RibbonCommandIconKind.Orientation);
         if (name.Contains("align")) return new(RibbonCommandIconKind.Align);

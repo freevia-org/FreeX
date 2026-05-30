@@ -256,6 +256,7 @@ public static partial class RibbonIconFactory
             "side-by-side" => "view-side-by-side",
             "sync-scrolling" => "synchronous-scrolling",
             "reset-position" => "reset-window-position",
+            "100" => "zoom-to-100",
             "save-as" => "save-as",
             "export-pdf-xps" => "export",
             "page-orientation" => "page-orientation",

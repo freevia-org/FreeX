@@ -70,6 +70,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Refresh All", RibbonCommandIconKind.Refresh)]
     [InlineData("Reapply", RibbonCommandIconKind.Refresh)]
     [InlineData("Advanced", RibbonCommandIconKind.Filter)]
+    [InlineData("100%", RibbonCommandIconKind.Zoom)]
     [InlineData("Insert Function", RibbonCommandIconKind.Function)]
     [InlineData("Spelling", RibbonCommandIconKind.Spelling)]
     [InlineData("Check Accessibility", RibbonCommandIconKind.Accessibility)]

@@ -1015,9 +1015,7 @@ public partial class MainWindow
             {
                 if (RibbonMetadata.IsCommandLabel(textBlock))
                 {
-                    textBlock.FontSize = string.Equals(textBlock.Uid, "RibbonCompactRowLabel", StringComparison.Ordinal)
-                        ? 9
-                        : 12;
+                    textBlock.FontSize = 12;
                     textBlock.TextTrimming = TextTrimming.CharacterEllipsis;
                     textBlock.VerticalAlignment = System.Windows.VerticalAlignment.Center;
                     if (tall)
@@ -1160,7 +1158,7 @@ public partial class MainWindow
                          .Where(RibbonMetadata.IsCommandLabel))
             {
                 textBlock.Uid = "RibbonCompactRowLabel";
-                textBlock.FontSize = 9;
+                textBlock.FontSize = 12;
             }
         }
 
@@ -1746,7 +1744,7 @@ public partial class MainWindow
     private static double GetIconLabelRowRibbonCommandWidth(string label)
     {
         var length = string.IsNullOrWhiteSpace(label) ? 0 : label.Trim().Length;
-        return Math.Min(210, 72 + length * 7);
+        return Math.Min(156, 48 + length * 5.8);
     }
 
     private static double GetLargeRibbonCommandWidth(string label)

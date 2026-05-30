@@ -285,7 +285,7 @@
                                     <StackPanel>
                                         <local:RibbonIcon Kind="Paste" IconSize="22"
                                                           HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Paste" local:RibbonMetadata.Role="CommandLabel" FontSize="10" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                        <TextBlock Text="Paste" local:RibbonMetadata.Role="CommandLabel" FontSize="12" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </Button>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Top" Margin="2,1,0,0">
@@ -659,7 +659,7 @@
                                         <StackPanel Orientation="Horizontal">
                                             <local:RibbonIcon Kind="Wrap" IconSize="16"
                                                               VerticalAlignment="Center" Margin="0,0,2,0"/>
-                                            <TextBlock Text="Wrap" FontSize="10" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Wrap" FontSize="12" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </ToggleButton>
                                 </StackPanel>
@@ -737,7 +737,7 @@
                                                 <Path Data="M 2 7 L 7 3 M 2 7 L 7 11 M 18 7 L 13 3 M 18 7 L 13 11"
                                                       Stroke="#111" StrokeThickness="1"/>
                                             </Grid>
-                                            <TextBlock Text="Merge &amp; Center" local:RibbonMetadata.Role="CommandLabel" FontSize="10"/>
+                                            <TextBlock Text="Merge &amp; Center" local:RibbonMetadata.Role="CommandLabel" FontSize="12"/>
                                         </StackPanel>
                                     </Button>
                                 </StackPanel>
@@ -901,8 +901,8 @@
                                     <StackPanel HorizontalAlignment="Center">
                                         <local:RibbonIcon Kind="Theme" IconSize="20"
                                                           HorizontalAlignment="Center" Margin="0,5,0,3"/>
-                                        <TextBlock Text="Conditional" local:RibbonMetadata.Role="CommandLabel" FontSize="9" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Formatting" local:RibbonMetadata.Role="CommandLabel" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Conditional" local:RibbonMetadata.Role="CommandLabel" FontSize="12" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Formatting" local:RibbonMetadata.Role="CommandLabel" FontSize="12" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 <!-- Format as Table -->
@@ -917,8 +917,8 @@
                                     <StackPanel HorizontalAlignment="Center">
                                         <local:RibbonIcon Kind="Table" IconSize="20"
                                                           HorizontalAlignment="Center" Margin="0,5,0,3"/>
-                                        <TextBlock Text="Format as" local:RibbonMetadata.Role="CommandLabel" FontSize="9" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Table" local:RibbonMetadata.Role="CommandLabel" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Format as" local:RibbonMetadata.Role="CommandLabel" FontSize="12" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Table" local:RibbonMetadata.Role="CommandLabel" FontSize="12" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 <!-- Cell Styles -->
@@ -959,8 +959,8 @@
                                     <StackPanel HorizontalAlignment="Center">
                                         <local:RibbonIcon Kind="Color" IconSize="20"
                                                           HorizontalAlignment="Center" Margin="0,5,0,3"/>
-                                        <TextBlock Text="Cell" local:RibbonMetadata.Role="CommandLabel" FontSize="9" HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Styles" local:RibbonMetadata.Role="CommandLabel" FontSize="9" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Cell" local:RibbonMetadata.Role="CommandLabel" FontSize="12" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Styles" local:RibbonMetadata.Role="CommandLabel" FontSize="12" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
@@ -1076,7 +1076,7 @@
                                     </Button.ContextMenu>
                                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <local:RibbonIcon Kind="Sum" IconSize="22" HorizontalAlignment="Center" Margin="0,4,0,1"/>
-                                        <TextBlock Text="AutoSum" local:RibbonMetadata.Role="CommandLabel" FontSize="10" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="AutoSum" local:RibbonMetadata.Role="CommandLabel" FontSize="12" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
                                 <!-- Right: 2×2 grid of Fill/Clear/Sort&Filter/Find&Select -->
@@ -1109,7 +1109,7 @@
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <local:RibbonIcon Kind="Fill" IconSize="18"
                                                               VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                            <TextBlock Text="Fill" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Fill" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                     <!-- Clear -->
@@ -1130,7 +1130,7 @@
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <local:RibbonIcon Kind="Clear" IconSize="18"
                                                               VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                            <TextBlock Text="Clear" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Clear" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                     <!-- Sort & Filter -->
@@ -1153,7 +1153,7 @@
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <local:RibbonIcon Kind="Sort" IconSize="18"
                                                               VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                            <TextBlock Text="Sort &amp; Filter" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Sort &amp; Filter" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                     <!-- Find & Select -->
@@ -1174,7 +1174,7 @@
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                             <local:RibbonIcon Kind="Search" IconSize="18"
                                                               VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                            <TextBlock Text="Find &amp; Select" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Find &amp; Select" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
                                 </Grid>
@@ -2186,7 +2186,7 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
-                                    <TextBlock Text="Gridlines" FontSize="10" Margin="4,2,4,0" Foreground="#444"/>
+                                    <TextBlock Text="Gridlines" FontSize="12" Margin="4,2,4,0" Foreground="#444"/>
                                     <CheckBox x:Name="PageLayoutViewGridlinesChk" Content="View" Margin="4,1" IsChecked="True"
                                               Checked="ViewGridlinesChk_Changed" Unchecked="ViewGridlinesChk_Changed"
                                               local:RibbonTooltip.Title="View Gridlines"
@@ -2199,7 +2199,7 @@
                                               local:RibbonTooltip.Description="Print worksheet gridlines on each page."/>
                                 </StackPanel>
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="Headings" FontSize="10" Margin="4,2,4,0" Foreground="#444"/>
+                                    <TextBlock Text="Headings" FontSize="12" Margin="4,2,4,0" Foreground="#444"/>
                                     <CheckBox x:Name="PageLayoutViewHeadingsChk" Content="View" Margin="4,1" IsChecked="True"
                                               Checked="ViewHeadersChk_Changed" Unchecked="ViewHeadersChk_Changed"
                                               local:RibbonTooltip.Title="View Headings"
@@ -2567,19 +2567,19 @@
                                             local:RibbonTooltip.Title="Text to Columns"
                                             local:RibbonTooltip.KeyTip="E"
                                             local:RibbonTooltip.Description="Split text in one column into multiple columns using a delimiter such as a comma or space.">
-                                        <TextBlock Text="Text to Columns" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Text to Columns" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                     <Button Width="124" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FlashFillMenuItem_Click"
                                             local:RibbonTooltip.Title="Flash Fill"
                                             local:RibbonTooltip.KeyTip="FF"
                                             local:RibbonTooltip.Description="Automatically fill values from examples in adjacent columns.">
-                                        <TextBlock Text="Flash Fill" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Flash Fill" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                     <Button Width="124" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveDuplicatesBtn_Click"
                                             local:RibbonTooltip.Title="Remove Duplicates"
                                             local:RibbonTooltip.KeyTip="M"
                                             local:RibbonTooltip.Description="Delete duplicate rows from the selected range.">
-                                        <TextBlock Text="Remove Duplicates" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Remove Duplicates" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
@@ -2587,13 +2587,13 @@
                                             local:RibbonTooltip.Title="Data Validation"
                                             local:RibbonTooltip.KeyTip="V"
                                             local:RibbonTooltip.Description="Control what data can be entered in the selected cells.">
-                                        <TextBlock Text="Data Validation" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Data Validation" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                     <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ConsolidateBtn_Click"
                                             local:RibbonTooltip.Title="Consolidate"
                                             local:RibbonTooltip.KeyTip="N"
                                             local:RibbonTooltip.Description="Combine values from multiple ranges into a single summary range.">
-                                        <TextBlock Text="Consolidate" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Consolidate" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
@@ -3263,7 +3263,7 @@
                                             local:RibbonTooltip.Title="Contact Support"
                                             local:RibbonTooltip.KeyTip="CS"
                                             local:RibbonTooltip.Description="Contact support for FreeX. In-app support is not yet implemented.">
-                                        <TextBlock Text="Contact Support" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Contact Support" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
@@ -3271,13 +3271,13 @@
                                             local:RibbonTooltip.Title="Show Training"
                                             local:RibbonTooltip.KeyTip="TR"
                                             local:RibbonTooltip.Description="Open FreeX training content. Training content is not yet implemented.">
-                                        <TextBlock Text="Show Training" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="Show Training" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                     <Button Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                             local:RibbonTooltip.Title="What's New"
                                             local:RibbonTooltip.KeyTip="WN"
                                             local:RibbonTooltip.Description="Show recent FreeX updates. What's New content is not yet implemented.">
-                                        <TextBlock Text="What's New" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center" TextAlignment="Center"/>
+                                        <TextBlock Text="What's New" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
                                 </StackPanel>
                             </StackPanel>

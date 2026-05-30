@@ -471,6 +471,7 @@
         <Style TargetType="MenuItem">
             <Setter Property="Background" Value="White"/>
             <Setter Property="Foreground" Value="#111"/>
+            <Setter Property="FontSize" Value="12"/>
         </Style>
 
         <!-- ── Start-screen sidebar buttons ─────────────────────────────── -->
