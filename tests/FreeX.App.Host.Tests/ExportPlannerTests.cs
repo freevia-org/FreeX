@@ -289,6 +289,66 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void CreateEffectiveOptionsForFormat_PreservesPdfPublishOptions()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.Selection,
+            IncludeDocumentProperties: true,
+            OpenAfterPublish: true,
+            IgnorePrintAreas: true,
+            PageRange: new ExportPageRange(2, 3),
+            Quality: ExportQuality.MinimumSize,
+            CreateBookmarks: true,
+            BookmarkMode: PdfBookmarkMode.PageNumbers,
+            InitialView: PdfInitialView.TwoColumnRight,
+            OpenMode: PdfOpenMode.Outlines,
+            BitmapTextWhenFontsMayNotBeEmbedded: true,
+            PdfLanguage: " uk_ua ");
+
+        ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Pdf)
+            .Should()
+            .Be(options with { PdfLanguage = "uk-UA" });
+    }
+
+    [Fact]
+    public void CreateEffectiveOptionsForFormat_ClearsPdfOnlyChoicesForXps()
+    {
+        var options = new ExportOptions(
+            ExportContentScope.Selection,
+            IncludeDocumentProperties: true,
+            OpenAfterPublish: true,
+            IgnorePrintAreas: true,
+            PageRange: new ExportPageRange(2, 3),
+            Quality: ExportQuality.MinimumSize,
+            CreateBookmarks: true,
+            BookmarkMode: PdfBookmarkMode.PageNumbers,
+            InitialView: PdfInitialView.TwoColumnRight,
+            OpenMode: PdfOpenMode.Outlines,
+            BitmapTextWhenFontsMayNotBeEmbedded: true,
+            PdfLanguage: "uk-UA",
+            PdfConformance: PdfConformance.PdfA1b,
+            IncludeDocumentStructureTags: true);
+
+        ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Xps)
+            .Should()
+            .Be(new ExportOptions(
+                ExportContentScope.Selection,
+                IncludeDocumentProperties: true,
+                OpenAfterPublish: true,
+                IgnorePrintAreas: true,
+                PageRange: new ExportPageRange(2, 3),
+                Quality: ExportQuality.Standard,
+                CreateBookmarks: false,
+                BookmarkMode: PdfBookmarkMode.None,
+                InitialView: PdfInitialView.SinglePage,
+                OpenMode: PdfOpenMode.Normal,
+                BitmapTextWhenFontsMayNotBeEmbedded: false,
+                PdfLanguage: ExportPlanner.DefaultPdfLanguage,
+                PdfConformance: PdfConformance.Standard,
+                IncludeDocumentStructureTags: false));
+    }
+
+    [Fact]
     public void ResolveExportSheetIds_ActiveSheetUsesGroupedVisibleSheetsInWorkbookOrder()
     {
         var workbook = new Workbook("Book");
@@ -449,6 +509,67 @@ public class ExportPlannerTests
                 BookmarkMode: PdfBookmarkMode.None));
     }
 
+    [Fact]
+    public void ExportOptionsDialog_CreateResult_ClearsPdfOnlyChoicesForXps()
+    {
+        ExportOptionsDialog.CreateResult(
+                ExportContentScope.EntireWorkbook,
+                includeDocumentProperties: true,
+                openAfterPublish: true,
+                ignorePrintAreas: true,
+                pageRange: new ExportPageRange(4, 5),
+                quality: ExportQuality.MinimumSize,
+                createBookmarks: true,
+                bookmarkMode: PdfBookmarkMode.PageNumbers,
+                initialView: PdfInitialView.TwoColumnLeft,
+                openMode: PdfOpenMode.FullScreen,
+                bitmapTextWhenFontsMayNotBeEmbedded: true,
+                pdfLanguage: "uk-UA",
+                pdfConformance: PdfConformance.PdfA1b,
+                includeDocumentStructureTags: true,
+                format: ExportFormat.Xps)
+            .Should()
+            .Be(new ExportOptions(
+                ExportContentScope.EntireWorkbook,
+                IncludeDocumentProperties: true,
+                OpenAfterPublish: true,
+                IgnorePrintAreas: true,
+                PageRange: new ExportPageRange(4, 5),
+                Quality: ExportQuality.Standard,
+                CreateBookmarks: false,
+                BookmarkMode: PdfBookmarkMode.None,
+                InitialView: PdfInitialView.SinglePage,
+                OpenMode: PdfOpenMode.Normal,
+                BitmapTextWhenFontsMayNotBeEmbedded: false,
+                PdfLanguage: ExportPlanner.DefaultPdfLanguage,
+                PdfConformance: PdfConformance.Standard,
+                IncludeDocumentStructureTags: false));
+    }
+
+    [Fact]
+    public void ExportOptionsDialogPlanner_CreatesFormatAvailability()
+    {
+        ExportOptionsDialogPlanner.CreateFormatAvailability(ExportFormat.Pdf)
+            .Should()
+            .Be(new ExportOptionsFormatAvailability(
+                PdfBookmarksEnabled: true,
+                PdfInitialViewEnabled: true,
+                PdfOpenModeEnabled: true,
+                PdfLanguageEnabled: true,
+                PdfBitmapTextEnabled: true,
+                MinimumSizeEnabled: true));
+
+        ExportOptionsDialogPlanner.CreateFormatAvailability(ExportFormat.Xps)
+            .Should()
+            .Be(new ExportOptionsFormatAvailability(
+                PdfBookmarksEnabled: false,
+                PdfInitialViewEnabled: false,
+                PdfOpenModeEnabled: false,
+                PdfLanguageEnabled: false,
+                PdfBitmapTextEnabled: false,
+                MinimumSizeEnabled: false));
+    }
+
     [Theory]
     [InlineData(0, 1)]
     [InlineData(1, 2)]
@@ -507,6 +628,9 @@ public class ExportPlannerTests
         source.Should().Contain("ExportOptionsDialogPlanner.InitialViewFromIndex(_initialViewBox.SelectedIndex)");
         source.Should().Contain("ExportOptionsDialogPlanner.OpenModeFromIndex(_openModeBox.SelectedIndex)");
         source.Should().Contain("ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, _fromPageBox.Text)");
+        source.Should().Contain("ExportOptionsDialogPlanner.CreateFormatAvailability(format)");
+        source.Should().Contain("ApplyFormatAvailability(ExportOptionsDialogPlanner.CreateFormatAvailability(format));");
+        source.Should().Contain("DisableOption(_bookmarksBox, UiText.Get(\"Export_BookmarksPdfOnly\"));");
     }
 
     [Theory]
@@ -615,6 +739,9 @@ public class ExportPlannerTests
         source.Should().Contain("AutomationProperties.SetHelpText(_selectionButton, UiText.Get(\"ExportOptions_SelectACellRangeBeforeExportingTheSelection\"));");
         source.Should().Contain("AutomationProperties.SetHelpText(_pdfABox, UiText.Get(\"ExportOptions_FreeXSCurrentPdfExporterCannotWritePdfAConformanceMetadata\"));");
         source.Should().Contain("AutomationProperties.SetHelpText(_structureTagsBox, UiText.Get(\"ExportOptions_FreeXSCurrentPdfExporterCannotWriteTaggedPdfStructureTrees\"));");
+        source.Should().Contain("private static void DisableOption(Control control, string helpText)");
+        source.Should().Contain("AutomationProperties.SetHelpText(control, helpText);");
+        source.Should().Contain("DisableOption(_minimumSizeButton, UiText.Get(\"Export_QualityMinimumSizePdfOnly\"));");
     }
 
     [Fact]
@@ -667,7 +794,7 @@ public class ExportPlannerTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
 
-        source.Should().Contain("public ExportOptionsDialog(bool hasSelection, string? initialPdfLanguage = null)");
+        source.Should().Contain("public ExportOptionsDialog(bool hasSelection, string? initialPdfLanguage = null, ExportFormat format = ExportFormat.Pdf)");
         source.Should().Contain("_pdfLanguageBox.Text = ExportPlanner.NormalizePdfLanguage(initialPdfLanguage);");
     }
 
@@ -3265,24 +3392,28 @@ public class ExportPlannerTests
         var optionsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeXOptions.cs"));
 
         optionsSource.Should().Contain("public string PdfExportLanguage { get; set; } = ExportPlanner.DefaultPdfLanguage;");
-        printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage)");
+        printExport.Should().Contain("saveDlg.FilterIndex == 2");
+        printExport.Should().Contain("new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage, selectedFormat)");
+        printExport.Should().Contain("if (selectedFormat == ExportFormat.Pdf)");
         printExport.Should().Contain("_options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;");
         printExport.Should().Contain("_options.Save();");
-        printExport.Should().Contain("saveDlg.FilterIndex == 2");
         printExport.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result)");
         printExport.Should().Contain("RenderExportDocument(options)");
-        printExport.Should().Contain("RenderExportPaginator(options)");
+        printExport.Should().Contain("ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Pdf)");
+        printExport.Should().Contain("ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Xps)");
+        printExport.Should().Contain("RenderExportDocument(effectiveOptions)");
+        printExport.Should().Contain("RenderExportPaginator(effectiveOptions)");
         printExport.Should().Contain("ApplyExportPageRange(options");
         printExport.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
         printExport.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
         printExport.Should().Contain("ResolveExportRange(options)");
-        printExport.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, options)");
-        printExport.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, options))");
-        printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, document.Pages.Count");
+        printExport.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions)");
+        printExport.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions))");
+        printExport.Should().Contain("ExportPlanner.TryValidatePageRange(effectiveOptions.PageRange, document.Pages.Count");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount");
-        printExport.Should().Contain("CreatePdfBookmarks(options)");
-        printExport.Should().Contain("includeSelectableText: !options.BitmapTextWhenFontsMayNotBeEmbedded");
-        printExport.Should().Contain("pdfLanguage: options.PdfLanguage");
+        printExport.Should().Contain("CreatePdfBookmarks(effectiveOptions)");
+        printExport.Should().Contain("includeSelectableText: !effectiveOptions.BitmapTextWhenFontsMayNotBeEmbedded");
+        printExport.Should().Contain("pdfLanguage: effectiveOptions.PdfLanguage");
         printExport.Should().Contain("options.EffectiveBookmarkMode");
         printExport.Should().Contain(": sheet.Name");
         printExport.Should().Contain("BuildPrintTitleBookmark(sheet)");
