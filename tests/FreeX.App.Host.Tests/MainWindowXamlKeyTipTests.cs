@@ -308,8 +308,15 @@ public sealed class MainWindowXamlKeyTipTests
             .Should()
             .Contain(command => command.Header == "Format Cells..." && command.Action == WorksheetContextMenuAction.FormatCells);
 
-        var fileRoute = RibbonTopLevelKeyTipRouter.Resolve("F");
+        var topLevelKeyTips = document
+            .Descendants(presentation + "TabItem")
+            .Select(tab => new RibbonTopLevelKeyTipEntry(
+                tab.Attribute("Header")?.Value ?? "",
+                tab.Attribute(local + "RibbonTooltip.KeyTip")?.Value))
+            .ToArray();
+        var fileRoute = RibbonTopLevelKeyTipRouter.Resolve("F", topLevelKeyTips);
         fileRoute.Should().Be(RibbonTopLevelKeyTipAction.BackstageFile);
+        editingSource.Should().Contain("RibbonTopLevelKeyTipRouter.Resolve(keyTip, EnumerateVisibleTopLevelRibbonKeyTipEntries())");
         editingSource.Should().Contain("{ Kind: RibbonTopLevelKeyTipActionKind.BackstageFile } => OpenFileBackstageFromKeyTip()");
         FindTab(document, "File").Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("F");
 

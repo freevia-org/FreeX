@@ -845,12 +845,21 @@ public partial class MainWindow
 
     private bool TryHandleTopLevelRibbonKeyTip(string keyTip)
     {
-        return RibbonTopLevelKeyTipRouter.Resolve(keyTip) switch
+        return RibbonTopLevelKeyTipRouter.Resolve(keyTip, EnumerateVisibleTopLevelRibbonKeyTipEntries()) switch
         {
             { Kind: RibbonTopLevelKeyTipActionKind.BackstageFile } => OpenFileBackstageFromKeyTip(),
             { Kind: RibbonTopLevelKeyTipActionKind.RibbonTab, RibbonTabHeader: { } header } => SelectRibbonTabByHeader(header),
             _ => false
         };
+    }
+
+    private IEnumerable<RibbonTopLevelKeyTipEntry> EnumerateVisibleTopLevelRibbonKeyTipEntries()
+    {
+        foreach (var tabItem in GetVisibleKeyTipElements(RibbonKeyTipScope.TopLevel).OfType<TabItem>())
+        {
+            if (tabItem.Header is string header)
+                yield return new RibbonTopLevelKeyTipEntry(header, RibbonTooltip.GetKeyTip(tabItem));
+        }
     }
 
     private bool SelectRibbonTabByHeader(string header)
