@@ -540,6 +540,62 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void DenseRibbonCommandColumns_PreserveExcelReadingOrderWithinRows()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Page Layout", 1465);
+            harness.ActiveRibbonGroupDenseCommandPlacements("Page Setup")
+                .Should()
+                .ContainInOrder(
+                    new DenseCommandPlacement("Margins", 0, 0),
+                    new DenseCommandPlacement("Orientation", 0, 1),
+                    new DenseCommandPlacement("Size", 0, 2),
+                    new DenseCommandPlacement("Print Area", 1, 0),
+                    new DenseCommandPlacement("Breaks", 1, 1),
+                    new DenseCommandPlacement("Background", 1, 2),
+                    new DenseCommandPlacement("Print Titles", 2, 0));
+        });
+    }
+
+    [Fact]
+    public void RibbonTabs_CollapseLowerPriorityGroupsInExcelOrderAcrossCommonWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var expectations = new[]
+            {
+                new RibbonFallbackExpectation("Insert", 900, Expanded: ["Tables"], Collapsed: ["Charts"]),
+                new RibbonFallbackExpectation("Data", 1120, Expanded: ["Sort & Filter", "Data Tools", "Forecast"], Collapsed: ["Queries & Connections", "Outline"]),
+                new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Page Setup"], Collapsed: ["Themes", "Arrange"]),
+                new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show", "Zoom"], Collapsed: ["Window"]),
+                new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views"], Collapsed: ["Show", "Zoom", "Window"]),
+                new RibbonFallbackExpectation("Draw", 900, Expanded: ["Tools", "Pens"], Collapsed: ["Convert", "Arrange", "Format"])
+            };
+
+            foreach (var expectation in expectations)
+            {
+                harness.SelectRibbonTab(expectation.Tab, expectation.Width);
+                if (!harness.CanUseRequestedRibbonWidth(expectation.Width))
+                    continue;
+
+                harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
+                    expectation.Expanded,
+                    $"{expectation.Tab} at {expectation.Width:0}px should keep Excel-style primary groups expanded before lower-priority groups; {harness.DebugActiveRibbonChildren}");
+                harness.CollapsedActiveRibbonGroupNames.Should().Contain(
+                    expectation.Collapsed,
+                    $"{expectation.Tab} at {expectation.Width:0}px should collapse lower-priority groups first; {harness.DebugActiveRibbonChildren}");
+                harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                    0.5,
+                    $"{expectation.Tab} at {expectation.Width:0}px should fit without a hidden-scroll overflow after fallback ordering; {harness.DebugActiveRibbonChildren}");
+            }
+        });
+    }
+
+    [Fact]
     public void PageLayoutPageSetup_KeepsCommandsInsideRibbonRow()
     {
         StaTestRunner.Run(() =>
@@ -1365,6 +1421,15 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .ToList()
                 : [];
 
+        public IReadOnlyList<DenseCommandPlacement> ActiveRibbonGroupDenseCommandPlacements(string groupName) =>
+            FindActiveRibbonGroup(groupName) is { } group
+                ? EnumerateSelfAndVisualDescendants(group)
+                    .OfType<UniformGrid>()
+                    .Where(grid => grid.Rows > 0 && grid.Children.OfType<Button>().Count() > 3)
+                    .SelectMany(GetDenseCommandPlacements)
+                    .ToList()
+                : [];
+
         public IReadOnlyList<string> ActiveRibbonGroupClippedCommandLabels(string groupName) =>
             FindActiveRibbonGroup(groupName) is { } group
                 ? EnumerateSelfAndVisualDescendants(group)
@@ -1745,6 +1810,22 @@ public sealed class MainWindowAdaptiveRibbonTests
                                  layout == RibbonCommandContentLayout.Small &&
                                  TryGetCommandIconSlot(button, out _));
 
+        private static IEnumerable<DenseCommandPlacement> GetDenseCommandPlacements(UniformGrid grid)
+        {
+            var buttons = grid.Children.OfType<Button>().Where(IsEffectivelyVisible).ToArray();
+            var columns = grid.Columns > 0
+                ? grid.Columns
+                : (int)Math.Ceiling(buttons.Length / (double)Math.Max(1, grid.Rows));
+            for (var index = 0; index < buttons.Length; index++)
+            {
+                var label = GetButtonLabel(buttons[index]);
+                if (string.IsNullOrWhiteSpace(label))
+                    continue;
+
+                yield return new DenseCommandPlacement(label, index / columns, index % columns);
+            }
+        }
+
         private static RibbonIconStackOffsets CreateIconStackOffsets(Visual ancestor, IReadOnlyList<Button> buttons) =>
             new(
                 buttons.Select(GetButtonLabel).ToArray(),
@@ -1845,6 +1926,14 @@ public sealed class MainWindowAdaptiveRibbonTests
     public sealed record CheckBoxLabelOffset(string Name, double Offset);
 
     public sealed record CollapsedGroupKeyTip(string GroupName, string KeyTip);
+
+    public sealed record DenseCommandPlacement(string Label, int Row, int Column);
+
+    private sealed record RibbonFallbackExpectation(
+        string Tab,
+        double Width,
+        IReadOnlyList<string> Expanded,
+        IReadOnlyList<string> Collapsed);
 
     private static void PumpDispatcher()
     {
