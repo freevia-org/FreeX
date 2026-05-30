@@ -196,6 +196,34 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void CalculateSplitPaneCellLayouts_AllowsTopRightTextOverflowWithinIndependentColumns()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0)],
+                [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64)],
+                [
+                    Cell(1, 12, "top-right overflow"),
+                    Cell(1, 14, "stop")
+                ],
+                [
+                    new ColMetric(12, 50, 0),
+                    new ColMetric(13, 70, 50),
+                    new ColMetric(14, 90, 120)
+                ]));
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(viewport);
+
+        layouts.Single(layout => layout.Cell.Col == 12).TextClipRect
+            .Should().Be(new Rect(GridView.RowHeaderWidth + 144, GridView.ColHeaderHeight, 120, 18));
+    }
+
+    [Fact]
     public void CalculateSplitPaneCellLayouts_TreatsEditingCellAsOverflowOccupied()
     {
         var sheetId = SheetId.New();

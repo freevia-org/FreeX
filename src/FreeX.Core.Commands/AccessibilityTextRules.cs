@@ -32,6 +32,20 @@ internal static partial class AccessibilityTextRules
         "graphic"
     };
 
+    private static readonly HashSet<string> GenericChartAxisTitles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "axis",
+        "axis title",
+        "category axis",
+        "horizontal axis",
+        "value axis",
+        "vertical axis",
+        "x axis",
+        "x-axis",
+        "y axis",
+        "y-axis"
+    };
+
     public static bool IsDescriptiveHyperlinkText(string displayText, string target)
     {
         var text = NormalizeComparableText(displayText);
@@ -62,6 +76,13 @@ internal static partial class AccessibilityTextRules
         return string.Equals(text, "Chart Title", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(text, "Title", StringComparison.OrdinalIgnoreCase) ||
             ChartNumberTitleRegex().IsMatch(text);
+    }
+
+    public static bool IsGenericChartAxisTitle(string title)
+    {
+        var text = NormalizeComparableText(title);
+        return GenericChartAxisTitles.Contains(text) ||
+            ChartAxisNumberTitleRegex().IsMatch(text);
     }
 
     public static bool IsDefaultTableHeaderText(string headerText)
@@ -95,6 +116,9 @@ internal static partial class AccessibilityTextRules
 
     [GeneratedRegex(@"(?i)^Chart\s*\d+$")]
     private static partial Regex ChartNumberTitleRegex();
+
+    [GeneratedRegex(@"(?i)^(?:Axis|X\s*Axis|Y\s*Axis|Horizontal\s*Axis|Vertical\s*Axis|Category\s*Axis|Value\s*Axis)\s*\d+$")]
+    private static partial Regex ChartAxisNumberTitleRegex();
 
     [GeneratedRegex(@"(?i)^Column\s*\d+$")]
     private static partial Regex DefaultTableHeaderRegex();

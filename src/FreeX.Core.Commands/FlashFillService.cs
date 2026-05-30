@@ -36,6 +36,8 @@ public static partial class FlashFillService
             ?? TryEmailLocalPartWithoutPlusTag(examples)
             ?? TryEmailDomainStem(examples)
             ?? TryDigitMask(examples)
+            ?? TryDateNormalization(examples)
+            ?? TryPhoneNumberNormalization(examples)
             ?? TryStripThousandSeparators(examples)
             ?? TryExtractDigitsOnly(examples)
             ?? TryExtractFinalDigitRun(examples)
