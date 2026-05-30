@@ -522,12 +522,16 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
-    public void PageBreakDialog_NumberInputsExposeAutomationNames()
+    public void PageBreakDialog_NumberInputsExposeAutomationMetadata()
     {
         var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
 
         source.Should().Contain("AutomationProperties.SetName(_rowBreakBox, \"Row page break\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_rowBreakBox, \"PageBreakRowBreakBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_rowBreakBox, \"Enter the row number where the horizontal page break should be inserted.\");");
         source.Should().Contain("AutomationProperties.SetName(_columnBreakBox, \"Column page break\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_columnBreakBox, \"PageBreakColumnBreakBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_columnBreakBox, \"Enter the column number or letter where the vertical page break should be inserted.\");");
     }
 
     [Fact]
