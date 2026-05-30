@@ -191,11 +191,11 @@ public sealed class PageSetupDialogXamlTests
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
-        foreach (var (buttonName, targetName, automationName) in new[]
+        foreach (var (buttonName, targetName, automationName, automationId, helpText) in new[]
         {
-            ("PrintAreaPickerButton", "PrintAreaBox", "Select print area"),
-            ("RowsRepeatPickerButton", "RowsRepeatBox", "Select rows to repeat"),
-            ("ColumnsRepeatPickerButton", "ColumnsRepeatBox", "Select columns to repeat")
+            ("PrintAreaPickerButton", "PrintAreaBox", "Select print area", "PageSetupPrintAreaPickerButton", "Collapse the Page Setup dialog and select the print area from the worksheet."),
+            ("RowsRepeatPickerButton", "RowsRepeatBox", "Select rows to repeat", "PageSetupRowsRepeatPickerButton", "Collapse the Page Setup dialog and select rows to repeat at the top of each printed page."),
+            ("ColumnsRepeatPickerButton", "ColumnsRepeatBox", "Select columns to repeat", "PageSetupColumnsRepeatPickerButton", "Collapse the Page Setup dialog and select columns to repeat at the left of each printed page.")
         })
         {
             var button = document.Descendants(presentation + "Button")
@@ -208,6 +208,8 @@ public sealed class PageSetupDialogXamlTests
             button.Attribute("Tag")?.Value.Should().Be(targetName);
             button.Attribute(x + "Name")?.Value.Should().Be(buttonName);
             button.Attribute("AutomationProperties.Name")?.Value.Should().Be(automationName);
+            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
+            button.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(helpText);
         }
 
         source.Should().Contain("RangePickerButton_Click");
@@ -395,6 +397,31 @@ public sealed class PageSetupDialogXamlTests
         handlerSource.Should().Contain("PageSetupDialogAction.Options");
         handlerSource.Should().Contain("ShowPageSetupPrinterOptions()");
         handlerSource.Should().Contain("PrintButton_Click(this, new RoutedEventArgs())");
+    }
+
+    [Fact]
+    public void FooterActionButtons_ExposeAutomationMetadata()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        foreach (var (content, name, automationId, helpText) in new[]
+        {
+            ("_Print...", "Print", "PageSetupPrintButton", "Print using the current Page Setup settings."),
+            ("Print Pre_view", "Print Preview", "PageSetupPrintPreviewButton", "Preview the worksheet with the current Page Setup settings."),
+            ("_Options...", "Options", "PageSetupOptionsButton", "Open printer options for Page Setup."),
+            ("_OK", "OK", "PageSetupOkButton", "Apply the Page Setup settings."),
+            ("_Cancel", "Cancel", "PageSetupCancelButton", "Close Page Setup without applying changes.")
+        })
+        {
+            var button = document
+                .Descendants(presentation + "Button")
+                .Single(element => element.Attribute("Content")?.Value == content);
+
+            button.Attribute("AutomationProperties.Name")?.Value.Should().Be(name);
+            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
+            button.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(helpText);
+        }
     }
 
     [Fact]

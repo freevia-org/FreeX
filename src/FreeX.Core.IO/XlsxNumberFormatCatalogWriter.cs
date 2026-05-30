@@ -131,18 +131,25 @@ internal static class XlsxNumberFormatCatalogWriter
 
     private static Dictionary<int, string> BuildNumberFormatCatalog(Workbook workbook)
     {
-        var catalog = workbook.NumberFormatCatalog
-            .Where(pair => pair.Key >= 164 && !string.IsNullOrWhiteSpace(pair.Value))
-            .ToDictionary(pair => pair.Key, pair => pair.Value);
-
-        foreach (var field in workbook.Sheets
-                     .SelectMany(sheet => sheet.PivotTables)
-                     .SelectMany(pivot => pivot.DataFields))
+        var catalog = new Dictionary<int, string>();
+        foreach (var (numberFormatId, formatCode) in workbook.NumberFormatCatalog)
         {
-            if (field.NumberFormatId is >= 164 and var numberFormatId &&
-                !string.IsNullOrWhiteSpace(field.NumberFormatCode))
+            if (numberFormatId >= 164 && !string.IsNullOrWhiteSpace(formatCode))
+                catalog[numberFormatId] = formatCode;
+        }
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var pivot in sheet.PivotTables)
             {
-                catalog[numberFormatId] = field.NumberFormatCode;
+                foreach (var field in pivot.DataFields)
+                {
+                    if (field.NumberFormatId is >= 164 and var numberFormatId &&
+                        !string.IsNullOrWhiteSpace(field.NumberFormatCode))
+                    {
+                        catalog[numberFormatId] = field.NumberFormatCode;
+                    }
+                }
             }
         }
 

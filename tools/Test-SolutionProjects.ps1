@@ -68,8 +68,12 @@ if (-not (Test-Path -LiteralPath $resolvedSolutionPath -PathType Leaf)) {
 
 [xml]$solutionXml = Get-Content -LiteralPath $resolvedSolutionPath -Raw
 $solutionRoot = Split-Path -Parent $resolvedSolutionPath
+$solutionRootPath = [System.IO.Path]::GetFullPath($solutionRoot)
+if (-not $solutionRootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+    $solutionRootPath += [System.IO.Path]::DirectorySeparatorChar
+}
 $solutionProjectPaths = @(
-    $solutionXml.Solution.Folder.Project |
+    $solutionXml.SelectNodes("//*[local-name()='Project']") |
         ForEach-Object { Normalize-RelativePath ([string]$_.Path) } |
         Sort-Object -Unique
 )
@@ -77,6 +81,24 @@ $solutionProjectPaths = @(
 if ($solutionProjectPaths.Count -eq 0) {
     throw "No project entries were found in $resolvedSolutionPath"
 }
+
+$duplicateSolutionProjectPaths = @(
+    $solutionXml.SelectNodes("//*[local-name()='Project']") |
+        ForEach-Object { Normalize-RelativePath ([string]$_.Path) } |
+        Group-Object { $_.ToUpperInvariant() } |
+        Where-Object { $_.Count -gt 1 } |
+        ForEach-Object { $_.Group[0] } |
+        Sort-Object
+)
+
+$escapedSolutionProjectPaths = @(
+    $solutionProjectPaths |
+        Where-Object {
+            $projectPath = if ([System.IO.Path]::IsPathRooted($_)) { $_ } else { Join-Path $solutionRoot $_ }
+            $resolvedProjectPath = [System.IO.Path]::GetFullPath($projectPath)
+            -not $resolvedProjectPath.StartsWith($solutionRootPath, [System.StringComparison]::OrdinalIgnoreCase)
+        }
+)
 
 $discoveredProjectPaths = @(
     Get-ChildItem -LiteralPath $resolvedProjectRoot -Filter "*.csproj" -File -Recurse |
@@ -99,9 +121,22 @@ $missingOnDisk = @(
     $solutionProjectPaths |
         Where-Object {
             $projectPath = Join-Path $solutionRoot $_
-            -not (Test-Path -LiteralPath $projectPath -PathType Leaf)
+            ($escapedSolutionProjectPaths -notcontains $_) -and
+                -not (Test-Path -LiteralPath $projectPath -PathType Leaf)
         }
 )
+
+if ($duplicateSolutionProjectPaths.Count -gt 0) {
+    foreach ($projectPath in $duplicateSolutionProjectPaths) {
+        Write-Error "Duplicate solution project entry: $projectPath" -ErrorAction Continue
+    }
+}
+
+if ($escapedSolutionProjectPaths.Count -gt 0) {
+    foreach ($projectPath in $escapedSolutionProjectPaths) {
+        Write-Error "Solution project path escapes solution root: $projectPath" -ErrorAction Continue
+    }
+}
 
 if ($missingFromSolution.Count -gt 0) {
     foreach ($projectPath in $missingFromSolution) {
@@ -115,7 +150,7 @@ if ($missingOnDisk.Count -gt 0) {
     }
 }
 
-if ($missingFromSolution.Count -gt 0 -or $missingOnDisk.Count -gt 0) {
+if ($duplicateSolutionProjectPaths.Count -gt 0 -or $escapedSolutionProjectPaths.Count -gt 0 -or $missingFromSolution.Count -gt 0 -or $missingOnDisk.Count -gt 0) {
     throw "Solution project validation failed."
 }
 

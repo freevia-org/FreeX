@@ -136,6 +136,28 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void AdvancedFamilyRenderers_AggregateTotalsWhileCollectingValues()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.AdvancedFamilies.cs"));
+        var pareto = source[
+            source.IndexOf("internal static PlotModel BuildParetoModel", StringComparison.Ordinal)..
+            source.IndexOf("internal static PlotModel BuildBoxAndWhiskerModel", StringComparison.Ordinal)];
+        var treemap = source[
+            source.IndexOf("internal static PlotModel BuildTreemapModel", StringComparison.Ordinal)..
+            source.IndexOf("internal static PlotModel BuildSunburstModel", StringComparison.Ordinal)];
+        var funnel = source[
+            source.IndexOf("internal static PlotModel BuildFunnelModel", StringComparison.Ordinal)..];
+
+        pareto.Should().Contain("total += v;");
+        pareto.Should().NotContain("total += values[index].Value");
+        treemap.Should().Contain("total += v;");
+        treemap.Should().NotContain("total += values[index].Value");
+        funnel.Should().Contain("if (value > maxVal)");
+        funnel.Should().NotContain("values[index].Value > maxVal");
+    }
+
+    [Fact]
     public void StockRenderer_BuildsDateAxisXValuesWithoutLinqScaffolding()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
@@ -643,6 +665,22 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void ChartDataTableAnnotations_BuildRowsWithoutListJoinPipelines()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.Annotations.cs"));
+        var dataTableAnnotations = source[
+            source.IndexOf("private static void AddChartDataTableAnnotations", StringComparison.Ordinal)..
+            source.IndexOf("private static int AppendChartDataTablePart", StringComparison.Ordinal)];
+
+        dataTableAnnotations.Should().Contain("var textBuilder = new StringBuilder();");
+        dataTableAnnotations.Should().Contain("AppendChartDataTablePart(");
+        dataTableAnnotations.Should().Contain("AddChartDataTableAnnotation(");
+        dataTableAnnotations.Should().NotContain("new List<string>");
+        dataTableAnnotations.Should().NotContain("string.Join(");
+    }
+
+    [Fact]
     public void ColumnRenderer_AppliesChartDataTableDirectStyle()
     {
         var sheetId = SheetId.New();
@@ -744,6 +782,22 @@ public sealed class ChartRendererTests
             .Select(annotation => annotation.Text)
             .Should()
             .Contain(["PivotTable1", "Axis Fields", "Values"]);
+    }
+
+    [Fact]
+    public void PivotChartFieldButtons_AddAnnotationsWithoutCaptionList()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.Annotations.cs"));
+        var fieldButtons = source[
+            source.IndexOf("private static void AddPivotChartFieldButtons", StringComparison.Ordinal)..
+            source.IndexOf("private static void AddPivotChartFieldButtonAnnotation", StringComparison.Ordinal)];
+
+        fieldButtons.Should().Contain("var index = 0;");
+        fieldButtons.Should().Contain("AddPivotChartFieldButtonAnnotation(");
+        fieldButtons.Should().NotContain("new List<string>");
+        fieldButtons.Should().NotContain("captions.Add(");
+        fieldButtons.Should().NotContain("captions.Count");
     }
 
     [Fact]
@@ -1367,6 +1421,22 @@ public sealed class ChartRendererTests
 
         var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.OutsideLabelFormat.Should().Be("{1}" + Environment.NewLine + "{2:0%}");
+    }
+
+    [Fact]
+    public void PieRenderer_DataLabelAnnotationsAggregatePositiveTotalsWithoutLinq()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.SeriesFormatting.cs"));
+        var annotations = source[
+            source.IndexOf("private static void AddPieDataLabelAnnotations", StringComparison.Ordinal)..
+            source.IndexOf("private static void AddPieAnnotationAxes", StringComparison.Ordinal)];
+
+        annotations.Should().Contain("for (var i = 0; i < points.Count; i++)");
+        annotations.Should().Contain("total += Math.Max(0, points[i].Value);");
+        annotations.Should().Contain("var positiveValue = Math.Max(0, point.Value);");
+        annotations.Should().NotContain("points.Sum(");
+        annotations.Should().NotContain(".Sum(");
     }
 
     [Fact]

@@ -76,6 +76,7 @@ public sealed partial class AdvancedFilterDialog : Window
         AutomationProperties.SetName(_copyToBox, "Copy to");
         AutomationProperties.SetAutomationId(_copyToBox, "AdvancedFilterCopyToBox");
         AutomationProperties.SetHelpText(_copyToBox, "Enter the destination cell or one-row header range when copying filtered records.");
+        ApplyAutomationMetadata();
         var root = new DockPanel { Margin = new Thickness(12) };
         DockPanel.SetDock(root, Dock.Top);
 
@@ -115,6 +116,21 @@ public sealed partial class AdvancedFilterDialog : Window
         Content = root;
         UpdateCopyToState();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void ApplyAutomationMetadata()
+    {
+        AutomationProperties.SetName(_filterInPlaceButton, "Filter the list, in-place");
+        AutomationProperties.SetAutomationId(_filterInPlaceButton, "AdvancedFilterInPlaceButton");
+        AutomationProperties.SetHelpText(_filterInPlaceButton, "Filter the list in its current location.");
+
+        AutomationProperties.SetName(_copyToAnotherLocationButton, "Copy to another location");
+        AutomationProperties.SetAutomationId(_copyToAnotherLocationButton, "AdvancedFilterCopyToAnotherLocationButton");
+        AutomationProperties.SetHelpText(_copyToAnotherLocationButton, "Copy filtered records to the Copy to destination.");
+
+        AutomationProperties.SetName(_uniqueBox, "Unique records only");
+        AutomationProperties.SetAutomationId(_uniqueBox, "AdvancedFilterUniqueRecordsOnlyBox");
+        AutomationProperties.SetHelpText(_uniqueBox, "Show or copy only unique records.");
     }
 
     private DockPanel CreateReferenceEditor(

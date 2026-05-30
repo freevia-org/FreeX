@@ -46,17 +46,19 @@ public sealed class SortOptionsDialog : Window
         };
         body.Children.Add(_caseSensitiveBox);
 
-        body.Children.Add(new TextBlock
-        {
-            Text = "First key sort order",
-            Margin = new Thickness(0, 0, 0, 3)
-        });
         _firstKeySortOrderBox = new ComboBox
         {
             ItemsSource = FirstKeySortOrders,
             SelectedItem = NormalizeFirstKeySortOrder(current.FirstKeySortOrder),
             Margin = new Thickness(0, 0, 0, 10)
         };
+        body.Children.Add(new Label
+        {
+            Content = "_First key sort order:",
+            Target = _firstKeySortOrderBox,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 0, 3)
+        });
         body.Children.Add(_firstKeySortOrderBox);
 
         _topToBottomButton = new RadioButton { Content = "Sort top to _bottom", IsChecked = !current.LeftToRight };

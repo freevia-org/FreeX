@@ -24,11 +24,20 @@
             </Grid.RowDefinitions>
             <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Show items for which the label" Margin="0,0,0,10"/>
             <Label Grid.Row="1" Grid.Column="0" Content="_Operator:" Target="{Binding ElementName=LabelFilterKindBox}" VerticalAlignment="Center" Margin="0,0,8,8"/>
-            <ComboBox x:Name="LabelFilterKindBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" SelectionChanged="LabelFilterKindBox_SelectionChanged" AutomationProperties.Name="Label filter operator"/>
+            <ComboBox x:Name="LabelFilterKindBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" SelectionChanged="LabelFilterKindBox_SelectionChanged"
+                      AutomationProperties.Name="Label filter operator"
+                      AutomationProperties.AutomationId="PivotLabelFilterOperatorBox"
+                      AutomationProperties.HelpText="Choose the label comparison operator."/>
             <Label Grid.Row="2" Grid.Column="0" Content="_Value:" Target="{Binding ElementName=LabelFilterValueBox}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <TextBox x:Name="LabelFilterValueBox" Grid.Row="2" Grid.Column="1" AutomationProperties.Name="Label filter value"/>
+            <TextBox x:Name="LabelFilterValueBox" Grid.Row="2" Grid.Column="1"
+                     AutomationProperties.Name="Label filter value"
+                     AutomationProperties.AutomationId="PivotLabelFilterValueBox"
+                     AutomationProperties.HelpText="Enter the label value to compare."/>
             <Label x:Name="LabelFilterValue2Label" Grid.Row="3" Grid.Column="0" Content="_And:" Target="{Binding ElementName=LabelFilterValue2Box}" VerticalAlignment="Center" Margin="0,8,8,0"/>
-            <TextBox x:Name="LabelFilterValue2Box" Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" AutomationProperties.Name="Ending label filter value"/>
+            <TextBox x:Name="LabelFilterValue2Box" Grid.Row="3" Grid.Column="1" Margin="0,8,0,0"
+                     AutomationProperties.Name="Ending label filter value"
+                     AutomationProperties.AutomationId="PivotLabelFilterEndingValueBox"
+                     AutomationProperties.HelpText="Enter the ending label value for between filters."/>
         </Grid>
     </DockPanel>
 </Window>

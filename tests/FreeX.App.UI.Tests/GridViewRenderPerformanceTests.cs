@@ -193,6 +193,44 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderMarchingAnts_ReusesCachedPhasePens()
+    {
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
+        var overlaysSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var renderMarchingAnts = overlaysSource[
+            overlaysSource.IndexOf("private void RenderMarchingAnts", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private void RenderFormulaTraceArrows", StringComparison.Ordinal)];
+
+        gridViewSource.Should().Contain("private const int MarchingAntsPhaseCount = 16;");
+        gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsBlackPens = CreateMarchingAntsPens(Brushes.Black, 2.5);");
+        gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsCopyOverlayPens = CreateMarchingAntsPens(Brushes.White, 1.5);");
+        gridViewSource.Should().Contain("private static readonly Pen[] MarchingAntsCutOverlayPens = CreateMarchingAntsPens(MakeBrush(245, 124, 0), 1.5);");
+        gridViewSource.Should().Contain("private static Pen[] CreateMarchingAntsPens");
+        gridViewSource.Should().Contain("private static int GetMarchingAntsPhase(double offset)");
+        renderMarchingAnts.Should().Contain("var phase = GetMarchingAntsPhase(_marchOffset);");
+        renderMarchingAnts.Should().Contain("MarchingAntsBlackPens[phase]");
+        renderMarchingAnts.Should().Contain("ClipboardIsCut ? MarchingAntsCutOverlayPens[phase] : MarchingAntsCopyOverlayPens[phase]");
+        renderMarchingAnts.Should().NotContain("new Pen");
+        renderMarchingAnts.Should().NotContain("new SolidColorBrush");
+        renderMarchingAnts.Should().NotContain("new DashStyle");
+    }
+
+    [Fact]
+    public void GetMarchingAntsPhase_NormalizesAnimationOffset()
+    {
+        var getPhase = typeof(GridView).GetMethod(
+            "GetMarchingAntsPhase",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        getPhase.Should().NotBeNull();
+        getPhase!.Invoke(null, [0d]).Should().Be(0);
+        getPhase.Invoke(null, [1.5d]).Should().Be(3);
+        getPhase.Invoke(null, [7.5d]).Should().Be(15);
+        getPhase.Invoke(null, [8.0d]).Should().Be(0);
+        getPhase.Invoke(null, [-0.5d]).Should().Be(15);
+    }
+
+    [Fact]
     public void OnRender_SkipsHeavyVisualLayersDuringLiveResize()
     {
         var properties = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));

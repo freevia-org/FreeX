@@ -55,6 +55,8 @@ public sealed class HyperlinkDialog : Window
         };
         _linkTypes.SelectedIndex = 0;
         AutomationProperties.SetName(_linkTypes, "Link to");
+        AutomationProperties.SetAutomationId(_linkTypes, "HyperlinkLinkTypeList");
+        AutomationProperties.SetHelpText(_linkTypes, "Choose the kind of hyperlink to insert.");
         linkTypePanel.Children.Add(new Label { Content = "Link _to:", Target = _linkTypes, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         linkTypePanel.Children.Add(_linkTypes);
         DockPanel.SetDock(linkTypePanel, Dock.Left);
@@ -63,14 +65,19 @@ public sealed class HyperlinkDialog : Window
         var grid = DialogGrid(3);
         AddTextRow(grid, 0, "Text to _display:", _displayBox, displayText);
         AutomationProperties.SetName(_displayBox, "Text to display");
+        AutomationProperties.SetAutomationId(_displayBox, "HyperlinkDisplayTextBox");
+        AutomationProperties.SetHelpText(_displayBox, "Enter the text shown in the cell for the hyperlink.");
         _targetLabel = AddTextRow(grid, 1, "_Address:", _targetBox, target);
+        AutomationProperties.SetAutomationId(_targetBox, "HyperlinkTargetTextBox");
         _linkTypes.SelectionChanged += (_, _) => UpdateTargetFieldForLinkType();
         UpdateTargetFieldForLinkType();
         _screenTipButton.Click += ScreenTipButton_Click;
         _bookmarkButton.Click += BookmarkButton_Click;
         AutomationProperties.SetName(_screenTipButton, "Set ScreenTip");
+        AutomationProperties.SetAutomationId(_screenTipButton, "HyperlinkScreenTipButton");
         AutomationProperties.SetHelpText(_screenTipButton, "Set the text shown when pointing to the hyperlink.");
         AutomationProperties.SetName(_bookmarkButton, "Select place in document");
+        AutomationProperties.SetAutomationId(_bookmarkButton, "HyperlinkBookmarkButton");
         AutomationProperties.SetHelpText(_bookmarkButton, "Choose a bookmark, defined name, or cell reference in this workbook.");
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
         _screenTipButton.Width = 96;

@@ -115,6 +115,26 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FocusFormulaBar_WhileInlineEditorVisible_DoesNotCommitDraftEdit()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.ShowInlineEditor(1, 1);
+            harness.SetInlineEditorText("draft edit");
+
+            harness.FocusFormulaBar();
+
+            harness.InlineEditorVisible.Should().BeTrue();
+            harness.CellText(1, 1).Should().Be("original");
+            harness.FormulaBarText.Should().Be("draft edit");
+        });
+    }
+
+    [Fact]
     public void CtrlEnterFormulaBarEdit_FillsSelectedRangeWhenNotChoosingFormulaReferences()
     {
         StaTestRunner.Run(() =>
@@ -214,6 +234,8 @@ public sealed class MainWindowFormulaBarSyncTests
 
         public string? InlineEditorText => InlineEditor?.Text;
 
+        public bool InlineEditorVisible => InlineEditor?.IsVisible == true;
+
         public void SetCellText(uint row, uint col, string text)
         {
             var sheet = Workbook.Sheets[0];
@@ -300,6 +322,12 @@ public sealed class MainWindowFormulaBarSyncTests
         {
             var inlineEditor = InlineEditor ?? throw new InvalidOperationException("Inline editor is not visible.");
             inlineEditor.Text = text;
+            PumpDispatcher();
+        }
+
+        public void FocusFormulaBar()
+        {
+            ((TextBox)_window.FindName("FormulaBar")).Focus();
             PumpDispatcher();
         }
 

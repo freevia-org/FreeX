@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -142,9 +143,10 @@ public sealed class RepositoryPreflightTests
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
             var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
 
+            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("newer than workflow SDK 10.0.x");
-            (result.Output + result.Error).Should().Contain("src/Future/Future.csproj: net11.0");
+            combinedOutput.Should().Contain("newer than workflow SDK 10.0.x");
+            combinedOutput.Should().Contain("src/Future/Future.csproj: net11.0");
         }
         finally
         {
@@ -173,6 +175,8 @@ public sealed class RepositoryPreflightTests
 
         return new PowerShellResult(process.ExitCode, output, error);
     }
+
+    private static string NormalizeWhitespace(string text) => Regex.Replace(text, "\\s+", " ");
 
     private sealed record PowerShellResult(int ExitCode, string Output, string Error);
 }

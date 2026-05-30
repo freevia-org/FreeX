@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
 using System.IO;
@@ -71,6 +72,44 @@ public sealed class PasteSpecialDialogTests
         });
     }
 
+    [Theory]
+    [InlineData("_rbAll", "Paste all", "PasteSpecialAllOption", "Paste all cell contents and formatting.")]
+    [InlineData("_rbValues", "Paste values", "PasteSpecialValuesOption", "Paste only cell values.")]
+    [InlineData("_rbFormulas", "Paste formulas", "PasteSpecialFormulasOption", "Paste formulas without changing existing formatting.")]
+    [InlineData("_rbFormats", "Paste formats", "PasteSpecialFormatsOption", "Paste only cell formatting.")]
+    [InlineData("_rbComments", "Paste comments and notes", "PasteSpecialCommentsAndNotesOption", "Paste only comments and notes.")]
+    [InlineData("_rbValidation", "Paste validation", "PasteSpecialValidationOption", "Paste only data validation rules.")]
+    [InlineData("_rbAllUsingSourceTheme", "Paste all using source theme", "PasteSpecialAllUsingSourceThemeOption", "Paste all content using the copied source theme.")]
+    [InlineData("_rbAllExceptBorders", "Paste all except borders", "PasteSpecialAllExceptBordersOption", "Paste all content and formatting except cell borders.")]
+    [InlineData("_rbAllMergingConditionalFormats", "Paste all merging conditional formats", "PasteSpecialAllMergingConditionalFormatsOption", "Paste all content while merging conditional formatting rules.")]
+    [InlineData("_rbColumnWidths", "Paste column widths", "PasteSpecialColumnWidthsOption", "Paste only copied column widths.")]
+    [InlineData("_rbFormulasAndNumberFormats", "Paste formulas and number formats", "PasteSpecialFormulasAndNumberFormatsOption", "Paste formulas and number formats.")]
+    [InlineData("_rbValuesAndNumberFormats", "Paste values and number formats", "PasteSpecialValuesAndNumberFormatsOption", "Paste values and number formats.")]
+    [InlineData("_rbValuesAndSourceFormatting", "Paste values and source formatting", "PasteSpecialValuesAndSourceFormattingOption", "Paste values with copied source formatting.")]
+    [InlineData("_rbText", "Paste text", "PasteSpecialTextOption", "Paste clipboard text.")]
+    [InlineData("_rbUnicodeText", "Paste Unicode text", "PasteSpecialUnicodeTextOption", "Paste clipboard Unicode text.")]
+    [InlineData("_rbPicture", "Paste picture", "PasteSpecialPictureOption", "Paste copied cells as a picture.")]
+    [InlineData("_rbLinkedPicture", "Paste linked picture", "PasteSpecialLinkedPictureOption", "Paste copied cells as a linked picture.")]
+    public void Choices_ExposeStableAutomationMetadata(string fieldName, string expectedName, string expectedAutomationId, string expectedHelpText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PasteSpecialDialog();
+            try
+            {
+                var button = GetRadioButton(dialog, fieldName);
+
+                AutomationProperties.GetName(button).Should().Be(expectedName);
+                AutomationProperties.GetAutomationId(button).Should().Be(expectedAutomationId);
+                AutomationProperties.GetHelpText(button).Should().Be(expectedHelpText);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     [Fact]
     public void PasteChoices_FollowExcelDialogOrder()
     {
@@ -123,6 +162,57 @@ public sealed class PasteSpecialDialogTests
         });
     }
 
+    [Theory]
+    [InlineData("_opNone", "Operation none", "PasteSpecialOperationNoneOption", "Paste without a mathematical operation.")]
+    [InlineData("_opAdd", "Operation add", "PasteSpecialOperationAddOption", "Add copied values to destination values.")]
+    [InlineData("_opSubtract", "Operation subtract", "PasteSpecialOperationSubtractOption", "Subtract copied values from destination values.")]
+    [InlineData("_opMultiply", "Operation multiply", "PasteSpecialOperationMultiplyOption", "Multiply destination values by copied values.")]
+    [InlineData("_opDivide", "Operation divide", "PasteSpecialOperationDivideOption", "Divide destination values by copied values.")]
+    public void Operations_ExposeStableAutomationMetadata(string fieldName, string expectedName, string expectedAutomationId, string expectedHelpText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PasteSpecialDialog();
+            try
+            {
+                var button = GetRadioButton(dialog, fieldName);
+
+                AutomationProperties.GetName(button).Should().Be(expectedName);
+                AutomationProperties.GetAutomationId(button).Should().Be(expectedAutomationId);
+                AutomationProperties.GetHelpText(button).Should().Be(expectedHelpText);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData("_skipBlanks", "Skip blanks", "PasteSpecialSkipBlanksBox", "Skip blank cells from the copied range.")]
+    [InlineData("_transpose", "Transpose", "PasteSpecialTransposeBox", "Switch copied rows and columns while pasting.")]
+    [InlineData("_keepColumnWidths", "Keep source column widths", "PasteSpecialKeepColumnWidthsBox", "Apply the copied source column widths.")]
+    [InlineData("_pasteLinkButton", "Paste Link", "PasteSpecialPasteLinkButton", "Paste formulas that link to the copied cells.")]
+    public void OptionsAndPasteLink_ExposeStableAutomationMetadata(string fieldName, string expectedName, string expectedAutomationId, string expectedHelpText)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PasteSpecialDialog();
+            try
+            {
+                var control = GetControl<Control>(dialog, fieldName);
+
+                AutomationProperties.GetName(control).Should().Be(expectedName);
+                AutomationProperties.GetAutomationId(control).Should().Be(expectedAutomationId);
+                AutomationProperties.GetHelpText(control).Should().Be(expectedHelpText);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     [Fact]
     public void DialogButtons_ExposeKeyboardAccessKeys()
     {
@@ -130,6 +220,8 @@ public sealed class PasteSpecialDialogTests
 
         source.Should().Contain("Content = \"_OK\"");
         source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("SetAutomationMetadata(ok, \"OK\", \"PasteSpecialOkButton\", \"Apply the selected Paste Special options.\");");
+        source.Should().Contain("SetAutomationMetadata(cancel, \"Cancel\", \"PasteSpecialCancelButton\", \"Close the Paste Special dialog without applying changes.\");");
     }
 
     [Fact]
@@ -157,9 +249,15 @@ public sealed class PasteSpecialDialogTests
 
     private static RadioButton GetRadioButton(PasteSpecialDialog dialog, string fieldName)
     {
+        return GetControl<RadioButton>(dialog, fieldName);
+    }
+
+    private static T GetControl<T>(PasteSpecialDialog dialog, string fieldName)
+        where T : Control
+    {
         var field = typeof(PasteSpecialDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull();
-        return field!.GetValue(dialog).Should().BeOfType<RadioButton>().Subject;
+        return field!.GetValue(dialog).Should().BeAssignableTo<T>().Subject;
     }
 
     private static string ReadPasteSpecialDialogSources() =>

@@ -17,6 +17,7 @@ internal sealed class NameDefinitionDialog : Window
     private readonly IReadOnlyList<string> _scopeOptions;
     private readonly Action<NamedRangeSelectionRequest>? _requestRangeSelection;
     private readonly Func<string, bool> _isValidRange;
+    private readonly Func<string, string?> _validateName;
 
     public NameDefinitionDialogResult Result { get; private set; }
     public NamedRangeSelectionRequest? RangeSelectionRequest { get; private set; }
@@ -25,12 +26,14 @@ internal sealed class NameDefinitionDialog : Window
         NameDefinitionDialogResult initial,
         IReadOnlyList<string> scopeOptions,
         Action<NamedRangeSelectionRequest>? requestRangeSelection = null,
-        Func<string, bool>? isValidRange = null)
+        Func<string, bool>? isValidRange = null,
+        Func<string, string?>? validateName = null)
     {
         Result = initial;
         _scopeOptions = scopeOptions.Count > 0 ? scopeOptions : ["Workbook"];
         _requestRangeSelection = requestRangeSelection;
         _isValidRange = isValidRange ?? (rangeText => !string.IsNullOrWhiteSpace(rangeText));
+        _validateName = validateName ?? (_ => null);
         Title = string.IsNullOrWhiteSpace(initial.Name) ? "New Name" : "Edit Name";
         Width = 460;
         Height = 300;
@@ -130,9 +133,11 @@ internal sealed class NameDefinitionDialog : Window
 
     private void Accept()
     {
-        if (string.IsNullOrWhiteSpace(_nameBox.Text))
+        var name = _nameBox.Text.Trim();
+        var nameError = ValidateNameInput(name, _validateName);
+        if (nameError is not null)
         {
-            DialogMessageHelper.ShowWarning(this, "Please enter a name.", Title);
+            DialogMessageHelper.ShowWarning(this, nameError, Title);
             FocusNameInput();
             return;
         }
@@ -145,11 +150,19 @@ internal sealed class NameDefinitionDialog : Window
         }
 
         Result = new NameDefinitionDialogResult(
-            _nameBox.Text.Trim(),
+            name,
             (_scopeBox.SelectedItem as string)?.Trim() ?? "Workbook",
             _commentBox.Text.Trim(),
             _refersToBox.Text.Trim());
         DialogResult = true;
+    }
+
+    internal static string? ValidateNameInput(string name, Func<string, string?> validateName)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "Please enter a name.";
+
+        return validateName(name.Trim());
     }
 
     private void FocusNameInput()

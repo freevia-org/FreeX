@@ -29,11 +29,12 @@ public sealed class ThirdPartyNoticeTests
         notices.Should().Contain("[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)");
         notices.Should().Contain("FluentAssertions 8.9.0 is a test/development dependency only");
         notices.Should().Contain("non-commercial use");
-        notices.Should().Contain("Package-provided `NOTICE` files found in the local NuGet cache: none.");
+        notices.Should().Contain("Microsoft.NET.ILLink.Tasks `THIRD-PARTY-NOTICES.TXT`");
+        licenses.Should().Contain("Microsoft.NET.ILLink.Tasks Package Third-Party Notices");
         licenses.Should().Contain("Apache License");
         licenses.Should().Contain("SharpVectors.Wpf Package License File");
         licenses.Should().Contain("FluentAssertions Package License");
-        audit.Should().Contain("40 unique restored NuGet packages");
+        audit.Should().Contain("41 unique restored NuGet packages");
         audit.Should().Contain("Open Compliance Watch Item");
     }
 

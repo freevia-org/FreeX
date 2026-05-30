@@ -113,12 +113,18 @@ public sealed partial class SymbolPickerDialog
                 recent.Children.Add(CreateSymbolButton(symbol, 28, 28, 14));
         }
 
+        void ApplySymbolFont(string fontName)
+        {
+            var fontFamily = new FontFamily(fontName);
+            preview.FontFamily = fontFamily;
+            foreach (var button in grid.Children.OfType<Button>().Concat(recent.Children.OfType<Button>()))
+                button.FontFamily = fontFamily;
+        }
+
         fontBox.SelectionChanged += (_, _) =>
         {
             if (fontBox.SelectedItem is string fontName)
-                preview.FontFamily = new FontFamily(fontName);
-            foreach (var button in grid.Children.OfType<Button>())
-                button.FontFamily = preview.FontFamily;
+                ApplySymbolFont(fontName);
         };
         subsetBox.SelectionChanged += (_, _) =>
         {
@@ -131,6 +137,8 @@ public sealed partial class SymbolPickerDialog
         };
         PopulateGrid(SubsetChoices[0]);
         PopulateRecent();
+        if (fontBox.SelectedItem is string initialFontName)
+            ApplySymbolFont(initialFontName);
 
         var scroll = new ScrollViewer
         {

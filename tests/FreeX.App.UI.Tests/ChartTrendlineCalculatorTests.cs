@@ -82,6 +82,24 @@ public sealed class ChartTrendlineCalculatorTests
     }
 
     [Fact]
+    public void TryCalculateRSquared_AggregatesMatchesWithoutIntermediateListOrLinqPasses()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartTrendlineCalculator.cs"));
+        var rSquaredBlock = source[
+            source.IndexOf("public static bool TryCalculateRSquared", StringComparison.Ordinal)..
+            source.IndexOf("private static bool TryInterpolateTrendY", StringComparison.Ordinal)];
+
+        rSquaredBlock.Should().Contain("var sumActual = 0.0;");
+        rSquaredBlock.Should().Contain("var sumActualSquared = 0.0;");
+        rSquaredBlock.Should().Contain("var residual = 0.0;");
+        rSquaredBlock.Should().Contain("count++;");
+        rSquaredBlock.Should().NotContain("new List<");
+        rSquaredBlock.Should().NotContain(".Average(");
+        rSquaredBlock.Should().NotContain(".Sum(");
+    }
+
+    [Fact]
     public void TryCalculateRSquared_ReturnsOneForPerfectFit()
     {
         var source = new[] { new DataPoint(0, 1), new DataPoint(1, 3), new DataPoint(2, 5) };

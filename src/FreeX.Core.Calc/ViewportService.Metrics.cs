@@ -14,7 +14,7 @@ public sealed partial class ViewportService
             return BuildRowMetrics(sheet, startRow, CellAddress.MaxRow, availableHeight);
 
         var pinnedRows = BuildRowMetrics(sheet, 1, frozenRows, availableHeight);
-        var pinnedHeight = pinnedRows.Sum(row => row.Height);
+        var pinnedHeight = SumRowHeights(pinnedRows);
         var remainingHeight = Math.Max(0, availableHeight - pinnedHeight);
         var bodyStart = Math.Max(startRow, frozenRows + 1);
         if (remainingHeight <= 0 || bodyStart > CellAddress.MaxRow)
@@ -33,7 +33,7 @@ public sealed partial class ViewportService
             return BuildColMetrics(sheet, startCol, CellAddress.MaxCol, availableWidth);
 
         var pinnedColumns = BuildColMetrics(sheet, 1, frozenCols, availableWidth);
-        var pinnedWidth = pinnedColumns.Sum(column => column.Width);
+        var pinnedWidth = SumColumnWidths(pinnedColumns);
         var remainingWidth = Math.Max(0, availableWidth - pinnedWidth);
         var bodyStart = Math.Max(startCol, frozenCols + 1);
         if (remainingWidth <= 0 || bodyStart > CellAddress.MaxCol)
@@ -43,6 +43,24 @@ public sealed partial class ViewportService
             pinnedColumns,
             BuildColMetrics(sheet, bodyStart, CellAddress.MaxCol, remainingWidth),
             pinnedWidth);
+    }
+
+    private static double SumRowHeights(IReadOnlyList<RowMetric> rows)
+    {
+        double height = 0;
+        foreach (var row in rows)
+            height += row.Height;
+
+        return height;
+    }
+
+    private static double SumColumnWidths(IReadOnlyList<ColMetric> columns)
+    {
+        double width = 0;
+        foreach (var column in columns)
+            width += column.Width;
+
+        return width;
     }
 
     private static List<RowMetric> CombineRowsWithOffset(

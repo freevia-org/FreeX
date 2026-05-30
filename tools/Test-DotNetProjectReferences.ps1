@@ -48,6 +48,10 @@ $resolvedProjectRoot = Resolve-RepoPath $ProjectRoot
 if (-not (Test-Path -LiteralPath $resolvedProjectRoot -PathType Container)) {
     throw "Project root was not found: $resolvedProjectRoot"
 }
+$resolvedProjectRootPath = [System.IO.Path]::GetFullPath($resolvedProjectRoot)
+if (-not $resolvedProjectRootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+    $resolvedProjectRootPath += [System.IO.Path]::DirectorySeparatorChar
+}
 
 $projectFiles = @(
     Get-ChildItem -LiteralPath $resolvedProjectRoot -Filter "*.csproj" -File -Recurse |
@@ -60,10 +64,14 @@ if ($projectFiles.Count -eq 0) {
 }
 
 $missingReferences = New-Object System.Collections.Generic.List[string]
+$escapedReferences = New-Object System.Collections.Generic.List[string]
+$duplicateReferences = New-Object System.Collections.Generic.List[string]
 
 foreach ($projectFile in $projectFiles) {
     [xml]$projectXml = Get-Content -LiteralPath $projectFile.FullName -Raw
     $projectReferences = @($projectXml.Project.ItemGroup.ProjectReference)
+    $referencesByResolvedPath = @{}
+    $relativeProjectPath = Get-RelativeRepoPath $projectFile.FullName
 
     foreach ($projectReference in $projectReferences) {
         $include = [string]$projectReference.Include
@@ -73,11 +81,34 @@ foreach ($projectFile in $projectFiles) {
 
         $referencedProjectPath = Join-Path $projectFile.DirectoryName $include
         $resolvedReferencePath = [System.IO.Path]::GetFullPath($referencedProjectPath)
+        $resolvedReferenceKey = $resolvedReferencePath.ToUpperInvariant()
+
+        if ($referencesByResolvedPath.ContainsKey($resolvedReferenceKey)) {
+            $duplicateReferences.Add("${relativeProjectPath}: $include")
+        } else {
+            $referencesByResolvedPath[$resolvedReferenceKey] = $include
+        }
+
+        if (-not $resolvedReferencePath.StartsWith($resolvedProjectRootPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $escapedReferences.Add("${relativeProjectPath}: $include")
+            continue
+        }
 
         if (-not (Test-Path -LiteralPath $resolvedReferencePath -PathType Leaf)) {
-            $relativeProjectPath = Get-RelativeRepoPath $projectFile.FullName
             $missingReferences.Add("${relativeProjectPath}: $include")
         }
+    }
+}
+
+if ($duplicateReferences.Count -gt 0) {
+    foreach ($duplicateReference in $duplicateReferences) {
+        Write-Error "Duplicate ProjectReference target: $duplicateReference" -ErrorAction Continue
+    }
+}
+
+if ($escapedReferences.Count -gt 0) {
+    foreach ($escapedReference in $escapedReferences) {
+        Write-Error "ProjectReference target escapes project root: $escapedReference" -ErrorAction Continue
     }
 }
 
@@ -85,8 +116,10 @@ if ($missingReferences.Count -gt 0) {
     foreach ($missingReference in $missingReferences) {
         Write-Error "Missing ProjectReference target: $missingReference" -ErrorAction Continue
     }
+}
 
-    throw "Project reference validation failed for $($missingReferences.Count) reference(s)."
+if ($duplicateReferences.Count -gt 0 -or $escapedReferences.Count -gt 0 -or $missingReferences.Count -gt 0) {
+    throw "Project reference validation failed for $($duplicateReferences.Count + $escapedReferences.Count + $missingReferences.Count) reference(s)."
 }
 
 Write-Host "Validated ProjectReference targets for $($projectFiles.Count) .NET project file(s)."

@@ -201,7 +201,8 @@ public sealed class ColorPickerDialogTests
         source.Should().Contain("FocusInvalidCustomColorInput();");
         source.Should().Contain("private void FocusInvalidCustomColorInput()");
         source.Should().Contain("ColorTabs.SelectedItem = CustomTab;");
-        source.Should().Contain("DialogFocus.FocusAndSelect(CustomColorTextBox);");
+        source.Should().Contain("FocusInvalidCustomColorInput(CustomColorTextBox);");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
     [Theory]
@@ -228,6 +229,47 @@ public sealed class ColorPickerDialogTests
         ColorPickerDialog.TryParseColorText(text, out var color).Should().BeFalse();
 
         color.Should().Be(default(CellColor));
+    }
+
+    [Theory]
+    [InlineData("33", "115", "70", 33, 115, 70)]
+    [InlineData(" 0 ", "255", "128", 0, 255, 128)]
+    public void TryParseRgbComponents_AcceptsByteComponents(
+        string redText,
+        string greenText,
+        string blueText,
+        byte red,
+        byte green,
+        byte blue)
+    {
+        ColorPickerDialog.TryParseRgbComponents(redText, greenText, blueText, out var color).Should().BeTrue();
+
+        color.Should().Be(new CellColor(red, green, blue));
+    }
+
+    [Theory]
+    [InlineData("300", "0", "0")]
+    [InlineData("-1", "0", "0")]
+    [InlineData("red", "0", "0")]
+    [InlineData("", "0", "0")]
+    public void TryParseRgbComponents_RejectsInvalidComponents(string redText, string greenText, string blueText)
+    {
+        ColorPickerDialog.TryParseRgbComponents(redText, greenText, blueText, out var color).Should().BeFalse();
+
+        color.Should().Be(default(CellColor));
+    }
+
+    [Fact]
+    public void OkButton_RejectsInvalidRgbComponentBeforeAcceptingStaleHexText()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ColorPickerDialog.xaml.cs"));
+
+        source.Should().Contain("TryParseRgbComponents(");
+        source.Should().Contain("if (!TryParseCustomRgbFields(out _, out var invalidRgbInput))");
+        source.Should().Contain("ShowInvalidCustomColorWarning(\"Enter RGB values from 0 to 255.\", invalidRgbInput);");
+        source.Should().Contain("private void FocusInvalidCustomColorInput(TextBox target)");
+        source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+        source.Should().NotContain("byte.TryParse(CustomRedTextBox.Text");
     }
 
     [Fact]

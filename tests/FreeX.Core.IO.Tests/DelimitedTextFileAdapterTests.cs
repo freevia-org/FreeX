@@ -43,6 +43,23 @@ public sealed class DelimitedTextFileAdapterTests
             "wide sparse delimited saves should not allocate delimiter strings for every row chunk");
     }
 
+    [Fact]
+    public void Save_UsesSinglePassDateTimeShapeProbeWithoutLinq()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "DelimitedTextWorkbookWriter.cs"));
+        var shapeProbe = source[
+            source.IndexOf("private static bool HasSupportedDateTimeShape", StringComparison.Ordinal)..
+            source.IndexOf("private static bool IsUnsignedCurrencyText", StringComparison.Ordinal)];
+
+        shapeProbe.Should().Contain("foreach (var ch in value)");
+        shapeProbe.Should().Contain("if (ch == ':' || char.IsLetter(ch))");
+        shapeProbe.Should().Contain("if (digitRun >= 4)");
+        shapeProbe.Should().NotContain("value.Contains");
+        shapeProbe.Should().NotContain("HasFourConsecutiveDigits");
+        shapeProbe.Should().NotContain(".Any(");
+    }
+
     [Theory]
     [InlineData(".txt")]
     [InlineData(".tsv")]
@@ -298,7 +315,7 @@ public sealed class DelimitedTextFileAdapterTests
     public void Load_UsesExcelLikeTextCoercionForErrorLiterals()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("#N/A\t#DIV/0!\t#REF!\t#CIRCULAR!\t#FIELD!\t#BLOCKED!\t#GETTING_DATA\r\n"));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("#N/A\t#DIV/0!\t#REF!\t#CIRCULAR!\t#FIELD!\t#BLOCKED!\t#GETTING_DATA\t#CONNECT!\t#UNKNOWN!\r\n"));
 
         var workbook = adapter.Load(stream);
         var sheet = workbook.Sheets.Single();
@@ -310,6 +327,8 @@ public sealed class DelimitedTextFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 1, 5)).Should().Be(new ErrorValue("#FIELD!"));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 6)).Should().Be(new ErrorValue("#BLOCKED!"));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 7)).Should().Be(new ErrorValue("#GETTING_DATA"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 8)).Should().Be(new ErrorValue("#CONNECT!"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 9)).Should().Be(new ErrorValue("#UNKNOWN!"));
     }
 
     [Fact]
@@ -811,6 +830,8 @@ public sealed class DelimitedTextFileAdapterTests
     [InlineData(" TRUE ")]
     [InlineData("2026-05-17")]
     [InlineData("#N/A")]
+    [InlineData("#CONNECT!")]
+    [InlineData("#UNKNOWN!")]
     [InlineData("#FIELD!")]
     [InlineData("#BLOCKED!")]
     public void Save_RoundTripsCoercionLikeTextFieldsAsLiteralText(string text)

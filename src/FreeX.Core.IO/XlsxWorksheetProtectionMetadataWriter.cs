@@ -15,8 +15,12 @@ internal static class XlsxWorksheetProtectionMetadataWriter
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.ProtectionMetadata is not null))
+        foreach (var sheet in workbook.Sheets)
         {
+            var metadata = sheet.ProtectionMetadata;
+            if (metadata is null)
+                continue;
+
             if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
@@ -43,7 +47,7 @@ internal static class XlsxWorksheetProtectionMetadataWriter
                 InsertSheetProtection(root, worksheetNs, protection);
             }
 
-            var (protAttrs, protChildren) = XmlNativeBagSerializer.Deserialize(sheet.ProtectionMetadata!.Get("sheetProtection"));
+            var (protAttrs, protChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetProtection"));
             foreach (var attribute in protAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) ||

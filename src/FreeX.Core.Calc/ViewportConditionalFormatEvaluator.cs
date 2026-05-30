@@ -22,23 +22,22 @@ internal sealed record CfFormulaCache(
 
 internal static class ViewportConditionalFormatEvaluator
 {
+    private static readonly ConditionalFormat[] EmptyRules = [];
+    private static readonly Dictionary<ConditionalFormat, CfAggregateCache> EmptyAggregates = new(ReferenceEqualityComparer.Instance);
+    private static readonly Dictionary<ConditionalFormat, CfFormulaCache> EmptyFormulas = new(ReferenceEqualityComparer.Instance);
+    private static readonly CfEvaluationContext EmptyContext = new(
+        EmptyRules,
+        EmptyRules,
+        EmptyAggregates,
+        EmptyFormulas);
+
     public static CfEvaluationContext BuildContext(Sheet sheet)
     {
         if (sheet.ConditionalFormats.Count == 0)
-        {
-            return new CfEvaluationContext(
-                [],
-                [],
-                new Dictionary<ConditionalFormat, CfAggregateCache>(ReferenceEqualityComparer.Instance),
-                new Dictionary<ConditionalFormat, CfFormulaCache>(ReferenceEqualityComparer.Instance));
-        }
+            return EmptyContext;
 
-        var rulesByPriority = sheet.ConditionalFormats
-            .OrderBy(cf => cf.Priority)
-            .ToArray();
-        var iconRulesByPriority = rulesByPriority
-            .Where(cf => cf.RuleType == CfRuleType.IconSet)
-            .ToArray();
+        var rulesByPriority = CopyRulesByPriority(sheet.ConditionalFormats);
+        var iconRulesByPriority = CopyIconRulesByPriority(rulesByPriority);
 
         return new CfEvaluationContext(
             rulesByPriority,
@@ -46,6 +45,53 @@ internal static class ViewportConditionalFormatEvaluator
             PrecomputeAggregates(sheet),
             PrecomputeFormulaCaches(sheet));
     }
+
+    private static ConditionalFormat[] CopyRulesByPriority(IReadOnlyList<ConditionalFormat> rules)
+    {
+        var indexedRules = new IndexedConditionalFormat[rules.Count];
+        for (var i = 0; i < rules.Count; i++)
+            indexedRules[i] = new IndexedConditionalFormat(rules[i], i);
+
+        Array.Sort(indexedRules, static (left, right) =>
+        {
+            var priorityOrder = left.Rule.Priority.CompareTo(right.Rule.Priority);
+            return priorityOrder != 0
+                ? priorityOrder
+                : left.Index.CompareTo(right.Index);
+        });
+
+        var sortedRules = new ConditionalFormat[indexedRules.Length];
+        for (var i = 0; i < indexedRules.Length; i++)
+            sortedRules[i] = indexedRules[i].Rule;
+
+        return sortedRules;
+    }
+
+    private static ConditionalFormat[] CopyIconRulesByPriority(IReadOnlyList<ConditionalFormat> rulesByPriority)
+    {
+        var iconRuleCount = 0;
+        for (var i = 0; i < rulesByPriority.Count; i++)
+        {
+            if (rulesByPriority[i].RuleType == CfRuleType.IconSet)
+                iconRuleCount++;
+        }
+
+        if (iconRuleCount == 0)
+            return EmptyRules;
+
+        var iconRules = new ConditionalFormat[iconRuleCount];
+        var iconIndex = 0;
+        for (var i = 0; i < rulesByPriority.Count; i++)
+        {
+            var rule = rulesByPriority[i];
+            if (rule.RuleType == CfRuleType.IconSet)
+                iconRules[iconIndex++] = rule;
+        }
+
+        return iconRules;
+    }
+
+    private readonly record struct IndexedConditionalFormat(ConditionalFormat Rule, int Index);
 
     public static CellStyle? Evaluate(
         Sheet sheet,
@@ -171,7 +217,7 @@ internal static class ViewportConditionalFormatEvaluator
 
             double sum = 0, min = double.MaxValue, max = double.MinValue;
             int count = 0;
-            List<(CellAddress Address, double Value)>? rankedValues =
+            List<(CellAddress Address, double Value, int Index)>? rankedValues =
                 cf.RuleType == CfRuleType.Top10 ? [] : null;
             Dictionary<string, int>? valueCounts =
                 cf.RuleType is CfRuleType.DuplicateValues or CfRuleType.UniqueValues
@@ -190,8 +236,8 @@ internal static class ViewportConditionalFormatEvaluator
                     sum += x;
                     if (x < min) min = x;
                     if (x > max) max = x;
+                    rankedValues?.Add((a, x, count));
                     count++;
-                    rankedValues?.Add((a, x));
                 }
             }
 
@@ -209,7 +255,7 @@ internal static class ViewportConditionalFormatEvaluator
 
     private static IReadOnlySet<CellAddress>? ResolveTopBottomMatches(
         ConditionalFormat cf,
-        IReadOnlyList<(CellAddress Address, double Value)>? rankedValues)
+        List<(CellAddress Address, double Value, int Index)>? rankedValues)
     {
         if (cf.RuleType != CfRuleType.Top10 || rankedValues is null || rankedValues.Count == 0)
             return null;
@@ -220,12 +266,23 @@ internal static class ViewportConditionalFormatEvaluator
                 : cf.TopBottomRank,
             1,
             rankedValues.Count);
-        var ordered = cf.AboveAverage
-            ? rankedValues.OrderByDescending(item => item.Value)
-            : rankedValues.OrderBy(item => item.Value);
-        return ordered.Take(take)
-            .Select(item => item.Address)
-            .ToHashSet();
+        rankedValues.Sort(cf.AboveAverage
+            ? static (left, right) =>
+            {
+                var valueOrder = right.Value.CompareTo(left.Value);
+                return valueOrder != 0 ? valueOrder : left.Index.CompareTo(right.Index);
+            }
+            : static (left, right) =>
+            {
+                var valueOrder = left.Value.CompareTo(right.Value);
+                return valueOrder != 0 ? valueOrder : left.Index.CompareTo(right.Index);
+            });
+
+        var result = new HashSet<CellAddress>(take);
+        for (var i = 0; i < take; i++)
+            result.Add(rankedValues[i].Address);
+
+        return result;
     }
 
     private static IEnumerable<(CellAddress Address, ScalarValue Value)> EnumerateAggregateValues(

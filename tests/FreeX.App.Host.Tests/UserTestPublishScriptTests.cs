@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using FluentAssertions;
 
@@ -17,6 +18,14 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("[string]$PublishMode = \"SingleFile\"");
         script.Should().Contain("AppInfo.cs");
         script.Should().Contain("function ConvertTo-MsixPackageVersion");
+        script.Should().Contain("function Assert-SafeArtifactToken");
+        script.Should().Contain("function Assert-SafeTimestampUrl");
+        script.Should().Contain("function Assert-MsixCertificatePath");
+        script.Should().Contain("function Assert-MsixSigningOptions");
+        script.Should().Contain("Assert-SafeArtifactToken -Value $RuntimeIdentifier -Label \"RuntimeIdentifier\"");
+        script.Should().Contain("Assert-SafeTimestampUrl -Value $MsixTimestampUrl");
+        script.Should().Contain("Assert-MsixCertificatePath -Value $MsixCertificatePath");
+        script.Should().Contain("Assert-MsixSigningOptions -CertificatePath $MsixCertificatePath -CertificatePassword $MsixCertificatePassword -TimestampUrl $MsixTimestampUrl");
         script.Should().Contain("rev-parse --short=8 HEAD");
         script.Should().Contain("$buildStamp = Get-Date -Format \"yyyyMMdd-HHmmss\"");
         script.Should().Contain("freex-$versionSlug-$buildStamp-$commitId-$RuntimeIdentifier-$modeSlug");
@@ -44,6 +53,94 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("In the app: Help > Legal Notices");
         script.Should().Contain("docs/PRIVACY.md");
         script.Should().Contain("THIRD_PARTY_NOTICES.md");
+    }
+
+    [Fact]
+    public void PublishScript_RejectsMsixSigningOptionsWithoutCertificatePathBeforePublishing()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            var result = RunPowerShellScript(scriptPath, $"-PublishMode Msix -MsixCertificatePassword \"placeholder\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("MSIX signing options require MsixCertificatePath");
+            Directory.GetFileSystemEntries(tempDirectory).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PublishScript_RejectsDirectoryMsixCertificatePathBeforePublishing()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
+        var outputDirectory = Path.Combine(tempDirectory, "out");
+        var certificateDirectory = Path.Combine(tempDirectory, "certificate");
+        Directory.CreateDirectory(outputDirectory);
+        Directory.CreateDirectory(certificateDirectory);
+
+        try
+        {
+            var result = RunPowerShellScript(scriptPath, $"-PublishMode Msix -MsixCertificatePath \"{certificateDirectory}\" -Version 0.8.0 -OutputRoot \"{outputDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("MsixCertificatePath must reference an existing certificate file");
+            Directory.GetFileSystemEntries(outputDirectory).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PublishScript_RejectsUnsafeMsixTimestampUrlBeforePublishing()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            var result = RunPowerShellScript(scriptPath, $"-PublishMode Msix -MsixTimestampUrl \"file:///local/timestamp\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("MsixTimestampUrl must be an absolute http or https URL");
+            Directory.GetFileSystemEntries(tempDirectory).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PublishScript_RejectsRuntimeIdentifierPathSegmentsBeforePublishing()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            var result = RunPowerShellScript(scriptPath, $"-RuntimeIdentifier \"..\\outside\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("RuntimeIdentifier must contain only letters, numbers, dots, and hyphens");
+            (result.Output + result.Error).Should().Contain("path separators");
+            Directory.GetFileSystemEntries(tempDirectory).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]
@@ -92,4 +189,28 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("https://dotnet.microsoft.com/download/dotnet/10.0");
         script.Should().Contain("FreeX.cmd");
     }
+
+    private static PowerShellResult RunPowerShellScript(string scriptPath, string arguments)
+    {
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
+            WorkingDirectory = Path.GetTempPath(),
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        process.Start().Should().BeTrue();
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        return new PowerShellResult(process.ExitCode, output, error);
+    }
+
+    private sealed record PowerShellResult(int ExitCode, string Output, string Error);
 }

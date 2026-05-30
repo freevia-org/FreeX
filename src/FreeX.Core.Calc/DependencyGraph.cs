@@ -118,6 +118,8 @@ public sealed class DependencyGraph
     private static readonly IReadOnlySet<CellAddress> EmptySet =
         new HashSet<CellAddress>().ToFrozenSet();
 
+    private static readonly RecalcPlan EmptyPlan = new([], []);
+
     /// <summary>Get all cells that directly depend on the given cell.</summary>
     public IReadOnlySet<CellAddress> GetDirectDependents(CellAddress cell)
     {
@@ -150,6 +152,12 @@ public sealed class DependencyGraph
     /// </summary>
     public RecalcPlan GetRecalcOrder(IEnumerable<CellAddress> changedCells)
     {
+        if (changedCells is IReadOnlyList<CellAddress> changedList)
+        {
+            if (changedList.Count == 0 || !HasAnyDependents(changedList))
+                return EmptyPlan;
+        }
+
         var toRecalc = new HashSet<CellAddress>();
 
         // BFS to find all transitive dependents
@@ -199,6 +207,27 @@ public sealed class DependencyGraph
         }
 
         return new RecalcPlan(sorted, cycles ?? []);
+    }
+
+    private bool HasAnyDependents(IReadOnlyList<CellAddress> cells)
+    {
+        for (var i = 0; i < cells.Count; i++)
+        {
+            var cell = cells[i];
+            if (_dependents.TryGetValue(cell, out var exactDeps) && exactDeps.Count > 0)
+                return true;
+
+            if (!_rangeDependentsBySheet.TryGetValue(cell.Sheet, out var rangeDeps))
+                continue;
+
+            foreach (var dep in rangeDeps)
+            {
+                if (dep.Range.Contains(cell))
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     private void EnqueueUnvisitedDependents(

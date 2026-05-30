@@ -59,18 +59,29 @@ public sealed class SparklineDialog : Window
         _locationPickerButton.Click += (_, _) => RequestRangeSelection(SparklineRangeSelectionTarget.Location, _locationBox);
 
         AutomationProperties.SetName(_dataRangePickerButton, "Select sparkline data range");
+        AutomationProperties.SetAutomationId(_dataRangePickerButton, "SparklineDataRangePickerButton");
+        AutomationProperties.SetHelpText(_dataRangePickerButton, "Select the worksheet data range for the sparkline.");
         AutomationProperties.SetName(_locationPickerButton, "Select sparkline location range");
+        AutomationProperties.SetAutomationId(_locationPickerButton, "SparklineLocationRangePickerButton");
+        AutomationProperties.SetHelpText(_locationPickerButton, "Select the destination cell for the sparkline.");
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new Label { Content = "_Data range:", Target = _dataRangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _dataRangeBox.Text = Result.DataRangeText;
         AutomationProperties.SetName(_dataRangeBox, "Sparkline data range");
+        AutomationProperties.SetAutomationId(_dataRangeBox, "SparklineDataRangeBox");
+        AutomationProperties.SetHelpText(_dataRangeBox, "Enter the worksheet data range for the sparkline.");
         stack.Children.Add(CreateRangePickerRow(_dataRangeBox, _dataRangePickerButton));
         stack.Children.Add(new Label { Content = "_Location range:", Target = _locationBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _locationBox.Text = Result.LocationText;
         AutomationProperties.SetName(_locationBox, "Sparkline location range");
+        AutomationProperties.SetAutomationId(_locationBox, "SparklineLocationRangeBox");
+        AutomationProperties.SetHelpText(_locationBox, "Enter the destination cell for the sparkline.");
         stack.Children.Add(CreateRangePickerRow(_locationBox, _locationPickerButton));
         stack.Children.Add(new Label { Content = "Sparkline _type:", Target = _kindBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        AutomationProperties.SetName(_kindBox, "Sparkline type");
+        AutomationProperties.SetAutomationId(_kindBox, "SparklineTypeBox");
+        AutomationProperties.SetHelpText(_kindBox, "Choose whether the sparkline is line, column, or win/loss.");
         _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>()
             .Select(choice => new ComboBoxItem
             {

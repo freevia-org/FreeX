@@ -135,8 +135,7 @@ public static partial class NumberFormatter
             return new FormatResult(singleSectionText);
         }
 
-        var parsedSections = sections.Select(section => ParseSection(section, indexedColors, theme)).ToArray();
-        bool hasConditions = parsedSections.Any(section => section.Condition is not null);
+        var parsedSections = ParseSections(sections, indexedColors, theme, out var hasConditions);
 
         ParsedSection section;
         double displayValue = value;
