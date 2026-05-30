@@ -17,4 +17,14 @@ public sealed class TableDesignCommandSourceTests
         source.Should().Contain("new CompositeWorkbookCommand(\"Table Style Options\", commands)");
         source.Should().NotContain("totalsRowShown: totalsRowShown");
     }
+
+    [Fact]
+    public void TableDesignOptions_ReapplyNonGalleryStylesInsteadOfMetadataOnlyConfigure()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.TableDesignCommands.cs"));
+
+        source.Should().Contain("else if (styleOptionChanged)");
+        source.Should().Contain("new ReapplyStructuredTableStyleCommand(");
+        source.Should().Contain("else if (totalsRowChanged)");
+    }
 }
