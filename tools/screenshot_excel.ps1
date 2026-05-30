@@ -286,7 +286,10 @@ function Screenshot-Tab($tabName, $widthSpec) {
     $tabCond = New-Object System.Windows.Automation.PropertyCondition(
                    [System.Windows.Automation.AutomationElement]::NameProperty, $tabName)
     $tabEl   = $appEl.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $tabCond)
-    if ($tabEl -eq $null) { Write-Warning "Tab '$tabName' not found"; return }
+    if ($tabEl -eq $null) {
+        Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        throw "Ribbon screenshot tab '$tabName' was not found; aborting instead of writing an incomplete evidence matrix."
+    }
 
     # Click the tab via its bounding rectangle center (UIA patterns unsupported in Excel ribbon)
     $rect = $tabEl.Current.BoundingRectangle

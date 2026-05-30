@@ -18,6 +18,10 @@ internal static class RibbonScreenshotTourWidthExtensions
 
 internal sealed record RibbonScreenshotTourPhase(string Label, string? FileNameSuffix);
 
+internal sealed record RibbonScreenshotTourPhaseCaptureGroup(
+    RibbonScreenshotTourPhase Phase,
+    IReadOnlyList<string> FileNames);
+
 internal sealed record RibbonScreenshotTourCapture(
     RibbonScreenshotTourTab Tab,
     RibbonScreenshotTourWidth Width,
@@ -26,6 +30,8 @@ internal sealed record RibbonScreenshotTourCapture(
     public string FileName => Phase.FileNameSuffix is { Length: > 0 } suffix
         ? $"{Width.Label}_{Tab.FileName}_{suffix}"
         : $"{Width.Label}_{Tab.FileName}";
+
+    public string OutputFileName => $"{FileName}.png";
 }
 
 internal sealed record RibbonScreenshotTourPlan(
@@ -35,6 +41,21 @@ internal sealed record RibbonScreenshotTourPlan(
     IReadOnlyList<RibbonScreenshotTourCapture> Captures)
 {
     public bool IsBurst => Phases.Count > 1;
+
+    public IReadOnlyList<string> ExpectedCaptureFileNames() =>
+        Captures
+            .Select(capture => capture.OutputFileName)
+            .ToArray();
+
+    public IReadOnlyList<RibbonScreenshotTourPhaseCaptureGroup> ExpectedCaptureFileNamesByPhase() =>
+        Phases
+            .Select(phase => new RibbonScreenshotTourPhaseCaptureGroup(
+                phase,
+                Captures
+                    .Where(capture => capture.Phase == phase)
+                    .Select(capture => capture.OutputFileName)
+                    .ToArray()))
+            .ToArray();
 }
 
 internal static class RibbonScreenshotTourPlanner

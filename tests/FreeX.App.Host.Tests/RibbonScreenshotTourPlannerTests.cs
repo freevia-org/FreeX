@@ -118,6 +118,24 @@ public sealed class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void BurstPhases_AreDistinctFromTheNormalSettledOnlyTour()
+    {
+        RibbonScreenshotTourPlanner.DefaultPhases
+            .Should()
+            .Equal([RibbonScreenshotTourPlanner.SettledPhase]);
+
+        RibbonScreenshotTourPlanner.BurstPhases
+            .Should()
+            .HaveCount(3)
+            .And.OnlyHaveUniqueItems(phase => phase.Label)
+            .And.OnlyHaveUniqueItems(phase => phase.FileNameSuffix);
+
+        RibbonScreenshotTourPlanner.BurstPhases.Select(phase => phase.Label)
+            .Should()
+            .Equal(["immediate", "first-render", "settled"]);
+    }
+
+    [Fact]
     public void FilterTabs_ReturnsDefaultTourWhenNoFilterIsProvided()
     {
         RibbonScreenshotTourPlanner.FilterTabs(Tabs, null)
@@ -231,6 +249,27 @@ public sealed class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void CreatePlan_ExposesExpectedPngFileNamesForManifestAndStaleCleanup()
+    {
+        var plan = RibbonScreenshotTourPlanner.CreatePlan("Home,Page_Layout", "max,750");
+
+        plan.ExpectedCaptureFileNames()
+            .Should()
+            .Equal(
+            [
+                "max_Home.png",
+                "max_Page_Layout.png",
+                "750_Home.png",
+                "750_Page_Layout.png"
+            ]);
+
+        plan.ExpectedCaptureFileNames()
+            .Should()
+            .OnlyContain(fileName => fileName.EndsWith(".png", StringComparison.Ordinal))
+            .And.OnlyHaveUniqueItems();
+    }
+
+    [Fact]
     public void CreatePlan_WithBurstMode_CapturesEveryTabWidthAcrossTransientLayoutPhases()
     {
         var plan = RibbonScreenshotTourPlanner.CreatePlan("Home,Data", "900", burstMode: true);
@@ -251,6 +290,33 @@ public sealed class RibbonScreenshotTourPlannerTests
                 "900:Data:first-render:900_Data_first_render",
                 "900:Data:settled:900_Data_settled"
             ]);
+    }
+
+    [Fact]
+    public void CreatePlan_WithBurstMode_GroupsExpectedFilesByFirstFrameStabilityPhase()
+    {
+        var plan = RibbonScreenshotTourPlanner.CreatePlan("Home,Data", "900,750", burstMode: true);
+        var capturesPerPhase = plan.Tabs.Count * plan.Widths.Count;
+
+        plan.ExpectedCaptureFileNamesByPhase()
+            .Should()
+            .HaveCount(RibbonScreenshotTourPlanner.BurstPhases.Count);
+
+        plan.ExpectedCaptureFileNamesByPhase()
+            .Select(group => $"{group.Phase.Label}:{group.FileNames.Count}:{string.Join(",", group.FileNames)}")
+            .Should()
+            .Equal(
+            [
+                $"immediate:{capturesPerPhase}:900_Home_immediate.png,900_Data_immediate.png,750_Home_immediate.png,750_Data_immediate.png",
+                $"first-render:{capturesPerPhase}:900_Home_first_render.png,900_Data_first_render.png,750_Home_first_render.png,750_Data_first_render.png",
+                $"settled:{capturesPerPhase}:900_Home_settled.png,900_Data_settled.png,750_Home_settled.png,750_Data_settled.png"
+            ]);
+
+        plan.ExpectedCaptureFileNamesByPhase()
+            .SelectMany(group => group.FileNames)
+            .Should()
+            .BeEquivalentTo(plan.ExpectedCaptureFileNames())
+            .And.OnlyHaveUniqueItems();
     }
 
     [Fact]
@@ -287,5 +353,24 @@ public sealed class RibbonScreenshotTourPlannerTests
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("throw new InvalidOperationException");
+    }
+
+    [Fact]
+    public void MainWindowScreenshotTour_StaleCleanupDeletesOnlyRequestedPlanCaptures()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ScreenshotTour.cs"));
+        var method = Regex.Match(
+            source,
+            @"private static void DeleteStaleRibbonScreenshotTourCaptures\([^)]*\)\s*\{(?<body>.*?)\n    \}",
+            RegexOptions.Singleline);
+
+        method.Success.Should().BeTrue("stale cleanup should stay source-visible and plan-scoped");
+        method.Groups["body"].Value.Should().Contain("foreach (var capture in plan.Captures)");
+        method.Groups["body"].Value.Should().Contain("Path.Combine(outputDir, $\"{capture.FileName}.png\")");
+        method.Groups["body"].Value.Should().Contain("File.Exists(path)");
+        method.Groups["body"].Value.Should().Contain("File.Delete(path)");
+        method.Groups["body"].Value.Should().NotContain("EnumerateFiles");
+        method.Groups["body"].Value.Should().NotContain("GetFiles");
+        method.Groups["body"].Value.Should().NotContain("*.png");
     }
 }

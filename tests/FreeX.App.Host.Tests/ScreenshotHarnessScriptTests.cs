@@ -73,6 +73,25 @@ public sealed class ScreenshotHarnessScriptTests
     }
 
     [Theory]
+    [InlineData("screenshot_excel.ps1")]
+    [InlineData("screenshot_ribbon.ps1")]
+    public void ScreenshotScripts_AbortWhenPlannedRibbonTabCannotBeCaptured(string scriptName)
+    {
+        var script = ReadScript(scriptName);
+        var missingTabBranch = Regex.Match(
+            script,
+            @"if \(\$tabEl -eq \$null\) \{(?<body>.*?)\n    \}",
+            RegexOptions.Singleline);
+
+        missingTabBranch.Success.Should().BeTrue($"{scriptName} should make missing planned tabs a hard failure");
+        missingTabBranch.Groups["body"].Value.Should().Contain("Get-ChildItem $outDir -Filter \"*.png\"");
+        missingTabBranch.Groups["body"].Value.Should().Contain("Remove-Item -Force");
+        missingTabBranch.Groups["body"].Value.Should().Contain("throw \"Ribbon screenshot tab '$tabName' was not found");
+        missingTabBranch.Groups["body"].Value.Should().NotContain("Write-Warning");
+        missingTabBranch.Groups["body"].Value.Should().NotContain("return");
+    }
+
+    [Theory]
     [InlineData(
         "screenshot_excel.ps1",
         "excel",

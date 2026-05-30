@@ -277,7 +277,10 @@ function Screenshot-Tab($tabName, $widthSpec) {
                        [System.Windows.Automation.ControlType]::TabItem)
     $tabCond = New-Object System.Windows.Automation.AndCondition($nameCond, $tabItemCond)
     $tabEl   = $appEl.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $tabCond)
-    if ($tabEl -eq $null) { Write-Warning "Tab '$tabName' not found"; return }
+    if ($tabEl -eq $null) {
+        Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        throw "Ribbon screenshot tab '$tabName' was not found; aborting instead of writing an incomplete evidence matrix."
+    }
 
     $selPat = $tabEl.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
     if ($selPat -ne $null) { $selPat.Select() }
