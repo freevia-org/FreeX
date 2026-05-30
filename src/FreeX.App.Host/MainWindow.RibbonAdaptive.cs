@@ -11,18 +11,18 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private void UpdateRibbonCompactMode(bool force = false)
+    private RibbonCompactUpdateResult UpdateRibbonCompactMode(bool force = false)
     {
         if (RibbonTabs is null)
-            return;
+            return RibbonCompactUpdateResult.Noop;
 
         var activePanel = GetActiveRibbonPanel();
         if (activePanel is null)
-            return;
+            return RibbonCompactUpdateResult.Noop;
 
         var groups = GetCachedRibbonAdaptiveGroups(activePanel);
         if (groups.Count == 0)
-            return;
+            return RibbonCompactUpdateResult.Noop;
 
         var controlCacheKey = _ribbonAdaptiveControlCacheKey ??
             CreateRibbonAdaptiveMeasurementCacheKey(activePanel, groups);
@@ -30,7 +30,7 @@ public partial class MainWindow
         var groupSnapshots = GetCachedRibbonCompactGroupSnapshots(groups, controlCacheKey);
         var availableWidth = GetRibbonAvailableWidth(activePanel);
         if (availableWidth <= 0)
-            return;
+            return RibbonCompactUpdateResult.Noop;
 
         var selectedTabHeader = GetRibbonAdaptiveTabIdentity(activePanel);
         var cacheKey = controlCacheKey;
@@ -92,26 +92,28 @@ public partial class MainWindow
             _lastRibbonAdaptiveAppliedStateKey == appliedStateKey)
         {
             _ribbonAppliedStateSkipCount++;
-            return;
+            return RibbonCompactUpdateResult.SkippedAppliedState;
         }
 
-        ApplyRibbonAdaptiveStates(
+        var changedGroupCount = ApplyRibbonAdaptiveStates(
             groupSnapshots,
             collapsedButtons,
             plannedStates,
             _ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates,
             availableWidth);
-        SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
+        var visualStateChanged = changedGroupCount > 0;
+        visualStateChanged |= SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
         var requiresMeasuredCorrection = cachedCorrectionNeedsExpansion ||
             layout.RequiresMeasuredCorrection &&
             (!hasCachedCorrection || RibbonRowOverflowsMeasuredCached(activePanel, cacheKey, availableWidth, plannedStates));
+        var measuredCorrectionApplied = false;
         if (requiresMeasuredCorrection)
         {
-            ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
-            ApplyRibbonMeasuredExpansionFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
+            measuredCorrectionApplied |= ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
+            measuredCorrectionApplied |= ApplyRibbonMeasuredExpansionFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
         }
 
-        SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
+        visualStateChanged |= SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
         appliedStateKey = CreateRibbonAppliedStateKey(availableWidth, plannedStates);
         if (!hasCachedCorrection || requiresMeasuredCorrection)
             _ribbonCorrectedStateCache[correctionCacheKey] = plannedStates.ToArray();
@@ -121,6 +123,12 @@ public partial class MainWindow
 
         var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
         _ribbonCompact = compacted;
+        if (measuredCorrectionApplied)
+            return RibbonCompactUpdateResult.MeasuredCorrectionApplied;
+
+        return visualStateChanged
+            ? RibbonCompactUpdateResult.AppliedVisualChange
+            : RibbonCompactUpdateResult.Noop;
     }
 
     private static bool RibbonStatesAreMoreCollapsedThan(
@@ -241,6 +249,9 @@ public partial class MainWindow
             _ribbonMeasuredOverflowMeasurementCount,
             _ribbonCorrectedStateCacheHitCount,
             _ribbonAppliedStateSkipCount,
+            _ribbonAdaptiveStateApplyCount,
+            _ribbonAdaptiveStateChangedGroupCount,
+            _ribbonCollapsedFootprintApplyCount,
             _ribbonAdaptiveMeasurementCacheKey,
             _ribbonResizeThresholdCacheKey,
             _ribbonCompactSnapshotCacheKey);
@@ -256,6 +267,9 @@ public partial class MainWindow
         _ribbonMeasuredOverflowMeasurementCount = 0;
         _ribbonCorrectedStateCacheHitCount = 0;
         _ribbonAppliedStateSkipCount = 0;
+        _ribbonAdaptiveStateApplyCount = 0;
+        _ribbonAdaptiveStateChangedGroupCount = 0;
+        _ribbonCollapsedFootprintApplyCount = 0;
 
         if (resetSelectedStaticNormalization &&
             RibbonTabs?.SelectedItem is TabItem selectedTab)
@@ -336,7 +350,7 @@ public partial class MainWindow
         return tab.Header?.ToString() ?? "";
     }
 
-    private void ApplyRibbonMeasuredOverflowFallback(
+    private bool ApplyRibbonMeasuredOverflowFallback(
         StackPanel activePanel,
         IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
         IReadOnlyList<Button> collapsedButtons,
@@ -346,25 +360,32 @@ public partial class MainWindow
         double availableWidth,
         string? selectedTabHeader)
     {
+        var appliedCorrection = false;
         var protectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetFallbackProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
         var runtimeVisibilityProtectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
         protectedGroupIndexes.UnionWith(runtimeVisibilityProtectedGroupIndexes);
-        while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates) &&
-               RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
+        while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
         {
-            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null, availableWidth);
-            RibbonAdaptiveStateApplicator.SetCollapsedButtonFootprint(collapsedButtons, availableWidth);
+            var previousStates = plannedStates.ToArray();
+            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
+                break;
+
+            appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
         }
 
-        while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates) &&
-               RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false, runtimeVisibilityProtectedGroupIndexes))
+        while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
         {
-            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null, availableWidth);
-            RibbonAdaptiveStateApplicator.SetCollapsedButtonFootprint(collapsedButtons, availableWidth);
+            var previousStates = plannedStates.ToArray();
+            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false, runtimeVisibilityProtectedGroupIndexes))
+                break;
+
+            appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
         }
+
+        return appliedCorrection;
     }
 
-    private void ApplyRibbonMeasuredExpansionFallback(
+    private bool ApplyRibbonMeasuredExpansionFallback(
         StackPanel activePanel,
         IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
         IReadOnlyList<Button> collapsedButtons,
@@ -374,22 +395,25 @@ public partial class MainWindow
         double availableWidth,
         string? selectedTabHeader)
     {
+        var appliedCorrection = false;
         foreach (var index in RibbonAdaptiveLayoutEngine.GetExpandableGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader))
         {
             var currentState = plannedStates[index];
             if (!RibbonAdaptiveLayoutEngine.TryGetNextExpandedState(currentState, out var expandedState))
                 continue;
 
+            var previousStates = plannedStates.ToArray();
             plannedStates[index] = expandedState;
-            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null, availableWidth);
-            RibbonAdaptiveStateApplicator.SetCollapsedButtonFootprint(collapsedButtons, availableWidth);
+            appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
             if (!RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
                 continue;
 
+            var expandedStates = plannedStates.ToArray();
             plannedStates[index] = currentState;
-            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null, availableWidth);
-            RibbonAdaptiveStateApplicator.SetCollapsedButtonFootprint(collapsedButtons, availableWidth);
+            appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, expandedStates, availableWidth) > 0;
         }
+
+        return appliedCorrection;
     }
 
     private bool RibbonRowOverflowsMeasuredCached(
@@ -445,27 +469,34 @@ public partial class MainWindow
             CreateRibbonStateSignature(states));
     }
 
-    private static void ApplyRibbonAdaptiveStates(
+    private int ApplyRibbonAdaptiveStates(
         IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
         IReadOnlyList<Button> collapsedButtons,
         IReadOnlyList<RibbonAdaptiveGroupState> plannedStates,
         IReadOnlyList<RibbonAdaptiveGroupState>? previousStates,
-        double availableWidth = 0) =>
-        RibbonAdaptiveStateApplicator.ApplyStates(
+        double availableWidth = 0)
+    {
+        var changedGroupCount = RibbonAdaptiveStateApplicator.ApplyStates(
             groupSnapshots,
             collapsedButtons,
             plannedStates,
             previousStates,
             availableWidth);
+        _ribbonAdaptiveStateApplyCount++;
+        _ribbonAdaptiveStateChangedGroupCount += changedGroupCount;
+        return changedGroupCount;
+    }
 
-    private void SetCollapsedRibbonButtonFootprintIfNeeded(IReadOnlyList<Button> collapsedButtons, double availableWidth)
+    private bool SetCollapsedRibbonButtonFootprintIfNeeded(IReadOnlyList<Button> collapsedButtons, double availableWidth)
     {
         var footprintMode = GetCollapsedRibbonFootprintMode(availableWidth);
         if (_lastRibbonCollapsedFootprintMode == footprintMode)
-            return;
+            return false;
 
         RibbonAdaptiveStateApplicator.SetCollapsedButtonFootprint(collapsedButtons, availableWidth);
         _lastRibbonCollapsedFootprintMode = footprintMode;
+        _ribbonCollapsedFootprintApplyCount++;
+        return true;
     }
 
     private static RibbonCollapsedGroupFootprintMode GetCollapsedRibbonFootprintMode(double availableWidth)
@@ -971,6 +1002,14 @@ public partial class MainWindow
         None,
         CompactOnly,
         NormalizeSurface
+    }
+
+    private enum RibbonCompactUpdateResult
+    {
+        Noop,
+        SkippedAppliedState,
+        AppliedVisualChange,
+        MeasuredCorrectionApplied
     }
 
     private readonly record struct RibbonAdaptiveLayoutPlanCacheEntryKey(

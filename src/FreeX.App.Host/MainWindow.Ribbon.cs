@@ -703,8 +703,9 @@ public partial class MainWindow
             return;
         }
 
-        UpdateRibbonCompactMode(force: true);
-        UpdateActiveRibbonLayoutBeforeFirstFrame();
+        var result = UpdateRibbonCompactMode(force: true);
+        if (RibbonCompactUpdateRequiresLayout(result))
+            UpdateActiveRibbonLayoutBeforeFirstFrame();
         QueueRibbonFallback(RibbonFallbackWork.CompactOnly);
     }
 
@@ -740,8 +741,11 @@ public partial class MainWindow
                 else if (pendingWork == RibbonFallbackWork.CompactOnly)
                 {
                     _ribbonFallbackForcedCompactCount++;
-                    UpdateRibbonCompactMode(force: false);
-                    UpdateActiveRibbonLayoutBeforeFirstFrame();
+                    var result = UpdateRibbonCompactMode(force: false);
+                    if (RibbonCompactUpdateRequiresLayout(result))
+                        UpdateActiveRibbonLayoutBeforeFirstFrame();
+                    else
+                        _ribbonFallbackSkippedCompactLayoutCount++;
                 }
             }),
             DispatcherPriority.Render);
@@ -754,6 +758,7 @@ public partial class MainWindow
             _ribbonFallbackExecutedCount,
             _ribbonFallbackForcedNormalizeCount,
             _ribbonFallbackForcedCompactCount,
+            _ribbonFallbackSkippedCompactLayoutCount,
             _ribbonFirstFrameLayoutUpdateCount,
             _lastRibbonFallbackRequestedWork.ToString(),
             _lastRibbonFallbackMergedWork.ToString(),
@@ -768,6 +773,7 @@ public partial class MainWindow
         _ribbonFallbackExecutedCount = 0;
         _ribbonFallbackForcedNormalizeCount = 0;
         _ribbonFallbackForcedCompactCount = 0;
+        _ribbonFallbackSkippedCompactLayoutCount = 0;
         _ribbonFirstFrameLayoutUpdateCount = 0;
         _lastRibbonFallbackRequestedWork = RibbonFallbackWork.None;
         _lastRibbonFallbackMergedWork = RibbonFallbackWork.None;
@@ -781,13 +787,17 @@ public partial class MainWindow
                 ? RibbonFallbackWork.CompactOnly
                 : RibbonFallbackWork.None;
 
+    private static bool RibbonCompactUpdateRequiresLayout(RibbonCompactUpdateResult result) =>
+        result is RibbonCompactUpdateResult.AppliedVisualChange or RibbonCompactUpdateResult.MeasuredCorrectionApplied;
+
     private void CompleteRibbonResizeCompaction()
     {
         if (_ribbonResizeCompactionPendingOnExit)
         {
             _ribbonResizeCompactionPendingOnExit = false;
-            UpdateRibbonCompactMode(force: true);
-            UpdateActiveRibbonLayoutBeforeFirstFrame();
+            var result = UpdateRibbonCompactMode(force: true);
+            if (RibbonCompactUpdateRequiresLayout(result))
+                UpdateActiveRibbonLayoutBeforeFirstFrame();
             QueueRibbonFallback(RibbonFallbackWork.CompactOnly);
         }
 

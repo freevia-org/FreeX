@@ -10,6 +10,9 @@ internal readonly record struct RibbonAdaptiveDiagnosticsSnapshot(
     int MeasuredOverflowMeasurementCount,
     int CorrectedStateCacheHitCount,
     int AppliedStateSkipCount,
+    int StateApplyCount,
+    int StateChangedGroupCount,
+    int CollapsedFootprintApplyCount,
     string? MeasurementCacheKey,
     string? ResizeThresholdCacheKey,
     string? CompactSnapshotCacheKey);

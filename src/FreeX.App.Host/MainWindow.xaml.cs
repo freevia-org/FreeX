@@ -122,6 +122,9 @@ public partial class MainWindow : Window
     private int _ribbonMeasuredOverflowMeasurementCount;
     private int _ribbonCorrectedStateCacheHitCount;
     private int _ribbonAppliedStateSkipCount;
+    private int _ribbonAdaptiveStateApplyCount;
+    private int _ribbonAdaptiveStateChangedGroupCount;
+    private int _ribbonCollapsedFootprintApplyCount;
     private bool _ribbonFallbackPending;
     private RibbonFallbackWork _ribbonFallbackWork;
     private int _ribbonFallbackRequestCount;
@@ -129,6 +132,7 @@ public partial class MainWindow : Window
     private int _ribbonFallbackExecutedCount;
     private int _ribbonFallbackForcedNormalizeCount;
     private int _ribbonFallbackForcedCompactCount;
+    private int _ribbonFallbackSkippedCompactLayoutCount;
     private int _ribbonFirstFrameLayoutUpdateCount;
     private RibbonFallbackWork _lastRibbonFallbackRequestedWork;
     private RibbonFallbackWork _lastRibbonFallbackMergedWork;
