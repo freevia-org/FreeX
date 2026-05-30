@@ -235,6 +235,21 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
+    public void BreakpointThresholds_SourceAvoidsRedundantSortedSetLinqPasses()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveTabProfiles.cs"));
+        var method = source.Substring(
+            source.IndexOf("public static IReadOnlyList<double> GetBreakpointThresholds", StringComparison.Ordinal),
+            source.IndexOf("internal static string? ResolveProfileName", StringComparison.Ordinal) -
+            source.IndexOf("public static IReadOnlyList<double> GetBreakpointThresholds", StringComparison.Ordinal));
+
+        method.Should().Contain("new List<double>(thresholds.Count)");
+        method.Should().NotContain(".Where(");
+        method.Should().NotContain(".OrderBy(");
+        method.Should().NotContain(".ToList()");
+    }
+
+    [Fact]
     public void Plan_SourceAppliesProfileOverridesInPlace()
     {
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));

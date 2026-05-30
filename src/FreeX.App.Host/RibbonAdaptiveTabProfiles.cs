@@ -329,10 +329,14 @@ internal static class RibbonAdaptiveTabProfiles
         foreach (var threshold in RibbonCollapsedGroupPresentationPlanner.BreakpointThresholds)
             thresholds.Add(threshold);
 
-        return thresholds
-            .Where(width => width > 0 && !double.IsInfinity(width))
-            .OrderBy(width => width)
-            .ToList();
+        var positiveThresholds = new List<double>(thresholds.Count);
+        foreach (var threshold in thresholds)
+        {
+            if (threshold > 0 && !double.IsInfinity(threshold))
+                positiveThresholds.Add(threshold);
+        }
+
+        return positiveThresholds;
     }
 
     internal static string? ResolveProfileName(
