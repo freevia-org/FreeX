@@ -210,7 +210,7 @@ public static partial class FlashFillService
         string? domain = null;
         foreach (var (source, expected) in examples)
         {
-            if (!TrySplitWhitespaceTokens(source, 2, out var tokens))
+            if (!TrySplitFullNameEdgeTokens(source, out var tokens))
                 return null;
 
             var expectedPrefix = localPart(tokens) + "@";
@@ -229,9 +229,22 @@ public static partial class FlashFillService
 
         return domain is null
             ? null
-            : source => TrySplitWhitespaceTokens(source, 2, out var tokens)
+            : source => TrySplitFullNameEdgeTokens(source, out var tokens)
                 ? localPart(tokens) + "@" + domain
                 : null;
+    }
+
+    private static bool TrySplitFullNameEdgeTokens(string source, out string[] tokens)
+    {
+        var sourceTokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (sourceTokens.Length < 2 || sourceTokens.Any(token => token.Length == 0))
+        {
+            tokens = [];
+            return false;
+        }
+
+        tokens = [sourceTokens[0], sourceTokens[^1]];
+        return true;
     }
 
     private static Func<IReadOnlyList<string>, string>? TryFirstLastEmailPattern(

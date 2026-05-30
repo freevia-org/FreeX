@@ -582,6 +582,19 @@ public sealed class FlashFillServiceTests
         result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
     }
 
+    [Fact]
+    public void Fill_FullNamesToFirstLastEmail_UsesFirstAndLastAcrossMiddleNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "ada.lovelace@contoso.com"),
+                ("Grace Brewster Hopper", "grace.hopper@contoso.com")
+            ],
+            ["Katherine Coleman Johnson"]);
+
+        result.Should().BeEquivalentTo(["katherine.johnson@contoso.com"], o => o.WithStrictOrdering());
+    }
+
     [Theory]
     [InlineData(".", "turing.alan@contoso.com")]
     [InlineData("_", "turing_alan@contoso.com")]
@@ -1103,12 +1116,12 @@ public sealed class FlashFillServiceTests
     {
         var result = FlashFillService.Fill(
             [
-                ("Dr. Ada Lovelace Jr.", "ada.lovelace@contoso.com"),
-                ("Prof Grace Hopper Sr.", "grace.hopper@contoso.com")
+                ("Dr. Ada Byron Lovelace Jr.", "ada.lovelace@contoso.com"),
+                ("Prof Grace Brewster Hopper Sr.", "grace.hopper@contoso.com")
             ],
-            ["Ms. Alan Turing III"]);
+            ["Ms. Katherine Coleman Johnson III"]);
 
-        result.Should().BeEquivalentTo(["alan.turing@contoso.com"], o => o.WithStrictOrdering());
+        result.Should().BeEquivalentTo(["katherine.johnson@contoso.com"], o => o.WithStrictOrdering());
     }
 
     [Fact]
