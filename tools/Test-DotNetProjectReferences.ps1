@@ -48,6 +48,10 @@ $resolvedProjectRoot = Resolve-RepoPath $ProjectRoot
 if (-not (Test-Path -LiteralPath $resolvedProjectRoot -PathType Container)) {
     throw "Project root was not found: $resolvedProjectRoot"
 }
+$resolvedProjectRootPath = [System.IO.Path]::GetFullPath($resolvedProjectRoot)
+if (-not $resolvedProjectRootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+    $resolvedProjectRootPath += [System.IO.Path]::DirectorySeparatorChar
+}
 
 $projectFiles = @(
     Get-ChildItem -LiteralPath $resolvedProjectRoot -Filter "*.csproj" -File -Recurse |
@@ -60,6 +64,7 @@ if ($projectFiles.Count -eq 0) {
 }
 
 $missingReferences = New-Object System.Collections.Generic.List[string]
+$escapedReferences = New-Object System.Collections.Generic.List[string]
 
 foreach ($projectFile in $projectFiles) {
     [xml]$projectXml = Get-Content -LiteralPath $projectFile.FullName -Raw
@@ -73,11 +78,22 @@ foreach ($projectFile in $projectFiles) {
 
         $referencedProjectPath = Join-Path $projectFile.DirectoryName $include
         $resolvedReferencePath = [System.IO.Path]::GetFullPath($referencedProjectPath)
+        $relativeProjectPath = Get-RelativeRepoPath $projectFile.FullName
+
+        if (-not $resolvedReferencePath.StartsWith($resolvedProjectRootPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $escapedReferences.Add("${relativeProjectPath}: $include")
+            continue
+        }
 
         if (-not (Test-Path -LiteralPath $resolvedReferencePath -PathType Leaf)) {
-            $relativeProjectPath = Get-RelativeRepoPath $projectFile.FullName
             $missingReferences.Add("${relativeProjectPath}: $include")
         }
+    }
+}
+
+if ($escapedReferences.Count -gt 0) {
+    foreach ($escapedReference in $escapedReferences) {
+        Write-Error "ProjectReference target escapes project root: $escapedReference" -ErrorAction Continue
     }
 }
 
@@ -85,8 +101,10 @@ if ($missingReferences.Count -gt 0) {
     foreach ($missingReference in $missingReferences) {
         Write-Error "Missing ProjectReference target: $missingReference" -ErrorAction Continue
     }
+}
 
-    throw "Project reference validation failed for $($missingReferences.Count) reference(s)."
+if ($escapedReferences.Count -gt 0 -or $missingReferences.Count -gt 0) {
+    throw "Project reference validation failed for $($escapedReferences.Count + $missingReferences.Count) reference(s)."
 }
 
 Write-Host "Validated ProjectReference targets for $($projectFiles.Count) .NET project file(s)."
