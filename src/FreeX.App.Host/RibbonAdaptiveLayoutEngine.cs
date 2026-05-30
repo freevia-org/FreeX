@@ -23,15 +23,11 @@ internal static class RibbonAdaptiveLayoutEngine
         string? selectedTabHeader)
     {
         var states = RibbonAdaptiveLayoutPlanner.Plan(availableWidth, groups, fixedChromeWidth).ToArray();
-        states = RibbonAdaptiveTabProfiles
-            .ApplyBreakpointOverrides(availableWidth, groupProfileKeys, states, selectedTabHeader)
-            .ToArray();
-        states = RibbonAdaptivePriorityPlanner
-            .ApplyRuntimePriorityStates(availableWidth, groupProfileKeys, states, selectedTabHeader)
-            .ToArray();
-        states = RibbonAdaptivePriorityPlanner
-            .ApplyRuntimeVisibilityStates(availableWidth, groupProfileKeys, states, selectedTabHeader)
-            .ToArray();
+        RibbonAdaptiveTabProfiles.ApplyPlanOverridesInPlace(
+            availableWidth,
+            groupProfileKeys,
+            states,
+            selectedTabHeader);
 
         FitStatesToWidth(states, groups, groupProfileKeys, fixedChromeWidth, availableWidth, selectedTabHeader);
         ExpandStatesIntoAvailableWidth(states, groups, groupProfileKeys, fixedChromeWidth, availableWidth, selectedTabHeader);
