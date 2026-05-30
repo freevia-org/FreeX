@@ -45,6 +45,21 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCells_LazilyAllocatesStyleLookupForDefaultStyledViewports()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var buildStyleLookup = source[
+            source.IndexOf("private static Dictionary<(uint Row, uint Col), CellStyle> BuildRenderCellStyleLookup", StringComparison.Ordinal)..
+            source.IndexOf("private RenderCellLookupCache GetRenderCellLookups", StringComparison.Ordinal)];
+
+        source.Should().Contain("private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);");
+        buildStyleLookup.Should().Contain("Dictionary<(uint Row, uint Col), CellStyle>? lookup = null;");
+        buildStyleLookup.Should().Contain("lookup ??= new Dictionary<(uint Row, uint Col), CellStyle>(cells.Count);");
+        buildStyleLookup.Should().Contain("return lookup ?? EmptyRenderCellStyleLookup;");
+        buildStyleLookup.Should().NotContain("var lookup = new Dictionary<(uint Row, uint Col), CellStyle>();");
+    }
+
+    [Fact]
     public void RenderCells_ReusesPixelsPerDipAcrossFormattedTextCalls()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
@@ -156,6 +171,25 @@ public sealed class GridViewRenderPerformanceTests
         renderSparklines.Should().NotContain(".Select(");
         renderSparklines.Should().NotContain("new SolidColorBrush");
         renderSparklines.Should().NotContain("new Pen");
+    }
+
+    [Fact]
+    public void RenderAutofillPreview_ReusesFrozenStaticDashedPen()
+    {
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
+        var overlaysSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var renderAutofill = overlaysSource[
+            overlaysSource.IndexOf("private void RenderAutofillPreview", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private void RenderMarchingAnts", StringComparison.Ordinal)];
+
+        gridViewSource.Should().Contain("private static readonly Pen AutofillPreviewPen = MakeAutofillPreviewPen();");
+        gridViewSource.Should().Contain("private static Pen MakeAutofillPreviewPen()");
+        gridViewSource.Should().Contain("DashStyle = new DashStyle([4.0, 4.0], 0)");
+        gridViewSource.Should().Contain("pen.Freeze();");
+        renderAutofill.Should().Contain("dc.DrawRectangle(null, AutofillPreviewPen, rect);");
+        renderAutofill.Should().NotContain("new Pen");
+        renderAutofill.Should().NotContain("new SolidColorBrush");
+        renderAutofill.Should().NotContain("new DashStyle");
     }
 
     [Fact]
@@ -276,11 +310,29 @@ public sealed class GridViewRenderPerformanceTests
 
         renderCells.Should().Contain("GetRenderCellLookups(viewport)");
         rendering.Should().Contain("ReferenceEquals(cached.Viewport, viewport)");
-        rendering.Should().Contain("GetOccupiedCellLookup(viewport, EditingCell)");
+        rendering.Should().Contain("occupied ??= GetOccupiedCellLookup(viewport, EditingCell);");
         cacheSource.Should().Contain("private sealed record RenderCellLookupCache");
         cacheSource.Should().Contain("private sealed record OccupiedCellLookupCache");
         propertiesSource.Should().Contain("OnViewportChanged");
         propertiesSource.Should().Contain("grid.ClearRenderLookupCache();");
+    }
+
+    [Fact]
+    public void RenderCells_LazilyBuildsOverflowOccupancyLookup()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var textPass = source[
+            source.IndexOf("// Pass 3: text", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderCellBackgroundBase", StringComparison.Ordinal)];
+        var setup = textPass[..textPass.IndexOf("foreach (var cell in viewport.Cells)", StringComparison.Ordinal)];
+        var overflowBlock = textPass[
+            textPass.IndexOf("if (canOverflow)", StringComparison.Ordinal)..
+            textPass.IndexOf("var typeface = CreateCellTypeface", StringComparison.Ordinal)];
+
+        setup.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
+        setup.Should().NotContain("GetOccupiedCellLookup(viewport, EditingCell)");
+        overflowBlock.Should().Contain("occupied ??= GetOccupiedCellLookup(viewport, EditingCell);");
+        overflowBlock.Should().Contain("!occupied.Contains((cell.Row, nextCol))");
     }
 
     [Fact]
