@@ -92,6 +92,8 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("new ShapeGradientDialog");
         source.Should().Contain("new SetDrawingShapeGradientCommand(");
         source.Should().Contain("new SetDrawingShapeEffectCommand(");
+        source.Should().Contain("shape.GetEffectiveEffectPreset() == DrawingShapeEffectPreset.None");
+        source.Should().Contain("DrawingShapeEffectPreset.Shadow");
         source.Should().Contain("new PictureCropDialog(picture)");
         source.Should().Contain("private void PictureCropDialogMenuItem_Click(object sender, RoutedEventArgs e) =>");
         source.Should().Contain("new SetPictureCropCommand(");
