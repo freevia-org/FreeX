@@ -146,9 +146,11 @@ public sealed partial class UiTestCatalogInventoryTests
                                   RibbonScreenshotTourPlanner.DefaultWidths.Count;
 
         row.Should().Contain("FREEX_SS_TOUR=1");
+        row.Should().Contain("FREEX_SS_TOUR_BURST=1");
         row.Should().Contain("FREEX_SS_TOUR_TABS");
         row.Should().Contain("FREEX_SS_TOUR_WIDTHS");
         row.Should().Contain($"{plannedCaptureCount} planned captures");
+        row.Should().Contain($"{plannedCaptureCount * RibbonScreenshotTourPlanner.BurstPhases.Count} burst-phase captures");
     }
 
     [Theory]

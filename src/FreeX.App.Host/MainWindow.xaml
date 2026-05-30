@@ -1,4 +1,4 @@
-<Window x:Class="FreeX.App.Host.MainWindow"
+﻿<Window x:Class="FreeX.App.Host.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -44,9 +44,9 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- ═══════════════════════════════════════════════════════════════
+        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
              ROW 0  Title bar / Quick Access Toolbar
-             ═══════════════════════════════════════════════════════════════ -->
+             â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
         <Border x:Name="TitleBarRoot" Grid.Row="0" Background="{StaticResource FreeXTitleBarBrush}" BorderBrush="{StaticResource FreeXAccentDarkBrush}"
                 BorderThickness="0,0,0,1" Padding="6,3">
             <DockPanel>
@@ -188,7 +188,7 @@
                     <local:RibbonIcon Kind="Redo" CommandName="Redo" IconSize="16"
                                       Foreground="{StaticResource FreeXWhiteBrush}"/>
                 </Button>
-                <!-- System buttons — must be docked Right before the fill element -->
+                <!-- System buttons â€” must be docked Right before the fill element -->
                 <!-- Order in XAML (Right-docked) is right-to-left, so Close first -->
                 <Button x:Name="CloseSysBtn"    DockPanel.Dock="Right"
                         Style="{StaticResource CloseSysBtnStyle}" Click="CloseSysBtn_Click"
@@ -215,9 +215,9 @@
             </DockPanel>
         </Border>
 
-        <!-- ═══════════════════════════════════════════════════════════════
+        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
              ROW 1  Ribbon  (tabbed, groups with labels)
-             ═══════════════════════════════════════════════════════════════ -->
+             â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
         <TabControl x:Name="RibbonTabs" Grid.Row="1" Background="{StaticResource FreeXRibbonSurfaceBrush}"
                     BorderThickness="0,0,0,1" BorderBrush="{StaticResource FreeXBorderBrush}"
                     Padding="0" TabStripPlacement="Top" SelectedIndex="1" MinHeight="132"
@@ -227,24 +227,24 @@
                     KeyboardNavigation.DirectionalNavigation="Contained"
                     SelectionChanged="RibbonTabs_SelectionChanged">
 
-            <!-- ── FILE — clicking opens the overlay; handler immediately switches back to Home -->
+            <!-- â”€â”€ FILE â€” clicking opens the overlay; handler immediately switches back to Home -->
             <TabControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <StackPanel Orientation="Horizontal"/>
                 </ItemsPanelTemplate>
             </TabControl.ItemsPanel>
-            <TabItem x:Name="FileTab" Header="File" local:RibbonTooltip.KeyTip="F"/>
+            <TabItem x:Name="FileTab" Header="File" local:RibbonTooltip.KeyTip="F" local:RibbonMetadata.CatalogId="FileTab"/>
 
-            <!-- ── HOME ──────────────────────────────────────────────── -->
-            <TabItem Header="Home" local:RibbonTooltip.KeyTip="H">
+            <!-- â”€â”€ HOME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <TabItem Header="Home" local:RibbonTooltip.KeyTip="H" local:RibbonMetadata.CatalogId="HomeTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel x:Name="HomeRibbonPanel" Orientation="Horizontal" MinHeight="88">
 
-                        <!-- ▌Clipboard ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒClipboard â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="HomeClipboardGroup">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="18"/>
@@ -313,8 +313,8 @@
 
                         <Rectangle Style="{StaticResource RibbonGroupDivider}"/>
 
-                        <!-- ▌Font ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒFont â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="HomeFontGroup">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="18"/>
@@ -571,8 +571,8 @@
 
                         <Rectangle Style="{StaticResource RibbonGroupDivider}"/>
 
-                        <!-- ▌Alignment ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒAlignment â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="HomeAlignmentGroup">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="18"/>
@@ -749,8 +749,8 @@
 
                         <Rectangle Style="{StaticResource RibbonGroupDivider}"/>
 
-                        <!-- ▌Number ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒNumber â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="HomeNumberGroup">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="18"/>
@@ -828,8 +828,8 @@
 
                         <Rectangle Style="{StaticResource RibbonGroupDivider}"/>
 
-                        <!-- ▌Styles ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒStyles â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="HomeStylesGroup">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="18"/>
@@ -971,8 +971,8 @@
 
                         <Rectangle Style="{StaticResource RibbonGroupDivider}"/>
                         
-                        <!-- ▌Cells ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒCells â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="HomeCellsGroup">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="18"/>
@@ -1045,8 +1045,8 @@
                         <Rectangle Style="{StaticResource RibbonGroupDivider}"/>
 
 
-                        <!-- ▌Editing ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒEditing â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="HomeEditingGroup">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                                 <RowDefinition Height="18"/>
@@ -1079,7 +1079,7 @@
                                         <TextBlock Text="AutoSum" local:RibbonMetadata.Role="CommandLabel" FontSize="12" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
-                                <!-- Right: 2×2 grid of Fill/Clear/Sort&Filter/Find&Select -->
+                                <!-- Right: 2Ã—2 grid of Fill/Clear/Sort&Filter/Find&Select -->
                                 <Grid Grid.Column="1">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
@@ -1189,16 +1189,16 @@
                 </Border>
             </TabItem>
 
-            <!-- ── INSERT ────────────────────────────────────────────── -->
-            <TabItem Header="Insert" local:RibbonTooltip.KeyTip="N">
+            <!-- â”€â”€ INSERT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <TabItem Header="Insert" local:RibbonTooltip.KeyTip="N" local:RibbonMetadata.CatalogId="InsertTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
-                        <!-- ▌Tables ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒTables â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertTablesGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="PivotTable" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableBtn_Click"
@@ -1224,8 +1224,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Illustrations ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒIllustrations â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertIllustrationsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Pictures" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertPictureBtn_Click"
@@ -1249,8 +1249,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Charts ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒCharts â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertChartsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Recommended Charts" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertChartPickerBtn_Click"
@@ -1526,7 +1526,7 @@
                                     <Button Content="Equation"     Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineEquationBtn_Click"
                                             local:RibbonTooltip.Title="Trendline Equation" local:RibbonTooltip.KeyTip="TQ"
                                             local:RibbonTooltip.Description="Show or hide the trendline equation on the current chart."/>
-                                    <Button Content="R²"           Width="48"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineRSquaredBtn_Click"
+                                    <Button Content="RÂ²"           Width="48"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineRSquaredBtn_Click"
                                             local:RibbonTooltip.Title="R-squared" local:RibbonTooltip.KeyTip="RS"
                                             local:RibbonTooltip.Description="Show or hide the trendline R-squared value on the current chart."/>
                                 </StackPanel>
@@ -1656,14 +1656,14 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Sparklines ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒSparklines â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertSparklinesGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Line"    Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SparklineLineBtn_Click"
                                         local:RibbonTooltip.Title="Line Sparkline"
                                         local:RibbonTooltip.KeyTip="SL"
-                                        local:RibbonTooltip.Description="Insert a line sparkline — a tiny chart in a single cell showing a trend."/>
+                                        local:RibbonTooltip.Description="Insert a line sparkline â€” a tiny chart in a single cell showing a trend."/>
                                 <Button Content="Column"  Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SparklineColumnBtn_Click"
                                         local:RibbonTooltip.Title="Column Sparkline"
                                         local:RibbonTooltip.KeyTip="SK"
@@ -1677,8 +1677,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Filters ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒFilters â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertFiltersGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Slicer" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotInsertSlicerBtn_Click"
@@ -1694,8 +1694,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Links ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒLinks â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertLinksGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Link" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertLinkBtn_Click"
@@ -1707,8 +1707,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Comments ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒComments â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertCommentsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Comment" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertCommentBtn_Click"
@@ -1720,8 +1720,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Text ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒText â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertTextGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Text Box" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DrawTextBtn_Click"
@@ -1737,8 +1737,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Symbols ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒSymbols â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertSymbolsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Equation" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
@@ -1758,16 +1758,16 @@
                 </Border>
             </TabItem>
 
-            <!-- ── DRAW ──────────────────────────────────────────────── -->
-            <TabItem Header="Draw" local:RibbonTooltip.KeyTip="J">
+            <!-- â”€â”€ DRAW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <TabItem Header="Draw" local:RibbonTooltip.KeyTip="J" local:RibbonMetadata.CatalogId="DrawTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
-                        <!-- ▌Tools ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒTools â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DrawToolsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Draw" Width="78" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
@@ -1787,8 +1787,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Pens ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒPens â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DrawPensGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Pen" Width="62" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
@@ -1812,8 +1812,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Convert ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒConvert â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DrawConvertGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Ink to Shape" Width="96" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
@@ -1829,8 +1829,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Arrange ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒArrange â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DrawArrangeGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Bring Forward" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
@@ -1864,7 +1864,7 @@
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
                         <!-- Format -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DrawFormatGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Margin="1,0">
@@ -1922,8 +1922,8 @@
                 </Border>
             </TabItem>
 
-            <!-- ── PAGE LAYOUT ───────────────────────────────────────── -->
-            <TabItem Header="Page Layout" local:RibbonTooltip.KeyTip="P">
+            <!-- â”€â”€ PAGE LAYOUT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <TabItem Header="Page Layout" local:RibbonTooltip.KeyTip="P" local:RibbonMetadata.CatalogId="PageLayoutTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
@@ -1931,7 +1931,7 @@
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
                         <!-- Themes -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PageLayoutThemesGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Themes" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ThemeBtn_Click"
@@ -2051,8 +2051,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Page Setup ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒPage Setup â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PageLayoutPageSetupGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Margins" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageMarginsBtn_Click"
@@ -2134,8 +2134,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Scale to Fit ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒScale to Fit â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PageLayoutScaleToFitGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Scale" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ScaleToFitBtn_Click"
@@ -2147,8 +2147,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Sheet Options ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒSheet Options â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PageLayoutSheetOptionsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
@@ -2182,8 +2182,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Arrange ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒArrange â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PageLayoutArrangeGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Bring Forward" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36"
@@ -2220,16 +2220,16 @@
                 </Border>
             </TabItem>
 
-            <!-- ── FORMULAS ──────────────────────────────────────────── -->
-            <TabItem Header="Formulas" local:RibbonTooltip.KeyTip="M">
+            <!-- â”€â”€ FORMULAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <TabItem Header="Formulas" local:RibbonTooltip.KeyTip="M" local:RibbonMetadata.CatalogId="FormulasTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
-                        <!-- ▌Function Library ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒFunction Library â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="FormulasFunctionLibraryGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <local:AutomationInvokeButton x:Name="FormulasInsertFunctionButton"
@@ -2293,7 +2293,7 @@
                                                 local:RibbonTooltip.Title="Math &amp; Trig"
                                                 local:RibbonTooltip.KeyTip="MT"
                                                 local:RibbonTooltip.Description="Browse and insert math and trigonometry functions."/>
-                                        <Button Content="More…"    Width="40" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaMoreBtn_Click"
+                                        <Button Content="Moreâ€¦"    Width="40" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaMoreBtn_Click"
                                                 local:RibbonTooltip.Title="More Functions"
                                                 local:RibbonTooltip.KeyTip="MF"
                                                 local:RibbonTooltip.Description="Browse all available functions organized by category."/>
@@ -2304,8 +2304,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Defined Names ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒDefined Names â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="FormulasDefinedNamesGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Name Manager"   Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NamedRangesButton_Click"
@@ -2330,8 +2330,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Formula Auditing ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒFormula Auditing â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="FormulasFormulaAuditingGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel VerticalAlignment="Center">
@@ -2386,8 +2386,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Calculation ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒCalculation â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="FormulasCalculationGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Calculate Now"   Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CalcNowBtn_Click"
@@ -2418,7 +2418,7 @@
                 </Border>
             </TabItem>
 
-            <!-- ── DATA ──────────────────────────────────────────────── -->
+            <!-- â”€â”€ DATA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
             <TabItem Header="Data" local:RibbonTooltip.KeyTip="A" local:RibbonMetadata.CatalogId="DataTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
@@ -2426,7 +2426,7 @@
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
-                        <!-- ▌Get &amp; Transform Data ▌ -->
+                        <!-- â–ŒGet &amp; Transform Data â–Œ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataGetTransformGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
@@ -2439,7 +2439,7 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Queries &amp; Connections ▌ -->
+                        <!-- â–ŒQueries &amp; Connections â–Œ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataQueriesConnectionsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
@@ -2452,7 +2452,7 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Sort &amp; Filter ▌ -->
+                        <!-- â–ŒSort &amp; Filter â–Œ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataSortFilterGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
@@ -2503,7 +2503,7 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Data Tools ▌ -->
+                        <!-- â–ŒData Tools â–Œ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataToolsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
@@ -2546,7 +2546,7 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Forecast ▌ -->
+                        <!-- â–ŒForecast â–Œ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataForecastGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
@@ -2575,7 +2575,7 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Outline ▌ -->
+                        <!-- â–ŒOutline â–Œ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataOutlineGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
@@ -2612,16 +2612,16 @@
                 </Border>
             </TabItem>
 
-            <!-- ── REVIEW ────────────────────────────────────────────── -->
-            <TabItem Header="Review" local:RibbonTooltip.KeyTip="R">
+            <!-- â”€â”€ REVIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <TabItem Header="Review" local:RibbonTooltip.KeyTip="R" local:RibbonMetadata.CatalogId="ReviewTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
-                        <!-- ▌Proofing ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒProofing â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ReviewProofingGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Spelling" Width="104" Height="22"
@@ -2645,7 +2645,7 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ReviewAccessibilityGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Accessibility" Width="96" Height="22"
@@ -2669,8 +2669,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Comments ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒComments â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ReviewCommentsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="New Comment" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewThreadedCommentBtn_Click"
@@ -2682,8 +2682,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Notes ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒNotes â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ReviewNotesGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel VerticalAlignment="Center">
@@ -2721,8 +2721,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Protect ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒProtect â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ReviewProtectGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button x:Name="ProtectSheetButton" Content="Protect Sheet"    Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ProtectSheetBtn_Click"
@@ -2751,16 +2751,16 @@
                 </Border>
             </TabItem>
 
-            <!-- ── VIEW ──────────────────────────────────────────────── -->
-            <TabItem Header="View" local:RibbonTooltip.KeyTip="W">
+            <!-- â”€â”€ VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <TabItem Header="View" local:RibbonTooltip.KeyTip="W" local:RibbonMetadata.CatalogId="ViewTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
-                        <!-- ▌Show ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒShow â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ViewWorkbookViewsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Normal" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="NormalViewBtn_Click"
@@ -2784,7 +2784,7 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ViewShowGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" VerticalAlignment="Center" Margin="0,2,8,0">
                                 <CheckBox x:Name="ViewGridlinesChk" Content="Gridlines"              Margin="4,1" IsChecked="True" Checked="ViewGridlinesChk_Changed" Unchecked="ViewGridlinesChk_Changed"
@@ -2808,8 +2808,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Zoom ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒZoom â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ViewZoomGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Zoom" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ZoomPickerBtn_Click"
@@ -2841,8 +2841,8 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Window ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒWindow â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ViewWindowGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Vertical">
@@ -2918,14 +2918,14 @@
                 </Border>
             </TabItem>
 
-            <!-- ── HELP ──────────────────────────────────────────────── -->
-            <TabItem x:Name="PivotTableAnalyzeTab" Header="PivotTable Analyze" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JA">
+            <!-- â”€â”€ HELP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+            <TabItem x:Name="PivotTableAnalyzeTab" Header="PivotTable Analyze" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JA" local:RibbonMetadata.CatalogId="PivotTableAnalyzeTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                         <StackPanel Orientation="Horizontal" MinHeight="88">
-                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableAnalyzePivotTableGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="PivotTable Name" Width="116" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
@@ -2940,7 +2940,7 @@
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="PivotTable" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                             <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableAnalyzeActiveFieldGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Show Details" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableShowDetailsBtn_Click"
@@ -2955,7 +2955,7 @@
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Active Field" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                             <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableAnalyzeGroupGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Group Field" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotGroupFieldBtn_Click"
@@ -2970,7 +2970,7 @@
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Group" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                             <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableAnalyzeFilterGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Insert Slicer" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotInsertSlicerBtn_Click"
@@ -2985,7 +2985,7 @@
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Filter" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                             <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableAnalyzeDataGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Refresh" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshPivotTableBtn_Click"
@@ -3000,7 +3000,7 @@
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                             <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableAnalyzeActionsGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Clear" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
@@ -3019,7 +3019,7 @@
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Actions" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                             <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableAnalyzeCalculationsGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Calc Field" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotCalculatedFieldBtn_Click"
@@ -3034,7 +3034,7 @@
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Calculations" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                             <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableAnalyzeToolsGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="PivotChart" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotChartBtn_Click"
@@ -3053,7 +3053,7 @@
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Tools" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                             <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableAnalyzeShowGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Field List" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotFieldListBtn_Click"
@@ -3068,13 +3068,13 @@
                 </Border>
             </TabItem>
 
-            <TabItem x:Name="PivotTableDesignTab" Header="Design" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JD">
+            <TabItem x:Name="PivotTableDesignTab" Header="Design" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JD" local:RibbonMetadata.CatalogId="PivotTableDesignTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                         <StackPanel Orientation="Horizontal" MinHeight="88">
-                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableDesignLayoutGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Grand Totals" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotGrandTotalsBtn_Click"
@@ -3097,7 +3097,7 @@
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Layout" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                             <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableDesignStyleOptionsGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <StackPanel>
@@ -3124,7 +3124,7 @@
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="PivotTable Style Options" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
                             <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-                            <Grid Style="{StaticResource RibbonGroupPanel}">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableDesignStylesGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <Button Content="Styles" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotStyleGalleryBtn_Click"
@@ -3139,15 +3139,15 @@
                 </Border>
             </TabItem>
 
-            <TabItem Header="Help" local:RibbonTooltip.KeyTip="Y">
+            <TabItem Header="Help" local:RibbonTooltip.KeyTip="Y" local:RibbonMetadata.CatalogId="HelpTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
-                        <!-- ▌Help ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <!-- â–ŒHelp â–Œ -->
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="HelpHelpGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Vertical">
@@ -3210,9 +3210,9 @@
 
         </TabControl>
 
-        <!-- ═══════════════════════════════════════════════════════════════
+        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
              ROW 2  Formula bar
-             ═══════════════════════════════════════════════════════════════ -->
+             â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
         <Border x:Name="FormulaBarBorder" Grid.Row="2" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Background="White" Padding="4,5">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -3297,9 +3297,9 @@
             </Grid>
         </Border>
 
-        <!-- ═══════════════════════════════════════════════════════════════
+        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
              ROW 3  Spreadsheet grid
-             ═══════════════════════════════════════════════════════════════ -->
+             â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
         <Grid Grid.Row="3" ClipToBounds="True">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
@@ -3626,9 +3626,9 @@
             </Border>
         </Grid>
 
-        <!-- ═══════════════════════════════════════════════════════════════
+        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
              ROW 4  Sheet tabs
-             ═══════════════════════════════════════════════════════════════ -->
+             â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
         <Border Grid.Row="4" Panel.ZIndex="5" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="{StaticResource FreeXBorderBrush}"
                 BorderThickness="0" Padding="0">
             <Grid x:Name="SheetTabsRowGrid"
@@ -3765,14 +3765,14 @@
                                         </Grid.Style>
                                         <Grid.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="Rename…"         local:RibbonTooltip.KeyTip="R" Click="SheetCtxRename_Click"/>
+                                                <MenuItem Header="Renameâ€¦"         local:RibbonTooltip.KeyTip="R" Click="SheetCtxRename_Click"/>
                                                 <MenuItem Header="Insert Sheet"    local:RibbonTooltip.KeyTip="I" Click="SheetCtxInsert_Click"/>
                                                 <MenuItem Header="Duplicate"       local:RibbonTooltip.KeyTip="D" Click="SheetCtxDuplicate_Click"/>
                                                 <MenuItem Header="Delete Sheet"    local:RibbonTooltip.KeyTip="E" Click="SheetCtxDelete_Click"/>
                                                 <Separator/>
                                                 <MenuItem Header="Hide"            local:RibbonTooltip.KeyTip="H" Click="SheetCtxHide_Click"/>
-                                                <MenuItem Header="Unhide…"         local:RibbonTooltip.KeyTip="U" Click="SheetCtxUnhide_Click"/>
-                                                <MenuItem Header="Tab Color…"      local:RibbonTooltip.KeyTip="T" Click="SheetCtxTabColor_Click"/>
+                                                <MenuItem Header="Unhideâ€¦"         local:RibbonTooltip.KeyTip="U" Click="SheetCtxUnhide_Click"/>
+                                                <MenuItem Header="Tab Colorâ€¦"      local:RibbonTooltip.KeyTip="T" Click="SheetCtxTabColor_Click"/>
                                                 <Separator/>
                                                 <MenuItem Header="Select All Sheets" local:RibbonTooltip.KeyTip="A" Click="SheetCtxSelectAllSheets_Click"/>
                                                 <MenuItem Header="Ungroup Sheets"    local:RibbonTooltip.KeyTip="G" Click="SheetCtxUngroupSheets_Click"/>
@@ -4017,9 +4017,9 @@
             </Grid>
         </Border>
 
-        <!-- ═══════════════════════════════════════════════════════════════
+        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
              ROW 5  Status bar
-             ═══════════════════════════════════════════════════════════════ -->
+             â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
         <Border x:Name="StatusBarRoot" Grid.Row="5" Panel.ZIndex="6" Background="{StaticResource FreeXStatusSurfaceBrush}" Padding="8,3"
                 ClipToBounds="True">
             <Grid x:Name="StatusBarGrid" ClipToBounds="True">
@@ -4094,7 +4094,7 @@
                         <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="38"/>
                     </Grid.ColumnDefinitions>
-                    <Button x:Name="StatusZoomOutButton" Grid.Column="0" Content="−" Width="22" Height="22"
+                    <Button x:Name="StatusZoomOutButton" Grid.Column="0" Content="âˆ’" Width="22" Height="22"
                             Style="{StaticResource StatusBarZoomButtonStyle}"
                             Foreground="White" FontSize="18" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
@@ -4131,9 +4131,9 @@
             </Grid>
         </Border>
 
-        <!-- ═══════════════════════════════════════════════════════════════
-             START SCREEN — full-window overlay shown at launch / via ← Home
-             ═══════════════════════════════════════════════════════════════ -->
+        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+             START SCREEN â€” full-window overlay shown at launch / via â† Home
+             â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
         <Border x:Name="OpenProgressOverlay"
                 Grid.Row="1" Grid.RowSpan="5"
                 Panel.ZIndex="260"
@@ -4178,7 +4178,7 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- ── Left sidebar ─────────────────────────────────────────── -->
+            <!-- â”€â”€ Left sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
             <DockPanel x:Name="StartScreenSidebar" Grid.Column="0" Background="#10253A" LastChildFill="True">
 
                 <!-- Back arrow -->
@@ -4347,10 +4347,10 @@
                 </StackPanel>
             </DockPanel>
 
-            <!-- ── Right content area ───────────────────────────────────── -->
+            <!-- â”€â”€ Right content area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
             <Grid Grid.Column="1" Background="White">
 
-                <!-- ══ HOME VIEW ════════════════════════════════════════════ -->
+                <!-- â•â• HOME VIEW â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
                 <Grid x:Name="SsHomeView">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>  <!-- Greeting -->
@@ -4369,7 +4369,7 @@
                         <DockPanel LastChildFill="False" Margin="0,0,0,10">
                             <TextBlock DockPanel.Dock="Left" Text="New"
                                        FontSize="14" FontWeight="SemiBold" Foreground="#1F1F1F"/>
-                            <Button DockPanel.Dock="Right" Content="More templates (Excluded) →"
+                            <Button DockPanel.Dock="Right" Content="More templates (Excluded) â†’"
                                     Background="Transparent" BorderThickness="0" Padding="0"
                                     FontSize="12" Foreground="#0F6D8C"
                                     VerticalAlignment="Center" Cursor="Hand"
@@ -4673,7 +4673,7 @@
                 </Grid>
                 </Grid><!-- end SsHomeView -->
 
-                <!-- ══ INFO VIEW ════════════════════════════════════════════ -->
+                <!-- â•â• INFO VIEW â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
                 <Grid x:Name="SsInfoView" Visibility="Collapsed">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>

@@ -29,6 +29,9 @@ public sealed class RibbonTabSelectionCoordinatorTests
             queued.ExecutedCount.Should().Be(0);
             queued.LastMergedWork.Should().Be("NormalizeSurface");
             queued.IsPending.Should().BeTrue();
+            queued.FirstFrameLayoutUpdateCount.Should().BeGreaterThan(
+                0,
+                "tab switches should settle the normalized ribbon before the queued render fallback runs");
             harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(1);
 
             harness.PumpDispatcher();
@@ -49,6 +52,7 @@ public sealed class RibbonTabSelectionCoordinatorTests
             changed.RequestCount.Should().Be(1);
             changed.PostedCount.Should().Be(1);
             changed.LastMergedWork.Should().Be("NormalizeSurface");
+            changed.FirstFrameLayoutUpdateCount.Should().BeGreaterThan(0);
 
             harness.PumpDispatcher();
             harness.ResetFallbackDiagnostics();
@@ -75,6 +79,7 @@ public sealed class RibbonTabSelectionCoordinatorTests
             queued.RequestCount.Should().Be(1);
             queued.PostedCount.Should().Be(1);
             queued.LastMergedWork.Should().Be("NormalizeSurface");
+            queued.FirstFrameLayoutUpdateCount.Should().BeGreaterThan(0);
         });
     }
 
