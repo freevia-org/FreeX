@@ -18,6 +18,7 @@ public partial class GridView
         if (Pictures == null || Viewport == null) return;
 
         var fill = Brushes.White;
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         foreach (var picture in Pictures)
         {
             if (!picture.IsVisible) continue;
@@ -93,7 +94,7 @@ public partial class GridView
                     DefaultTypeface,
                     11,
                     TextBrush,
-                    VisualTreeHelper.GetDpi(this).PixelsPerDip)
+                    pixelsPerDip)
                 {
                     MaxTextWidth = textRect.Width,
                     MaxTextHeight = textRect.Height,
