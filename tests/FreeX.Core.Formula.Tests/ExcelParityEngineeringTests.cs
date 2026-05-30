@@ -204,6 +204,22 @@ public sealed class ExcelParityEngineeringTests
         AssertNumberApproximately(_eval.Evaluate(formula, MakeSheet()), expected);
     }
 
+    [Theory]
+    [InlineData("=CONVERT(1,\"kibyte\",\"byte\")", 1024)]
+    [InlineData("=CONVERT(1,\"Mibit\",\"bit\")", 1048576)]
+    [InlineData("=CONVERT(2,\"byte\",\"kibit\")", 0.015625)]
+    [InlineData("=CONVERT(1,\"kbit\",\"bit\")", 1000)]
+    public void Convert_BinaryInformationPrefixesMatchExcelUnits(string formula, double expected)
+    {
+        AssertNumberApproximately(_eval.Evaluate(formula, MakeSheet()), expected);
+    }
+
+    [Fact]
+    public void Convert_BinaryPrefixOnUnsupportedUnitReturnsNa()
+    {
+        _eval.Evaluate("=CONVERT(1,\"kim\",\"m\")", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
     [Fact]
     public void Convert_MismatchedUnitArgument_ReturnsValueError()
     {
