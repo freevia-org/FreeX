@@ -12,7 +12,6 @@ internal static class NumberFormatColorMapper
     private static readonly Regex IndexedColorTokenRegex = new(
         @"^Color\s*(\d+)$",
         RegexOptions.IgnoreCase);
-    private static readonly Regex ColorTokenWhitespaceRegex = new(@"\s+");
 
     public static (string? Color, string Format) ExtractColor(string section)
     {
@@ -45,23 +44,34 @@ internal static class NumberFormatColorMapper
         if (TryMapThemeColor(token, theme, out color))
             return true;
 
-        color = token.ToUpperInvariant() switch
-        {
-            "BLACK" => "#000000",
-            "WHITE" => "#FFFFFF",
-            "RED" => "#FF0000",
-            "GREEN" => "#00B050",
-            "BLUE" => "#0070C0",
-            "YELLOW" => "#FFFF00",
-            "CYAN" => "#00FFFF",
-            "MAGENTA" => "#FF00FF",
-            _ => null
-        };
+        color = TryMapNamedColor(token);
         return color is not null;
     }
 
     public static bool IsThemeColorDirective(string token)
-        => NormalizeToken(token).StartsWith("THEME", StringComparison.Ordinal);
+        => TokenStartsWithIgnoringWhitespace(token, "THEME");
+
+    private static string? TryMapNamedColor(string token)
+    {
+        if (token.Equals("BLACK", StringComparison.OrdinalIgnoreCase))
+            return "#000000";
+        if (token.Equals("WHITE", StringComparison.OrdinalIgnoreCase))
+            return "#FFFFFF";
+        if (token.Equals("RED", StringComparison.OrdinalIgnoreCase))
+            return "#FF0000";
+        if (token.Equals("GREEN", StringComparison.OrdinalIgnoreCase))
+            return "#00B050";
+        if (token.Equals("BLUE", StringComparison.OrdinalIgnoreCase))
+            return "#0070C0";
+        if (token.Equals("YELLOW", StringComparison.OrdinalIgnoreCase))
+            return "#FFFF00";
+        if (token.Equals("CYAN", StringComparison.OrdinalIgnoreCase))
+            return "#00FFFF";
+        if (token.Equals("MAGENTA", StringComparison.OrdinalIgnoreCase))
+            return "#FF00FF";
+
+        return null;
+    }
 
     private static bool TryMapIndexedColor(
         string token,
@@ -97,29 +107,78 @@ internal static class NumberFormatColorMapper
 
     private static bool TryGetThemeColorSlot(string token, out WorkbookThemeColorSlot slot)
     {
-        var mappedSlot = NormalizeToken(token) switch
+        if (TokenEqualsIgnoringWhitespace(token, "THEMEDARK1"))
+            slot = WorkbookThemeColorSlot.Dark1;
+        else if (TokenEqualsIgnoringWhitespace(token, "THEMELIGHT1"))
+            slot = WorkbookThemeColorSlot.Light1;
+        else if (TokenEqualsIgnoringWhitespace(token, "THEMEDARK2"))
+            slot = WorkbookThemeColorSlot.Dark2;
+        else if (TokenEqualsIgnoringWhitespace(token, "THEMELIGHT2"))
+            slot = WorkbookThemeColorSlot.Light2;
+        else if (TokenEqualsIgnoringWhitespace(token, "THEMEACCENT1"))
+            slot = WorkbookThemeColorSlot.Accent1;
+        else if (TokenEqualsIgnoringWhitespace(token, "THEMEACCENT2"))
+            slot = WorkbookThemeColorSlot.Accent2;
+        else if (TokenEqualsIgnoringWhitespace(token, "THEMEACCENT3"))
+            slot = WorkbookThemeColorSlot.Accent3;
+        else if (TokenEqualsIgnoringWhitespace(token, "THEMEACCENT4"))
+            slot = WorkbookThemeColorSlot.Accent4;
+        else if (TokenEqualsIgnoringWhitespace(token, "THEMEACCENT5"))
+            slot = WorkbookThemeColorSlot.Accent5;
+        else if (TokenEqualsIgnoringWhitespace(token, "THEMEACCENT6"))
+            slot = WorkbookThemeColorSlot.Accent6;
+        else if (TokenEqualsIgnoringWhitespace(token, "THEMEHYPERLINK"))
+            slot = WorkbookThemeColorSlot.Hyperlink;
+        else if (TokenEqualsIgnoringWhitespace(token, "THEMEFOLLOWEDHYPERLINK"))
+            slot = WorkbookThemeColorSlot.FollowedHyperlink;
+        else
         {
-            "THEMEDARK1" => (WorkbookThemeColorSlot?)WorkbookThemeColorSlot.Dark1,
-            "THEMELIGHT1" => WorkbookThemeColorSlot.Light1,
-            "THEMEDARK2" => WorkbookThemeColorSlot.Dark2,
-            "THEMELIGHT2" => WorkbookThemeColorSlot.Light2,
-            "THEMEACCENT1" => WorkbookThemeColorSlot.Accent1,
-            "THEMEACCENT2" => WorkbookThemeColorSlot.Accent2,
-            "THEMEACCENT3" => WorkbookThemeColorSlot.Accent3,
-            "THEMEACCENT4" => WorkbookThemeColorSlot.Accent4,
-            "THEMEACCENT5" => WorkbookThemeColorSlot.Accent5,
-            "THEMEACCENT6" => WorkbookThemeColorSlot.Accent6,
-            "THEMEHYPERLINK" => WorkbookThemeColorSlot.Hyperlink,
-            "THEMEFOLLOWEDHYPERLINK" => WorkbookThemeColorSlot.FollowedHyperlink,
-            _ => null
-        };
+            slot = default;
+            return false;
+        }
 
-        slot = mappedSlot.GetValueOrDefault();
-        return mappedSlot.HasValue;
+        return true;
     }
 
-    private static string NormalizeToken(string token) =>
-        ColorTokenWhitespaceRegex.Replace(token.Trim(), "").ToUpperInvariant();
+    private static bool TokenStartsWithIgnoringWhitespace(string token, string prefix)
+    {
+        var tokenIndex = 0;
+        var prefixIndex = 0;
+        while (tokenIndex < token.Length && prefixIndex < prefix.Length)
+        {
+            var current = token[tokenIndex++];
+            if (char.IsWhiteSpace(current))
+                continue;
+
+            if (char.ToUpperInvariant(current) != prefix[prefixIndex++])
+                return false;
+        }
+
+        return prefixIndex == prefix.Length;
+    }
+
+    private static bool TokenEqualsIgnoringWhitespace(string token, string expected)
+    {
+        var tokenIndex = 0;
+        var expectedIndex = 0;
+        while (tokenIndex < token.Length && expectedIndex < expected.Length)
+        {
+            var current = token[tokenIndex++];
+            if (char.IsWhiteSpace(current))
+                continue;
+
+            if (char.ToUpperInvariant(current) != expected[expectedIndex++])
+                return false;
+        }
+
+        while (tokenIndex < token.Length)
+        {
+            if (!char.IsWhiteSpace(token[tokenIndex++]))
+                return false;
+        }
+
+        return expectedIndex == expected.Length;
+    }
 
     private static string ToHex(CellColor color) =>
         string.Create(CultureInfo.InvariantCulture, $"#{color.R:X2}{color.G:X2}{color.B:X2}");

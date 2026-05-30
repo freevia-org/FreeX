@@ -20,8 +20,11 @@ internal static class XlsxWorksheetPageBreaksMetadataReader
             model.NativeAttributes[attribute.Name.ToString()] = attribute.Value;
         }
 
-        foreach (var breakElement in pageBreaks.Elements().Where(element => string.Equals(element.Name.LocalName, "brk", StringComparison.Ordinal)))
+        foreach (var breakElement in pageBreaks.Elements())
         {
+            if (!string.Equals(breakElement.Name.LocalName, "brk", StringComparison.Ordinal))
+                continue;
+
             if (!TryReadPageBreakId(breakElement, maxBreakId, out var id))
                 continue;
 

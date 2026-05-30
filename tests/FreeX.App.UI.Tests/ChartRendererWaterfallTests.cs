@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.IO;
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
@@ -79,6 +80,47 @@ public sealed class ChartRendererWaterfallTests
         model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>();
     }
 
+    [Fact]
+    public void HistogramRenderer_AggregatesMinAndMaxWhileCollectingValues()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.WaterfallHistogram.cs"));
+        var histogram = source[
+            source.IndexOf("internal static PlotModel BuildHistogramModel", StringComparison.Ordinal)..];
+
+        histogram.Should().Contain("if (v < min)");
+        histogram.Should().Contain("if (v > max)");
+        histogram.Should().NotContain("rawValues.Min()");
+        histogram.Should().NotContain("rawValues.Max()");
+    }
+
+    [Fact]
+    public void HistogramRenderer_BuildsBinsFromNumericValues()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Histogram,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 1))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Value"),
+                Cell(2, 1, "1"),
+                Cell(3, 1, "2"),
+                Cell(4, 1, "3"),
+                Cell(5, 1, "4")
+            ],
+            [],
+            []));
+
+        var bars = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+        bars.Items.Select(item => item.Y1).Should().Equal(2, 2);
+    }
+
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport) =>
         BuildPlotModel(chart, viewport, WorkbookTheme.Office);
 
@@ -94,4 +136,19 @@ public sealed class ChartRendererWaterfallTests
 
     private static DisplayCell Cell(uint row, uint col, string text) =>
         new(row, col, null, text, null, StyleId.Default, null);
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
+    {
+        var current = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(current))
+        {
+            var candidate = Path.Combine(new[] { current }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            current = Directory.GetParent(current)?.FullName ?? string.Empty;
+        }
+
+        throw new FileNotFoundException("Unable to locate workspace file", Path.Combine(relativeParts));
+    }
 }

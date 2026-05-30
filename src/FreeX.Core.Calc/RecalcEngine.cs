@@ -35,6 +35,14 @@ public sealed class RecalcEngine
         // Include volatile cells in the dependency traversal so their dependents appear in the plan
         var changedForTraversal = BuildChangedSetForTraversal(changedCells);
         var plan = _graph.GetRecalcOrder(changedForTraversal);
+        if (plan.OrderedCells.Count == 0 &&
+            plan.CyclicCells.Count == 0 &&
+            _volatileCells.Count == 0 &&
+            !HasChangedFormulaCells(workbook, changedCells))
+        {
+            return EmptyReport;
+        }
+
         var recalculated = new List<CellAddress>();
         var errors = new List<(CellAddress Cell, string Error)>();
 
@@ -153,6 +161,19 @@ public sealed class RecalcEngine
         foreach (var addr in _volatileCells)
             allChanged.Add(addr);
         return allChanged;
+    }
+
+    private static bool HasChangedFormulaCells(Workbook workbook, IReadOnlyList<CellAddress> changedCells)
+    {
+        for (var i = 0; i < changedCells.Count; i++)
+        {
+            var addr = changedCells[i];
+            var sheet = workbook.GetSheet(addr.Sheet);
+            if (sheet?.GetCell(addr)?.HasFormula == true)
+                return true;
+        }
+
+        return false;
     }
 
     private static void AddIfNew(
@@ -339,11 +360,22 @@ public sealed class RecalcEngine
         return node switch
         {
             FunctionCallNode f => BuiltInFunctions.IsVolatile(f.FunctionName)
-                                  || f.Arguments.Any(ContainsVolatileFunction),
+                                  || ContainsVolatileFunctionArgument(f.Arguments),
             BinaryOpNode b => ContainsVolatileFunction(b.Left) || ContainsVolatileFunction(b.Right),
             UnaryOpNode u => ContainsVolatileFunction(u.Operand),
             _ => false
         };
+    }
+
+    private static bool ContainsVolatileFunctionArgument(IReadOnlyList<FormulaNode> arguments)
+    {
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            if (ContainsVolatileFunction(arguments[i]))
+                return true;
+        }
+
+        return false;
     }
 
     private static void CollectReferences(

@@ -14,8 +14,12 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
             return;
 
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.PrimaryViewMetadata is not null))
+        foreach (var sheet in workbook.Sheets)
         {
+            var metadata = sheet.PrimaryViewMetadata;
+            if (metadata is null)
+                continue;
+
             if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
@@ -43,7 +47,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 sheetViews.AddFirst(sheetView);
             }
 
-            var (pvAttrs, pvChildren) = XmlNativeBagSerializer.Deserialize(sheet.PrimaryViewMetadata!.Get("sheetView"));
+            var (pvAttrs, pvChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetView"));
             foreach (var attribute in pvAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPrimaryViewAttribute(attribute.Key))

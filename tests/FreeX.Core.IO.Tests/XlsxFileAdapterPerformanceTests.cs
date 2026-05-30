@@ -164,6 +164,34 @@ public sealed class XlsxFileAdapterPerformanceTests
             "trailing-number parsing should avoid a temporary char array allocation");
     }
 
+    [Fact]
+    public void SavePostProcessing_DetectsPivotCustomNumberFormatsWithoutNestedLinq()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+
+        source.Should().Contain("HasPivotCustomNumberFormats(workbook)");
+        source.Should().Contain("private static bool HasPivotCustomNumberFormats(Workbook workbook)");
+        source.Should().NotContain(
+            "workbook.Sheets.SelectMany(sheet => sheet.PivotTables)",
+            "XLSX save post-processing should avoid nested LINQ iterator allocation while deciding whether pivot custom number formats need catalog output");
+    }
+
+    [Fact]
+    public void NumberFormatCatalogWriter_BuildsPivotCustomFormatCatalogWithoutNestedLinq()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxNumberFormatCatalogWriter.cs"));
+
+        source.Should().Contain("foreach (var sheet in workbook.Sheets)");
+        source.Should().Contain("foreach (var pivot in sheet.PivotTables)");
+        source.Should().Contain("foreach (var field in pivot.DataFields)");
+        source.Should().NotContain(
+            ".SelectMany(",
+            "pivot custom number-format catalog building should walk sheets/pivots/data fields directly");
+        source.Should().NotContain(
+            ".Where(pair => pair.Key >= 164",
+            "catalog seeding should avoid a temporary LINQ filtered dictionary projection");
+    }
+
     private const int DenseSheetCount = 8;
     private const int DenseRowsPerSheet = 80;
     private const int DenseColumnsPerSheet = 24;

@@ -19,30 +19,31 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
-        var numericCells = new List<(DisplayCell Cell, double Value)>();
         var max = 0d;
+        var hasNumericCell = false;
         foreach (var cell in viewport.Cells)
         {
-            if (cell.Row < range.Start.Row ||
-                cell.Row > range.End.Row ||
-                cell.Col < range.Start.Col ||
-                cell.Col > range.End.Col ||
-                !TryGetPreviewNumber(cell, out var value))
+            if (!IsCellInRange(cell, range) || !TryGetPreviewNumber(cell, out var value))
                 continue;
 
-            numericCells.Add((cell, value));
-            max = Math.Max(max, Math.Max(0, value));
+            hasNumericCell = true;
+            var positiveValue = Math.Max(0, value);
+            if (positiveValue > max)
+                max = positiveValue;
         }
 
-        if (numericCells.Count == 0)
+        if (!hasNumericCell)
             return [];
 
         var rows = BuildRowMetricLookup(viewport.RowMetrics);
         var cols = BuildColMetricLookup(viewport.ColMetrics);
         var rects = new List<Rect>();
-        foreach (var (cell, value) in numericCells)
+        foreach (var cell in viewport.Cells)
         {
-            if (!rows.TryGetValue(cell.Row, out var row) || !cols.TryGetValue(cell.Col, out var col))
+            if (!IsCellInRange(cell, range) ||
+                !TryGetPreviewNumber(cell, out var value) ||
+                !rows.TryGetValue(cell.Row, out var row) ||
+                !cols.TryGetValue(cell.Col, out var col))
                 continue;
 
             var fraction = max <= 0 ? 0 : Math.Clamp(Math.Max(0, value) / max, 0, 1);
@@ -56,6 +57,12 @@ internal static class QuickAnalysisPreviewLayoutPlanner
 
         return rects;
     }
+
+    private static bool IsCellInRange(DisplayCell cell, GridRange range) =>
+        cell.Row >= range.Start.Row &&
+        cell.Row <= range.End.Row &&
+        cell.Col >= range.Start.Col &&
+        cell.Col <= range.End.Col;
 
     public static IReadOnlyList<Rect> CalculateCellPreviewRects(
         ViewportModel viewport,

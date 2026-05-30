@@ -234,25 +234,23 @@ internal static class DelimitedTextWorkbookWriter
             out _);
     }
 
-    private static bool HasSupportedDateTimeShape(string value) =>
-        value.Contains(':') ||
-        HasFourConsecutiveDigits(value) ||
-        value.Any(char.IsLetter);
-
-    private static bool HasFourConsecutiveDigits(string value)
+    private static bool HasSupportedDateTimeShape(string value)
     {
-        var run = 0;
+        var digitRun = 0;
         foreach (var ch in value)
         {
+            if (ch == ':' || char.IsLetter(ch))
+                return true;
+
             if (char.IsDigit(ch))
             {
-                run++;
-                if (run >= 4)
+                digitRun++;
+                if (digitRun >= 4)
                     return true;
             }
             else
             {
-                run = 0;
+                digitRun = 0;
             }
         }
 

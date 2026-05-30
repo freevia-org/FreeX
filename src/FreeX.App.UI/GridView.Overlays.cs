@@ -57,19 +57,9 @@ public partial class GridView
             EffectiveColHeaderHeight);
         if (rect is null) return;
 
-        var dashBlack = new DashStyle([4.0, 4.0], _marchOffset);
-        var penBlack = new Pen(new SolidColorBrush(Color.FromRgb(0, 0, 0)), 2.5) { DashStyle = dashBlack };
-        penBlack.Freeze();
-        dc.DrawRectangle(null, penBlack, rect.Value);
-
-        var overlayBrush = ClipboardIsCut
-            ? new SolidColorBrush(Color.FromRgb(245, 124, 0))
-            : new SolidColorBrush(Color.FromRgb(255, 255, 255));
-        overlayBrush.Freeze();
-        var dashOverlay = new DashStyle([4.0, 4.0], _marchOffset);
-        var penOverlay = new Pen(overlayBrush, 1.5) { DashStyle = dashOverlay };
-        penOverlay.Freeze();
-        dc.DrawRectangle(null, penOverlay, rect.Value);
+        var phase = GetMarchingAntsPhase(_marchOffset);
+        dc.DrawRectangle(null, MarchingAntsBlackPens[phase], rect.Value);
+        dc.DrawRectangle(null, ClipboardIsCut ? MarchingAntsCutOverlayPens[phase] : MarchingAntsCopyOverlayPens[phase], rect.Value);
     }
 
     private void RenderFormulaTraceArrows(DrawingContext dc)

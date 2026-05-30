@@ -43,8 +43,8 @@ public static partial class NumberFormatter
         WorkbookIndexedColorPalette? indexedColors,
         WorkbookTheme? theme)
     {
-        var parsedSections = sections.Select(section => ParseSection(section, indexedColors, theme)).ToArray();
-        if (!parsedSections.Any(section => section.Condition is not null))
+        var parsedSections = ParseSections(sections, indexedColors, theme, out var hasConditions);
+        if (!hasConditions)
             return parsedSections[0];
 
         var selectedIndex = Array.FindIndex(parsedSections, section =>

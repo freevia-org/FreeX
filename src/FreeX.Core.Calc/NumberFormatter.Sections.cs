@@ -100,6 +100,25 @@ public static partial class NumberFormatter
     private static ParsedSection ParseSection(string section, WorkbookIndexedColorPalette? indexedColors)
         => ParseSection(section, indexedColors, null);
 
+    private static ParsedSection[] ParseSections(
+        string[] sections,
+        WorkbookIndexedColorPalette? indexedColors,
+        WorkbookTheme? theme,
+        out bool hasConditions)
+    {
+        var parsedSections = new ParsedSection[sections.Length];
+        hasConditions = false;
+
+        for (var i = 0; i < sections.Length; i++)
+        {
+            var parsedSection = ParseSection(sections[i], indexedColors, theme);
+            parsedSections[i] = parsedSection;
+            hasConditions |= parsedSection.Condition is not null;
+        }
+
+        return parsedSections;
+    }
+
     private static ParsedSection ParseSection(
         string section,
         WorkbookIndexedColorPalette? indexedColors,

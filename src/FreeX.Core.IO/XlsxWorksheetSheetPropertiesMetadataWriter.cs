@@ -14,8 +14,12 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.SheetPropertiesMetadata is not null))
+        foreach (var sheet in workbook.Sheets)
         {
+            var metadata = sheet.SheetPropertiesMetadata;
+            if (metadata is null)
+                continue;
+
             if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
@@ -35,7 +39,7 @@ internal static class XlsxWorksheetSheetPropertiesMetadataWriter
                 root.AddFirst(sheetProperties);
             }
 
-            var (spAttrs, spChildren) = XmlNativeBagSerializer.Deserialize(sheet.SheetPropertiesMetadata!.Get("sheetPr"));
+            var (spAttrs, spChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetPr"));
             foreach (var attribute in spAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledSheetPropertiesAttribute(attribute.Key))
