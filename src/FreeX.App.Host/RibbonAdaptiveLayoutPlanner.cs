@@ -71,7 +71,8 @@ public sealed record RibbonAdaptiveGroup(
     double FullWidth,
     double SmallWithLabelsWidth,
     double IconOnlyWidth,
-    double CollapsedWidth);
+    double CollapsedWidth,
+    string? CatalogId = null);
 
 public enum RibbonAdaptiveGroupState
 {

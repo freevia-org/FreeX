@@ -14,6 +14,7 @@ public sealed record RibbonCatalog(IReadOnlyList<RibbonTabDefinition> Tabs)
 
 public sealed record RibbonTabDefinition(
     string Header,
+    string? Id,
     string? Name,
     string? KeyTip,
     bool IsContextual,
@@ -25,6 +26,7 @@ public sealed record RibbonTabDefinition(
 
 public sealed record RibbonGroupDefinition(
     string Name,
+    string? Id,
     IReadOnlyList<RibbonCommandDefinition> Commands)
 {
     public RibbonCommandDefinition? FindCommand(string title) =>

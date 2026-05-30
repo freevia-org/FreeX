@@ -214,6 +214,22 @@ public sealed class RibbonMetadataTests
     }
 
     [Fact]
+    public void CatalogId_TrimsAttachedMetadataForStableCatalogLookup()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var metadataElement = new Grid();
+            RibbonMetadata.SetCatalogId(metadataElement, "  DataToolsGroup  ");
+
+            RibbonMetadata.TryGetCatalogId(metadataElement, out var catalogId).Should().BeTrue();
+            catalogId.Should().Be("DataToolsGroup");
+
+            RibbonMetadata.TryGetCatalogId(new Grid(), out var missingCatalogId).Should().BeFalse();
+            missingCatalogId.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
     public void CollapsedChevron_UsesAttachedRoleOnly()
     {
         StaTestRunner.Run(() =>

@@ -54,6 +54,22 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
     }
 
     [Fact]
+    public void Catalog_PreservesStableDataTabAndGroupIds()
+    {
+        var dataTab = RibbonXamlCatalogSnapshotReader.ReadMainWindow().FindTab("Data");
+
+        dataTab.Should().NotBeNull();
+        dataTab!.Id.Should().Be("DataTab");
+        dataTab.Groups.Select(group => group.Id).Should().Equal(
+            "DataGetTransformGroup",
+            "DataQueriesConnectionsGroup",
+            "DataSortFilterGroup",
+            "DataToolsGroup",
+            "DataForecastGroup",
+            "DataOutlineGroup");
+    }
+
+    [Fact]
     public void Catalog_MapsCommandsToOwningTabAndGroup()
     {
         var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();

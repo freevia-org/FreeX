@@ -97,6 +97,26 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
+    public void Plan_UsesCatalogIdsWhenDataGroupCaptionsChange()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Imported Data", 100, 80, 60, 40, CatalogId: "DataGetTransformGroup"),
+            new RibbonAdaptiveGroup("Filters", 100, 80, 60, 40, CatalogId: "DataSortFilterGroup"),
+            new RibbonAdaptiveGroup("Cleanup", 300, 200, 70, 40, CatalogId: "DataToolsGroup")
+        };
+
+        var layout = RibbonAdaptiveLayoutEngine.Plan(900, groups, fixedChromeWidth: 20, selectedTabHeader: "DataTab");
+
+        layout.States.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.IconOnly,
+            RibbonAdaptiveGroupState.IconOnly);
+        layout.PlannedWidth.Should().Be(250);
+        layout.RequiresMeasuredCorrection.Should().BeTrue();
+    }
+
+    [Fact]
     public void Plan_AppliesInsertRuntimeVisibilityStateBeforeMeasuringPlannedWidth()
     {
         var groups = new[]

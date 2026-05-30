@@ -62,6 +62,7 @@ internal static class RibbonAdaptiveTabProfiles
             RequiresMeasuredCorrection: true),
         new(
             Name: "Data",
+            CatalogId: "DataTab",
             RequiredGroups: ["Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools"],
             Defaults:
             [
@@ -391,8 +392,19 @@ internal static class RibbonAdaptiveTabProfiles
             states[i] = RibbonAdaptiveGroupState.Collapsed;
     }
 
+    private static readonly IReadOnlyDictionary<string, string> DataGroupCatalogIds =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Get & Transform Data"] = "DataGetTransformGroup",
+            ["Queries & Connections"] = "DataQueriesConnectionsGroup",
+            ["Sort & Filter"] = "DataSortFilterGroup",
+            ["Data Tools"] = "DataToolsGroup",
+            ["Forecast"] = "DataForecastGroup",
+            ["Outline"] = "DataOutlineGroup"
+        };
+
     private static bool ContainsGroup(IReadOnlyList<string> groupNames, string groupName) =>
-        groupNames.Contains(groupName, StringComparer.Ordinal);
+        TryFindGroupIndex(groupNames, groupName, out _);
 
     private static bool TryFindGroupIndex(
         IReadOnlyList<string> groupNames,
@@ -401,7 +413,7 @@ internal static class RibbonAdaptiveTabProfiles
     {
         for (var i = 0; i < groupNames.Count; i++)
         {
-            if (string.Equals(groupNames[i], groupName, StringComparison.Ordinal))
+            if (IsGroupKeyMatch(groupNames[i], groupName))
             {
                 index = i;
                 return true;
@@ -412,11 +424,17 @@ internal static class RibbonAdaptiveTabProfiles
         return false;
     }
 
+    private static bool IsGroupKeyMatch(string candidate, string profileGroupName) =>
+        string.Equals(candidate, profileGroupName, StringComparison.Ordinal) ||
+        (DataGroupCatalogIds.TryGetValue(profileGroupName, out var dataCatalogId) &&
+            string.Equals(candidate, dataCatalogId, StringComparison.Ordinal));
+
     private sealed record RibbonAdaptiveTabProfile(
         string Name,
         IReadOnlyList<string> RequiredGroups,
         IReadOnlyList<RibbonAdaptiveGroupStateAssignment> Defaults,
         IReadOnlyList<RibbonAdaptiveBreakpointRule> Breakpoints,
+        string? CatalogId = null,
         IReadOnlyList<RibbonAdaptiveRuntimeStateOverrideRule>? RuntimeStates = null,
         IReadOnlyList<RibbonAdaptiveRuntimeStateOverrideRule>? RuntimeVisibility = null,
         IReadOnlyList<RibbonAdaptiveProtectedGroupsRule>? ProtectedGroups = null,
@@ -425,7 +443,8 @@ internal static class RibbonAdaptiveTabProfiles
         IReadOnlyList<string>? TinyGroupNames = null)
     {
         public bool MatchesTabHeader(string selectedTabHeader) =>
-            string.Equals(Name, selectedTabHeader, StringComparison.Ordinal);
+            string.Equals(Name, selectedTabHeader, StringComparison.Ordinal) ||
+            string.Equals(CatalogId, selectedTabHeader, StringComparison.Ordinal);
 
         public bool MatchesGroups(IReadOnlyList<string> groupNames)
         {

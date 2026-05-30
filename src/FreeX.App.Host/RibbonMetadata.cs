@@ -46,6 +46,13 @@ public static class RibbonMetadata
             typeof(RibbonMetadata),
             new FrameworkPropertyMetadata(""));
 
+    public static readonly DependencyProperty CatalogIdProperty =
+        DependencyProperty.RegisterAttached(
+            "CatalogId",
+            typeof(string),
+            typeof(RibbonMetadata),
+            new FrameworkPropertyMetadata(""));
+
     public static readonly DependencyProperty DropdownMenuButtonProperty =
         DependencyProperty.RegisterAttached(
             "DropdownMenuButton",
@@ -102,6 +109,12 @@ public static class RibbonMetadata
 
     public static void SetCommandName(DependencyObject element, string value) =>
         element.SetValue(CommandNameProperty, value);
+
+    public static string GetCatalogId(DependencyObject element) =>
+        (string)element.GetValue(CatalogIdProperty);
+
+    public static void SetCatalogId(DependencyObject element, string value) =>
+        element.SetValue(CatalogIdProperty, value);
 
     public static bool GetDropdownMenuButton(DependencyObject element) =>
         (bool)element.GetValue(DropdownMenuButtonProperty);
@@ -192,6 +205,19 @@ public static class RibbonMetadata
         }
 
         commandName = "";
+        return false;
+    }
+
+    public static bool TryGetCatalogId(DependencyObject element, out string catalogId)
+    {
+        catalogId = GetCatalogId(element);
+        if (!string.IsNullOrWhiteSpace(catalogId))
+        {
+            catalogId = catalogId.Trim();
+            return true;
+        }
+
+        catalogId = "";
         return false;
     }
 
