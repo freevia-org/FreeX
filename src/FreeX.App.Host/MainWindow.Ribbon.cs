@@ -265,8 +265,6 @@ public partial class MainWindow
         RibbonMetadata.SetDropdownZoneHighlightAttached(button, true);
         if (button is Button standardButton)
             standardButton.Template = CreateRibbonDropdownButtonTemplate();
-        button.Background = Brushes.Transparent;
-        button.BorderBrush = Brushes.Transparent;
         button.Loaded += RibbonMenuButton_Loaded;
         button.MouseMove += RibbonMenuButton_InvalidateDropdownZoneHighlight;
         button.MouseLeave += RibbonMenuButton_InvalidateDropdownZoneHighlight;
@@ -387,10 +385,10 @@ public partial class MainWindow
 
     private static Brush GetRibbonDropdownHoverBrush(FrameworkElement element)
     {
-        if (element.TryFindResource("FreeXAccentSoftBrush") is Brush brush)
+        if (element.TryFindResource("FreeXRibbonButtonHoverBrush") is Brush brush)
             return brush;
 
-        return new SolidColorBrush(Color.FromRgb(0xEA, 0xF4, 0xEF));
+        return new SolidColorBrush(Color.FromRgb(0xBE, 0xE6, 0xFD));
     }
 
     private static void HideRibbonDropdownHoverPart(Border border)
@@ -550,8 +548,8 @@ public partial class MainWindow
 
     private sealed class RibbonDropdownZoneAdorner : Adorner
     {
-        private static readonly Pen HoverBorder = CreatePen(Color.FromRgb(0xC8, 0xCC, 0xD0), 1);
-        private static readonly Pen SeparatorPen = CreatePen(Color.FromRgb(0xC8, 0xCC, 0xD0), 1);
+        private static readonly Pen HoverBorder = CreatePen(Color.FromRgb(0x3C, 0x7F, 0xB1), 1);
+        private static readonly Pen SeparatorPen = CreatePen(Color.FromRgb(0x3C, 0x7F, 0xB1), 1);
         private readonly ButtonBase _button;
 
         public RibbonDropdownZoneAdorner(ButtonBase button)
@@ -1611,7 +1609,7 @@ public partial class MainWindow
     {
         return accent switch
         {
-            RibbonCommandIconAccent.Green => (BrushFromRgb(232, 244, 239), BrushFromRgb(33, 115, 70), BrushFromRgb(24, 92, 55)),
+            RibbonCommandIconAccent.Green => (BrushFromRgb(230, 246, 250), BrushFromRgb(15, 109, 140), BrushFromRgb(23, 50, 77)),
             RibbonCommandIconAccent.Chart => (BrushFromRgb(232, 241, 252), BrushFromRgb(68, 114, 196), BrushFromRgb(47, 84, 150)),
             RibbonCommandIconAccent.Data => (BrushFromRgb(229, 243, 250), BrushFromRgb(0, 120, 170), BrushFromRgb(0, 92, 135)),
             RibbonCommandIconAccent.Theme => (BrushFromRgb(241, 236, 250), BrushFromRgb(112, 48, 160), BrushFromRgb(85, 35, 125)),
@@ -1619,7 +1617,7 @@ public partial class MainWindow
             RibbonCommandIconAccent.Color => (BrushFromRgb(255, 235, 235), BrushFromRgb(192, 0, 0), BrushFromRgb(150, 0, 0)),
             RibbonCommandIconAccent.Border => (BrushFromRgb(245, 245, 245), BrushFromRgb(96, 96, 96), BrushFromRgb(31, 31, 31)),
             RibbonCommandIconAccent.Warning => (BrushFromRgb(255, 244, 214), BrushFromRgb(214, 157, 0), BrushFromRgb(138, 91, 0)),
-            RibbonCommandIconAccent.Protect => (BrushFromRgb(232, 244, 239), BrushFromRgb(33, 115, 70), BrushFromRgb(24, 92, 55)),
+            RibbonCommandIconAccent.Protect => (BrushFromRgb(230, 246, 250), BrushFromRgb(15, 109, 140), BrushFromRgb(23, 50, 77)),
             RibbonCommandIconAccent.Help => (BrushFromRgb(235, 242, 255), BrushFromRgb(68, 114, 196), BrushFromRgb(47, 84, 150)),
             _ => (Brushes.Transparent, null, Brushes.Black)
         };
