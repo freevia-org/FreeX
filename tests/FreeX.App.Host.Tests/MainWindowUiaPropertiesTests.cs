@@ -47,7 +47,7 @@ public sealed class MainWindowUiaPropertiesTests
             .Single(element => element.Attribute(x + "Name")?.Value == "FormulaBarExpandBtn");
 
         expandButton.Attribute("AutomationProperties.Name")?.Value.Should().Be(UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));
-        expandButton.Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
+        expandButton.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(UiText.Get("MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor"));
         expandButton.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("FormulaBarExpandBtn");
     }
 
@@ -57,14 +57,14 @@ public sealed class MainWindowUiaPropertiesTests
         var source = File.ReadAllText(
             WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(FormulaBarExpandBtn, \"Collapse Formula Bar\")");
-        source.Should().Contain("AutomationProperties.SetHelpText(FormulaBarExpandBtn, \"Collapse the formula bar to a single-line editor\")");
-        source.Should().Contain("RibbonTooltip.SetTitle(FormulaBarExpandBtn, \"Collapse Formula Bar\")");
-        source.Should().Contain("RibbonTooltip.SetDescription(FormulaBarExpandBtn, \"Collapse the formula bar to a single-line editor.\")");
-        source.Should().Contain("AutomationProperties.SetName(FormulaBarExpandBtn, \"Expand Formula Bar\")");
-        source.Should().Contain("AutomationProperties.SetHelpText(FormulaBarExpandBtn, \"Expand the formula bar to a multi-line editor\")");
-        source.Should().Contain("RibbonTooltip.SetTitle(FormulaBarExpandBtn, \"Expand Formula Bar\")");
-        source.Should().Contain("RibbonTooltip.SetDescription(FormulaBarExpandBtn, \"Expand the formula bar to a multi-line editor.\")");
+        source.Should().Contain("AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get(\"MainWindow_AutomationName_CollapseFormulaBar\"))");
+        source.Should().Contain("AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get(\"MainWindow_AutomationHelpText_CollapseTheFormulaBarToASingleLineEditor\"))");
+        source.Should().Contain("RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get(\"MainWindow_TooltipTitle_CollapseFormulaBar\"))");
+        source.Should().Contain("RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get(\"MainWindow_TooltipDescription_CollapseTheFormulaBarToASingleLineEditor\"))");
+        source.Should().Contain("AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get(\"MainWindow_AutomationName_ExpandFormulaBar\"))");
+        source.Should().Contain("AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get(\"MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor\"))");
+        source.Should().Contain("RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get(\"MainWindow_TooltipTitle_ExpandFormulaBar\"))");
+        source.Should().Contain("RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get(\"MainWindow_TooltipDescription_ExpandTheFormulaBarToAMultiLineEditor\"))");
     }
 
     [Fact]

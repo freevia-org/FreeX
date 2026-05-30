@@ -389,20 +389,20 @@ public partial class MainWindow
             FormulaBar.Height       = 84;
             FormulaBar.AcceptsReturn = true;
             FormulaBarExpandBtn.Content = CreateFormulaBarChevron(pointsUp: true);
-            System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, "Collapse Formula Bar");
-            System.Windows.Automation.AutomationProperties.SetHelpText(FormulaBarExpandBtn, "Collapse the formula bar to a single-line editor");
-            RibbonTooltip.SetTitle(FormulaBarExpandBtn, "Collapse Formula Bar");
-            RibbonTooltip.SetDescription(FormulaBarExpandBtn, "Collapse the formula bar to a single-line editor.");
+            System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationName_CollapseFormulaBar"));
+            System.Windows.Automation.AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationHelpText_CollapseTheFormulaBarToASingleLineEditor"));
+            RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get("MainWindow_TooltipTitle_CollapseFormulaBar"));
+            RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get("MainWindow_TooltipDescription_CollapseTheFormulaBarToASingleLineEditor"));
         }
         else
         {
             FormulaBar.ClearValue(System.Windows.Controls.TextBox.HeightProperty);
             FormulaBar.AcceptsReturn = false;
             FormulaBarExpandBtn.Content = CreateFormulaBarChevron(pointsUp: false);
-            System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, "Expand Formula Bar");
-            System.Windows.Automation.AutomationProperties.SetHelpText(FormulaBarExpandBtn, "Expand the formula bar to a multi-line editor");
-            RibbonTooltip.SetTitle(FormulaBarExpandBtn, "Expand Formula Bar");
-            RibbonTooltip.SetDescription(FormulaBarExpandBtn, "Expand the formula bar to a multi-line editor.");
+            System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));
+            System.Windows.Automation.AutomationProperties.SetHelpText(FormulaBarExpandBtn, UiText.Get("MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor"));
+            RibbonTooltip.SetTitle(FormulaBarExpandBtn, UiText.Get("MainWindow_TooltipTitle_ExpandFormulaBar"));
+            RibbonTooltip.SetDescription(FormulaBarExpandBtn, UiText.Get("MainWindow_TooltipDescription_ExpandTheFormulaBarToAMultiLineEditor"));
         }
     }
 

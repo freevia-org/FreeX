@@ -3301,11 +3301,11 @@
                         VerticalAlignment="Top" Cursor="Hand"
                         Click="FormulaBarExpandBtn_Click"
                         AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ExpandFormulaBar}"
-                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_ExpandOrCollapseTheFormulaBar}"
+                        AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor}"
                         AutomationProperties.AutomationId="FormulaBarExpandBtn"
                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ExpandFormulaBar}"
                         local:RibbonTooltip.KeyTip="BX"
-                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ExpandOrCollapseTheFormulaBar}" local:RibbonMetadata.CommandName="Expand Formula Bar">
+                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ExpandTheFormulaBarToAMultiLineEditor}" local:RibbonMetadata.CommandName="Expand Formula Bar">
                     <Path Data="M2,2 L6,6 L10,2"
                           Width="12" Height="8"
                           Stroke="#1F1F1F"
