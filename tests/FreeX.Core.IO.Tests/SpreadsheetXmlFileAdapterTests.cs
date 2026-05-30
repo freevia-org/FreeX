@@ -190,6 +190,9 @@ public sealed class SpreadsheetXmlFileAdapterTests
                 <ss:Table/>
                 <x:WorksheetOptions>
                   <x:DoNotDisplayGridlines/>
+                  <x:Print>
+                    <x:Gridlines/>
+                  </x:Print>
                   <x:FreezePanes/>
                   <x:FrozenNoSplit/>
                   <x:SplitHorizontal>2</x:SplitHorizontal>
@@ -204,6 +207,7 @@ public sealed class SpreadsheetXmlFileAdapterTests
         var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
 
         sheet.ShowGridlines.Should().BeFalse();
+        sheet.PrintGridlines.Should().BeTrue();
         sheet.FrozenRows.Should().Be(2);
         sheet.FrozenCols.Should().Be(3);
     }
@@ -712,6 +716,7 @@ public sealed class SpreadsheetXmlFileAdapterTests
         var workbook = new Workbook("XmlWorksheetOptions");
         var sheet = workbook.AddSheet("Options");
         sheet.ShowGridlines = false;
+        sheet.PrintGridlines = true;
         sheet.FrozenRows = 2;
         sheet.FrozenCols = 3;
 
@@ -724,6 +729,7 @@ public sealed class SpreadsheetXmlFileAdapterTests
         XNamespace x = "urn:schemas-microsoft-com:office:excel";
         var options = document.Descendants(x + "WorksheetOptions").Single();
         options.Element(x + "DoNotDisplayGridlines").Should().NotBeNull();
+        options.Element(x + "Print")?.Element(x + "Gridlines").Should().NotBeNull();
         options.Element(x + "FreezePanes").Should().NotBeNull();
         options.Element(x + "FrozenNoSplit").Should().NotBeNull();
         options.Element(x + "SplitHorizontal")!.Value.Should().Be("2");
@@ -734,6 +740,7 @@ public sealed class SpreadsheetXmlFileAdapterTests
         stream.Position = 0;
         var loaded = adapter.Load(stream).GetSheetAt(0);
         loaded.ShowGridlines.Should().BeFalse();
+        loaded.PrintGridlines.Should().BeTrue();
         loaded.FrozenRows.Should().Be(2);
         loaded.FrozenCols.Should().Be(3);
     }
