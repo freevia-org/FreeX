@@ -20,6 +20,8 @@ internal static class DelimitedTextWorkbookWriter
         "#CIRCULAR!",
         "#SPILL!",
         "#CALC!",
+        "#CONNECT!",
+        "#UNKNOWN!",
         "#FIELD!",
         "#BLOCKED!",
         "#GETTING_DATA"
