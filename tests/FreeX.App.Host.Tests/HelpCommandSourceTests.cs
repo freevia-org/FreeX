@@ -25,17 +25,12 @@ public sealed class HelpCommandSourceTests
     }
 
     [Theory]
-    [InlineData("Contact Support", "CS")]
-    [InlineData("Show Training", "TR")]
-    [InlineData("What's New", "WN")]
-    public void HelpDeferredCommands_RemainDisabledWithoutClickHandlers(string title, string keyTip)
+    [InlineData("Contact Support")]
+    [InlineData("Show Training")]
+    [InlineData("What's New")]
+    public void HelpOutOfScopeCommands_AreNotSurfacedAsDisabledRibbonButtons(string title)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
-
-        button.Should().Contain("IsEnabled=\"False\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().NotContain("Click=");
+        ReadMainWindowXaml().Should().NotContain($"local:RibbonTooltip.Title=\"{title}\"");
     }
 
     [Fact]
@@ -51,6 +46,14 @@ public sealed class HelpCommandSourceTests
         source.Should().Contain("Clipboard.SetText(diagnosticsText);");
         source.Should().Contain("ExternalUrlLauncher.Open(");
         source.Should().Contain("ShowOwnedMessage(");
+    }
+
+    [Fact]
+    public void HelpKeyboardShortcut_RoutesF1ToHelpOnlineCommand()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
+
+        source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHelp, HelpOnlineBtn_Click);");
     }
 
     private static string ReadMainWindowXaml() =>

@@ -58,6 +58,7 @@ public sealed class RibbonResizeCoordinatorTests
 
         method.Should().Contain("DispatcherPriority.Render");
         method.Should().NotContain("DispatcherPriority.Send");
+        method.Should().Contain("UpdateRibbonCompactMode(force: false)");
     }
 
     [Fact]
@@ -137,6 +138,8 @@ public sealed class RibbonResizeCoordinatorTests
             deferred.ResizeCompactionPendingOnExit.Should().BeTrue();
             deferred.RequestCount.Should().Be(0);
             deferred.PostedCount.Should().Be(0);
+            harness.AdaptiveDiagnostics.GroupMeasurementCount.Should().Be(0);
+            harness.AdaptiveDiagnostics.AppliedStateSkipCount.Should().Be(0);
 
             harness.ExitNativeResizeLoop();
 
@@ -152,6 +155,48 @@ public sealed class RibbonResizeCoordinatorTests
             harness.PumpDispatcher();
 
             var executed = harness.Diagnostics;
+            executed.ExecutedCount.Should().Be(1);
+            executed.ForcedCompactCount.Should().Be(1);
+            executed.LastExecutedWork.Should().Be("CompactOnly");
+        });
+    }
+
+    [Fact]
+    public void NativeResizeLoop_CoalescesMultipleDeferredCompactionsIntoSingleExitFallback()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonCoordinatorHarness.Create();
+
+            harness.SelectRibbonTab("Home", width: 1500);
+            harness.PrimeResizeGate();
+            harness.ResetDiagnostics();
+
+            harness.EnterNativeResizeLoop();
+            foreach (var width in new[] { 700d, 640d, 900d, 760d })
+                harness.ResizeWindow(width);
+
+            var deferred = harness.Diagnostics;
+            deferred.ResizeCompactionPendingOnExit.Should().BeTrue();
+            deferred.RequestCount.Should().Be(0);
+            deferred.PostedCount.Should().Be(0);
+            deferred.ExecutedCount.Should().Be(0);
+            harness.AdaptiveDiagnostics.GroupMeasurementCount.Should().Be(0);
+
+            harness.ExitNativeResizeLoop();
+
+            var queued = harness.Diagnostics;
+            queued.ResizeCompactionPendingOnExit.Should().BeFalse();
+            queued.RequestCount.Should().Be(1);
+            queued.PostedCount.Should().Be(1);
+            queued.ExecutedCount.Should().Be(0);
+            queued.LastMergedWork.Should().Be("CompactOnly");
+
+            harness.PumpDispatcher();
+
+            var executed = harness.Diagnostics;
+            executed.RequestCount.Should().Be(1);
+            executed.PostedCount.Should().Be(1);
             executed.ExecutedCount.Should().Be(1);
             executed.ForcedCompactCount.Should().Be(1);
             executed.LastExecutedWork.Should().Be("CompactOnly");

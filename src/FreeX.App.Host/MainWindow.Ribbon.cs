@@ -675,15 +675,14 @@ public partial class MainWindow
 
     private void CompactRibbonSurfaceAfterResize(bool scheduleFallback)
     {
-        UpdateRibbonCompactMode(force: true);
-        if (scheduleFallback)
-        {
-            QueueRibbonFallback(RibbonFallbackWork.CompactOnly);
-        }
-        else
+        if (!scheduleFallback)
         {
             _ribbonResizeCompactionPendingOnExit = true;
+            return;
         }
+
+        UpdateRibbonCompactMode(force: true);
+        QueueRibbonFallback(RibbonFallbackWork.CompactOnly);
     }
 
     private void QueueRibbonFallback(RibbonFallbackWork work)
@@ -717,7 +716,7 @@ public partial class MainWindow
                 else if (pendingWork == RibbonFallbackWork.CompactOnly)
                 {
                     _ribbonFallbackForcedCompactCount++;
-                    UpdateRibbonCompactMode(force: true);
+                    UpdateRibbonCompactMode(force: false);
                 }
             }),
             DispatcherPriority.Render);
