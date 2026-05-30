@@ -17,6 +17,9 @@ public enum AccessibilityIssueKind
     TableMissingHeaderText,
     TableDefaultHeaderText,
     TableDuplicateHeaderText,
+    TableMissingHeaderRow,
+    ChartMissingAxisTitle,
+    GenericChartAxisTitle,
     LowContrastCellText,
     LowContrastChartText
 }
@@ -123,11 +126,54 @@ public static class AccessibilityCheckerService
                         "Chart title should describe the chart."));
                 }
 
+                AddChartAxisTitleIssues(issues, sheet, chart);
                 AddLowContrastChartTextIssues(issues, workbook, sheet, chart);
             }
         }
 
         return issues;
+    }
+
+    private static void AddChartAxisTitleIssues(List<AccessibilityIssue> issues, Sheet sheet, ChartModel chart)
+    {
+        if (!ChartTypeSupport.SupportsAxes(chart.Type))
+            return;
+
+        AddChartAxisTitleIssue(issues, sheet, chart, "X-axis", chart.XAxisTitle, chart.HideXAxis);
+        AddChartAxisTitleIssue(issues, sheet, chart, "Y-axis", chart.YAxisTitle, chart.HideYAxis);
+    }
+
+    private static void AddChartAxisTitleIssue(
+        List<AccessibilityIssue> issues,
+        Sheet sheet,
+        ChartModel chart,
+        string axisName,
+        string? axisTitle,
+        bool axisHidden)
+    {
+        if (axisHidden)
+            return;
+
+        if (string.IsNullOrWhiteSpace(axisTitle))
+        {
+            issues.Add(new AccessibilityIssue(
+                AccessibilityIssueKind.ChartMissingAxisTitle,
+                sheet.Id,
+                sheet.Name,
+                FormatRange(chart.DataRange),
+                $"Chart {axisName} is missing a title."));
+            return;
+        }
+
+        if (AccessibilityTextRules.IsGenericChartAxisTitle(axisTitle))
+        {
+            issues.Add(new AccessibilityIssue(
+                AccessibilityIssueKind.GenericChartAxisTitle,
+                sheet.Id,
+                sheet.Name,
+                FormatRange(chart.DataRange),
+                $"Chart {axisName} title should describe the axis."));
+        }
     }
 
     private static void AddLowContrastChartTextIssues(
@@ -172,6 +218,32 @@ public static class AccessibilityCheckerService
             chartBackground,
             chart.AxisTitleFontSize);
 
+        if (!chart.HideXAxis && chart.ShowXAxisLabels)
+        {
+            AddLowContrastChartTextIssue(
+                issues,
+                sheet,
+                chart,
+                "X-axis labels",
+                "Axis labels",
+                chart.ResolveXAxisLabelTextColor(workbook.Theme) ?? defaultText,
+                chartBackground,
+                chart.XAxisLabelFontSize);
+        }
+
+        if (!chart.HideYAxis && chart.ShowYAxisLabels)
+        {
+            AddLowContrastChartTextIssue(
+                issues,
+                sheet,
+                chart,
+                "Y-axis labels",
+                "Axis labels",
+                chart.ResolveYAxisLabelTextColor(workbook.Theme) ?? defaultText,
+                chartBackground,
+                chart.YAxisLabelFontSize);
+        }
+
         if (chart.ShowLegend)
         {
             AddLowContrastChartTextIssue(
@@ -196,6 +268,32 @@ public static class AccessibilityCheckerService
                 chart.ResolveDataLabelTextColor(workbook.Theme) ?? defaultText,
                 chart.ResolveDataLabelFillColor(workbook.Theme) ?? plotBackground,
                 chart.DataLabelFontSize);
+        }
+
+        if (chart.DataTable is { } dataTable)
+        {
+            AddLowContrastChartTextIssue(
+                issues,
+                sheet,
+                chart,
+                "Chart data table text",
+                "Data table",
+                dataTable.TextThemeColor?.Resolve(workbook.Theme) ?? dataTable.TextColor ?? defaultText,
+                dataTable.FillThemeColor?.Resolve(workbook.Theme) ?? dataTable.FillColor ?? chartBackground,
+                dataTable.FontSize ?? chart.ChartDefaultFontSize);
+        }
+
+        if (chart.ShowLinearTrendline && (chart.ShowTrendlineEquation || chart.ShowTrendlineRSquared))
+        {
+            AddLowContrastChartTextIssue(
+                issues,
+                sheet,
+                chart,
+                "Trendline label text",
+                "Trendline label",
+                chart.TrendlineLabelTextThemeColor?.Resolve(workbook.Theme) ?? chart.TrendlineLabelTextColor ?? defaultText,
+                chart.TrendlineLabelFillThemeColor?.Resolve(workbook.Theme) ?? chart.TrendlineLabelFillColor ?? chartBackground,
+                chart.TrendlineLabelFontSize ?? chart.ChartDefaultFontSize);
         }
     }
 
@@ -352,7 +450,15 @@ public static class AccessibilityCheckerService
         foreach (var table in sheet.StructuredTables)
         {
             if (table.HeaderRowCount.GetValueOrDefault(1) <= 0)
+            {
+                issues.Add(new AccessibilityIssue(
+                    AccessibilityIssueKind.TableMissingHeaderRow,
+                    sheet.Id,
+                    sheet.Name,
+                    FormatRange(table.Range),
+                    "Tables should include a header row."));
                 continue;
+            }
 
             var seenHeaderTexts = new Dictionary<string, CellAddress>(StringComparer.OrdinalIgnoreCase);
             var startCol = (int)table.Range.Start.Col;
