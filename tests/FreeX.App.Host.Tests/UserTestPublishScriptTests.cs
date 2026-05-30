@@ -21,9 +21,11 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("function Assert-SafeArtifactToken");
         script.Should().Contain("function Assert-SafeTimestampUrl");
         script.Should().Contain("function Assert-MsixCertificatePath");
+        script.Should().Contain("function Assert-MsixSigningOptions");
         script.Should().Contain("Assert-SafeArtifactToken -Value $RuntimeIdentifier -Label \"RuntimeIdentifier\"");
         script.Should().Contain("Assert-SafeTimestampUrl -Value $MsixTimestampUrl");
         script.Should().Contain("Assert-MsixCertificatePath -Value $MsixCertificatePath");
+        script.Should().Contain("Assert-MsixSigningOptions -CertificatePath $MsixCertificatePath -CertificatePassword $MsixCertificatePassword -TimestampUrl $MsixTimestampUrl");
         script.Should().Contain("rev-parse --short=8 HEAD");
         script.Should().Contain("$buildStamp = Get-Date -Format \"yyyyMMdd-HHmmss\"");
         script.Should().Contain("freex-$versionSlug-$buildStamp-$commitId-$RuntimeIdentifier-$modeSlug");
@@ -51,6 +53,27 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("Microsoft Excel is a trademark of Microsoft Corporation.");
         script.Should().Contain("docs/PRIVACY.md");
         script.Should().Contain("THIRD_PARTY_NOTICES.md");
+    }
+
+    [Fact]
+    public void PublishScript_RejectsMsixSigningOptionsWithoutCertificatePathBeforePublishing()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            var result = RunPowerShellScript(scriptPath, $"-PublishMode Msix -MsixCertificatePassword \"placeholder\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("MSIX signing options require MsixCertificatePath");
+            Directory.GetFileSystemEntries(tempDirectory).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]

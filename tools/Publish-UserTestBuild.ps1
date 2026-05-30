@@ -51,9 +51,23 @@ function Assert-MsixCertificatePath {
     }
 }
 
+function Assert-MsixSigningOptions {
+    param(
+        [string]$CertificatePath,
+        [string]$CertificatePassword,
+        [string]$TimestampUrl
+    )
+
+    if ([string]::IsNullOrWhiteSpace($CertificatePath) -and
+        (-not [string]::IsNullOrWhiteSpace($CertificatePassword) -or -not [string]::IsNullOrWhiteSpace($TimestampUrl))) {
+        throw "MSIX signing options require MsixCertificatePath."
+    }
+}
+
 Assert-SafeArtifactToken -Value $RuntimeIdentifier -Label "RuntimeIdentifier"
 Assert-SafeTimestampUrl -Value $MsixTimestampUrl
 Assert-MsixCertificatePath -Value $MsixCertificatePath
+Assert-MsixSigningOptions -CertificatePath $MsixCertificatePath -CertificatePassword $MsixCertificatePassword -TimestampUrl $MsixTimestampUrl
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "src\FreeX.App.Host\FreeX.App.Host.csproj"
