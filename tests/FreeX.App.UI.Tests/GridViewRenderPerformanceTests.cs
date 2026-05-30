@@ -45,6 +45,21 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCells_LazilyAllocatesStyleLookupForDefaultStyledViewports()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var buildStyleLookup = source[
+            source.IndexOf("private static Dictionary<(uint Row, uint Col), CellStyle> BuildRenderCellStyleLookup", StringComparison.Ordinal)..
+            source.IndexOf("private RenderCellLookupCache GetRenderCellLookups", StringComparison.Ordinal)];
+
+        source.Should().Contain("private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);");
+        buildStyleLookup.Should().Contain("Dictionary<(uint Row, uint Col), CellStyle>? lookup = null;");
+        buildStyleLookup.Should().Contain("lookup ??= new Dictionary<(uint Row, uint Col), CellStyle>(cells.Count);");
+        buildStyleLookup.Should().Contain("return lookup ?? EmptyRenderCellStyleLookup;");
+        buildStyleLookup.Should().NotContain("var lookup = new Dictionary<(uint Row, uint Col), CellStyle>();");
+    }
+
+    [Fact]
     public void RenderCells_ReusesPixelsPerDipAcrossFormattedTextCalls()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));

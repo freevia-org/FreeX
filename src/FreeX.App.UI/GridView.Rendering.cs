@@ -610,16 +610,21 @@ public partial class GridView
         dc.DrawLine(GridPen, new Point(right, top), new Point(right, bottom));
     }
 
+    private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);
+
     private static Dictionary<(uint Row, uint Col), CellStyle> BuildRenderCellStyleLookup(IReadOnlyList<DisplayCell> cells)
     {
-        var lookup = new Dictionary<(uint Row, uint Col), CellStyle>();
+        Dictionary<(uint Row, uint Col), CellStyle>? lookup = null;
         foreach (var cell in cells)
         {
             if (cell.Style is { } style)
+            {
+                lookup ??= new Dictionary<(uint Row, uint Col), CellStyle>(cells.Count);
                 lookup.Add((cell.Row, cell.Col), style);
+            }
         }
 
-        return lookup;
+        return lookup ?? EmptyRenderCellStyleLookup;
     }
 
     private RenderCellLookupCache GetRenderCellLookups(ViewportModel viewport)
