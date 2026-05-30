@@ -7,7 +7,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     [Fact]
     public void ApplyRuntimePriorityStates_CollapsesInsertChartsAtNarrowWidths()
     {
-        var groupNames = new[] { "Tables", "Illustrations", "Add-ins", "Charts" };
+        var groupNames = new[] { "Tables", "Illustrations", "Charts" };
 
         var states = RibbonAdaptivePriorityPlanner.ApplyRuntimePriorityStates(
             900,
@@ -23,7 +23,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     {
         var states = RibbonAdaptivePriorityPlanner.ApplyRuntimePriorityStates(
             900,
-            ["Tables", "Illustrations", "Add-ins", "Charts"],
+            ["Tables", "Illustrations", "Charts"],
             [RibbonAdaptiveGroupState.Full, RibbonAdaptiveGroupState.Full]);
 
         states.Should().Equal(RibbonAdaptiveGroupState.Full, RibbonAdaptiveGroupState.Full);
@@ -32,7 +32,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     [Fact]
     public void RuntimeVisibilityOverrides_KeepMediumDataPriorityGroupsIconOnly()
     {
-        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast" };
 
         var decisions = RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityOverrides(1120, groupNames);
 
@@ -69,7 +69,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     [Fact]
     public void ApplyRuntimeVisibilityStates_ContributesMediumDataPriorityIconOnlyStatesToPurePlan()
     {
-        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast" };
 
         var states = RibbonAdaptivePriorityPlanner.ApplyRuntimeVisibilityStates(
             1120,
@@ -89,7 +89,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     [Fact]
     public void FallbackProtectedGroupIndexes_ProtectPriorityGroupsButRelaxAtVeryNarrowWidths()
     {
-        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast" };
 
         RibbonAdaptivePriorityPlanner.GetFallbackProtectedGroupIndexes(groupNames, 1120)
             .Should()
@@ -141,7 +141,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     [Fact]
     public void ExpandableGroupIndexes_ExcludeRuntimeVisibilityStateOverrides()
     {
-        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast" };
 
         RibbonAdaptivePriorityPlanner.GetExpandableGroupIndexes(groupNames, 1120)
             .Should()
@@ -153,8 +153,8 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     [Fact]
     public void RuntimeVisibilityProtectedGroupIndexes_ProtectOnlyVisibleRuntimeOverrides()
     {
-        var dataGroups = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
-        var insertGroups = new[] { "Tables", "Illustrations", "Add-ins", "Charts" };
+        var dataGroups = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast" };
+        var insertGroups = new[] { "Tables", "Illustrations", "Charts" };
 
         RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityProtectedGroupIndexes(dataGroups, 1120)
             .Should()
@@ -170,7 +170,7 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     public void RequiresMeasuredCorrection_DetectsTabsThatNeedMeasuredOverflowGuard()
     {
         RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
-                ["Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools"])
+                ["Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools"])
             .Should()
             .BeTrue();
 

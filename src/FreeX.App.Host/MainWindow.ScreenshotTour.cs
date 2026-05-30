@@ -19,54 +19,29 @@ public partial class MainWindow
     private static extern bool SetCursorPos(int x, int y);
 
     // Activated by FREEX_SS_TOUR=1 env var.  Output lands in <repo-root>/screenshots/.
-    private void TryStartScreenshotTour()
+    private async void TryStartScreenshotTour()
     {
         var ribbonTour = Environment.GetEnvironmentVariable("FREEX_SS_TOUR") == "1";
         var backstageTour = Environment.GetEnvironmentVariable("FREEX_BACKSTAGE_TOUR") == "1";
         if (!ribbonTour && !backstageTour)
             return;
 
+        var ribbonPlan = ribbonTour
+            ? RibbonScreenshotTourPlanner.CreatePlan(
+                Environment.GetEnvironmentVariable("FREEX_SS_TOUR_TABS"),
+                Environment.GetEnvironmentVariable("FREEX_SS_TOUR_WIDTHS"))
+            : null;
+
         var outputDir = Path.GetFullPath(
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "screenshots"));
         Directory.CreateDirectory(outputDir);
-        _ = RunScreenshotTourAsync(outputDir, ribbonTour, backstageTour);
+        await RunScreenshotTourAsync(outputDir, ribbonPlan, backstageTour);
     }
 
-    private async Task RunScreenshotTourAsync(string outputDir, bool ribbonTour, bool backstageTour)
+    private async Task RunScreenshotTourAsync(string outputDir, RibbonScreenshotTourPlan? ribbonPlan, bool backstageTour)
     {
-        if (ribbonTour)
-        {
-            var requestedWidths = GetScreenshotTourRequestedWidths();
-            if (requestedWidths.Count > 0)
-            {
-                WindowState = WindowState.Normal;
-                Height = 768;
-                foreach (var width in requestedWidths)
-                {
-                    Width = width;
-                    await Task.Delay(600);
-                    await CaptureAllTabsAsync(outputDir, width.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                }
-            }
-            else
-            {
-                await Task.Delay(1200);
-                await CaptureAllTabsAsync(outputDir, "max");
-
-                WindowState = WindowState.Normal;
-                Width = 1100; Height = 768;
-                await Task.Delay(600);
-                await CaptureAllTabsAsync(outputDir, "1100");
-
-                Width = 900;
-                await Task.Delay(600);
-                await CaptureAllTabsAsync(outputDir, "900");
-
-                Width = 750;
-                await Task.Delay(600);
-                await CaptureAllTabsAsync(outputDir, "750");
-            }
-        }
+        if (ribbonPlan is not null)
+            await CaptureRibbonTourAsync(outputDir, ribbonPlan);
 
         if (backstageTour)
             await CaptureBackstageAsync(outputDir);
@@ -89,34 +64,53 @@ public partial class MainWindow
         await CaptureCurrentWindowAsync(outputDir, "backstage_home", 760);
     }
 
-    private async Task CaptureAllTabsAsync(string outputDir, string label)
+    private async Task CaptureRibbonTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
     {
-        foreach (var (header, fileName) in GetScreenshotTourTabs())
+        RibbonScreenshotTourWidth? activeWidth = null;
+        foreach (var capture in plan.Captures)
         {
-            var tab = RibbonTabs.Items
-                .OfType<System.Windows.Controls.TabItem>()
-                .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal));
+            if (!Equals(activeWidth, capture.Width))
+            {
+                await ApplyScreenshotTourWidthAsync(capture.Width);
+                activeWidth = capture.Width;
+            }
 
-            if (tab is null)
-                continue;
-
-            RibbonTabs.SelectedItem = tab;
-            UpdateLayout();
-            await Task.Delay(350);
-            UpdateLayout();
-
-            await CaptureCurrentWindowAsync(outputDir, $"{label}_{fileName}", ScreenshotTourCaptureHeight);
+            await CaptureRibbonTabAsync(outputDir, capture);
         }
     }
 
-    private static IReadOnlyList<(string Header, string FileName)> GetScreenshotTourTabs()
-        => RibbonScreenshotTourPlanner.FilterTabs(
-            RibbonScreenshotTourPlanner.DefaultTabs,
-            Environment.GetEnvironmentVariable("FREEX_SS_TOUR_TABS"));
+    private async Task ApplyScreenshotTourWidthAsync(RibbonScreenshotTourWidth width)
+    {
+        if (width.WindowWidth is { } windowWidth)
+        {
+            WindowState = WindowState.Normal;
+            Width = windowWidth;
+            Height = 768;
+            await Task.Delay(600);
+            return;
+        }
 
-    private static IReadOnlyList<double> GetScreenshotTourRequestedWidths()
-        => RibbonScreenshotTourPlanner.ParseWidths(
-            Environment.GetEnvironmentVariable("FREEX_SS_TOUR_WIDTHS"));
+        WindowState = WindowState.Maximized;
+        await Task.Delay(1200);
+    }
+
+    private async Task CaptureRibbonTabAsync(string outputDir, RibbonScreenshotTourCapture capture)
+    {
+        var tab = RibbonTabs.Items
+            .OfType<System.Windows.Controls.TabItem>()
+            .FirstOrDefault(item => string.Equals(item.Header?.ToString(), capture.Tab.Header, StringComparison.Ordinal));
+
+        if (tab is null)
+            throw new InvalidOperationException(
+                $"Ribbon screenshot tour expected tab '{capture.Tab.Header}' but it was not found in the live ribbon.");
+
+        RibbonTabs.SelectedItem = tab;
+        UpdateLayout();
+        await Task.Delay(350);
+        UpdateLayout();
+
+        await CaptureCurrentWindowAsync(outputDir, capture.FileName, ScreenshotTourCaptureHeight);
+    }
 
     private async Task CaptureCurrentWindowAsync(string outputDir, string fileName, double logicalHeight)
     {

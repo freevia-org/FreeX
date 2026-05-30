@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Xml.Linq;
 using FreeX.App.Host;
 using FluentAssertions;
+using FreeX.App.Host;
 
 namespace FreeX.App.Host.Tests;
 
@@ -198,8 +199,11 @@ public sealed class OptionsDialogSourceTests
         source.Should().Contain("PanelQuickAccessToolbar.Visibility = selected == \"_Quick Access Toolbar\" ? Visibility.Visible : Visibility.Collapsed;");
         source.Should().Contain("DeferredCommandMessages.QuickAccessToolbarReset()");
 
-        deferredMessages.Should().Contain("Quick Access Toolbar customization is not persisted in FreeX yet");
-        deferredMessages.Should().Contain("so there is no custom toolbar state to reset.");
+        deferredMessages.Should().Contain("DeferredCommand_QuickAccessToolbar_Body");
+        UiText.Get("DeferredCommand_QuickAccessToolbar_Body")
+            .Should().Contain("Quick Access Toolbar customization is not persisted in FreeX yet");
+        UiText.Get("DeferredCommand_QuickAccessToolbar_Body")
+            .Should().Contain("so there is no custom toolbar state to reset.");
     }
 
     [Fact]
