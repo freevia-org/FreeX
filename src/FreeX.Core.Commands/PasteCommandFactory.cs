@@ -182,12 +182,18 @@ public static class PasteCommandFactory
     private static bool IsBlank(Cell cell) =>
         cell.FormulaText is null && cell.Value is BlankValue;
 
-    private static ScalarValue ParseClipboardValue(string text) =>
-        double.TryParse(
-            text,
-            System.Globalization.NumberStyles.Any,
-            System.Globalization.CultureInfo.InvariantCulture,
-            out var number)
-            ? new NumberValue(number)
-            : new TextValue(text);
+    private static ScalarValue ParseClipboardValue(string text)
+    {
+        if (double.TryParse(
+                text,
+                System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var number) &&
+            double.IsFinite(number))
+        {
+            return new NumberValue(number);
+        }
+
+        return new TextValue(text);
+    }
 }
