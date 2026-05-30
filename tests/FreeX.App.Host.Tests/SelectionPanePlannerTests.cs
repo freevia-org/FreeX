@@ -87,6 +87,26 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialogStatePlanner_PlanDragReorder_CanInsertAfterTarget()
+    {
+        var front = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
+        var middle = DialogState(SelectionPaneObjectKind.Picture, "Middle", isVisible: true);
+        var back = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
+
+        var plan = SelectionPaneDialogStatePlanner.PlanDragReorder(
+            [front, middle, back],
+            draggedId: front.Id,
+            targetId: back.Id,
+            placement: SelectionPaneDropPlacement.After);
+
+        plan.Should().NotBeNull();
+        plan!.OrderedIds.Should().Equal(middle.Id, back.Id, front.Id);
+        plan.MoveChanges.Should().Equal(
+            new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, front.Id, Forward: false),
+            new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, front.Id, Forward: false));
+    }
+
+    [Fact]
     public void SelectionPaneDialogStatePlanner_PlanDragReorder_HandlesLargeListsWithConsolidatedLookup()
     {
         const int itemCount = 5_000;
@@ -379,6 +399,28 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialog_CreateDragMoveChanges_PlansMovesAfterDroppedPosition()
+    {
+        var front = Guid.NewGuid();
+        var middle = Guid.NewGuid();
+        var back = Guid.NewGuid();
+
+        var moves = SelectionPaneDialog.CreateDragMoveChanges(
+            [
+                (SelectionPaneObjectKind.Picture, front),
+                (SelectionPaneObjectKind.Picture, middle),
+                (SelectionPaneObjectKind.Picture, back)
+            ],
+            draggedId: front,
+            targetId: back,
+            placement: SelectionPaneDropPlacement.After);
+
+        moves.Should().Equal(
+            new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, front, Forward: false),
+            new SelectionPaneMoveChange(SelectionPaneObjectKind.Picture, front, Forward: false));
+    }
+
+    [Fact]
     public void SelectionPaneDialog_CreateDragMoveChanges_RejectsCrossKindDrops()
     {
         var picture = Guid.NewGuid();
@@ -544,6 +586,8 @@ public sealed class SelectionPanePlannerTests
         source.Should().Contain("_list.Drop");
         source.Should().Contain("DragDrop.DoDragDrop");
         source.Should().Contain("SelectionPaneDialogStatePlanner.PlanDragReorder");
+        source.Should().Contain("GetDropPlacement");
+        source.Should().Contain("SelectionPaneDropPlacement.After");
         source.Should().Contain("CreateDragMoveChanges");
     }
 

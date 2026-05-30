@@ -67,11 +67,12 @@ public sealed partial class SelectionPaneDialog
     private void List_Drop(object sender, DragEventArgs e)
     {
         var dragged = e.Data.GetData(typeof(SelectionPaneDialogItem)) as SelectionPaneDialogItem;
-        var target = FindListItem(e.OriginalSource);
+        var targetContainer = FindListBoxItem(e.OriginalSource);
+        var target = targetContainer?.DataContext as SelectionPaneDialogItem;
         if (!CanDropDraggedItem(dragged, target))
             return;
 
-        DragReorder(dragged!, target!);
+        DragReorder(dragged!, target!, GetDropPlacement(e, targetContainer!));
         e.Handled = true;
     }
 
@@ -91,12 +92,16 @@ public sealed partial class SelectionPaneDialog
         }
     }
 
-    private void DragReorder(SelectionPaneDialogItem dragged, SelectionPaneDialogItem target)
+    private void DragReorder(
+        SelectionPaneDialogItem dragged,
+        SelectionPaneDialogItem target,
+        SelectionPaneDropPlacement placement)
     {
         var plan = SelectionPaneDialogStatePlanner.PlanDragReorder(
             CurrentItemStates(),
             dragged.Source.Id,
-            target.Source.Id);
+            target.Source.Id,
+            placement);
         if (plan is null)
             return;
 
@@ -142,12 +147,23 @@ public sealed partial class SelectionPaneDialog
 
     private SelectionPaneDialogItem? FindListItem(object originalSource)
     {
+        return FindListBoxItem(originalSource)?.DataContext as SelectionPaneDialogItem;
+    }
+
+    private ListBoxItem? FindListBoxItem(object originalSource)
+    {
         if (originalSource is not DependencyObject dependencyObject)
             return null;
 
-        return ItemsControl.ContainerFromElement(_list, dependencyObject) is ListBoxItem item
-            ? item.DataContext as SelectionPaneDialogItem
-            : null;
+        return ItemsControl.ContainerFromElement(_list, dependencyObject) as ListBoxItem;
+    }
+
+    private static SelectionPaneDropPlacement GetDropPlacement(DragEventArgs e, ListBoxItem target)
+    {
+        var midpoint = target.ActualHeight / 2;
+        return e.GetPosition(target).Y > midpoint
+            ? SelectionPaneDropPlacement.After
+            : SelectionPaneDropPlacement.Before;
     }
 
     private static bool CanDropDraggedItem(SelectionPaneDialogItem? dragged, SelectionPaneDialogItem? target) =>
