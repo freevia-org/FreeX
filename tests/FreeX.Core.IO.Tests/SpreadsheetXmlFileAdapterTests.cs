@@ -320,6 +320,46 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsSpreadsheetMlNumberFormatStyles()
+    {
+        var workbook = new Workbook("XmlStyles");
+        var sheet = workbook.AddSheet("Styles");
+        var currency = workbook.RegisterStyle(new CellStyle { NumberFormat = "$#,##0.00" });
+        var percent = workbook.RegisterStyle(new CellStyle { NumberFormat = "0.0%" });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell
+        {
+            Value = new NumberValue(12.5),
+            StyleId = currency
+        });
+        sheet.SetStyleOnly(1, 2, percent);
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var styles = document.Descendants(ss + "Style").ToList();
+        styles.Should().HaveCount(2);
+        var savedFormats = styles
+            .Select(style => style.Element(ss + "NumberFormat")!.Attribute(ss + "Format")!.Value)
+            .ToList();
+        savedFormats.Should().BeEquivalentTo(["$#,##0.00", "0.0%"]);
+        var cells = document.Descendants(ss + "Cell").ToList();
+        cells.Should().HaveCount(2);
+        cells.Select(cell => cell.Attribute(ss + "StyleID")?.Value)
+            .Should().OnlyContain(styleId => !string.IsNullOrWhiteSpace(styleId));
+        cells.Single(cell => cell.Attribute(ss + "Index")?.Value == "2").Element(ss + "Data").Should().BeNull();
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loaded.GetStyle(loadedSheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+        loaded.GetStyle(loadedSheet.GetStyleOnly(1, 2)!.Value).NumberFormat.Should().Be("0.0%");
+    }
+
+    [Fact]
     public void Load_AdvancesImplicitCellIndexPastMergeAcrossSpan()
     {
         using var stream = StreamFromString("""
