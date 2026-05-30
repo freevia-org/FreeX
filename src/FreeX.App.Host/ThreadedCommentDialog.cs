@@ -7,12 +7,27 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed record ThreadedCommentDialogResult(string? RootText, string? ReplyText, bool IsResolved);
+public enum ThreadedCommentDialogAction
+{
+    ApplyThread,
+    EditReply,
+    DeleteReply
+}
+
+public sealed record ThreadedCommentDialogResult(
+    string? RootText,
+    string? ReplyText,
+    bool IsResolved,
+    ThreadedCommentDialogAction Action = ThreadedCommentDialogAction.ApplyThread,
+    int? ReplyIndex = null,
+    string? ReplyEditText = null);
 
 public sealed class ThreadedCommentDialog : Window
 {
     private readonly TextBox _rootBox = new() { AcceptsReturn = true, MinLines = 3, MaxLines = 6 };
     private readonly TextBox _replyBox = new() { AcceptsReturn = true, MinLines = 3, MaxLines = 6 };
+    private readonly ComboBox _replySelector = new() { MinWidth = 180 };
+    private readonly TextBox _selectedReplyBox = new() { AcceptsReturn = true, MinLines = 2, MaxLines = 5 };
     private readonly CheckBox _resolveBox;
 
     public ThreadedCommentDialogResult Result { get; private set; } = new(null, null, false);
@@ -56,7 +71,11 @@ public sealed class ThreadedCommentDialog : Window
         DockPanel.SetDock(btnRow, Dock.Bottom);
         root.Children.Add(btnRow);
 
-        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 300 };
+        var scroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            MaxHeight = existing is not null && existing.Replies.Count > 0 ? 180 : 300
+        };
         var threadPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
         if (existing is not null)
         {
@@ -76,6 +95,9 @@ public sealed class ThreadedCommentDialog : Window
         inner.Children.Add(_rootBox);
         if (existing is not null)
         {
+            if (existing.Replies.Count > 0)
+                inner.Children.Add(BuildSelectedReplyEditor(existing));
+
             inner.Children.Add(new Label { Content = "Repl_y:", Target = _replyBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
             AutomationProperties.SetName(_replyBox, "Reply");
             AutomationProperties.SetAutomationId(_replyBox, "ThreadedCommentReplyBox");
@@ -142,6 +164,70 @@ public sealed class ThreadedCommentDialog : Window
         return true;
     }
 
+    public static bool TryCreateReplyEditResult(
+        ThreadedComment? existing,
+        int replyIndex,
+        string? replyText,
+        out ThreadedCommentDialogResult result,
+        out string? error)
+    {
+        result = new ThreadedCommentDialogResult(
+            null,
+            null,
+            existing?.IsResolved ?? false,
+            ThreadedCommentDialogAction.EditReply,
+            replyIndex,
+            (replyText ?? "").Trim());
+        if (existing is null)
+        {
+            error = "No threaded comment is available.";
+            return false;
+        }
+
+        if (!IsValidReplyIndex(existing, replyIndex))
+        {
+            error = "Select a reply.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(result.ReplyEditText))
+        {
+            error = "Enter a reply.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    public static bool TryCreateReplyDeleteResult(
+        ThreadedComment? existing,
+        int replyIndex,
+        out ThreadedCommentDialogResult result,
+        out string? error)
+    {
+        result = new ThreadedCommentDialogResult(
+            null,
+            null,
+            existing?.IsResolved ?? false,
+            ThreadedCommentDialogAction.DeleteReply,
+            replyIndex);
+        if (existing is null)
+        {
+            error = "No threaded comment is available.";
+            return false;
+        }
+
+        if (!IsValidReplyIndex(existing, replyIndex))
+        {
+            error = "Select a reply.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
     public static ThreadedCommentDialogResult CreateResult(
         ThreadedComment? existing,
         string? rootText,
@@ -166,6 +252,96 @@ public sealed class ThreadedCommentDialog : Window
             rootEdit,
             string.IsNullOrWhiteSpace(trimmedReply) ? null : trimmedReply,
             isResolved);
+    }
+
+    private StackPanel BuildSelectedReplyEditor(ThreadedComment existing)
+    {
+        var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        AutomationProperties.SetName(_replySelector, "Reply to edit or delete");
+        AutomationProperties.SetAutomationId(_replySelector, "ThreadedCommentReplySelector");
+        AutomationProperties.SetHelpText(_replySelector, "Select a threaded comment reply to edit or delete.");
+        for (var i = 0; i < existing.Replies.Count; i++)
+        {
+            var item = new ComboBoxItem { Content = FormatReplyChoice(i, existing.Replies[i]) };
+            AutomationProperties.SetName(item, FormatReplyAutomationName(i, existing.Replies[i]));
+            _replySelector.Items.Add(item);
+        }
+
+        _replySelector.SelectionChanged += (_, _) => PopulateSelectedReplyText(existing);
+        _replySelector.SelectedIndex = 0;
+        panel.Children.Add(new Label { Content = "Select re_ply:", Target = _replySelector, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
+        panel.Children.Add(_replySelector);
+
+        AutomationProperties.SetName(_selectedReplyBox, "Selected reply text");
+        AutomationProperties.SetAutomationId(_selectedReplyBox, "ThreadedCommentSelectedReplyBox");
+        AutomationProperties.SetHelpText(_selectedReplyBox, "Edit the selected reply text before choosing Update Reply.");
+        panel.Children.Add(new Label { Content = "Selected reply te_xt:", Target = _selectedReplyBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
+        panel.Children.Add(_selectedReplyBox);
+
+        var updateReply = new Button { Content = "_Update Reply", Width = 112, Margin = new Thickness(0, 8, 8, 0) };
+        var deleteReply = new Button { Content = "_Delete Reply", Width = 112, Margin = new Thickness(0, 8, 0, 0) };
+        AutomationProperties.SetName(updateReply, "Update selected reply");
+        AutomationProperties.SetAutomationId(updateReply, "ThreadedCommentUpdateReplyButton");
+        AutomationProperties.SetHelpText(updateReply, "Update the selected threaded comment reply.");
+        AutomationProperties.SetName(deleteReply, "Delete selected reply");
+        AutomationProperties.SetAutomationId(deleteReply, "ThreadedCommentDeleteReplyButton");
+        AutomationProperties.SetHelpText(deleteReply, "Delete the selected threaded comment reply.");
+        updateReply.Click += (_, _) => SubmitThreadedCommentReplyEdit(existing);
+        deleteReply.Click += (_, _) => SubmitThreadedCommentReplyDelete(existing);
+
+        var actionRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Left };
+        actionRow.Children.Add(updateReply);
+        actionRow.Children.Add(deleteReply);
+        panel.Children.Add(actionRow);
+        PopulateSelectedReplyText(existing);
+        return panel;
+    }
+
+    private void PopulateSelectedReplyText(ThreadedComment existing)
+    {
+        var replyIndex = _replySelector.SelectedIndex;
+        _selectedReplyBox.Text = IsValidReplyIndex(existing, replyIndex)
+            ? existing.Replies[replyIndex].Text
+            : "";
+    }
+
+    private void SubmitThreadedCommentReplyEdit(ThreadedComment existing)
+    {
+        if (!TryCreateReplyEditResult(existing, _replySelector.SelectedIndex, _selectedReplyBox.Text, out var result, out var error))
+        {
+            ShowInvalidThreadedCommentWarning(error ?? "Enter a reply.", _selectedReplyBox);
+            return;
+        }
+
+        Result = result;
+        DialogResult = true;
+    }
+
+    private void SubmitThreadedCommentReplyDelete(ThreadedComment existing)
+    {
+        if (!TryCreateReplyDeleteResult(existing, _replySelector.SelectedIndex, out var result, out var error))
+        {
+            ShowInvalidThreadedCommentWarning(error ?? "Select a reply.", _selectedReplyBox);
+            return;
+        }
+
+        Result = result;
+        DialogResult = true;
+    }
+
+    private static bool IsValidReplyIndex(ThreadedComment comment, int replyIndex) =>
+        replyIndex >= 0 && replyIndex < comment.Replies.Count;
+
+    private static string FormatReplyChoice(int index, CommentReply reply) =>
+        $"{index + 1}. {reply.Author}: {SummarizeReplyText(reply.Text)}";
+
+    private static string FormatReplyAutomationName(int index, CommentReply reply) =>
+        $"Reply {index + 1} by {reply.Author}: {SummarizeReplyText(reply.Text)}";
+
+    private static string SummarizeReplyText(string text)
+    {
+        var normalized = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return normalized.Length <= 60 ? normalized : normalized[..57] + "...";
     }
 
     private static Border BuildMessage(string author, string text, bool isRoot)
