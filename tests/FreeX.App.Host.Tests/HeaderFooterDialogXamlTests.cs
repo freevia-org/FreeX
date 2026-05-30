@@ -1,6 +1,7 @@
 using System.IO;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -235,6 +236,47 @@ public sealed class HeaderFooterDialogXamlTests
     }
 
     [Fact]
+    public void PictureFormatDialog_SizeControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var picture = new WorksheetHeaderFooterPicture([1, 2, 3], "image/png", "logo.png", 120, 48);
+            var dialog = new HeaderFooterPictureFormatDialog(picture);
+            try
+            {
+                var widthBox = GetPrivateField<TextBox>(dialog, "_widthBox");
+                AutomationProperties.GetName(widthBox).Should().Be("Header/footer picture width");
+                AutomationProperties.GetAutomationId(widthBox).Should().Be("HeaderFooterPictureWidthBox");
+                AutomationProperties.GetHelpText(widthBox).Should().Be("Enter the header or footer picture width.");
+
+                var heightBox = GetPrivateField<TextBox>(dialog, "_heightBox");
+                AutomationProperties.GetName(heightBox).Should().Be("Header/footer picture height");
+                AutomationProperties.GetAutomationId(heightBox).Should().Be("HeaderFooterPictureHeightBox");
+                AutomationProperties.GetHelpText(heightBox).Should().Be("Enter the header or footer picture height.");
+
+                var lockAspectRatioBox = GetPrivateField<CheckBox>(dialog, "_lockAspectRatioBox");
+                AutomationProperties.GetName(lockAspectRatioBox).Should().Be("Lock aspect ratio");
+                AutomationProperties.GetAutomationId(lockAspectRatioBox).Should().Be("HeaderFooterPictureLockAspectRatioCheckBox");
+                AutomationProperties.GetHelpText(lockAspectRatioBox).Should().Be("Keep the header or footer picture width and height proportional.");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void PictureFormatDialog_ResetButtonExposesAutomationMetadata()
+    {
+        var source = ReadHeaderFooterDialogSource();
+
+        source.Should().Contain("AutomationProperties.SetName(resetButton, \"Reset picture size\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(resetButton, \"HeaderFooterPictureResetSizeButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(resetButton, \"Reset the picture width and height to the original size.\");");
+    }
+
+    [Fact]
     public void OptionalFirstAndEvenSections_AreEnabledOnlyWhenTheirOptionsAreChecked()
     {
         var source = ReadHeaderFooterDialogSource();
@@ -350,6 +392,14 @@ public sealed class HeaderFooterDialogXamlTests
         var field = typeof(HeaderFooterDialog).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static T GetPrivateField<T>(object instance, string name)
+        where T : class
+    {
+        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
     }
 
     private static string ReadHeaderFooterDialogSource() =>
