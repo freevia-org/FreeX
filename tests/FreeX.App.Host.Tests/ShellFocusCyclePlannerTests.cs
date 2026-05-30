@@ -86,6 +86,21 @@ public sealed class ShellFocusCyclePlannerTests
         next.Should().Be(ShellFocusTarget.StatusBar);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetNextAvailable_FallsBackToWorksheetWhenNoShellRegionIsAvailable(bool reverse)
+    {
+        var next = ShellFocusCyclePlanner.GetNextAvailable(
+            ShellFocusTarget.FormulaBar,
+            reverse,
+            _ => false);
+
+        next.Should().Be(
+            ShellFocusTarget.Worksheet,
+            "F6 routing should recover to the grid when transient shell state leaves no optional region focusable");
+    }
+
     private static bool IsContextualTaskPaneVisible(
         bool pivotFieldListVisible,
         bool slicerTimelineVisible) =>
