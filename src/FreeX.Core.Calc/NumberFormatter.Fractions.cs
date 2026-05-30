@@ -12,8 +12,6 @@ public static partial class NumberFormatter
     private static readonly Regex FixedFractionNumeratorPlaceholderRegex = new(@"(?<numerator>\?+)$");
     private static readonly Regex FixedDenominatorFractionFormatRegex = new(@"\?+/\d+");
     private static readonly Regex ScientificFormatRegex = new(@"E[+-]0+", RegexOptions.IgnoreCase);
-    private static readonly Regex ScientificExponentSuffixRegex = new(@"E([+-])(\d{2,})$");
-    private static readonly Regex ScientificExponentFormatRegex = new(@"E([+-])(0+)", RegexOptions.IgnoreCase);
 
     private static bool IsSimpleFractionFormat(string format)
     {
@@ -141,22 +139,13 @@ public static partial class NumberFormatter
     {
         var (prefix, numericFormat, suffix) = ExtractNumericAffixes(format);
         var stripped = FractionQuotedTextRegex.Replace(numericFormat, "");
-        var mantissa = stripped.Split(['E', 'e'], 2)[0];
-        int decimals = mantissa.Contains('.')
-            ? mantissa[(mantissa.IndexOf('.') + 1)..].Count(c => c == '0' || c == '#')
-            : 0;
-
-        string result = value.ToString("E" + decimals.ToString(CultureInfo.InvariantCulture), formatProvider);
-        result = ScientificExponentSuffixRegex.Replace(result, match =>
+        try
         {
-            string sign = match.Groups[1].Value;
-            string exponent = match.Groups[2].Value;
-            var exponentFormat = ScientificExponentFormatRegex.Match(stripped);
-            int minDigits = exponentFormat.Groups[2].Value.Length;
-            exponent = int.Parse(exponent, CultureInfo.InvariantCulture).ToString("D" + minDigits.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
-            string displaySign = exponentFormat.Groups[1].Value == "-" && sign == "+" ? "" : sign;
-            return "E" + displaySign + exponent;
-        });
-        return prefix + result + suffix;
+            return prefix + value.ToString(stripped, formatProvider) + suffix;
+        }
+        catch
+        {
+            return prefix + value.ToString(formatProvider) + suffix;
+        }
     }
 }
