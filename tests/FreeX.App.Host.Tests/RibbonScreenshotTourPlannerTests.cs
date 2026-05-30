@@ -62,6 +62,20 @@ public sealed class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void BurstPhases_CoverImmediateFirstRenderAndSettledLayoutMoments()
+    {
+        RibbonScreenshotTourPlanner.BurstPhases
+            .Select(phase => $"{phase.Label}:{phase.FileNameSuffix}")
+            .Should()
+            .Equal(
+            [
+                "immediate:immediate",
+                "first-render:first_render",
+                "settled:settled"
+            ]);
+    }
+
+    [Fact]
     public void FilterTabs_ReturnsDefaultTourWhenNoFilterIsProvided()
     {
         RibbonScreenshotTourPlanner.FilterTabs(Tabs, null)
@@ -159,6 +173,8 @@ public sealed class RibbonScreenshotTourPlannerTests
 
         plan.Tabs.Should().Equal(RibbonScreenshotTourPlanner.DefaultTabs);
         plan.Widths.Should().Equal(RibbonScreenshotTourPlanner.DefaultWidths);
+        plan.Phases.Should().Equal(RibbonScreenshotTourPlanner.DefaultPhases);
+        plan.IsBurst.Should().BeFalse();
         plan.Captures.Should().HaveCount(
             RibbonScreenshotTourPlanner.DefaultTabs.Count *
             RibbonScreenshotTourPlanner.DefaultWidths.Count);
@@ -170,6 +186,29 @@ public sealed class RibbonScreenshotTourPlannerTests
                 RibbonScreenshotTourPlanner.DefaultWidths.SelectMany(width =>
                     RibbonScreenshotTourPlanner.DefaultTabs.Select(tab =>
                         $"{width.Label}:{tab.Header}:{width.Label}_{tab.FileName}")));
+    }
+
+    [Fact]
+    public void CreatePlan_WithBurstMode_CapturesEveryTabWidthAcrossTransientLayoutPhases()
+    {
+        var plan = RibbonScreenshotTourPlanner.CreatePlan("Home,Data", "900", burstMode: true);
+
+        plan.Tabs.Should().Equal([new("Home", "Home"), new("Data", "Data")]);
+        plan.Widths.Should().Equal([new("900", 900)]);
+        plan.Phases.Should().Equal(RibbonScreenshotTourPlanner.BurstPhases);
+        plan.IsBurst.Should().BeTrue();
+        plan.Captures
+            .Select(capture => $"{capture.Width.Label}:{capture.Tab.Header}:{capture.Phase.Label}:{capture.FileName}")
+            .Should()
+            .Equal(
+            [
+                "900:Home:immediate:900_Home_immediate",
+                "900:Home:first-render:900_Home_first_render",
+                "900:Home:settled:900_Home_settled",
+                "900:Data:immediate:900_Data_immediate",
+                "900:Data:first-render:900_Data_first_render",
+                "900:Data:settled:900_Data_settled"
+            ]);
     }
 
     [Fact]
@@ -195,9 +234,12 @@ public sealed class RibbonScreenshotTourPlannerTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ScreenshotTour.cs"));
 
         source.Should().Contain("RibbonScreenshotTourPlanner.CreatePlan");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_BURST\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_TABS\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_WIDTHS\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
+        source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
+        source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("throw new InvalidOperationException");
     }
 }

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -21,7 +22,8 @@ public partial class MainWindow
     // Activated by FREEX_SS_TOUR=1 env var.  Output lands in <repo-root>/screenshots/.
     private async void TryStartScreenshotTour()
     {
-        var ribbonTour = Environment.GetEnvironmentVariable("FREEX_SS_TOUR") == "1";
+        var ribbonBurstTour = Environment.GetEnvironmentVariable("FREEX_SS_TOUR_BURST") == "1";
+        var ribbonTour = ribbonBurstTour || Environment.GetEnvironmentVariable("FREEX_SS_TOUR") == "1";
         var backstageTour = Environment.GetEnvironmentVariable("FREEX_BACKSTAGE_TOUR") == "1";
         if (!ribbonTour && !backstageTour)
             return;
@@ -29,7 +31,8 @@ public partial class MainWindow
         var ribbonPlan = ribbonTour
             ? RibbonScreenshotTourPlanner.CreatePlan(
                 Environment.GetEnvironmentVariable("FREEX_SS_TOUR_TABS"),
-                Environment.GetEnvironmentVariable("FREEX_SS_TOUR_WIDTHS"))
+                Environment.GetEnvironmentVariable("FREEX_SS_TOUR_WIDTHS"),
+                ribbonBurstTour)
             : null;
 
         var outputDir = Path.GetFullPath(
@@ -66,6 +69,12 @@ public partial class MainWindow
 
     private async Task CaptureRibbonTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
     {
+        if (plan.IsBurst)
+        {
+            await CaptureRibbonBurstTourAsync(outputDir, plan);
+            return;
+        }
+
         RibbonScreenshotTourWidth? activeWidth = null;
         foreach (var capture in plan.Captures)
         {
@@ -81,35 +90,96 @@ public partial class MainWindow
 
     private async Task ApplyScreenshotTourWidthAsync(RibbonScreenshotTourWidth width)
     {
-        if (width.WindowWidth is { } windowWidth)
+        ApplyScreenshotTourWidth(width);
+
+        if (width.WindowWidth is not null)
         {
-            WindowState = WindowState.Normal;
-            Width = windowWidth;
-            Height = 768;
             await Task.Delay(600);
             return;
         }
 
-        WindowState = WindowState.Maximized;
         await Task.Delay(1200);
     }
 
     private async Task CaptureRibbonTabAsync(string outputDir, RibbonScreenshotTourCapture capture)
     {
-        var tab = RibbonTabs.Items
-            .OfType<System.Windows.Controls.TabItem>()
-            .FirstOrDefault(item => string.Equals(item.Header?.ToString(), capture.Tab.Header, StringComparison.Ordinal));
-
-        if (tab is null)
-            throw new InvalidOperationException(
-                $"Ribbon screenshot tour expected tab '{capture.Tab.Header}' but it was not found in the live ribbon.");
-
-        RibbonTabs.SelectedItem = tab;
+        SelectRibbonTourTab(capture.Tab);
         UpdateLayout();
         await Task.Delay(350);
         UpdateLayout();
 
         await CaptureCurrentWindowAsync(outputDir, capture.FileName, ScreenshotTourCaptureHeight);
+    }
+
+    private async Task CaptureRibbonBurstTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
+    {
+        foreach (var width in plan.Widths)
+        {
+            ApplyScreenshotTourWidth(width);
+
+            foreach (var tab in plan.Tabs)
+            {
+                SelectRibbonTourTab(tab);
+
+                foreach (var phase in plan.Phases)
+                {
+                    await PrepareRibbonBurstCapturePhaseAsync(phase);
+                    var capture = new RibbonScreenshotTourCapture(tab, width, phase);
+                    await CaptureCurrentWindowAsync(outputDir, capture.FileName, ScreenshotTourCaptureHeight);
+                }
+            }
+        }
+    }
+
+    private void ApplyScreenshotTourWidth(RibbonScreenshotTourWidth width)
+    {
+        if (width.WindowWidth is { } windowWidth)
+        {
+            WindowState = WindowState.Normal;
+            Width = windowWidth;
+            Height = 768;
+            return;
+        }
+
+        WindowState = WindowState.Maximized;
+    }
+
+    private void SelectRibbonTourTab(RibbonScreenshotTourTab tab)
+    {
+        var tabItem = RibbonTabs.Items
+            .OfType<System.Windows.Controls.TabItem>()
+            .FirstOrDefault(item => string.Equals(item.Header?.ToString(), tab.Header, StringComparison.Ordinal));
+
+        if (tabItem is null)
+            throw new InvalidOperationException(
+                $"Ribbon screenshot tour expected tab '{tab.Header}' but it was not found in the live ribbon.");
+
+        RibbonTabs.SelectedItem = tabItem;
+    }
+
+    private async Task PrepareRibbonBurstCapturePhaseAsync(RibbonScreenshotTourPhase phase)
+    {
+        switch (phase.Label)
+        {
+            case "immediate":
+                UpdateLayout();
+                return;
+            case "first-render":
+                await WaitForRibbonScreenshotRenderPassAsync();
+                return;
+            case "settled":
+                await Task.Delay(350);
+                UpdateLayout();
+                await WaitForRibbonScreenshotRenderPassAsync();
+                return;
+            default:
+                throw new InvalidOperationException($"Unknown ribbon screenshot tour burst phase '{phase.Label}'.");
+        }
+    }
+
+    private async Task WaitForRibbonScreenshotRenderPassAsync()
+    {
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
     }
 
     private async Task CaptureCurrentWindowAsync(string outputDir, string fileName, double logicalHeight)
