@@ -6,6 +6,24 @@ public static partial class FlashFillService
 {
     private delegate bool NameCleaner(string source, out string name);
 
+    private enum DatePartKind
+    {
+        Year,
+        Month,
+        Day
+    }
+
+    private readonly record struct DateParts(int Year, int Month, int Day);
+
+    private readonly record struct DateOutputPattern(
+        DatePartKind First,
+        DatePartKind Second,
+        DatePartKind Third,
+        char Separator,
+        int YearWidth,
+        int MonthWidth,
+        int DayWidth);
+
     // Delimiters tried in order for extract-by-delimiter, token casing, and initials patterns.
     private static readonly char[] Delimiters = [' ', ',', ';', ':', '|', '-', '_', '@', '.', '/', '\\'];
     private static readonly char[] DateComponentSeparators = ['/', '-', '.'];
@@ -455,6 +473,155 @@ public static partial class FlashFillService
         return false;
     }
 
+    private static Func<string, string?>? TryDateNormalization(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        DateOutputPattern? outputPattern = null;
+        var changedAny = false;
+
+        foreach (var (source, expected) in examples)
+        {
+            if (!TryParseDateLikeValue(source, out var sourceDate, out _) ||
+                !TryParseDateLikeValue(expected, out var expectedDate, out var currentPattern) ||
+                sourceDate != expectedDate)
+            {
+                return null;
+            }
+
+            if (outputPattern is null)
+                outputPattern = currentPattern;
+            else if (outputPattern.Value != currentPattern)
+                return null;
+
+            changedAny |= !string.Equals(source, expected, StringComparison.Ordinal);
+        }
+
+        if (outputPattern is null || !changedAny)
+            return null;
+
+        var pattern = outputPattern.Value;
+        return source => TryParseDateLikeValue(source, out var date, out _)
+            ? FormatDateParts(date, pattern)
+            : null;
+    }
+
+    private static bool TryParseDateLikeValue(
+        string source,
+        out DateParts date,
+        out DateOutputPattern pattern)
+    {
+        date = default;
+        pattern = default;
+
+        if (!TrySplitDateLikeText(source, out var parts, out var separator))
+            return false;
+
+        var yearIndex = Array.FindIndex(parts, part => part.Length == 4);
+        if (yearIndex < 0 ||
+            Array.FindLastIndex(parts, part => part.Length == 4) != yearIndex ||
+            (yearIndex != 0 && yearIndex != 2))
+        {
+            return false;
+        }
+
+        var order = yearIndex == 0
+            ? new[] { DatePartKind.Year, DatePartKind.Month, DatePartKind.Day }
+            : new[] { DatePartKind.Month, DatePartKind.Day, DatePartKind.Year };
+
+        if (!TryCreateDateParts(parts, order, out date))
+            return false;
+
+        pattern = new DateOutputPattern(
+            order[0],
+            order[1],
+            order[2],
+            separator,
+            parts[Array.IndexOf(order, DatePartKind.Year)].Length,
+            parts[Array.IndexOf(order, DatePartKind.Month)].Length,
+            parts[Array.IndexOf(order, DatePartKind.Day)].Length);
+        return true;
+    }
+
+    private static bool TrySplitDateLikeText(string source, out string[] parts, out char separator)
+    {
+        foreach (var candidate in DateComponentSeparators)
+        {
+            var split = source.Split(candidate, StringSplitOptions.TrimEntries);
+            if (split.Length == 3 &&
+                split.All(part => part.Length > 0 && part.All(char.IsDigit)))
+            {
+                parts = split;
+                separator = candidate;
+                return true;
+            }
+        }
+
+        parts = [];
+        separator = default;
+        return false;
+    }
+
+    private static bool TryCreateDateParts(string[] parts, DatePartKind[] order, out DateParts date)
+    {
+        date = default;
+        if (parts.Length != 3 || order.Length != 3)
+            return false;
+
+        if (!TryGetDatePartValue(parts, order, DatePartKind.Year, out var year) ||
+            !TryGetDatePartValue(parts, order, DatePartKind.Month, out var month) ||
+            !TryGetDatePartValue(parts, order, DatePartKind.Day, out var day) ||
+            year is < 1000 or > 9999 ||
+            month is < 1 or > 12 ||
+            day < 1 ||
+            day > DateTime.DaysInMonth(year, month))
+        {
+            return false;
+        }
+
+        date = new DateParts(year, month, day);
+        return true;
+    }
+
+    private static bool TryGetDatePartValue(
+        string[] parts,
+        DatePartKind[] order,
+        DatePartKind kind,
+        out int value)
+    {
+        value = 0;
+        var index = Array.IndexOf(order, kind);
+        return index >= 0 &&
+            int.TryParse(parts[index], NumberStyles.None, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static string FormatDateParts(DateParts date, DateOutputPattern pattern) =>
+        string.Join(
+            pattern.Separator,
+            new[]
+            {
+                FormatDatePart(date, pattern.First, pattern),
+                FormatDatePart(date, pattern.Second, pattern),
+                FormatDatePart(date, pattern.Third, pattern)
+            });
+
+    private static string FormatDatePart(DateParts date, DatePartKind kind, DateOutputPattern pattern)
+    {
+        var value = kind switch
+        {
+            DatePartKind.Year => date.Year,
+            DatePartKind.Month => date.Month,
+            _ => date.Day
+        };
+
+        var width = kind switch
+        {
+            DatePartKind.Year => pattern.YearWidth,
+            DatePartKind.Month => pattern.MonthWidth,
+            _ => pattern.DayWidth
+        };
+
+        return value.ToString("D" + width.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+    }
+
     private static Func<string, string?>? TryDelimitedPartCaseTransform(
         IReadOnlyList<(string Source, string Expected)> examples)
     {
@@ -741,6 +908,53 @@ public static partial class FlashFillService
                 return null;
 
             return ApplyDigitMask(source, mask);
+        };
+    }
+
+    private static Func<string, string?>? TryPhoneNumberNormalization(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        string? mask = null;
+        int? digitCount = null;
+        var sawFormattedSource = false;
+
+        foreach (var (source, expected) in examples)
+        {
+            var sourceDigits = ExtractDigits(source);
+            var expectedDigits = ExtractDigits(expected);
+            if (sourceDigits.Length == 0 ||
+                expectedDigits.Length is < 7 or > 15 ||
+                !sourceDigits.EndsWith(expectedDigits, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            var currentMask = CreateDigitMask(expected);
+            if (currentMask == expected || string.IsNullOrWhiteSpace(currentMask))
+                return null;
+
+            if (mask is null)
+            {
+                mask = currentMask;
+                digitCount = expectedDigits.Length;
+            }
+            else if (mask != currentMask || digitCount != expectedDigits.Length)
+            {
+                return null;
+            }
+
+            sawFormattedSource |= source.Any(c => !char.IsDigit(c));
+        }
+
+        if (mask is null || digitCount is null || !sawFormattedSource)
+            return null;
+
+        return source =>
+        {
+            var digits = ExtractDigits(source);
+            if (digits.Length < digitCount.Value)
+                return null;
+
+            return ApplyDigitMask(digits[^digitCount.Value..], mask);
         };
     }
 
