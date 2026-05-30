@@ -912,6 +912,63 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void SubtotalDialog_ControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SubtotalDialog(
+                [
+                    new SubtotalColumnChoice(0, "Region", false),
+                    new SubtotalColumnChoice(1, "Sales", true),
+                    new SubtotalColumnChoice(2, "Units", true)
+                ]);
+            dialog.Show();
+            try
+            {
+                var comboBoxes = FindVisualChildren<ComboBox>(dialog).ToList();
+                var groupColumnBox = comboBoxes.Single(box => AutomationProperties.GetAutomationId(box) == "SubtotalGroupColumnBox");
+                AutomationProperties.GetName(groupColumnBox).Should().Be("At each change in");
+                AutomationProperties.GetHelpText(groupColumnBox).Should().Be("Choose the column that defines each subtotal group.");
+
+                var functionBox = comboBoxes.Single(box => AutomationProperties.GetAutomationId(box) == "SubtotalFunctionBox");
+                AutomationProperties.GetName(functionBox).Should().Be("Use function");
+                AutomationProperties.GetHelpText(functionBox).Should().Be("Choose the function used to calculate each subtotal.");
+
+                var columnsPanel = FindVisualChildren<StackPanel>(dialog)
+                    .Single(panel => AutomationProperties.GetAutomationId(panel) == "SubtotalColumnsPanel");
+                AutomationProperties.GetName(columnsPanel).Should().Be("Add subtotal to");
+                AutomationProperties.GetHelpText(columnsPanel).Should().Be("Choose columns that receive subtotal calculations.");
+
+                var salesBox = FindVisualChildren<CheckBox>(dialog)
+                    .Single(box => AutomationProperties.GetAutomationId(box) == "SubtotalColumn1Box");
+                AutomationProperties.GetName(salesBox).Should().Be("Sales subtotal column");
+                AutomationProperties.GetHelpText(salesBox).Should().Be("Select to add a subtotal calculation to this column.");
+
+                AssertCheckBoxAutomation("SubtotalReplaceCurrentBox", "Replace current subtotals", "Replace existing subtotals with the new subtotal settings.");
+                AssertCheckBoxAutomation("SubtotalPageBreakBox", "Page break between groups", "Insert a page break after each subtotal group.");
+                AssertCheckBoxAutomation("SubtotalSummaryBelowBox", "Summary below data", "Place subtotal rows below each group.");
+
+                var removeAll = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetAutomationId(button) == "SubtotalRemoveAllButton");
+                AutomationProperties.GetName(removeAll).Should().Be("Remove all subtotals");
+                AutomationProperties.GetHelpText(removeAll).Should().Be("Remove all subtotal rows from the selected data.");
+
+                void AssertCheckBoxAutomation(string automationId, string name, string helpText)
+                {
+                    var checkBox = FindVisualChildren<CheckBox>(dialog)
+                        .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
+                    AutomationProperties.GetName(checkBox).Should().Be(name);
+                    AutomationProperties.GetHelpText(checkBox).Should().Be(helpText);
+                }
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void SubtotalDialog_ExposesKeyboardAccessKeysForStaticOptions()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SubtotalDialog.cs"));
