@@ -224,10 +224,14 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=EDATE(DATE(1900,1,1),1)", 32)]
     [InlineData("=EDATE(DATE(1900,1,31),1)", 59)]
     [InlineData("=EDATE(DATE(1900,2,28),1)", 88)]
+    [InlineData("=EDATE(DATE(1900,2,29),0)", 60)]
+    [InlineData("=EDATE(DATE(1900,2,29),1)", 89)]
+    [InlineData("=EDATE(DATE(1900,2,29),-1)", 29)]
     [InlineData("=EOMONTH(DATE(1900,1,1),0)", 31)]
     [InlineData("=EOMONTH(DATE(1900,1,1),1)", 59)]
     [InlineData("=EOMONTH(DATE(1900,2,1),0)", 59)]
     [InlineData("=EOMONTH(DATE(1900,2,28),0)", 59)]
+    [InlineData("=EOMONTH(DATE(1900,2,29),0)", 60)]
     [InlineData("=EOMONTH(DATE(1900,3,1),0)", 91)]
     public void DateOffsetFunctions_ReturnExcelSerialNumbers(string formula, double expected)
     {

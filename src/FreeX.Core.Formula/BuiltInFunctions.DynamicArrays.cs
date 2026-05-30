@@ -55,7 +55,7 @@ public static partial class BuiltInFunctions
         int cols = (int)colsD;
         if (rows < 1 || cols < 1) return ErrorValue.Value;
         if ((long)rows * cols > 1_000_000) return ErrorValue.Value;
-        if (!double.IsFinite(min) || !double.IsFinite(max) || min > max) return ErrorValue.Value;
+        if (!double.IsFinite(min) || !double.IsFinite(max) || min >= max) return ErrorValue.Value;
 
         if (wholeNumber)
         {
