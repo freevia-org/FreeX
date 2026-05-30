@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -168,6 +169,33 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("FocusRangeInput();");
         source.Should().Contain("private void FocusRangeInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_rangeBox);");
+    }
+
+    [Fact]
+    public void ProtectionPasswordFields_ExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var protectDialog = new PasswordProtectionDialog("Protect Sheet", "_Password (optional):");
+            var confirmDialog = new ConfirmPasswordDialog("secret");
+            try
+            {
+                var passwordBox = GetPrivateField<PasswordBox>(protectDialog, "_passwordBox");
+                AutomationProperties.GetName(passwordBox).Should().Be("Protection password");
+                AutomationProperties.GetAutomationId(passwordBox).Should().Be("ProtectionPasswordBox");
+                AutomationProperties.GetHelpText(passwordBox).Should().Be("Enter the optional password for protecting the sheet or workbook.");
+
+                var confirmationBox = GetPrivateField<PasswordBox>(confirmDialog, "_confirmationBox");
+                AutomationProperties.GetName(confirmationBox).Should().Be("Confirm protection password");
+                AutomationProperties.GetAutomationId(confirmationBox).Should().Be("ConfirmProtectionPasswordBox");
+                AutomationProperties.GetHelpText(confirmationBox).Should().Be("Reenter the password to confirm protection.");
+            }
+            finally
+            {
+                protectDialog.Close();
+                confirmDialog.Close();
+            }
+        });
     }
 
     [Fact]
