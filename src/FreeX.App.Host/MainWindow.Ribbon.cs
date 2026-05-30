@@ -1340,24 +1340,13 @@ public partial class MainWindow
 
     private static FrameworkElement CreateStaticRibbonCommandIcon(ButtonBase owner, RibbonIcon source, bool tall)
     {
-        var commandName = source.Kind == RibbonCommandIconKind.Previous
+        var commandName = !string.IsNullOrWhiteSpace(source.CommandName)
+            ? source.CommandName.Trim()
+            : source.Kind == RibbonCommandIconKind.Previous
             ? "Back to workbook"
             : GetStaticRibbonIconCommandName(owner, source.Kind.ToString());
         var fallbackIcon = new RibbonCommandIcon(source.Kind);
         var iconSize = IsWhiteBrush(source.Foreground) ? source.IconSize : tall ? 32 : 22;
-        if (IsWhiteBrush(source.Foreground))
-        {
-            var fallbackElement = RibbonIconFactory.CreateIcon(
-                fallbackIcon,
-                iconSize,
-                source.Foreground ?? owner.Foreground);
-            RibbonMetadata.SetRole(fallbackElement, RibbonMetadataRole.CommandIcon);
-            fallbackElement.HorizontalAlignment = source.HorizontalAlignment;
-            fallbackElement.VerticalAlignment = source.VerticalAlignment;
-            fallbackElement.Margin = source.Margin;
-            return fallbackElement;
-        }
-
         var commandIcon = RibbonIconFactory.CreateCommandIcon(
             commandName,
             fallbackIcon,

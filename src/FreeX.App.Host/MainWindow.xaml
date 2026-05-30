@@ -289,39 +289,21 @@
                                     </StackPanel>
                                 </Button>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Top" Margin="2,1,0,0">
-                                    <Button Click="CutBtn_Click" Width="126" Height="20" Margin="1,0"
+                                    <Button Content="Cut" Click="CutBtn_Click" Width="126" Height="20" Margin="1,0"
                                             Style="{StaticResource RibbonBtn}" HorizontalContentAlignment="Left"
                                             local:RibbonTooltip.Title="Cut"
                                             local:RibbonTooltip.KeyTip="X"
-                                            local:RibbonTooltip.Description="Cut the selection and put it on the Clipboard (Ctrl+X).">
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <local:RibbonIcon Kind="Cut" IconSize="10"
-                                                              VerticalAlignment="Center" Margin="0,0,2,0"/>
-                                            <TextBlock Text="Cut" VerticalAlignment="Center" FontSize="10"/>
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Click="CopyBtn_Click" Width="126" Height="20" Margin="1,1,0,0"
+                                            local:RibbonTooltip.Description="Cut the selection and put it on the Clipboard (Ctrl+X)."/>
+                                    <Button Content="Copy" Click="CopyBtn_Click" Width="126" Height="20" Margin="1,1,0,0"
                                             Style="{StaticResource RibbonBtn}" HorizontalContentAlignment="Left"
                                             local:RibbonTooltip.Title="Copy"
                                             local:RibbonTooltip.KeyTip="C"
-                                            local:RibbonTooltip.Description="Copy the selection and put it on the Clipboard (Ctrl+C).">
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                            <local:RibbonIcon Kind="Copy" IconSize="10"
-                                                              VerticalAlignment="Center" Margin="0,0,2,0"/>
-                                            <TextBlock Text="Copy" VerticalAlignment="Center" FontSize="10"/>
-                                        </StackPanel>
-                                    </Button>
-                                    <Button Click="FormatPainterBtn_Click" PreviewMouseLeftButtonDown="FormatPainterBtn_PreviewMouseLeftButtonDown" Width="126" Height="20" Margin="1,1,0,0"
+                                            local:RibbonTooltip.Description="Copy the selection and put it on the Clipboard (Ctrl+C)."/>
+                                    <Button Content="Format Painter" Click="FormatPainterBtn_Click" PreviewMouseLeftButtonDown="FormatPainterBtn_PreviewMouseLeftButtonDown" Width="126" Height="20" Margin="1,1,0,0"
                                             Style="{StaticResource RibbonBtn}" HorizontalContentAlignment="Left"
                                             local:RibbonTooltip.Title="Format Painter"
                                             local:RibbonTooltip.KeyTip="FP"
-                                            local:RibbonTooltip.Description="Copy formatting from one place and apply it to another.">
-                                        <StackPanel Orientation="Horizontal">
-                                            <local:RibbonIcon Kind="FormatPainter" IconSize="11"
-                                                              VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                            <TextBlock Text="Format Painter" local:RibbonMetadata.Role="CommandLabel" VerticalAlignment="Center" FontSize="10"/>
-                                        </StackPanel>
-                                    </Button>
+                                            local:RibbonTooltip.Description="Copy formatting from one place and apply it to another."/>
                                 </StackPanel>
                             </Grid>
                             <Border Grid.Row="1" Style="{StaticResource RibbonGroupLabelBorder}">
@@ -996,7 +978,7 @@
                                 <RowDefinition Height="18"/>
                             </Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Margin="0,0,2,0">
-                                <Button Style="{StaticResource RibbonCommandButton}" Height="24" local:RibbonMetadata.CompactFullWidth="92" local:RibbonMetadata.CompactWidth="24"
+                                <Button Content="Insert" Style="{StaticResource RibbonCommandButton}" Height="24" local:RibbonMetadata.CompactFullWidth="92" local:RibbonMetadata.CompactWidth="24"
                                         Click="InsertPickerBtn_Click"
                                         local:RibbonTooltip.Title="Insert"
                                         local:RibbonTooltip.KeyTip="I"
@@ -1009,13 +991,8 @@
                                             <MenuItem Header="Insert Sheet"           local:RibbonTooltip.KeyTip="S" Click="InsertSheetMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <local:RibbonIcon Kind="Insert" IconSize="11"
-                                                          VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                        <TextBlock Text="Insert" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
-                                    </StackPanel>
                                 </Button>
-                                <Button Style="{StaticResource RibbonCommandButton}" Height="24" local:RibbonMetadata.CompactFullWidth="92" local:RibbonMetadata.CompactWidth="24"
+                                <Button Content="Delete" Style="{StaticResource RibbonCommandButton}" Height="24" local:RibbonMetadata.CompactFullWidth="92" local:RibbonMetadata.CompactWidth="24"
                                         Click="DeletePickerBtn_Click"
                                         local:RibbonTooltip.Title="Delete"
                                         local:RibbonTooltip.KeyTip="D"
@@ -1028,13 +1005,8 @@
                                             <MenuItem Header="Delete Sheet"           local:RibbonTooltip.KeyTip="S" Click="DeleteSheetMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <local:RibbonIcon Kind="Delete" IconSize="11"
-                                                          VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                        <TextBlock Text="Delete" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
-                                    </StackPanel>
                                 </Button>
-                                <Button Style="{StaticResource RibbonCommandButton}" Height="24" local:RibbonMetadata.CompactFullWidth="92" local:RibbonMetadata.CompactWidth="24"
+                                <Button Content="Format" Style="{StaticResource RibbonCommandButton}" Height="24" local:RibbonMetadata.CompactFullWidth="92" local:RibbonMetadata.CompactWidth="24"
                                         Click="FormatPickerBtn_Click"
                                         local:RibbonTooltip.Title="Format"
                                         local:RibbonTooltip.KeyTip="O"
@@ -1063,11 +1035,6 @@
                                             <MenuItem Header="Format Cells..."        local:RibbonTooltip.KeyTip="F" Click="FormatCellsMenuItem_Click"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <local:RibbonIcon Kind="FormatPainter" IconSize="11"
-                                                          VerticalAlignment="Center" Margin="0,0,3,0"/>
-                                        <TextBlock Text="Format" local:RibbonMetadata.Role="CommandLabel" FontSize="10" VerticalAlignment="Center"/>
-                                    </StackPanel>
                                 </Button>
                             </StackPanel>
                             <Border Grid.Row="1" Style="{StaticResource RibbonGroupLabelBorder}">
