@@ -2207,11 +2207,30 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
-    public void CreateTableDialog_RangeEditorExposesAutomationName()
+    public void CreateTableDialog_ControlsExposeAutomationMetadata()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateTableDialog.cs"));
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new CreateTableDialog(SheetId.New(), "A1:C12", "TableStyleMedium2");
+            dialog.Show();
+            try
+            {
+                var rangeBox = FindVisualChildren<TextBox>(dialog).Single();
+                AutomationProperties.GetName(rangeBox).Should().Be("Table range");
+                AutomationProperties.GetAutomationId(rangeBox).Should().Be("CreateTableRangeBox");
+                AutomationProperties.GetHelpText(rangeBox).Should().Be("Enter the range of worksheet cells to convert into a table.");
 
-        source.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Table range\");");
+                var headersBox = FindVisualChildren<CheckBox>(dialog)
+                    .Single(box => Equals(box.Content, "_My table has headers"));
+                AutomationProperties.GetName(headersBox).Should().Be("My table has headers");
+                AutomationProperties.GetAutomationId(headersBox).Should().Be("CreateTableHeadersBox");
+                AutomationProperties.GetHelpText(headersBox).Should().Be("Select when the first row of the table range contains column headers.");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]

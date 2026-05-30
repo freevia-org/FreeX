@@ -37,6 +37,11 @@ public sealed class CreateTableDialog : Window
 
         _rangeBox.Text = defaultRangeText;
         AutomationProperties.SetName(_rangeBox, "Table range");
+        AutomationProperties.SetAutomationId(_rangeBox, "CreateTableRangeBox");
+        AutomationProperties.SetHelpText(_rangeBox, "Enter the range of worksheet cells to convert into a table.");
+        AutomationProperties.SetName(_headersBox, "My table has headers");
+        AutomationProperties.SetAutomationId(_headersBox, "CreateTableHeadersBox");
+        AutomationProperties.SetHelpText(_headersBox, "Select when the first row of the table range contains column headers.");
         var root = new StackPanel { Margin = new Thickness(16) };
         root.Children.Add(new Label { Content = "_Where is the data for your table?", Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         root.Children.Add(CreateReferenceEditor(_rangeBox, "Select table range", RequestRangeSelection));
