@@ -188,14 +188,18 @@ public partial class MainWindow
         }
         else if (styleOptionChanged)
         {
-            commands.Add(new ConfigureStructuredTableStyleOptionsCommand(
+            commands.Add(new ReapplyStructuredTableStyleCommand(
                 _currentSheetId,
                 table.Id,
-                showFirstColumn ?? table.ShowFirstColumn,
-                showLastColumn ?? table.ShowLastColumn,
-                showRowStripes ?? table.ShowRowStripes,
-                showColumnStripes ?? table.ShowColumnStripes,
+                showFirstColumn: showFirstColumn,
+                showLastColumn: showLastColumn,
+                showRowStripes: showRowStripes,
+                showColumnStripes: showColumnStripes,
                 hasAutoFilter: hasAutoFilter));
+        }
+        else if (totalsRowChanged)
+        {
+            commands.Add(new ReapplyStructuredTableStyleCommand(_currentSheetId, table.Id));
         }
 
         if (commands.Count == 0)
