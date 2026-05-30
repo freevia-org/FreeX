@@ -18,6 +18,9 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static readonly XName SpreadsheetTypeAttribute = SpreadsheetNs + "Type";
     private static readonly XName SpreadsheetMergeAcrossAttribute = SpreadsheetNs + "MergeAcross";
     private static readonly XName SpreadsheetMergeDownAttribute = SpreadsheetNs + "MergeDown";
+    private static readonly XName SpreadsheetIdAttribute = SpreadsheetNs + "ID";
+    private static readonly XName SpreadsheetStyleIdAttribute = SpreadsheetNs + "StyleID";
+    private static readonly XName SpreadsheetFormatAttribute = SpreadsheetNs + "Format";
     private static readonly XName SpreadsheetHrefAttribute = SpreadsheetNs + "HRef";
     private static readonly XName SpreadsheetHrefScreenTipAttribute = SpreadsheetNs + "HRefScreenTip";
     private static readonly XName SpreadsheetAuthorAttribute = SpreadsheetNs + "Author";
@@ -41,6 +44,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             throw new InvalidDataException("The XML document is not an Excel XML Spreadsheet 2003 workbook.");
 
         var workbook = new Workbook("XML Spreadsheet");
+        var styles = ReadStyles(workbook, document.Root);
         var sheetIndex = 1;
         foreach (var worksheetElement in document.Root.Elements(SpreadsheetNs + "Worksheet"))
         {
@@ -50,7 +54,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 sheetIndex++);
             var sheet = workbook.AddSheet(sheetName);
             ReadWorksheetVisibility(sheet, worksheetElement);
-            ReadWorksheet(sheet, worksheetElement);
+            ReadWorksheet(sheet, worksheetElement, styles);
         }
 
         if (workbook.Sheets.Count == 0)
@@ -133,7 +137,33 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                          string.Equals(visibility, "SheetHidden", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void ReadWorksheet(Sheet sheet, XElement worksheetElement)
+    private static Dictionary<string, StyleId> ReadStyles(Workbook workbook, XElement workbookElement)
+    {
+        var styles = new Dictionary<string, StyleId>(StringComparer.Ordinal);
+        var stylesElement = workbookElement.Element(SpreadsheetNs + "Styles");
+        if (stylesElement is null)
+            return styles;
+
+        foreach (var styleElement in stylesElement.Elements(SpreadsheetNs + "Style"))
+        {
+            var id = styleElement.Attribute(SpreadsheetIdAttribute)?.Value;
+            if (string.IsNullOrWhiteSpace(id))
+                continue;
+
+            var numberFormat = styleElement
+                .Element(SpreadsheetNs + "NumberFormat")
+                ?.Attribute(SpreadsheetFormatAttribute)
+                ?.Value;
+            if (string.IsNullOrWhiteSpace(numberFormat))
+                continue;
+
+            styles[id] = workbook.RegisterStyle(new CellStyle { NumberFormat = numberFormat });
+        }
+
+        return styles;
+    }
+
+    private static void ReadWorksheet(Sheet sheet, XElement worksheetElement, IReadOnlyDictionary<string, StyleId> styles)
     {
         var tableElement = worksheetElement.Element(SpreadsheetNs + "Table");
         if (tableElement is null)
@@ -158,10 +188,16 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                     break;
 
                 var address = new CellAddress(sheet.Id, rowIndex, columnIndex);
-                var cell = ReadCell(cellElement);
+                var cell = ReadCell(cellElement, styles);
                 var hyperlinkTarget = cellElement.Attribute(SpreadsheetHrefAttribute)?.Value;
                 if (cell.Value is not BlankValue || cell.FormulaText is not null || !string.IsNullOrWhiteSpace(hyperlinkTarget))
+                {
                     sheet.SetCell(address, cell);
+                }
+                else if (cell.StyleId != StyleId.Default)
+                {
+                    sheet.SetStyleOnly(rowIndex, columnIndex, cell.StyleId);
+                }
 
                 if (!string.IsNullOrWhiteSpace(hyperlinkTarget))
                 {
@@ -238,18 +274,28 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             sheet.HiddenRows.Add(rowIndex);
     }
 
-    private static Cell ReadCell(XElement cellElement)
+    private static Cell ReadCell(XElement cellElement, IReadOnlyDictionary<string, StyleId> styles)
     {
         var value = ReadValue(cellElement.Element(SpreadsheetNs + "Data"));
         var formula = cellElement.Attribute(SpreadsheetFormulaAttribute)?.Value;
+        var styleId = ReadStyleId(cellElement, styles);
         if (string.IsNullOrWhiteSpace(formula))
-            return Cell.FromValue(value);
+            return new Cell { Value = value, StyleId = styleId };
 
         return new Cell
         {
             FormulaText = formula.StartsWith("=", StringComparison.Ordinal) ? formula[1..] : formula,
-            Value = value
+            Value = value,
+            StyleId = styleId
         };
+    }
+
+    private static StyleId ReadStyleId(XElement cellElement, IReadOnlyDictionary<string, StyleId> styles)
+    {
+        var styleId = cellElement.Attribute(SpreadsheetStyleIdAttribute)?.Value;
+        return styleId is not null && styles.TryGetValue(styleId, out var registeredStyleId)
+            ? registeredStyleId
+            : StyleId.Default;
     }
 
     private static ScalarValue ReadValue(XElement? dataElement)

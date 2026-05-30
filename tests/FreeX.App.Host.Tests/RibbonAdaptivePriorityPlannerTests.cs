@@ -30,13 +30,16 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     }
 
     [Fact]
-    public void RuntimeVisibilityOverrides_KeepDataToolsIconOnlyAtMediumWidths()
+    public void RuntimeVisibilityOverrides_KeepMediumDataPriorityGroupsIconOnly()
     {
         var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
 
         var decisions = RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityOverrides(1120, groupNames);
 
-        decisions.Should().ContainSingle(decision =>
+        decisions.Should().Contain(decision =>
+            decision.Index == Array.IndexOf(groupNames, "Sort & Filter") &&
+            decision.State == RibbonAdaptiveGroupState.IconOnly);
+        decisions.Should().Contain(decision =>
             decision.Index == Array.IndexOf(groupNames, "Data Tools") &&
             decision.State == RibbonAdaptiveGroupState.IconOnly);
     }
@@ -55,13 +58,16 @@ public sealed class RibbonAdaptivePriorityPlannerTests
             groupNames,
             selectedTabHeader: "Data");
 
-        decisions.Should().ContainSingle(decision =>
+        decisions.Should().Contain(decision =>
+            decision.Index == Array.IndexOf(groupNames, "Sort & Filter") &&
+            decision.State == RibbonAdaptiveGroupState.IconOnly);
+        decisions.Should().Contain(decision =>
             decision.Index == Array.IndexOf(groupNames, "Data Tools") &&
             decision.State == RibbonAdaptiveGroupState.IconOnly);
     }
 
     [Fact]
-    public void ApplyRuntimeVisibilityStates_ContributesDataToolsIconOnlyStateToPurePlan()
+    public void ApplyRuntimeVisibilityStates_ContributesMediumDataPriorityIconOnlyStatesToPurePlan()
     {
         var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
 
@@ -70,8 +76,12 @@ public sealed class RibbonAdaptivePriorityPlannerTests
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
 
-        states[Array.IndexOf(groupNames, "Data Tools")].Should().Be(RibbonAdaptiveGroupState.IconOnly);
-        states.Where((_, index) => index != Array.IndexOf(groupNames, "Data Tools"))
+        var sortFilterIndex = Array.IndexOf(groupNames, "Sort & Filter");
+        var dataToolsIndex = Array.IndexOf(groupNames, "Data Tools");
+
+        states[sortFilterIndex].Should().Be(RibbonAdaptiveGroupState.IconOnly);
+        states[dataToolsIndex].Should().Be(RibbonAdaptiveGroupState.IconOnly);
+        states.Where((_, index) => index != sortFilterIndex && index != dataToolsIndex)
             .Should()
             .OnlyContain(state => state == RibbonAdaptiveGroupState.Full);
     }
@@ -135,6 +145,8 @@ public sealed class RibbonAdaptivePriorityPlannerTests
 
         RibbonAdaptivePriorityPlanner.GetExpandableGroupIndexes(groupNames, 1120)
             .Should()
+            .NotContain(Array.IndexOf(groupNames, "Sort & Filter"))
+            .And
             .NotContain(Array.IndexOf(groupNames, "Data Tools"));
     }
 
@@ -146,7 +158,9 @@ public sealed class RibbonAdaptivePriorityPlannerTests
 
         RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityProtectedGroupIndexes(dataGroups, 1120)
             .Should()
-            .Equal(Array.IndexOf(dataGroups, "Data Tools"));
+            .Equal(
+                Array.IndexOf(dataGroups, "Sort & Filter"),
+                Array.IndexOf(dataGroups, "Data Tools"));
         RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityProtectedGroupIndexes(insertGroups, 900)
             .Should()
             .BeEmpty();
