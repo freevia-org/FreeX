@@ -80,6 +80,7 @@ public partial class OptionsDialog : Window
         // View
         OptShowFormulaBar.IsChecked = _opts.ShowFormulaBar;
         OptFormulaBarExpanded.IsChecked = _opts.FormulaBarExpanded;
+        UpdateFormulaBarExpandedState();
 
         // Save
         OptDefaultFormat.ItemsSource = new[] { "XLSX Workbook (.xlsx)", "FreeX JSON (.json)" };
@@ -118,12 +119,23 @@ public partial class OptionsDialog : Window
     private void MoveAfterEnter_Changed(object sender, RoutedEventArgs e) =>
         UpdateAfterEnterDirectionState();
 
+    private void ShowFormulaBar_Changed(object sender, RoutedEventArgs e) =>
+        UpdateFormulaBarExpandedState();
+
     private void UpdateAfterEnterDirectionState()
     {
         if (OptAfterEnterDirection is null)
             return;
 
         OptAfterEnterDirection.IsEnabled = OptMoveAfterEnter.IsChecked == true;
+    }
+
+    private void UpdateFormulaBarExpandedState()
+    {
+        if (OptFormulaBarExpanded is null)
+            return;
+
+        OptFormulaBarExpanded.IsEnabled = OptShowFormulaBar.IsChecked == true;
     }
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
@@ -149,7 +161,7 @@ public partial class OptionsDialog : Window
             AutoCalculate     = OptCalcAuto.IsChecked == true,
             UseR1C1ReferenceStyle = OptR1C1.IsChecked == true,
             ShowFormulaBar     = OptShowFormulaBar.IsChecked == true,
-            FormulaBarExpanded = OptFormulaBarExpanded.IsChecked == true,
+            FormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true,
             MoveSelectionAfterEnter = OptMoveAfterEnter.IsChecked == true,
             AfterEnterDirection = OptAfterEnterDirection.SelectedIndex switch
             {

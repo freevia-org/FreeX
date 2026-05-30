@@ -1,5 +1,8 @@
 using System.IO;
+using System.Reflection;
+using System.Windows.Controls;
 using System.Xml.Linq;
+using FreeX.App.Host;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -19,7 +22,7 @@ public sealed class OptionsDialogSourceTests
         source.Should().Contain("OptShowFormulaBar.IsChecked = _opts.ShowFormulaBar");
         source.Should().Contain("OptFormulaBarExpanded.IsChecked = _opts.FormulaBarExpanded");
         source.Should().Contain("ShowFormulaBar     = OptShowFormulaBar.IsChecked == true");
-        source.Should().Contain("FormulaBarExpanded = OptFormulaBarExpanded.IsChecked == true");
+        source.Should().Contain("FormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
     }
 
     [Fact]
@@ -214,6 +217,56 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_ShowFormulaBarToggleControlsExpandedState()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+
+        xaml.Should().Contain("Checked=\"ShowFormulaBar_Changed\"");
+        xaml.Should().Contain("Unchecked=\"ShowFormulaBar_Changed\"");
+        source.Should().Contain("UpdateFormulaBarExpandedState();");
+        source.Should().Contain("private void ShowFormulaBar_Changed(object sender, RoutedEventArgs e)");
+        source.Should().Contain("private void UpdateFormulaBarExpandedState()");
+        source.Should().Contain("OptFormulaBarExpanded.IsEnabled = OptShowFormulaBar.IsChecked == true;");
+        source.Should().Contain("FormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
+    }
+
+    [Fact]
+    public void OptionsDialog_RuntimeFormulaBarToggleControlsExpandedState()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new OptionsDialog(new FreeXOptions
+            {
+                ShowFormulaBar = false,
+                FormulaBarExpanded = true
+            });
+
+            dialog.Show();
+            try
+            {
+                var showFormulaBar = GetControl<CheckBox>(dialog, "OptShowFormulaBar");
+                var expandedFormulaBar = GetControl<CheckBox>(dialog, "OptFormulaBarExpanded");
+
+                expandedFormulaBar.IsChecked.Should().BeTrue();
+                expandedFormulaBar.IsEnabled.Should().BeFalse();
+
+                showFormulaBar.IsChecked = true;
+
+                expandedFormulaBar.IsEnabled.Should().BeTrue();
+
+                showFormulaBar.IsChecked = false;
+
+                expandedFormulaBar.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void Viewport_MapsObjectPlaceholderOptionToGridDisplayMode()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));
@@ -234,5 +287,15 @@ public sealed class OptionsDialogSourceTests
         backstageSource.Should().Contain("new SetWorksheetViewOptionsCommand(");
         workbookUiSource.Should().NotContain("currentSheet.ShowGridlines = _options.ShowGridlines");
         workbookUiSource.Should().NotContain("currentSheet.ShowHeadings = _options.ShowHeadings");
+    }
+
+    private static T GetControl<T>(OptionsDialog dialog, string name)
+        where T : class
+    {
+        var field = typeof(OptionsDialog).GetField(
+            name,
+            BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
 }
