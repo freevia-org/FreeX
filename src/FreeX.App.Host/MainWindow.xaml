@@ -1526,7 +1526,7 @@
                                     <Button Content="Equation"     Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineEquationBtn_Click"
                                             local:RibbonTooltip.Title="Trendline Equation" local:RibbonTooltip.KeyTip="TQ"
                                             local:RibbonTooltip.Description="Show or hide the trendline equation on the current chart."/>
-                                    <Button Content="RÂ²"           Width="48"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineRSquaredBtn_Click"
+                                    <Button Content="R^2"           Width="48"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartTrendlineRSquaredBtn_Click"
                                             local:RibbonTooltip.Title="R-squared" local:RibbonTooltip.KeyTip="RS"
                                             local:RibbonTooltip.Description="Show or hide the trendline R-squared value on the current chart."/>
                                 </StackPanel>
@@ -1663,7 +1663,7 @@
                                 <Button Content="Line"    Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SparklineLineBtn_Click"
                                         local:RibbonTooltip.Title="Line Sparkline"
                                         local:RibbonTooltip.KeyTip="SL"
-                                        local:RibbonTooltip.Description="Insert a line sparkline â€” a tiny chart in a single cell showing a trend."/>
+                                        local:RibbonTooltip.Description="Insert a line sparkline - a tiny chart in a single cell showing a trend."/>
                                 <Button Content="Column"  Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SparklineColumnBtn_Click"
                                         local:RibbonTooltip.Title="Column Sparkline"
                                         local:RibbonTooltip.KeyTip="SK"
@@ -2293,7 +2293,7 @@
                                                 local:RibbonTooltip.Title="Math &amp; Trig"
                                                 local:RibbonTooltip.KeyTip="MT"
                                                 local:RibbonTooltip.Description="Browse and insert math and trigonometry functions."/>
-                                        <Button Content="Moreâ€¦"    Width="40" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaMoreBtn_Click"
+                                        <Button Content="More..."    Width="40" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaMoreBtn_Click"
                                                 local:RibbonTooltip.Title="More Functions"
                                                 local:RibbonTooltip.KeyTip="MF"
                                                 local:RibbonTooltip.Description="Browse all available functions organized by category."/>
@@ -3765,14 +3765,14 @@
                                         </Grid.Style>
                                         <Grid.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="Renameâ€¦"         local:RibbonTooltip.KeyTip="R" Click="SheetCtxRename_Click"/>
+                                                <MenuItem Header="Rename..."       local:RibbonTooltip.KeyTip="R" Click="SheetCtxRename_Click"/>
                                                 <MenuItem Header="Insert Sheet"    local:RibbonTooltip.KeyTip="I" Click="SheetCtxInsert_Click"/>
                                                 <MenuItem Header="Duplicate"       local:RibbonTooltip.KeyTip="D" Click="SheetCtxDuplicate_Click"/>
                                                 <MenuItem Header="Delete Sheet"    local:RibbonTooltip.KeyTip="E" Click="SheetCtxDelete_Click"/>
                                                 <Separator/>
                                                 <MenuItem Header="Hide"            local:RibbonTooltip.KeyTip="H" Click="SheetCtxHide_Click"/>
-                                                <MenuItem Header="Unhideâ€¦"         local:RibbonTooltip.KeyTip="U" Click="SheetCtxUnhide_Click"/>
-                                                <MenuItem Header="Tab Colorâ€¦"      local:RibbonTooltip.KeyTip="T" Click="SheetCtxTabColor_Click"/>
+                                                <MenuItem Header="Unhide..."       local:RibbonTooltip.KeyTip="U" Click="SheetCtxUnhide_Click"/>
+                                                <MenuItem Header="Tab Color..."    local:RibbonTooltip.KeyTip="T" Click="SheetCtxTabColor_Click"/>
                                                 <Separator/>
                                                 <MenuItem Header="Select All Sheets" local:RibbonTooltip.KeyTip="A" Click="SheetCtxSelectAllSheets_Click"/>
                                                 <MenuItem Header="Ungroup Sheets"    local:RibbonTooltip.KeyTip="G" Click="SheetCtxUngroupSheets_Click"/>
@@ -4094,7 +4094,7 @@
                         <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="38"/>
                     </Grid.ColumnDefinitions>
-                    <Button x:Name="StatusZoomOutButton" Grid.Column="0" Content="âˆ’" Width="22" Height="22"
+                    <Button x:Name="StatusZoomOutButton" Grid.Column="0" Content="-" Width="22" Height="22"
                             Style="{StaticResource StatusBarZoomButtonStyle}"
                             Foreground="White" FontSize="18" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
@@ -4131,9 +4131,7 @@
             </Grid>
         </Border>
 
-        <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-             START SCREEN â€” full-window overlay shown at launch / via â† Home
-             â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+        <!-- START SCREEN - full-window overlay shown at launch / via Backstage Home -->
         <Border x:Name="OpenProgressOverlay"
                 Grid.Row="1" Grid.RowSpan="5"
                 Panel.ZIndex="260"
@@ -4369,7 +4367,7 @@
                         <DockPanel LastChildFill="False" Margin="0,0,0,10">
                             <TextBlock DockPanel.Dock="Left" Text="New"
                                        FontSize="14" FontWeight="SemiBold" Foreground="#1F1F1F"/>
-                            <Button DockPanel.Dock="Right" Content="More templates (Excluded) â†’"
+                            <Button DockPanel.Dock="Right" Content="More templates (Excluded) ->"
                                     Background="Transparent" BorderThickness="0" Padding="0"
                                     FontSize="12" Foreground="#0F6D8C"
                                     VerticalAlignment="Center" Cursor="Hand"
