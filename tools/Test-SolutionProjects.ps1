@@ -69,7 +69,7 @@ if (-not (Test-Path -LiteralPath $resolvedSolutionPath -PathType Leaf)) {
 [xml]$solutionXml = Get-Content -LiteralPath $resolvedSolutionPath -Raw
 $solutionRoot = Split-Path -Parent $resolvedSolutionPath
 $solutionProjectPaths = @(
-    $solutionXml.Solution.Folder.Project |
+    $solutionXml.SelectNodes("//*[local-name()='Project']") |
         ForEach-Object { Normalize-RelativePath ([string]$_.Path) } |
         Sort-Object -Unique
 )
