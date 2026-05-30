@@ -79,6 +79,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Help Online", RibbonCommandIconKind.Help)]
     [InlineData("Report Issue", RibbonCommandIconKind.Feedback)]
     [InlineData("Copy Diagnostics", RibbonCommandIconKind.Info)]
+    [InlineData("Legal Notices", RibbonCommandIconKind.Info)]
     [InlineData("Get Add-ins", RibbonCommandIconKind.Insert)]
     [InlineData("Stocks", RibbonCommandIconKind.Table)]
     [InlineData("Geography", RibbonCommandIconKind.Table)]
@@ -145,6 +146,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Contact Support", RibbonCommandIconAccent.Help)]
     [InlineData("Show Training", RibbonCommandIconAccent.Help)]
     [InlineData("What's New", RibbonCommandIconAccent.Help)]
+    [InlineData("Legal Notices", RibbonCommandIconAccent.Help)]
     public void GetIcon_AssignsExcelLikeAccentFamilies(string commandName, RibbonCommandIconAccent expectedAccent)
     {
         RibbonCommandPresentationPlanner.GetIcon(commandName).Accent.Should().Be(expectedAccent);

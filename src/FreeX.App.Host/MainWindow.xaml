@@ -3190,6 +3190,14 @@
                                                                   local:RibbonTooltip.Title="About FreeX"
                                                                   local:RibbonTooltip.KeyTip="AB"
                                                                   local:RibbonTooltip.Description="View version and license information about FreeX."/>
+                                    <local:AutomationInvokeButton x:Name="HelpLegalNoticesButton"
+                                                                  Content="Legal Notices" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="LegalNoticesBtn_Click"
+                                                                  AutomationProperties.Name="Legal Notices"
+                                                                  AutomationProperties.AutomationId="HelpLegalNoticesButton"
+                                                                  AutomationProperties.HelpText="Open legal, privacy, and third-party notices packaged with FreeX."
+                                                                  local:RibbonTooltip.Title="Legal Notices"
+                                                                  local:RibbonTooltip.KeyTip="LN"
+                                                                  local:RibbonTooltip.Description="View legal, privacy, and third-party notices packaged with FreeX."/>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Help" Style="{StaticResource GroupLbl}"/></Border>
