@@ -1738,6 +1738,66 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void ConsolidateDialog_ControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConsolidateDialog(SheetId.New(), "A1:B3; D5:E7", "G10");
+            dialog.Show();
+            try
+            {
+                var functionBox = FindVisualChildren<ComboBox>(dialog)
+                    .Single(box => AutomationProperties.GetAutomationId(box) == "ConsolidateFunctionBox");
+                AutomationProperties.GetName(functionBox).Should().Be("Function");
+                AutomationProperties.GetHelpText(functionBox).Should().Be("Choose the function used to combine source ranges.");
+
+                AssertTextBoxAutomation("ConsolidateReferenceBox", "Reference", "Enter a source range to add to the All references list.");
+                AssertTextBoxAutomation("ConsolidateDestinationCellBox", "Destination cell", "Enter the upper-left destination cell for the consolidated result.");
+
+                var referencesList = FindVisualChildren<ListBox>(dialog)
+                    .Single(list => AutomationProperties.GetAutomationId(list) == "ConsolidateAllReferencesList");
+                AutomationProperties.GetName(referencesList).Should().Be("All references");
+                AutomationProperties.GetHelpText(referencesList).Should().Be("Lists the source ranges that will be consolidated.");
+
+                AssertCheckBoxAutomation("ConsolidateTopRowLabelsBox", "Top row labels", "Use labels from the top row of each source range.");
+                AssertCheckBoxAutomation("ConsolidateLeftColumnLabelsBox", "Left column labels", "Use labels from the left column of each source range.");
+                AssertCheckBoxAutomation("ConsolidateCreateLinksBox", "Create links to source data", "Create formulas that link the result to the source cells.");
+
+                AssertButtonAutomation("ConsolidateAddReferenceButton", "Add reference", "Add the reference range to the All references list.");
+                AssertButtonAutomation("ConsolidateDeleteReferenceButton", "Delete reference", "Delete the selected reference range.");
+
+                void AssertTextBoxAutomation(string automationId, string name, string helpText)
+                {
+                    var textBox = FindVisualChildren<TextBox>(dialog)
+                        .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
+                    AutomationProperties.GetName(textBox).Should().Be(name);
+                    AutomationProperties.GetHelpText(textBox).Should().Be(helpText);
+                }
+
+                void AssertCheckBoxAutomation(string automationId, string name, string helpText)
+                {
+                    var checkBox = FindVisualChildren<CheckBox>(dialog)
+                        .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
+                    AutomationProperties.GetName(checkBox).Should().Be(name);
+                    AutomationProperties.GetHelpText(checkBox).Should().Be(helpText);
+                }
+
+                void AssertButtonAutomation(string automationId, string name, string helpText)
+                {
+                    var button = FindVisualChildren<Button>(dialog)
+                        .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
+                    AutomationProperties.GetName(button).Should().Be(name);
+                    AutomationProperties.GetHelpText(button).Should().Be(helpText);
+                }
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void ConsolidateDialogOpenedFromKeyboard_FocusesFunctionChoice()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ConsolidateDialog.cs"));
