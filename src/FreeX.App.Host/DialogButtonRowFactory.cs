@@ -6,8 +6,11 @@ namespace FreeX.App.Host;
 
 internal static class DialogButtonRowFactory
 {
-    public static StackPanel Create(Action accept, double buttonWidth, Thickness rowMargin = default, string acceptContent = "_OK")
+    private const string DefaultOkContent = "_OK";
+
+    public static StackPanel Create(Action accept, double buttonWidth, Thickness rowMargin = default, string acceptContent = DefaultOkContent)
     {
+        var resolvedAcceptContent = ResolveDefaultAcceptContent(acceptContent);
         var row = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -16,29 +19,31 @@ internal static class DialogButtonRowFactory
         };
         var ok = new Button
         {
-            Content = acceptContent,
+            Content = resolvedAcceptContent,
             Width = buttonWidth,
             Margin = new Thickness(0, 0, 8, 0),
             IsDefault = true
         };
-        AutomationProperties.SetName(ok, CreateAutomationName(acceptContent));
-        SetAcceleratorKey(ok, acceptContent);
+        AutomationProperties.SetName(ok, UiText.CreateAutomationName(resolvedAcceptContent));
+        SetAcceleratorKey(ok, resolvedAcceptContent);
         ok.Click += (_, _) => accept();
         row.Children.Add(ok);
+        var cancelContent = UiText.Cancel;
         var cancel = new Button
         {
-            Content = "_Cancel",
+            Content = cancelContent,
             Width = buttonWidth,
             IsCancel = true
         };
-        AutomationProperties.SetName(cancel, "Cancel");
-        SetAcceleratorKey(cancel, "_Cancel");
+        AutomationProperties.SetName(cancel, UiText.CreateAutomationName(cancelContent));
+        SetAcceleratorKey(cancel, cancelContent);
         row.Children.Add(cancel);
         return row;
     }
 
-    public static StackPanel CreateOkOnly(Action accept, double buttonWidth, Thickness rowMargin = default, string acceptContent = "_OK")
+    public static StackPanel CreateOkOnly(Action accept, double buttonWidth, Thickness rowMargin = default, string acceptContent = DefaultOkContent)
     {
+        var resolvedAcceptContent = ResolveDefaultAcceptContent(acceptContent);
         var row = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -47,20 +52,22 @@ internal static class DialogButtonRowFactory
         };
         var ok = new Button
         {
-            Content = acceptContent,
+            Content = resolvedAcceptContent,
             Width = buttonWidth,
             IsDefault = true,
             IsCancel = true
         };
-        AutomationProperties.SetName(ok, CreateAutomationName(acceptContent));
-        SetAcceleratorKey(ok, acceptContent);
+        AutomationProperties.SetName(ok, UiText.CreateAutomationName(resolvedAcceptContent));
+        SetAcceleratorKey(ok, resolvedAcceptContent);
         ok.Click += (_, _) => accept();
         row.Children.Add(ok);
         return row;
     }
 
-    private static string CreateAutomationName(string content) =>
-        content.Replace("_", string.Empty, StringComparison.Ordinal);
+    private static string ResolveDefaultAcceptContent(string acceptContent) =>
+        string.Equals(acceptContent, DefaultOkContent, StringComparison.Ordinal)
+            ? UiText.Ok
+            : acceptContent;
 
     private static void SetAcceleratorKey(Button button, string content)
     {

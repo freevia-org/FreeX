@@ -156,15 +156,13 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     {
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
             1120,
-            ["Tables", "Illustrations", "Add-ins", "Charts", "Tours", "Sparklines", "Filters", "Links", "Text", "Symbols"],
-            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 10).ToArray());
+            ["Tables", "Illustrations", "Charts", "Sparklines", "Filters", "Links", "Text", "Symbols"],
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, 8).ToArray());
 
         states.Should().Equal(
             RibbonAdaptiveGroupState.SmallWithLabels,
             RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed,
@@ -175,15 +173,15 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_KeepsInsertChartsBeforeUtilityGroups()
     {
-        var groupNames = new[] { "Tables", "Illustrations", "Add-ins", "Charts", "Tours", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments" };
+        var groupNames = new[] { "Tables", "Illustrations", "Charts", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments" };
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
             1320,
             groupNames,
             Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupNames.Length).ToArray());
 
         states[Array.IndexOf(groupNames, "Charts")].Should().Be(RibbonAdaptiveGroupState.Full);
-        states[Array.IndexOf(groupNames, "Add-ins")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
-        states[Array.IndexOf(groupNames, "Tours")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupNames, "Sparklines")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupNames, "Comments")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
     }
 
     [Fact]
@@ -233,7 +231,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_KeepsDataSortAndFilterBeforeConnectionsAtMediumWidths()
     {
-        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast", "Outline" };
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline" };
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
             1120,
             groupNames,
@@ -241,7 +239,6 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
 
         states[Array.IndexOf(groupNames, "Sort & Filter")].Should().NotBe(RibbonAdaptiveGroupState.Collapsed);
         states[Array.IndexOf(groupNames, "Queries & Connections")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
-        states[Array.IndexOf(groupNames, "Data Types")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
         states[Array.IndexOf(groupNames, "Data Tools")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Forecast")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Outline")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
@@ -250,7 +247,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void GetPriorityProtectedGroupNames_PrefersDataToolsAndForecastAtNarrowWidths()
     {
-        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast", "Outline" };
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline" };
 
         var protectedGroups = RibbonAdaptivePriorityPlanner.GetPriorityProtectedGroupNames(groupNames, 900);
 
@@ -276,7 +273,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_RestoresViewShowWithPriorityGroupsAfterPlannerCollapse()
     {
-        var groupNames = new[] { "Workbook Views", "Show", "Zoom", "Window", "Macros" };
+        var groupNames = new[] { "Workbook Views", "Show", "Zoom", "Window" };
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
             1366,
             groupNames,
@@ -286,7 +283,6 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
         states[Array.IndexOf(groupNames, "Show")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Zoom")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Window")].Should().Be(RibbonAdaptiveGroupState.Full);
-        states[Array.IndexOf(groupNames, "Macros")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
     }
 
     [Theory]
@@ -308,7 +304,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [Fact]
     public void ApplyBreakpointOverrides_KeepsViewShowWithZoomAndWindowAtMediumWidths()
     {
-        var groupNames = new[] { "Workbook Views", "Show", "Zoom", "Window", "Macros" };
+        var groupNames = new[] { "Workbook Views", "Show", "Zoom", "Window" };
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
             1120,
             groupNames,
@@ -318,7 +314,6 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
         states[Array.IndexOf(groupNames, "Show")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Zoom")].Should().Be(RibbonAdaptiveGroupState.Full);
         states[Array.IndexOf(groupNames, "Window")].Should().Be(RibbonAdaptiveGroupState.Full);
-        states[Array.IndexOf(groupNames, "Macros")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
     }
 
     [Theory]
@@ -355,10 +350,10 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [InlineData("Clipboard|Font|Alignment|Number|Styles|Cells|Editing", "Home")]
     [InlineData("Tables|Illustrations|Charts|Links", "Insert")]
     [InlineData("Function Library|Defined Names|Formula Auditing|Calculation", "Formulas")]
-    [InlineData("Get & Transform Data|Queries & Connections|Data Types|Sort & Filter|Data Tools|Forecast|Outline", "Data")]
+    [InlineData("Get & Transform Data|Queries & Connections|Sort & Filter|Data Tools|Forecast|Outline", "Data")]
     [InlineData("Themes|Page Setup|Scale to Fit|Sheet Options|Arrange", "Page Layout")]
     [InlineData("Proofing|Accessibility|Comments|Notes|Protect", "Review")]
-    [InlineData("Workbook Views|Show|Zoom|Window|Macros", "View")]
+    [InlineData("Workbook Views|Show|Zoom|Window", "View")]
     [InlineData("Tools|Pens|Convert|Arrange|Format", "Draw")]
     [InlineData("Help", "Tiny")]
     public void Profiles_ResolveKnownRibbonTabGroupSets(string groupNameList, string expectedProfile)
@@ -414,7 +409,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     public void Profiles_ExposeTabAndCollapsedPresentationBreakpointsForResizeGate()
     {
         var thresholds = RibbonAdaptiveTabProfiles.GetBreakpointThresholds(
-            ["Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast", "Outline"]);
+            ["Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline"]);
 
         thresholds.Should().Contain([700, 760, 900, 920, 1120, 1320]);
         thresholds.Should().BeInAscendingOrder();
