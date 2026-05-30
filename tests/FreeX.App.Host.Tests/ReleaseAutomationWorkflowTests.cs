@@ -24,6 +24,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("contents: write");
         workflow.Should().NotContain("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24");
         workflow.Should().Contain("actions/checkout@v6");
+        workflow.Should().Contain("persist-credentials: false");
         workflow.Should().Contain("actions/setup-dotnet@v5");
         workflow.Should().Contain("name: Repository preflight");
         workflow.Should().Contain("powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1");

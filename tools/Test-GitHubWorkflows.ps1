@@ -62,6 +62,31 @@ foreach ($workflow in $workflows) {
         }
     }
 
+    $lines = $content -split "\r?\n"
+    for ($lineIndex = 0; $lineIndex -lt $lines.Count; $lineIndex++) {
+        if ($lines[$lineIndex] -notmatch "^(\s*)-\s+(?:name|uses):") {
+            continue
+        }
+
+        $stepIndent = $Matches[1]
+        $escapedStepIndent = [regex]::Escape($stepIndent)
+        $stepLines = [System.Collections.Generic.List[string]]::new()
+        $stepLines.Add($lines[$lineIndex])
+        for ($nextLineIndex = $lineIndex + 1; $nextLineIndex -lt $lines.Count; $nextLineIndex++) {
+            if ($lines[$nextLineIndex] -match "^$escapedStepIndent-\s+") {
+                break
+            }
+
+            $stepLines.Add($lines[$nextLineIndex])
+        }
+
+        $stepBlock = $stepLines -join "`n"
+        if ($stepBlock -match "(?m)^\s*uses:\s+actions/checkout@v\d+\s*(?:#.*)?$" -and
+            $stepBlock -notmatch "(?m)^\s*persist-credentials:\s*false\s*(?:#.*)?$") {
+            $errors.Add("$($workflow.Name): actions/checkout steps must set persist-credentials: false.")
+        }
+    }
+
     foreach ($match in [regex]::Matches($content, "(?m)^\s*(?:-\s*)?uses:\s+([^\s#]+)")) {
         $actionRef = $match.Groups[1].Value.Trim("`"", "'")
         if ($actionRef -match "^\.[\\/]") {
