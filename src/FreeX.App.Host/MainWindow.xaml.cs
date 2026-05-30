@@ -129,6 +129,7 @@ public partial class MainWindow : Window
     private int _ribbonFallbackExecutedCount;
     private int _ribbonFallbackForcedNormalizeCount;
     private int _ribbonFallbackForcedCompactCount;
+    private int _ribbonFirstFrameLayoutUpdateCount;
     private RibbonFallbackWork _lastRibbonFallbackRequestedWork;
     private RibbonFallbackWork _lastRibbonFallbackMergedWork;
     private RibbonFallbackWork _lastRibbonFallbackExecutedWork;
