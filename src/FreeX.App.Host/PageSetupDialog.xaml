@@ -261,13 +261,28 @@
 
         <DockPanel Grid.Row="1" Margin="0,12,0,0">
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" HorizontalAlignment="Left">
-                <Button Content="_Print..." Width="86" Margin="0,0,8,0" Click="PrintButton_Click"/>
-                <Button Content="Print Pre_view" Width="104" Margin="0,0,8,0" Click="PrintPreviewButton_Click"/>
-                <Button Content="_Options..." Width="86" Click="OptionsButton_Click"/>
+                <Button Content="_Print..." Width="86" Margin="0,0,8,0" Click="PrintButton_Click"
+                        AutomationProperties.Name="Print"
+                        AutomationProperties.AutomationId="PageSetupPrintButton"
+                        AutomationProperties.HelpText="Print using the current Page Setup settings."/>
+                <Button Content="Print Pre_view" Width="104" Margin="0,0,8,0" Click="PrintPreviewButton_Click"
+                        AutomationProperties.Name="Print Preview"
+                        AutomationProperties.AutomationId="PageSetupPrintPreviewButton"
+                        AutomationProperties.HelpText="Preview the worksheet with the current Page Setup settings."/>
+                <Button Content="_Options..." Width="86" Click="OptionsButton_Click"
+                        AutomationProperties.Name="Options"
+                        AutomationProperties.AutomationId="PageSetupOptionsButton"
+                        AutomationProperties.HelpText="Open printer options for Page Setup."/>
             </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="_OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
-                <Button Content="_Cancel" Width="72" IsCancel="True"/>
+                <Button Content="_OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"
+                        AutomationProperties.Name="OK"
+                        AutomationProperties.AutomationId="PageSetupOkButton"
+                        AutomationProperties.HelpText="Apply the Page Setup settings."/>
+                <Button Content="_Cancel" Width="72" IsCancel="True"
+                        AutomationProperties.Name="Cancel"
+                        AutomationProperties.AutomationId="PageSetupCancelButton"
+                        AutomationProperties.HelpText="Close Page Setup without applying changes."/>
             </StackPanel>
         </DockPanel>
     </Grid>

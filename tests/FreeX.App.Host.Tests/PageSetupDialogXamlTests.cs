@@ -400,6 +400,31 @@ public sealed class PageSetupDialogXamlTests
     }
 
     [Fact]
+    public void FooterActionButtons_ExposeAutomationMetadata()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        foreach (var (content, name, automationId, helpText) in new[]
+        {
+            ("_Print...", "Print", "PageSetupPrintButton", "Print using the current Page Setup settings."),
+            ("Print Pre_view", "Print Preview", "PageSetupPrintPreviewButton", "Preview the worksheet with the current Page Setup settings."),
+            ("_Options...", "Options", "PageSetupOptionsButton", "Open printer options for Page Setup."),
+            ("_OK", "OK", "PageSetupOkButton", "Apply the Page Setup settings."),
+            ("_Cancel", "Cancel", "PageSetupCancelButton", "Close Page Setup without applying changes.")
+        })
+        {
+            var button = document
+                .Descendants(presentation + "Button")
+                .Single(element => element.Attribute("Content")?.Value == content);
+
+            button.Attribute("AutomationProperties.Name")?.Value.Should().Be(name);
+            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
+            button.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(helpText);
+        }
+    }
+
+    [Fact]
     public void PageSetupHandler_AppliesHeaderFooterValuesReturnedByDialog()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
