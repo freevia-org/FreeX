@@ -117,6 +117,25 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
+    public void Plan_UsesCatalogIdsForDuplicateGroupCaptions()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Branding", 100, 80, 60, 40, CatalogId: "PageLayoutThemesGroup"),
+            new RibbonAdaptiveGroup("Print Geometry", 100, 80, 60, 40, CatalogId: "PageLayoutPageSetupGroup"),
+            new RibbonAdaptiveGroup("Object Placement", 100, 80, 60, 40, CatalogId: "PageLayoutArrangeGroup")
+        };
+
+        var layout = RibbonAdaptiveLayoutEngine.Plan(1120, groups, fixedChromeWidth: 0, selectedTabHeader: "PageLayoutTab");
+
+        layout.States.Should().Equal(
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Collapsed);
+        layout.PlannedWidth.Should().Be(180);
+    }
+
+    [Fact]
     public void Plan_AppliesInsertRuntimeVisibilityStateBeforeMeasuringPlannedWidth()
     {
         var groups = new[]

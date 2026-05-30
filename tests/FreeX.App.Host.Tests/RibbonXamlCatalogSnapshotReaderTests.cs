@@ -54,19 +54,34 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
     }
 
     [Fact]
-    public void Catalog_PreservesStableDataTabAndGroupIds()
+    public void Catalog_PreservesStableTabAndGroupIds()
     {
-        var dataTab = RibbonXamlCatalogSnapshotReader.ReadMainWindow().FindTab("Data");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var expected = new Dictionary<string, (string TabId, string[] GroupIds)>(StringComparer.Ordinal)
+        {
+            ["File"] = ("FileTab", []),
+            ["Home"] = ("HomeTab", ["HomeClipboardGroup", "HomeFontGroup", "HomeAlignmentGroup", "HomeNumberGroup", "HomeStylesGroup", "HomeCellsGroup", "HomeEditingGroup"]),
+            ["Insert"] = ("InsertTab", ["InsertTablesGroup", "InsertIllustrationsGroup", "InsertChartsGroup", "InsertSparklinesGroup", "InsertFiltersGroup", "InsertLinksGroup", "InsertCommentsGroup", "InsertTextGroup", "InsertSymbolsGroup"]),
+            ["Draw"] = ("DrawTab", ["DrawToolsGroup", "DrawPensGroup", "DrawConvertGroup", "DrawArrangeGroup", "DrawFormatGroup"]),
+            ["Page Layout"] = ("PageLayoutTab", ["PageLayoutThemesGroup", "PageLayoutPageSetupGroup", "PageLayoutScaleToFitGroup", "PageLayoutSheetOptionsGroup", "PageLayoutArrangeGroup"]),
+            ["Formulas"] = ("FormulasTab", ["FormulasFunctionLibraryGroup", "FormulasDefinedNamesGroup", "FormulasFormulaAuditingGroup", "FormulasCalculationGroup"]),
+            ["Data"] = ("DataTab", ["DataGetTransformGroup", "DataQueriesConnectionsGroup", "DataSortFilterGroup", "DataToolsGroup", "DataForecastGroup", "DataOutlineGroup"]),
+            ["Review"] = ("ReviewTab", ["ReviewProofingGroup", "ReviewAccessibilityGroup", "ReviewCommentsGroup", "ReviewNotesGroup", "ReviewProtectGroup"]),
+            ["View"] = ("ViewTab", ["ViewWorkbookViewsGroup", "ViewShowGroup", "ViewZoomGroup", "ViewWindowGroup"]),
+            ["PivotTable Analyze"] = ("PivotTableAnalyzeTab", ["PivotTableAnalyzePivotTableGroup", "PivotTableAnalyzeActiveFieldGroup", "PivotTableAnalyzeGroupGroup", "PivotTableAnalyzeFilterGroup", "PivotTableAnalyzeDataGroup", "PivotTableAnalyzeActionsGroup", "PivotTableAnalyzeCalculationsGroup", "PivotTableAnalyzeToolsGroup", "PivotTableAnalyzeShowGroup"]),
+            ["Design"] = ("PivotTableDesignTab", ["PivotTableDesignLayoutGroup", "PivotTableDesignStyleOptionsGroup", "PivotTableDesignStylesGroup"]),
+            ["Help"] = ("HelpTab", ["HelpHelpGroup"])
+        };
 
-        dataTab.Should().NotBeNull();
-        dataTab!.Id.Should().Be("DataTab");
-        dataTab.Groups.Select(group => group.Id).Should().Equal(
-            "DataGetTransformGroup",
-            "DataQueriesConnectionsGroup",
-            "DataSortFilterGroup",
-            "DataToolsGroup",
-            "DataForecastGroup",
-            "DataOutlineGroup");
+        catalog.Tabs.Should().OnlyContain(tab => !string.IsNullOrWhiteSpace(tab.Id));
+        catalog.Tabs.SelectMany(tab => tab.Groups).Should().OnlyContain(group => !string.IsNullOrWhiteSpace(group.Id));
+        foreach (var (header, (tabId, groupIds)) in expected)
+        {
+            var tab = catalog.FindTab(header);
+            tab.Should().NotBeNull();
+            tab!.Id.Should().Be(tabId);
+            tab.Groups.Select(group => group.Id).Should().Equal(groupIds);
+        }
     }
 
     [Fact]
