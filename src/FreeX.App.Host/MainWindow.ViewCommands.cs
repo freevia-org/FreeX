@@ -388,7 +388,7 @@ public partial class MainWindow
         {
             FormulaBar.Height       = 84;
             FormulaBar.AcceptsReturn = true;
-            FormulaBarExpandBtn.Content = "▲";
+            FormulaBarExpandBtn.Content = CreateFormulaBarChevron(pointsUp: true);
             System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, "Collapse Formula Bar");
             System.Windows.Automation.AutomationProperties.SetHelpText(FormulaBarExpandBtn, "Collapse the formula bar to a single-line editor");
             RibbonTooltip.SetTitle(FormulaBarExpandBtn, "Collapse Formula Bar");
@@ -398,13 +398,16 @@ public partial class MainWindow
         {
             FormulaBar.ClearValue(System.Windows.Controls.TextBox.HeightProperty);
             FormulaBar.AcceptsReturn = false;
-            FormulaBarExpandBtn.Content = "▼";
+            FormulaBarExpandBtn.Content = CreateFormulaBarChevron(pointsUp: false);
             System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, "Expand Formula Bar");
             System.Windows.Automation.AutomationProperties.SetHelpText(FormulaBarExpandBtn, "Expand the formula bar to a multi-line editor");
             RibbonTooltip.SetTitle(FormulaBarExpandBtn, "Expand Formula Bar");
             RibbonTooltip.SetDescription(FormulaBarExpandBtn, "Expand the formula bar to a multi-line editor.");
         }
     }
+
+    private static FrameworkElement CreateFormulaBarChevron(bool pointsUp) =>
+        CreateRibbonChevronGlyph(12, 8, BrushFromRgb(31, 31, 31), pointsUp);
 
     // ── Ribbon horizontal scroll via mouse wheel ─────────────────────────────
 

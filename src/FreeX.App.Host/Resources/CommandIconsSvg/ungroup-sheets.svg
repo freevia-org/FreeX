@@ -1,5 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Ungroup Sheets">
-
-  <rect width="54" height="54" fill="none"/>
-  <g><rect fill="#f8fafc" stroke="#202124" stroke-width="1.5" x="9.72" y="11.88" width="34.56" height="22.68"/><path stroke="#202124" stroke-width="1.7" d="M16.2 41.04h21.6"/><circle cx="39.96" cy="16.2" r="4.32" fill="#d32f2f"/><path stroke="#fff" stroke-width="1.3" d="M37.26 16.2h5.4"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Ungroup sheets">
+  <rect width="32" height="32" fill="none"/>
+  <g fill="none" stroke="#242424" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">
+    <path d="M5 20h9c1.2 0 2-0.8 2-2v-4c0-1.2.8-2 2-2h2"/>
+    <path d="M18 21h5c1.2 0 2-0.8 2-2v-4"/>
+    <path d="M15.5 8.5v15"/>
+  </g>
 </svg>

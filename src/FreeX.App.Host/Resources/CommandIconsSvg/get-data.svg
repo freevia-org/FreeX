@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Get Data" shape-rendering="crispEdges">
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Get Data">
   <rect width="32" height="32" fill="none"/>
-  <ellipse cx="16" cy="8" rx="8" ry="3" fill="#ffffff" stroke="#242424" stroke-width="1"/>
-  <path d="M8 8V19C8 21 12 23 16 23S24 21 24 19V8M8 14C8 16 12 18 16 18S24 16 24 14" fill="none" stroke="#5c5c5c" stroke-width="1"/>
-  <path d="M5 24H13M10 21L13 24L10 27" fill="none" stroke="#0F6D8C" stroke-width="1" stroke-linecap="square" stroke-linejoin="miter"/>
+  <ellipse cx="16" cy="7.5" rx="8" ry="3" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
+  <path d="M8 7.5v10c0 1.9 3.6 3.5 8 3.5s8-1.6 8-3.5v-10M8 12.5c0 1.9 3.6 3.5 8 3.5s8-1.6 8-3.5" fill="none" stroke="#5c5c5c" stroke-width="1.2"/>
+  <path d="M5.5 24.5h8M10.5 21.5l3 3-3 3" fill="none" stroke="#0F6D8C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

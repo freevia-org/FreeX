@@ -1,6 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Print Titles">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><rect fill="#fff" stroke="#202124" stroke-width="1.8" x="15.12" y="4.32" width="23.76" height="13.5"/><rect fill="#f8fafc" stroke="#202124" stroke-width="1.8" x="11.88" y="30.24" width="30.24" height="16.2"/><path d="M9.72 19.44h34.56v16.2" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><rect x="15.12" y="31.32" width="23.76" height="4.32" fill="#E6F6FA"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Print Titles">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="5.5" y="7.5" width="21" height="17" rx="1.5" fill="#ffffff" stroke="#242424" stroke-width="1.5"/>
+  <rect x="5.5" y="7.5" width="21" height="5.5" fill="#E6F6FA"/>
+  <rect x="5.5" y="7.5" width="5.5" height="17" fill="#E6F6FA"/>
+  <path d="M5.5 13h21M11 7.5v17M18 7.5v17M5.5 18.5h21" fill="none" stroke="#8a8a8a" stroke-width="1"/>
+  <path d="M5.5 13h21M11 7.5v17" fill="none" stroke="#0F6D8C" stroke-width="1.5"/>
 </svg>
-

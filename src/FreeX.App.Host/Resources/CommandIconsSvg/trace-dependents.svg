@@ -1,6 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Trace Dependents">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><circle fill="#f8fafc" stroke="#202124" stroke-width="1.6" cx="17.28" cy="27" r="5.4"/><circle fill="#f8fafc" stroke="#202124" stroke-width="1.6" cx="36.72" cy="27" r="5.4"/><path d="M20.52 27h12.96m-4.15 -3.63l4.15 3.63-4.15 3.63" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Trace Dependents">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="5" y="13" width="7" height="7" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1.6"/>
+  <rect x="21" y="8" width="7" height="6" rx="1" fill="#E6F6FA" stroke="#0F6D8C" stroke-width="1.5"/>
+  <rect x="21" y="19" width="7" height="6" rx="1" fill="#E6F6FA" stroke="#0F6D8C" stroke-width="1.5"/>
+  <path d="M12 16.5c3.5 0 4-5.5 9-5.5M12 16.5c3.5 0 4 5.5 9 5.5" fill="none" stroke="#242424" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M18.6 8.6L21 11l-2.4 2.4M18.6 19.6L21 22l-2.4 2.4" fill="none" stroke="#242424" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-
