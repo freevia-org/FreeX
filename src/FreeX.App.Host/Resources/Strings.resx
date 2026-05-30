@@ -561,6 +561,420 @@
   <data name="FunctionArguments_Title" xml:space="preserve">
     <value>Function Arguments</value>
   </data>
+  <data name="AutoFilter_BlankDisplayText" xml:space="preserve">
+    <value>(Blanks)</value>
+  </data>
+  <data name="AutoFilter_ClearFilterFrom" xml:space="preserve">
+    <value>Clear Filter From "{0}"</value>
+  </data>
+  <data name="AutoFilter_ColumnHeader" xml:space="preserve">
+    <value>Column {0}</value>
+  </data>
+  <data name="AutoFilter_Criteria_AboveAverage" xml:space="preserve">
+    <value>Above Average</value>
+  </data>
+  <data name="AutoFilter_Criteria_After" xml:space="preserve">
+    <value>After</value>
+  </data>
+  <data name="AutoFilter_Criteria_Before" xml:space="preserve">
+    <value>Before</value>
+  </data>
+  <data name="AutoFilter_Criteria_BeginsWith" xml:space="preserve">
+    <value>Begins With</value>
+  </data>
+  <data name="AutoFilter_Criteria_BelowAverage" xml:space="preserve">
+    <value>Below Average</value>
+  </data>
+  <data name="AutoFilter_Criteria_Between" xml:space="preserve">
+    <value>Between</value>
+  </data>
+  <data name="AutoFilter_Criteria_Blanks" xml:space="preserve">
+    <value>Blanks</value>
+  </data>
+  <data name="AutoFilter_Criteria_Bottom10" xml:space="preserve">
+    <value>Bottom 10</value>
+  </data>
+  <data name="AutoFilter_Criteria_Bottom10Percent" xml:space="preserve">
+    <value>Bottom 10 Percent</value>
+  </data>
+  <data name="AutoFilter_Criteria_Contains" xml:space="preserve">
+    <value>Contains</value>
+  </data>
+  <data name="AutoFilter_Criteria_DoesNotContain" xml:space="preserve">
+    <value>Does Not Contain</value>
+  </data>
+  <data name="AutoFilter_Criteria_DoesNotEqual" xml:space="preserve">
+    <value>Does Not Equal</value>
+  </data>
+  <data name="AutoFilter_Criteria_EndsWith" xml:space="preserve">
+    <value>Ends With</value>
+  </data>
+  <data name="AutoFilter_Criteria_Equals" xml:space="preserve">
+    <value>Equals</value>
+  </data>
+  <data name="AutoFilter_Criteria_GreaterThan" xml:space="preserve">
+    <value>Greater Than</value>
+  </data>
+  <data name="AutoFilter_Criteria_GreaterThanOrEqualTo" xml:space="preserve">
+    <value>Greater Than Or Equal To</value>
+  </data>
+  <data name="AutoFilter_Criteria_LessThan" xml:space="preserve">
+    <value>Less Than</value>
+  </data>
+  <data name="AutoFilter_Criteria_LessThanOrEqualTo" xml:space="preserve">
+    <value>Less Than Or Equal To</value>
+  </data>
+  <data name="AutoFilter_Criteria_NonBlanks" xml:space="preserve">
+    <value>Non-Blanks</value>
+  </data>
+  <data name="AutoFilter_Criteria_OnOrAfter" xml:space="preserve">
+    <value>On Or After</value>
+  </data>
+  <data name="AutoFilter_Criteria_OnOrBefore" xml:space="preserve">
+    <value>On Or Before</value>
+  </data>
+  <data name="AutoFilter_Criteria_Top10" xml:space="preserve">
+    <value>Top 10</value>
+  </data>
+  <data name="AutoFilter_Criteria_Top10Percent" xml:space="preserve">
+    <value>Top 10 Percent</value>
+  </data>
+  <data name="AutoFilter_FilterByColor" xml:space="preserve">
+    <value>Filter by Color</value>
+  </data>
+  <data name="AutoFilter_FilterFamily_Date" xml:space="preserve">
+    <value>Date Filters</value>
+  </data>
+  <data name="AutoFilter_FilterFamily_Number" xml:space="preserve">
+    <value>Number Filters</value>
+  </data>
+  <data name="AutoFilter_FilterFamily_Text" xml:space="preserve">
+    <value>Text Filters</value>
+  </data>
+  <data name="AutoFilter_NoFill" xml:space="preserve">
+    <value>No Fill</value>
+  </data>
+  <data name="AutoFilter_Search" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="AutoFilter_SectionFilter" xml:space="preserve">
+    <value>Filter</value>
+  </data>
+  <data name="AutoFilter_SectionSearch" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="AutoFilter_SectionSort" xml:space="preserve">
+    <value>Sort</value>
+  </data>
+  <data name="AutoFilter_SectionValues" xml:space="preserve">
+    <value>Values</value>
+  </data>
+  <data name="AutoFilter_SelectAll" xml:space="preserve">
+    <value>(Select All)</value>
+  </data>
+  <data name="AutoFilter_SortAscending" xml:space="preserve">
+    <value>Sort A to Z</value>
+  </data>
+  <data name="AutoFilter_SortDescending" xml:space="preserve">
+    <value>Sort Z to A</value>
+  </data>
+  <data name="Backstage_GreetingAfternoon" xml:space="preserve">
+    <value>Good afternoon</value>
+  </data>
+  <data name="Backstage_GreetingEvening" xml:space="preserve">
+    <value>Good evening</value>
+  </data>
+  <data name="Backstage_GreetingMorning" xml:space="preserve">
+    <value>Good morning</value>
+  </data>
+  <data name="Backstage_Info_MultipleIssuesFound" xml:space="preserve">
+    <value>{0} issues found</value>
+  </data>
+  <data name="Backstage_Info_NoAccessibilityIssues" xml:space="preserve">
+    <value>No accessibility issues found</value>
+  </data>
+  <data name="Backstage_Info_NoFormulaErrors" xml:space="preserve">
+    <value>No formula errors found</value>
+  </data>
+  <data name="Backstage_Info_NotSavedYet" xml:space="preserve">
+    <value>Not saved yet</value>
+  </data>
+  <data name="Backstage_Info_OneIssueFound" xml:space="preserve">
+    <value>1 issue found</value>
+  </data>
+  <data name="Backstage_Recent_LastOpenedDateFormat" xml:space="preserve">
+    <value>MMM d</value>
+  </data>
+  <data name="Backstage_Recent_LastOpenedDateWithYearFormat" xml:space="preserve">
+    <value>MMM d, yyyy</value>
+  </data>
+  <data name="Backstage_Recent_LastOpenedJustNow" xml:space="preserve">
+    <value>Just now</value>
+  </data>
+  <data name="Backstage_Recent_LastOpenedTimeFormat" xml:space="preserve">
+    <value>h:mm tt</value>
+  </data>
+  <data name="Backstage_Recent_LastOpenedTodayAt" xml:space="preserve">
+    <value>Today at {0}</value>
+  </data>
+  <data name="Backstage_Recent_LastOpenedWeekdayAt" xml:space="preserve">
+    <value>{0} at {1}</value>
+  </data>
+  <data name="Backstage_Recent_LastOpenedYesterdayAt" xml:space="preserve">
+    <value>Yesterday at {0}</value>
+  </data>
+  <data name="Backstage_Recent_OpenAutomationHelpText" xml:space="preserve">
+    <value>Open {0}</value>
+  </data>
+  <data name="Backstage_Recent_OpenPinnedFileAutomationName" xml:space="preserve">
+    <value>Open pinned file {0}</value>
+  </data>
+  <data name="Backstage_Recent_OpenRecentFileAutomationName" xml:space="preserve">
+    <value>Open recent file {0}</value>
+  </data>
+  <data name="Backstage_Recent_PinAutomationName" xml:space="preserve">
+    <value>Pin {0}</value>
+  </data>
+  <data name="Backstage_Recent_PinHelpText" xml:space="preserve">
+    <value>Keep this workbook in the pinned files list.</value>
+  </data>
+  <data name="Backstage_Recent_RemoveAutomationHelpText" xml:space="preserve">
+    <value>Remove this workbook from the recent files list without deleting it.</value>
+  </data>
+  <data name="Backstage_Recent_RemoveAutomationName" xml:space="preserve">
+    <value>Remove {0} from recent files</value>
+  </data>
+  <data name="Backstage_Recent_UnpinAutomationName" xml:space="preserve">
+    <value>Unpin {0}</value>
+  </data>
+  <data name="Backstage_Recent_UnpinHelpText" xml:space="preserve">
+    <value>Remove this workbook from the pinned files list.</value>
+  </data>
+  <data name="CellShift_Delete_EntireColumn" xml:space="preserve">
+    <value>Entire _column</value>
+  </data>
+  <data name="CellShift_Delete_EntireRow" xml:space="preserve">
+    <value>Entire _row</value>
+  </data>
+  <data name="CellShift_Delete_ShiftCellsLeft" xml:space="preserve">
+    <value>Shift cells _left</value>
+  </data>
+  <data name="CellShift_Delete_ShiftCellsUp" xml:space="preserve">
+    <value>Shift cells _up</value>
+  </data>
+  <data name="CellShift_Insert_EntireColumn" xml:space="preserve">
+    <value>Entire _column</value>
+  </data>
+  <data name="CellShift_Insert_EntireRow" xml:space="preserve">
+    <value>Entire _row</value>
+  </data>
+  <data name="CellShift_Insert_ShiftCellsDown" xml:space="preserve">
+    <value>Shift cells _down</value>
+  </data>
+  <data name="CellShift_Insert_ShiftCellsRight" xml:space="preserve">
+    <value>Shift cells _right</value>
+  </data>
+  <data name="ConditionalFormatIconSet_3Arrows_Label" xml:space="preserve">
+    <value>3 Arrows</value>
+  </data>
+  <data name="ConditionalFormatIconSet_3ArrowsGray_Label" xml:space="preserve">
+    <value>3 Arrows (Gray)</value>
+  </data>
+  <data name="ConditionalFormatIconSet_3Flags_Label" xml:space="preserve">
+    <value>3 Flags</value>
+  </data>
+  <data name="ConditionalFormatIconSet_3Signs_Label" xml:space="preserve">
+    <value>3 Signs</value>
+  </data>
+  <data name="ConditionalFormatIconSet_3Symbols_Label" xml:space="preserve">
+    <value>3 Symbols</value>
+  </data>
+  <data name="ConditionalFormatIconSet_3Symbols2_Label" xml:space="preserve">
+    <value>3 Symbols (Uncircled)</value>
+  </data>
+  <data name="ConditionalFormatIconSet_3TrafficLights1_Label" xml:space="preserve">
+    <value>3 Traffic Lights</value>
+  </data>
+  <data name="ConditionalFormatIconSet_3TrafficLights2_Label" xml:space="preserve">
+    <value>3 Traffic Lights (Rimmed)</value>
+  </data>
+  <data name="ConditionalFormatIconSet_4Arrows_Label" xml:space="preserve">
+    <value>4 Arrows</value>
+  </data>
+  <data name="ConditionalFormatIconSet_4ArrowsGray_Label" xml:space="preserve">
+    <value>4 Arrows (Gray)</value>
+  </data>
+  <data name="ConditionalFormatIconSet_4Rating_Label" xml:space="preserve">
+    <value>4 Ratings</value>
+  </data>
+  <data name="ConditionalFormatIconSet_4RedToBlack_Label" xml:space="preserve">
+    <value>4 Red To Black</value>
+  </data>
+  <data name="ConditionalFormatIconSet_4TrafficLights_Label" xml:space="preserve">
+    <value>4 Traffic Lights</value>
+  </data>
+  <data name="ConditionalFormatIconSet_5Arrows_Label" xml:space="preserve">
+    <value>5 Arrows</value>
+  </data>
+  <data name="ConditionalFormatIconSet_5ArrowsGray_Label" xml:space="preserve">
+    <value>5 Arrows (Gray)</value>
+  </data>
+  <data name="ConditionalFormatIconSet_5Boxes_Label" xml:space="preserve">
+    <value>5 Boxes</value>
+  </data>
+  <data name="ConditionalFormatIconSet_5Quarters_Label" xml:space="preserve">
+    <value>5 Quarters</value>
+  </data>
+  <data name="ConditionalFormatIconSet_5Rating_Label" xml:space="preserve">
+    <value>5 Ratings</value>
+  </data>
+  <data name="ConditionalFormatIconSet_Category_Directional" xml:space="preserve">
+    <value>Directional</value>
+  </data>
+  <data name="ConditionalFormatIconSet_Category_Indicators" xml:space="preserve">
+    <value>Indicators</value>
+  </data>
+  <data name="ConditionalFormatIconSet_Category_Ratings" xml:space="preserve">
+    <value>Ratings</value>
+  </data>
+  <data name="ConditionalFormatIconSet_Category_Shapes" xml:space="preserve">
+    <value>Shapes</value>
+  </data>
+  <data name="Export_BitmapTextPdfOnly" xml:space="preserve">
+    <value>bitmap text is PDF-only</value>
+  </data>
+  <data name="Export_BitmapTextWhenFontsMayNotBeEmbedded" xml:space="preserve">
+    <value>bitmap text when fonts may not be embedded</value>
+  </data>
+  <data name="Export_BookmarksPageNumbers" xml:space="preserve">
+    <value>bookmarks use page numbers</value>
+  </data>
+  <data name="Export_BookmarksPdfOnly" xml:space="preserve">
+    <value>bookmarks are PDF-only</value>
+  </data>
+  <data name="Export_BookmarksPrintTitles" xml:space="preserve">
+    <value>bookmarks use print titles</value>
+  </data>
+  <data name="Export_BookmarksSheetNames" xml:space="preserve">
+    <value>bookmarks use sheet names</value>
+  </data>
+  <data name="Export_DocumentPropertiesIncluded" xml:space="preserve">
+    <value>document properties are included</value>
+  </data>
+  <data name="Export_DocumentPropertiesNotIncluded" xml:space="preserve">
+    <value>document properties are not included</value>
+  </data>
+  <data name="Export_InitialViewOneColumn" xml:space="preserve">
+    <value>opens as one continuous column</value>
+  </data>
+  <data name="Export_InitialViewPdfOnly" xml:space="preserve">
+    <value>PDF initial view is PDF-only</value>
+  </data>
+  <data name="Export_InitialViewTwoColumnLeft" xml:space="preserve">
+    <value>opens as two columns with odd pages left</value>
+  </data>
+  <data name="Export_InitialViewTwoColumnRight" xml:space="preserve">
+    <value>opens as two columns with odd pages right</value>
+  </data>
+  <data name="Export_InvalidPdfLanguage" xml:space="preserve">
+    <value>Enter a valid PDF language tag, for example {0}.</value>
+  </data>
+  <data name="Export_NoExportablePagesError" xml:space="preserve">
+    <value>There are no exportable pages.</value>
+  </data>
+  <data name="Export_OpenAfterPublishing" xml:space="preserve">
+    <value>open after publishing</value>
+  </data>
+  <data name="Export_OpenModeFullScreen" xml:space="preserve">
+    <value>opens full screen</value>
+  </data>
+  <data name="Export_OpenModeOutlines" xml:space="preserve">
+    <value>opens with bookmarks visible</value>
+  </data>
+  <data name="Export_OpenModePdfOnly" xml:space="preserve">
+    <value>PDF open mode is PDF-only</value>
+  </data>
+  <data name="Export_OptionsSentence" xml:space="preserve">
+    <value>{0}.</value>
+  </data>
+  <data name="Export_OptionsSeparator" xml:space="preserve">
+    <value>; </value>
+  </data>
+  <data name="Export_PageRangeEndsAfterLastPage" xml:space="preserve">
+    <value>Page range ends after the last exportable page ({0}).</value>
+  </data>
+  <data name="Export_PageRangeFromLessThanToError" xml:space="preserve">
+    <value>From page must be less than or equal to To page.</value>
+  </data>
+  <data name="Export_PageRangeMultiple" xml:space="preserve">
+    <value>pages {0}-{1}</value>
+  </data>
+  <data name="Export_PageRangePositiveError" xml:space="preserve">
+    <value>Page numbers must be 1 or greater.</value>
+  </data>
+  <data name="Export_PageRangeSingle" xml:space="preserve">
+    <value>page {0}</value>
+  </data>
+  <data name="Export_PageRangeStartsAfterLastPage" xml:space="preserve">
+    <value>Page range starts after the last exportable page ({0}).</value>
+  </data>
+  <data name="Export_PageRangeWholeNumbersError" xml:space="preserve">
+    <value>Page range must include whole-number From and To values.</value>
+  </data>
+  <data name="Export_PdfANotSupported" xml:space="preserve">
+    <value>PDF/A compliance is not supported</value>
+  </data>
+  <data name="Export_PdfAPdfOnlyUnsupported" xml:space="preserve">
+    <value>PDF/A compliance is PDF-only and not supported</value>
+  </data>
+  <data name="Export_PdfAUnsupportedError" xml:space="preserve">
+    <value>PDF/A compliance is not supported by the current PDF exporter.</value>
+  </data>
+  <data name="Export_PdfFallbackMessage" xml:space="preserve">
+    <value>PDF export uses FreeX's print renderer. XPS export remains available for Windows print-pipeline workflows.</value>
+  </data>
+  <data name="Export_PdfLanguage" xml:space="preserve">
+    <value>PDF language {0}</value>
+  </data>
+  <data name="Export_PdfLanguagePdfOnly" xml:space="preserve">
+    <value>PDF language is PDF-only</value>
+  </data>
+  <data name="Export_PrintAreasIgnored" xml:space="preserve">
+    <value>print areas are ignored</value>
+  </data>
+  <data name="Export_QualityMinimumSize" xml:space="preserve">
+    <value>minimum size</value>
+  </data>
+  <data name="Export_QualityMinimumSizePdfOnly" xml:space="preserve">
+    <value>minimum size is PDF-only</value>
+  </data>
+  <data name="Export_QualityStandard" xml:space="preserve">
+    <value>standard quality</value>
+  </data>
+  <data name="Export_RequestDescription" xml:space="preserve">
+    <value>Options: {0}</value>
+  </data>
+  <data name="Export_RequestDescriptionWithFallback" xml:space="preserve">
+    <value>{0}&#x0A;&#x0A;Options: {1}</value>
+  </data>
+  <data name="Export_ScopeActiveSheet" xml:space="preserve">
+    <value>Active sheet only</value>
+  </data>
+  <data name="Export_ScopeEntireWorkbook" xml:space="preserve">
+    <value>Entire workbook</value>
+  </data>
+  <data name="Export_ScopeSelection" xml:space="preserve">
+    <value>Selection</value>
+  </data>
+  <data name="Export_TaggedPdfNotSupported" xml:space="preserve">
+    <value>tagged PDF structure is not supported</value>
+  </data>
+  <data name="Export_TaggedPdfPdfOnlyUnsupported" xml:space="preserve">
+    <value>tagged PDF structure is PDF-only and not supported</value>
+  </data>
+  <data name="Export_TaggedPdfUnsupportedError" xml:space="preserve">
+    <value>Tagged PDF structure is not supported by the current PDF exporter.</value>
+  </data>
   <data name="DeferredCommand_AutoCorrectOptions_Body" xml:space="preserve">
     <value>AutoCorrect replacement dictionaries are not implemented in FreeX. Proofing options shown here are informational until a local spelling and replacement dictionary model exists.</value>
   </data>

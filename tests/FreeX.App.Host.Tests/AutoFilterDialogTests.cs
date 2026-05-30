@@ -71,12 +71,12 @@ public sealed class AutoFilterDialogTests
     }
 
     [Theory]
-    [InlineData(AutoFilterMenuFilterKind.Text, "Text Filters")]
-    [InlineData(AutoFilterMenuFilterKind.Number, "Number Filters")]
-    [InlineData(AutoFilterMenuFilterKind.Date, "Date Filters")]
-    public void GetFilterFamilyHeader_ReturnsExcelTypedFilterAffordance(AutoFilterMenuFilterKind filterKind, string expected)
+    [InlineData(AutoFilterMenuFilterKind.Text, "AutoFilter_FilterFamily_Text")]
+    [InlineData(AutoFilterMenuFilterKind.Number, "AutoFilter_FilterFamily_Number")]
+    [InlineData(AutoFilterMenuFilterKind.Date, "AutoFilter_FilterFamily_Date")]
+    public void GetFilterFamilyHeader_ReturnsExcelTypedFilterAffordance(AutoFilterMenuFilterKind filterKind, string expectedKey)
     {
-        AutoFilterDialog.GetFilterFamilyHeader(filterKind).Should().Be(expected);
+        AutoFilterDialog.GetFilterFamilyHeader(filterKind).Should().Be(UiText.Get(expectedKey));
     }
 
     [Theory]
@@ -217,16 +217,16 @@ public sealed class AutoFilterDialogTests
     }
 
     [Theory]
-    [InlineData(AutoFilterMenuFilterKind.Text, "Contains", "contains:Blue")]
-    [InlineData(AutoFilterMenuFilterKind.Number, "Greater Than", ">42")]
-    [InlineData(AutoFilterMenuFilterKind.Date, "After", "date>2026-05-21")]
+    [InlineData(AutoFilterMenuFilterKind.Text, "AutoFilter_Criteria_Contains", "contains:Blue")]
+    [InlineData(AutoFilterMenuFilterKind.Number, "AutoFilter_Criteria_GreaterThan", ">42")]
+    [InlineData(AutoFilterMenuFilterKind.Date, "AutoFilter_Criteria_After", "date>2026-05-21")]
     public void BuildCriteriaText_UsesTypedOperatorTemplates(
         AutoFilterMenuFilterKind filterKind,
-        string optionLabel,
+        string optionLabelKey,
         string expected)
     {
         var option = AutoFilterDialog.GetCriteriaOptions(filterKind)
-            .Single(item => item.Label == optionLabel);
+            .Single(item => item.Label == UiText.Get(optionLabelKey));
 
         var value = filterKind switch
         {
@@ -242,7 +242,7 @@ public sealed class AutoFilterDialogTests
     public void BuildBetweenCriteriaText_UsesSeparateMinimumAndMaximumValues()
     {
         var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
-            .Single(item => item.Label == "Between");
+            .Single(item => item.Label == UiText.Get("AutoFilter_Criteria_Between"));
 
         AutoFilterDialog.BuildBetweenCriteriaText(option, " 10 ", "20")
             .Should()
@@ -250,12 +250,12 @@ public sealed class AutoFilterDialogTests
     }
 
     [Theory]
-    [InlineData("Top 10", "top:5")]
-    [InlineData("Bottom 10 Percent", "bottompercent:25")]
-    public void BuildTopBottomCriteriaText_UsesExcelCountControl(string optionLabel, string expected)
+    [InlineData("AutoFilter_Criteria_Top10", "top:5")]
+    [InlineData("AutoFilter_Criteria_Bottom10Percent", "bottompercent:25")]
+    public void BuildTopBottomCriteriaText_UsesExcelCountControl(string optionLabelKey, string expected)
     {
         var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
-            .Single(item => item.Label == optionLabel);
+            .Single(item => item.Label == UiText.Get(optionLabelKey));
 
         AutoFilterDialog.BuildTopBottomCriteriaText(option, expected.Split(':')[1])
             .Should()
@@ -644,7 +644,7 @@ public sealed class AutoFilterDialogTests
         sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(10));
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
         var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
-            .Single(item => item.Label == "Greater Than");
+            .Single(item => item.Label == UiText.Get("AutoFilter_Criteria_GreaterThan"));
         var result = AutoFilterDialog.BuildResult(
             AutoFilterSortDirection.None,
             [

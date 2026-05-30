@@ -119,7 +119,10 @@ public class ExportPlannerTests
             Quality: ExportQuality.Standard));
 
         ExportPlanner.DescribeOptions(ExportOptions.ExcelLikeDefault)
-            .Should().Be("Active sheet only; standard quality; document properties are not included.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeActiveSheet"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded")));
     }
 
     [Fact]
@@ -136,14 +139,22 @@ public class ExportPlannerTests
             BitmapTextWhenFontsMayNotBeEmbedded: true);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Selection; pages 2-4; minimum size; print areas are ignored; document properties are included; bookmarks use sheet names; bitmap text when fonts may not be embedded; open after publishing.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeSelection"),
+                UiText.Format("Export_PageRangeMultiple", 2, 4),
+                UiText.Get("Export_QualityMinimumSize"),
+                UiText.Get("Export_PrintAreasIgnored"),
+                UiText.Get("Export_DocumentPropertiesIncluded"),
+                UiText.Get("Export_BookmarksSheetNames"),
+                UiText.Get("Export_BitmapTextWhenFontsMayNotBeEmbedded"),
+                UiText.Get("Export_OpenAfterPublishing")));
     }
 
     [Theory]
-    [InlineData("sheet", "bookmarks use sheet names")]
-    [InlineData("print-title", "bookmarks use print titles")]
-    [InlineData("page-number", "bookmarks use page numbers")]
-    public void ExportOptions_DescribePdfBookmarkModes(string mode, string expectedPart)
+    [InlineData("sheet", "Export_BookmarksSheetNames")]
+    [InlineData("print-title", "Export_BookmarksPrintTitles")]
+    [InlineData("page-number", "Export_BookmarksPageNumbers")]
+    public void ExportOptions_DescribePdfBookmarkModes(string mode, string expectedPartKey)
     {
         var bookmarkMode = mode switch
         {
@@ -158,7 +169,11 @@ public class ExportPlannerTests
             BookmarkMode: bookmarkMode);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be($"Entire workbook; standard quality; document properties are included; {expectedPart}.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeEntireWorkbook"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesIncluded"),
+                UiText.Get(expectedPartKey)));
     }
 
     [Fact]
@@ -172,7 +187,12 @@ public class ExportPlannerTests
             OpenMode: PdfOpenMode.FullScreen);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Active sheet only; standard quality; opens as one continuous column; opens full screen; document properties are not included.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeActiveSheet"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_InitialViewOneColumn"),
+                UiText.Get("Export_OpenModeFullScreen"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded")));
     }
 
     [Fact]
@@ -185,7 +205,11 @@ public class ExportPlannerTests
             PdfLanguage: "uk-UA");
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Active sheet only; standard quality; document properties are not included; PDF language uk-UA.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeActiveSheet"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded"),
+                UiText.Format("Export_PdfLanguage", "uk-UA")));
     }
 
     [Fact]
@@ -199,7 +223,12 @@ public class ExportPlannerTests
             IncludeDocumentStructureTags: true);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Active sheet only; standard quality; document properties are not included; PDF/A compliance is not supported; tagged PDF structure is not supported.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeActiveSheet"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded"),
+                UiText.Get("Export_PdfANotSupported"),
+                UiText.Get("Export_TaggedPdfNotSupported")));
     }
 
     [Fact]
@@ -215,7 +244,7 @@ public class ExportPlannerTests
             .Should()
             .BeFalse();
 
-        error.Should().Be("PDF/A compliance is not supported by the current PDF exporter.");
+        error.Should().Be(UiText.Get("Export_PdfAUnsupportedError"));
     }
 
     [Fact]
@@ -231,7 +260,7 @@ public class ExportPlannerTests
             .Should()
             .BeFalse();
 
-        error.Should().Be("Tagged PDF structure is not supported by the current PDF exporter.");
+        error.Should().Be(UiText.Get("Export_TaggedPdfUnsupportedError"));
     }
 
     [Fact]
@@ -251,7 +280,12 @@ public class ExportPlannerTests
         error.Should().BeNull();
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
             .Should()
-            .Be("Active sheet only; standard quality; document properties are not included; PDF/A compliance is PDF-only and not supported; tagged PDF structure is PDF-only and not supported.");
+            .Be(ExportSummary(
+                UiText.Get("Export_ScopeActiveSheet"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded"),
+                UiText.Get("Export_PdfAPdfOnlyUnsupported"),
+                UiText.Get("Export_TaggedPdfPdfOnlyUnsupported")));
     }
 
     [Fact]
@@ -282,7 +316,11 @@ public class ExportPlannerTests
             OpenAfterPublish: true);
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Selection; standard quality; document properties are included; open after publishing.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeSelection"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesIncluded"),
+                UiText.Get("Export_OpenAfterPublishing")));
     }
 
     [Fact]
@@ -295,7 +333,11 @@ public class ExportPlannerTests
             BookmarkMode: PdfBookmarkMode.PrintTitles);
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Entire workbook; standard quality; document properties are included; bookmarks are PDF-only.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeEntireWorkbook"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesIncluded"),
+                UiText.Get("Export_BookmarksPdfOnly")));
     }
 
     [Fact]
@@ -308,7 +350,11 @@ public class ExportPlannerTests
             PdfLanguage: "uk-UA");
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Entire workbook; standard quality; document properties are not included; PDF language is PDF-only.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeEntireWorkbook"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded"),
+                UiText.Get("Export_PdfLanguagePdfOnly")));
     }
 
     [Fact]
@@ -322,7 +368,12 @@ public class ExportPlannerTests
             OpenMode: PdfOpenMode.FullScreen);
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Active sheet only; standard quality; PDF initial view is PDF-only; PDF open mode is PDF-only; document properties are not included.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeActiveSheet"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_InitialViewPdfOnly"),
+                UiText.Get("Export_OpenModePdfOnly"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded")));
     }
 
     [Fact]
@@ -335,7 +386,10 @@ public class ExportPlannerTests
             Quality: ExportQuality.MinimumSize);
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Selection; minimum size is PDF-only; document properties are not included.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeSelection"),
+                UiText.Get("Export_QualityMinimumSizePdfOnly"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded")));
     }
 
     [Fact]
@@ -347,7 +401,10 @@ public class ExportPlannerTests
             OpenAfterPublish: false);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Entire workbook; standard quality; document properties are not included.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeEntireWorkbook"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded")));
     }
 
     [Fact]
@@ -424,15 +481,19 @@ public class ExportPlannerTests
     }
 
     [Theory]
-    [InlineData("From page must be less than or equal to To page.", "4", 1)]
+    [InlineData("Export_PageRangeFromLessThanToError", "4", 1)]
     [InlineData("Enter a valid page range.", "2", 1)]
     [InlineData("Enter a valid page range.", "0", 0)]
     [InlineData("Enter a valid page range.", "x", 0)]
     public void ExportOptionsDialogPlanner_SelectsInvalidPageRangeFocusTarget(
-        string error,
+        string errorOrKey,
         string fromPageText,
         int expected)
     {
+        var error = errorOrKey.StartsWith("Export_", StringComparison.Ordinal)
+            ? UiText.Get(errorOrKey)
+            : errorOrKey;
+
         ((int)ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, fromPageText)).Should().Be(expected);
     }
 
@@ -460,18 +521,21 @@ public class ExportPlannerTests
     [Theory]
     [InlineData(" uk_ua ", true, "uk-UA", null)]
     [InlineData("", true, "en-US", null)]
-    [InlineData("not a culture", false, "en-US", "Enter a valid PDF language tag, for example en-US.")]
+    [InlineData("not a culture", false, "en-US", "Export_InvalidPdfLanguage")]
     public void TryNormalizePdfLanguage_ValidatesTypedLanguageTags(
         string input,
         bool expectedSuccess,
         string expectedLanguage,
-        string? expectedError)
+        string? expectedErrorKey)
     {
         ExportPlanner.TryNormalizePdfLanguage(input, out var language, out var error)
             .Should()
             .Be(expectedSuccess);
 
         language.Should().Be(expectedLanguage);
+        var expectedError = expectedErrorKey is null
+            ? null
+            : UiText.Format(expectedErrorKey, ExportPlanner.DefaultPdfLanguage);
         error.Should().Be(expectedError);
     }
 
@@ -646,21 +710,28 @@ public class ExportPlannerTests
     [InlineData(null, null, 3, true, null)]
     [InlineData(1, 2, 3, true, null)]
     [InlineData(3, 3, 3, true, null)]
-    [InlineData(4, 4, 3, false, "Page range starts after the last exportable page (3).")]
-    [InlineData(1, 4, 3, false, "Page range ends after the last exportable page (3).")]
-    [InlineData(1, 1, 0, false, "There are no exportable pages.")]
+    [InlineData(4, 4, 3, false, "Export_PageRangeStartsAfterLastPage")]
+    [InlineData(1, 4, 3, false, "Export_PageRangeEndsAfterLastPage")]
+    [InlineData(1, 1, 0, false, "Export_NoExportablePagesError")]
     public void TryValidatePageRange_ChecksRenderedPageCount(
         int? fromPage,
         int? toPage,
         int pageCount,
         bool expectedSuccess,
-        string? expectedError)
+        string? expectedErrorKey)
     {
         var pageRange = fromPage is null || toPage is null ? null : new ExportPageRange(fromPage.Value, toPage.Value);
 
         var success = ExportPlanner.TryValidatePageRange(pageRange, pageCount, out var error);
 
         success.Should().Be(expectedSuccess);
+        var expectedError = expectedErrorKey switch
+        {
+            "Export_PageRangeStartsAfterLastPage" => UiText.Format(expectedErrorKey, pageCount),
+            "Export_PageRangeEndsAfterLastPage" => UiText.Format(expectedErrorKey, pageCount),
+            null => null,
+            _ => UiText.Get(expectedErrorKey)
+        };
         error.Should().Be(expectedError);
     }
 
@@ -670,7 +741,12 @@ public class ExportPlannerTests
         var request = ExportPlanner.PlanExport(@"C:\temp\report.pdf");
 
         ExportPlanner.DescribeRequest(request).Should().Be(
-            "Options: Active sheet only; standard quality; document properties are not included.");
+            UiText.Format(
+                "Export_RequestDescription",
+                ExportSummary(
+                    UiText.Get("Export_ScopeActiveSheet"),
+                    UiText.Get("Export_QualityStandard"),
+                    UiText.Get("Export_DocumentPropertiesNotIncluded"))));
     }
 
     [Fact]
@@ -684,7 +760,12 @@ public class ExportPlannerTests
                 OpenAfterPublish: false));
 
         ExportPlanner.DescribeRequest(request).Should().Be(
-            "Options: Active sheet only; standard quality; document properties are included.");
+            UiText.Format(
+                "Export_RequestDescription",
+                ExportSummary(
+                    UiText.Get("Export_ScopeActiveSheet"),
+                    UiText.Get("Export_QualityStandard"),
+                    UiText.Get("Export_DocumentPropertiesIncluded"))));
     }
 
     [Fact]
@@ -708,7 +789,7 @@ public class ExportPlannerTests
     public void PdfFallbackMessage_ExplainsWindowsPrintPipelineAndXpsConversion()
     {
         ExportPlanner.PdfFallbackMessage.Should().Be(
-            "PDF export uses FreeX's print renderer. XPS export remains available for Windows print-pipeline workflows.");
+            UiText.Get("Export_PdfFallbackMessage"));
     }
 
     [Fact]
@@ -2045,7 +2126,7 @@ public class ExportPlannerTests
                 var action = () => PdfDocumentExporter.Save(document, path, null, new ExportPageRange(3, 3));
 
                 action.Should().Throw<InvalidOperationException>()
-                    .WithMessage("Page range starts after the last exportable page (2).");
+                    .WithMessage(UiText.Format("Export_PageRangeStartsAfterLastPage", 2));
                 File.Exists(path).Should().BeFalse();
             }
             finally
@@ -2068,7 +2149,7 @@ public class ExportPlannerTests
                 var action = () => PdfDocumentExporter.Save(document, path, null, new ExportPageRange(1, 3));
 
                 action.Should().Throw<InvalidOperationException>()
-                    .WithMessage("Page range ends after the last exportable page (2).");
+                    .WithMessage(UiText.Format("Export_PageRangeEndsAfterLastPage", 2));
                 File.Exists(path).Should().BeFalse();
             }
             finally
@@ -3203,6 +3284,9 @@ public class ExportPlannerTests
         pdf.Internals.Catalog.Elements
             .GetDictionary("/ViewerPreferences")
             ?.Elements.GetBoolean("/DisplayDocTitle", false) == true;
+
+    private static string ExportSummary(params string[] parts) =>
+        UiText.Format("Export_OptionsSentence", string.Join(UiText.Get("Export_OptionsSeparator"), parts));
 
     private static string ReadPrintPreviewDialogSources() =>
         string.Join(

@@ -105,7 +105,7 @@ public sealed class AutoFilterDropdownPlannerTests
             new AutoFilterChecklistItem("TRUE", "TRUE"),
             new AutoFilterChecklistItem("2026-05-19", "2026-05-19"),
             new AutoFilterChecklistItem("#DIV/0!", "#DIV/0!"),
-            new AutoFilterChecklistItem("(Blanks)", ""));
+            new AutoFilterChecklistItem(UiText.Get("AutoFilter_BlankDisplayText"), ""));
     }
 
     [Fact]
@@ -127,16 +127,16 @@ public sealed class AutoFilterDropdownPlannerTests
         menu.HeaderText.Should().Be("Fruit");
         menu.FilterKind.Should().Be(AutoFilterMenuFilterKind.Text);
         menu.Entries.Select(entry => entry.Header).Should().ContainInOrder(
-            "Sort A to Z",
-            "Sort Z to A",
-            "Clear Filter From \"Fruit\"",
-            "Filter by Color",
-            "Text Filters",
-            "Search",
-            "(Select All)",
+            UiText.Get("AutoFilter_SortAscending"),
+            UiText.Get("AutoFilter_SortDescending"),
+            UiText.Format("AutoFilter_ClearFilterFrom", "Fruit"),
+            UiText.Get("AutoFilter_FilterByColor"),
+            UiText.Get("AutoFilter_FilterFamily_Text"),
+            UiText.Get("AutoFilter_Search"),
+            UiText.Get("AutoFilter_SelectAll"),
             "Apple",
             "Banana");
-        menu.Entries.Single(entry => entry.Header == "Text Filters")
+        menu.Entries.Single(entry => entry.Header == UiText.Get("AutoFilter_FilterFamily_Text"))
             .CriteriaSuggestions.Should().Equal("equals:", "text<>", "contains:", "notcontains:", "begins:", "ends:", "blank", "nonblank");
     }
 
@@ -155,8 +155,8 @@ public sealed class AutoFilterDropdownPlannerTests
 
         var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
 
-        menu.HeaderText.Should().Be("Column C");
-        menu.Entries.Should().Contain(entry => entry.Header == "Clear Filter From \"Column C\"");
+        menu.HeaderText.Should().Be(UiText.Format("AutoFilter_ColumnHeader", "C"));
+        menu.Entries.Should().Contain(entry => entry.Header == UiText.Format("AutoFilter_ClearFilterFrom", UiText.Format("AutoFilter_ColumnHeader", "C")));
     }
 
     [Fact]
@@ -212,16 +212,16 @@ public sealed class AutoFilterDropdownPlannerTests
             AutoFilterMenuSectionKind.Search,
             AutoFilterMenuSectionKind.Checklist);
         menu.Sections.Select(section => section.Label).Should().Equal(
-            "Sort",
-            "Filter",
-            "Search",
-            "Values");
-        menu.Sections[0].Entries.Select(entry => entry.Header).Should().Equal("Sort A to Z", "Sort Z to A");
+            UiText.Get("AutoFilter_SectionSort"),
+            UiText.Get("AutoFilter_SectionFilter"),
+            UiText.Get("AutoFilter_SectionSearch"),
+            UiText.Get("AutoFilter_SectionValues"));
+        menu.Sections[0].Entries.Select(entry => entry.Header).Should().Equal(UiText.Get("AutoFilter_SortAscending"), UiText.Get("AutoFilter_SortDescending"));
         menu.Sections[1].Entries.Select(entry => entry.Header).Should().Equal(
-            "Clear Filter From \"Fruit\"",
-            "Filter by Color",
-            "Text Filters");
-        menu.Sections[2].Entries.Select(entry => entry.Header).Should().Equal("Search", "(Select All)");
+            UiText.Format("AutoFilter_ClearFilterFrom", "Fruit"),
+            UiText.Get("AutoFilter_FilterByColor"),
+            UiText.Get("AutoFilter_FilterFamily_Text"));
+        menu.Sections[2].Entries.Select(entry => entry.Header).Should().Equal(UiText.Get("AutoFilter_Search"), UiText.Get("AutoFilter_SelectAll"));
         menu.Sections[3].Entries.Select(entry => entry.Header).Should().Equal("Apple", "Banana");
     }
 
@@ -253,19 +253,19 @@ public sealed class AutoFilterDropdownPlannerTests
         var menu = AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan);
 
         var family = menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.FilterFamily);
-        family.Header.Should().Be("Number Filters");
+        family.Header.Should().Be(UiText.Get("AutoFilter_FilterFamily_Number"));
         family.Children.Select(child => child.Header).Should().ContainInOrder(
-            "Equals",
-            "Does Not Equal",
-            "Greater Than",
-            "Between",
-            "Top 10",
-            "Above Average",
-            "Blanks");
+            UiText.Get("AutoFilter_Criteria_Equals"),
+            UiText.Get("AutoFilter_Criteria_DoesNotEqual"),
+            UiText.Get("AutoFilter_Criteria_GreaterThan"),
+            UiText.Get("AutoFilter_Criteria_Between"),
+            UiText.Get("AutoFilter_Criteria_Top10"),
+            UiText.Get("AutoFilter_Criteria_AboveAverage"),
+            UiText.Get("AutoFilter_Criteria_Blanks"));
         family.Children.Should().OnlyContain(child => child.Kind == AutoFilterMenuEntryKind.FilterFamilyCommand);
-        family.Children.Single(child => child.Header == "Greater Than").Value.Should().Be(">");
-        family.Children.Single(child => child.Header == "Above Average").Value.Should().Be("above average");
-        family.Children.Single(child => child.Header == "Blanks").Value.Should().Be("blank");
+        family.Children.Single(child => child.Header == UiText.Get("AutoFilter_Criteria_GreaterThan")).Value.Should().Be(">");
+        family.Children.Single(child => child.Header == UiText.Get("AutoFilter_Criteria_AboveAverage")).Value.Should().Be("above average");
+        family.Children.Single(child => child.Header == UiText.Get("AutoFilter_Criteria_Blanks")).Value.Should().Be("blank");
     }
 
     [Fact]
@@ -290,13 +290,13 @@ public sealed class AutoFilterDropdownPlannerTests
         AutoFilterDropdownPlanner.CreateMenuPlan(numberSheet, numberPlan)
             .FilterKind.Should().Be(AutoFilterMenuFilterKind.Number);
         AutoFilterDropdownPlanner.CreateMenuPlan(numberSheet, numberPlan)
-            .Entries.Single(entry => entry.Header == "Number Filters")
+            .Entries.Single(entry => entry.Header == UiText.Get("AutoFilter_FilterFamily_Number"))
             .CriteriaSuggestions.Should().Equal("=", "<>", ">", ">=", "<", "<=", "between:", "top:", "bottom:", "toppercent:", "bottompercent:", "above average", "below average", "blank", "nonblank");
 
         AutoFilterDropdownPlanner.CreateMenuPlan(dateSheet, datePlan)
             .FilterKind.Should().Be(AutoFilterMenuFilterKind.Date);
         AutoFilterDropdownPlanner.CreateMenuPlan(dateSheet, datePlan)
-            .Entries.Single(entry => entry.Header == "Date Filters")
+            .Entries.Single(entry => entry.Header == UiText.Get("AutoFilter_FilterFamily_Date"))
             .CriteriaSuggestions.Should().Equal("date=", "date<>", "date>", "date>=", "date<", "date<=", "datebetween:", "blank", "nonblank");
     }
 
@@ -370,7 +370,7 @@ public sealed class AutoFilterDropdownPlannerTests
         menu.ColorOptions.Should().Equal(
             new AutoFilterColorOption("#00B050", AutoFilterColorFilterKind.CellFillColor, green),
             new AutoFilterColorOption("#FFC000", AutoFilterColorFilterKind.CellFillColor, yellow),
-            new AutoFilterColorOption("No Fill", AutoFilterColorFilterKind.NoFill, null),
+            new AutoFilterColorOption(UiText.Get("AutoFilter_NoFill"), AutoFilterColorFilterKind.NoFill, null),
             new AutoFilterColorOption("#C00000", AutoFilterColorFilterKind.FontColor, red));
     }
 
