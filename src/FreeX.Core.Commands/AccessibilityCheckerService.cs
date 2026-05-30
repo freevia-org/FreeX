@@ -15,6 +15,8 @@ public enum AccessibilityIssueKind
     HiddenRowWithContent,
     HiddenColumnWithContent,
     TableMissingHeaderText,
+    TableDefaultHeaderText,
+    TableDuplicateHeaderText,
     LowContrastCellText,
     LowContrastChartText
 }
@@ -352,6 +354,7 @@ public static class AccessibilityCheckerService
             if (table.HeaderRowCount.GetValueOrDefault(1) <= 0)
                 continue;
 
+            var seenHeaderTexts = new Dictionary<string, CellAddress>(StringComparer.OrdinalIgnoreCase);
             var startCol = (int)table.Range.Start.Col;
             var endCol = (int)table.Range.End.Col;
             for (var col = startCol; col <= endCol; col++)
@@ -360,15 +363,41 @@ public static class AccessibilityCheckerService
                 var columnName = columnOffset < table.Columns.Count ? table.Columns[columnOffset].Name : null;
                 var headerAddress = new CellAddress(sheet.Id, table.Range.Start.Row, (uint)col);
                 var headerText = ReadHeaderText(sheet, headerAddress, columnName);
-                if (!string.IsNullOrWhiteSpace(headerText))
+                if (string.IsNullOrWhiteSpace(headerText))
+                {
+                    issues.Add(new AccessibilityIssue(
+                        AccessibilityIssueKind.TableMissingHeaderText,
+                        sheet.Id,
+                        sheet.Name,
+                        headerAddress.ToA1(),
+                        "Table headers should not be blank."));
                     continue;
+                }
 
-                issues.Add(new AccessibilityIssue(
-                    AccessibilityIssueKind.TableMissingHeaderText,
-                    sheet.Id,
-                    sheet.Name,
-                    headerAddress.ToA1(),
-                    "Table headers should not be blank."));
+                if (AccessibilityTextRules.IsDefaultTableHeaderText(headerText))
+                {
+                    issues.Add(new AccessibilityIssue(
+                        AccessibilityIssueKind.TableDefaultHeaderText,
+                        sheet.Id,
+                        sheet.Name,
+                        headerAddress.ToA1(),
+                        "Table headers should describe the column contents."));
+                    continue;
+                }
+
+                var normalizedHeaderText = NormalizeHeaderText(headerText);
+                if (seenHeaderTexts.TryGetValue(normalizedHeaderText, out _))
+                {
+                    issues.Add(new AccessibilityIssue(
+                        AccessibilityIssueKind.TableDuplicateHeaderText,
+                        sheet.Id,
+                        sheet.Name,
+                        headerAddress.ToA1(),
+                        "Table headers should be unique."));
+                    continue;
+                }
+
+                seenHeaderTexts[normalizedHeaderText] = headerAddress;
             }
         }
     }
@@ -447,19 +476,14 @@ public static class AccessibilityCheckerService
 
     private static string? ReadHeaderText(Sheet sheet, CellAddress headerAddress, string? columnName)
     {
-        if (!string.IsNullOrWhiteSpace(columnName))
-            return columnName;
+        if (sheet.GetCell(headerAddress) is { } cell)
+            return ValueText(cell.Value);
 
-        return sheet.GetCell(headerAddress)?.Value switch
-        {
-            TextValue text => text.Value,
-            NumberValue number => number.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            BoolValue boolean => boolean.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            DateTimeValue dateTime => dateTime.ToDateTime().ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ErrorValue error => error.Code,
-            _ => null
-        };
+        return columnName;
     }
+
+    private static string NormalizeHeaderText(string text) =>
+        string.Join(" ", text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     private static double ContrastRatio(CellColor first, CellColor second)
     {

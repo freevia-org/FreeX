@@ -86,6 +86,40 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void FindIssuesInCell_IgnoresExpandedAddressPathAndFilenameSpans()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+        var text = "Open mailto:teh@example.com, file:///C:/adn/report.xlsx, \\\\server\\teh\\share, /var/adn/report.csv, and teh-report.pdf before recieve.";
+
+        var issues = SpellCheckService.FindIssuesInCell(address, text);
+
+        issues.Select(issue => issue.Word).Should().Equal("recieve");
+    }
+
+    [Fact]
+    public void FindIssuesInCell_ReturnsRepeatedWordsInTextOrder()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+
+        var issues = SpellCheckService.FindIssuesInCell(address, "Please recieve the the file adn receipt.");
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("recieve", "receive"),
+            ("the the", "the"),
+            ("adn", "and"));
+    }
+
+    [Fact]
+    public void FindIssuesInCell_ReturnsCasingAwareKnownCorrectionSuggestions()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+
+        var issues = SpellCheckService.FindIssuesInCell(address, "TEH Teh teh");
+
+        issues.Select(issue => issue.Suggestion).Should().Equal("THE", "The", "the");
+    }
+
+    [Fact]
     public void PlanKnownCorrections_ReplacesAllKnownWholeWordsPreservingCapitalization()
     {
         var wb = new Workbook("test");
@@ -148,7 +182,7 @@ public sealed class SpellCheckServiceTests
         var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
 
         issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
-            ("Calender", "calendar"),
+            ("Calender", "Calendar"),
             ("recomendations", "recommendations"),
             ("tommorow", "tomorrow"),
             ("sucess", "success"),
@@ -188,6 +222,20 @@ public sealed class SpellCheckServiceTests
         var corrected = SpellCheckService.ApplyCorrection(issue, "the");
 
         corrected.Should().Be("The item is not the same as other.");
+    }
+
+    [Fact]
+    public void ApplyCorrection_CanRemoveRepeatedWordIssue()
+    {
+        var issue = new SpellingIssue(
+            new CellAddress(SheetId.New(), 1, 1),
+            "the the",
+            "the",
+            "Please review the the file.");
+
+        var corrected = SpellCheckService.ApplyCorrection(issue, "the");
+
+        corrected.Should().Be("Please review the file.");
     }
 
     [Theory]

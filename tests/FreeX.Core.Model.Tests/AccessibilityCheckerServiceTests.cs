@@ -75,6 +75,7 @@ public sealed class AccessibilityCheckerServiceTests
     [InlineData("Chart Title")]
     [InlineData("chart title")]
     [InlineData("Title")]
+    [InlineData("Chart 1")]
     public void FindIssues_FlagsChartsWithGenericTitleText(string title)
     {
         var workbook = new Workbook("Accessibility");
@@ -156,6 +157,8 @@ public sealed class AccessibilityCheckerServiceTests
     [Theory]
     [InlineData("Picture 1")]
     [InlineData("Image")]
+    [InlineData("Image 2.")]
+    [InlineData("IMG_0001.jpg")]
     [InlineData("Shape")]
     [InlineData("Text box")]
     public void FindIssues_FlagsObjectsWithGenericAltText(string altText)
@@ -370,6 +373,25 @@ public sealed class AccessibilityCheckerServiceTests
             .Which.Location.Should().Be("A1");
     }
 
+    [Theory]
+    [InlineData("Click here.")]
+    [InlineData("Learn more >")]
+    [InlineData("example.com/report")]
+    [InlineData("support@example.com")]
+    public void FindIssues_FlagsHyperlinksWithPunctuatedGenericOrAddressLikeDisplayText(string displayText)
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Links");
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        sheet.SetCell(address, new TextValue(displayText));
+        sheet.Hyperlinks[address] = "https://example.com/report";
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HyperlinkDisplayTextIsUrl)
+            .Which.Location.Should().Be("A1");
+    }
+
     [Fact]
     public void FindIssues_FlagsDefaultWorksheetNames()
     {
@@ -463,6 +485,35 @@ public sealed class AccessibilityCheckerServiceTests
         issue.SheetName.Should().Be("Sales");
         issue.Location.Should().Be("B1");
         issue.Message.Should().Be("Table headers should not be blank.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsStructuredTablesWithDefaultAndDuplicateHeaderText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Column1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue(" region "));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(42));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(43));
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 3)),
+            HeaderRowCount = 1,
+            HasAutoFilter = true,
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.TableDefaultHeaderText)
+            .Which.Location.Should().Be("A1");
+        issues.Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.TableDuplicateHeaderText)
+            .Which.Location.Should().Be("C1");
     }
 
     [Fact]
