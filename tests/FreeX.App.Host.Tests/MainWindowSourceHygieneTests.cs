@@ -102,6 +102,51 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void AppChrome_DoesNotUseLegacyFreexcelGreenThemeConstants()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
+        var legacyFragments = new[]
+        {
+            "#217346",
+            "#185C37",
+            "33, 115, 70",
+            "24, 92, 55",
+            "0x21, 0x73, 0x46"
+        };
+
+        var offenders = Directory
+            .EnumerateFiles(appHostDirectory, "*.*", SearchOption.AllDirectories)
+            .Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+                           path.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(path =>
+            {
+                var source = File.ReadAllText(path);
+                return legacyFragments
+                    .Where(fragment => source.Contains(fragment, StringComparison.Ordinal))
+                    .Select(fragment => $"{Path.GetRelativePath(appHostDirectory, path)} contains {fragment}");
+            })
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        offenders.Should().BeEmpty("old Freexcel-green chrome should use the shared FreeX theme resources or #0F6D8C accent instead");
+    }
+
+    [Fact]
+    public void RibbonSplitButtonHover_UsesRibbonButtonHoverBrushInsteadOfMenuHoverBrush()
+    {
+        var ribbonSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Ribbon.cs"));
+        var resources = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "MainWindowResources.xaml"));
+        var theme = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "ThemeResources.xaml"));
+        var hoverMethod = ExtractMethodSource(ribbonSource, "private static Brush GetRibbonDropdownHoverBrush(");
+
+        resources.Should().Contain("FreeXRibbonButtonHoverBrush");
+        theme.Should().Contain("FreeXRibbonButtonHoverBrush\" Color=\"#BEE6FD\"");
+        hoverMethod.Should().Contain("FreeXRibbonButtonHoverBrush");
+        hoverMethod.Should().NotContain("FreeXAccentSoftBrush");
+        ribbonSource.Should().Contain("Color.FromRgb(0x3C, 0x7F, 0xB1)");
+    }
+
+    [Fact]
     public void UpdateViewport_RoutesSparklineValuesThroughSparklineValueCache()
     {
         var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));

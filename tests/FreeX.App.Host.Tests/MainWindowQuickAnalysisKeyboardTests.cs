@@ -188,11 +188,11 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         }
 
         public string? FocusedMenuHeader =>
-            Keyboard.FocusedElement is MenuItem menuItem
-                ? menuItem.Header?.ToString()
-                : ActiveContextMenu is { } menu &&
-                  FocusManager.GetFocusedElement(menu) is MenuItem scopedMenuItem
-                    ? scopedMenuItem.Header?.ToString()
+            ActiveContextMenu is { } menu &&
+            FocusManager.GetFocusedElement(menu) is MenuItem scopedMenuItem
+                ? scopedMenuItem.Header?.ToString()
+                : Keyboard.FocusedElement is MenuItem menuItem
+                    ? menuItem.Header?.ToString()
                     : ActiveContextMenu?.Items.OfType<MenuItem>()
                         .FirstOrDefault(item => item.IsEnabled)
                         ?.Header

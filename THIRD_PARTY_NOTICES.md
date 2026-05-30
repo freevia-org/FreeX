@@ -4,6 +4,30 @@ This file summarizes third-party NuGet packages referenced by the FreeX
 solution after restore on 2026-05-30. Each package remains governed by its own
 license. This notice does not change those license terms.
 
+See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for bundled common
+license text and package-provided license text found in the restored packages.
+
+## Audit Status
+
+- Audit command: `dotnet restore FreeX.slnx --disable-parallel -v:minimal`.
+- Restored package inventory: 40 unique NuGet packages across 15
+  `project.assets.json` files.
+- Coverage: every restored package is listed below.
+- Runtime package posture: the publishable app dependency set is covered by
+  MIT, Apache-2.0, and BSD-3-Clause style licenses.
+- Package-provided `NOTICE` files found in the local NuGet cache: none.
+- Package-provided license files found: FluentAssertions `LICENSE`,
+  Newtonsoft.Json `LICENSE.md`, SharpVectors.Wpf `lib/License.txt`, and
+  System.IO.Packaging `LICENSE.TXT`.
+
+## Commercial-Use Note
+
+FluentAssertions 8.9.0 is a test/development dependency only; it is not part of
+the FreeX runtime publish output. Its package metadata points to the Xceed
+Community License, which is limited to non-commercial use unless a commercial
+license is obtained. If FreeX source/tests are distributed for commercial use,
+replace this dependency or confirm the project has the required Xceed license.
+
 ## Runtime Packages
 
 | Package | Version | License | Project |
@@ -56,9 +80,8 @@ license. This notice does not change those license terms.
 
 ## Common License Texts
 
-- MIT: https://opensource.org/license/mit
-- Apache License 2.0: https://www.apache.org/licenses/LICENSE-2.0
-- BSD 3-Clause: https://opensource.org/license/bsd-3-clause
+- MIT, Apache License 2.0, and package-provided BSD/additional license text are
+  bundled in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 Some package licenses are provided as files or legacy license URLs inside the
 NuGet package metadata. Preserve those package-provided notices when
