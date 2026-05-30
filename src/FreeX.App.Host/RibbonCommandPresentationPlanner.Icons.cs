@@ -2,9 +2,143 @@ namespace FreeX.App.Host;
 
 public static partial class RibbonCommandPresentationPlanner
 {
+    private static readonly IReadOnlyDictionary<string, RibbonCommandIcon> ExactCommandIcons =
+        new Dictionary<string, RibbonCommandIcon>(StringComparer.Ordinal)
+        {
+            ["100%"] = Icon(RibbonCommandIconKind.Zoom),
+            ["accounting number format"] = Icon(RibbonCommandIconKind.Currency),
+            ["advanced filter"] = Icon(RibbonCommandIconKind.Filter),
+            ["align left"] = Icon(RibbonCommandIconKind.Align),
+            ["align right"] = Icon(RibbonCommandIconKind.Align),
+            ["arrange all"] = Icon(RibbonCommandIconKind.PageBreak),
+            ["autosum"] = Icon(RibbonCommandIconKind.Sum),
+            ["bar chart"] = Icon(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart),
+            ["bold"] = Icon(RibbonCommandIconKind.Bold),
+            ["bottom align"] = Icon(RibbonCommandIconKind.Align),
+            ["center"] = Icon(RibbonCommandIconKind.Align),
+            ["clear"] = Icon(RibbonCommandIconKind.Clear),
+            ["clear filter"] = Icon(RibbonCommandIconKind.Clear),
+            ["column chart"] = Icon(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart),
+            ["comma style"] = Icon(RibbonCommandIconKind.Comma),
+            ["conditional formatting"] = Icon(RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color),
+            ["copy"] = Icon(RibbonCommandIconKind.Copy),
+            ["cut"] = Icon(RibbonCommandIconKind.Cut),
+            ["custom views"] = Icon(RibbonCommandIconKind.View),
+            ["decrease decimal places"] = Icon(RibbonCommandIconKind.Decimal),
+            ["decrease font size"] = Icon(RibbonCommandIconKind.Font),
+            ["decrease indent"] = Icon(RibbonCommandIconKind.Align),
+            ["delete"] = Icon(RibbonCommandIconKind.Delete),
+            ["fill"] = Icon(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill),
+            ["fill color"] = Icon(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill),
+            ["find & select"] = Icon(RibbonCommandIconKind.Search),
+            ["flash fill"] = Icon(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill),
+            ["font"] = Icon(RibbonCommandIconKind.Font),
+            ["font color"] = Icon(RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color),
+            ["font size"] = Icon(RibbonCommandIconKind.Font),
+            ["format"] = Icon(RibbonCommandIconKind.Table),
+            ["format as table"] = Icon(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green),
+            ["format painter"] = Icon(RibbonCommandIconKind.FormatPainter),
+            ["formula bar"] = Icon(RibbonCommandIconKind.Function),
+            ["freeze panes"] = Icon(RibbonCommandIconKind.Freeze),
+            ["geography"] = Icon(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Data),
+            ["get add-ins"] = Icon(RibbonCommandIconKind.Insert, RibbonCommandIconAccent.Data),
+            ["get data"] = Icon(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data),
+            ["gridlines"] = Icon(RibbonCommandIconKind.Grid),
+            ["group"] = Icon(RibbonCommandIconKind.Group),
+            ["headings"] = Icon(RibbonCommandIconKind.Label),
+            ["hide"] = Icon(RibbonCommandIconKind.Window),
+            ["increase decimal places"] = Icon(RibbonCommandIconKind.Decimal),
+            ["increase font size"] = Icon(RibbonCommandIconKind.Font),
+            ["increase indent"] = Icon(RibbonCommandIconKind.Align),
+            ["insert"] = Icon(RibbonCommandIconKind.Insert),
+            ["italic"] = Icon(RibbonCommandIconKind.Italic),
+            ["line chart"] = Icon(RibbonCommandIconKind.ChartLine, RibbonCommandIconAccent.Chart),
+            ["macros"] = Icon(RibbonCommandIconKind.Function),
+            ["merge & center"] = Icon(RibbonCommandIconKind.Merge),
+            ["middle align"] = Icon(RibbonCommandIconKind.Align),
+            ["my add-ins"] = Icon(RibbonCommandIconKind.Insert, RibbonCommandIconAccent.Data),
+            ["new window"] = Icon(RibbonCommandIconKind.Window),
+            ["normal"] = Icon(RibbonCommandIconKind.Grid),
+            ["number format"] = Icon(RibbonCommandIconKind.Number),
+            ["open"] = Icon(RibbonCommandIconKind.GetData),
+            ["orientation"] = Icon(RibbonCommandIconKind.Orientation),
+            ["page break preview"] = Icon(RibbonCommandIconKind.PageBreak),
+            ["page layout"] = Icon(RibbonCommandIconKind.Page),
+            ["paste"] = Icon(RibbonCommandIconKind.Paste),
+            ["percent style"] = Icon(RibbonCommandIconKind.Percent),
+            ["pivottable"] = Icon(RibbonCommandIconKind.PivotTable, RibbonCommandIconAccent.Green),
+            ["pictures"] = Icon(RibbonCommandIconKind.Picture),
+            ["queries & connections"] = Icon(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data),
+            ["reapply"] = Icon(RibbonCommandIconKind.Refresh, RibbonCommandIconAccent.Data),
+            ["recommended charts"] = Icon(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart),
+            ["recommended pivottables"] = Icon(RibbonCommandIconKind.PivotTable, RibbonCommandIconAccent.Green),
+            ["redo"] = Icon(RibbonCommandIconKind.Redo),
+            ["refresh all"] = Icon(RibbonCommandIconKind.Refresh, RibbonCommandIconAccent.Data),
+            ["remove duplicates"] = Icon(RibbonCommandIconKind.Delete),
+            ["reset window position"] = Icon(RibbonCommandIconKind.History),
+            ["ruler"] = Icon(RibbonCommandIconKind.Ruler),
+            ["shapes"] = Icon(RibbonCommandIconKind.Rectangle),
+            ["sort & filter"] = Icon(RibbonCommandIconKind.Sort),
+            ["sort a to z"] = Icon(RibbonCommandIconKind.Sort),
+            ["sort z to a"] = Icon(RibbonCommandIconKind.Sort),
+            ["split"] = Icon(RibbonCommandIconKind.PageBreak),
+            ["stocks"] = Icon(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Data),
+            ["strikethrough"] = Icon(RibbonCommandIconKind.Strikethrough),
+            ["switch windows"] = Icon(RibbonCommandIconKind.History),
+            ["synchronous scrolling"] = Icon(RibbonCommandIconKind.History),
+            ["table"] = Icon(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green),
+            ["text to columns"] = Icon(RibbonCommandIconKind.TextColumns),
+            ["top align"] = Icon(RibbonCommandIconKind.Align),
+            ["underline"] = Icon(RibbonCommandIconKind.Underline),
+            ["ungroup"] = Icon(RibbonCommandIconKind.Ungroup),
+            ["unhide"] = Icon(RibbonCommandIconKind.Window),
+            ["view side by side"] = Icon(RibbonCommandIconKind.History),
+            ["wrap text"] = Icon(RibbonCommandIconKind.Wrap),
+            ["zoom"] = Icon(RibbonCommandIconKind.Zoom),
+            ["zoom to selection"] = Icon(RibbonCommandIconKind.Zoom)
+        };
+
+    private static readonly IReadOnlyDictionary<string, RibbonCommandIcon> ExactGroupIcons =
+        new Dictionary<string, RibbonCommandIcon>(StringComparer.Ordinal)
+        {
+            ["accessibility"] = Icon(RibbonCommandIconKind.Accessibility, RibbonCommandIconAccent.Warning),
+            ["add-ins"] = Icon(RibbonCommandIconKind.GetData),
+            ["alignment"] = Icon(RibbonCommandIconKind.Align),
+            ["charts"] = Icon(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart),
+            ["clipboard"] = Icon(RibbonCommandIconKind.Paste),
+            ["comments"] = Icon(RibbonCommandIconKind.Comment),
+            ["data"] = Icon(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data),
+            ["data tools"] = Icon(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data),
+            ["data types"] = Icon(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data),
+            ["editing"] = Icon(RibbonCommandIconKind.Search),
+            ["filter"] = Icon(RibbonCommandIconKind.Filter),
+            ["font"] = Icon(RibbonCommandIconKind.Font),
+            ["forecast"] = Icon(RibbonCommandIconKind.ChartLine),
+            ["get & transform data"] = Icon(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data),
+            ["illustrations"] = Icon(RibbonCommandIconKind.Picture),
+            ["macros"] = Icon(RibbonCommandIconKind.GetData),
+            ["number"] = Icon(RibbonCommandIconKind.Number),
+            ["outline"] = Icon(RibbonCommandIconKind.Group),
+            ["proofing"] = Icon(RibbonCommandIconKind.Spelling),
+            ["queries & connections"] = Icon(RibbonCommandIconKind.GetData, RibbonCommandIconAccent.Data),
+            ["show"] = Icon(RibbonCommandIconKind.View),
+            ["sort & filter"] = Icon(RibbonCommandIconKind.Filter),
+            ["sparklines"] = Icon(RibbonCommandIconKind.Sparkline),
+            ["styles"] = Icon(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme),
+            ["tables"] = Icon(RibbonCommandIconKind.Table),
+            ["tools"] = Icon(RibbonCommandIconKind.Search),
+            ["tours"] = Icon(RibbonCommandIconKind.ChartColumn),
+            ["window"] = Icon(RibbonCommandIconKind.Window),
+            ["workbook views"] = Icon(RibbonCommandIconKind.Grid),
+            ["zoom"] = Icon(RibbonCommandIconKind.Zoom)
+        };
+
     public static RibbonCommandIcon GetIcon(string commandName)
     {
         var name = NormalizeCommandText(commandName);
+
+        if (ExactCommandIcons.TryGetValue(name, out var exactIcon))
+            return exactIcon;
 
         if (name.Contains("diagnostics")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("save")) return new(RibbonCommandIconKind.Save);
@@ -240,6 +374,9 @@ public static partial class RibbonCommandPresentationPlanner
     {
         var name = NormalizeCommandText(groupName);
 
+        if (ExactGroupIcons.TryGetValue(name, out var exactIcon))
+            return exactIcon;
+
         if (name.Contains("clipboard")) return new(RibbonCommandIconKind.Paste);
         if (name.Contains("font")) return new(RibbonCommandIconKind.Font);
         if (name.Contains("alignment")) return new(RibbonCommandIconKind.Align);
@@ -294,5 +431,10 @@ public static partial class RibbonCommandPresentationPlanner
 
         return new(RibbonCommandIconKind.Generic);
     }
+
+    private static RibbonCommandIcon Icon(
+        RibbonCommandIconKind kind,
+        RibbonCommandIconAccent accent = RibbonCommandIconAccent.None) =>
+        new(kind, accent);
 
 }
