@@ -2683,7 +2683,8 @@ public sealed class DataToolDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
 
-        source.Should().Contain("ShowOwnedMessage(\"Select a range first.\", \"Data Validation\", MessageBoxButton.OK, MessageBoxImage.Information);");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_SelectRangeFirst\")");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_DataValidationTitle\")");
         source.Should().NotContain("MessageBox.Show(\"Select a range first.\", \"Data Validation\")");
     }
 

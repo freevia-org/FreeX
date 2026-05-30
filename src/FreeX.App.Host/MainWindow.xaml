@@ -4744,12 +4744,14 @@
                                     <TextBlock Text="{local:Loc Key=MainWindow_Text_AboutFreeX}"
                                                FontSize="13" FontWeight="SemiBold" Foreground="#555"
                                                Margin="0,0,0,10"/>
-                                    <TextBlock FontSize="12" Foreground="#555"
+                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_FreeXDescription}"
+                                               FontSize="12" Foreground="#555"
                                                TextWrapping="Wrap" LineHeight="20"
-                                               Margin="0,0,0,6">FreeX is a free spreadsheet app for .xlsx files. It supports workbook editing, formulas, styling, charts, and local file workflows.</TextBlock>
-                                    <TextBlock FontSize="11" Foreground="#666"
+                                               Margin="0,0,0,6"/>
+                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_FreeXTrademarkDisclaimer}"
+                                               FontSize="11" Foreground="#666"
                                                TextWrapping="Wrap" LineHeight="18"
-                                               Margin="0,0,0,6">FreeX is not affiliated with, endorsed by, or sponsored by Microsoft. Microsoft Excel is a trademark of Microsoft Corporation.</TextBlock>
+                                               Margin="0,0,0,6"/>
                                     <TextBlock Text="{local:Loc Key=MainWindow_Text_Version05TesterRelease}"
                                                FontSize="11" Foreground="#888"/>
                                 </StackPanel>

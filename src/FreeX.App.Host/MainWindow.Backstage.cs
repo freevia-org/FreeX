@@ -245,7 +245,7 @@ public partial class MainWindow
 
     private async Task RequestNewWorkbookAsync()
     {
-        if (!await ConfirmSaveBeforeDestructiveActionAsync("Save changes before creating a new workbook?"))
+        if (!await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeCreatingWorkbook")))
             return;
 
         CreateNewWorkbook();
@@ -262,7 +262,10 @@ public partial class MainWindow
         try
         {
             _isOpeningFile = true;
-            ShowOpenProgress("Opening workbook", "Loading file (preparing)", 1);
+            ShowOpenProgress(
+                OpenWorkbookProgressPlanner.ProgressTitle(),
+                OpenWorkbookProgressPlanner.FormatLoadingFileDetail("preparing", TimeSpan.Zero),
+                1);
 
             var progress = new Progress<OpenProgressUpdate>(
                 update => ShowOpenProgress(update.Title, update.Detail, update.Percent));
@@ -280,11 +283,17 @@ public partial class MainWindow
             MarkWorkbookSaved();
 
             _recentFiles.AddOrUpdate(path);
-            ShowOpenProgress("Opening workbook", "Loading file (preparing view)", 98);
+            ShowOpenProgress(
+                OpenWorkbookProgressPlanner.ProgressTitle(),
+                OpenWorkbookProgressPlanner.FormatLoadingFileDetail("preparing view", TimeSpan.Zero),
+                98);
             ApplyOpenedWorksheetViewState();
             RefreshSheetTabs();
             HideStartScreen();
-            ShowOpenProgress("Opening workbook", "Loading file (done)", 100);
+            ShowOpenProgress(
+                OpenWorkbookProgressPlanner.ProgressTitle(),
+                OpenWorkbookProgressPlanner.FormatLoadingFileDetail("done", TimeSpan.Zero),
+                100);
             ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();
             ShowXlsxLoadWarningsIfNeeded(result.LoadWarnings);
             RecordDiagnosticEvent("workbook_opened", new Dictionary<string, string?>
@@ -304,7 +313,9 @@ public partial class MainWindow
                 ["format"] = format?.FormatName,
                 ["reason"] = ex.GetType().Name
             });
-            ShowOwnedMessage($"Failed to open file:\n{ex.Message}", "Open Error",
+            ShowOwnedMessage(
+                UiText.Format("MainWindowMessage_OpenFileFailed", ex.Message),
+                UiText.Get("MainWindowMessage_OpenErrorTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
@@ -595,7 +606,10 @@ public partial class MainWindow
         try
         {
             _isSavingFile = true;
-            ShowSaveProgress("Saving workbook", "Saving file (preparing)", 1);
+            ShowSaveProgress(
+                UiText.Get("Progress_SavingWorkbook"),
+                UiText.Get("Progress_SavingFilePreparing"),
+                1);
             var progress = new Progress<SaveProgressUpdate>(
                 update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
             await new SaveWorkbookWriter().SaveAsync(target.Path, target.Adapter, _workbook, progress);
@@ -622,7 +636,9 @@ public partial class MainWindow
                 ["format"] = target.Adapter.FormatName,
                 ["reason"] = ex.GetType().Name
             });
-            ShowOwnedMessage($"Failed to save file:\n{ex.Message}", "Save Error",
+            ShowOwnedMessage(
+                UiText.Format("MainWindowMessage_SaveFileFailed", ex.Message),
+                UiText.Get("MainWindowMessage_SaveErrorTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Error);
             return false;
         }
@@ -685,11 +701,16 @@ public partial class MainWindow
 
         const int maxShown = 10;
         var lines = warnings.Take(maxShown).ToList();
-        var body = "Some features could not be loaded from the file and may be missing:\n\n"
-            + string.Join("\n", lines.Select(w => $"• {w}"));
+        var body = UiText.Format(
+            "MainWindowMessage_XlsxLoadWarningsBodyFormat",
+            string.Join("\n", lines.Select(w => UiText.Format("MainWindowMessage_BulletListItemFormat", w))));
         if (warnings.Count > maxShown)
-            body += $"\n\n…and {warnings.Count - maxShown} more.";
+            body += UiText.Format("MainWindowMessage_XlsxLoadWarningsMoreFormat", warnings.Count - maxShown);
 
-        ShowOwnedMessage(body, "File Opened with Warnings", MessageBoxButton.OK, MessageBoxImage.Warning);
+        ShowOwnedMessage(
+            body,
+            UiText.Get("MainWindowMessage_FileOpenedWithWarningsTitle"),
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
     }
 }

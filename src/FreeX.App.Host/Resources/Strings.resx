@@ -13455,6 +13455,45 @@ Changing cell value: {2}</value>
   <data name="MainWindowMessage_ChartInvalidDataRange" xml:space="preserve">
     <value>Enter a valid chart data range.</value>
   </data>
+  <data name="MainWindowMessage_ChartAxisBoundsRequiresChart" xml:space="preserve">
+    <value>Insert or select a chart before changing axis bounds.</value>
+  </data>
+  <data name="MainWindowMessage_ChartAxisBoundsRequiresNumericData" xml:space="preserve">
+    <value>Add numeric chart data before setting axis bounds.</value>
+  </data>
+  <data name="MainWindowMessage_ChartAxisBoundsSupportedTypes" xml:space="preserve">
+    <value>Axis bounds are currently supported for chart value axes only.</value>
+  </data>
+  <data name="MainWindowMessage_ChartAxisScaleRequiresChart" xml:space="preserve">
+    <value>Insert or select a chart before changing axis scale.</value>
+  </data>
+  <data name="MainWindowMessage_ChartAxisGridlinesRequiresChart" xml:space="preserve">
+    <value>Insert or select a chart before changing axis gridlines.</value>
+  </data>
+  <data name="MainWindowMessage_ChartAxisLabelFormattingRequiresChart" xml:space="preserve">
+    <value>Insert or select a chart before changing axis label formatting.</value>
+  </data>
+  <data name="MainWindowMessage_ChartAxisLabelRotationRequiresChart" xml:space="preserve">
+    <value>Insert or select a chart before changing axis label rotation.</value>
+  </data>
+  <data name="MainWindowMessage_ChartAxisLabelsRequiresChart" xml:space="preserve">
+    <value>Insert or select a chart before changing axis labels.</value>
+  </data>
+  <data name="MainWindowMessage_ChartAxisLineFormattingRequiresChart" xml:space="preserve">
+    <value>Insert or select a chart before changing axis line formatting.</value>
+  </data>
+  <data name="MainWindowMessage_ChartAxisNumberFormatRequiresChart" xml:space="preserve">
+    <value>Insert or select a chart before changing axis number formats.</value>
+  </data>
+  <data name="MainWindowMessage_ChartAxisOptionsRequiresChart" xml:space="preserve">
+    <value>Insert or select a chart before changing axis options.</value>
+  </data>
+  <data name="MainWindowMessage_ChartAxisTicksRequiresChart" xml:space="preserve">
+    <value>Insert or select a chart before changing axis ticks.</value>
+  </data>
+  <data name="MainWindowMessage_ChartGridlineFormattingRequiresChart" xml:space="preserve">
+    <value>Insert or select a chart before changing gridline formatting.</value>
+  </data>
   <data name="MainWindowMessage_ChartPieOptionsUnsupported" xml:space="preserve">
     <value>Pie format options only apply to pie and doughnut charts.</value>
   </data>
@@ -13463,6 +13502,9 @@ Changing cell value: {2}</value>
   </data>
   <data name="MainWindowMessage_ChartSecondaryAxisUnsupported" xml:space="preserve">
     <value>Secondary value axes require a supported chart with at least two data series.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSecondaryAxisRequiresChart" xml:space="preserve">
+    <value>Insert or select a chart before changing secondary axes.</value>
   </data>
   <data name="MainWindowMessage_ChartSelectBarColumnForGapWidth" xml:space="preserve">
     <value>Insert or select a bar or column chart before changing gap width.</value>
@@ -13548,8 +13590,20 @@ Changing cell value: {2}</value>
   <data name="MainWindowMessage_ChartTrendlinesSupportedTypes" xml:space="preserve">
     <value>Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.</value>
   </data>
+  <data name="MainWindowMessage_ChartXAxisLogScaleSupportedTypes" xml:space="preserve">
+    <value>X-axis log scale is currently supported for bar, scatter, and bubble charts with value X axes.</value>
+  </data>
+  <data name="MainWindowMessage_ChartYAxisLogScaleSupportedTypes" xml:space="preserve">
+    <value>Y-axis log scale is currently supported for column, line, area, scatter, and bubble charts with value Y axes.</value>
+  </data>
   <data name="MainWindowMessage_CheckForUpdatesTitle" xml:space="preserve">
     <value>Check for Updates</value>
+  </data>
+  <data name="MainWindowMessage_CommandCouldNotBeCompleted" xml:space="preserve">
+    <value>The command could not be completed.</value>
+  </data>
+  <data name="MainWindowMessage_CommandErrorTitle" xml:space="preserve">
+    <value>Command Error</value>
   </data>
   <data name="MainWindowMessage_CommentAdded" xml:space="preserve">
     <value>Comment added to {0}.</value>
@@ -13729,5 +13783,381 @@ Changing cell value: {2}</value>
   </data>
   <data name="MainWindowMessage_UnhideSheetTitle" xml:space="preserve">
     <value>Unhide Sheet</value>
+  </data>
+  <data name="FilterPrompt_ErrorBetweenSyntax" xml:space="preserve">
+    <value>Enter a between filter as between:min:max.</value>
+  </data>
+  <data name="FilterPrompt_ErrorComparisonNumber" xml:space="preserve">
+    <value>Enter a valid number after the comparison operator.</value>
+  </data>
+  <data name="FilterPrompt_ErrorCompositeSyntax" xml:space="preserve">
+    <value>Enter a composite filter as and:criterion1|criterion2 or or:criterion1|criterion2.</value>
+  </data>
+  <data name="FilterPrompt_ErrorDateBetweenSyntax" xml:space="preserve">
+    <value>Enter a date-between filter as datebetween:yyyy-mm-dd:yyyy-mm-dd.</value>
+  </data>
+  <data name="FilterPrompt_ErrorDateFormat" xml:space="preserve">
+    <value>Enter dates as yyyy-mm-dd.</value>
+  </data>
+  <data name="FilterPrompt_ErrorPercentageRange" xml:space="preserve">
+    <value>Enter a percentage from 1 to 100.</value>
+  </data>
+  <data name="FilterPrompt_ErrorPositiveItemCount" xml:space="preserve">
+    <value>Enter a positive item count.</value>
+  </data>
+  <data name="FilterPrompt_ErrorTextToMatch" xml:space="preserve">
+    <value>Enter text to match.</value>
+  </data>
+  <data name="FilterPrompt_ErrorTopBottomSyntax" xml:space="preserve">
+    <value>Enter top:n, bottom:n, toppercent:n, or bottompercent:n.</value>
+  </data>
+  <data name="MainWindow_AutomationName_Maximize" xml:space="preserve">
+    <value>Maximize</value>
+  </data>
+  <data name="MainWindow_AutomationName_RestoreDown" xml:space="preserve">
+    <value>Restore Down</value>
+  </data>
+  <data name="MainWindow_RibbonCollapsedGroupFallbackName" xml:space="preserve">
+    <value>Commands</value>
+  </data>
+  <data name="MainWindow_RibbonCollapsedGroupTooltipFormat" xml:space="preserve">
+    <value>Show the {0} commands.</value>
+  </data>
+  <data name="MainWindow_Text_FreeXDescription" xml:space="preserve">
+    <value>FreeX is a free spreadsheet app for .xlsx files. It supports workbook editing, formulas, styling, charts, and local file workflows.</value>
+  </data>
+  <data name="MainWindow_Text_FreeXTrademarkDisclaimer" xml:space="preserve">
+    <value>FreeX is not affiliated with, endorsed by, or sponsored by Microsoft. Microsoft Excel is a trademark of Microsoft Corporation.</value>
+  </data>
+  <data name="MainWindowDialog_ExportPdfXpsFilter" xml:space="preserve">
+    <value>PDF files (*.pdf)|*.pdf|XPS files (*.xps)|*.xps</value>
+  </data>
+  <data name="MainWindowDialog_ExportPdfXpsTitle" xml:space="preserve">
+    <value>Export as PDF / XPS</value>
+  </data>
+  <data name="MainWindowDialog_FilterTitle" xml:space="preserve">
+    <value>Filter</value>
+  </data>
+  <data name="MainWindowDialog_ImageFilesFilter" xml:space="preserve">
+    <value>Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*</value>
+  </data>
+  <data name="MainWindowDialog_InsertPictureTitle" xml:space="preserve">
+    <value>Insert Picture</value>
+  </data>
+  <data name="MainWindowDialog_InsertTextBoxTitle" xml:space="preserve">
+    <value>Insert Text Box</value>
+  </data>
+  <data name="MainWindowDialog_PageBreakDefaultClear" xml:space="preserve">
+    <value>clear</value>
+  </data>
+  <data name="MainWindowDialog_PageBreakDefaultRowFormat" xml:space="preserve">
+    <value>row {0}</value>
+  </data>
+  <data name="MainWindowDialog_SheetBackgroundTitle" xml:space="preserve">
+    <value>Sheet Background</value>
+  </data>
+  <data name="MainWindowDialog_TextEntryLabel" xml:space="preserve">
+    <value>Text:</value>
+  </data>
+  <data name="MainWindowMessage_BulletListItemFormat" xml:space="preserve">
+    <value>- {0}</value>
+  </data>
+  <data name="MainWindowMessage_CfRuleTitle" xml:space="preserve">
+    <value>CF Rule</value>
+  </data>
+  <data name="MainWindowMessage_CropPictureTitle" xml:space="preserve">
+    <value>Crop Picture</value>
+  </data>
+  <data name="MainWindowMessage_CropRequiresInsertedImage" xml:space="preserve">
+    <value>Only inserted image pictures can be cropped.</value>
+  </data>
+  <data name="MainWindowMessage_DataValidationTitle" xml:space="preserve">
+    <value>Data Validation</value>
+  </data>
+  <data name="MainWindowMessage_DeferredCommandFallbackName" xml:space="preserve">
+    <value>This command</value>
+  </data>
+  <data name="MainWindowMessage_DrawTitle" xml:space="preserve">
+    <value>Draw</value>
+  </data>
+  <data name="MainWindowMessage_ExportErrorTitle" xml:space="preserve">
+    <value>Export Error</value>
+  </data>
+  <data name="MainWindowMessage_ExportOptionsTitle" xml:space="preserve">
+    <value>Export Options</value>
+  </data>
+  <data name="MainWindowMessage_ExportPdfFailed" xml:space="preserve">
+    <value>Failed to save PDF file:
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_ExportPdfSavedFormat" xml:space="preserve">
+    <value>{0}
+
+Saved PDF file:
+{1}</value>
+  </data>
+  <data name="MainWindowMessage_ExportPdfTitle" xml:space="preserve">
+    <value>Export PDF</value>
+  </data>
+  <data name="MainWindowMessage_ExportUnsupportedOptions" xml:space="preserve">
+    <value>Unsupported export options.</value>
+  </data>
+  <data name="MainWindowMessage_ExportXpsFailed" xml:space="preserve">
+    <value>Failed to save XPS file:
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_ExportXpsSavedFormat" xml:space="preserve">
+    <value>Saved XPS file:
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_ExportXpsSavedWithOptionsFormat" xml:space="preserve">
+    <value>{0}
+
+Saved XPS file:
+{1}</value>
+  </data>
+  <data name="MainWindowMessage_ExportXpsTitle" xml:space="preserve">
+    <value>Export XPS</value>
+  </data>
+  <data name="MainWindowMessage_FileOpenedWithWarningsTitle" xml:space="preserve">
+    <value>File Opened with Warnings</value>
+  </data>
+  <data name="MainWindowMessage_FilterSelectAtLeastOneItem" xml:space="preserve">
+    <value>Select at least one filter item.</value>
+  </data>
+  <data name="MainWindowMessage_FilterUnsupportedCriterion" xml:space="preserve">
+    <value>Enter a supported filter criterion.</value>
+  </data>
+  <data name="MainWindowMessage_InsertPictureReadFailed" xml:space="preserve">
+    <value>Could not read picture file:
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_InsertPictureTitle" xml:space="preserve">
+    <value>Insert Picture</value>
+  </data>
+  <data name="MainWindowMessage_InsertSparklineInvalidDataRange" xml:space="preserve">
+    <value>Invalid data range.</value>
+  </data>
+  <data name="MainWindowMessage_InsertSparklineInvalidLocation" xml:space="preserve">
+    <value>Invalid location cell.</value>
+  </data>
+  <data name="MainWindowMessage_InsertSparklineTitle" xml:space="preserve">
+    <value>Insert Sparkline</value>
+  </data>
+  <data name="MainWindowMessage_NoDrawingObjectOnSheet" xml:space="preserve">
+    <value>No drawing object found on this sheet.</value>
+  </data>
+  <data name="MainWindowMessage_NoDrawingShapeOnSheet" xml:space="preserve">
+    <value>No drawing shape found on this sheet.</value>
+  </data>
+  <data name="MainWindowMessage_NoDrawingShapesOnSheet" xml:space="preserve">
+    <value>No drawing shapes are available on this sheet.</value>
+  </data>
+  <data name="MainWindowMessage_NoObjectsOnSheet" xml:space="preserve">
+    <value>No objects are available on this sheet.</value>
+  </data>
+  <data name="MainWindowMessage_NoPictureFoundOnSheet" xml:space="preserve">
+    <value>No picture found on this sheet.</value>
+  </data>
+  <data name="MainWindowMessage_ObjectFillTitle" xml:space="preserve">
+    <value>Object Fill</value>
+  </data>
+  <data name="MainWindowMessage_ObjectOutlineTitle" xml:space="preserve">
+    <value>Object Outline</value>
+  </data>
+  <data name="MainWindowMessage_ObjectSizeTitle" xml:space="preserve">
+    <value>Object Size</value>
+  </data>
+  <data name="MainWindowMessage_OpenErrorTitle" xml:space="preserve">
+    <value>Open Error</value>
+  </data>
+  <data name="MainWindowMessage_OpenFileFailed" xml:space="preserve">
+    <value>Failed to open file:
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_OpenHyperlinkBlockedScheme" xml:space="preserve">
+    <value>This hyperlink type is not supported for security reasons.</value>
+  </data>
+  <data name="MainWindowMessage_OpenHyperlinkOpenFailed" xml:space="preserve">
+    <value>The hyperlink target could not be opened.</value>
+  </data>
+  <data name="MainWindowMessage_OpenHyperlinkTargetNotFound" xml:space="preserve">
+    <value>The hyperlink target could not be found.</value>
+  </data>
+  <data name="MainWindowMessage_OpenHyperlinkTitle" xml:space="preserve">
+    <value>Open Hyperlink</value>
+  </data>
+  <data name="MainWindowMessage_PictureSizeTitle" xml:space="preserve">
+    <value>Picture Size</value>
+  </data>
+  <data name="MainWindowMessage_PictureWasNotFound" xml:space="preserve">
+    <value>Picture was not found.</value>
+  </data>
+  <data name="MainWindowMessage_ReapplyFilterNoFilter" xml:space="preserve">
+    <value>Apply a filter before using Reapply.</value>
+  </data>
+  <data name="MainWindowMessage_ReapplyFilterTitle" xml:space="preserve">
+    <value>Reapply Filter</value>
+  </data>
+  <data name="MainWindowMessage_ResetCropTitle" xml:space="preserve">
+    <value>Reset Crop</value>
+  </data>
+  <data name="MainWindowMessage_RotateObjectTitle" xml:space="preserve">
+    <value>Rotate Object</value>
+  </data>
+  <data name="MainWindowMessage_RotatePictureTitle" xml:space="preserve">
+    <value>Rotate Picture</value>
+  </data>
+  <data name="MainWindowMessage_SaveChangesBeforeClosingWorkbook" xml:space="preserve">
+    <value>Save changes before closing this workbook?</value>
+  </data>
+  <data name="MainWindowMessage_SaveChangesBeforeCreatingWorkbook" xml:space="preserve">
+    <value>Save changes before creating a new workbook?</value>
+  </data>
+  <data name="MainWindowMessage_SaveChangesTitle" xml:space="preserve">
+    <value>FreeX</value>
+  </data>
+  <data name="MainWindowMessage_SaveErrorTitle" xml:space="preserve">
+    <value>Save Error</value>
+  </data>
+  <data name="MainWindowMessage_SaveFileFailed" xml:space="preserve">
+    <value>Failed to save file:
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_SelectRangeFirst" xml:space="preserve">
+    <value>Select a range first.</value>
+  </data>
+  <data name="MainWindowMessage_SelectionPaneTitle" xml:space="preserve">
+    <value>Selection Pane</value>
+  </data>
+  <data name="MainWindowMessage_ShapeEffectsTitle" xml:space="preserve">
+    <value>Shape Effects</value>
+  </data>
+  <data name="MainWindowMessage_ShapeGradientTitle" xml:space="preserve">
+    <value>Shape Gradient</value>
+  </data>
+  <data name="MainWindowMessage_SheetBackgroundReadFailed" xml:space="preserve">
+    <value>Could not read the selected image: {0}</value>
+  </data>
+  <data name="MainWindowMessage_SheetBackgroundTitle" xml:space="preserve">
+    <value>Sheet Background</value>
+  </data>
+  <data name="MainWindowMessage_SheetBackgroundUnsupportedImageType" xml:space="preserve">
+    <value>Choose a PNG, JPG, JPEG, BMP, or GIF image file.</value>
+  </data>
+  <data name="MainWindowMessage_SheetNotFound" xml:space="preserve">
+    <value>Sheet not found.</value>
+  </data>
+  <data name="MainWindowMessage_XlsxLoadWarningsBodyFormat" xml:space="preserve">
+    <value>Some features could not be loaded from the file and may be missing:
+
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_XlsxLoadWarningsMoreFormat" xml:space="preserve">
+    <value>
+
+and {0} more.</value>
+  </data>
+  <data name="MainWindowMessage_UnsupportedChartCommand" xml:space="preserve">
+    <value>This chart command is not supported for the selected chart.</value>
+  </data>
+  <data name="MainWindowPrintSettings_ActiveSheet" xml:space="preserve">
+    <value>Print active sheet</value>
+  </data>
+  <data name="Progress_LoadingFileBuildingWorkbook" xml:space="preserve">
+    <value>Loading file (building workbook)</value>
+  </data>
+  <data name="Progress_LoadingFileCalculating" xml:space="preserve">
+    <value>Loading file (calculating)</value>
+  </data>
+  <data name="Progress_LoadingFileCheckingPackage" xml:space="preserve">
+    <value>Loading file (checking package)</value>
+  </data>
+  <data name="Progress_LoadingFileCheckingWorkbookParts" xml:space="preserve">
+    <value>Loading file (checking workbook parts)</value>
+  </data>
+  <data name="Progress_LoadingFileDetectingFeatures" xml:space="preserve">
+    <value>Loading file (detecting features)</value>
+  </data>
+  <data name="Progress_LoadingFileDone" xml:space="preserve">
+    <value>Loading file (done)</value>
+  </data>
+  <data name="Progress_LoadingFileEvaluatingFormulas" xml:space="preserve">
+    <value>Loading file (evaluating formulas)</value>
+  </data>
+  <data name="Progress_LoadingFileInspecting" xml:space="preserve">
+    <value>Loading file (inspecting)</value>
+  </data>
+  <data name="Progress_LoadingFileLayingOutWorksheet" xml:space="preserve">
+    <value>Loading file (laying out worksheet)</value>
+  </data>
+  <data name="Progress_LoadingFileLoadingStyles" xml:space="preserve">
+    <value>Loading file (loading styles)</value>
+  </data>
+  <data name="Progress_LoadingFileParsing" xml:space="preserve">
+    <value>Loading file (parsing)</value>
+  </data>
+  <data name="Progress_LoadingFilePhaseFormat" xml:space="preserve">
+    <value>Loading file ({0})</value>
+  </data>
+  <data name="Progress_LoadingFilePreparing" xml:space="preserve">
+    <value>Loading file (preparing)</value>
+  </data>
+  <data name="Progress_LoadingFilePreparingView" xml:space="preserve">
+    <value>Loading file (preparing view)</value>
+  </data>
+  <data name="Progress_LoadingFileReading" xml:space="preserve">
+    <value>Loading file (reading)</value>
+  </data>
+  <data name="Progress_LoadingFileReadingBytes" xml:space="preserve">
+    <value>Loading file (reading bytes)</value>
+  </data>
+  <data name="Progress_LoadingFileReadingWorksheets" xml:space="preserve">
+    <value>Loading file (reading worksheets)</value>
+  </data>
+  <data name="Progress_LoadingFileRefreshingValues" xml:space="preserve">
+    <value>Loading file (refreshing values)</value>
+  </data>
+  <data name="Progress_LoadingFileRestoringSelection" xml:space="preserve">
+    <value>Loading file (restoring selection)</value>
+  </data>
+  <data name="Progress_LoadingFileWorking" xml:space="preserve">
+    <value>Loading file (working)</value>
+  </data>
+  <data name="Progress_OpeningWorkbook" xml:space="preserve">
+    <value>Opening workbook</value>
+  </data>
+  <data name="Progress_SavingFileBuildingWorkbookParts" xml:space="preserve">
+    <value>Saving file (building workbook parts)</value>
+  </data>
+  <data name="Progress_SavingFileDone" xml:space="preserve">
+    <value>Saving file (done)</value>
+  </data>
+  <data name="Progress_SavingFileFlushingPackage" xml:space="preserve">
+    <value>Saving file (flushing package)</value>
+  </data>
+  <data name="Progress_SavingFilePackagingSheets" xml:space="preserve">
+    <value>Saving file (packaging sheets)</value>
+  </data>
+  <data name="Progress_SavingFilePhaseFormat" xml:space="preserve">
+    <value>Saving file ({0})</value>
+  </data>
+  <data name="Progress_SavingFilePreparing" xml:space="preserve">
+    <value>Saving file (preparing)</value>
+  </data>
+  <data name="Progress_SavingFileSerializing" xml:space="preserve">
+    <value>Saving file (serializing)</value>
+  </data>
+  <data name="Progress_SavingFileWriting" xml:space="preserve">
+    <value>Saving file (writing)</value>
+  </data>
+  <data name="Progress_SavingFileWritingBytes" xml:space="preserve">
+    <value>Saving file (writing bytes)</value>
+  </data>
+  <data name="Progress_SavingFileWorking" xml:space="preserve">
+    <value>Saving file (working)</value>
+  </data>
+  <data name="Progress_SavingWorkbook" xml:space="preserve">
+    <value>Saving workbook</value>
   </data>
 </root>

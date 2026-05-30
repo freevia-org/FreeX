@@ -11,7 +11,8 @@ public partial class MainWindow
 {
     private void PageLayoutDeferredBtn_Click(object sender, RoutedEventArgs e)
     {
-        var commandName = (sender as System.Windows.Controls.Button)?.Content?.ToString() ?? "This command";
+        var commandName = (sender as System.Windows.Controls.Button)?.Content?.ToString()
+            ?? UiText.Get("MainWindowMessage_DeferredCommandFallbackName");
         var message = DeferredCommandMessages.WorkbookTheme(commandName);
         _messageService.ShowInfo(message.Body, message.Title);
     }
@@ -110,8 +111,8 @@ public partial class MainWindow
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Sheet Background",
-            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*",
+            Title = UiText.Get("MainWindowDialog_SheetBackgroundTitle"),
+            Filter = UiText.Get("MainWindowDialog_ImageFilesFilter"),
             CheckFileExists = true,
             Multiselect = false
         };
@@ -122,8 +123,8 @@ public partial class MainWindow
         if (!IsSupportedSheetBackgroundFile(dialog.FileName))
         {
             ShowOwnedMessage(
-                "Choose a PNG, JPG, JPEG, BMP, or GIF image file.",
-                "Sheet Background",
+                UiText.Get("MainWindowMessage_SheetBackgroundUnsupportedImageType"),
+                UiText.Get("MainWindowMessage_SheetBackgroundTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;
@@ -136,12 +137,20 @@ public partial class MainWindow
         }
         catch (IOException ex)
         {
-            ShowOwnedMessage($"Could not read the selected image: {ex.Message}", "Sheet Background", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage(
+                UiText.Format("MainWindowMessage_SheetBackgroundReadFailed", ex.Message),
+                UiText.Get("MainWindowMessage_SheetBackgroundTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
             return;
         }
         catch (UnauthorizedAccessException ex)
         {
-            ShowOwnedMessage($"Could not read the selected image: {ex.Message}", "Sheet Background", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage(
+                UiText.Format("MainWindowMessage_SheetBackgroundReadFailed", ex.Message),
+                UiText.Get("MainWindowMessage_SheetBackgroundTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
             return;
         }
 
@@ -264,8 +273,8 @@ public partial class MainWindow
     {
         var selected = SheetGrid.SelectedRange?.Start;
         var defaultValue = selected is { } address
-            ? $"row {Math.Max(2u, address.Row)}"
-            : "clear";
+            ? UiText.Format("MainWindowDialog_PageBreakDefaultRowFormat", Math.Max(2u, address.Row))
+            : UiText.Get("MainWindowDialog_PageBreakDefaultClear");
         var dialog = new PageBreakDialog(defaultValue) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
