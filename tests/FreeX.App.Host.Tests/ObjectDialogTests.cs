@@ -672,6 +672,8 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("new Label { Content = \"Link _to:\", Target = _linkTypes");
         source.Should().Contain("AutomationProperties.SetName(_linkTypes, \"Link to\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_linkTypes, \"HyperlinkLinkTypeList\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_linkTypes, \"Choose the kind of hyperlink to insert.\");");
     }
 
     [Fact]
@@ -680,6 +682,9 @@ public sealed class ObjectDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs"));
 
         source.Should().Contain("AutomationProperties.SetName(_displayBox, \"Text to display\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_displayBox, \"HyperlinkDisplayTextBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_displayBox, \"Enter the text shown in the cell for the hyperlink.\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_targetBox, \"HyperlinkTargetTextBox\");");
         source.Should().Contain("AutomationProperties.SetName(_targetBox, automationName);");
     }
 
@@ -708,6 +713,7 @@ public sealed class ObjectDialogTests
                 targetLabel.Content.Should().Be(expectedLabel);
                 targetLabel.Target.Should().BeSameAs(targetBox);
                 AutomationProperties.GetName(targetBox).Should().Be(expectedAutomationName);
+                AutomationProperties.GetAutomationId(targetBox).Should().Be("HyperlinkTargetTextBox");
                 AutomationProperties.GetHelpText(targetBox).Should().Be(expectedHelpText);
             }
             finally
@@ -723,8 +729,10 @@ public sealed class ObjectDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs"));
 
         source.Should().Contain("AutomationProperties.SetName(_screenTipButton, \"Set ScreenTip\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_screenTipButton, \"HyperlinkScreenTipButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_screenTipButton, \"Set the text shown when pointing to the hyperlink.\");");
         source.Should().Contain("AutomationProperties.SetName(_bookmarkButton, \"Select place in document\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_bookmarkButton, \"HyperlinkBookmarkButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_bookmarkButton, \"Choose a bookmark, defined name, or cell reference in this workbook.\");");
     }
 
