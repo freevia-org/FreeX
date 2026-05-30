@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -15,6 +16,7 @@ public sealed class DotNetProjectReferencesPreflightTests
         script.Should().Contain("*_wpftmp.csproj");
         script.Should().Contain("$segments -contains \".worktrees\"");
         script.Should().Contain("ProjectReference");
+        script.Should().Contain("Duplicate ProjectReference target");
         script.Should().Contain("ProjectReference target escapes project root");
         script.Should().Contain("Missing ProjectReference target");
         script.Should().Contain("Validated ProjectReference targets for $($projectFiles.Count) .NET project file(s).");
@@ -50,6 +52,41 @@ public sealed class DotNetProjectReferencesPreflightTests
 
             result.ExitCode.Should().Be(0, result.Error);
             result.Output.Should().Contain("Validated ProjectReference targets for 1 .NET project file(s).");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DotNetProjectReferencesPreflight_FailsForDuplicateProjectReferenceTarget()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-project-reference-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "A"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "B"));
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(tempDirectory, "src", "A", "A.csproj"),
+                """
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <ItemGroup>
+                    <ProjectReference Include="..\B\B.csproj" />
+                    <ProjectReference Include="../B/B.csproj" />
+                  </ItemGroup>
+                </Project>
+                """);
+            File.WriteAllText(Path.Combine(tempDirectory, "src", "B", "B.csproj"), "<Project />");
+            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
+
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
+
+            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
+            result.ExitCode.Should().NotBe(0);
+            combinedOutput.Should().Contain("Duplicate ProjectReference target");
+            combinedOutput.Should().Contain("src/A/A.csproj");
         }
         finally
         {
@@ -143,6 +180,8 @@ public sealed class DotNetProjectReferencesPreflightTests
 
         return new PowerShellResult(process.ExitCode, output, error);
     }
+
+    private static string NormalizeWhitespace(string text) => Regex.Replace(text, "\\s+", " ");
 
     private sealed record PowerShellResult(int ExitCode, string Output, string Error);
 }

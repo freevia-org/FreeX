@@ -65,10 +65,13 @@ if ($projectFiles.Count -eq 0) {
 
 $missingReferences = New-Object System.Collections.Generic.List[string]
 $escapedReferences = New-Object System.Collections.Generic.List[string]
+$duplicateReferences = New-Object System.Collections.Generic.List[string]
 
 foreach ($projectFile in $projectFiles) {
     [xml]$projectXml = Get-Content -LiteralPath $projectFile.FullName -Raw
     $projectReferences = @($projectXml.Project.ItemGroup.ProjectReference)
+    $referencesByResolvedPath = @{}
+    $relativeProjectPath = Get-RelativeRepoPath $projectFile.FullName
 
     foreach ($projectReference in $projectReferences) {
         $include = [string]$projectReference.Include
@@ -78,7 +81,13 @@ foreach ($projectFile in $projectFiles) {
 
         $referencedProjectPath = Join-Path $projectFile.DirectoryName $include
         $resolvedReferencePath = [System.IO.Path]::GetFullPath($referencedProjectPath)
-        $relativeProjectPath = Get-RelativeRepoPath $projectFile.FullName
+        $resolvedReferenceKey = $resolvedReferencePath.ToUpperInvariant()
+
+        if ($referencesByResolvedPath.ContainsKey($resolvedReferenceKey)) {
+            $duplicateReferences.Add("${relativeProjectPath}: $include")
+        } else {
+            $referencesByResolvedPath[$resolvedReferenceKey] = $include
+        }
 
         if (-not $resolvedReferencePath.StartsWith($resolvedProjectRootPath, [System.StringComparison]::OrdinalIgnoreCase)) {
             $escapedReferences.Add("${relativeProjectPath}: $include")
@@ -88,6 +97,12 @@ foreach ($projectFile in $projectFiles) {
         if (-not (Test-Path -LiteralPath $resolvedReferencePath -PathType Leaf)) {
             $missingReferences.Add("${relativeProjectPath}: $include")
         }
+    }
+}
+
+if ($duplicateReferences.Count -gt 0) {
+    foreach ($duplicateReference in $duplicateReferences) {
+        Write-Error "Duplicate ProjectReference target: $duplicateReference" -ErrorAction Continue
     }
 }
 
@@ -103,8 +118,8 @@ if ($missingReferences.Count -gt 0) {
     }
 }
 
-if ($escapedReferences.Count -gt 0 -or $missingReferences.Count -gt 0) {
-    throw "Project reference validation failed for $($escapedReferences.Count + $missingReferences.Count) reference(s)."
+if ($duplicateReferences.Count -gt 0 -or $escapedReferences.Count -gt 0 -or $missingReferences.Count -gt 0) {
+    throw "Project reference validation failed for $($duplicateReferences.Count + $escapedReferences.Count + $missingReferences.Count) reference(s)."
 }
 
 Write-Host "Validated ProjectReference targets for $($projectFiles.Count) .NET project file(s)."
