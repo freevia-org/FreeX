@@ -187,31 +187,22 @@ public partial class MainWindow
         }
         else if (existing is not null)
         {
-            if (result.RootText is not null)
+            var hasThreadChange =
+                result.RootText is not null ||
+                result.ReplyText is not null ||
+                result.IsResolved != existing.IsResolved;
+            if (hasThreadChange)
             {
                 changed = TryExecuteRepeatableCurrentRangeCommand(
                     "Edit Comment",
                     range,
-                    r => new UpdateThreadedCommentTextCommand(_currentSheetId, r.Start, result.RootText));
+                    r => new ApplyThreadedCommentChangesCommand(
+                        _currentSheetId,
+                        r.Start,
+                        result.RootText,
+                        result.ReplyText,
+                        result.IsResolved));
             }
-
-            if (result.ReplyText is not null)
-            {
-                TryExecuteRepeatableCurrentRangeCommand(
-                    "Reply to Comment",
-                    range,
-                    r => new AddThreadedCommentReplyCommand(_currentSheetId, r.Start, result.ReplyText));
-                changed = true;
-            }
-        }
-
-        if (existing is not null && result.IsResolved != existing.IsResolved)
-        {
-            TryExecuteRepeatableCurrentRangeCommand(
-                result.IsResolved ? "Resolve Comment" : "Unresolve Comment",
-                range,
-                r => new ResolveThreadedCommentCommand(_currentSheetId, r.Start, result.IsResolved));
-            changed = true;
         }
 
         if (changed) UpdateViewport();
