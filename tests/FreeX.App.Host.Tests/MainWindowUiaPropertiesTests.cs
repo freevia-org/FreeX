@@ -36,6 +36,22 @@ public sealed class MainWindowUiaPropertiesTests
     }
 
     [Fact]
+    public void FormulaBarExpandButton_ExposesAutomationNameHelpTextAndId()
+    {
+        var document = LoadMainWindowXaml();
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var expandButton = document
+            .Descendants(presentation + "Button")
+            .Single(element => element.Attribute(x + "Name")?.Value == "FormulaBarExpandBtn");
+
+        expandButton.Attribute("AutomationProperties.Name")?.Value.Should().Be("Expand Formula Bar");
+        expandButton.Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
+        expandButton.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("FormulaBarExpandBtn");
+    }
+
+    [Fact]
     public void CellAddressBox_ExposesAutomationNameAndHelpText()
     {
         var document = LoadMainWindowXaml();
