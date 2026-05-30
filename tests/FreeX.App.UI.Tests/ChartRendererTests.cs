@@ -1370,6 +1370,22 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void PieRenderer_DataLabelAnnotationsAggregatePositiveTotalsWithoutLinq()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.SeriesFormatting.cs"));
+        var annotations = source[
+            source.IndexOf("private static void AddPieDataLabelAnnotations", StringComparison.Ordinal)..
+            source.IndexOf("private static void AddPieAnnotationAxes", StringComparison.Ordinal)];
+
+        annotations.Should().Contain("for (var i = 0; i < points.Count; i++)");
+        annotations.Should().Contain("total += Math.Max(0, points[i].Value);");
+        annotations.Should().Contain("var positiveValue = Math.Max(0, point.Value);");
+        annotations.Should().NotContain("points.Sum(");
+        annotations.Should().NotContain(".Sum(");
+    }
+
+    [Fact]
     public void PieRenderer_RotatesInsideDataLabelsWhenRotationIsRequested()
     {
         var sheetId = SheetId.New();
