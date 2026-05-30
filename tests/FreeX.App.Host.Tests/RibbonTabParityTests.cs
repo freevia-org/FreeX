@@ -1,6 +1,6 @@
 using System.IO;
-using System.Text.RegularExpressions;
 using FluentAssertions;
+using FreeX.App.Host;
 
 namespace FreeX.App.Host.Tests;
 
@@ -9,11 +9,11 @@ public sealed class RibbonTabParityTests
     [Fact]
     public void HomeTab_UsesExcelLikeGroupOrderAndFontColorPlacement()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var homeTab = ExtractTabXaml(xaml, "Home", "Insert");
-        var fontGroup = ExtractGroupXaml(homeTab, "Font");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var homeTab = Tab(catalog, "Home");
+        var fontGroup = Group(homeTab, "Font");
 
-        ExtractGroupLabels(homeTab).Should().Equal(
+        GroupNames(homeTab).Should().Equal(
             "Clipboard",
             "Font",
             "Alignment",
@@ -22,7 +22,7 @@ public sealed class RibbonTabParityTests
             "Cells",
             "Editing");
 
-        ExtractTooltipTitles(fontGroup).Should().ContainInOrder(
+        CommandTitles(fontGroup).Should().ContainInOrder(
             "Borders",
             "Fill Color",
             "Font Color");
@@ -31,10 +31,10 @@ public sealed class RibbonTabParityTests
     [Fact]
     public void InsertTab_UsesExcelLikeGroupOrderAndCommandPlacement()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var insertTab = ExtractTabXaml(xaml, "Insert", "Draw");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var insertTab = Tab(catalog, "Insert");
 
-        ExtractGroupLabels(insertTab).Should().Equal(
+        GroupNames(insertTab).Should().Equal(
             "Tables",
             "Illustrations",
             "Charts",
@@ -45,69 +45,62 @@ public sealed class RibbonTabParityTests
             "Text",
             "Symbols");
 
-        ExtractGroupXaml(insertTab, "Tables").Should().Contain(
-            "local:RibbonMetadata.CommandName=\"Recommended PivotTables\"",
+        CommandTitles(Group(insertTab, "Tables")).Should().Contain("Recommended PivotTables");
+        Command(Group(insertTab, "Tables"), "Recommended PivotTables").Should().NotBeNull(
             "Excel exposes Recommended PivotTables as a first-class Tables command, not only as a nested PivotTable menu item");
-        ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonMetadata.CommandName=\"Pictures\"");
-        ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonMetadata.CommandName=\"Shapes\"");
-        ExtractGroupXaml(insertTab, "Charts").Should().Contain("local:RibbonMetadata.CommandName=\"Recommended Charts\"");
-        ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonMetadata.CommandName=\"Insert Slicer\"");
-        ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonMetadata.CommandName=\"Insert Timeline\"");
-        ExtractGroupXaml(insertTab, "Links").Should().Contain("local:RibbonMetadata.CommandName=\"Insert Link\"");
-        ExtractGroupXaml(insertTab, "Comments").Should().Contain("local:RibbonMetadata.CommandName=\"Comment\"");
-        ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonMetadata.CommandName=\"Text Box\"");
-        ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonMetadata.CommandName=\"Header &amp; Footer\"");
-        ExtractGroupXaml(insertTab, "Symbols").Should().Contain("local:RibbonMetadata.CommandName=\"Symbol\"");
+        CommandTitles(Group(insertTab, "Illustrations")).Should().Contain(["Pictures", "Shapes"]);
+        CommandTitles(Group(insertTab, "Charts")).Should().Contain("Recommended Charts");
+        CommandTitles(Group(insertTab, "Filters")).Should().Contain(["Insert Slicer", "Insert Timeline"]);
+        CommandTitles(Group(insertTab, "Links")).Should().Contain("Insert Link");
+        CommandTitles(Group(insertTab, "Comments")).Should().Contain("Comment");
+        CommandTitles(Group(insertTab, "Text")).Should().Contain(["Text Box", "Header & Footer"]);
+        CommandTitles(Group(insertTab, "Symbols")).Should().Contain("Symbol");
     }
 
     [Fact]
     public void DrawTab_ExposesExcelLikeInkConversionGroup()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var drawTab = ExtractTabXaml(xaml, "Draw", "Page Layout");
-        var toolsGroup = ExtractGroupXaml(drawTab, "Tools");
-        var pensGroup = ExtractGroupXaml(drawTab, "Pens");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var drawTab = Tab(catalog, "Draw");
 
-        ExtractGroupLabels(drawTab).Should().Equal(
+        GroupNames(drawTab).Should().Equal(
             "Tools",
             "Pens",
             "Convert",
             "Arrange",
             "Format");
 
-        ExtractTooltipTitles(toolsGroup).Should().ContainInOrder(
+        CommandTitles(Group(drawTab, "Tools")).Should().ContainInOrder(
             "Draw with Touch",
             "Eraser",
             "Lasso Select");
-        ExtractTooltipTitles(pensGroup).Should().ContainInOrder(
+        CommandTitles(Group(drawTab, "Pens")).Should().ContainInOrder(
             "Pen",
             "Pencil",
             "Highlighter",
             "Add Pen");
-        drawTab.Should().NotContain("local:RibbonMetadata.CommandName=\"Rectangle\"");
-        drawTab.Should().NotContain("local:RibbonMetadata.CommandName=\"Ellipse\"");
-        drawTab.Should().NotContain("local:RibbonMetadata.CommandName=\"Line\"");
-        drawTab.Should().NotContain("local:RibbonMetadata.CommandName=\"Text Box\"");
-        ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonMetadata.CommandName=\"Ink to Shape\"");
-        ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonMetadata.CommandName=\"Ink to Math\"");
-        ExtractGroupXaml(drawTab, "Format").Should().Contain("local:RibbonMetadata.CommandName=\"Shape Fill\"");
+        drawTab.Groups.SelectMany(group => group.Commands).Select(command => command.Title)
+            .Should()
+            .NotContain(["Rectangle", "Ellipse", "Line"]);
+        CommandTitles(Group(drawTab, "Convert")).Should().Contain(["Ink to Shape", "Ink to Math"]);
+        CommandTitles(Group(drawTab, "Format")).Should().Contain("Shape Fill");
     }
 
     [Fact]
     public void PageLayoutTab_UsesExcelLikeGroupOrderAndArrangeCommands()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var pageLayoutTab = ExtractTabXaml(xaml, "Page Layout", "Formulas");
-        var pageSetupGroup = ExtractGroupXaml(pageLayoutTab, "Page Setup");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var pageLayoutTab = Tab(catalog, "Page Layout");
+        var pageSetupGroup = Group(pageLayoutTab, "Page Setup");
 
-        ExtractGroupLabels(pageLayoutTab).Should().Equal(
+        GroupNames(pageLayoutTab).Should().Equal(
             "Themes",
             "Page Setup",
             "Scale to Fit",
             "Sheet Options",
             "Arrange");
 
-        ExtractTooltipTitles(pageSetupGroup).Should().ContainInOrder(
+        CommandTitles(pageSetupGroup).Should().ContainInOrder(
             "Margins",
             "Page Orientation",
             "Paper Size",
@@ -115,31 +108,27 @@ public sealed class RibbonTabParityTests
             "Breaks",
             "Background",
             "Print Titles");
-        pageSetupGroup.Should().NotContain("local:RibbonMetadata.CommandName=\"Header &amp; Footer\"");
-        ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonMetadata.CommandName=\"Bring Forward\"");
-        ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonMetadata.CommandName=\"Send Backward\"");
-        ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonMetadata.CommandName=\"Selection Pane\"");
-        ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonMetadata.CommandName=\"Rotate Object\"");
+        CommandTitles(pageSetupGroup).Should().NotContain("Header & Footer");
+        CommandTitles(Group(pageLayoutTab, "Arrange")).Should().Contain(["Bring Forward", "Send Backward", "Selection Pane", "Rotate Object"]);
     }
 
     [Fact]
     public void ArrangeGroups_TreatBringForwardAndSendBackwardAsDistinctRibbonRows()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var drawArrangeGroup = ExtractGroupXaml(ExtractTabXaml(xaml, "Draw", "Page Layout"), "Arrange");
-        var pageLayoutArrangeGroup = ExtractGroupXaml(ExtractTabXaml(xaml, "Page Layout", "Formulas"), "Arrange");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
 
-        foreach (var (arrangeGroup, bringForwardKeyTip, sendBackwardKeyTip) in new[]
+        foreach (var arrangeGroup in new[]
         {
-            (drawArrangeGroup, "BF", "SB"),
-            (pageLayoutArrangeGroup, "BF", "SB")
+            Group(Tab(catalog, "Draw"), "Arrange"),
+            Group(Tab(catalog, "Page Layout"), "Arrange")
         })
         {
-            ExtractTooltipTitles(arrangeGroup).Should().ContainInOrder("Bring Forward", "Send Backward");
-            arrangeGroup.Should().Contain("Click=\"BringForwardBtn_Click\"");
-            arrangeGroup.Should().Contain("Click=\"SendBackwardBtn_Click\"");
-            arrangeGroup.Should().Contain($"local:RibbonTooltip.KeyTip=\"{bringForwardKeyTip}\"");
-            arrangeGroup.Should().Contain($"local:RibbonTooltip.KeyTip=\"{sendBackwardKeyTip}\"");
+            CommandTitles(arrangeGroup).Should().ContainInOrder("Bring Forward", "Send Backward");
+
+            Command(arrangeGroup, "Bring Forward").Should().Match<RibbonCommandDefinition>(
+                command => command.ClickHandler == "BringForwardBtn_Click" && command.KeyTip == "BF");
+            Command(arrangeGroup, "Send Backward").Should().Match<RibbonCommandDefinition>(
+                command => command.ClickHandler == "SendBackwardBtn_Click" && command.KeyTip == "SB");
         }
 
         File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"))
@@ -150,18 +139,16 @@ public sealed class RibbonTabParityTests
     [Fact]
     public void FormulasTab_UsesExcelLikeDefinedNamesCommandOrder()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var formulasTab = ExtractTabXaml(xaml, "Formulas", "Data");
-        var functionLibraryGroup = ExtractGroupXaml(formulasTab, "Function Library");
-        var definedNamesGroup = ExtractGroupXaml(formulasTab, "Defined Names");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var formulasTab = Tab(catalog, "Formulas");
 
-        ExtractGroupLabels(formulasTab).Should().Equal(
+        GroupNames(formulasTab).Should().Equal(
             "Function Library",
             "Defined Names",
             "Formula Auditing",
             "Calculation");
 
-        ExtractTooltipTitles(functionLibraryGroup).Should().ContainInOrder(
+        CommandTitles(Group(formulasTab, "Function Library")).Should().ContainInOrder(
             "Insert Function",
             "AutoSum",
             "Recently Used",
@@ -172,7 +159,7 @@ public sealed class RibbonTabParityTests
             "Lookup & Reference",
             "Math & Trig",
             "More Functions");
-        ExtractTooltipTitles(definedNamesGroup).Should().ContainInOrder(
+        CommandTitles(Group(formulasTab, "Defined Names")).Should().ContainInOrder(
             "Name Manager",
             "Define Name",
             "Use in Formula",
@@ -182,11 +169,11 @@ public sealed class RibbonTabParityTests
     [Fact]
     public void DataTab_UsesExcelLikeGroupOrderAndForecastPlacement()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var dataTab = ExtractTabXaml(xaml, "Data", "Review");
-        var sortFilterGroup = ExtractGroupXaml(dataTab, "Sort & Filter");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var dataTab = Tab(catalog, "Data");
+        var sortFilterGroup = Group(dataTab, "Sort & Filter");
 
-        ExtractGroupLabels(dataTab).Should().Equal(
+        GroupNames(dataTab).Should().Equal(
             "Get & Transform Data",
             "Queries & Connections",
             "Sort & Filter",
@@ -194,68 +181,65 @@ public sealed class RibbonTabParityTests
             "Forecast",
             "Outline");
 
-        ExtractGroupXaml(dataTab, "Get & Transform Data").Should().Contain("local:RibbonMetadata.CommandName=\"Get Data\"");
-        ExtractGroupXaml(dataTab, "Queries & Connections").Should().Contain("local:RibbonMetadata.CommandName=\"Refresh All\"");
-        ExtractTooltipTitles(sortFilterGroup).Should().ContainInOrder(
+        CommandTitles(Group(dataTab, "Get & Transform Data")).Should().Contain("Get Data");
+        CommandTitles(Group(dataTab, "Queries & Connections")).Should().Contain("Refresh All");
+        CommandTitles(sortFilterGroup).Should().ContainInOrder(
             "Sort A to Z",
             "Sort Z to A",
             "Filter",
             "Clear Filter",
             "Advanced Filter");
-        ExtractTooltipTitles(sortFilterGroup).Should().NotContain("Sort Ascending");
-        ExtractTooltipTitles(sortFilterGroup).Should().NotContain("Sort Descending");
-        ExtractGroupXaml(dataTab, "Data Tools").Should().NotContain("local:RibbonMetadata.CommandName=\"Subtotal\"");
-        ExtractTooltipTitles(ExtractGroupXaml(dataTab, "Outline")).Should().ContainInOrder(
+        CommandTitles(sortFilterGroup).Should().NotContain(["Sort Ascending", "Sort Descending"]);
+        CommandTitles(Group(dataTab, "Data Tools")).Should().NotContain("Subtotal");
+        CommandTitles(Group(dataTab, "Outline")).Should().ContainInOrder(
             "Group",
             "Ungroup",
             "Subtotal",
             "Collapse Group",
             "Expand Group");
-        ExtractGroupXaml(dataTab, "Forecast").Should().Contain("local:RibbonMetadata.CommandName=\"Forecast Sheet\"");
-        ExtractGroupXaml(dataTab, "Forecast").Should().Contain("local:RibbonMetadata.CommandName=\"What-If Analysis\"");
+        CommandTitles(Group(dataTab, "Forecast")).Should().Contain(["Forecast Sheet", "What-If Analysis"]);
     }
 
     [Fact]
     public void ReviewTab_SeparatesCommentsAndNotesLikeExcel()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var reviewTab = ExtractTabXaml(xaml, "Review", "View");
-        var proofingGroup = ExtractGroupXaml(reviewTab, "Proofing");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var reviewTab = Tab(catalog, "Review");
+        var proofingGroup = Group(reviewTab, "Proofing");
 
-        ExtractGroupLabels(reviewTab).Should().Equal(
+        GroupNames(reviewTab).Should().Equal(
             "Proofing",
             "Accessibility",
             "Comments",
             "Notes",
             "Protect");
 
-        proofingGroup.ShouldContainLocalizedAttribute("Content", "Workbook Statistics");
-        proofingGroup.Should().NotContain("Content=\"Workbook Stats\"");
-        ExtractGroupXaml(reviewTab, "Comments").Should().Contain("local:RibbonMetadata.CommandName=\"New Comment\"");
-        ExtractGroupXaml(reviewTab, "Notes").Should().Contain("local:RibbonMetadata.CommandName=\"New Note\"");
-        ExtractGroupXaml(reviewTab, "Notes").Should().Contain("local:RibbonMetadata.CommandName=\"Show Notes\"");
+        Command(proofingGroup, "Workbook Statistics").Content.Should().Be("Workbook Statistics");
+        CommandTitles(proofingGroup).Should().NotContain("Workbook Stats");
+        CommandTitles(Group(reviewTab, "Comments")).Should().Contain("New Comment");
+        CommandTitles(Group(reviewTab, "Notes")).Should().Contain(["New Note", "Show Notes"]);
     }
 
     [Fact]
     public void ViewTab_UsesExcelLikeGroupOrderAndWindowPlacement()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var viewTab = ExtractTabXaml(xaml, "View", "PivotTable Analyze");
-        var zoomGroup = ExtractGroupXaml(viewTab, "Zoom");
-        var windowGroup = ExtractGroupXaml(viewTab, "Window");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var viewTab = Tab(catalog, "View");
+        var zoomGroup = Group(viewTab, "Zoom");
+        var windowGroup = Group(viewTab, "Window");
 
-        ExtractGroupLabels(viewTab).Should().Equal(
+        GroupNames(viewTab).Should().Equal(
             "Workbook Views",
             "Show",
             "Zoom",
             "Window");
 
-        ExtractTooltipTitles(zoomGroup).Should().ContainInOrder(
+        CommandTitles(zoomGroup).Should().ContainInOrder(
             "Zoom",
             "100%",
             "Zoom to Selection");
-        ExtractTooltipTitles(zoomGroup).Should().NotContain(["Zoom Out", "Zoom In"]);
-        ExtractTooltipTitles(windowGroup).Should().ContainInOrder(
+        CommandTitles(zoomGroup).Should().NotContain(["Zoom Out", "Zoom In"]);
+        CommandTitles(windowGroup).Should().ContainInOrder(
             "New Window",
             "Arrange All",
             "Freeze Panes",
@@ -271,11 +255,11 @@ public sealed class RibbonTabParityTests
     [Fact]
     public void PivotTableAnalyzeTab_UsesExcelLikeContextualGroupOrder()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var analyzeTab = ExtractTabXaml(xaml, "PivotTable Analyze", "Design");
-        var dataGroup = ExtractGroupXaml(analyzeTab, "Data");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var analyzeTab = Tab(catalog, "PivotTable Analyze");
+        var dataGroup = Group(analyzeTab, "Data");
 
-        ExtractGroupLabels(analyzeTab).Should().Equal(
+        GroupNames(analyzeTab).Should().Equal(
             "PivotTable",
             "Active Field",
             "Group",
@@ -286,42 +270,41 @@ public sealed class RibbonTabParityTests
             "Tools",
             "Show");
 
-        ExtractGroupXaml(analyzeTab, "Group").Should().Contain("local:RibbonMetadata.CommandName=\"Group Field\"");
-        ExtractGroupXaml(analyzeTab, "Filter").Should().Contain("local:RibbonMetadata.CommandName=\"Insert Slicer\"");
-        dataGroup.ShouldContainInvariantCommandName("Refresh");
-        dataGroup.ShouldContainLocalizedAttribute("Content", "Change Data Source");
-        dataGroup.Should().NotContain("Content=\"Change Source\"");
-        ExtractGroupXaml(analyzeTab, "Calculations").Should().Contain("local:RibbonMetadata.CommandName=\"Calculated Field\"");
-        ExtractGroupXaml(analyzeTab, "Tools").Should().Contain("local:RibbonMetadata.CommandName=\"PivotChart\"");
-        ExtractGroupXaml(analyzeTab, "Show").Should().Contain("local:RibbonMetadata.CommandName=\"Field List\"");
+        CommandTitles(Group(analyzeTab, "Group")).Should().Contain("Group Field");
+        CommandTitles(Group(analyzeTab, "Filter")).Should().Contain("Insert Slicer");
+        CommandTitles(dataGroup).Should().Contain("Refresh");
+        Command(dataGroup, "Change Data Source").Content.Should().Be("Change Data Source");
+        CommandTitles(dataGroup).Should().NotContain("Change Source");
+        CommandTitles(Group(analyzeTab, "Calculations")).Should().Contain("Calculated Field");
+        CommandTitles(Group(analyzeTab, "Tools")).Should().Contain("PivotChart");
+        CommandTitles(Group(analyzeTab, "Show")).Should().Contain("Field List");
     }
 
     [Fact]
     public void PivotTableDesignTab_SeparatesStyleGalleryFromStyleOptions()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var designTab = ExtractTabXaml(xaml, "Design", "Help");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var designTab = Tab(catalog, "Design");
 
-        ExtractGroupLabels(designTab).Should().Equal(
+        GroupNames(designTab).Should().Equal(
             "Layout",
             "PivotTable Style Options",
             "PivotTable Styles");
 
-        ExtractGroupXaml(designTab, "Layout").Should().Contain("local:RibbonMetadata.CommandName=\"Report Layout\"");
-        ExtractGroupXaml(designTab, "PivotTable Style Options").Should().Contain("local:RibbonMetadata.CommandName=\"Banded Rows\"");
-        ExtractGroupXaml(designTab, "PivotTable Style Options").Should().Contain("local:RibbonMetadata.CommandName=\"Banded Columns\"");
-        ExtractGroupXaml(designTab, "PivotTable Styles").Should().Contain("local:RibbonMetadata.CommandName=\"PivotTable Styles\"");
+        CommandTitles(Group(designTab, "Layout")).Should().Contain("Report Layout");
+        CommandTitles(Group(designTab, "PivotTable Style Options")).Should().Contain("Banded Rows");
+        Command(Group(designTab, "PivotTable Style Options"), "Banded Columns").Content.Should().Be("Banded Columns");
+        CommandTitles(Group(designTab, "PivotTable Styles")).Should().Contain("PivotTable Styles");
     }
 
     [Fact]
     public void HelpTab_ExposesOnlineFeedbackAboutAndLegalCommands()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var helpTab = ExtractTabXaml(xaml, "Help", "</TabControl>");
-        var helpGroup = ExtractGroupXaml(helpTab, "Help");
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var helpTab = Tab(catalog, "Help");
 
-        ExtractGroupLabels(helpTab).Should().Equal("Help");
-        ExtractTooltipTitles(helpGroup).Should().ContainInOrder(
+        GroupNames(helpTab).Should().Equal("Help");
+        CommandTitles(Group(helpTab, "Help")).Should().ContainInOrder(
             "Help Online",
             "Feedback",
             "Copy Diagnostics",
@@ -330,69 +313,30 @@ public sealed class RibbonTabParityTests
             "Legal Notices");
     }
 
-    private static string ExtractTabXaml(string xaml, string header, string nextHeader)
+    private static RibbonTabDefinition Tab(RibbonCatalog catalog, string header)
     {
-        var start = FindTabStart(xaml, header, 0);
-        var end = nextHeader.StartsWith("</", StringComparison.Ordinal)
-            ? xaml.IndexOf(nextHeader, start + 1, StringComparison.Ordinal)
-            : FindTabStart(xaml, nextHeader, start + 1);
-
-        start.Should().BeGreaterThanOrEqualTo(0);
-        end.Should().BeGreaterThan(start);
-
-        return xaml[start..end];
+        var tab = catalog.FindTab(header);
+        tab.Should().NotBeNull($"the {header} ribbon tab should be present");
+        return tab!;
     }
 
-    private static int FindTabStart(string xaml, string header, int startIndex)
+    private static RibbonGroupDefinition Group(RibbonTabDefinition tab, string name)
     {
-        var matches = Regex.Matches(
-            xaml[startIndex..],
-            "<TabItem\\b[^>]*Header=\"(?<header>[^\"]+)\"",
-            RegexOptions.CultureInvariant);
-
-        foreach (Match match in matches)
-        {
-            if (LocalizedXamlTestSupport.ResolveLocalizedValue(match.Groups["header"].Value) == header)
-                return startIndex + match.Index;
-        }
-
-        return -1;
+        var group = tab.FindGroup(name);
+        group.Should().NotBeNull($"the {tab.Header}/{name} ribbon group should be present");
+        return group!;
     }
 
-    private static IReadOnlyList<string> ExtractGroupLabels(string tabXaml) =>
-        Regex.Matches(tabXaml, "<TextBlock Text=\"(?<label>[^\"]+)\" Style=\"\\{StaticResource GroupLbl\\}\"")
-            .Select(match => LocalizedXamlTestSupport.ResolveLocalizedValue(match.Groups["label"].Value))
-            .Where(label => label is not null)
-            .Select(label => label!)
-            .ToList();
-
-    private static string ExtractGroupXaml(string tabXaml, string groupName)
+    private static RibbonCommandDefinition Command(RibbonGroupDefinition group, string title)
     {
-        var labelMatches = Regex.Matches(
-            tabXaml,
-            "<TextBlock Text=\"(?<label>[^\"]+)\" Style=\"\\{StaticResource GroupLbl\\}\"",
-            RegexOptions.CultureInvariant);
-        var labelIndex = -1;
-        foreach (Match match in labelMatches)
-        {
-            if (LocalizedXamlTestSupport.ResolveLocalizedValue(match.Groups["label"].Value) == groupName)
-            {
-                labelIndex = match.Index;
-                break;
-            }
-        }
-
-        labelIndex.Should().BeGreaterThanOrEqualTo(0);
-
-        var start = tabXaml.LastIndexOf("<Grid Style=\"{StaticResource RibbonGroupPanel}\">", labelIndex, StringComparison.Ordinal);
-        var nextStart = tabXaml.IndexOf("<Grid Style=\"{StaticResource RibbonGroupPanel}\">", labelIndex, StringComparison.Ordinal);
-
-        start.Should().BeGreaterThanOrEqualTo(0);
-        return nextStart < 0 ? tabXaml[start..] : tabXaml[start..nextStart];
+        var command = group.FindCommand(title);
+        command.Should().NotBeNull($"the {group.Name}/{title} ribbon command should be present");
+        return command!;
     }
 
-    private static IReadOnlyList<string> ExtractTooltipTitles(string xaml) =>
-        Regex.Matches(xaml, "local:RibbonMetadata.CommandName=\"(?<title>[^\"]+)\"")
-            .Select(match => match.Groups["title"].Value.Replace("&amp;", "&", StringComparison.Ordinal))
-            .ToList();
+    private static IReadOnlyList<string> GroupNames(RibbonTabDefinition tab) =>
+        tab.Groups.Select(group => group.Name).ToArray();
+
+    private static IReadOnlyList<string> CommandTitles(RibbonGroupDefinition group) =>
+        group.Commands.Select(command => command.Title).ToArray();
 }

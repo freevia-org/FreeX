@@ -303,22 +303,13 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     private static int ReadMainWindowXamlClickHandlerCount()
-    {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        return XamlClickHandler().Matches(xaml).Count;
-    }
+        => RibbonXamlCatalogSnapshotReader.ReadMainWindowSnapshot().ClickHandlerCount;
 
     private static int ReadMainWindowXamlAutomationIdCount()
-    {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        return XamlAutomationId().Matches(xaml).Count;
-    }
+        => RibbonXamlCatalogSnapshotReader.ReadMainWindowSnapshot().AutomationIdCount;
 
     private static int ReadMainWindowXamlRibbonKeyTipCount()
-    {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        return RibbonTooltipKeyTip().Matches(xaml).Count;
-    }
+        => RibbonXamlCatalogSnapshotReader.ReadMainWindowSnapshot().RibbonKeyTipCount;
 
     private static KeyboardShortcutUsageCounts ReadKeyboardShortcutUsageCounts()
     {
@@ -405,15 +396,6 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<string> SplitMarkdownRow(string row) =>
         row.Trim().Trim('|').Split('|').Select(column => column.Trim()).ToArray();
-
-    [GeneratedRegex(@"Click=""[^""]+""")]
-    private static partial Regex XamlClickHandler();
-
-    [GeneratedRegex(@"AutomationProperties\.AutomationId=""[^""]+""")]
-    private static partial Regex XamlAutomationId();
-
-    [GeneratedRegex(@"RibbonTooltip\.KeyTip=""[^""]+""")]
-    private static partial Regex RibbonTooltipKeyTip();
 
     [GeneratedRegex(@"\bnew\(KeyboardCommandShortcut\.")]
     private static partial Regex CommandShortcutRuleDeclaration();
