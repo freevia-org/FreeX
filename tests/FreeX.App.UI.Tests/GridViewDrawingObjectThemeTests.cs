@@ -198,6 +198,22 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void NativeSlicerRendering_DrawsSelectedTilesWithoutMaterializingArray()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var drawSlicer = source[
+            source.IndexOf("private void DrawNativeSlicerControl", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawNativeTimelineControl", StringComparison.Ordinal)];
+
+        drawSlicer.Should().Contain("var tileCount = selectedItemCount == 0 ? 1 : Math.Min(4, selectedItemCount);");
+        drawSlicer.Should().Contain("slicer.SelectedItems[index]");
+        drawSlicer.Should().NotContain(".Take(4)");
+        drawSlicer.Should().NotContain(".ToArray()");
+        drawSlicer.Should().NotContain("new[]");
+    }
+
+    [Fact]
     public void GridView_ExposesObjectDisplayModeForExcelPlaceholderRendering()
     {
         var source =

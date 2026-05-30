@@ -151,12 +151,11 @@ public partial class GridView
     {
         DrawNativeControlFrame(dc, rect, GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName));
 
-        var items = slicer.SelectedItems.Count == 0
-            ? new[] { slicer.SourceFieldName ?? slicer.CacheName ?? "All" }
-            : slicer.SelectedItems.Take(4).ToArray();
+        var selectedItemCount = slicer.SelectedItems.Count;
+        var tileCount = selectedItemCount == 0 ? 1 : Math.Min(4, selectedItemCount);
         var tileTop = rect.Top + 26;
-        var tileHeight = Math.Max(14, Math.Min(22, (rect.Bottom - tileTop - 6) / Math.Max(1, items.Length)));
-        for (var index = 0; index < items.Length; index++)
+        var tileHeight = Math.Max(14, Math.Min(22, (rect.Bottom - tileTop - 6) / tileCount));
+        for (var index = 0; index < tileCount; index++)
         {
             var tileRect = new Rect(rect.Left + 6, tileTop + index * (tileHeight + 3), Math.Max(1, rect.Width - 12), tileHeight);
             dc.DrawRoundedRectangle(
@@ -165,7 +164,10 @@ public partial class GridView
                 tileRect,
                 2,
                 2);
-            DrawClippedText(dc, items[index], tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1);
+            var tileText = selectedItemCount == 0
+                ? slicer.SourceFieldName ?? slicer.CacheName ?? "All"
+                : slicer.SelectedItems[index];
+            DrawClippedText(dc, tileText, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1);
         }
     }
 
