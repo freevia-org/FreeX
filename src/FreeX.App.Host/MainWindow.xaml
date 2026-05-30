@@ -1249,23 +1249,6 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Add-ins ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Get Add-ins" Width="94" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="Get Add-ins"
-                                        local:RibbonTooltip.KeyTip="GA"
-                                        local:RibbonTooltip.Description="Office add-in discovery is deferred in FreeX."/>
-                                <Button Content="My Add-ins" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="My Add-ins"
-                                        local:RibbonTooltip.KeyTip="AI"
-                                        local:RibbonTooltip.Description="Office add-in management is deferred in FreeX."/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Add-ins" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-
                         <!-- ▌Charts ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
@@ -1673,19 +1656,6 @@
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
-                        <!-- ▌Tours ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="3D Map" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="3D Map"
-                                        local:RibbonTooltip.KeyTip="3D"
-                                        local:RibbonTooltip.Description="3D Map tours are deferred in FreeX."/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Tours" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-
                         <!-- ▌Sparklines ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
@@ -1762,10 +1732,6 @@
                                         local:RibbonTooltip.Title="Header &amp; Footer"
                                         local:RibbonTooltip.KeyTip="HF"
                                         local:RibbonTooltip.Description="Edit printed page headers and footers."/>
-                                <Button Content="Object" Width="74" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="Object"
-                                        local:RibbonTooltip.KeyTip="O"
-                                        local:RibbonTooltip.Description="Embedded object authoring is deferred in FreeX."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Text" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -2481,29 +2447,8 @@
                                         local:RibbonTooltip.Title="Refresh All"
                                         local:RibbonTooltip.KeyTip="FA"
                                         local:RibbonTooltip.Description="Recalculate formulas and refresh FreeX-managed workbook data. External data connections and Power Query are excluded."/>
-                                <Button Content="Queries &amp; Connections" Width="128" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="Queries &amp; Connections"
-                                        local:RibbonTooltip.KeyTip="Q"
-                                        local:RibbonTooltip.Description="External workbook queries and connection management are deferred in FreeX."/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Queries &amp; Connections" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-
-                        <!-- ▌Data Types ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Stocks" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="Stocks"
-                                        local:RibbonTooltip.KeyTip="ST"
-                                        local:RibbonTooltip.Description="Linked stock data types are deferred in FreeX."/>
-                                <Button Content="Geography" Width="86" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="Geography"
-                                        local:RibbonTooltip.KeyTip="Y"
-                                        local:RibbonTooltip.Description="Linked geography data types are deferred in FreeX."/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Data Types" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
@@ -2968,20 +2913,6 @@
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Window" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
-
-                        <!-- ▌Macros ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="Macros" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="Macros"
-                                        local:RibbonTooltip.KeyTip="M"
-                                        local:RibbonTooltip.Description="VBA macro recording and playback are deferred in FreeX."/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Macros" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-
                     </StackPanel>
                     </ScrollViewer>
                 </Border>
@@ -3267,26 +3198,6 @@
                                                                   local:RibbonTooltip.Title="Legal Notices"
                                                                   local:RibbonTooltip.KeyTip="LN"
                                                                   local:RibbonTooltip.Description="View legal, privacy, and third-party notices packaged with FreeX."/>
-                                </StackPanel>
-                                <StackPanel Orientation="Vertical">
-                                    <Button Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                            local:RibbonTooltip.Title="Contact Support"
-                                            local:RibbonTooltip.KeyTip="CS"
-                                            local:RibbonTooltip.Description="Contact support for FreeX. In-app support is not yet implemented.">
-                                        <TextBlock Text="Contact Support" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
-                                    </Button>
-                                    <Button Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                            local:RibbonTooltip.Title="Show Training"
-                                            local:RibbonTooltip.KeyTip="TR"
-                                            local:RibbonTooltip.Description="Open FreeX training content. Training content is not yet implemented.">
-                                        <TextBlock Text="Show Training" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
-                                    </Button>
-                                    <Button Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                            local:RibbonTooltip.Title="What's New"
-                                            local:RibbonTooltip.KeyTip="WN"
-                                            local:RibbonTooltip.Description="Show recent FreeX updates. What's New content is not yet implemented.">
-                                        <TextBlock Text="What's New" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
-                                    </Button>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="Help" Style="{StaticResource GroupLbl}"/></Border>

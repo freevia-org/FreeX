@@ -26,17 +26,12 @@ public sealed class HelpCommandSourceTests
     }
 
     [Theory]
-    [InlineData("Contact Support", "CS")]
-    [InlineData("Show Training", "TR")]
-    [InlineData("What's New", "WN")]
-    public void HelpDeferredCommands_RemainDisabledWithoutClickHandlers(string title, string keyTip)
+    [InlineData("Contact Support")]
+    [InlineData("Show Training")]
+    [InlineData("What's New")]
+    public void HelpOutOfScopeCommands_AreNotSurfacedAsDisabledRibbonButtons(string title)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
-
-        button.Should().Contain("IsEnabled=\"False\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().NotContain("Click=");
+        ReadMainWindowXaml().Should().NotContain($"local:RibbonTooltip.Title=\"{title}\"");
     }
 
     [Fact]

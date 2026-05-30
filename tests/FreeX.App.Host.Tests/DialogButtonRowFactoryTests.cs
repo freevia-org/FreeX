@@ -25,18 +25,18 @@ public sealed class DialogButtonRowFactoryTests
             row.Children.Count.Should().Be(2);
 
             var ok = row.Children[0].Should().BeOfType<Button>().Subject;
-            ok.Content.Should().Be("_OK");
+            ok.Content.Should().Be(UiText.Ok);
             ok.Width.Should().Be(72);
             ok.Margin.Should().Be(new Thickness(0, 0, 8, 0));
             ok.IsDefault.Should().BeTrue();
-            AutomationProperties.GetName(ok).Should().Be("OK");
+            AutomationProperties.GetName(ok).Should().Be(UiText.CreateAutomationName(UiText.Ok));
             AutomationProperties.GetAcceleratorKey(ok).Should().Be("Alt+O");
 
             var cancel = row.Children[1].Should().BeOfType<Button>().Subject;
-            cancel.Content.Should().Be("_Cancel");
+            cancel.Content.Should().Be(UiText.Cancel);
             cancel.Width.Should().Be(72);
             cancel.IsCancel.Should().BeTrue();
-            AutomationProperties.GetName(cancel).Should().Be("Cancel");
+            AutomationProperties.GetName(cancel).Should().Be(UiText.CreateAutomationName(UiText.Cancel));
             AutomationProperties.GetAcceleratorKey(cancel).Should().Be("Alt+C");
 
             ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -62,11 +62,11 @@ public sealed class DialogButtonRowFactoryTests
             row.Children.Count.Should().Be(1);
 
             var ok = row.Children[0].Should().BeOfType<Button>().Subject;
-            ok.Content.Should().Be("_OK");
+            ok.Content.Should().Be(UiText.Ok);
             ok.Width.Should().Be(76);
             ok.IsDefault.Should().BeTrue();
             ok.IsCancel.Should().BeTrue();
-            AutomationProperties.GetName(ok).Should().Be("OK");
+            AutomationProperties.GetName(ok).Should().Be(UiText.CreateAutomationName(UiText.Ok));
             AutomationProperties.GetAcceleratorKey(ok).Should().Be("Alt+O");
 
             ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

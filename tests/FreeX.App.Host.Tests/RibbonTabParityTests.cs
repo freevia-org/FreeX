@@ -37,9 +37,7 @@ public sealed class RibbonTabParityTests
         ExtractGroupLabels(insertTab).Should().Equal(
             "Tables",
             "Illustrations",
-            "Add-ins",
             "Charts",
-            "Tours",
             "Sparklines",
             "Filters",
             "Links",
@@ -192,7 +190,6 @@ public sealed class RibbonTabParityTests
         ExtractGroupLabels(dataTab).Should().Equal(
             "Get & Transform Data",
             "Queries & Connections",
-            "Data Types",
             "Sort & Filter",
             "Data Tools",
             "Forecast",
@@ -252,8 +249,7 @@ public sealed class RibbonTabParityTests
             "Workbook Views",
             "Show",
             "Zoom",
-            "Window",
-            "Macros");
+            "Window");
 
         ExtractTooltipTitles(zoomGroup).Should().ContainInOrder(
             "Zoom",
@@ -271,7 +267,6 @@ public sealed class RibbonTabParityTests
             "Synchronous Scrolling",
             "Reset Window Position",
             "Switch Windows");
-        ExtractGroupXaml(viewTab, "Macros").Should().Contain("local:RibbonTooltip.Title=\"Macros\"");
     }
 
     [Fact]
@@ -320,7 +315,7 @@ public sealed class RibbonTabParityTests
     }
 
     [Fact]
-    public void HelpTab_ExposesExcelLikeSupportTrainingAndWhatsNewCommands()
+    public void HelpTab_ExposesOnlineFeedbackAboutAndLegalCommands()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var helpTab = ExtractTabXaml(xaml, "Help", "</TabControl>");
@@ -333,10 +328,7 @@ public sealed class RibbonTabParityTests
             "Copy Diagnostics",
             "Check for Updates",
             "About FreeX",
-            "Legal Notices",
-            "Contact Support",
-            "Show Training",
-            "What's New");
+            "Legal Notices");
     }
 
     private static string ExtractTabXaml(string xaml, string header, string nextHeader)
