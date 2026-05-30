@@ -101,6 +101,7 @@ internal static class PdfDocumentExporter
             using var gfx = XGraphics.FromPdfPage(page);
             using var image = XImage.FromBitmapSource(bitmap);
             gfx.DrawImage(image, 0, 0, page.Width.Point, page.Height.Point);
+            DrawVectorOverlays(gfx, fixedPage);
             if (includeSelectableText)
                 DrawTextOverlay(gfx, fixedPage);
             AddLinkAnnotations(page, fixedPage);
@@ -283,6 +284,187 @@ internal static class PdfDocumentExporter
                 new XPoint(overlay.X * 72.0 / StandardDpi, (overlay.Y + overlay.FontSize) * 72.0 / StandardDpi));
         }
     }
+
+    private static void DrawVectorOverlays(XGraphics gfx, FixedPage page)
+    {
+        foreach (UIElement child in page.Children)
+            DrawVectorOverlays(gfx, child, 0, 0);
+    }
+
+    private static void DrawVectorOverlays(XGraphics gfx, UIElement element, double parentX, double parentY)
+    {
+        if (element.Visibility != Visibility.Visible)
+            return;
+
+        var x = parentX + ReadLeft(element);
+        var y = parentY + ReadTop(element);
+
+        if (element is FrameworkElement frameworkElement)
+        {
+            x += frameworkElement.Margin.Left;
+            y += frameworkElement.Margin.Top;
+        }
+
+        var renderTranslation = ReadSimpleTranslation(element.RenderTransform);
+        x += renderTranslation.X;
+        y += renderTranslation.Y;
+
+        if (element is VisualHost { Visual: DrawingVisual drawingVisual })
+            DrawVectorDrawing(gfx, drawingVisual.Drawing, CreatePageTransform(x, y));
+
+        if (element is Panel panel)
+        {
+            foreach (UIElement child in panel.Children)
+                DrawVectorOverlays(gfx, child, x, y);
+        }
+        else if (element is Decorator { Child: UIElement decoratorChild })
+        {
+            DrawVectorOverlays(gfx, decoratorChild, x, y);
+        }
+        else if (element is ContentControl { Content: UIElement contentChild })
+        {
+            DrawVectorOverlays(gfx, contentChild, x, y);
+        }
+
+        if (element is HeaderedContentControl { Header: UIElement headerChild })
+            DrawVectorOverlays(gfx, headerChild, x, y);
+
+        if (element is ItemsControl itemsControlWithElementItems)
+        {
+            foreach (var item in WpfTextContentExtractor.EnumerateVisibleItemElements(itemsControlWithElementItems))
+                DrawVectorOverlays(gfx, item, x, y);
+        }
+    }
+
+    private static void DrawVectorDrawing(XGraphics gfx, Drawing drawing, Matrix transform)
+    {
+        switch (drawing)
+        {
+            case DrawingGroup group:
+                var groupTransform = transform;
+                if (group.Transform is not null && group.Transform != Transform.Identity)
+                    groupTransform.Append(group.Transform.Value);
+
+                foreach (var child in group.Children)
+                    DrawVectorDrawing(gfx, child, groupTransform);
+                break;
+            case GeometryDrawing geometryDrawing:
+                DrawVectorGeometry(gfx, geometryDrawing, transform);
+                break;
+        }
+    }
+
+    private static void DrawVectorGeometry(XGraphics gfx, GeometryDrawing drawing, Matrix transform)
+    {
+        if (drawing.Geometry is null)
+            return;
+
+        var brush = TryCreateBrush(drawing.Brush);
+        var pen = TryCreatePen(drawing.Pen);
+        if (brush is null && pen is null)
+            return;
+
+        var geometry = drawing.Geometry.Clone();
+        var geometryTransform = transform;
+        if (geometry.Transform is not null && geometry.Transform != Transform.Identity)
+            geometryTransform.Append(geometry.Transform.Value);
+        geometry.Transform = new MatrixTransform(geometryTransform);
+
+        var pathGeometry = geometry.GetFlattenedPathGeometry();
+        if (pathGeometry.Figures.Count == 0)
+            return;
+
+        var path = new XGraphicsPath(pathGeometry);
+        gfx.DrawPath(pen, brush, path);
+    }
+
+    private static Matrix CreatePageTransform(double x, double y) =>
+        new(72.0 / StandardDpi, 0, 0, 72.0 / StandardDpi, x * 72.0 / StandardDpi, y * 72.0 / StandardDpi);
+
+    private static XSolidBrush? TryCreateBrush(Brush? brush)
+    {
+        if (brush is not SolidColorBrush solid)
+            return null;
+
+        var color = solid.Color;
+        return new XSolidBrush(XColor.FromArgb(color.A, color.R, color.G, color.B));
+    }
+
+    private static XPen? TryCreatePen(System.Windows.Media.Pen? pen)
+    {
+        if (pen is null || pen.Thickness <= 0 || pen.Brush is not SolidColorBrush solid)
+            return null;
+
+        var color = solid.Color;
+        return new XPen(XColor.FromArgb(color.A, color.R, color.G, color.B), pen.Thickness * 72.0 / StandardDpi);
+    }
+
+    private static double ReadLeft(UIElement element)
+    {
+        var left = Canvas.GetLeft(element);
+        return double.IsNaN(left) ? 0 : left;
+    }
+
+    private static double ReadTop(UIElement element)
+    {
+        var top = Canvas.GetTop(element);
+        return double.IsNaN(top) ? 0 : top;
+    }
+
+    private static Vector ReadSimpleTranslation(Transform? transform)
+    {
+        return TryReadSimpleTranslation(transform, out var translation)
+            ? translation
+            : default;
+    }
+
+    private static bool TryReadSimpleTranslation(Transform? transform, out Vector translation)
+    {
+        if (transform is null || transform == Transform.Identity)
+        {
+            translation = default;
+            return true;
+        }
+
+        switch (transform)
+        {
+            case TranslateTransform translate:
+                translation = new Vector(translate.X, translate.Y);
+                return true;
+            case MatrixTransform matrixTransform when IsOffsetOnly(matrixTransform.Matrix):
+                translation = new Vector(matrixTransform.Matrix.OffsetX, matrixTransform.Matrix.OffsetY);
+                return true;
+            case TransformGroup group:
+                return TryReadSimpleTranslation(group, out translation);
+            default:
+                translation = default;
+                return false;
+        }
+    }
+
+    private static bool TryReadSimpleTranslation(TransformGroup group, out Vector translation)
+    {
+        var result = new Vector();
+        foreach (var child in group.Children)
+        {
+            if (!TryReadSimpleTranslation(child, out var childTranslation))
+            {
+                translation = default;
+                return false;
+            }
+
+            result += childTranslation;
+        }
+
+        translation = result;
+        return true;
+    }
+
+    private static bool IsOffsetOnly(Matrix matrix) =>
+        matrix.M11 == 1 &&
+        matrix.M12 == 0 &&
+        matrix.M21 == 0 &&
+        matrix.M22 == 1;
 
     private static void AddLinkAnnotations(PdfPage pdfPage, FixedPage fixedPage)
     {
