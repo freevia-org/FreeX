@@ -95,9 +95,9 @@ public sealed class DataValidationDialogTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml"));
 
         xaml.Should().Contain("<TabControl");
-        xaml.Should().Contain("Header=\"_Settings\"");
-        xaml.Should().Contain("Header=\"_Input Message\"");
-        xaml.Should().Contain("Header=\"_Error Alert\"");
+        xaml.ShouldContainLocalizedAttribute("Header", "_Settings");
+        xaml.ShouldContainLocalizedAttribute("Header", "_Input Message");
+        xaml.ShouldContainLocalizedAttribute("Header", "_Error Alert");
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public sealed class DataValidationDialogTests
             "_OK",
             "_Cancel"
         })
-            xaml.Should().Contain($"Content=\"{content}\"");
+            xaml.ShouldContainLocalizedAttribute("Content", content);
     }
 
     [Fact]

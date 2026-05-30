@@ -49,18 +49,18 @@ public sealed class RibbonTabParityTests
 
         ExtractGroupXaml(insertTab, "Tables").Should().Contain("Recommended PivotTables");
         ExtractGroupXaml(insertTab, "Tables").Should().Contain(
-            "local:RibbonTooltip.Title=\"Recommended PivotTables\"",
+            "local:RibbonMetadata.CommandName=\"Recommended PivotTables\"",
             "Excel exposes Recommended PivotTables as a first-class Tables command, not only as a nested PivotTable menu item");
-        ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Pictures\"");
-        ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonTooltip.Title=\"Shapes\"");
-        ExtractGroupXaml(insertTab, "Charts").Should().Contain("local:RibbonTooltip.Title=\"Recommended Charts\"");
-        ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
-        ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonTooltip.Title=\"Insert Timeline\"");
-        ExtractGroupXaml(insertTab, "Links").Should().Contain("local:RibbonTooltip.Title=\"Insert Link\"");
-        ExtractGroupXaml(insertTab, "Comments").Should().Contain("local:RibbonTooltip.Title=\"Comment\"");
-        ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonTooltip.Title=\"Text Box\"");
-        ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonTooltip.Title=\"Header &amp; Footer\"");
-        ExtractGroupXaml(insertTab, "Symbols").Should().Contain("local:RibbonTooltip.Title=\"Symbol\"");
+        ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonMetadata.CommandName=\"Pictures\"");
+        ExtractGroupXaml(insertTab, "Illustrations").Should().Contain("local:RibbonMetadata.CommandName=\"Shapes\"");
+        ExtractGroupXaml(insertTab, "Charts").Should().Contain("local:RibbonMetadata.CommandName=\"Recommended Charts\"");
+        ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonMetadata.CommandName=\"Insert Slicer\"");
+        ExtractGroupXaml(insertTab, "Filters").Should().Contain("local:RibbonMetadata.CommandName=\"Insert Timeline\"");
+        ExtractGroupXaml(insertTab, "Links").Should().Contain("local:RibbonMetadata.CommandName=\"Insert Link\"");
+        ExtractGroupXaml(insertTab, "Comments").Should().Contain("local:RibbonMetadata.CommandName=\"Comment\"");
+        ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonMetadata.CommandName=\"Text Box\"");
+        ExtractGroupXaml(insertTab, "Text").Should().Contain("local:RibbonMetadata.CommandName=\"Header &amp; Footer\"");
+        ExtractGroupXaml(insertTab, "Symbols").Should().Contain("local:RibbonMetadata.CommandName=\"Symbol\"");
     }
 
     [Fact]
@@ -87,13 +87,13 @@ public sealed class RibbonTabParityTests
             "Pencil",
             "Highlighter",
             "Add Pen");
-        drawTab.Should().NotContain("local:RibbonTooltip.Title=\"Rectangle\"");
-        drawTab.Should().NotContain("local:RibbonTooltip.Title=\"Ellipse\"");
-        drawTab.Should().NotContain("local:RibbonTooltip.Title=\"Line\"");
-        drawTab.Should().NotContain("local:RibbonTooltip.Title=\"Text Box\"");
-        ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Shape\"");
-        ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonTooltip.Title=\"Ink to Math\"");
-        ExtractGroupXaml(drawTab, "Format").Should().Contain("local:RibbonTooltip.Title=\"Shape Fill\"");
+        drawTab.Should().NotContain("local:RibbonMetadata.CommandName=\"Rectangle\"");
+        drawTab.Should().NotContain("local:RibbonMetadata.CommandName=\"Ellipse\"");
+        drawTab.Should().NotContain("local:RibbonMetadata.CommandName=\"Line\"");
+        drawTab.Should().NotContain("local:RibbonMetadata.CommandName=\"Text Box\"");
+        ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonMetadata.CommandName=\"Ink to Shape\"");
+        ExtractGroupXaml(drawTab, "Convert").Should().Contain("local:RibbonMetadata.CommandName=\"Ink to Math\"");
+        ExtractGroupXaml(drawTab, "Format").Should().Contain("local:RibbonMetadata.CommandName=\"Shape Fill\"");
     }
 
     [Fact]
@@ -118,11 +118,11 @@ public sealed class RibbonTabParityTests
             "Breaks",
             "Background",
             "Print Titles");
-        pageSetupGroup.Should().NotContain("local:RibbonTooltip.Title=\"Header &amp; Footer\"");
-        ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Bring Forward\"");
-        ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Send Backward\"");
-        ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Selection Pane\"");
-        ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonTooltip.Title=\"Rotate Object\"");
+        pageSetupGroup.Should().NotContain("local:RibbonMetadata.CommandName=\"Header &amp; Footer\"");
+        ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonMetadata.CommandName=\"Bring Forward\"");
+        ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonMetadata.CommandName=\"Send Backward\"");
+        ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonMetadata.CommandName=\"Selection Pane\"");
+        ExtractGroupXaml(pageLayoutTab, "Arrange").Should().Contain("local:RibbonMetadata.CommandName=\"Rotate Object\"");
     }
 
     [Fact]
@@ -198,8 +198,8 @@ public sealed class RibbonTabParityTests
             "Forecast",
             "Outline");
 
-        ExtractGroupXaml(dataTab, "Get & Transform Data").Should().Contain("local:RibbonTooltip.Title=\"Get Data\"");
-        ExtractGroupXaml(dataTab, "Queries & Connections").Should().Contain("local:RibbonTooltip.Title=\"Refresh All\"");
+        ExtractGroupXaml(dataTab, "Get & Transform Data").Should().Contain("local:RibbonMetadata.CommandName=\"Get Data\"");
+        ExtractGroupXaml(dataTab, "Queries & Connections").Should().Contain("local:RibbonMetadata.CommandName=\"Refresh All\"");
         ExtractTooltipTitles(sortFilterGroup).Should().ContainInOrder(
             "Sort A to Z",
             "Sort Z to A",
@@ -208,15 +208,15 @@ public sealed class RibbonTabParityTests
             "Advanced Filter");
         ExtractTooltipTitles(sortFilterGroup).Should().NotContain("Sort Ascending");
         ExtractTooltipTitles(sortFilterGroup).Should().NotContain("Sort Descending");
-        ExtractGroupXaml(dataTab, "Data Tools").Should().NotContain("local:RibbonTooltip.Title=\"Subtotal\"");
+        ExtractGroupXaml(dataTab, "Data Tools").Should().NotContain("local:RibbonMetadata.CommandName=\"Subtotal\"");
         ExtractTooltipTitles(ExtractGroupXaml(dataTab, "Outline")).Should().ContainInOrder(
             "Group",
             "Ungroup",
             "Subtotal",
             "Collapse Group",
             "Expand Group");
-        ExtractGroupXaml(dataTab, "Forecast").Should().Contain("local:RibbonTooltip.Title=\"Forecast Sheet\"");
-        ExtractGroupXaml(dataTab, "Forecast").Should().Contain("local:RibbonTooltip.Title=\"What-If Analysis\"");
+        ExtractGroupXaml(dataTab, "Forecast").Should().Contain("local:RibbonMetadata.CommandName=\"Forecast Sheet\"");
+        ExtractGroupXaml(dataTab, "Forecast").Should().Contain("local:RibbonMetadata.CommandName=\"What-If Analysis\"");
     }
 
     [Fact]
@@ -233,11 +233,11 @@ public sealed class RibbonTabParityTests
             "Notes",
             "Protect");
 
-        proofingGroup.Should().Contain("Content=\"Workbook Statistics\"");
+        proofingGroup.ShouldContainLocalizedAttribute("Content", "Workbook Statistics");
         proofingGroup.Should().NotContain("Content=\"Workbook Stats\"");
-        ExtractGroupXaml(reviewTab, "Comments").Should().Contain("local:RibbonTooltip.Title=\"New Comment\"");
-        ExtractGroupXaml(reviewTab, "Notes").Should().Contain("local:RibbonTooltip.Title=\"New Note\"");
-        ExtractGroupXaml(reviewTab, "Notes").Should().Contain("local:RibbonTooltip.Title=\"Show Notes\"");
+        ExtractGroupXaml(reviewTab, "Comments").Should().Contain("local:RibbonMetadata.CommandName=\"New Comment\"");
+        ExtractGroupXaml(reviewTab, "Notes").Should().Contain("local:RibbonMetadata.CommandName=\"New Note\"");
+        ExtractGroupXaml(reviewTab, "Notes").Should().Contain("local:RibbonMetadata.CommandName=\"Show Notes\"");
     }
 
     [Fact]
@@ -271,7 +271,7 @@ public sealed class RibbonTabParityTests
             "Synchronous Scrolling",
             "Reset Window Position",
             "Switch Windows");
-        ExtractGroupXaml(viewTab, "Macros").Should().Contain("local:RibbonTooltip.Title=\"Macros\"");
+        ExtractGroupXaml(viewTab, "Macros").Should().Contain("local:RibbonMetadata.CommandName=\"Macros\"");
     }
 
     [Fact]
@@ -292,14 +292,14 @@ public sealed class RibbonTabParityTests
             "Tools",
             "Show");
 
-        ExtractGroupXaml(analyzeTab, "Group").Should().Contain("local:RibbonTooltip.Title=\"Group Field\"");
-        ExtractGroupXaml(analyzeTab, "Filter").Should().Contain("local:RibbonTooltip.Title=\"Insert Slicer\"");
-        dataGroup.Should().Contain("local:RibbonTooltip.Title=\"Refresh\"");
-        dataGroup.Should().Contain("Content=\"Change Data Source\"");
+        ExtractGroupXaml(analyzeTab, "Group").Should().Contain("local:RibbonMetadata.CommandName=\"Group Field\"");
+        ExtractGroupXaml(analyzeTab, "Filter").Should().Contain("local:RibbonMetadata.CommandName=\"Insert Slicer\"");
+        dataGroup.ShouldContainInvariantCommandName("Refresh");
+        dataGroup.ShouldContainLocalizedAttribute("Content", "Change Data Source");
         dataGroup.Should().NotContain("Content=\"Change Source\"");
-        ExtractGroupXaml(analyzeTab, "Calculations").Should().Contain("local:RibbonTooltip.Title=\"Calculated Field\"");
-        ExtractGroupXaml(analyzeTab, "Tools").Should().Contain("local:RibbonTooltip.Title=\"PivotChart\"");
-        ExtractGroupXaml(analyzeTab, "Show").Should().Contain("local:RibbonTooltip.Title=\"Field List\"");
+        ExtractGroupXaml(analyzeTab, "Calculations").Should().Contain("local:RibbonMetadata.CommandName=\"Calculated Field\"");
+        ExtractGroupXaml(analyzeTab, "Tools").Should().Contain("local:RibbonMetadata.CommandName=\"PivotChart\"");
+        ExtractGroupXaml(analyzeTab, "Show").Should().Contain("local:RibbonMetadata.CommandName=\"Field List\"");
     }
 
     [Fact]
@@ -313,10 +313,10 @@ public sealed class RibbonTabParityTests
             "PivotTable Style Options",
             "PivotTable Styles");
 
-        ExtractGroupXaml(designTab, "Layout").Should().Contain("local:RibbonTooltip.Title=\"Report Layout\"");
-        ExtractGroupXaml(designTab, "PivotTable Style Options").Should().Contain("local:RibbonTooltip.Title=\"Banded Rows\"");
+        ExtractGroupXaml(designTab, "Layout").Should().Contain("local:RibbonMetadata.CommandName=\"Report Layout\"");
+        ExtractGroupXaml(designTab, "PivotTable Style Options").Should().Contain("local:RibbonMetadata.CommandName=\"Banded Rows\"");
         ExtractGroupXaml(designTab, "PivotTable Style Options").Should().Contain("Content=\"Banded Columns\"");
-        ExtractGroupXaml(designTab, "PivotTable Styles").Should().Contain("local:RibbonTooltip.Title=\"PivotTable Styles\"");
+        ExtractGroupXaml(designTab, "PivotTable Styles").Should().Contain("local:RibbonMetadata.CommandName=\"PivotTable Styles\"");
     }
 
     [Fact]
@@ -380,7 +380,7 @@ public sealed class RibbonTabParityTests
     }
 
     private static IReadOnlyList<string> ExtractTooltipTitles(string xaml) =>
-        Regex.Matches(xaml, "local:RibbonTooltip.Title=\"(?<title>[^\"]+)\"")
+        Regex.Matches(xaml, "local:RibbonMetadata.CommandName=\"(?<title>[^\"]+)\"")
             .Select(match => match.Groups["title"].Value.Replace("&amp;", "&", StringComparison.Ordinal))
             .ToList();
 }

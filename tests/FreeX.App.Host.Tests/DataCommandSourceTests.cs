@@ -19,7 +19,7 @@ public sealed class DataCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -50,9 +50,9 @@ public sealed class DataCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), "Queries &amp; Connections");
 
-        button.Should().Contain("Content=\"Queries &amp; Connections\"");
+        button.ShouldContainLocalizedAttribute("Content", "Queries &amp; Connections");
         button.Should().Contain("IsEnabled=\"False\"");
-        button.Should().Contain("local:RibbonTooltip.Title=\"Queries &amp; Connections\"");
+        button.ShouldContainInvariantCommandName("Queries &amp; Connections");
         button.Should().Contain("local:RibbonTooltip.KeyTip=\"Q\"");
         button.Should().Contain("External workbook queries and connection management are deferred in FreeX.");
         button.Should().NotContain("Click=");
@@ -66,7 +66,7 @@ public sealed class DataCommandSourceTests
         var searchIndex = 0;
         while (true)
         {
-            var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", searchIndex, StringComparison.Ordinal);
+            var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", searchIndex, StringComparison.Ordinal);
             titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} Data command should be present");
 
             var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);

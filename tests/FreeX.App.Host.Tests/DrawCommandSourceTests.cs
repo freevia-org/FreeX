@@ -22,9 +22,9 @@ public sealed class DrawCommandSourceTests
     {
         var button = ExtractElementByTitle(ReadMainWindowXaml(), title, "Button");
 
-        button.Should().Contain($"Content=\"{content}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
         button.Should().Contain("IsEnabled=\"False\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().NotContain("Click=");
     }
@@ -48,8 +48,8 @@ public sealed class DrawCommandSourceTests
     {
         var button = ExtractElementByTitle(ReadMainWindowXaml(), title, "Button");
 
-        button.Should().Contain($"Content=\"{content}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -64,7 +64,7 @@ public sealed class DrawCommandSourceTests
     {
         var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header, handler);
 
-        item.Should().Contain($"Header=\"{header}\"");
+        item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         item.Should().Contain($"Click=\"{handler}\"");
     }
@@ -103,7 +103,7 @@ public sealed class DrawCommandSourceTests
 
     private static string ExtractElementByTitle(string xaml, string title, string elementName)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
+        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
         titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} Draw command should be present");
 
         var start = xaml.LastIndexOf($"<{elementName}", titleIndex, StringComparison.Ordinal);

@@ -16,8 +16,8 @@ public sealed class ViewCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
 
-        button.Should().Contain($"Content=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", title);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -35,7 +35,7 @@ public sealed class ViewCommandSourceTests
     {
         var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header, "ZoomPresetMenuItem_Click");
 
-        item.Should().Contain($"Header=\"{header}\"");
+        item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"Tag=\"{tag}\"");
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         item.Should().Contain("Click=\"ZoomPresetMenuItem_Click\"");
@@ -83,8 +83,8 @@ public sealed class ViewCommandSourceTests
     {
         var button = ExtractCommandElementByTitle(ReadMainWindowXaml(), title);
 
-        button.Should().Contain($"Content=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", title);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -101,7 +101,7 @@ public sealed class ViewCommandSourceTests
     {
         var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header, "ArrangeAllMenuItem_Click");
 
-        item.Should().Contain($"Header=\"{header}\"");
+        item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"Tag=\"{tag}\"");
         item.Should().Contain("IsCheckable=\"True\"");
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -120,7 +120,7 @@ public sealed class ViewCommandSourceTests
     {
         var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header);
 
-        item.Should().Contain($"Header=\"{header}\"");
+        item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         item.Should().Contain($"Click=\"{handler}\"");
     }
@@ -145,7 +145,7 @@ public sealed class ViewCommandSourceTests
 
     private static string ExtractButtonElementByTitle(string xaml, string title)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
+        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
         titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} View zoom command should be present");
 
         var start = FindCommandElementStart(xaml, titleIndex);

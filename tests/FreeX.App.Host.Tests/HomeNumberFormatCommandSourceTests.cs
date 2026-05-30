@@ -20,7 +20,7 @@ public sealed class HomeNumberFormatCommandSourceTests
         var button = ExtractButtonElementByClickHandler(xaml, clickHandler);
 
         button.Should().Contain($"Click=\"{clickHandler}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{tooltipTitle}\"");
+        button.ShouldContainInvariantCommandName(tooltipTitle);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
     }
 

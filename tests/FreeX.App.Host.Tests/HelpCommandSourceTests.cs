@@ -18,8 +18,8 @@ public sealed class HelpCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
 
-        button.Should().Contain($"Content=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", title);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -33,7 +33,7 @@ public sealed class HelpCommandSourceTests
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
 
         button.Should().Contain("IsEnabled=\"False\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().NotContain("Click=");
     }
@@ -58,7 +58,7 @@ public sealed class HelpCommandSourceTests
 
     private static string ExtractButtonElementByTitle(string xaml, string title)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
+        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
         titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} help command should be present");
 
         var start = xaml.LastIndexOf('<', titleIndex);

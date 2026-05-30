@@ -23,7 +23,7 @@ public sealed class FormulaCommandSourceTests
     {
         var button = ExtractCommandElementByTitle(ReadFormulasTabXaml(), title, handler);
 
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -40,8 +40,8 @@ public sealed class FormulaCommandSourceTests
     {
         var button = ExtractCommandElementByTitle(ReadMainWindowXaml(), title);
 
-        button.Should().Contain($"Content=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", title);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -61,7 +61,7 @@ public sealed class FormulaCommandSourceTests
     {
         var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header);
 
-        item.Should().Contain($"Header=\"{header}\"");
+        item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         item.Should().Contain($"Click=\"{handler}\"");
     }
@@ -102,7 +102,7 @@ public sealed class FormulaCommandSourceTests
         var searchIndex = 0;
         while (true)
         {
-            var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", searchIndex, StringComparison.Ordinal);
+            var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", searchIndex, StringComparison.Ordinal);
             titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} formula command should be present");
 
             var start = xaml.LastIndexOf('<', titleIndex);

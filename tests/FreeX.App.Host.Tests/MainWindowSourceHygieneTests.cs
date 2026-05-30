@@ -2432,7 +2432,7 @@ public sealed class MainWindowSourceHygieneTests
             "Dotted",
             "More Borders..."
         })
-            xaml.Should().Contain($"Header=\"{label}\"");
+            xaml.ShouldContainLocalizedAttribute("Header", label);
 
         foreach (var handler in new[]
         {
@@ -2771,9 +2771,9 @@ public sealed class MainWindowSourceHygieneTests
 
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureButton\"");
         xaml.Should().Contain("AutomationProperties.HelpText=\"Open crop controls for the selected or most recent inserted picture.\"");
-        xaml.Should().Contain("Header=\"Crop...\"");
+        xaml.ShouldContainLocalizedAttribute("Header", "Crop...");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureMenuItem\"");
-        xaml.Should().Contain("Header=\"Reset Crop\"");
+        xaml.ShouldContainLocalizedAttribute("Header", "Reset Crop");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawResetPictureCropMenuItem\"");
         xaml.Should().Contain("Click=\"PictureCropDialogMenuItem_Click\"");
         xaml.Should().Contain("Click=\"PictureResetCropMenuItem_Click\"");

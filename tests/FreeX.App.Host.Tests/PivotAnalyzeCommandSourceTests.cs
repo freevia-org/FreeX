@@ -28,8 +28,8 @@ public sealed class PivotAnalyzeCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadPivotAnalyzeTabXaml(), title);
 
-        button.Should().Contain($"Content=\"{content}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -47,9 +47,9 @@ public sealed class PivotAnalyzeCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadPivotAnalyzeTabXaml(), title);
 
-        button.Should().Contain($"Content=\"{content}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
         button.Should().Contain("IsEnabled=\"False\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().NotContain("Click=");
     }
@@ -98,7 +98,7 @@ public sealed class PivotAnalyzeCommandSourceTests
 
     private static string ExtractButtonElementByTitle(string xaml, string title)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
+        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
         titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} PivotTable Analyze command should be present");
 
         var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);

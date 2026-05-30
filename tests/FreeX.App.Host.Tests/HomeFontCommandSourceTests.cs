@@ -20,7 +20,7 @@ public sealed class HomeFontCommandSourceTests
         var selector = ExtractElementByName(xaml, "ComboBox", name);
 
         selector.Should().Contain("IsEditable=\"True\"");
-        selector.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        selector.ShouldContainInvariantCommandName(title);
         selector.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         selector.Should().Contain($"SelectionChanged=\"{selectionHandler}\"");
         selector.Should().Contain($"KeyDown=\"{keyHandler}\"");
@@ -40,7 +40,7 @@ public sealed class HomeFontCommandSourceTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var button = ExtractButtonElementByClickHandler(xaml, handler);
 
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -59,7 +59,7 @@ public sealed class HomeFontCommandSourceTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var toggle = ExtractElementByName(xaml, "ToggleButton", name);
 
-        toggle.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        toggle.ShouldContainInvariantCommandName(title);
         toggle.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         toggle.Should().Contain($"Click=\"{handler}\"");
     }
