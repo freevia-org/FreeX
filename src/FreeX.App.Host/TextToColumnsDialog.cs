@@ -14,16 +14,16 @@ public sealed partial class TextToColumnsDialog : Window
 {
     private static readonly string[] DateColumnFormatLabels = ["MDY", "DMY", "YMD", "MYD", "DYM", "YDM"];
 
-    private readonly RadioButton _delimitedButton = new() { Content = "_Delimited", IsChecked = true };
-    private readonly RadioButton _fixedWidthButton = new() { Content = "Fi_xed width" };
-    private readonly CheckBox _tabBox = new() { Content = "_Tab" };
-    private readonly CheckBox _semicolonBox = new() { Content = "_Semicolon" };
-    private readonly CheckBox _commaBox = new() { Content = "_Comma", IsChecked = true };
-    private readonly CheckBox _spaceBox = new() { Content = "S_pace" };
-    private readonly CheckBox _otherBox = new() { Content = "_Other:" };
+    private readonly RadioButton _delimitedButton = new() { Content = UiText.Get("TextToColumns_Delimited"), IsChecked = true };
+    private readonly RadioButton _fixedWidthButton = new() { Content = UiText.Get("TextToColumns_FixedWidth") };
+    private readonly CheckBox _tabBox = new() { Content = UiText.Get("TextToColumns_Tab") };
+    private readonly CheckBox _semicolonBox = new() { Content = UiText.Get("TextToColumns_Semicolon") };
+    private readonly CheckBox _commaBox = new() { Content = UiText.Get("TextToColumns_Comma"), IsChecked = true };
+    private readonly CheckBox _spaceBox = new() { Content = UiText.Get("TextToColumns_Space") };
+    private readonly CheckBox _otherBox = new() { Content = UiText.Get("TextToColumns_Other") };
     private readonly TextBox _customBox = new() { Width = 48, Margin = new Thickness(6, 0, 0, 0) };
     private readonly ComboBox _textQualifierBox = new() { Width = 130, Margin = new Thickness(8, 0, 0, 0) };
-    private readonly CheckBox _treatConsecutiveDelimitersBox = new() { Content = "_Treat consecutive delimiters as one", Margin = new Thickness(0, 8, 0, 0) };
+    private readonly CheckBox _treatConsecutiveDelimitersBox = new() { Content = UiText.Get("TextToColumns_TreatConsecutiveDelimitersAsOne"), Margin = new Thickness(0, 8, 0, 0) };
     private readonly TextBox _fixedWidthBreaksBox = new() { Text = "10,20" };
     private readonly Canvas _fixedWidthRuler = new()
     {
@@ -33,14 +33,14 @@ public sealed partial class TextToColumnsDialog : Window
     };
     private readonly TextBox _destinationBox = new() { Width = 120 };
     private readonly ComboBox _formatColumnBox = new() { Width = 110, Margin = new Thickness(0, 0, 10, 0) };
-    private readonly RadioButton _formatGeneralButton = new() { Content = "_General", IsChecked = true };
-    private readonly RadioButton _formatTextButton = new() { Content = "_Text" };
-    private readonly RadioButton _formatDateButton = new() { Content = "_Date:" };
+    private readonly RadioButton _formatGeneralButton = new() { Content = UiText.Get("TextToColumns_General"), IsChecked = true };
+    private readonly RadioButton _formatTextButton = new() { Content = UiText.Get("TextToColumns_Text") };
+    private readonly RadioButton _formatDateButton = new() { Content = UiText.Get("TextToColumns_Date") };
     private readonly ComboBox _dateFormatBox = new() { Width = 72, Margin = new Thickness(8, 0, 0, 0) };
-    private readonly RadioButton _formatSkipButton = new() { Content = "Do not import column (_skip)" };
+    private readonly RadioButton _formatSkipButton = new() { Content = UiText.Get("TextToColumns_DoNotImportColumnSkip") };
     private readonly TextBox _decimalSeparatorBox = new() { Text = ".", Width = 42 };
     private readonly TextBox _thousandsSeparatorBox = new() { Text = ",", Width = 42 };
-    private readonly CheckBox _trailingMinusBox = new() { Content = "_Trailing minus for negative numbers" };
+    private readonly CheckBox _trailingMinusBox = new() { Content = UiText.Get("TextToColumns_TrailingMinusForNegativeNumbers") };
     private readonly ListView _previewGrid = new() { Height = 88 };
     private readonly IReadOnlyList<string> _previewRows;
     private readonly Dictionary<int, TextToColumnsColumnFormat> _columnFormats = [];
@@ -76,7 +76,7 @@ public sealed partial class TextToColumnsDialog : Window
         _requestRangeSelection = requestRangeSelection;
         _destinationBox.Text = _defaultDestination.ToA1();
 
-        Title = "Text to Columns";
+        Title = UiText.Get("TextToColumns_TextToColumns");
         Width = 500;
         Height = 430;
         ResizeMode = ResizeMode.NoResize;
@@ -129,7 +129,7 @@ public sealed partial class TextToColumnsDialog : Window
         _originalDataTypePanel = CreateOriginalDataTypePanel();
         _delimiterPanel = CreateDelimiterPanel();
         _fixedWidthPanel = CreateFixedWidthPanel();
-        _dataPreviewLabel = new TextBlock { Text = "Data preview", Margin = new Thickness(0, 10, 0, 4) };
+        _dataPreviewLabel = new TextBlock { Text = UiText.Get("TextToColumns_DataPreview"), Margin = new Thickness(0, 10, 0, 4) };
         _columnFormatPanel = CreateColumnFormatPanel();
         _destinationPanel = CreateDestinationPanel();
         body.Children.Add(_originalDataTypePanel);
@@ -152,7 +152,7 @@ public sealed partial class TextToColumnsDialog : Window
         var panel = new StackPanel();
         panel.Children.Add(new TextBlock
         {
-            Text = "Click the ruler to create a break line, drag to move it, or right-click a line to remove it.",
+            Text = UiText.Get("TextToColumns_ClickTheRulerToCreateABreakLineDragToMoveItOrRightClickALineToRemoveIt"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 6)
         });
@@ -161,7 +161,7 @@ public sealed partial class TextToColumnsDialog : Window
         var breakRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
         breakRow.Children.Add(new Label
         {
-            Content = "_Breaks:",
+            Content = UiText.Get("TextToColumns_Breaks"),
             Target = _fixedWidthBreaksBox,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 3, 8, 0)
@@ -172,7 +172,7 @@ public sealed partial class TextToColumnsDialog : Window
 
         return new GroupBox
         {
-            Header = "Fixed width",
+            Header = UiText.Get("TextToColumns_FixedWidth2"),
             Content = panel,
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 8)
@@ -186,38 +186,38 @@ public sealed partial class TextToColumnsDialog : Window
             if (!TryParseDestination(_destinationBox.Text, _defaultDestination, out var destination))
             {
                 FocusInvalidDestinationInput();
-                throw new ArgumentException("Enter a single destination cell, such as F2.");
+                throw new ArgumentException(UiText.Get("TextToColumns_EnterASingleDestinationCellSuchAsF2"));
             }
 
             if (_fixedWidthButton.IsChecked == true &&
                 !TryParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text, FixedWidthMaxLength(), out _))
             {
                 FocusInvalidFixedWidthBreaksInput();
-                throw new ArgumentException("Enter at least one fixed-width break position.");
+                throw new ArgumentException(UiText.Get("TextToColumns_EnterAtLeastOneFixedWidthBreakPosition"));
             }
 
             if (_fixedWidthButton.IsChecked != true && SelectedDelimiterKinds().Count == 0)
             {
                 FocusInvalidDelimiterSelectionInput();
-                throw new ArgumentException("Select at least one delimiter.");
+                throw new ArgumentException(UiText.Get("TextToColumns_SelectAtLeastOneDelimiter"));
             }
 
             if (_fixedWidthButton.IsChecked != true && _otherBox.IsChecked == true && string.IsNullOrEmpty(_customBox.Text))
             {
                 FocusInvalidCustomDelimiterInput();
-                throw new ArgumentException("Custom delimiter is required.");
+                throw new ArgumentException(UiText.Get("TextToColumns_CustomDelimiterIsRequired"));
             }
 
             if (!TryParseAdvancedSeparator(_decimalSeparatorBox.Text, out _))
             {
                 FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);
-                throw new ArgumentException("Enter a single decimal separator.");
+                throw new ArgumentException(UiText.Get("TextToColumns_EnterASingleDecimalSeparator"));
             }
 
             if (!TryParseAdvancedSeparator(_thousandsSeparatorBox.Text, out _))
             {
                 FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);
-                throw new ArgumentException("Enter a single thousands separator.");
+                throw new ArgumentException(UiText.Get("TextToColumns_EnterASingleThousandsSeparator"));
             }
 
             Result = _fixedWidthButton.IsChecked == true
@@ -241,26 +241,29 @@ public sealed partial class TextToColumnsDialog : Window
 
     private void RefocusInvalidInputAfterWarning(string message)
     {
-        switch (message)
+        if (string.Equals(message, UiText.Get("TextToColumns_EnterASingleDestinationCellSuchAsF2"), StringComparison.Ordinal))
         {
-            case "Enter a single destination cell, such as F2.":
-                FocusInvalidDestinationInput();
-                break;
-            case "Enter at least one fixed-width break position.":
-                FocusInvalidFixedWidthBreaksInput();
-                break;
-            case "Select at least one delimiter.":
-                FocusInvalidDelimiterSelectionInput();
-                break;
-            case "Custom delimiter is required.":
-                FocusInvalidCustomDelimiterInput();
-                break;
-            case "Enter a single decimal separator.":
-                FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);
-                break;
-            case "Enter a single thousands separator.":
-                FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);
-                break;
+            FocusInvalidDestinationInput();
+        }
+        else if (string.Equals(message, UiText.Get("TextToColumns_EnterAtLeastOneFixedWidthBreakPosition"), StringComparison.Ordinal))
+        {
+            FocusInvalidFixedWidthBreaksInput();
+        }
+        else if (string.Equals(message, UiText.Get("TextToColumns_SelectAtLeastOneDelimiter"), StringComparison.Ordinal))
+        {
+            FocusInvalidDelimiterSelectionInput();
+        }
+        else if (string.Equals(message, UiText.Get("TextToColumns_CustomDelimiterIsRequired"), StringComparison.Ordinal))
+        {
+            FocusInvalidCustomDelimiterInput();
+        }
+        else if (string.Equals(message, UiText.Get("TextToColumns_EnterASingleDecimalSeparator"), StringComparison.Ordinal))
+        {
+            FocusInvalidAdvancedSeparatorInput(_decimalSeparatorBox);
+        }
+        else if (string.Equals(message, UiText.Get("TextToColumns_EnterASingleThousandsSeparator"), StringComparison.Ordinal))
+        {
+            FocusInvalidAdvancedSeparatorInput(_thousandsSeparatorBox);
         }
     }
 
@@ -307,7 +310,7 @@ public sealed partial class TextToColumnsDialog : Window
         {
             view.Columns.Add(new GridViewColumn
             {
-                Header = $"Column {index + 1}",
+                Header = UiText.Format("TextToColumns_ColumnHeader", index + 1),
                 DisplayMemberBinding = new Binding($"[{index}]"),
                 Width = index == 0 ? 140 : 100
             });

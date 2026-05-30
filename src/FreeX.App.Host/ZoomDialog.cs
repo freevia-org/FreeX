@@ -12,8 +12,8 @@ public sealed class ZoomDialog : Window
 {
     private static readonly int[] ZoomPresets = [400, 200, 100, 75, 50, 25];
     private readonly TextBox _zoomBox = new();
-    private readonly RadioButton _customZoomButton = new() { Content = "_Custom:", GroupName = "Zoom", IsChecked = true };
-    private readonly RadioButton _fitSelectionButton = new() { Content = "Fit _selection", GroupName = "Zoom" };
+    private readonly RadioButton _customZoomButton = new() { Content = UiText.Get("Zoom_Custom"), GroupName = "Zoom", IsChecked = true };
+    private readonly RadioButton _fitSelectionButton = new() { Content = UiText.Get("Zoom_FitSelection"), GroupName = "Zoom" };
     private readonly List<RadioButton> _presetButtons = [];
 
     public ZoomDialogResult Result { get; private set; }
@@ -21,16 +21,16 @@ public sealed class ZoomDialog : Window
     public ZoomDialog(int currentZoomPercent)
     {
         Result = new ZoomDialogResult(currentZoomPercent);
-        Title = "Zoom";
+        Title = UiText.Get("Zoom_Zoom");
         Width = 300;
         Height = 240;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _zoomBox.Text = currentZoomPercent.ToString(CultureInfo.InvariantCulture);
-        AutomationProperties.SetName(_zoomBox, "Custom zoom percent");
+        AutomationProperties.SetName(_zoomBox, UiText.Get("Zoom_CustomZoomPercent"));
         AutomationProperties.SetAutomationId(_zoomBox, "ZoomCustomPercentBox");
-        AutomationProperties.SetHelpText(_zoomBox, "Enter a whole zoom percentage from 10 to 400.");
+        AutomationProperties.SetHelpText(_zoomBox, UiText.Get("Zoom_EnterAWholeZoomPercentageFrom10To400"));
         _zoomBox.GotKeyboardFocus += (_, _) => _customZoomButton.IsChecked = true;
         Content = CreateZoomContent(currentZoomPercent);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
@@ -57,14 +57,14 @@ public sealed class ZoomDialog : Window
         error = null;
         if (!FreeX.App.UI.ZoomLevelMapper.TryParseZoomPercent(input, out var zoomPercent))
         {
-            error = "Zoom must be between 10% and 400%.";
+            error = UiText.Get("Zoom_MustBeBetween10And400");
             return false;
         }
 
         var roundedPercent = Math.Round(zoomPercent);
         if (Math.Abs(zoomPercent - roundedPercent) > 0.000001)
         {
-            error = "Zoom must be a whole percent between 10% and 400%.";
+            error = UiText.Get("Zoom_MustBeWholePercentBetween10And400");
             return false;
         }
 
@@ -91,7 +91,7 @@ public sealed class ZoomDialog : Window
         var input = selectedPreset ?? _zoomBox.Text;
         if (!TryCreateResult(input, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? "Enter a valid zoom percent.", Title);
+            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("Zoom_EnterAValidZoomPercent"), Title);
             _customZoomButton.IsChecked = true;
             DialogFocus.FocusAndSelect(_zoomBox);
             return;
@@ -106,7 +106,7 @@ public sealed class ZoomDialog : Window
         var stack = new StackPanel { Margin = new Thickness(12) };
         var group = new GroupBox
         {
-            Header = "Magnification",
+            Header = UiText.Get("Zoom_Magnification"),
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 12)
         };

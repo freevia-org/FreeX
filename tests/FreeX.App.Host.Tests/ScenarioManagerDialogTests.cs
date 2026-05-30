@@ -243,12 +243,12 @@ public sealed class ScenarioManagerDialogTests
         var source = ReadScenarioManagerDialogSources();
 
         source.Should().Contain("ListBox");
-        source.Should().Contain("Add...");
-        source.Should().Contain("Edit...");
-        source.Should().Contain("Delete");
-        source.Should().Contain("List...");
-        source.Should().Contain("Show");
-        source.Should().Contain("S_ummary...");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Add\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Edit\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Delete\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_List\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Show\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Summary\")");
         source.Should().Contain("UpdateSelectionState");
         source.Should().Contain("ScenarioManagerAction.Delete");
         source.Should().Contain("ScenarioManagerAction.List");
@@ -261,20 +261,20 @@ public sealed class ScenarioManagerDialogTests
     {
         var source = ReadScenarioManagerDialogSources();
 
-        source.Should().Contain("\"_Scenarios:\"");
-        source.Should().Contain("\"Scenario _name:\"");
-        source.Should().Contain("\"Changing _cells:\"");
-        source.Should().Contain("\"_Result cells:\"");
-        source.Should().Contain("\"_Comment:\"");
-        source.Should().Contain("\"_Prevent changes\"");
-        source.Should().Contain("\"_Hide\"");
-        source.Should().Contain("\"_Add...\"");
-        source.Should().Contain("\"_Edit...\"");
-        source.Should().Contain("\"_Delete\"");
-        source.Should().Contain("\"_List...\"");
-        source.Should().Contain("\"_Show\"");
-        source.Should().Contain("\"S_ummary...\"");
-        source.Should().Contain("Content = \"_Close\"");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Scenarios\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_ScenarioName\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_ChangingCells\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_ResultCells\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Comment\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_PreventChanges\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Hide\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Add\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Edit\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Delete\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_List\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Show\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Summary\")");
+        source.Should().Contain("Content = UiText.Get(\"ScenarioManager_Close\")");
     }
 
     [Fact]
@@ -282,7 +282,7 @@ public sealed class ScenarioManagerDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_scenarioList, \"Scenarios\");");
+        source.Should().Contain("AutomationProperties.SetName(_scenarioList, UiText.Get(\"ScenarioManager_Scenarios2\"));");
     }
 
     [Fact]
@@ -351,24 +351,24 @@ public sealed class ScenarioManagerDialogTests
             {
                 AssertAutomation(
                     GetField<Button>(dialog, "_addButton"),
-                    "Add scenario",
+                    UiText.Get("ScenarioManager_AddScenarioAutomationName"),
                     "ScenarioManagerAddButton",
-                    "Add a scenario using the scenario fields.");
+                    UiText.Get("ScenarioManager_AddAScenarioUsingTheScenarioFields"));
                 AssertAutomation(
                     GetField<Button>(dialog, "_editButton"),
-                    "Edit scenario",
+                    UiText.Get("ScenarioManager_EditScenarioAutomationName"),
                     "ScenarioManagerEditButton",
-                    "Edit the selected scenario using the scenario fields.");
+                    UiText.Get("ScenarioManager_EditTheSelectedScenarioUsingTheScenarioFields"));
                 AssertAutomation(
                     GetField<Button>(dialog, "_deleteButton"),
-                    "Delete scenario",
+                    UiText.Get("ScenarioManager_DeleteScenarioAutomationName"),
                     "ScenarioManagerDeleteButton",
-                    "Delete the selected scenario.");
+                    UiText.Get("ScenarioManager_DeleteTheSelectedScenario"));
                 AssertAutomation(
                     GetField<Button>(dialog, "_showButton"),
-                    "Show scenario",
+                    UiText.Get("ScenarioManager_ShowScenarioAutomationName"),
                     "ScenarioManagerShowButton",
-                    "Apply the selected scenario to the workbook.");
+                    UiText.Get("ScenarioManager_ApplyTheSelectedScenarioToTheWorkbook"));
             }
             finally
             {
@@ -379,13 +379,13 @@ public sealed class ScenarioManagerDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.cs"));
         source.Should().Contain("AutomationProperties.SetName(button, GetActionAutomationName(action));");
         source.Should().Contain("AutomationProperties.SetAutomationId(button, $\"ScenarioManager{action}Button\");");
-        source.Should().Contain("ScenarioManagerAction.List => \"List scenarios\"");
-        source.Should().Contain("ScenarioManagerAction.List => \"Show the list of workbook scenarios.\"");
-        source.Should().Contain("ScenarioManagerAction.Report => \"Scenario summary\"");
-        source.Should().Contain("ScenarioManagerAction.Report => \"Create a scenario summary report.\"");
-        source.Should().Contain("AutomationProperties.SetName(closeButton, \"Close\");");
+        source.Should().Contain("ScenarioManagerAction.List => UiText.Get(\"ScenarioManager_ListScenariosAutomationName\")");
+        source.Should().Contain("ScenarioManagerAction.List => UiText.Get(\"ScenarioManager_ShowTheListOfWorkbookScenarios\")");
+        source.Should().Contain("ScenarioManagerAction.Report => UiText.Get(\"ScenarioManager_ScenarioSummaryAutomationName\")");
+        source.Should().Contain("ScenarioManagerAction.Report => UiText.Get(\"ScenarioManager_CreateAScenarioSummaryReport\")");
+        source.Should().Contain("AutomationProperties.SetName(closeButton, UiText.Get(\"ScenarioManager_CloseAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(closeButton, \"ScenarioManagerCloseButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(closeButton, \"Close the Scenario Manager dialog.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(closeButton, UiText.Get(\"ScenarioManager_CloseTheScenarioManagerDialog\"));");
     }
 
     [Fact]
@@ -393,10 +393,10 @@ public sealed class ScenarioManagerDialogTests
     {
         var source = ReadScenarioManagerDialogSources();
 
-        source.Should().Contain("Scenario _name:");
-        source.Should().Contain("Changing _cells:");
-        source.Should().Contain("Comment:");
-        source.Should().Contain("Add/Edit Scenario");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_ScenarioName\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_ChangingCells\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_Comment\")");
+        source.Should().Contain("UiText.Get(\"ScenarioManager_AddEditScenario\")");
         source.Should().Contain("ProjectSelectionFields(selected, _newNameBox.Text, _defaultScenarioName)");
         source.Should().Contain("ApplySelectionFields(fields)");
         source.Should().Contain("selected.Name");
@@ -462,12 +462,12 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("ScenarioHidden = result.Hidden");
         source.Should().Contain("ValidateAcceptRequest(");
         source.Should().Contain("!TryValidateScenarioName(scenarioName, out var error)");
-        source.Should().Contain("new ScenarioManagerValidationFailure(error ?? \"Enter scenario details.\", ScenarioManagerValidationField.ScenarioName)");
+        source.Should().Contain("new ScenarioManagerValidationFailure(error ?? UiText.Get(\"ScenarioManager_EnterScenarioDetails\"), ScenarioManagerValidationField.ScenarioName)");
         source.Should().Contain("!TryValidateChangingCells(changingCellsText, currentSheetId, resolveSheetIdByName, out error)");
-        source.Should().Contain("new ScenarioManagerValidationFailure(error ?? \"Enter scenario details.\", ScenarioManagerValidationField.ChangingCells)");
+        source.Should().Contain("new ScenarioManagerValidationFailure(error ?? UiText.Get(\"ScenarioManager_EnterScenarioDetails\"), ScenarioManagerValidationField.ChangingCells)");
         source.Should().Contain("WorkbookRangeTextCodec.TryParseMany(currentSheetId.Value, resultCellsText, resolveSheetIdByName, out _)");
         source.Should().Contain("!TryValidateResultCells(resultCellsText, currentSheetId, resolveSheetIdByName, out error)");
-        source.Should().Contain("new ScenarioManagerValidationFailure(error ?? \"Enter scenario result cells.\", ScenarioManagerValidationField.ResultCells)");
+        source.Should().Contain("new ScenarioManagerValidationFailure(error ?? UiText.Get(\"ScenarioManager_EnterScenarioResultCells\"), ScenarioManagerValidationField.ResultCells)");
         source.Should().Contain("GetValidationTarget(failure.Field)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("target.SelectAll();");
@@ -503,7 +503,7 @@ public sealed class ScenarioManagerDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.cs"));
 
         source.Should().Contain("_scenarioList.MouseDoubleClick += (_, _) => AcceptSelectedScenario();");
-        source.Should().Contain("_showButton = AddActionButton(sideButtons, \"_Show\", ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null, isDefault: _scenarioList.SelectedItem is not null);");
+        source.Should().Contain("_showButton = AddActionButton(sideButtons, UiText.Get(\"ScenarioManager_Show\"), ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null, isDefault: _scenarioList.SelectedItem is not null);");
         source.Should().Contain("private void AcceptSelectedScenario()");
         source.Should().Contain("Accept(ScenarioManagerAction.Show);");
         source.Should().Contain("_showButton.IsDefault = hasSelection;");
@@ -515,7 +515,7 @@ public sealed class ScenarioManagerDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.cs"));
 
         source.Should().Contain("private Button? _addButton;");
-        source.Should().Contain("_addButton = AddActionButton(sideButtons, \"_Add...\", ScenarioManagerAction.Add, isDefault: _scenarioList.Items.Count == 0);");
+        source.Should().Contain("_addButton = AddActionButton(sideButtons, UiText.Get(\"ScenarioManager_Add\"), ScenarioManagerAction.Add, isDefault: _scenarioList.Items.Count == 0);");
         source.Should().Contain("_addButton.IsDefault = !hasSelection;");
         source.Should().Contain("_showButton.IsDefault = hasSelection;");
     }

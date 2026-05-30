@@ -35,23 +35,30 @@ public partial class FormatCellsDialog
 
     private static string FontStyleLabel(bool bold, bool italic) => (bold, italic) switch
     {
-        (true, true) => "Bold Italic",
-        (true, false) => "Bold",
-        (false, true) => "Italic",
-        _ => "Regular"
+        (true, true) => UiText.Get("FormatCells_FontStyleBoldItalic"),
+        (true, false) => UiText.Get("FormatCells_FontStyleBold"),
+        (false, true) => UiText.Get("FormatCells_FontStyleItalic"),
+        _ => UiText.Get("FormatCells_FontStyleRegular")
     };
 
     private bool IsSelectedFontBold()
-        => DlgFontStyleList.SelectedItem is string style
-            && style.Contains("Bold", StringComparison.OrdinalIgnoreCase);
+        => DlgFontStyleList.SelectedItem is string style &&
+           (string.Equals(style, UiText.Get("FormatCells_FontStyleBold"), StringComparison.Ordinal) ||
+            string.Equals(style, UiText.Get("FormatCells_FontStyleBoldItalic"), StringComparison.Ordinal));
 
     private bool IsSelectedFontItalic()
-        => DlgFontStyleList.SelectedItem is string style
-            && style.Contains("Italic", StringComparison.OrdinalIgnoreCase);
+        => DlgFontStyleList.SelectedItem is string style &&
+           (string.Equals(style, UiText.Get("FormatCells_FontStyleItalic"), StringComparison.Ordinal) ||
+            string.Equals(style, UiText.Get("FormatCells_FontStyleBoldItalic"), StringComparison.Ordinal));
 
     private bool IsSingleUnderlineSelected()
-        => DlgUnderlineStyleBox.SelectedItem is string underline
-            && underline is "Single" or "Single Accounting";
+        => DlgUnderlineStyleBox.SelectedItem is string underline &&
+           (string.Equals(underline, UiText.Get("FormatCells_UnderlineSingle"), StringComparison.Ordinal) ||
+            string.Equals(underline, UiText.Get("FormatCells_UnderlineSingleAccounting"), StringComparison.Ordinal));
+
+    private static bool IsDoubleUnderlineSelected(string underline) =>
+        string.Equals(underline, UiText.Get("FormatCells_UnderlineDouble"), StringComparison.Ordinal) ||
+        string.Equals(underline, UiText.Get("FormatCells_UnderlineDoubleAccounting"), StringComparison.Ordinal);
 
     private string? ResolveSelectedFontName()
     {
@@ -72,7 +79,7 @@ public partial class FormatCellsDialog
         DlgFontNameBox.Text = normal.FontName;
         DlgFontSizeBox.Text = normal.FontSize.ToString("0.#");
         DlgFontStyleList.SelectedItem = FontStyleLabel(normal.Bold, normal.Italic);
-        DlgUnderlineStyleBox.SelectedItem = "None";
+        DlgUnderlineStyleBox.SelectedItem = UiText.Get("FormatCells_UnderlineNone");
         DlgDoubleUnderlineCheck.IsChecked = normal.DoubleUnderline;
         DlgStrikeCheck.IsChecked = normal.Strikethrough;
         DlgSuperscriptCheck.IsChecked = normal.Superscript;

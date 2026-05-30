@@ -29,7 +29,7 @@ public partial class FormatCellsDialog
     }
 
     private void DlgBorderLineColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgBorderLineColorBox, allowNoColor: false, "Border Color");
+        PickColorInto(DlgBorderLineColorBox, allowNoColor: false, UiText.Get("FormatCells_BorderColorTitle"));
 
     private void DlgBorderLineColorSwatchButton_Click(object sender, RoutedEventArgs e)
     {
@@ -38,16 +38,16 @@ public partial class FormatCellsDialog
     }
 
     private void DlgBorderTopColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgBorderTopColorBox, allowNoColor: false, "Top Border Color");
+        PickColorInto(DlgBorderTopColorBox, allowNoColor: false, UiText.Get("FormatCells_TopBorderColorTitle"));
 
     private void DlgBorderRightColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgBorderRightColorBox, allowNoColor: false, "Right Border Color");
+        PickColorInto(DlgBorderRightColorBox, allowNoColor: false, UiText.Get("FormatCells_RightBorderColorTitle"));
 
     private void DlgBorderBottomColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgBorderBottomColorBox, allowNoColor: false, "Bottom Border Color");
+        PickColorInto(DlgBorderBottomColorBox, allowNoColor: false, UiText.Get("FormatCells_BottomBorderColorTitle"));
 
     private void DlgBorderLeftColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgBorderLeftColorBox, allowNoColor: false, "Left Border Color");
+        PickColorInto(DlgBorderLeftColorBox, allowNoColor: false, UiText.Get("FormatCells_LeftBorderColorTitle"));
 
     private void DlgBorderPresetNoneButton_Click(object sender, RoutedEventArgs e) =>
         ApplyBorderClearPreset();
@@ -132,35 +132,35 @@ public partial class FormatCellsDialog
         if (!TryParseRequiredColor(DlgBorderLineColorBox.Text, out _))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
-            ShowInvalidInputWarning("Enter a border color as #RRGGBB or R, G, B.", DlgBorderLineColorBox);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidBorderColorMessage"), DlgBorderLineColorBox);
             return false;
         }
 
         if (BorderSideNeedsColor(DlgBorderTopStyleBox) && !TryParseRequiredColor(DlgBorderTopColorBox.Text, out _))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
-            ShowInvalidInputWarning("Enter a top border color as #RRGGBB or R, G, B.", DlgBorderTopColorBox);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidTopBorderColorMessage"), DlgBorderTopColorBox);
             return false;
         }
 
         if (BorderSideNeedsColor(DlgBorderRightStyleBox) && !TryParseRequiredColor(DlgBorderRightColorBox.Text, out _))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
-            ShowInvalidInputWarning("Enter a right border color as #RRGGBB or R, G, B.", DlgBorderRightColorBox);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidRightBorderColorMessage"), DlgBorderRightColorBox);
             return false;
         }
 
         if (BorderSideNeedsColor(DlgBorderBottomStyleBox) && !TryParseRequiredColor(DlgBorderBottomColorBox.Text, out _))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
-            ShowInvalidInputWarning("Enter a bottom border color as #RRGGBB or R, G, B.", DlgBorderBottomColorBox);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidBottomBorderColorMessage"), DlgBorderBottomColorBox);
             return false;
         }
 
         if (BorderSideNeedsColor(DlgBorderLeftStyleBox) && !TryParseRequiredColor(DlgBorderLeftColorBox.Text, out _))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Border;
-            ShowInvalidInputWarning("Enter a left border color as #RRGGBB or R, G, B.", DlgBorderLeftColorBox);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidLeftBorderColorMessage"), DlgBorderLeftColorBox);
             return false;
         }
 

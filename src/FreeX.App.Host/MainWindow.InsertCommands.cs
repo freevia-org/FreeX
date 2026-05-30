@@ -51,13 +51,21 @@ public partial class MainWindow
 
         if (!SparklineInputParser.TryParseDataRange(dialog.Result.DataRangeText, _currentSheetId, out var dataRange))
         {
-            ShowOwnedMessage("Invalid data range.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_InsertSparklineInvalidDataRange"),
+                UiText.Get("MainWindowMessage_InsertSparklineTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
             return;
         }
 
         if (!SparklineInputParser.TryParseLocation(dialog.Result.LocationText, _currentSheetId, out var location))
         {
-            ShowOwnedMessage("Invalid location cell.", "Insert Sparkline", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_InsertSparklineInvalidLocation"),
+                UiText.Get("MainWindowMessage_InsertSparklineTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
             return;
         }
 
@@ -150,17 +158,29 @@ public partial class MainWindow
             if (TryNavigateToWorkbookReference(plan.Target))
                 return true;
 
-            ShowOwnedMessage("The hyperlink target could not be found.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_OpenHyperlinkTargetNotFound"),
+                UiText.Get("MainWindowMessage_OpenHyperlinkTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
             return true;
         }
 
         switch (ExternalUrlLauncher.Open(plan.Target))
         {
             case ExternalUrlLaunchResult.BlockedScheme:
-                ShowOwnedMessage("This hyperlink type is not supported for security reasons.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowOwnedMessage(
+                    UiText.Get("MainWindowMessage_OpenHyperlinkBlockedScheme"),
+                    UiText.Get("MainWindowMessage_OpenHyperlinkTitle"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
                 break;
             case ExternalUrlLaunchResult.LaunchFailed:
-                ShowOwnedMessage("The hyperlink target could not be opened.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowOwnedMessage(
+                    UiText.Get("MainWindowMessage_OpenHyperlinkOpenFailed"),
+                    UiText.Get("MainWindowMessage_OpenHyperlinkTitle"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
                 break;
         }
 

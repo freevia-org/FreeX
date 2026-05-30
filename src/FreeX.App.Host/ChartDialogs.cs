@@ -30,7 +30,7 @@ public sealed class ChartTitlesDialog : Window
     public ChartTitlesDialog(string? chartTitle, string? xAxisTitle, string? yAxisTitle)
     {
         Result = CreateResult(chartTitle, xAxisTitle, yAxisTitle);
-        Title = "Chart Titles";
+        Title = UiText.Get("ChartTitles_Title");
         Width = 380;
         Height = 240;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -38,16 +38,16 @@ public sealed class ChartTitlesDialog : Window
         ShowInTaskbar = false;
 
         _chartTitleBox.Text = chartTitle ?? "";
-        AutomationProperties.SetName(_chartTitleBox, "Chart title");
+        AutomationProperties.SetName(_chartTitleBox, UiText.Get("ChartTitles_ChartTitleAutomationName"));
         _xAxisTitleBox.Text = xAxisTitle ?? "";
-        AutomationProperties.SetName(_xAxisTitleBox, "Primary horizontal axis title");
+        AutomationProperties.SetName(_xAxisTitleBox, UiText.Get("ChartTitles_XAxisTitleAutomationName"));
         _yAxisTitleBox.Text = yAxisTitle ?? "";
-        AutomationProperties.SetName(_yAxisTitleBox, "Primary vertical axis title");
+        AutomationProperties.SetName(_yAxisTitleBox, UiText.Get("ChartTitles_YAxisTitleAutomationName"));
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        AddInput(stack, "_Chart title:", _chartTitleBox);
-        AddInput(stack, "_Primary horizontal axis title:", _xAxisTitleBox);
-        AddInput(stack, "Primary _vertical axis title:", _yAxisTitleBox);
+        AddInput(stack, UiText.Get("ChartTitles_ChartTitleLabel"), _chartTitleBox);
+        AddInput(stack, UiText.Get("ChartTitles_XAxisTitleLabel"), _xAxisTitleBox);
+        AddInput(stack, UiText.Get("ChartTitles_YAxisTitleLabel"), _yAxisTitleBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(() =>
         {
             Result = CreateResult(_chartTitleBox.Text, _xAxisTitleBox.Text, _yAxisTitleBox.Text);
@@ -89,7 +89,7 @@ public sealed class ChartStyleDialog : Window
     public ChartStyleDialog(ChartModel chart)
     {
         Result = FromChart(chart);
-        Title = "Chart Styles";
+        Title = UiText.Get("ChartStyle_Title");
         Width = 480;
         Height = 350;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -105,10 +105,10 @@ public sealed class ChartStyleDialog : Window
         _styleGallery.SelectedItem = options.FirstOrDefault(option => option.StyleId == Result.ChartStyleId) ?? options[0];
         _styleGallery.Margin = new Thickness(0, 0, 0, 16);
         _styleGallery.Height = 230;
-        AutomationProperties.SetName(_styleGallery, "Chart style gallery");
+        AutomationProperties.SetName(_styleGallery, UiText.Get("ChartStyle_GalleryAutomationName"));
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new Label { Content = "_Style", Target = _styleGallery, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = UiText.Get("ChartStyle_StyleLabel"), Target = _styleGallery, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         stack.Children.Add(_styleGallery);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
@@ -122,8 +122,8 @@ public sealed class ChartStyleDialog : Window
         new(NormalizeStyleId(chartStyleId));
 
     public static IReadOnlyList<ChartStyleOption> GetStyleOptions() =>
-        new[] { new ChartStyleOption(null, "Automatic", "Use current chart formatting") }
-            .Concat(Enumerable.Range(1, 48).Select(index => new ChartStyleOption(index, $"Style {index}", $"Preview style {index}")))
+        new[] { new ChartStyleOption(null, UiText.Get("ChartStyle_AutomaticOption"), UiText.Get("ChartStyle_AutomaticPreview")) }
+            .Concat(Enumerable.Range(1, 48).Select(index => new ChartStyleOption(index, UiText.Format("ChartStyle_NumberedOption", index), UiText.Format("ChartStyle_NumberedPreview", index))))
             .ToList();
 
     private void Accept()
@@ -213,7 +213,7 @@ public sealed record MoveChartDialogResult(MoveChartTargetKind TargetKind, strin
 
 public sealed class MoveChartDialog : Window
 {
-    private readonly RadioButton _objectInSheet = new() { Content = "_Object in:", IsChecked = true };
+    private readonly RadioButton _objectInSheet = new() { Content = UiText.Get("MoveChart_ObjectInSheet"), IsChecked = true };
     private readonly TextBox _targetBox = new();
 
     public MoveChartDialogResult Result { get; private set; }
@@ -221,7 +221,7 @@ public sealed class MoveChartDialog : Window
     public MoveChartDialog(string currentSheetName)
     {
         Result = CreateObjectResult(currentSheetName);
-        Title = "Move Chart";
+        Title = UiText.Get("MoveChart_Title");
         Width = 340;
         Height = 210;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -230,11 +230,11 @@ public sealed class MoveChartDialog : Window
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         _targetBox.Text = currentSheetName;
-        AutomationProperties.SetName(_targetBox, "Target chart sheet or object sheet name");
-        AutomationProperties.SetHelpText(_targetBox, "Enter the worksheet or chart sheet name that will contain the chart.");
+        AutomationProperties.SetName(_targetBox, UiText.Get("MoveChart_TargetNameAutomationName"));
+        AutomationProperties.SetHelpText(_targetBox, UiText.Get("MoveChart_TargetNameHelpText"));
         stack.Children.Add(_objectInSheet);
-        stack.Children.Add(new RadioButton { Content = "_New chart sheet", Margin = new Thickness(0, 4, 0, 8) });
-        stack.Children.Add(new Label { Content = "_Target name:", Target = _targetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new RadioButton { Content = UiText.Get("MoveChart_NewChartSheet"), Margin = new Thickness(0, 4, 0, 8) });
+        stack.Children.Add(new Label { Content = UiText.Get("MoveChart_TargetNameLabel"), Target = _targetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         stack.Children.Add(_targetBox);
         stack.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         Content = stack;
@@ -281,7 +281,7 @@ public sealed class MoveChartDialog : Window
     private static string RequireTargetName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Target name is required.", nameof(name));
+            throw new ArgumentException(UiText.Get("MoveChart_TargetNameRequiredMessage"), nameof(name));
         return name.Trim();
     }
 }

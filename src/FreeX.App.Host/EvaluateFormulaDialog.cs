@@ -23,7 +23,7 @@ public sealed class EvaluateFormulaDialog : Window
     {
         _session = FormulaEvaluationSession.Start(summary);
 
-        Title = "Evaluate Formula";
+        Title = UiText.Get("EvaluateFormula_Title");
         Width = 600;
         Height = 360;
         MinWidth = 420;
@@ -42,7 +42,7 @@ public sealed class EvaluateFormulaDialog : Window
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
-        _nextButton = new Button { Content = "_Evaluate", Width = 80, Height = 26, IsDefault = true, Margin = new Thickness(4, 0, 0, 0) };
+        _nextButton = new Button { Content = UiText.Get("EvaluateFormula_EvaluateButton"), Width = 80, Height = 26, IsDefault = true, Margin = new Thickness(4, 0, 0, 0) };
         _nextButton.Click += (_, _) =>
         {
             _session.MoveNext();
@@ -50,7 +50,7 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(_nextButton);
 
-        _stepInButton = new Button { Content = "Step _In", Width = 68, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _stepInButton = new Button { Content = UiText.Get("EvaluateFormula_StepInButton"), Width = 68, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         _stepInButton.Click += (_, _) =>
         {
             _session.StepIn();
@@ -58,7 +58,7 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(_stepInButton);
 
-        _stepOutButton = new Button { Content = "Step _Out", Width = 76, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _stepOutButton = new Button { Content = UiText.Get("EvaluateFormula_StepOutButton"), Width = 76, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         _stepOutButton.Click += (_, _) =>
         {
             _session.StepOut();
@@ -66,7 +66,7 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(_stepOutButton);
 
-        var restart = new Button { Content = "_Restart", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var restart = new Button { Content = UiText.Get("EvaluateFormula_RestartButton"), Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         restart.Click += (_, _) =>
         {
             while (_session.CanMovePrevious)
@@ -75,11 +75,11 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(restart);
 
-        _closeButton = new Button { Content = "_Close", Width = 80, Height = 26, IsCancel = true, Margin = new Thickness(4, 0, 0, 0) };
+        _closeButton = new Button { Content = UiText.Get("EvaluateFormula_CloseButton"), Width = 80, Height = 26, IsCancel = true, Margin = new Thickness(4, 0, 0, 0) };
         _closeButton.Click += (_, _) => Close();
         buttons.Children.Add(_closeButton);
 
-        var help = new Button { Content = "Help on this _Function", Width = 142, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var help = new Button { Content = UiText.Get("EvaluateFormula_HelpButton"), Width = 142, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
         help.Click += (_, _) => ShowFormulaHelp();
         buttons.Children.Add(help);
 
@@ -88,7 +88,7 @@ public sealed class EvaluateFormulaDialog : Window
 
         stack.Children.Add(new TextBlock
         {
-            Text = "Evaluation:",
+            Text = UiText.Get("EvaluateFormula_EvaluationLabel"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 6)
         });
@@ -107,7 +107,7 @@ public sealed class EvaluateFormulaDialog : Window
         stack.Children.Add(_formulaText);
         stack.Children.Add(new TextBlock
         {
-            Text = $"Result: {summary.ValueText}",
+            Text = UiText.Format("EvaluateFormula_ResultText", summary.ValueText),
             Margin = new Thickness(0, 0, 0, 12)
         });
 
@@ -140,15 +140,15 @@ public sealed class EvaluateFormulaDialog : Window
 
         if (_session.CurrentStep is { } step)
         {
-            _positionText.Text = $"Step {_session.CurrentStepNumber} of {_session.StepCount}";
+            _positionText.Text = UiText.Format("EvaluateFormula_StepPositionText", _session.CurrentStepNumber, _session.StepCount);
             _stepText.Text = step.Expression;
-            _valueText.Text = $"Value: {step.ValueText}";
+            _valueText.Text = UiText.Format("EvaluateFormula_ValueText", step.ValueText);
         }
         else
         {
-            _positionText.Text = "No intermediate evaluation steps.";
+            _positionText.Text = UiText.Get("EvaluateFormula_NoIntermediateStepsText");
             _stepText.Text = _session.Summary.FormulaText;
-            _valueText.Text = $"Value: {_session.Summary.ValueText}";
+            _valueText.Text = UiText.Format("EvaluateFormula_ValueText", _session.Summary.ValueText);
         }
 
         _stepOutButton.IsEnabled = _session.CurrentStep is not null;
@@ -159,8 +159,8 @@ public sealed class EvaluateFormulaDialog : Window
     private void ShowFormulaHelp()
     {
         DialogMessageHelper.ShowInfo(this,
-            "Evaluate Formula shows the selected formula one calculation step at a time. Use Evaluate to advance, Step In when a nested formula can be inspected, Step Out to return to the previous step, and Restart to begin again.",
-            "Evaluate Formula Help");
+            UiText.Get("EvaluateFormula_HelpBody"),
+            UiText.Get("EvaluateFormula_HelpTitle"));
     }
 
     private void FocusInitialKeyboardTarget()
@@ -179,7 +179,7 @@ public sealed class EvaluateFormulaDialog : Window
     {
         var highlight = _session.CurrentHighlight;
         _formulaText.Inlines.Clear();
-        _formulaText.Inlines.Add(new Run("Formula: "));
+        _formulaText.Inlines.Add(new Run(UiText.Get("EvaluateFormula_FormulaPrefix")));
         if (!string.IsNullOrEmpty(highlight.Prefix))
             _formulaText.Inlines.Add(new Run(highlight.Prefix));
 

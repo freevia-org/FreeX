@@ -100,6 +100,6 @@ public partial class PageSetupDialog
         var parts = new[] { value.Left, value.Center, value.Right }
             .Where(part => !string.IsNullOrWhiteSpace(part))
             .ToArray();
-        return parts.Length == 0 ? "(none)" : string.Join(" | ", parts);
+        return parts.Length == 0 ? UiText.Get("PageSetup_None") : string.Join(" | ", parts);
     }
 }

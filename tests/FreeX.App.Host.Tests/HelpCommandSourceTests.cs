@@ -6,21 +6,22 @@ namespace FreeX.App.Host.Tests;
 public sealed class HelpCommandSourceTests
 {
     [Theory]
-    [InlineData("Help Online", "HO", "HelpOnlineBtn_Click")]
-    [InlineData("Feedback", "FE", "SendFeedbackBtn_Click")]
-    [InlineData("Copy Diagnostics", "DG", "CopyDiagnosticsBtn_Click")]
-    [InlineData("Check for Updates", "UP", "CheckForUpdatesBtn_Click")]
-    [InlineData("About FreeX", "AB", "AboutBtn_Click")]
-    [InlineData("Legal Notices", "LN", "LegalNoticesBtn_Click")]
+    [InlineData("MainWindow_Content_HelpOnline", "Help Online", "HO", "HelpOnlineBtn_Click")]
+    [InlineData("MainWindow_Content_Feedback", "Feedback", "FE", "SendFeedbackBtn_Click")]
+    [InlineData("MainWindow_Content_CopyDiagnostics", "Copy Diagnostics", "DG", "CopyDiagnosticsBtn_Click")]
+    [InlineData("MainWindow_Content_CheckForUpdates", "Check for Updates", "UP", "CheckForUpdatesBtn_Click")]
+    [InlineData("MainWindow_Content_AboutFreeX", "About FreeX", "AB", "AboutBtn_Click")]
+    [InlineData("MainWindow_Content_LegalNotices", "Legal Notices", "LN", "LegalNoticesBtn_Click")]
     public void HelpEnabledCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
-        string title,
+        string contentKey,
+        string commandName,
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), commandName);
 
-        button.Should().Contain($"Content=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", UiText.Get(contentKey));
+        button.ShouldContainInvariantCommandName(commandName);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -31,7 +32,7 @@ public sealed class HelpCommandSourceTests
     [InlineData("What's New")]
     public void HelpOutOfScopeCommands_AreNotSurfacedAsDisabledRibbonButtons(string title)
     {
-        ReadMainWindowXaml().Should().NotContain($"local:RibbonTooltip.Title=\"{title}\"");
+        ReadMainWindowXaml().Should().NotContain($"local:RibbonMetadata.CommandName=\"{LocalizedXamlTestSupport.EscapeAttribute(title)}\"");
     }
 
     [Fact]
@@ -39,14 +40,16 @@ public sealed class HelpCommandSourceTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
 
-        source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, \"Help Online\")");
-        source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, \"Check for Updates\")");
-        source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), \"Feedback\")");
+        source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, UiText.Get(\"MainWindowMessage_HelpOnlineTitle\"))");
+        source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, UiText.Get(\"MainWindowMessage_CheckForUpdatesTitle\"))");
+        source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), UiText.Get(\"MainWindowMessage_FeedbackTitle\"))");
         source.Should().Contain("AppInfo.AboutText");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_AboutFreeXTitle\")");
         source.Should().Contain("var dialog = new LegalNoticesDialog();");
         source.Should().Contain("ShowOwnedDialog(dialog);");
         source.Should().Contain("AppIssueReporter.CreateDiagnosticsText(context)");
         source.Should().Contain("Clipboard.SetText(diagnosticsText);");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_CopyDiagnosticsTitle\")");
         source.Should().Contain("ExternalUrlLauncher.Open(");
         source.Should().Contain("ShowOwnedMessage(");
     }
@@ -64,7 +67,7 @@ public sealed class HelpCommandSourceTests
 
     private static string ExtractButtonElementByTitle(string xaml, string title)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
+        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
         titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} help command should be present");
 
         var start = xaml.LastIndexOf('<', titleIndex);

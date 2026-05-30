@@ -6,21 +6,21 @@ public static class ProtectionDialogPlanner
 {
     private static readonly (string Label, SheetProtectionPermission Permission)[] SheetPermissionChoices =
     [
-        ("Select locked cells", SheetProtectionPermission.SelectLockedCells),
-        ("Select unlocked cells", SheetProtectionPermission.SelectUnlockedCells),
-        ("Format cells", SheetProtectionPermission.FormatCells),
-        ("Format columns", SheetProtectionPermission.FormatColumns),
-        ("Format rows", SheetProtectionPermission.FormatRows),
-        ("Insert columns", SheetProtectionPermission.InsertColumns),
-        ("Insert rows", SheetProtectionPermission.InsertRows),
-        ("Insert hyperlinks", SheetProtectionPermission.InsertHyperlinks),
-        ("Delete columns", SheetProtectionPermission.DeleteColumns),
-        ("Delete rows", SheetProtectionPermission.DeleteRows),
-        ("Sort", SheetProtectionPermission.Sort),
-        ("Use AutoFilter", SheetProtectionPermission.UseAutoFilter),
-        ("Use PivotTable reports", SheetProtectionPermission.UsePivotTableReports),
-        ("Edit objects", SheetProtectionPermission.EditObjects),
-        ("Edit scenarios", SheetProtectionPermission.EditScenarios)
+        (UiText.Get("Protection_PermissionSelectLockedCells"), SheetProtectionPermission.SelectLockedCells),
+        (UiText.Get("Protection_PermissionSelectUnlockedCells"), SheetProtectionPermission.SelectUnlockedCells),
+        (UiText.Get("Protection_PermissionFormatCells"), SheetProtectionPermission.FormatCells),
+        (UiText.Get("Protection_PermissionFormatColumns"), SheetProtectionPermission.FormatColumns),
+        (UiText.Get("Protection_PermissionFormatRows"), SheetProtectionPermission.FormatRows),
+        (UiText.Get("Protection_PermissionInsertColumns"), SheetProtectionPermission.InsertColumns),
+        (UiText.Get("Protection_PermissionInsertRows"), SheetProtectionPermission.InsertRows),
+        (UiText.Get("Protection_PermissionInsertHyperlinks"), SheetProtectionPermission.InsertHyperlinks),
+        (UiText.Get("Protection_PermissionDeleteColumns"), SheetProtectionPermission.DeleteColumns),
+        (UiText.Get("Protection_PermissionDeleteRows"), SheetProtectionPermission.DeleteRows),
+        (UiText.Get("Protection_PermissionSort"), SheetProtectionPermission.Sort),
+        (UiText.Get("Protection_PermissionUseAutoFilter"), SheetProtectionPermission.UseAutoFilter),
+        (UiText.Get("Protection_PermissionUsePivotTableReports"), SheetProtectionPermission.UsePivotTableReports),
+        (UiText.Get("Protection_PermissionEditObjects"), SheetProtectionPermission.EditObjects),
+        (UiText.Get("Protection_PermissionEditScenarios"), SheetProtectionPermission.EditScenarios)
     ];
 
     private static readonly SheetProtectionPermission[] DefaultSelectedSheetPermissions =

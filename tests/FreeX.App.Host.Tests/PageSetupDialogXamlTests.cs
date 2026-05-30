@@ -14,7 +14,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupDialog_ExposesKeyboardAccessKeysForTabsOptionsAndButtons()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
 
         foreach (var header in new[]
         {
@@ -23,7 +23,7 @@ public sealed class PageSetupDialogXamlTests
             "_Header/Footer",
             "_Sheet"
         })
-            xaml.Should().Contain($"Header=\"{header}\"");
+            xaml.ShouldContainLocalizedAttribute("Header", header);
 
         foreach (var content in new[]
         {
@@ -109,7 +109,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageTab_UsesExcelLikeScalingChoices()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PageSetupDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -131,7 +131,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageTab_DisablesInactiveScalingInputsByMode()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
 
         xaml.Should().Contain("Checked=\"ScalingMode_Changed\"");
@@ -144,7 +144,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void HeaderFooterTab_ReusesSupportedPresetAndCustomDialogConcepts()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PageSetupDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -186,7 +186,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void SheetTab_ExposesCurrentSelectionRangePickerButtonsForPrintRanges()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -313,7 +313,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupDialogInvalidPrintArea_SelectsSheetTabPrintAreaBox()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
 
         xaml.Should().Contain("x:Name=\"PageSetupTabs\"");
@@ -338,7 +338,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupDialogInvalidPageTabNumber_SelectsPageTabInvalidBox()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
 
         xaml.Should().Contain("x:Name=\"PageTab\"");
@@ -352,7 +352,7 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void PageSetupDialogInvalidMargin_SelectsMarginsTabInvalidBox()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
 
         xaml.Should().Contain("x:Name=\"MarginsTab\"");
@@ -381,12 +381,12 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void Footer_ExposesExcelPrintActionsAndPrinterOptionsAction()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PageSetupDialog.xaml");
         var source = ReadPageSetupDialogSource();
         var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
 
         foreach (var content in new[] { "Print Pre_view", "_Print...", "_Options..." })
-            xaml.Should().Contain($"Content=\"{content}\"");
+            xaml.ShouldContainLocalizedAttribute("Content", content);
 
         xaml.Should().Contain("Click=\"OptionsButton_Click\"");
         xaml.Should().NotContain("IsEnabled=\"False\"");
@@ -402,16 +402,16 @@ public sealed class PageSetupDialogXamlTests
     [Fact]
     public void FooterActionButtons_ExposeAutomationMetadata()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PageSetupDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PageSetupDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         foreach (var (content, name, automationId, helpText) in new[]
         {
-            ("_Print...", "Print", "PageSetupPrintButton", "Print using the current Page Setup settings."),
-            ("Print Pre_view", "Print Preview", "PageSetupPrintPreviewButton", "Preview the worksheet with the current Page Setup settings."),
-            ("_Options...", "Options", "PageSetupOptionsButton", "Open printer options for Page Setup."),
-            ("_OK", "OK", "PageSetupOkButton", "Apply the Page Setup settings."),
-            ("_Cancel", "Cancel", "PageSetupCancelButton", "Close Page Setup without applying changes.")
+            (UiText.Get("PageSetup_Print"), UiText.Get("PageSetup_PrintAutomationName"), "PageSetupPrintButton", UiText.Get("PageSetup_PrintHelpText")),
+            (UiText.Get("PageSetup_PrintPreview"), UiText.Get("PageSetup_PrintPreviewAutomationName"), "PageSetupPrintPreviewButton", UiText.Get("PageSetup_PrintPreviewHelpText")),
+            (UiText.Get("PageSetup_Options"), UiText.Get("PageSetup_OptionsAutomationName"), "PageSetupOptionsButton", UiText.Get("PageSetup_OptionsHelpText")),
+            (UiText.Get("Common_Ok"), UiText.Get("PageSetup_OkAutomationName"), "PageSetupOkButton", UiText.Get("PageSetup_OkHelpText")),
+            (UiText.Get("Common_Cancel"), UiText.Get("PageSetup_CancelAutomationName"), "PageSetupCancelButton", UiText.Get("PageSetup_CancelHelpText"))
         })
         {
             var button = document

@@ -1,7 +1,8 @@
 <Window x:Class="FreeX.App.Host.PivotFieldFilterDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Filter"
+        xmlns:local="clr-namespace:FreeX.App.Host"
+        Title="{local:Loc Key=PivotFieldFilter_Filter}"
         Width="380"
         Height="470"
         WindowStartupLocation="CenterOwner"
@@ -11,18 +12,18 @@
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Margin="0,10,0,0">
-            <Button Content="_OK"
+            <Button Content="{local:Loc Key=Common_Ok}"
                     Width="74"
                     Margin="0,0,8,0"
                     IsDefault="True"
                     Click="OkButton_Click"/>
-            <Button Content="_Cancel"
+            <Button Content="{local:Loc Key=Common_Cancel}"
                     Width="74"
                     IsCancel="True"/>
         </StackPanel>
 
         <TabControl>
-            <TabItem Header="Select _Items">
+            <TabItem Header="{local:Loc Key=PivotFieldFilter_SelectItems}">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -33,10 +34,10 @@
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0"
-                               Text="Choose items to show:"
+                               Text="{local:Loc Key=PivotFieldFilter_ChooseItemsToShow}"
                                Margin="0,0,0,8"/>
                     <Label Grid.Row="1"
-                           Content="_Search:"
+                           Content="{local:Loc Key=PivotFieldFilter_Search}"
                            Target="{Binding ElementName=FilterSearchBox}"
                            Padding="0"
                            Margin="0,0,0,4"/>
@@ -44,11 +45,11 @@
                              Grid.Row="2"
                              Margin="0,0,0,8"
                              TextChanged="FilterSearchBox_TextChanged"
-                             AutomationProperties.Name="Search PivotTable filter items"/>
+                             AutomationProperties.Name="{local:Loc Key=PivotFieldFilter_SearchPivotTableFilterItems}"/>
 
                     <CheckBox x:Name="SelectAllCheckBox"
                               Grid.Row="3"
-                              Content="Select _All"
+                              Content="{local:Loc Key=PivotFieldFilter_SelectAll}"
                               IsThreeState="True"
                               Margin="2,0,0,6"
                               Click="SelectAllCheckBox_Click"/>
@@ -56,7 +57,7 @@
                     <ListBox x:Name="FilterItemsList"
                              Grid.Row="4"
                              BorderBrush="#BDBDBD"
-                             AutomationProperties.Name="PivotTable filter items">
+                             AutomationProperties.Name="{local:Loc Key=PivotFieldFilter_PivotTableFilterItems}">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <CheckBox Content="{Binding Caption}"
@@ -67,36 +68,36 @@
                     </ListBox>
                 </Grid>
             </TabItem>
-            <TabItem Header="_Label Filters">
+            <TabItem Header="{local:Loc Key=PivotFieldFilter_LabelFilters}">
                 <StackPanel Margin="10">
-                    <TextBlock Text="Open the full label filter dialog to filter PivotTable items by their captions."
+                    <TextBlock Text="{local:Loc Key=PivotFieldFilter_OpenTheFullLabelFilterDialogToFilterPivotTableItemsByThe}"
                                TextWrapping="Wrap"
                                Margin="0,0,0,12"/>
                     <Button x:Name="LabelFilterButton"
-                            Content="_Label Filter..."
+                            Content="{local:Loc Key=PivotFieldFilter_LabelFilter}"
                             Width="120"
                             HorizontalAlignment="Left"
                             Click="LabelFilterButton_Click"
-                            AutomationProperties.Name="Open PivotTable label filter dialog"/>
+                            AutomationProperties.Name="{local:Loc Key=PivotFieldFilter_OpenPivotTableLabelFilterDialog}"/>
                 </StackPanel>
             </TabItem>
             <TabItem x:Name="ValueFiltersTab"
-                     Header="_Value Filters">
+                     Header="{local:Loc Key=PivotFieldFilter_ValueFilters}">
                 <StackPanel Margin="10">
-                    <TextBlock Text="Open the full value filter dialog to filter PivotTable items by summarized values."
+                    <TextBlock Text="{local:Loc Key=PivotFieldFilter_OpenTheFullValueFilterDialogToFilterPivotTableItemsBySum}"
                                TextWrapping="Wrap"
                                Margin="0,0,0,12"/>
                     <TextBlock x:Name="ValueFilterUnavailableText"
-                               Text="Add at least one PivotTable value field to use value filters."
+                               Text="{local:Loc Key=PivotFieldFilter_AddAtLeastOnePivotTableValueFieldToUseValueFilters}"
                                TextWrapping="Wrap"
                                Margin="0,0,0,12"
                                Visibility="Collapsed"/>
                     <Button x:Name="ValueFilterButton"
-                            Content="_Value Filter..."
+                            Content="{local:Loc Key=PivotFieldFilter_ValueFilter}"
                             Width="120"
                             HorizontalAlignment="Left"
                             Click="ValueFilterButton_Click"
-                            AutomationProperties.Name="Open PivotTable value filter dialog"/>
+                            AutomationProperties.Name="{local:Loc Key=PivotFieldFilter_OpenPivotTableValueFilterDialog}"/>
                 </StackPanel>
             </TabItem>
         </TabControl>

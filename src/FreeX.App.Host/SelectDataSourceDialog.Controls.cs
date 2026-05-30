@@ -57,11 +57,11 @@ public sealed partial class SelectDataSourceDialog
             Margin = margin
         };
         button.Click += handler;
-        if (content == "_Edit series")
+        if (content == UiText.Get("SelectDataSource_EditSeriesButton"))
             _editSeriesButton = button;
-        else if (content == "_Remove series")
+        else if (content == UiText.Get("SelectDataSource_RemoveSeriesButton"))
             _removeSeriesButton = button;
-        else if (content == "_Edit Axis Labels")
+        else if (content == UiText.Get("SelectDataSource_EditAxisLabelsButton"))
             _editAxisLabelsButton = button;
         return button;
     }

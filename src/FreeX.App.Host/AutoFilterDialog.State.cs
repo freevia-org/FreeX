@@ -55,7 +55,7 @@ public sealed partial class AutoFilterDialog
                 : string.Empty;
         _criteriaBox.Text = BuildCompositeCriteriaText(
             firstCriteria,
-            _criteriaConnectorBox.SelectedItem as string,
+            _criteriaConnectorBox.SelectedValue as string,
             secondCriteria);
         RefreshSpecialCriteriaPanels(option);
         if (_criteriaOperatorBox2.SelectedItem is AutoFilterCriteriaOption secondOption)
@@ -84,10 +84,10 @@ public sealed partial class AutoFilterDialog
         if (IsBetweenOption(option))
         {
             if (string.IsNullOrWhiteSpace(_betweenMinBox.Text))
-                return ShowInvalidCriteriaWarning("Enter the first value for the between filter.", _betweenMinBox);
+                return ShowInvalidCriteriaWarning(UiText.Get("AutoFilter_EnterFirstBetweenValue"), _betweenMinBox);
 
             if (string.IsNullOrWhiteSpace(_betweenMaxBox.Text))
-                return ShowInvalidCriteriaWarning("Enter the second value for the between filter.", _betweenMaxBox);
+                return ShowInvalidCriteriaWarning(UiText.Get("AutoFilter_EnterSecondBetweenValue"), _betweenMaxBox);
 
             return true;
         }
@@ -95,13 +95,13 @@ public sealed partial class AutoFilterDialog
         if (IsTopBottomOption(option))
         {
             if (!FilterInputParser.TryParseTopBottom(BuildTopBottomCriteriaText(option, _topBottomCountBox.Text), out _, out _, out _, out _))
-                return ShowInvalidCriteriaWarning("Enter a valid top or bottom count.", _topBottomCountBox);
+                return ShowInvalidCriteriaWarning(UiText.Get("AutoFilter_EnterValidTopOrBottomCount"), _topBottomCountBox);
 
             return true;
         }
 
         if (option.RequiresValue && string.IsNullOrWhiteSpace(_criteriaValueBox.Text))
-            return ShowInvalidCriteriaWarning("Enter a filter value.", _criteriaValueBox);
+            return ShowInvalidCriteriaWarning(UiText.Get("AutoFilter_EnterFilterValue"), _criteriaValueBox);
 
         return true;
     }
@@ -118,7 +118,7 @@ public sealed partial class AutoFilterDialog
     private string SelectedDatePresetCriteria()
     {
         var preset = _datePresetBox.Visibility == Visibility.Visible
-            ? _datePresetBox.SelectedItem as string
+            ? _datePresetBox.SelectedValue as string
             : null;
         return string.IsNullOrWhiteSpace(preset) || preset == "Custom"
             ? string.Empty
@@ -136,8 +136,8 @@ public sealed partial class AutoFilterDialog
         _betweenCriteriaPanel.Visibility = isBetween ? Visibility.Visible : Visibility.Collapsed;
         _topBottomCriteriaPanel.Visibility = isTopBottom ? Visibility.Visible : Visibility.Collapsed;
         _topBottomUnitText.Text = option.CriteriaPrefix.Contains("percent", StringComparison.OrdinalIgnoreCase)
-            ? "Percent"
-            : "Items";
+            ? UiText.Get("AutoFilter_Percent")
+            : UiText.Get("AutoFilter_Items");
     }
 
     private static bool IsBetweenOption(AutoFilterCriteriaOption option) =>

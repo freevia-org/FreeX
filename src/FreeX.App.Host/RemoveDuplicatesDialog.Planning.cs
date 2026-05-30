@@ -39,14 +39,14 @@ public sealed partial class RemoveDuplicatesDialog
 
         return Enumerable
             .Range(0, columnCount)
-            .Select(index => new RemoveDuplicateColumnChoice((uint)index, $"Column {index + 1}", isSelected))
+            .Select(index => new RemoveDuplicateColumnChoice((uint)index, UiText.Format("RemoveDuplicates_ColumnLabel", index + 1), isSelected))
             .ToList();
     }
 
     public static IReadOnlyList<RemoveDuplicateColumnChoice> BuildColumnChoices(GridRange range) =>
         Enumerable
             .Range(0, (int)range.ColCount)
-            .Select(index => new RemoveDuplicateColumnChoice((uint)index, $"Column {index + 1}", true))
+            .Select(index => new RemoveDuplicateColumnChoice((uint)index, UiText.Format("RemoveDuplicates_ColumnLabel", index + 1), true))
             .ToList();
 
     public static IReadOnlyList<RemoveDuplicateColumnChoice> BuildColumnChoices(Sheet sheet, GridRange range) =>
@@ -62,7 +62,7 @@ public sealed partial class RemoveDuplicatesDialog
                     ? SpreadsheetDisplayFormatter.FormatCellValue(sheet.GetCell(range.Start.Row, absoluteColumn)?.Value)
                     : "";
                 if (string.IsNullOrWhiteSpace(header))
-                    header = $"Column {CellAddress.NumberToColumnName(absoluteColumn)}";
+                    header = UiText.Format("RemoveDuplicates_ColumnLabel", CellAddress.NumberToColumnName(absoluteColumn));
 
                 return new RemoveDuplicateColumnChoice((uint)index, header, true);
             })

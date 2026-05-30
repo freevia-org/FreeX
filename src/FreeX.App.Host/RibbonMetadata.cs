@@ -39,6 +39,13 @@ public static class RibbonMetadata
             typeof(RibbonMetadata),
             new FrameworkPropertyMetadata(""));
 
+    public static readonly DependencyProperty CommandNameProperty =
+        DependencyProperty.RegisterAttached(
+            "CommandName",
+            typeof(string),
+            typeof(RibbonMetadata),
+            new FrameworkPropertyMetadata(""));
+
     public static readonly DependencyProperty CatalogIdProperty =
         DependencyProperty.RegisterAttached(
             "CatalogId",
@@ -96,6 +103,12 @@ public static class RibbonMetadata
 
     public static void SetGroupName(DependencyObject element, string value) =>
         element.SetValue(GroupNameProperty, value);
+
+    public static string GetCommandName(DependencyObject element) =>
+        (string)element.GetValue(CommandNameProperty);
+
+    public static void SetCommandName(DependencyObject element, string value) =>
+        element.SetValue(CommandNameProperty, value);
 
     public static string GetCatalogId(DependencyObject element) =>
         (string)element.GetValue(CatalogIdProperty);
@@ -179,6 +192,19 @@ public static class RibbonMetadata
         }
 
         groupName = "";
+        return false;
+    }
+
+    public static bool TryGetCommandName(DependencyObject element, out string commandName)
+    {
+        commandName = GetCommandName(element);
+        if (!string.IsNullOrWhiteSpace(commandName))
+        {
+            commandName = commandName.Trim();
+            return true;
+        }
+
+        commandName = "";
         return false;
     }
 

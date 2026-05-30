@@ -213,7 +213,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             harness.ResetDiagnostics();
             harness.ResetFallbackDiagnostics();
 
-            harness.SetWidth(1275);
+            harness.SetWidth(1279);
 
             harness.FallbackDiagnostics.RequestCount.Should().Be(0);
             harness.Diagnostics.GroupMeasurementCount.Should().Be(0);

@@ -80,7 +80,7 @@ public partial class MainWindow
             ? new AutoFilterDialog(Array.Empty<AutoFilterChecklistItem>())
             : new AutoFilterDialog(AutoFilterDropdownPlanner.CreateMenuPlan(_workbook, sheet, new AutoFilterDropdownPlan(range, filterColOffset)));
         dialog.Owner = this;
-        dialog.Title = "Filter";
+        dialog.Title = UiText.Get("MainWindowDialog_FilterTitle");
         if (dialog.ShowDialog() != true) return;
 
         if (!ApplyAutoFilterDialogResult(range, filterColOffset, dialog.Result, "Filter"))
@@ -106,7 +106,9 @@ public partial class MainWindow
     {
         if (_lastAutoFilterRange is not { } range || _lastAutoFilterCommandFactory is null)
         {
-            _messageService.ShowInfo("Apply a filter before using Reapply.", "Reapply Filter");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_ReapplyFilterNoFilter"),
+                UiText.Get("MainWindowMessage_ReapplyFilterTitle"));
             return;
         }
 
@@ -180,7 +182,9 @@ public partial class MainWindow
         {
             if (!FilterPromptPlanner.TryPlan(value, out var promptPlan, out var promptError) || promptPlan is null)
             {
-                _messageService.ShowWarning(promptError ?? "Enter a supported filter criterion.", title);
+                _messageService.ShowWarning(
+                    promptError ?? UiText.Get("MainWindowMessage_FilterUnsupportedCriterion"),
+                    title);
                 return false;
             }
 
@@ -194,7 +198,9 @@ public partial class MainWindow
 
         if (string.IsNullOrWhiteSpace(filterText) && result.SelectedValues.Count == 0)
         {
-            _messageService.ShowWarning("Select at least one filter item.", title);
+            _messageService.ShowWarning(
+                UiText.Get("MainWindowMessage_FilterSelectAtLeastOneItem"),
+                title);
             return false;
         }
 
@@ -215,7 +221,9 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            _messageService.ShowWarning("Select a range first.", "CF Rule");
+            _messageService.ShowWarning(
+                UiText.Get("MainWindowMessage_SelectRangeFirst"),
+                UiText.Get("MainWindowMessage_CfRuleTitle"));
             return;
         }
 
@@ -244,7 +252,11 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            ShowOwnedMessage("Select a range first.", "Data Validation", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_SelectRangeFirst"),
+                UiText.Get("MainWindowMessage_DataValidationTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 

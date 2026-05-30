@@ -10,17 +10,17 @@ public sealed record GoToSpecialChoice(GoToSpecialKind Kind, string Label);
 public sealed class GoToSpecialDialog : Window
 {
     private readonly List<RadioButton> _buttons = [];
-    private readonly CheckBox _numbersBox = new() { Content = "_Numbers", IsChecked = true, Margin = new Thickness(0, 0, 18, 4) };
-    private readonly CheckBox _textBox = new() { Content = "_Text", IsChecked = true, Margin = new Thickness(0, 0, 18, 4) };
-    private readonly CheckBox _logicalsBox = new() { Content = "_Logicals", IsChecked = true, Margin = new Thickness(0, 0, 18, 4) };
-    private readonly CheckBox _errorsBox = new() { Content = "_Errors", IsChecked = true, Margin = new Thickness(0, 0, 0, 4) };
+    private readonly CheckBox _numbersBox = new() { Content = UiText.Get("GoToSpecial_Numbers"), IsChecked = true, Margin = new Thickness(0, 0, 18, 4) };
+    private readonly CheckBox _textBox = new() { Content = UiText.Get("GoToSpecial_Text"), IsChecked = true, Margin = new Thickness(0, 0, 18, 4) };
+    private readonly CheckBox _logicalsBox = new() { Content = UiText.Get("GoToSpecial_Logicals"), IsChecked = true, Margin = new Thickness(0, 0, 18, 4) };
+    private readonly CheckBox _errorsBox = new() { Content = UiText.Get("GoToSpecial_Errors"), IsChecked = true, Margin = new Thickness(0, 0, 0, 4) };
 
     public GoToSpecialKind SelectedKind { get; private set; } = GoToSpecialKind.Blanks;
     public GoToSpecialOptions SelectedOptions { get; private set; } = new();
 
     public GoToSpecialDialog()
     {
-        Title = "Go To Special";
+        Title = UiText.Get("GoToSpecial_GoToSpecial");
         Width = 430;
         Height = 438;
         ResizeMode = ResizeMode.NoResize;
@@ -34,12 +34,12 @@ public sealed class GoToSpecialDialog : Window
 
         content.Children.Add(new TextBlock
         {
-            Text = "Select",
+            Text = UiText.Get("GoToSpecial_Select"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 6)
         });
 
-        var availableGroup = new GroupBox { Header = "Go to special", Margin = new Thickness(0, 0, 0, 10) };
+        var availableGroup = new GroupBox { Header = UiText.Get("GoToSpecial_GoToSpecial"), Margin = new Thickness(0, 0, 0, 10) };
         var optionGrid = CreateChoiceGrid();
         availableGroup.Content = optionGrid;
         content.Children.Add(availableGroup);
@@ -74,20 +74,20 @@ public sealed class GoToSpecialDialog : Window
 
     public static IReadOnlyList<GoToSpecialChoice> GetChoices() =>
         [
-            new(GoToSpecialKind.Blanks, "_Blanks"),
-            new(GoToSpecialKind.Constants, "_Constants"),
-            new(GoToSpecialKind.Formulas, "_Formulas"),
-            new(GoToSpecialKind.Comments, "Co_mments"),
-            new(GoToSpecialKind.CurrentRegion, "Current _region"),
-            new(GoToSpecialKind.RowDifferences, "Row _differences"),
-            new(GoToSpecialKind.ColumnDifferences, "Column diff_erences"),
-            new(GoToSpecialKind.LastCell, "_Last cell"),
-            new(GoToSpecialKind.ConditionalFormats, "Conditional forma_ts"),
-            new(GoToSpecialKind.Objects, "_Objects"),
-            new(GoToSpecialKind.Precedents, "_Precedents"),
-            new(GoToSpecialKind.Dependents, "Depe_ndents"),
-            new(GoToSpecialKind.DataValidation, "Data valid_ation"),
-            new(GoToSpecialKind.VisibleCellsOnly, "_Visible cells only")
+            new(GoToSpecialKind.Blanks, UiText.Get("GoToSpecial_Blanks")),
+            new(GoToSpecialKind.Constants, UiText.Get("GoToSpecial_Constants")),
+            new(GoToSpecialKind.Formulas, UiText.Get("GoToSpecial_Formulas")),
+            new(GoToSpecialKind.Comments, UiText.Get("GoToSpecial_Comments")),
+            new(GoToSpecialKind.CurrentRegion, UiText.Get("GoToSpecial_CurrentRegion")),
+            new(GoToSpecialKind.RowDifferences, UiText.Get("GoToSpecial_RowDifferences")),
+            new(GoToSpecialKind.ColumnDifferences, UiText.Get("GoToSpecial_ColumnDifferences")),
+            new(GoToSpecialKind.LastCell, UiText.Get("GoToSpecial_LastCell")),
+            new(GoToSpecialKind.ConditionalFormats, UiText.Get("GoToSpecial_ConditionalFormats")),
+            new(GoToSpecialKind.Objects, UiText.Get("GoToSpecial_Objects")),
+            new(GoToSpecialKind.Precedents, UiText.Get("GoToSpecial_Precedents")),
+            new(GoToSpecialKind.Dependents, UiText.Get("GoToSpecial_Dependents")),
+            new(GoToSpecialKind.DataValidation, UiText.Get("GoToSpecial_DataValidation")),
+            new(GoToSpecialKind.VisibleCellsOnly, UiText.Get("GoToSpecial_VisibleCellsOnly"))
         ];
 
     public static bool TryParseChoice(string text, out GoToSpecialKind kind)
@@ -119,7 +119,7 @@ public sealed class GoToSpecialDialog : Window
         panel.Children.Add(_errorsBox);
         return new GroupBox
         {
-            Header = "Values for constants and formulas",
+            Header = UiText.Get("GoToSpecial_ValuesForConstantsAndFormulas"),
             Margin = new Thickness(0, 0, 0, 10),
             Content = panel
         };

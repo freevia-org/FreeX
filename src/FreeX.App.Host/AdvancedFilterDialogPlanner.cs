@@ -20,29 +20,29 @@ internal static class AdvancedFilterDialogPlanner
 
         if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, listRangeText, resolveSheetId, out var listRange))
         {
-            error = "Enter a valid list range.";
+            error = UiText.Get("AdvancedFilter_EnterValidListRange");
             return false;
         }
         if (listRange.RowCount < 2)
         {
-            error = "List range must include headers and at least one data row.";
+            error = UiText.Get("AdvancedFilter_ListRangeMustIncludeHeaders");
             return false;
         }
 
         if (!AdvancedFilterInputParser.TryParseRange(currentSheetId, criteriaRangeText, resolveSheetId, out var criteriaRange))
         {
-            error = "Enter a valid criteria range.";
+            error = UiText.Get("AdvancedFilter_EnterValidCriteriaRange");
             return false;
         }
         if (criteriaRange.RowCount < 2)
         {
-            error = "Criteria range must include headers and at least one criteria row.";
+            error = UiText.Get("AdvancedFilter_CriteriaRangeMustIncludeHeaders");
             return false;
         }
 
         if (!AdvancedFilterInputParser.TryParseCopyDestinationRange(copyToCellText ?? "", currentSheetId, out var copyToRange))
         {
-            error = "Enter a valid copy-to cell or one-row header range.";
+            error = UiText.Get("AdvancedFilter_EnterValidCopyToRange");
             return false;
         }
 

@@ -30,14 +30,14 @@ public sealed class PivotTableDataSourceDialog : Window
         _resolveSheetId = resolveSheetId ?? (_ => null);
         _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(sourceRangeText);
-        Title = "Change PivotTable Data Source";
+        Title = UiText.Get("PivotTableDataSource_ChangePivotTableDataSource");
         Width = 420;
         Height = 160;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _sourceBox.Text = Result.SourceRangeText;
-        AutomationProperties.SetName(_sourceBox, "PivotTable source range");
+        AutomationProperties.SetName(_sourceBox, UiText.Get("PivotTableDataSource_PivotTableSourceRange"));
         Content = CreateContent();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -59,8 +59,8 @@ public sealed class PivotTableDataSourceDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
         PivotDialogLayout.AddLabeledControl(
             stack,
-            "Table/_Range:",
-            CreateReferenceEditor(_sourceBox, "Select PivotTable source range"),
+            UiText.Get("PivotTableDataSource_TableRangeLabel"),
+            CreateReferenceEditor(_sourceBox, UiText.Get("PivotTableDataSource_SelectPivotTableSourceRange")),
             _sourceBox,
             new Thickness(0, 0, 0, 16));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(() =>
@@ -89,7 +89,7 @@ public sealed class PivotTableDataSourceDialog : Window
     {
         if (!WorkbookRangeTextCodec.TryParse(_sheetId, _sourceBox.Text, ResolveSheetIdByName, out _))
         {
-            ShowInvalidInputWarning("Enter a valid PivotTable source range.", _sourceBox);
+            ShowInvalidInputWarning(UiText.Get("PivotTableDataSource_EnterValidSourceRange"), _sourceBox);
             return false;
         }
 

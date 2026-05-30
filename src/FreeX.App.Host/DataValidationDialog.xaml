@@ -1,7 +1,8 @@
 <Window x:Class="FreeX.App.Host.DataValidationDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Data Validation"
+        xmlns:local="clr-namespace:FreeX.App.Host"
+        Title="{local:Loc Key=DataValidation_DataValidation}"
         Width="520" Height="560"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
@@ -13,7 +14,7 @@
         </Grid.RowDefinitions>
 
         <TabControl x:Name="ValidationTabs" Grid.Row="0" Margin="0,0,0,12">
-            <TabItem x:Name="SettingsTab" Header="_Settings">
+            <TabItem x:Name="SettingsTab" Header="{local:Loc Key=DataValidation_Settings}">
                 <Grid Margin="12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -29,70 +30,70 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Text="Validation criteria" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                    <Label Grid.Row="1" Grid.Column="0" Content="_Allow:" Target="{Binding ElementName=TypeCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Text="{local:Loc Key=DataValidation_ValidationCriteria}" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                    <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=DataValidation_Allow}" Target="{Binding ElementName=TypeCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <ComboBox x:Name="TypeCombo" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"
                               SelectionChanged="TypeCombo_SelectionChanged">
-                        <ComboBoxItem Content="Any Value" Tag="Any"/>
-                        <ComboBoxItem Content="Whole Number" Tag="WholeNumber"/>
-                        <ComboBoxItem Content="Decimal" Tag="Decimal"/>
-                        <ComboBoxItem Content="List" Tag="List"/>
-                        <ComboBoxItem Content="Date" Tag="Date"/>
-                        <ComboBoxItem Content="Time" Tag="Time"/>
-                        <ComboBoxItem Content="Text Length" Tag="TextLength"/>
-                        <ComboBoxItem Content="Custom" Tag="Custom"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_AnyValue}" Tag="Any"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_WholeNumber}" Tag="WholeNumber"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Decimal}" Tag="Decimal"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_List}" Tag="List"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Date}" Tag="Date"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Time}" Tag="Time"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_TextLength}" Tag="TextLength"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Custom}" Tag="Custom"/>
                     </ComboBox>
 
-                    <Label x:Name="OperatorLabel" Grid.Row="2" Grid.Column="0" Content="_Data:" Target="{Binding ElementName=OperatorCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
+                    <Label x:Name="OperatorLabel" Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=DataValidation_Data}" Target="{Binding ElementName=OperatorCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <ComboBox x:Name="OperatorCombo" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
                               SelectionChanged="OperatorCombo_SelectionChanged">
-                        <ComboBoxItem Content="Between" Tag="Between"/>
-                        <ComboBoxItem Content="Not Between" Tag="NotBetween"/>
-                        <ComboBoxItem Content="Equal To" Tag="Equal"/>
-                        <ComboBoxItem Content="Not Equal To" Tag="NotEqual"/>
-                        <ComboBoxItem Content="Greater Than" Tag="GreaterThan"/>
-                        <ComboBoxItem Content="Less Than" Tag="LessThan"/>
-                        <ComboBoxItem Content="Greater Than Or Equal" Tag="GreaterThanOrEqual"/>
-                        <ComboBoxItem Content="Less Than Or Equal" Tag="LessThanOrEqual"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Between}" Tag="Between"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_NotBetween}" Tag="NotBetween"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_EqualTo}" Tag="Equal"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_NotEqualTo}" Tag="NotEqual"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_GreaterThan}" Tag="GreaterThan"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_LessThan}" Tag="LessThan"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_GreaterThanOrEqual}" Tag="GreaterThanOrEqual"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_LessThanOrEqual}" Tag="LessThanOrEqual"/>
                     </ComboBox>
 
-                    <Label x:Name="Formula1Label" Grid.Row="3" Grid.Column="0" Content="_Minimum:" Target="{Binding ElementName=Formula1Box}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
+                    <Label x:Name="Formula1Label" Grid.Row="3" Grid.Column="0" Content="{local:Loc Key=DataValidation_Minimum}" Target="{Binding ElementName=Formula1Box}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <DockPanel Grid.Row="3" Grid.Column="1" Margin="0,0,0,8">
                         <Button x:Name="SourcePickerButton" DockPanel.Dock="Right"
                                 Content="..." Width="28" Margin="6,0,0,0"
-                                AutomationProperties.Name="Select source range"
-                                AutomationProperties.HelpText="Collapse dialog and select a worksheet range for the validation source."
-                                ToolTip="Collapse dialog and select source range"
+                                AutomationProperties.Name="{local:Loc Key=DataValidation_SelectSourceRange}"
+                                AutomationProperties.HelpText="{local:Loc Key=DataValidation_CollapseDialogAndSelectAWorksheetRangeForTheValidationSo}"
+                                ToolTip="{local:Loc Key=DataValidation_CollapseDialogAndSelectSourceRange}"
                                 Click="SourcePickerButton_Click"/>
                         <Button x:Name="UseSelectionButton" DockPanel.Dock="Right"
-                                Content="_Use Selection" Width="104" Margin="6,0,0,0"
+                                Content="{local:Loc Key=DataValidation_UseSelection}" Width="104" Margin="6,0,0,0"
                                 Click="UseSelectionButton_Click"/>
                         <TextBox x:Name="Formula1Box"/>
                     </DockPanel>
 
-                    <Label x:Name="Formula2Label" Grid.Row="4" Grid.Column="0" Content="Ma_ximum:" Target="{Binding ElementName=Formula2Box}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
+                    <Label x:Name="Formula2Label" Grid.Row="4" Grid.Column="0" Content="{local:Loc Key=DataValidation_Maximum}" Target="{Binding ElementName=Formula2Box}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <DockPanel Grid.Row="4" Grid.Column="1" Margin="0,0,0,8">
                         <Button x:Name="SourcePicker2Button" DockPanel.Dock="Right"
                                 Content="..." Width="28" Margin="6,0,0,0"
-                                AutomationProperties.Name="Select maximum range"
-                                AutomationProperties.HelpText="Collapse dialog and select a worksheet range for the validation maximum."
-                                ToolTip="Collapse dialog and select maximum range"
+                                AutomationProperties.Name="{local:Loc Key=DataValidation_SelectMaximumRange}"
+                                AutomationProperties.HelpText="{local:Loc Key=DataValidation_CollapseDialogAndSelectAWorksheetRangeForTheValidationMa}"
+                                ToolTip="{local:Loc Key=DataValidation_CollapseDialogAndSelectMaximumRange}"
                                 Click="SourcePicker2Button_Click"/>
                         <Button x:Name="UseSelection2Button" DockPanel.Dock="Right"
-                                Content="Use _Selection" Width="104" Margin="6,0,0,0"
+                                Content="{local:Loc Key=DataValidation_UseSelection2}" Width="104" Margin="6,0,0,0"
                                 Click="UseSelection2Button_Click"/>
                         <TextBox x:Name="Formula2Box"/>
                     </DockPanel>
 
-                    <CheckBox x:Name="ShowDropdownBox" Grid.Row="5" Grid.Column="1" Content="_In-cell dropdown" IsChecked="True" Margin="0,0,0,8"/>
+                    <CheckBox x:Name="ShowDropdownBox" Grid.Row="5" Grid.Column="1" Content="{local:Loc Key=DataValidation_InCellDropdown}" IsChecked="True" Margin="0,0,0,8"/>
                     <StackPanel Grid.Row="6" Grid.Column="1">
-                        <CheckBox x:Name="AllowBlankBox" Content="_Ignore blank" IsChecked="True" Margin="0,0,0,8"/>
-                        <CheckBox x:Name="SameSettingsBox" Content="Apply these changes to all other cells with the _same settings" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="AllowBlankBox" Content="{local:Loc Key=DataValidation_IgnoreBlank}" IsChecked="True" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="SameSettingsBox" Content="{local:Loc Key=DataValidation_ApplyTheseChangesToAllOtherCellsWithTheSameSettings}" Margin="0,0,0,8"/>
                     </StackPanel>
                 </Grid>
             </TabItem>
 
-            <TabItem Header="_Input Message">
+            <TabItem Header="{local:Loc Key=DataValidation_InputMessage}">
                 <Grid Margin="12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -105,20 +106,20 @@
                     </Grid.ColumnDefinitions>
 
                     <CheckBox x:Name="ShowInputMessageBox" Grid.Row="0" Grid.Column="1"
-                              Content="Show _input message when cell is selected" IsChecked="True" Margin="0,0,0,4"/>
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="When selecting cell, show this input message"
+                              Content="{local:Loc Key=DataValidation_ShowInputMessageWhenCellIsSelected}" IsChecked="True" Margin="0,0,0,4"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{local:Loc Key=DataValidation_WhenSelectingCellShowThisInputMessage}"
                                Margin="22,24,0,12" Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
 
-                    <Label Grid.Row="1" Grid.Column="0" Content="Input _title:" Target="{Binding ElementName=PromptTitleBox}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
+                    <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=DataValidation_InputTitle}" Target="{Binding ElementName=PromptTitleBox}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <TextBox x:Name="PromptTitleBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/>
 
-                    <Label Grid.Row="2" Grid.Column="0" Content="Input _message:" Target="{Binding ElementName=PromptMessageBox}" VerticalAlignment="Top" Padding="0" Margin="0,3,8,8"/>
+                    <Label Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=DataValidation_InputMessage2}" Target="{Binding ElementName=PromptMessageBox}" VerticalAlignment="Top" Padding="0" Margin="0,3,8,8"/>
                     <TextBox x:Name="PromptMessageBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"
                              AcceptsReturn="True" TextWrapping="Wrap"/>
                 </Grid>
             </TabItem>
 
-            <TabItem Header="_Error Alert">
+            <TabItem Header="{local:Loc Key=DataValidation_ErrorAlert}">
                 <Grid Margin="12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -132,21 +133,21 @@
                     </Grid.ColumnDefinitions>
 
                     <CheckBox x:Name="ShowErrorMessageBox" Grid.Row="0" Grid.Column="1"
-                              Content="Show error _alert after invalid data is entered" IsChecked="True" Margin="0,0,0,4"/>
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="When user enters invalid data, show this error alert"
+                              Content="{local:Loc Key=DataValidation_ShowErrorAlertAfterInvalidDataIsEntered}" IsChecked="True" Margin="0,0,0,4"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{local:Loc Key=DataValidation_WhenUserEntersInvalidDataShowThisErrorAlert}"
                                Margin="22,24,0,12" Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"/>
 
-                    <Label Grid.Row="1" Grid.Column="0" Content="_Alert style:" Target="{Binding ElementName=AlertStyleCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
+                    <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=DataValidation_AlertStyle}" Target="{Binding ElementName=AlertStyleCombo}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <ComboBox x:Name="AlertStyleCombo" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8">
-                        <ComboBoxItem Content="Stop" Tag="Stop"/>
-                        <ComboBoxItem Content="Warning" Tag="Warning"/>
-                        <ComboBoxItem Content="Information" Tag="Information"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Stop}" Tag="Stop"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Warning}" Tag="Warning"/>
+                        <ComboBoxItem Content="{local:Loc Key=DataValidation_Information}" Tag="Information"/>
                     </ComboBox>
 
-                    <Label Grid.Row="2" Grid.Column="0" Content="Error _title:" Target="{Binding ElementName=ErrorTitleBox}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
+                    <Label Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=DataValidation_ErrorTitle}" Target="{Binding ElementName=ErrorTitleBox}" VerticalAlignment="Center" Padding="0" Margin="0,0,8,8"/>
                     <TextBox x:Name="ErrorTitleBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"/>
 
-                    <Label Grid.Row="3" Grid.Column="0" Content="Error _message:" Target="{Binding ElementName=ErrorMessageBox}" VerticalAlignment="Top" Padding="0" Margin="0,3,8,8"/>
+                    <Label Grid.Row="3" Grid.Column="0" Content="{local:Loc Key=DataValidation_ErrorMessage}" Target="{Binding ElementName=ErrorMessageBox}" VerticalAlignment="Top" Padding="0" Margin="0,3,8,8"/>
                     <TextBox x:Name="ErrorMessageBox" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"
                              AcceptsReturn="True" TextWrapping="Wrap"/>
                 </Grid>
@@ -154,9 +155,9 @@
         </TabControl>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="C_lear All" Width="78" Margin="0,0,16,0" Click="ClearAllButton_Click"/>
-            <Button Content="_OK" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
-            <Button Content="_Cancel" Width="72" IsCancel="True" Click="CancelButton_Click"/>
+            <Button Content="{local:Loc Key=DataValidation_ClearAll}" Width="78" Margin="0,0,16,0" Click="ClearAllButton_Click"/>
+            <Button Content="{local:Loc Key=Common_Ok}" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
+            <Button Content="{local:Loc Key=Common_Cancel}" Width="72" IsCancel="True" Click="CancelButton_Click"/>
         </StackPanel>
     </Grid>
 </Window>

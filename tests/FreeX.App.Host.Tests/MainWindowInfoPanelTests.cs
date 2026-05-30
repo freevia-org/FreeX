@@ -9,7 +9,7 @@ public sealed class MainWindowInfoPanelTests
     [Fact]
     public void BackstageInfo_ExposesWorkbookStatisticAndSummaryFields()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("MainWindow.xaml");
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -28,7 +28,7 @@ public sealed class MainWindowInfoPanelTests
         document.Descendants(presentation + "TextBlock")
             .Select(element => element.Attribute("Text")?.Value)
             .Should()
-            .Contain("Review local file status and unsupported workbook feature warnings.");
+            .Contain(UiText.Get("MainWindow_Text_ReviewLocalFileStatusAndUnsupportedWorkbookFeatureWarnings"));
     }
 
     [Fact]

@@ -59,7 +59,7 @@ public sealed partial class ScenarioManagerDialog
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            error = "Enter a scenario name.";
+            error = UiText.Get("ScenarioManager_EnterScenarioName");
             return false;
         }
 
@@ -87,7 +87,7 @@ public sealed partial class ScenarioManagerDialog
             return true;
         }
 
-        error = "Enter a valid changing cells reference.";
+        error = UiText.Get("ScenarioManager_EnterValidChangingCellsReference");
         return false;
     }
 
@@ -111,7 +111,7 @@ public sealed partial class ScenarioManagerDialog
             return true;
         }
 
-        error = "Enter a valid result cells reference.";
+        error = UiText.Get("ScenarioManager_EnterValidResultCellsReference");
         return false;
     }
 
@@ -168,19 +168,19 @@ public sealed partial class ScenarioManagerDialog
     {
         if (RequiresScenarioName(action) && !TryValidateScenarioName(scenarioName, out var error))
         {
-            return new ScenarioManagerValidationFailure(error ?? "Enter scenario details.", ScenarioManagerValidationField.ScenarioName);
+            return new ScenarioManagerValidationFailure(error ?? UiText.Get("ScenarioManager_EnterScenarioDetails"), ScenarioManagerValidationField.ScenarioName);
         }
 
         if (RequiresScenarioName(action) &&
             !TryValidateChangingCells(changingCellsText, currentSheetId, resolveSheetIdByName, out error))
         {
-            return new ScenarioManagerValidationFailure(error ?? "Enter scenario details.", ScenarioManagerValidationField.ChangingCells);
+            return new ScenarioManagerValidationFailure(error ?? UiText.Get("ScenarioManager_EnterScenarioDetails"), ScenarioManagerValidationField.ChangingCells);
         }
 
         if (action is ScenarioManagerAction.Report &&
             !TryValidateResultCells(resultCellsText, currentSheetId, resolveSheetIdByName, out error))
         {
-            return new ScenarioManagerValidationFailure(error ?? "Enter scenario result cells.", ScenarioManagerValidationField.ResultCells);
+            return new ScenarioManagerValidationFailure(error ?? UiText.Get("ScenarioManager_EnterScenarioResultCells"), ScenarioManagerValidationField.ResultCells);
         }
 
         return null;

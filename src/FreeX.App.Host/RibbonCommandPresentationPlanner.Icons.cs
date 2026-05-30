@@ -144,7 +144,9 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("save")) return new(RibbonCommandIconKind.Save);
         if (name == "open") return new(RibbonCommandIconKind.GetData);
         if (name.Contains("export")) return new(RibbonCommandIconKind.Share, RibbonCommandIconAccent.Data);
+        if (name is "cascade" or "tiled" or "horizontal" or "vertical") return new(RibbonCommandIconKind.Window);
         if (name == "insert") return new(RibbonCommandIconKind.Insert);
+        if (name is "up" or "down" or "left" or "right") return new(RibbonCommandIconKind.Align);
         if (name.Contains("undo")) return new(RibbonCommandIconKind.Undo);
         if (name.Contains("redo")) return new(RibbonCommandIconKind.Redo);
         if (name.Contains("cut")) return new(RibbonCommandIconKind.Cut);
@@ -167,7 +169,9 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("increase indent")) return new(RibbonCommandIconKind.Align);
         if (name.Contains("merge")) return new(RibbonCommandIconKind.Merge);
         if (name.Contains("wrap")) return new(RibbonCommandIconKind.Wrap);
+        if (name.Contains("angle") || name.Contains("vertical text")) return new(RibbonCommandIconKind.Rotate);
         if (name == "100%") return new(RibbonCommandIconKind.Zoom);
+        if (name is "a4" or "letter" or "legal") return new(RibbonCommandIconKind.Page);
         if (name.Contains("page orientation")) return new(RibbonCommandIconKind.Page);
         if (name.Contains("orientation")) return new(RibbonCommandIconKind.Orientation);
         if (name.Contains("align")) return new(RibbonCommandIconKind.Align);
@@ -217,6 +221,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("eraser")) return new(RibbonCommandIconKind.Clear);
         if (name.Contains("highlighter")) return new(RibbonCommandIconKind.Line, RibbonCommandIconAccent.Fill);
         if (name.Contains("pencil") || name.Contains("pen") || name.Contains("draw with touch")) return new(RibbonCommandIconKind.Line);
+        if (name.Contains("line style")) return new(RibbonCommandIconKind.Line);
         if (name.Contains("shape gradient")) return new(RibbonCommandIconKind.Effects, RibbonCommandIconAccent.Theme);
         if (name.Contains("shape effect")) return new(RibbonCommandIconKind.Effects);
         if (name.Contains("shape fill")) return new(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill);
@@ -234,19 +239,31 @@ public static partial class RibbonCommandPresentationPlanner
         if (name == "text") return new(RibbonCommandIconKind.TextBox);
         if (name.Contains("bring forward")) return new(RibbonCommandIconKind.BringForward);
         if (name.Contains("send backward")) return new(RibbonCommandIconKind.SendBackward);
+        if (name.Contains("autofit")) return new(RibbonCommandIconKind.Size);
         if (name.Contains("size")) return new(RibbonCommandIconKind.Size);
         if (name.Contains("rotate")) return new(RibbonCommandIconKind.Rotate);
         if (name.Contains("fill")) return new(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Fill);
         if (name.Contains("outline") || name.Contains("border")) return new(RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border);
 
         if (name.Contains("cell style")) return new(RibbonCommandIconKind.Theme);
+        if (name.Contains("accent")) return new(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme);
+        if (name is "subtle" or "refined" or "grayscale" or "freex colorful")
+            return new(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme);
+        if (name is "bad" or "good" or "neutral" or "input" or "output" or "calculation" or "check cell" or "note" or "linked cell" or "warning text" or "heading 1" or "heading 2" or "heading 3" or "heading 4" or "total")
+            return new(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme);
+        if (name is "black" or "gray" or "red" or "orange" or "gold" or "green" or "blue" or "purple" or "white")
+            return new(RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color);
+        if (name == "automatic") return new(RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color);
         if (name == "format") return new(RibbonCommandIconKind.Table);
         if (name.Contains("theme")) return new(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme);
         if (name.Contains("color")) return new(RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color);
         if (name.Contains("font")) return new(RibbonCommandIconKind.Font);
         if (name.Contains("effect")) return new(RibbonCommandIconKind.Effects);
         if (name.Contains("background")) return new(RibbonCommandIconKind.Picture);
+        if (name.Contains("crop")) return new(RibbonCommandIconKind.Picture);
         if (name.Contains("margin")) return new(RibbonCommandIconKind.Margins);
+        if (name is "arial" or "times new roman") return new(RibbonCommandIconKind.Font);
+        if (name == "office") return new(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme);
         if (name.Contains("paper") || name.Contains("page setup")) return new(RibbonCommandIconKind.Page);
         if (name.Contains("scale to fit")) return new(RibbonCommandIconKind.Scale);
         if (name.Contains("print area")) return new(RibbonCommandIconKind.Table);
@@ -260,6 +277,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("insert function")) return new(RibbonCommandIconKind.Function);
         if (name.Contains("autosum")) return new(RibbonCommandIconKind.Sum);
         if (name.Contains("recent")) return new(RibbonCommandIconKind.Recent);
+        if (name.Contains("calculated")) return new(RibbonCommandIconKind.Function);
         if (name.Contains("financial")) return new(RibbonCommandIconKind.Financial);
         if (name.Contains("math")) return new(RibbonCommandIconKind.Math);
         if (name == "text") return new(RibbonCommandIconKind.TextFunction);
@@ -291,6 +309,29 @@ public static partial class RibbonCommandPresentationPlanner
         if (name == "reapply" || name.Contains("reapply filter")) return new(RibbonCommandIconKind.Refresh, RibbonCommandIconAccent.Data);
         if (name == "advanced") return new(RibbonCommandIconKind.Filter);
         if (name.Contains("filter")) return new(RibbonCommandIconKind.Filter);
+        if (name.Contains("average") ||
+            name.Contains("greater than") ||
+            name.Contains("less than") ||
+            name.Contains("between") ||
+            name.Contains("equal to") ||
+            name.Contains("duplicate value") ||
+            name.Contains("unique") ||
+            name.Contains("top 10") ||
+            name.Contains("bottom 10") ||
+            name.Contains("text that contains") ||
+            name.Contains("date occurring") ||
+            name.Contains("data bar") ||
+            name.Contains("color scale") ||
+            name.Contains("icon set") ||
+            name.Contains("highlight cells") ||
+            name.Contains("top/bottom") ||
+            name.Contains("new rule") ||
+            name.Contains("formula rule") ||
+            name.Contains("clear rules") ||
+            name.Contains("manage rules"))
+        {
+            return new(RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color);
+        }
         if (name.Contains("text to columns")) return new(RibbonCommandIconKind.TextColumns);
         if (name.Contains("flash fill")) return new(RibbonCommandIconKind.Flash);
         if (name.Contains("remove duplicate")) return new(RibbonCommandIconKind.Delete);
@@ -303,6 +344,18 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("goal seek") || name.Contains("scenario") || name.Contains("what-if")) return new(RibbonCommandIconKind.Target);
         if (name.Contains("forecast")) return new(RibbonCommandIconKind.ChartLine);
         if (name.Contains("ungroup")) return new(RibbonCommandIconKind.Ungroup);
+        if (name.Contains("arrow") ||
+            name.Contains("traffic light") ||
+            name.Contains("flag") ||
+            name.Contains("sign") ||
+            name.Contains("rating") ||
+            name.Contains("quarter") ||
+            name.Contains("box") ||
+            name.Contains("red to black") ||
+            name is "directional" or "indicators")
+        {
+            return new(RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color);
+        }
         if (name.Contains("show detail")) return new(RibbonCommandIconKind.Expand);
         if (name.Contains("hide detail")) return new(RibbonCommandIconKind.Collapse);
         if (name.Contains("collapse")) return new(RibbonCommandIconKind.Collapse);
@@ -319,6 +372,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("previous")) return new(RibbonCommandIconKind.Previous);
         if (name.Contains("next")) return new(RibbonCommandIconKind.Next);
         if (name.Contains("allow edit") || name.Contains("allow users") || name.Contains("edit range") || name.Contains("protect")) return new(RibbonCommandIconKind.Protect, RibbonCommandIconAccent.Protect);
+        if (name.Contains("lock")) return new(RibbonCommandIconKind.Protect, RibbonCommandIconAccent.Protect);
         if (name.Contains("share")) return new(RibbonCommandIconKind.Share, RibbonCommandIconAccent.Data);
         if (name.Contains("hide ink")) return new(RibbonCommandIconKind.Previous);
 
@@ -358,6 +412,8 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("feedback") || name.Contains("report issue")) return new(RibbonCommandIconKind.Feedback, RibbonCommandIconAccent.Help);
         if (name.Contains("quick analysis")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Data);
         if (name.Contains("pick from drop-down")) return new(RibbonCommandIconKind.List);
+        if (name.Contains("go to") || name.Contains("replace")) return new(RibbonCommandIconKind.Search);
+        if (name.Contains("explanatory text")) return new(RibbonCommandIconKind.TextBox);
         if (name.Contains("report layout")) return new(RibbonCommandIconKind.Page);
         if (name.Contains("blank row")) return new(RibbonCommandIconKind.PageBreak);
         if (name.Contains("grand total")) return new(RibbonCommandIconKind.Sum);
@@ -366,6 +422,17 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("field setting")) return new(RibbonCommandIconKind.List);
         if (name.Contains("field header")) return new(RibbonCommandIconKind.Label);
         if (name.Contains("pivot style")) return new(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme);
+        if (name.Contains("cell")) return new(RibbonCommandIconKind.Table);
+        if (name.Contains("sheet")) return new(RibbonCommandIconKind.Table);
+        if (name.Contains("width") || name.Contains("height")) return new(RibbonCommandIconKind.Size);
+        if (name.Contains("row") || name.Contains("column")) return new(RibbonCommandIconKind.Table);
+        if (name.Contains("portrait") || name.Contains("landscape")) return new(RibbonCommandIconKind.Orientation);
+        if (name is "narrow" or "wide") return new(RibbonCommandIconKind.Margins);
+        if (name.Contains("more") || name.Contains("custom")) return new(RibbonCommandIconKind.More);
+        if (name.Contains("manual")) return new(RibbonCommandIconKind.Function);
+        if (name.Contains("scale")) return new(RibbonCommandIconKind.Scale);
+        if (name.Contains("count") || name.Contains("sum") || name is "max" or "min") return new(RibbonCommandIconKind.Sum);
+        if (name.Contains("thin") || name.Contains("medium") || name.Contains("thick") || name.Contains("dashed") || name.Contains("dotted") || name.Contains("double")) return new(RibbonCommandIconKind.Border);
 
         return new(RibbonCommandIconKind.Generic);
     }

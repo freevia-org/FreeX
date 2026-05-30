@@ -1,7 +1,8 @@
 <Window x:Class="FreeX.App.Host.CustomViewsDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Custom Views"
+        xmlns:local="clr-namespace:FreeX.App.Host"
+        Title="{local:Loc Key=CustomViews_CustomViews}"
         Width="640" Height="360"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize"
@@ -13,36 +14,36 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <GroupBox Grid.Row="0" Header="_Views">
+        <GroupBox Grid.Row="0" Header="{local:Loc Key=CustomViews_Views}">
             <ListView x:Name="ViewsList" SelectionChanged="ViewsList_SelectionChanged"
                       MouseDoubleClick="ViewsList_MouseDoubleClick"
-                      AutomationProperties.Name="Custom views"
+                      AutomationProperties.Name="{local:Loc Key=CustomViews_CustomViews}"
                       AutomationProperties.AutomationId="CustomViewsList"
-                      AutomationProperties.HelpText="Shows saved workbook views that can be shown or deleted.">
+                      AutomationProperties.HelpText="{local:Loc Key=CustomViews_ShowsSavedWorkbookViewsThatCanBeShownOrDeleted}">
                 <ListView.View>
                         <GridView>
-                        <GridViewColumn Header="Name" Width="200" DisplayMemberBinding="{Binding Name}"/>
-                        <GridViewColumn Header="Sheets" Width="70" DisplayMemberBinding="{Binding SheetCount}"/>
-                        <GridViewColumn Header="Print settings" Width="110" DisplayMemberBinding="{Binding PrintSettingsIndicator}"/>
-                        <GridViewColumn Header="Hidden rows, columns and filter settings" Width="210" DisplayMemberBinding="{Binding FilterSettingsIndicator}"/>
+                        <GridViewColumn Header="{local:Loc Key=CustomViews_Name}" Width="200" DisplayMemberBinding="{Binding Name}"/>
+                        <GridViewColumn Header="{local:Loc Key=CustomViews_Sheets}" Width="70" DisplayMemberBinding="{Binding SheetCount}"/>
+                        <GridViewColumn Header="{local:Loc Key=CustomViews_PrintSettings}" Width="110" DisplayMemberBinding="{Binding PrintSettingsIndicator}"/>
+                        <GridViewColumn Header="{local:Loc Key=CustomViews_HiddenRowsColumnsAndFilterSettings}" Width="210" DisplayMemberBinding="{Binding FilterSettingsIndicator}"/>
                     </GridView>
                 </ListView.View>
             </ListView>
         </GroupBox>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="ShowButton" Content="_Show" Width="72" Margin="0,0,8,0" IsDefault="True" Click="ShowButton_Click"
+            <Button x:Name="ShowButton" Content="{local:Loc Key=CustomViews_Show}" Width="72" Margin="0,0,8,0" IsDefault="True" Click="ShowButton_Click"
                     AutomationProperties.AutomationId="CustomViewsShowButton"
-                    AutomationProperties.HelpText="Apply the selected custom view."/>
-            <Button Content="_Add..." Width="72" Margin="0,0,8,0" Click="AddButton_Click"
+                    AutomationProperties.HelpText="{local:Loc Key=CustomViews_ApplySelectedCustomView}"/>
+            <Button Content="{local:Loc Key=CustomViews_Add}" Width="72" Margin="0,0,8,0" Click="AddButton_Click"
                     AutomationProperties.AutomationId="CustomViewsAddButton"
-                    AutomationProperties.HelpText="Create a new custom view from the current workbook state."/>
-            <Button x:Name="DeleteButton" Content="_Delete" Width="72" Margin="0,0,8,0" Click="DeleteButton_Click"
+                    AutomationProperties.HelpText="{local:Loc Key=CustomViews_CreateNewCustomViewFromCurrentWorkbookState}"/>
+            <Button x:Name="DeleteButton" Content="{local:Loc Key=CustomViews_Delete}" Width="72" Margin="0,0,8,0" Click="DeleteButton_Click"
                     AutomationProperties.AutomationId="CustomViewsDeleteButton"
-                    AutomationProperties.HelpText="Delete the selected custom view."/>
-            <Button Content="_Close" Width="72" IsCancel="True" Click="CloseButton_Click"
+                    AutomationProperties.HelpText="{local:Loc Key=CustomViews_DeleteSelectedCustomView}"/>
+            <Button Content="{local:Loc Key=CustomViews_Close}" Width="72" IsCancel="True" Click="CloseButton_Click"
                     AutomationProperties.AutomationId="CustomViewsCloseButton"
-                    AutomationProperties.HelpText="Close the Custom Views dialog."/>
+                    AutomationProperties.HelpText="{local:Loc Key=CustomViews_CloseCustomViewsDialog}"/>
         </StackPanel>
     </Grid>
 </Window>

@@ -21,7 +21,7 @@ public sealed class PivotChartTypeDialog : Window
     {
         SelectedChartType = currentType;
         Result = CreateResult(currentType);
-        Title = "Change PivotChart Type";
+        Title = UiText.Get("PivotChartType_ChangePivotChartType");
         Width = 640;
         Height = 410;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -39,13 +39,13 @@ public sealed class PivotChartTypeDialog : Window
             _recommendedGallery.SelectedIndex = 0;
         _tabs.Items.Add(new TabItem
         {
-            Header = "_Recommended PivotCharts",
+            Header = UiText.Get("PivotChartType_RecommendedPivotCharts"),
             Content = InsertChartDialog.CreateRecommendedChartsPanel(_recommendedGallery)
         });
 
         var allChartsPanel = InsertChartDialog.CreateAllChartsPanel(_categoryList, _subtypeGallery, currentType);
-        allChartsPanel.ToolTip = "Chart categories and Chart subtype gallery match the Insert Chart picker.";
-        _tabs.Items.Add(new TabItem { Header = "_All Charts", Content = allChartsPanel });
+        allChartsPanel.ToolTip = UiText.Get("PivotChartType_ChartCategoriesAndChartSubtypeGalleryMatchTheInsertChartPicker");
+        _tabs.Items.Add(new TabItem { Header = UiText.Get("PivotChartType_AllCharts"), Content = allChartsPanel });
         stack.Children.Add(_tabs);
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(() =>
         {

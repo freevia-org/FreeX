@@ -69,7 +69,7 @@ internal static class ExportOptionsDialogPlanner
         string? error,
         string? fromPageText)
     {
-        if (string.Equals(error, "From page must be less than or equal to To page.", StringComparison.Ordinal))
+        if (string.Equals(error, UiText.Get("Export_PageRangeFromLessThanToError"), StringComparison.Ordinal))
             return ExportOptionsFocusTarget.ToPage;
 
         if (int.TryParse(

@@ -12,10 +12,10 @@ public partial class MainWindow
     {
         if (!TryExecuteRepeatableChartLayout(
                 "Secondary Axis",
-                "Insert or select a chart before changing secondary axes.",
+                UiText.Get("MainWindowMessage_ChartSecondaryAxisRequiresChart"),
                 chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) &&
                          (chart.ShowSecondaryAxis || ChartOptionCycler.GetSeriesCount(chart) >= 2),
-                "Secondary value axes require a supported chart with at least two data series.",
+                UiText.Get("MainWindowMessage_ChartSecondaryAxisUnsupported"),
                 chart => new ChartLayoutOptions(
                     ShowSecondaryAxis: !chart.ShowSecondaryAxis,
                     SecondaryAxisSeriesIndexes: [])))
@@ -126,15 +126,15 @@ public partial class MainWindow
 
     private void ShowChartAxisFormatDialog(bool useXAxis)
     {
-        var caption = useXAxis ? "Format X Axis" : "Format Y Axis";
-        if (!TryGetFirstChartForDialog(caption, "Insert or select a chart before changing axis options.", out var chart))
+        var caption = useXAxis ? UiText.Get("ChartAxisFormat_XAxisTitle") : UiText.Get("ChartAxisFormat_YAxisTitle");
+        if (!TryGetFirstChartForDialog(caption, UiText.Get("MainWindowMessage_ChartAxisOptionsRequiresChart"), out var chart))
             return;
 
         var dialog = new ChartAxisFormatDialog(chart, useXAxis) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(useXAxis ? "Format X Axis" : "Format Y Axis", chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
     }
 
     private void ToggleChartAxisTicks(bool useXAxis)
@@ -142,7 +142,7 @@ public partial class MainWindow
         var caption = useXAxis ? "X Axis Ticks" : "Y Axis Ticks";
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing axis ticks.",
+                UiText.Get("MainWindowMessage_ChartAxisTicksRequiresChart"),
                 null,
                 null,
                 chart =>
@@ -164,7 +164,7 @@ public partial class MainWindow
         var caption = useXAxis ? "X Axis Labels" : "Y Axis Labels";
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing axis labels.",
+                UiText.Get("MainWindowMessage_ChartAxisLabelsRequiresChart"),
                 null,
                 null,
                 chart => useXAxis
@@ -180,7 +180,7 @@ public partial class MainWindow
         var caption = useXAxis ? "X Axis Label Font" : "Y Axis Label Font";
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing axis label formatting.",
+                UiText.Get("MainWindowMessage_ChartAxisLabelFormattingRequiresChart"),
                 null,
                 null,
                 chart =>
@@ -203,7 +203,7 @@ public partial class MainWindow
         var caption = useXAxis ? "X Axis Label Angle" : "Y Axis Label Angle";
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing axis label rotation.",
+                UiText.Get("MainWindowMessage_ChartAxisLabelRotationRequiresChart"),
                 null,
                 null,
                 chart =>
@@ -224,7 +224,7 @@ public partial class MainWindow
         var caption = useXAxis ? "X Axis Line" : "Y Axis Line";
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing axis line formatting.",
+                UiText.Get("MainWindowMessage_ChartAxisLineFormattingRequiresChart"),
                 null,
                 null,
                 chart =>
@@ -246,7 +246,7 @@ public partial class MainWindow
         var caption = useXAxis ? "X Axis Gridlines" : "Y Axis Gridlines";
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing axis gridlines.",
+                UiText.Get("MainWindowMessage_ChartAxisGridlinesRequiresChart"),
                 null,
                 null,
                 chart =>
@@ -268,7 +268,7 @@ public partial class MainWindow
         var caption = useXAxis ? "X Gridline Style" : "Y Gridline Style";
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing gridline formatting.",
+                UiText.Get("MainWindowMessage_ChartGridlineFormattingRequiresChart"),
                 null,
                 null,
                 chart =>
@@ -301,7 +301,7 @@ public partial class MainWindow
         var caption = useXAxis ? "X Axis Number Format" : "Y Axis Number Format";
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing axis number formats.",
+                UiText.Get("MainWindowMessage_ChartAxisNumberFormatRequiresChart"),
                 null,
                 null,
                 chart =>
@@ -324,13 +324,13 @@ public partial class MainWindow
             var sheet = _workbook.GetSheet(_currentSheetId);
             var chart = sheet?.Charts.FirstOrDefault();
             if (sheet is null || chart is null)
-                return new FailedWorkbookCommand("Insert or select a chart before changing axis scale.");
+                return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartAxisScaleRequiresChart"));
 
             if (useXAxis && !ChartTypeSupport.SupportsXAxisLogScale(chart.Type))
-                return new FailedWorkbookCommand("X-axis log scale is currently supported for bar, scatter, and bubble charts with value X axes.");
+                return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartXAxisLogScaleSupportedTypes"));
 
             if (!useXAxis && !ChartTypeSupport.SupportsYAxisLogScale(chart.Type))
-                return new FailedWorkbookCommand("Y-axis log scale is currently supported for column, line, area, scatter, and bubble charts with value Y axes.");
+                return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartYAxisLogScaleSupportedTypes"));
 
             var enableLog = useXAxis ? !chart.XAxisLogScale : !chart.YAxisLogScale;
             var options = useXAxis
@@ -368,7 +368,7 @@ public partial class MainWindow
             var sheet = _workbook.GetSheet(_currentSheetId);
             var chart = sheet?.Charts.FirstOrDefault();
             if (sheet is null || chart is null)
-                return new FailedWorkbookCommand("Insert or select a chart before changing axis bounds.");
+                return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresChart"));
 
             var hasBounds = useXAxis
                 ? chart.XAxisMinimum is not null || chart.XAxisMaximum is not null
@@ -377,7 +377,7 @@ public partial class MainWindow
                 (useXAxis
                     ? !ChartTypeSupport.SupportsXAxisBounds(chart.Type)
                     : !ChartTypeSupport.SupportsYAxisBounds(chart.Type)))
-                return new FailedWorkbookCommand("Axis bounds are currently supported for chart value axes only.");
+                return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartAxisBoundsSupportedTypes"));
 
             ChartLayoutOptions options;
             if (hasBounds)
@@ -396,7 +396,7 @@ public partial class MainWindow
             }
             else
             {
-                return new FailedWorkbookCommand("Add numeric chart data before setting axis bounds.");
+                return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_ChartAxisBoundsRequiresNumericData"));
             }
 
             return new SetChartLayoutCommand(_currentSheetId, chart.Id, options);

@@ -16,7 +16,7 @@ public sealed class PivotStyleGalleryDialog : Window
     public PivotStyleGalleryDialog(string? currentStyleName)
     {
         Result = CreateResult(currentStyleName);
-        Title = "PivotTable Styles";
+        Title = UiText.Get("PivotStyleGallery_PivotTableStyles");
         Width = 360;
         Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -36,8 +36,8 @@ public sealed class PivotStyleGalleryDialog : Window
 
         _styleGallery.SelectionMode = SelectionMode.Single;
         _styleGallery.Margin = new Thickness(0, 0, 0, 12);
-        AutomationProperties.SetName(_styleGallery, "PivotTable style gallery");
-        root.Children.Add(new Label { Content = "_PivotTable style:", Target = _styleGallery, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        AutomationProperties.SetName(_styleGallery, UiText.Get("PivotStyleGallery_PivotTableStyleGallery"));
+        root.Children.Add(new Label { Content = UiText.Get("PivotStyleGallery_PivotTableStyle"), Target = _styleGallery, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         DockPanel.SetDock(_styleGallery, Dock.Top);
         root.Children.Add(_styleGallery);
         root.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));

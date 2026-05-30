@@ -12,15 +12,15 @@ public sealed record CustomViewNameDialogResult(
 public sealed class CustomViewNameDialog : Window
 {
     private readonly TextBox _nameBox = new();
-    private readonly CheckBox _printSettingsBox = new() { Content = "_Print settings", IsChecked = true };
-    private readonly CheckBox _hiddenFilterSettingsBox = new() { Content = "_Hidden rows, columns and filter settings", IsChecked = true };
+    private readonly CheckBox _printSettingsBox = new() { Content = UiText.Get("CustomViewName_PrintSettingsCheckBox"), IsChecked = true };
+    private readonly CheckBox _hiddenFilterSettingsBox = new() { Content = UiText.Get("CustomViewName_HiddenFilterSettingsCheckBox"), IsChecked = true };
 
     public CustomViewNameDialogResult Result { get; private set; }
 
     public CustomViewNameDialog(string defaultValue)
     {
         Result = CreateResult(defaultValue);
-        Title = "Add View";
+        Title = UiText.Get("CustomViewName_Title");
         Width = 320;
         Height = 190;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -33,17 +33,17 @@ public sealed class CustomViewNameDialog : Window
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var label = new Label { Content = "_Name:", Target = _nameBox, Margin = new Thickness(0, 0, 0, 4) };
+        var label = new Label { Content = UiText.Get("CustomViewName_NameLabel"), Target = _nameBox, Margin = new Thickness(0, 0, 0, 4) };
         _nameBox.Text = Result.ViewName;
-        AutomationProperties.SetName(_nameBox, "Custom view name");
+        AutomationProperties.SetName(_nameBox, UiText.Get("CustomViewName_NameAutomationName"));
         AutomationProperties.SetAutomationId(_nameBox, "CustomViewNameBox");
-        AutomationProperties.SetHelpText(_nameBox, "Enter the name for the custom workbook view.");
-        AutomationProperties.SetName(_printSettingsBox, "Print settings");
+        AutomationProperties.SetHelpText(_nameBox, UiText.Get("CustomViewName_NameHelpText"));
+        AutomationProperties.SetName(_printSettingsBox, UiText.Get("CustomViewName_PrintSettingsAutomationName"));
         AutomationProperties.SetAutomationId(_printSettingsBox, "CustomViewPrintSettingsCheckBox");
-        AutomationProperties.SetHelpText(_printSettingsBox, "Include print settings in the custom view.");
-        AutomationProperties.SetName(_hiddenFilterSettingsBox, "Hidden rows, columns and filter settings");
+        AutomationProperties.SetHelpText(_printSettingsBox, UiText.Get("CustomViewName_PrintSettingsHelpText"));
+        AutomationProperties.SetName(_hiddenFilterSettingsBox, UiText.Get("CustomViewName_HiddenFilterSettingsAutomationName"));
         AutomationProperties.SetAutomationId(_hiddenFilterSettingsBox, "CustomViewHiddenFilterSettingsCheckBox");
-        AutomationProperties.SetHelpText(_hiddenFilterSettingsBox, "Include hidden rows, hidden columns, and filter settings in the custom view.");
+        AutomationProperties.SetHelpText(_hiddenFilterSettingsBox, UiText.Get("CustomViewName_HiddenFilterSettingsHelpText"));
         _printSettingsBox.Margin = new Thickness(0, 8, 0, 4);
         _hiddenFilterSettingsBox.Margin = new Thickness(0, 0, 0, 4);
         var buttons = new StackPanel
@@ -52,8 +52,8 @@ public sealed class CustomViewNameDialog : Window
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
             Margin = new Thickness(0, 12, 0, 0)
         };
-        var ok = new Button { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = "_Cancel", Width = 72, IsCancel = true };
+        var ok = new Button { Content = UiText.Ok, Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = UiText.Cancel, Width = 72, IsCancel = true };
         ok.Click += (_, _) => Accept();
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
@@ -90,7 +90,7 @@ public sealed class CustomViewNameDialog : Window
             _hiddenFilterSettingsBox.IsChecked == true);
         if (string.IsNullOrWhiteSpace(Result.ViewName))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a view name.", Title);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("CustomViewName_BlankNameMessage"), Title);
             FocusNameInput();
             return;
         }

@@ -25,8 +25,8 @@ public sealed class ChartCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
 
-        button.Should().Contain($"Content=\"{content}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -48,8 +48,8 @@ public sealed class ChartCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
 
-        button.Should().Contain($"Content=\"{content}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -67,7 +67,7 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("ShowDeferredChartFamilyMessage();");
         source.Should().Contain("new AddChartCommand(_currentSheetId, currentRange, type, \"Chart\")");
         source.Should().Contain("private void DeferredChartFamilyMenuItem_Click(object sender, RoutedEventArgs e)");
-        source.Should().Contain("This chart family is retained when opening XLSX files");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferred\")");
         source.Should().Contain("private void ChangeChartTypeBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new ChangeChartTypeDialog(chart.Type)");
         source.Should().Contain("new ChangeChartTypeCommand(_currentSheetId, chart.Id, dialog.Result.ChartType)");
@@ -86,7 +86,7 @@ public sealed class ChartCommandSourceTests
 
     private static string ExtractButtonElementByTitle(string xaml, string title)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
+        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
         titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} chart command should be present");
 
         var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);

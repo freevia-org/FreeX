@@ -66,7 +66,7 @@ public sealed partial class TextToColumnsDialog
 
         _backButton = new Button
         {
-            Content = "< _Back",
+            Content = UiText.Get("TextToColumns_BackButton"),
             Width = 72,
             Margin = new Thickness(0, 0, 8, 0)
         };
@@ -74,7 +74,7 @@ public sealed partial class TextToColumnsDialog
         panel.Children.Add(_backButton);
         _nextButton = new Button
         {
-            Content = "_Next >",
+            Content = UiText.Get("TextToColumns_NextButton"),
             Width = 72,
             Margin = new Thickness(0, 0, 8, 0)
         };
@@ -88,13 +88,13 @@ public sealed partial class TextToColumnsDialog
         panel.Children.Add(_nextButton);
         _finishButton = new Button
         {
-            Content = "_Finish",
+            Content = UiText.Get("TextToColumns_FinishButton"),
             Width = 72,
             Margin = new Thickness(0, 0, 8, 0)
         };
         _finishButton.Click += (_, _) => Accept();
         panel.Children.Add(_finishButton);
-        panel.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
+        panel.Children.Add(new Button { Content = UiText.Cancel, Width = 72, IsCancel = true });
         return panel;
     }
 

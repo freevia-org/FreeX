@@ -31,7 +31,7 @@ public static class SelectionPanePlanner
             items.Add(new SelectionPaneItem(
                 SelectionPaneObjectKind.Chart,
                 chart.Id,
-                DisplayName(chart.Name, $"Chart {index + 1}"),
+                DisplayName(chart.Name, UiText.Format("SelectionPane_DefaultChartName", index + 1)),
                 chart.IsVisible,
                 index < sheet.Charts.Count - 1,
                 index > 0));
@@ -46,7 +46,7 @@ public static class SelectionPanePlanner
             items.Add(new SelectionPaneItem(
                 SelectionPaneObjectKind.Shape,
                 shape.Id,
-                DisplayName(shape.Name, $"{ShapeName(shape.Kind)} {index + 1}"),
+                DisplayName(shape.Name, UiText.Format("SelectionPane_DefaultShapeNameFormat", ShapeName(shape.Kind), index + 1)),
                 shape.IsVisible,
                 index < sheet.DrawingShapes.Count - 1,
                 index > 0));
@@ -61,7 +61,7 @@ public static class SelectionPanePlanner
             items.Add(new SelectionPaneItem(
                 SelectionPaneObjectKind.Picture,
                 picture.Id,
-                DisplayName(picture.Name, $"Picture {index + 1}"),
+                DisplayName(picture.Name, UiText.Format("SelectionPane_DefaultPictureName", index + 1)),
                 picture.IsVisible,
                 index < sheet.Pictures.Count - 1,
                 index > 0));
@@ -76,7 +76,7 @@ public static class SelectionPanePlanner
             items.Add(new SelectionPaneItem(
                 SelectionPaneObjectKind.TextBox,
                 textBox.Id,
-                DisplayName(textBox.Name, $"Text Box {index + 1}"),
+                DisplayName(textBox.Name, UiText.Format("SelectionPane_DefaultTextBoxName", index + 1)),
                 textBox.IsVisible,
                 index < sheet.TextBoxes.Count - 1,
                 index > 0));
@@ -86,9 +86,9 @@ public static class SelectionPanePlanner
     private static string ShapeName(DrawingShapeKind kind) =>
         kind switch
         {
-            DrawingShapeKind.Ellipse => "Ellipse",
-            DrawingShapeKind.Line => "Line",
-            _ => "Rectangle"
+            DrawingShapeKind.Ellipse => UiText.Get("SelectionPane_DefaultEllipseName"),
+            DrawingShapeKind.Line => UiText.Get("SelectionPane_DefaultLineName"),
+            _ => UiText.Get("SelectionPane_DefaultRectangleName")
         };
 
     private static string DisplayName(string? name, string fallback) =>

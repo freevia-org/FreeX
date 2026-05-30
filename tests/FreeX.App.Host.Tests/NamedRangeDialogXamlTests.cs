@@ -14,7 +14,7 @@ public sealed class NamedRangeDialogXamlTests
     [Fact]
     public void Dialog_ExposesAccessKeyedFieldsAndCommands()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "NamedRangeDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("NamedRangeDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         document.Descendants(presentation + "GroupBox")
@@ -49,7 +49,7 @@ public sealed class NamedRangeDialogXamlTests
     [Fact]
     public void DefinedNamesList_UsesExcelLikeColumns()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "NamedRangeDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("NamedRangeDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         document.Descendants(presentation + "GridViewColumn")
@@ -61,7 +61,7 @@ public sealed class NamedRangeDialogXamlTests
     [Fact]
     public void DefinedNamesList_DoubleClickOpensEditNameDialog()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "NamedRangeDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("NamedRangeDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var source = ReadNamedRangeDialogSource();
@@ -76,7 +76,7 @@ public sealed class NamedRangeDialogXamlTests
     [Fact]
     public void Dialog_ProvidesFilterAndRefersToRangePickerAffordance()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "NamedRangeDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("NamedRangeDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -102,7 +102,7 @@ public sealed class NamedRangeDialogXamlTests
     [Fact]
     public void Dialog_FilterMenu_OffersExcelLikeErrorFilters()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "NamedRangeDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("NamedRangeDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -124,7 +124,7 @@ public sealed class NamedRangeDialogXamlTests
     [Fact]
     public void Dialog_UsesExcelLikeRefersToSummaryInsteadOfInlineNameEditing()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "NamedRangeDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("NamedRangeDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -155,7 +155,7 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().Contain("EditButton.IsEnabled = hasSelection");
         source.Should().Contain("DeleteButton.IsEnabled = hasSelection");
         source.Should().Contain("DialogMessageHelper.AskYesNo(this,");
-        source.Should().Contain("Delete the name");
+        source.Should().Contain("UiText.Format(\"NamedRange_DeleteConfirmation\", vm.Name)");
         source.Should().Contain("RefersToPickerButton_Click");
         source.Should().Contain("RefersToBox.SelectAll()");
         source.Should().NotContain("IsEnabled = false");
@@ -230,7 +230,7 @@ public sealed class NamedRangeDialogXamlTests
     [Fact]
     public void NameManagerDialogOpenedFromKeyboard_FocusesNamesListOrNewButton()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "NamedRangeDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("NamedRangeDialog.xaml");
         var source = ReadNamedRangeDialogSource();
 
         xaml.Should().Contain("x:Name=\"NewButton\"");
@@ -262,12 +262,12 @@ public sealed class NamedRangeDialogXamlTests
     {
         var source = ReadNamedRangeDialogSource();
 
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Select a named range to edit.\"");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Please enter a name.\"");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"NamedRange_SelectEditMessage\")");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"NamedRange_NameRequiredMessage\")");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not define named range.\"");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Select a named range to delete.\"");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not delete.\"");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get(\"NamedRange_DefineFailedMessage\")");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"NamedRange_SelectDeleteMessage\")");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get(\"NamedRange_DeleteFailedMessage\")");
     }
 
     [Fact]

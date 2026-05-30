@@ -108,7 +108,9 @@ public partial class MainWindow
 
         if (!ChartInputParser.TryParseDataRange(dialog.Result.SourceRangeText, _currentSheetId, out var dataRange))
         {
-            _messageService.ShowWarning("Enter a valid chart data range.", "Select Data Source");
+            _messageService.ShowWarning(
+                UiText.Get("MainWindowMessage_ChartInvalidDataRange"),
+                UiText.Get("MainWindowMessage_SelectDataSourceTitle"));
             return;
         }
 
@@ -177,7 +179,9 @@ public partial class MainWindow
             var targetSheet = _workbook.GetSheet(dialog.Result.TargetName);
             if (targetSheet is null)
             {
-                _messageService.ShowWarning("Target sheet was not found.", "Move Chart");
+                _messageService.ShowWarning(
+                    UiText.Get("MainWindowMessage_ChartTargetSheetNotFound"),
+                    UiText.Get("MainWindowMessage_MoveChartTitle"));
                 return;
             }
 
@@ -231,7 +235,7 @@ public partial class MainWindow
         if (chart is not null)
             return true;
 
-        _messageService.ShowInfo("Insert or select a chart before using this command.", caption);
+        _messageService.ShowInfo(UiText.Get("MainWindowMessage_ChartSelectBeforeCommand"), caption);
         return false;
     }
 
@@ -267,16 +271,16 @@ public partial class MainWindow
 
     private void ShowDeferredChartFamilyMessage() =>
         _messageService.ShowInfo(
-            "This chart family is retained when opening XLSX files, but authoring and rendering are deferred until its data model and renderer are implemented.",
-            "Chart family deferred");
+            UiText.Get("MainWindowMessage_ChartFamilyDeferred"),
+            UiText.Get("MainWindowMessage_ChartFamilyDeferredTitle"));
 
     private void ChartFirstSliceAngleBtn_Click(object sender, RoutedEventArgs e)
     {
         if (!TryExecuteRepeatableChartLayout(
                 "First Slice Angle",
-                "Insert or select a pie or doughnut chart before changing first-slice angle.",
+                UiText.Get("MainWindowMessage_ChartSelectPieDoughnutForFirstSliceAngle"),
                 chart => chart.Type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut,
-                "First-slice angle only applies to pie and doughnut charts.",
+                UiText.Get("MainWindowMessage_ChartFirstSliceAngleUnsupported"),
                 chart => new ChartLayoutOptions(FirstSliceAngle: chart.FirstSliceAngle >= 270 ? 0 : chart.FirstSliceAngle + 90)))
             return;
 
@@ -287,9 +291,9 @@ public partial class MainWindow
     {
         if (!TryExecuteRepeatableChartLayout(
                 "Doughnut Hole Size",
-                "Insert or select a doughnut chart before changing hole size.",
+                UiText.Get("MainWindowMessage_ChartSelectDoughnutForHoleSize"),
                 chart => chart.Type == ChartType.Doughnut,
-                "Doughnut hole size only applies to doughnut charts.",
+                UiText.Get("MainWindowMessage_ChartDoughnutHoleSizeUnsupported"),
                 chart => new ChartLayoutOptions(
                     DoughnutHoleSize: chart.DoughnutHoleSize switch
                     {
@@ -306,9 +310,9 @@ public partial class MainWindow
     {
         if (!TryExecuteRepeatableChartLayout(
                 "Explode Slice",
-                "Insert or select a pie or doughnut chart before exploding a slice.",
+                UiText.Get("MainWindowMessage_ChartSelectPieDoughnutForExplode"),
                 chart => chart.Type is (ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut) && ChartTypeSupport.GetDataPointCount(chart) > 0,
-                "Exploded slices require a pie or doughnut chart with chart data.",
+                UiText.Get("MainWindowMessage_ChartExplodedSliceUnsupported"),
                 chart =>
                 {
                     var sliceCount = ChartTypeSupport.GetDataPointCount(chart);
@@ -329,13 +333,15 @@ public partial class MainWindow
     {
         if (!TryGetFirstChartForDialog(
                 "Format Bar/Column",
-                "Insert or select a bar or column chart before changing gap width.",
+                UiText.Get("MainWindowMessage_ChartSelectBarColumnForGapWidth"),
                 out var chart))
             return;
 
         if (!ChartTypeSupport.SupportsBarGapWidth(chart.Type))
         {
-            _messageService.ShowInfo("Gap width and overlap only apply to bar and column charts.", "Format Bar/Column");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_ChartGapWidthUnsupported"),
+                UiText.Get("MainWindowMessage_FormatBarColumnTitle"));
             return;
         }
 
@@ -350,13 +356,15 @@ public partial class MainWindow
     {
         if (!TryGetFirstChartForDialog(
                 "Format Bubble Chart",
-                "Insert or select a bubble chart before changing bubble options.",
+                UiText.Get("MainWindowMessage_ChartSelectBubbleForOptions"),
                 out var chart))
             return;
 
         if (chart.Type != ChartType.Bubble)
         {
-            _messageService.ShowInfo("Bubble format options only apply to bubble charts.", "Format Bubble Chart");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_ChartBubbleOptionsUnsupported"),
+                UiText.Get("MainWindowMessage_FormatBubbleChartTitle"));
             return;
         }
 
@@ -371,13 +379,15 @@ public partial class MainWindow
     {
         if (!TryGetFirstChartForDialog(
                 "Format Pie/Doughnut",
-                "Insert or select a pie or doughnut chart before changing pie options.",
+                UiText.Get("MainWindowMessage_ChartSelectPieDoughnutForOptions"),
                 out var chart))
             return;
 
         if (!ChartTypeSupport.SupportsFirstSliceAngle(chart.Type))
         {
-            _messageService.ShowInfo("Pie format options only apply to pie and doughnut charts.", "Format Pie/Doughnut");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_ChartPieOptionsUnsupported"),
+                UiText.Get("MainWindowMessage_FormatPieDoughnutTitle"));
             return;
         }
 
@@ -392,13 +402,15 @@ public partial class MainWindow
     {
         if (!TryGetFirstChartForDialog(
                 "Format Stock Chart",
-                "Insert or select a stock chart before changing stock options.",
+                UiText.Get("MainWindowMessage_ChartSelectStockForOptions"),
                 out var chart))
             return;
 
         if (chart.Type != ChartType.Stock)
         {
-            _messageService.ShowInfo("Stock format options only apply to stock charts.", "Format Stock Chart");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_ChartStockOptionsUnsupported"),
+                UiText.Get("MainWindowMessage_FormatStockChartTitle"));
             return;
         }
 
@@ -416,7 +428,7 @@ public partial class MainWindow
 
     private void ShowChartDataLabelsDialog()
     {
-        if (!TryGetFirstChartForDialog("Format Data Labels", "Insert or select a chart before changing data labels.", out var chart))
+        if (!TryGetFirstChartForDialog("Format Data Labels", UiText.Get("MainWindowMessage_ChartSelectForDataLabels"), out var chart))
             return;
 
         var dialog = new ChartDataLabelsDialog(chart) { Owner = this };
@@ -536,9 +548,9 @@ public partial class MainWindow
         const string caption = "Format Data Point Label";
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing point data-label formatting.",
+                UiText.Get("MainWindowMessage_ChartSelectForPointDataLabel"),
                 chart => ChartOptionCycler.GetSeriesCount(chart) > 0 && ChartTypeSupport.GetDataPointCount(chart) > 0,
-                "Add chart data points before changing point data-label formatting.",
+                UiText.Get("MainWindowMessage_ChartPointDataLabelNeedsDataPoints"),
                 chart =>
                 {
                     var formats = chart.PointDataLabelFormats.ToList();
@@ -582,7 +594,7 @@ public partial class MainWindow
     private void ChartTitlesBtn_Click(object sender, RoutedEventArgs e)
     {
         const string caption = "Chart Titles";
-        if (!TryGetFirstChartForDialog(caption, "Insert or select a chart before editing chart titles.", out var chart))
+        if (!TryGetFirstChartForDialog(caption, UiText.Get("MainWindowMessage_ChartSelectForTitles"), out var chart))
             return;
 
         var dialog = new ChartTitlesDialog(chart.Title, chart.XAxisTitle, chart.YAxisTitle) { Owner = this };
@@ -670,7 +682,7 @@ public partial class MainWindow
     {
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing data label options.",
+                UiText.Get("MainWindowMessage_ChartSelectForDataLabelOptions"),
                 null,
                 null,
                 optionsFactory))
@@ -683,7 +695,7 @@ public partial class MainWindow
     {
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing chart area formatting.",
+                UiText.Get("MainWindowMessage_ChartSelectForChartAreaFormatting"),
                 null,
                 null,
                 optionsFactory))
@@ -699,12 +711,12 @@ public partial class MainWindow
 
     private void ShowChartTrendlineDialog()
     {
-        if (!TryGetFirstChartForDialog("Format Trendline", "Insert or select a chart before changing trendlines.", out var chart))
+        if (!TryGetFirstChartForDialog("Format Trendline", UiText.Get("MainWindowMessage_ChartSelectForTrendlines"), out var chart))
             return;
 
         if (!ChartTypeSupport.SupportsTrendlines(chart.Type))
         {
-            ShowCommandError(new CommandOutcome(false, "Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts."), "Format Trendline");
+            ShowCommandError(new CommandOutcome(false, UiText.Get("MainWindowMessage_ChartTrendlinesSupportedTypes")), "Format Trendline");
             return;
         }
 
@@ -724,9 +736,9 @@ public partial class MainWindow
     {
         if (!TryExecuteRepeatableChartLayout(
                 "Moving Average Period",
-                "Insert or select a chart before changing moving-average period.",
+                UiText.Get("MainWindowMessage_ChartSelectForMovingAveragePeriod"),
                 chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
-                "Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.",
+                UiText.Get("MainWindowMessage_ChartTrendlinesSupportedTypes"),
                 chart => new ChartLayoutOptions(
                     ShowLinearTrendline: true,
                     TrendlineType: ChartTrendlineType.MovingAverage,
@@ -740,9 +752,9 @@ public partial class MainWindow
     {
         if (!TryExecuteRepeatableChartLayout(
                 "Polynomial Order",
-                "Insert or select a chart before changing polynomial order.",
+                UiText.Get("MainWindowMessage_ChartSelectForPolynomialOrder"),
                 chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
-                "Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.",
+                UiText.Get("MainWindowMessage_ChartTrendlinesSupportedTypes"),
                 chart => new ChartLayoutOptions(
                     ShowLinearTrendline: true,
                     TrendlineType: ChartTrendlineType.Polynomial,
@@ -804,7 +816,7 @@ public partial class MainWindow
 
     private void ChartErrorBarsBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetFirstChartForDialog("Format Error Bars", "Insert or select a chart before changing error bars.", out var chart))
+        if (!TryGetFirstChartForDialog("Format Error Bars", UiText.Get("MainWindowMessage_ChartSelectForErrorBars"), out var chart))
             return;
 
         var dialog = new ChartErrorBarsDialog(chart) { Owner = this };
@@ -821,9 +833,9 @@ public partial class MainWindow
     {
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing trendline information.",
+                UiText.Get("MainWindowMessage_ChartSelectForTrendlineInformation"),
                 chart => ChartTypeSupport.SupportsTrendlines(chart.Type),
-                "Trendline information is currently supported for column, line, bar, scatter, bubble, and area charts.",
+                UiText.Get("MainWindowMessage_ChartTrendlineInformationSupportedTypes"),
                 optionsFactory))
             return;
 
@@ -834,9 +846,9 @@ public partial class MainWindow
     {
         if (!TryExecuteRepeatableChartLayout(
                 "Secondary Axis Series",
-                "Insert or select a chart before changing secondary-axis series.",
+                UiText.Get("MainWindowMessage_ChartSelectForSecondaryAxisSeries"),
                 chart => ChartTypeSupport.SupportsSecondaryAxis(chart.Type) && ChartOptionCycler.GetSeriesCount(chart) >= 2,
-                "Secondary value axes require a supported chart with at least two data series.",
+                UiText.Get("MainWindowMessage_ChartSecondaryAxisUnsupported"),
                 chart =>
                 {
                     var next = ChartOptionCycler.GetNextSecondaryAxisSeries(chart, ChartOptionCycler.GetSeriesCount(chart));
@@ -853,10 +865,10 @@ public partial class MainWindow
     {
         if (!TryExecuteRepeatableChartLayout(
                 "Combo Chart",
-                "Insert or select a chart before changing combo chart options.",
+                UiText.Get("MainWindowMessage_ChartSelectForComboOptions"),
                 chart => ChartTypeSupport.SupportsComboLineOverlay(chart.Type) &&
                          (chart.UseComboLineForSecondarySeries || ChartTypeSupport.SupportsComboLineOverlay(chart)),
-                "Combo line overlays require a supported chart with at least two data series.",
+                UiText.Get("MainWindowMessage_ChartComboUnsupported"),
                 chart => new ChartLayoutOptions(
                     UseComboLineForSecondarySeries: !chart.UseComboLineForSecondarySeries,
                     ComboLineSeriesIndexes: !chart.UseComboLineForSecondarySeries ? chart.ComboLineSeriesIndexes : [])))
@@ -869,9 +881,9 @@ public partial class MainWindow
     {
         if (!TryExecuteRepeatableChartLayout(
                 "Combo Chart Series",
-                "Insert or select a chart before changing combo chart series.",
+                UiText.Get("MainWindowMessage_ChartSelectForComboSeries"),
                 chart => ChartTypeSupport.SupportsComboLineOverlay(chart.Type) && ChartTypeSupport.SupportsComboLineOverlay(chart),
-                "Combo line overlays require a supported chart with at least two data series.",
+                UiText.Get("MainWindowMessage_ChartComboUnsupported"),
                 chart =>
                 {
                     var nextIndexes = ChartOptionCycler.GetNextComboLineSeries(chart, ChartOptionCycler.GetSeriesCount(chart));
@@ -922,13 +934,13 @@ public partial class MainWindow
 
     private void ShowChartSeriesFormatDialog()
     {
-        if (!TryGetFirstChartForDialog("Format Data Series", "Insert or select a chart before changing series formatting.", out var chart))
+        if (!TryGetFirstChartForDialog("Format Data Series", UiText.Get("MainWindowMessage_ChartSelectForSeriesFormatting"), out var chart))
             return;
 
         var seriesCount = ChartOptionCycler.GetSeriesCount(chart);
         if (seriesCount <= 0)
         {
-            ShowCommandError(new CommandOutcome(false, "Add data series before changing series formatting."), "Format Data Series");
+            ShowCommandError(new CommandOutcome(false, UiText.Get("MainWindowMessage_ChartSeriesFormattingNeedsDataSeries")), "Format Data Series");
             return;
         }
 
@@ -948,7 +960,7 @@ public partial class MainWindow
                 MarkerSize = format.MarkerSize is null or >= 12 ? 5 : format.MarkerSize.Value + 2
             },
             chart => ChartTypeSupport.SupportsSeriesMarkers(chart.Type),
-            "Series marker shape and size are currently supported for line and scatter charts.");
+            UiText.Get("MainWindowMessage_ChartSeriesMarkersSupportedTypes"));
     }
 
     private void ToggleSeriesFormat(
@@ -959,9 +971,9 @@ public partial class MainWindow
     {
         if (!TryExecuteRepeatableChartLayout(
                 caption,
-                "Insert or select a chart before changing series formatting.",
+                UiText.Get("MainWindowMessage_ChartSelectForSeriesFormatting"),
                 chart => ChartOptionCycler.GetSeriesCount(chart) > 0 && (canApply?.Invoke(chart) ?? true),
-                unsupportedMessage ?? "Add data series before changing series formatting.",
+                unsupportedMessage ?? UiText.Get("MainWindowMessage_ChartSeriesFormattingNeedsDataSeries"),
                 chart =>
                 {
                     var formats = chart.SeriesFormats.ToList();

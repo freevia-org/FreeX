@@ -19,8 +19,8 @@ public sealed class InsertSlicerDialog : Window
         var field = fields.FirstOrDefault(name => string.Equals(name, selectedField, StringComparison.OrdinalIgnoreCase))
             ?? fields.FirstOrDefault()
             ?? "";
-        Result = CreateResult(field, $"{field} Slicer");
-        Title = "Insert Slicer";
+        Result = CreateResult(field, UiText.Format("PivotSlicerTimeline_DefaultSlicerName", field));
+        Title = UiText.Get("PivotSlicerTimeline_InsertSlicer");
         Width = 410;
         Height = 270;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -42,13 +42,13 @@ public sealed class InsertSlicerDialog : Window
         result = CreateResult(fieldName ?? "", slicerName ?? "");
         if (string.IsNullOrWhiteSpace(result.FieldName))
         {
-            error = "Select a field to connect.";
+            error = UiText.Get("PivotSlicerTimeline_SelectFieldToConnect");
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(result.SlicerName))
         {
-            error = "Enter a slicer caption.";
+            error = UiText.Get("PivotSlicerTimeline_EnterSlicerCaption");
             return false;
         }
 
@@ -60,7 +60,7 @@ public sealed class InsertSlicerDialog : Window
     {
         if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))
         {
-            ShowInvalidInputWarning(error ?? "Enter slicer options.", string.IsNullOrWhiteSpace(_fieldBox.Text) ? _fieldBox : _nameBox);
+            ShowInvalidInputWarning(error ?? UiText.Get("PivotSlicerTimeline_EnterSlicerOptions"), string.IsNullOrWhiteSpace(_fieldBox.Text) ? _fieldBox : _nameBox);
             return;
         }
 
@@ -76,10 +76,10 @@ public sealed class InsertSlicerDialog : Window
         _fieldBox.ItemsSource = fields;
         _fieldBox.Text = field;
         _fieldBox.IsEditable = true;
-        PivotDialogLayout.AddLabeledControl(fieldPanel, "_Field to connect", _fieldBox);
+        PivotDialogLayout.AddLabeledControl(fieldPanel, UiText.Get("PivotSlicerTimeline_FieldToConnectLabel"), _fieldBox);
         _nameBox.Text = name;
-        PivotDialogLayout.AddLabeledControl(fieldPanel, "Slicer _caption", _nameBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Choose fields", fieldPanel));
+        PivotDialogLayout.AddLabeledControl(fieldPanel, UiText.Get("PivotSlicerTimeline_SlicerCaptionLabel"), _nameBox);
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotSlicerTimeline_ChooseFieldsGroup"), fieldPanel));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(accept));
         return stack;
     }
@@ -115,8 +115,8 @@ public sealed class InsertTimelineDialog : Window
         var field = fields.FirstOrDefault(name => string.Equals(name, selectedField, StringComparison.OrdinalIgnoreCase))
             ?? fields.FirstOrDefault()
             ?? "";
-        Result = CreateResult(field, $"{field} Timeline");
-        Title = "Insert Timeline";
+        Result = CreateResult(field, UiText.Format("PivotSlicerTimeline_DefaultTimelineName", field));
+        Title = UiText.Get("PivotSlicerTimeline_InsertTimeline");
         Width = 410;
         Height = 270;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -129,10 +129,10 @@ public sealed class InsertTimelineDialog : Window
         _fieldBox.ItemsSource = fields;
         _fieldBox.Text = field;
         _fieldBox.IsEditable = true;
-        PivotDialogLayout.AddLabeledControl(fieldPanel, "_Date field to connect", _fieldBox);
+        PivotDialogLayout.AddLabeledControl(fieldPanel, UiText.Get("PivotSlicerTimeline_DateFieldToConnectLabel"), _fieldBox);
         _nameBox.Text = Result.TimelineName;
-        PivotDialogLayout.AddLabeledControl(fieldPanel, "Timeline _caption", _nameBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Choose date fields", fieldPanel));
+        PivotDialogLayout.AddLabeledControl(fieldPanel, UiText.Get("PivotSlicerTimeline_TimelineCaptionLabel"), _nameBox);
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotSlicerTimeline_ChooseDateFieldsGroup"), fieldPanel));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
         Content = stack;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
@@ -150,13 +150,13 @@ public sealed class InsertTimelineDialog : Window
         result = CreateResult(dateFieldName ?? "", timelineName ?? "");
         if (string.IsNullOrWhiteSpace(result.DateFieldName))
         {
-            error = "Select a date field to connect.";
+            error = UiText.Get("PivotSlicerTimeline_SelectDateFieldToConnect");
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(result.TimelineName))
         {
-            error = "Enter a timeline caption.";
+            error = UiText.Get("PivotSlicerTimeline_EnterTimelineCaption");
             return false;
         }
 
@@ -168,7 +168,7 @@ public sealed class InsertTimelineDialog : Window
     {
         if (!TryCreateResult(_fieldBox.Text, _nameBox.Text, out var result, out var error))
         {
-            ShowInvalidInputWarning(error ?? "Enter timeline options.", string.IsNullOrWhiteSpace(_fieldBox.Text) ? _fieldBox : _nameBox);
+            ShowInvalidInputWarning(error ?? UiText.Get("PivotSlicerTimeline_EnterTimelineOptions"), string.IsNullOrWhiteSpace(_fieldBox.Text) ? _fieldBox : _nameBox);
             return;
         }
 

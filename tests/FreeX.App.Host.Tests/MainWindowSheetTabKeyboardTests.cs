@@ -30,10 +30,10 @@ public sealed class MainWindowSheetTabKeyboardTests
 
             harness.SheetTabContextMenuIsOpen.Should().BeTrue(harness.DebugSheetTabs);
             harness.SheetTabContextMenuPlacementTargetIsFocusedTab.Should().BeTrue();
-            harness.SheetTabMenuItemGestureText("Rename\u2026").Should().Be("R");
-            harness.SheetTabMenuItemGestureText("Insert Sheet").Should().Be("I");
-            harness.SheetTabMenuItemGestureText("Duplicate").Should().Be("D");
-            harness.SheetTabMenuItemGestureText("Tab Color\u2026").Should().Be("T");
+            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_Rename")).Should().Be("R");
+            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_InsertSheet")).Should().Be("I");
+            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_Duplicate")).Should().Be("D");
+            harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_TabColor_EDBDA613")).Should().Be("T");
         });
     }
 
@@ -58,8 +58,8 @@ public sealed class MainWindowSheetTabKeyboardTests
 
             addSheet.Parent.Should().BeSameAs(scrollableContent, "the ghost tab should scroll and clip with the sheet tabs instead of reserving fixed space");
             addSheet.Focusable.Should().BeTrue();
-            AutomationProperties.GetName(addSheet).Should().Be("Insert Sheet");
-            AutomationProperties.GetHelpText(addSheet).Should().Be("Add a new sheet to the workbook.");
+            AutomationProperties.GetName(addSheet).Should().Be(UiText.Get("MainWindow_AutomationName_InsertSheet"));
+            AutomationProperties.GetHelpText(addSheet).Should().Be(UiText.Get("MainWindow_AutomationHelpText_AddANewSheetToTheWorkbook"));
             addBounds.Left.Should().BeGreaterThanOrEqualTo(scrollerBounds.Left);
             addBounds.Left.Should().BeLessThan(scrollerBounds.Right, "the ghost tab should be inside the clipped tab viewport so it can slide under the right arrow");
             addSheet.ActualWidth.Should().BeGreaterThan(34);

@@ -19,7 +19,7 @@ public sealed class PivotFilterDialogXamlTests
         string valueTarget,
         string andTarget)
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", xamlFile));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml(xamlFile);
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         AssertLabelTargets(document, presentation, "_Operator:", conditionTarget);
@@ -44,7 +44,7 @@ public sealed class PivotFilterDialogXamlTests
     [Fact]
     public void PivotFieldFilterDialog_ExposesAccessKeyedSearchChecklistAndButtons()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotFieldFilterDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PivotFieldFilterDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         AssertLabelTargets(document, presentation, "_Search:", "FilterSearchBox");
@@ -238,7 +238,7 @@ public sealed class PivotFilterDialogXamlTests
     [Fact]
     public void PivotValueFieldSettingsDialog_ExposesAccessKeyedFieldsTabsAndButtons()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PivotValueFieldSettingsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         AssertLabelTargets(document, presentation, "Custom _Name:", "CustomNameBox");
@@ -262,7 +262,7 @@ public sealed class PivotFilterDialogXamlTests
     [Fact]
     public void PivotValueFieldSettingsDialog_ExposesAutomationIdsAndHelpText()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PivotValueFieldSettingsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -297,7 +297,7 @@ public sealed class PivotFilterDialogXamlTests
     [Fact]
     public void PivotValueFieldSettingsDialogInvalidInputs_SelectRelevantTabAndField()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("PivotValueFieldSettingsDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
 
         xaml.Should().Contain("<TabControl x:Name=\"ValueFieldTabs\"");
@@ -316,7 +316,7 @@ public sealed class PivotFilterDialogXamlTests
     [Fact]
     public void PivotValueFieldSettingsDialog_HidesBaseFieldsUntilShowValuesAsNeedsThem()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PivotValueFieldSettingsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
@@ -344,7 +344,7 @@ public sealed class PivotFilterDialogXamlTests
     [Fact]
     public void PivotValueFieldSettingsDialog_UsesNumberFormatAffordanceInsteadOfRawIds()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PivotValueFieldSettingsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
@@ -402,7 +402,7 @@ public sealed class PivotFilterDialogXamlTests
     [Fact]
     public void PivotFieldFilterDialog_ExposesItemLabelAndValueFilterTabsWithActions()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotFieldFilterDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("PivotFieldFilterDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotFieldFilterDialog.xaml.cs"));
@@ -452,7 +452,7 @@ public sealed class PivotFilterDialogXamlTests
         string operatorLabel,
         string operatorTarget)
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", xamlFile));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml(xamlFile);
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         document.Descendants(presentation + "TextBlock")

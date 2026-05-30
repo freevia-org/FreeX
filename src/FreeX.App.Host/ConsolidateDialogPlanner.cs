@@ -44,8 +44,8 @@ internal static class ConsolidateDialogPlanner
             ranges.Count != 1)
         {
             error = string.IsNullOrWhiteSpace(invalidPart)
-                ? "Enter a valid source range."
-                : $"Enter a valid source range: {invalidPart}.";
+                ? UiText.Get("Consolidate_EnterValidSourceRange")
+                : UiText.Format("Consolidate_EnterValidSourceRangeWithPart", invalidPart);
             return false;
         }
 
@@ -64,7 +64,7 @@ internal static class ConsolidateDialogPlanner
     {
         var ranges = sourceRanges.ToList();
         if (ranges.Count == 0)
-            throw new ArgumentException("At least one source range is required.", nameof(sourceRanges));
+            throw new ArgumentException(UiText.Get("Consolidate_AtLeastOneSourceRangeRequired"), nameof(sourceRanges));
 
         return new ConsolidateDialogResult(
             ranges,
@@ -120,20 +120,20 @@ internal static class ConsolidateDialogPlanner
         if (!ConsolidateInputParser.TryParseSourceRanges(sourceRangesText, sheetId, out var ranges, out var invalidPart))
         {
             error = string.IsNullOrWhiteSpace(invalidPart)
-                ? "Enter at least one valid source range."
-                : $"Enter a valid source range: {invalidPart}.";
+                ? UiText.Get("Consolidate_EnterAtLeastOneValidSourceRange")
+                : UiText.Format("Consolidate_EnterValidSourceRangeWithPart", invalidPart);
             return false;
         }
 
         if (!HaveSameSize(ranges))
         {
-            error = "Source ranges must be the same size.";
+            error = UiText.Get("Consolidate_SourceRangesMustBeSameSize");
             return false;
         }
 
         if (!ConsolidateInputParser.TryParseDestination(destinationCellText, sheetId, out var destination))
         {
-            error = "Enter a valid destination cell.";
+            error = UiText.Get("Consolidate_EnterValidDestinationCell");
             return false;
         }
 
@@ -155,9 +155,9 @@ internal static class ConsolidateDialogPlanner
     public static string FunctionLabel(ConsolidateFunction function) =>
         function switch
         {
-            ConsolidateFunction.CountNumbers => "Count Numbers",
-            ConsolidateFunction.StdDev => "StdDev",
-            ConsolidateFunction.StdDevp => "StdDevp",
+            ConsolidateFunction.CountNumbers => UiText.Get("Consolidate_FunctionCountNumbers"),
+            ConsolidateFunction.StdDev => UiText.Get("Consolidate_FunctionStdDev"),
+            ConsolidateFunction.StdDevp => UiText.Get("Consolidate_FunctionStdDevp"),
             _ => function.ToString()
         };
 }

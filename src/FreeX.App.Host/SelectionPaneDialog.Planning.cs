@@ -17,6 +17,17 @@ internal sealed record SelectionPaneDragMovePlan(
     int TargetIndex,
     IReadOnlyList<SelectionPaneMoveChange> MoveChanges);
 
+internal static class SelectionPaneFilterValues
+{
+    public const string All = "All";
+    public const string Visible = "Visible";
+    public const string Hidden = "Hidden";
+    public const string Charts = "Charts";
+    public const string Pictures = "Pictures";
+    public const string Shapes = "Shapes";
+    public const string TextBoxes = "Text Boxes";
+}
+
 internal static class SelectionPaneDialogStatePlanner
 {
     public static IReadOnlyList<SelectionPaneDialogItemState> FilterItems(
@@ -25,8 +36,8 @@ internal static class SelectionPaneDialogStatePlanner
         string filter)
     {
         var normalizedSearch = search.Trim();
-        var normalizedFilter = string.IsNullOrWhiteSpace(filter) ? "All" : filter;
-        if (normalizedSearch.Length == 0 && string.Equals(normalizedFilter, "All", StringComparison.Ordinal))
+        var normalizedFilter = string.IsNullOrWhiteSpace(filter) ? SelectionPaneFilterValues.All : filter;
+        if (normalizedSearch.Length == 0 && string.Equals(normalizedFilter, SelectionPaneFilterValues.All, StringComparison.Ordinal))
             return items;
 
         var filtered = new List<SelectionPaneDialogItemState>();
@@ -203,12 +214,12 @@ internal static class SelectionPaneDialogStatePlanner
     private static bool MatchesFilter(SelectionPaneDialogItemState item, string filter) =>
         filter switch
         {
-            "Visible" => item.IsVisible,
-            "Hidden" => !item.IsVisible,
-            "Charts" => item.Kind == SelectionPaneObjectKind.Chart,
-            "Pictures" => item.Kind == SelectionPaneObjectKind.Picture,
-            "Shapes" => item.Kind == SelectionPaneObjectKind.Shape,
-            "Text Boxes" => item.Kind == SelectionPaneObjectKind.TextBox,
+            SelectionPaneFilterValues.Visible => item.IsVisible,
+            SelectionPaneFilterValues.Hidden => !item.IsVisible,
+            SelectionPaneFilterValues.Charts => item.Kind == SelectionPaneObjectKind.Chart,
+            SelectionPaneFilterValues.Pictures => item.Kind == SelectionPaneObjectKind.Picture,
+            SelectionPaneFilterValues.Shapes => item.Kind == SelectionPaneObjectKind.Shape,
+            SelectionPaneFilterValues.TextBoxes => item.Kind == SelectionPaneObjectKind.TextBox,
             _ => true
         };
 

@@ -10,7 +10,7 @@ public sealed class HeaderFooterPictureFormatDialog : Window
 {
     private readonly TextBox _widthBox = new();
     private readonly TextBox _heightBox = new();
-    private readonly CheckBox _lockAspectRatioBox = new() { Content = "_Lock aspect ratio", IsChecked = true };
+    private readonly CheckBox _lockAspectRatioBox = new() { Content = UiText.Get("FormatPicture_LockAspectRatio"), IsChecked = true };
     private readonly double _originalWidth;
     private readonly double _originalHeight;
     private bool _updatingSize;
@@ -22,7 +22,7 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         Result = picture.DeepClone();
         _originalWidth = Math.Max(1, picture.Width);
         _originalHeight = Math.Max(1, picture.Height);
-        Title = "Format Picture";
+        Title = UiText.Get("FormatPicture_Title");
         Width = 360;
         Height = 270;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -41,7 +41,7 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         AutomationProperties.SetHelpText(_lockAspectRatioBox, "Keep the header or footer picture width and height proportional.");
         _widthBox.TextChanged += WidthBox_TextChanged;
         _heightBox.TextChanged += HeightBox_TextChanged;
-        Content = CreateContent(picture.FileName ?? "Header/footer picture");
+        Content = CreateContent(picture.FileName ?? UiText.Get("HeaderFooterPicture_DefaultFileName"));
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -49,12 +49,12 @@ public sealed class HeaderFooterPictureFormatDialog : Window
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new TextBlock { Text = fileName, Margin = new Thickness(0, 0, 0, 12) });
-        AddLabeledBox(stack, "_Width:", _widthBox);
-        AddLabeledBox(stack, "_Height:", _heightBox);
+        AddLabeledBox(stack, UiText.Get("FormatPicture_WidthLabel"), _widthBox);
+        AddLabeledBox(stack, UiText.Get("FormatPicture_HeightLabel"), _heightBox);
         stack.Children.Add(_lockAspectRatioBox);
         var resetButton = new Button
         {
-            Content = "_Reset",
+            Content = UiText.Get("HeaderFooterPicture_ResetButton"),
             Width = 72,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             Margin = new Thickness(0, 8, 0, 12)
@@ -72,14 +72,14 @@ public sealed class HeaderFooterPictureFormatDialog : Window
     {
         if (!TryParsePositiveSize(_widthBox.Text, out var width))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter positive width and height values.", Title);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("FormatPicture_InvalidSizeMessage"), Title);
             DialogFocus.FocusAndSelect(_widthBox);
             return;
         }
 
         if (!TryParsePositiveSize(_heightBox.Text, out var height))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter positive width and height values.", Title);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("FormatPicture_InvalidSizeMessage"), Title);
             DialogFocus.FocusAndSelect(_heightBox);
             return;
         }

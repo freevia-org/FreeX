@@ -19,7 +19,7 @@ public sealed class ChangeChartTypeDialog : Window
     {
         SelectedChartType = currentType;
         Result = CreateResult(currentType);
-        Title = "Change Chart Type";
+        Title = UiText.Get("ChangeChartType_Title");
         Width = 640;
         Height = 390;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -29,7 +29,7 @@ public sealed class ChangeChartTypeDialog : Window
         var root = new DockPanel { Margin = new Thickness(16), LastChildFill = false };
         var heading = new TextBlock
         {
-            Text = "Choose a chart type",
+            Text = UiText.Get("ChartTypePicker_ChooseChartTypeHeading"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         };

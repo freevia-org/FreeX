@@ -9,19 +9,19 @@ public sealed partial class ManageConditionalFormatsDialog
 {
     public static string DescribeRule(ConditionalFormat cf) => cf.RuleType switch
     {
-        CfRuleType.Formula     => $"Formula: ={cf.FormulaText}",
-        CfRuleType.DataBar     => cf.DataBarShowValue ? "Data Bar" : "Data Bar (bar only)",
-        CfRuleType.ColorScale  => cf.UseThreeColorScale ? "3-Color Scale" : "2-Color Scale",
+        CfRuleType.Formula     => UiText.Format("ManageConditionalFormats_RuleFormula", cf.FormulaText),
+        CfRuleType.DataBar     => cf.DataBarShowValue ? UiText.Get("ManageConditionalFormats_RuleDataBar") : UiText.Get("ManageConditionalFormats_RuleDataBarOnly"),
+        CfRuleType.ColorScale  => cf.UseThreeColorScale ? UiText.Get("ManageConditionalFormats_RuleThreeColorScale") : UiText.Get("ManageConditionalFormats_RuleTwoColorScale"),
         CfRuleType.IconSet     => BuildIconSetDescription(cf),
-        CfRuleType.ContainsText => $"Text contains \"{cf.TextRuleText}\"",
-        CfRuleType.NotContainsText => $"Text does not contain \"{cf.TextRuleText}\"",
-        CfRuleType.BeginsWith  => $"Text begins with \"{cf.TextRuleText}\"",
-        CfRuleType.EndsWith    => $"Text ends with \"{cf.TextRuleText}\"",
-        CfRuleType.DateOccurring => $"Date occurring: {DatePeriodLabel(cf.DateOccurringPeriod)}",
-        CfRuleType.DuplicateValues => "Duplicate Values",
-        CfRuleType.UniqueValues => "Unique Values",
-        CfRuleType.AboveAverage => cf.AboveAverage ? "Above Average" : "Below Average",
-        CfRuleType.Top10       => $"{(cf.AboveAverage ? "Top" : "Bottom")} {cf.TopBottomRank}{(cf.TopBottomPercent ? "%" : "")}",
+        CfRuleType.ContainsText => UiText.Format("ManageConditionalFormats_RuleTextContains", cf.TextRuleText),
+        CfRuleType.NotContainsText => UiText.Format("ManageConditionalFormats_RuleTextDoesNotContain", cf.TextRuleText),
+        CfRuleType.BeginsWith  => UiText.Format("ManageConditionalFormats_RuleTextBeginsWith", cf.TextRuleText),
+        CfRuleType.EndsWith    => UiText.Format("ManageConditionalFormats_RuleTextEndsWith", cf.TextRuleText),
+        CfRuleType.DateOccurring => UiText.Format("ManageConditionalFormats_RuleDateOccurring", DatePeriodLabel(cf.DateOccurringPeriod)),
+        CfRuleType.DuplicateValues => UiText.Get("ManageConditionalFormats_RuleDuplicateValues"),
+        CfRuleType.UniqueValues => UiText.Get("ManageConditionalFormats_RuleUniqueValues"),
+        CfRuleType.AboveAverage => cf.AboveAverage ? UiText.Get("ManageConditionalFormats_RuleAboveAverage") : UiText.Get("ManageConditionalFormats_RuleBelowAverage"),
+        CfRuleType.Top10       => UiText.Format(cf.AboveAverage ? "ManageConditionalFormats_RuleTopRank" : "ManageConditionalFormats_RuleBottomRank", cf.TopBottomRank, cf.TopBottomPercent ? "%" : ""),
         CfRuleType.CellValue   => BuildCellValueDescription(cf),
         _ => cf.RuleType.ToString()
     };
@@ -30,27 +30,27 @@ public sealed partial class ManageConditionalFormatsDialog
     {
         var style = string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle;
         var flags = new List<string>();
-        if (cf.IconSetReverse) flags.Add("reverse");
-        if (!cf.IconSetShowValue) flags.Add("icons only");
-        if (cf.IconOverrides.Count > 0) flags.Add("custom icons");
+        if (cf.IconSetReverse) flags.Add(UiText.Get("ManageConditionalFormats_IconFlagReverse"));
+        if (!cf.IconSetShowValue) flags.Add(UiText.Get("ManageConditionalFormats_IconFlagIconsOnly"));
+        if (cf.IconOverrides.Count > 0) flags.Add(UiText.Get("ManageConditionalFormats_IconFlagCustomIcons"));
         return flags.Count == 0
-            ? $"Icon Set: {style}"
-            : $"Icon Set: {style} ({string.Join(", ", flags)})";
+            ? UiText.Format("ManageConditionalFormats_RuleIconSet", style)
+            : UiText.Format("ManageConditionalFormats_RuleIconSetWithFlags", style, string.Join(UiText.Get("ManageConditionalFormats_ListSeparator"), flags));
     }
 
     private static string DatePeriodLabel(string? value) => value switch
     {
-        "yesterday" => "Yesterday",
-        "today" => "Today",
-        "tomorrow" => "Tomorrow",
-        "last7Days" => "Last 7 Days",
-        "lastWeek" => "Last Week",
-        "thisWeek" => "This Week",
-        "nextWeek" => "Next Week",
-        "lastMonth" => "Last Month",
-        "thisMonth" => "This Month",
-        "nextMonth" => "Next Month",
-        _ => "Today"
+        "yesterday" => UiText.Get("ManageConditionalFormats_DateYesterday"),
+        "today" => UiText.Get("ManageConditionalFormats_DateToday"),
+        "tomorrow" => UiText.Get("ManageConditionalFormats_DateTomorrow"),
+        "last7Days" => UiText.Get("ManageConditionalFormats_DateLast7Days"),
+        "lastWeek" => UiText.Get("ManageConditionalFormats_DateLastWeek"),
+        "thisWeek" => UiText.Get("ManageConditionalFormats_DateThisWeek"),
+        "nextWeek" => UiText.Get("ManageConditionalFormats_DateNextWeek"),
+        "lastMonth" => UiText.Get("ManageConditionalFormats_DateLastMonth"),
+        "thisMonth" => UiText.Get("ManageConditionalFormats_DateThisMonth"),
+        "nextMonth" => UiText.Get("ManageConditionalFormats_DateNextMonth"),
+        _ => UiText.Get("ManageConditionalFormats_DateToday")
     };
 
     private static string BuildCellValueDescription(ConditionalFormat cf)
@@ -63,15 +63,15 @@ public sealed partial class ManageConditionalFormatsDialog
             CfOperator.NotEqual           => "<>",
             CfOperator.GreaterThanOrEqual => ">=",
             CfOperator.LessThanOrEqual    => "<=",
-            CfOperator.Between            => "between",
-            CfOperator.NotBetween         => "not between",
+            CfOperator.Between            => UiText.Get("ManageConditionalFormats_OperatorBetween"),
+            CfOperator.NotBetween         => UiText.Get("ManageConditionalFormats_OperatorNotBetween"),
             _ => "?"
         };
 
         if (cf.Operator is CfOperator.Between or CfOperator.NotBetween)
-            return $"Cell Value {op} {cf.Value1} and {cf.Value2}";
+            return UiText.Format("ManageConditionalFormats_RuleCellValueBetween", op, cf.Value1, cf.Value2);
 
-        return $"Cell Value {op} {cf.Value1}";
+        return UiText.Format("ManageConditionalFormats_RuleCellValue", op, cf.Value1);
     }
 
     public static Brush PreviewBrush(ConditionalFormat cf)
@@ -170,7 +170,7 @@ public sealed partial class ManageConditionalFormatsDialog
         }
     }
 
-    public static string StopIfTrueText(ConditionalFormat cf) => cf.StopIfTrue ? "Yes" : "";
+    public static string StopIfTrueText(ConditionalFormat cf) => cf.StopIfTrue ? UiText.Get("ManageConditionalFormats_Yes") : "";
 }
 
 // ── Value converters used by the GridView cell templates ──────────────────────
