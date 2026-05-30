@@ -108,8 +108,9 @@ internal static class XlsxWorkbookThemeWriter
 
     private static IEnumerable<XElement> CreateThemeSupplementElements(WorkbookTheme theme, XNamespace drawingNs)
     {
+        var elements = new List<XElement>();
         if (string.IsNullOrWhiteSpace(theme.NativeThemeSupplementXml))
-            return [];
+            return CreateModeledThemeSupplementElements(theme, drawingNs);
 
         try
         {
@@ -122,19 +123,68 @@ internal static class XlsxWorkbookThemeWriter
                     XmlResolver = null
                 });
             var document = XDocument.Load(xmlReader);
-            return document.Root!
+            elements.AddRange(document.Root!
                 .Elements()
                 .Where(element => IsSupportedThemeSupplementElement(element, drawingNs))
-                .Select(element => new XElement(element))
-                .ToList();
+                .Select(element => new XElement(element)));
         }
         catch
         {
-            return [];
+            return CreateModeledThemeSupplementElements(theme, drawingNs);
         }
+
+        if (!elements.Any(element => element.Name == drawingNs + "extraClrSchemeLst"))
+            elements.AddRange(CreateAlternateColorSchemeListElement(theme, drawingNs));
+
+        return elements;
     }
 
     private static bool IsSupportedThemeSupplementElement(XElement element, XNamespace drawingNs) =>
         element.Name.Namespace == drawingNs
         && element.Name != drawingNs + "themeElements";
+
+    private static IEnumerable<XElement> CreateModeledThemeSupplementElements(WorkbookTheme theme, XNamespace drawingNs) =>
+        CreateAlternateColorSchemeListElement(theme, drawingNs);
+
+    private static IEnumerable<XElement> CreateAlternateColorSchemeListElement(WorkbookTheme theme, XNamespace drawingNs)
+    {
+        if (theme.AlternateColorSchemes is not { Count: > 0 })
+            return [];
+
+        return
+        [
+            new XElement(drawingNs + "extraClrSchemeLst",
+                theme.AlternateColorSchemes.Select(scheme =>
+                    new XElement(drawingNs + "extraClrScheme",
+                        CreateAlternateColorSchemeElement(scheme, drawingNs))))
+        ];
+    }
+
+    private static XElement CreateAlternateColorSchemeElement(
+        WorkbookThemeAlternateColorScheme scheme,
+        XNamespace drawingNs)
+    {
+        if (!string.IsNullOrWhiteSpace(scheme.NativeColorSchemeXml))
+        {
+            try
+            {
+                var colorScheme = XElement.Parse(scheme.NativeColorSchemeXml);
+                if (colorScheme.Name == drawingNs + "clrScheme")
+                    return new XElement(colorScheme);
+            }
+            catch
+            {
+                // Fall back to the parsed alternate colors when native XML is malformed.
+            }
+        }
+
+        return new XElement(drawingNs + "clrScheme",
+            new XAttribute("name", string.IsNullOrWhiteSpace(scheme.Name) ? "Alternate Colors" : scheme.Name),
+            XlsxWorkbookThemeReader.ColorElements
+                .Where(color => scheme.Colors.ContainsKey(color.Slot))
+                .Select(color =>
+                    new XElement(drawingNs + color.ElementName,
+                        new XElement(drawingNs + "srgbClr",
+                            new XAttribute("val", FormatColor(scheme.Colors[color.Slot]))))));
+    }
 }

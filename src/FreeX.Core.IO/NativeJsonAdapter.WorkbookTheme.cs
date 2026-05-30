@@ -28,7 +28,10 @@ public sealed partial class NativeJsonAdapter
             .WithNativeColorSchemeXml(dto.NativeColorSchemeXml)
             .WithNativeFontSchemeXml(dto.NativeFontSchemeXml)
             .WithNativeFormatSchemeXml(dto.NativeFormatSchemeXml)
-            .WithNativeThemeSupplementXml(dto.NativeThemeSupplementXml);
+            .WithNativeThemeSupplementXml(dto.NativeThemeSupplementXml)
+            .WithSupplementalMetadata(
+                (dto.AlternateColorSchemes ?? []).Select(ToAlternateColorScheme).ToArray(),
+                dto.HasObjectDefaults);
     }
 
     private static WorkbookThemeDto FromWorkbookTheme(WorkbookTheme theme) =>
@@ -42,11 +45,47 @@ public sealed partial class NativeJsonAdapter
             NativeFontSchemeXml = theme.NativeFontSchemeXml,
             NativeFormatSchemeXml = theme.NativeFormatSchemeXml,
             NativeThemeSupplementXml = theme.NativeThemeSupplementXml,
+            HasObjectDefaults = theme.HasObjectDefaults,
+            AlternateColorSchemes = (theme.AlternateColorSchemes ?? [])
+                .Select(FromAlternateColorScheme)
+                .ToList(),
             Colors = Enum.GetValues<WorkbookThemeColorSlot>()
                 .Select(slot => new WorkbookThemeColorDto
                 {
                     Slot = slot,
                     Color = FormatColor(theme.GetColor(slot))
+                })
+                .ToList()
+        };
+
+    private static WorkbookThemeAlternateColorScheme ToAlternateColorScheme(
+        WorkbookThemeAlternateColorSchemeDto dto)
+    {
+        var colors = new Dictionary<WorkbookThemeColorSlot, CellColor>();
+        foreach (var color in dto.Colors ?? [])
+        {
+            if (Enum.IsDefined(color.Slot) && ParseColor(color.Color ?? "") is { } parsed)
+                colors[color.Slot] = parsed;
+        }
+
+        return new WorkbookThemeAlternateColorScheme(
+            string.IsNullOrWhiteSpace(dto.Name) ? "Alternate Colors" : dto.Name.Trim(),
+            colors,
+            dto.NativeColorSchemeXml);
+    }
+
+    private static WorkbookThemeAlternateColorSchemeDto FromAlternateColorScheme(
+        WorkbookThemeAlternateColorScheme scheme) =>
+        new()
+        {
+            Name = scheme.Name,
+            NativeColorSchemeXml = scheme.NativeColorSchemeXml,
+            Colors = Enum.GetValues<WorkbookThemeColorSlot>()
+                .Where(slot => scheme.Colors.ContainsKey(slot))
+                .Select(slot => new WorkbookThemeColorDto
+                {
+                    Slot = slot,
+                    Color = FormatColor(scheme.Colors[slot])
                 })
                 .ToList()
         };

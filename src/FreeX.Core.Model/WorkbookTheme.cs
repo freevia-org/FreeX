@@ -12,7 +12,9 @@ public sealed record WorkbookTheme(
     string? NativeColorSchemeXml = null,
     string? NativeFontSchemeXml = null,
     string? NativeFormatSchemeXml = null,
-    string? NativeThemeSupplementXml = null)
+    string? NativeThemeSupplementXml = null,
+    IReadOnlyList<WorkbookThemeAlternateColorScheme> AlternateColorSchemes = null!,
+    bool HasObjectDefaults = false)
 {
     private static readonly IReadOnlyDictionary<WorkbookThemeColorSlot, CellColor> OfficeColors =
         new Dictionary<WorkbookThemeColorSlot, CellColor>
@@ -32,7 +34,7 @@ public sealed record WorkbookTheme(
         };
 
     public static WorkbookTheme Office { get; } =
-        new("Office", "Aptos Display", "Aptos", "Office", OfficeColors);
+        new("Office", "Aptos Display", "Aptos", "Office", OfficeColors, AlternateColorSchemes: []);
 
     public CellColor GetColor(WorkbookThemeColorSlot slot) =>
         Colors.TryGetValue(slot, out var color)
@@ -93,6 +95,15 @@ public sealed record WorkbookTheme(
             NativeThemeSupplementXml = string.IsNullOrWhiteSpace(themeSupplementXml) ? null : themeSupplementXml.Trim()
         };
 
+    public WorkbookTheme WithSupplementalMetadata(
+        IReadOnlyList<WorkbookThemeAlternateColorScheme>? alternateColorSchemes,
+        bool hasObjectDefaults) =>
+        this with
+        {
+            AlternateColorSchemes = alternateColorSchemes?.ToArray() ?? [],
+            HasObjectDefaults = hasObjectDefaults
+        };
+
     public WorkbookTheme WithColor(WorkbookThemeColorSlot slot, CellColor color)
     {
         var colors = new Dictionary<WorkbookThemeColorSlot, CellColor>(Colors)
@@ -125,6 +136,17 @@ public enum WorkbookThemeColorSlot
     Accent6,
     Hyperlink,
     FollowedHyperlink
+}
+
+public sealed record WorkbookThemeAlternateColorScheme(
+    string Name,
+    IReadOnlyDictionary<WorkbookThemeColorSlot, CellColor> Colors,
+    string? NativeColorSchemeXml = null)
+{
+    public CellColor? GetColor(WorkbookThemeColorSlot slot) =>
+        Colors.TryGetValue(slot, out var color)
+            ? color
+            : null;
 }
 
 public readonly record struct WorkbookThemeColorReference(
