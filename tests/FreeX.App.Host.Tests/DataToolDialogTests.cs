@@ -1368,6 +1368,38 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterDialog_ActionControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AdvancedFilterDialog(SheetId.New(), "A1:C12");
+            dialog.Show();
+            try
+            {
+                AssertRadioAutomation("AdvancedFilterInPlaceButton", "Filter the list, in-place", "Filter the list in its current location.");
+                AssertRadioAutomation("AdvancedFilterCopyToAnotherLocationButton", "Copy to another location", "Copy filtered records to the Copy to destination.");
+
+                var uniqueRecordsOnly = FindVisualChildren<CheckBox>(dialog)
+                    .Single(checkBox => AutomationProperties.GetAutomationId(checkBox) == "AdvancedFilterUniqueRecordsOnlyBox");
+                AutomationProperties.GetName(uniqueRecordsOnly).Should().Be("Unique records only");
+                AutomationProperties.GetHelpText(uniqueRecordsOnly).Should().Be("Show or copy only unique records.");
+
+                void AssertRadioAutomation(string automationId, string name, string helpText)
+                {
+                    var radioButton = FindVisualChildren<RadioButton>(dialog)
+                        .Single(button => AutomationProperties.GetAutomationId(button) == automationId);
+                    AutomationProperties.GetName(radioButton).Should().Be(name);
+                    AutomationProperties.GetHelpText(radioButton).Should().Be(helpText);
+                }
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void AdvancedFilterDialogOpenedFromKeyboard_FocusesInPlaceAction()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AdvancedFilterDialog.cs"));
