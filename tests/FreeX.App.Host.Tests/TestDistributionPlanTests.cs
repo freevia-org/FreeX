@@ -89,7 +89,7 @@ public sealed class TestDistributionPlanTests
 
         source.Should().Contain("Tester Release");
         source.Should().Contain("release_notes");
-        source.Should().Contain("Restore, build, and test");
+        source.Should().Contain("Repository preflight, restore, build, and test");
         source.Should().Contain("Versioned `.exe`, latest `.exe`, versioned MSIX, latest MSIX, and checksum artifacts");
         source.Should().Contain("release/progress.json");
         source.Should().Contain("Keyboard-only smoke validation");

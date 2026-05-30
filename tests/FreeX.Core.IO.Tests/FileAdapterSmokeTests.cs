@@ -100,6 +100,28 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_FormulaCachedValue()
+    {
+        var workbook = new Workbook("FormulaCachedValue");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell
+        {
+            FormulaText = "B1+1",
+            Value = new NumberValue(42)
+        });
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+        var cell = loaded.GetSheetAt(0).GetCell(1, 1)!;
+        cell.FormulaText.Should().Be("B1+1");
+        cell.Value.Should().Be(new NumberValue(42));
+    }
+
+    [Fact]
     public void NativeJsonAdapter_SaveThenResolveOpenAdapterAndReload()
     {
         var workbook = new Workbook("ResolvableNative");

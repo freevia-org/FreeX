@@ -52,6 +52,22 @@ public sealed class MainWindowUiaPropertiesTests
     }
 
     [Fact]
+    public void FormulaBarExpandButton_UpdatesAutomationTextForExpandedState()
+    {
+        var source = File.ReadAllText(
+            WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
+
+        source.Should().Contain("AutomationProperties.SetName(FormulaBarExpandBtn, \"Collapse Formula Bar\")");
+        source.Should().Contain("AutomationProperties.SetHelpText(FormulaBarExpandBtn, \"Collapse the formula bar to a single-line editor\")");
+        source.Should().Contain("RibbonTooltip.SetTitle(FormulaBarExpandBtn, \"Collapse Formula Bar\")");
+        source.Should().Contain("RibbonTooltip.SetDescription(FormulaBarExpandBtn, \"Collapse the formula bar to a single-line editor.\")");
+        source.Should().Contain("AutomationProperties.SetName(FormulaBarExpandBtn, \"Expand Formula Bar\")");
+        source.Should().Contain("AutomationProperties.SetHelpText(FormulaBarExpandBtn, \"Expand the formula bar to a multi-line editor\")");
+        source.Should().Contain("RibbonTooltip.SetTitle(FormulaBarExpandBtn, \"Expand Formula Bar\")");
+        source.Should().Contain("RibbonTooltip.SetDescription(FormulaBarExpandBtn, \"Expand the formula bar to a multi-line editor.\")");
+    }
+
+    [Fact]
     public void CellAddressBox_ExposesAutomationNameAndHelpText()
     {
         var document = LoadMainWindowXaml();

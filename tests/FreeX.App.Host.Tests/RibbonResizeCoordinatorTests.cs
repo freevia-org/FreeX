@@ -1,5 +1,6 @@
 using FluentAssertions;
 using System.Diagnostics;
+using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Windows;
@@ -45,6 +46,18 @@ public sealed class RibbonResizeCoordinatorTests
             executed.LastExecutedWork.Should().Be("NormalizeSurface");
             executed.IsPending.Should().BeFalse();
         });
+    }
+
+    [Fact]
+    public void FallbackScheduler_UsesRenderPriorityInsteadOfSynchronousSend()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Ribbon.cs"));
+        var methodStart = source.IndexOf("private void QueueRibbonFallback", StringComparison.Ordinal);
+        var methodEnd = source.IndexOf("internal RibbonFallbackDiagnosticsSnapshot GetRibbonFallbackDiagnosticsForTests", StringComparison.Ordinal);
+        var method = source[methodStart..methodEnd];
+
+        method.Should().Contain("DispatcherPriority.Render");
+        method.Should().NotContain("DispatcherPriority.Send");
     }
 
     [Fact]

@@ -193,6 +193,33 @@ public sealed class ExcelParityEngineeringTests
         _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(expected));
     }
 
+    [Theory]
+    [InlineData("=CONVERT(1,\"dag\",\"g\")", 10)]
+    [InlineData("=CONVERT(2,\"dam\",\"m\")", 20)]
+    [InlineData("=CONVERT(1,\"g\",\"dag\")", 0.1)]
+    [InlineData("=CONVERT(1,\"eg\",\"g\")", 10)]
+    [InlineData("=CONVERT(1,\"e\",\"J\")", 0.0000001)]
+    public void Convert_DekaPrefixesAndExactErgMatchExcelUnits(string formula, double expected)
+    {
+        AssertNumberApproximately(_eval.Evaluate(formula, MakeSheet()), expected);
+    }
+
+    [Theory]
+    [InlineData("=CONVERT(1,\"kibyte\",\"byte\")", 1024)]
+    [InlineData("=CONVERT(1,\"Mibit\",\"bit\")", 1048576)]
+    [InlineData("=CONVERT(2,\"byte\",\"kibit\")", 0.015625)]
+    [InlineData("=CONVERT(1,\"kbit\",\"bit\")", 1000)]
+    public void Convert_BinaryInformationPrefixesMatchExcelUnits(string formula, double expected)
+    {
+        AssertNumberApproximately(_eval.Evaluate(formula, MakeSheet()), expected);
+    }
+
+    [Fact]
+    public void Convert_BinaryPrefixOnUnsupportedUnitReturnsNa()
+    {
+        _eval.Evaluate("=CONVERT(1,\"kim\",\"m\")", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
+
     [Fact]
     public void Convert_MismatchedUnitArgument_ReturnsValueError()
     {

@@ -34,6 +34,14 @@ public partial class MainWindow
     private string GenerateUniqueSheetName()
         => SheetTabListPlanner.GenerateUniqueSheetName(_workbook);
 
+    private void SelectSingleSheetTab(SheetId sheetId)
+    {
+        _currentSheetId = sheetId;
+        _groupedSheetIds.Clear();
+        _groupedSheetIds.Add(sheetId);
+        _sheetGroupAnchor = sheetId;
+    }
+
     private void SheetTab_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
@@ -80,10 +88,7 @@ public partial class MainWindow
     private void SheetTab_MouseRightButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
-        _currentSheetId = tab.Id;
-        if (_groupedSheetIds.Count == 0)
-            _groupedSheetIds.Add(tab.Id);
-        _sheetGroupAnchor ??= tab.Id;
+        SelectSingleSheetTab(tab.Id);
         UpdateViewport();
         RefreshSheetTabs();
     }
@@ -98,7 +103,9 @@ public partial class MainWindow
 
     private void RenameSheetFromTab(SheetTabViewModel tab)
     {
-        _currentSheetId = tab.Id;
+        SelectSingleSheetTab(tab.Id);
+        UpdateViewport();
+        RefreshSheetTabs();
         RenameSheet(tab.Id, tab.Name);
     }
 
@@ -882,10 +889,7 @@ public partial class MainWindow
 
     private void SelectSheetTabForKeyboardContextMenu(SheetId tabId)
     {
-        _currentSheetId = tabId;
-        if (_groupedSheetIds.Count == 0)
-            _groupedSheetIds.Add(tabId);
-        _sheetGroupAnchor ??= tabId;
+        SelectSingleSheetTab(tabId);
         UpdateViewport();
         RefreshSheetTabs();
     }

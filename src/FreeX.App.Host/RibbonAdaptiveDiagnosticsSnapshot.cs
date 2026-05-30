@@ -5,6 +5,8 @@ internal readonly record struct RibbonAdaptiveDiagnosticsSnapshot(
     int GroupMeasurementCount,
     int CompactSnapshotCaptureCount,
     int ResizeThresholdRebuildCount,
+    int LayoutPlanComputeCount,
+    int LayoutPlanCacheHitCount,
     int MeasuredOverflowMeasurementCount,
     int CorrectedStateCacheHitCount,
     int AppliedStateSkipCount,

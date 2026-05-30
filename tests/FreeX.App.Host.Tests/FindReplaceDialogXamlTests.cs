@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Xml.Linq;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -391,6 +392,41 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("var target = FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;");
         source.Should().Contain("DialogFocus.FocusAndSelect(target);");
+    }
+
+    [Fact]
+    public void DialogTabSwitch_FocusesSearchBoxForSelectedTab()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            workbook.AddSheet("Sheet1");
+            var commandBus = new CommandBus(_ => new SimpleCommandContext(workbook));
+            var dialog = new FindReplaceDialog(() => workbook, commandBus, _ => { });
+            dialog.Show();
+            try
+            {
+                var tabs = GetPrivateControl<TabControl>(dialog, "FindReplaceTabs");
+                var findBox = GetPrivateControl<TextBox>(dialog, "FindBox");
+                var replaceTab = GetPrivateControl<TabItem>(dialog, "ReplaceTab");
+                var replaceFindBox = GetPrivateControl<TextBox>(dialog, "ReplaceFindBox");
+                var findTab = GetPrivateControl<TabItem>(dialog, "FindTab");
+
+                Keyboard.FocusedElement.Should().BeSameAs(findBox);
+
+                tabs.SelectedItem = replaceTab;
+
+                Keyboard.FocusedElement.Should().BeSameAs(replaceFindBox);
+
+                tabs.SelectedItem = findTab;
+
+                Keyboard.FocusedElement.Should().BeSameAs(findBox);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
