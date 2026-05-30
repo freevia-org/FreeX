@@ -39,12 +39,14 @@ public static partial class FlashFillService
             ?? TryStripThousandSeparators(examples)
             ?? TryExtractDigitsOnly(examples)
             ?? TryExtractFinalDigitRun(examples)
+            ?? TryDateComponentExtraction(examples)
             ?? TryThreeTokenNameInitial(examples)
             ?? TryThreeTokenNameDropMiddle(examples)
             ?? TryPairedDelimiterExtraction(examples)
             ?? TryPairedDelimiterRemoval(examples)
             ?? TryLabelValueExtraction(examples)
             ?? TryLabelQualifierRemoval(examples)
+            ?? TryDelimitedPartCaseTransform(examples)
             ?? TryDelimitedPartReorder(examples)
             ?? TryFinalWhitespaceToken(examples)
             ?? TryRemoveFinalDottedToken(examples)
@@ -256,7 +258,7 @@ public static partial class FlashFillService
             var pattern = TrySharedDomainEmailPattern(
                 exampleSources,
                 exampleOutputs,
-                s => (s[0] + separator + s[1]).ToLowerInvariant());
+                s => GetEmailNameToken(s, 0) + separator + GetEmailNameToken(s, 1));
             if (pattern is not null)
                 return pattern;
         }
@@ -271,7 +273,7 @@ public static partial class FlashFillService
         var compactPattern = TrySharedDomainEmailPattern(
             exampleSources,
             exampleOutputs,
-            s => (GetFirstInitial(s[0]) + s[1]).ToLowerInvariant());
+            s => GetEmailNameInitial(s, 0) + GetEmailNameToken(s, 1));
         if (compactPattern is not null)
             return compactPattern;
 
@@ -280,7 +282,7 @@ public static partial class FlashFillService
             var pattern = TrySharedDomainEmailPattern(
                 exampleSources,
                 exampleOutputs,
-                s => (GetFirstInitial(s[0]) + separator + s[1]).ToLowerInvariant());
+                s => GetEmailNameInitial(s, 0) + separator + GetEmailNameToken(s, 1));
             if (pattern is not null)
                 return pattern;
         }
@@ -297,7 +299,7 @@ public static partial class FlashFillService
             var pattern = TrySharedDomainEmailPattern(
                 exampleSources,
                 exampleOutputs,
-                s => (s[1] + separator + s[0]).ToLowerInvariant());
+                s => GetEmailNameToken(s, 1) + separator + GetEmailNameToken(s, 0));
             if (pattern is not null)
                 return pattern;
         }
@@ -312,7 +314,7 @@ public static partial class FlashFillService
         var compactPattern = TrySharedDomainEmailPattern(
             exampleSources,
             exampleOutputs,
-            s => (s[1] + GetFirstInitial(s[0])).ToLowerInvariant());
+            s => GetEmailNameToken(s, 1) + GetEmailNameInitial(s, 0));
         if (compactPattern is not null)
             return compactPattern;
 
@@ -321,7 +323,7 @@ public static partial class FlashFillService
             var pattern = TrySharedDomainEmailPattern(
                 exampleSources,
                 exampleOutputs,
-                s => (s[1] + separator + GetFirstInitial(s[0])).ToLowerInvariant());
+                s => GetEmailNameToken(s, 1) + separator + GetEmailNameInitial(s, 0));
             if (pattern is not null)
                 return pattern;
         }
@@ -336,7 +338,7 @@ public static partial class FlashFillService
         var compactPattern = TrySharedDomainEmailPattern(
             exampleSources,
             exampleOutputs,
-            s => (s[0] + GetFirstInitial(s[1])).ToLowerInvariant());
+            s => GetEmailNameToken(s, 0) + GetEmailNameInitial(s, 1));
         if (compactPattern is not null)
             return compactPattern;
 
@@ -345,12 +347,21 @@ public static partial class FlashFillService
             var pattern = TrySharedDomainEmailPattern(
                 exampleSources,
                 exampleOutputs,
-                s => (s[0] + separator + GetFirstInitial(s[1])).ToLowerInvariant());
+                s => GetEmailNameToken(s, 0) + separator + GetEmailNameInitial(s, 1));
             if (pattern is not null)
                 return pattern;
         }
 
         return null;
+    }
+
+    private static string GetEmailNameToken(IReadOnlyList<string> source, int index) =>
+        source[index].Trim().ToLowerInvariant();
+
+    private static string GetEmailNameInitial(IReadOnlyList<string> source, int index)
+    {
+        var token = source[index].Trim();
+        return token.Length == 0 ? string.Empty : char.ToLowerInvariant(token[0]).ToString();
     }
 
     private static Func<IReadOnlyList<string>, string>? TrySharedDomainEmailPattern(
@@ -361,7 +372,11 @@ public static partial class FlashFillService
         string? domain = null;
         for (var i = 0; i < exampleSources.Count; i++)
         {
-            var expectedPrefix = localPart(exampleSources[i]) + "@";
+            var expectedLocalPart = localPart(exampleSources[i]);
+            if (expectedLocalPart.Length == 0 || expectedLocalPart.Any(char.IsWhiteSpace))
+                return null;
+
+            var expectedPrefix = expectedLocalPart + "@";
             if (!exampleOutputs[i].StartsWith(expectedPrefix, StringComparison.Ordinal))
                 return null;
 

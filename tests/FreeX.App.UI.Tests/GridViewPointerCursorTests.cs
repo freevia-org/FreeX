@@ -16,14 +16,9 @@ public sealed class GridViewPointerCursorTests
 
         hoverCursorBlock.Should().Contain("var selectedObjectRect = GetSelectedObjectRect();");
         hoverCursorBlock.Should().Contain("selectedObjectDragKind = HitTestObjectHandle(pos, selectedObjectRect);");
-        hoverCursorBlock.Should().Contain("selectedObjectUnsupportedHandle = IsOnUnsupportedObjectHandle(pos, selectedObjectRect);");
         hoverCursorBlock.Should().Contain("if (selectedObjectDragKind != ObjectDragKind.None)");
         hoverCursorBlock.Should().Contain("Cursor = ObjectDragCursor(selectedObjectDragKind);");
-        hoverCursorBlock.Should().Contain("if (selectedObjectUnsupportedHandle)");
-        hoverCursorBlock.Should().Contain("Cursor = null;");
         hoverCursorBlock.IndexOf("if (selectedObjectDragKind != ObjectDragKind.None)", StringComparison.Ordinal)
-            .Should().BeLessThan(hoverCursorBlock.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal));
-        hoverCursorBlock.IndexOf("if (selectedObjectUnsupportedHandle)", StringComparison.Ordinal)
             .Should().BeLessThan(hoverCursorBlock.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal));
     }
 
@@ -109,24 +104,6 @@ public sealed class GridViewPointerCursorTests
         selectedObjectDragBlock.Should().Contain("_selectedObjectKind = SelectedObjectKind;");
         selectedObjectDragBlock.IndexOf("_selectedObjectId = SelectedObjectId;", StringComparison.Ordinal)
             .Should().BeLessThan(selectedObjectDragBlock.IndexOf("_objectDragKind = dragKind;", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void SelectedObjectMouseDownIgnoresUnsupportedHandlesBeforeDragging()
-    {
-        var inputSource = File.ReadAllText(FindWorkspaceFile(
-            "src", "FreeX.App.UI", "GridView.Input.cs"));
-        var selectedObjectDragBlock = inputSource[
-            inputSource.IndexOf("// Check if clicking on an already-selected object's handles", StringComparison.Ordinal)..
-            inputSource.IndexOf("// Check if clicking on a new drawing object", StringComparison.Ordinal)];
-
-        selectedObjectDragBlock.Should().Contain("if (dragKind == ObjectDragKind.None && IsOnUnsupportedObjectHandle(pos, selRect))");
-        selectedObjectDragBlock.Should().Contain("e.Handled = true;");
-        selectedObjectDragBlock.Should().Contain("return;");
-        selectedObjectDragBlock.IndexOf("if (dragKind == ObjectDragKind.None && IsOnUnsupportedObjectHandle(pos, selRect))", StringComparison.Ordinal)
-            .Should().BeLessThan(selectedObjectDragBlock.IndexOf("if (dragKind != ObjectDragKind.None)", StringComparison.Ordinal));
-        selectedObjectDragBlock.IndexOf("if (dragKind == ObjectDragKind.None && IsOnUnsupportedObjectHandle(pos, selRect))", StringComparison.Ordinal)
-            .Should().BeLessThan(selectedObjectDragBlock.IndexOf("_selectedObjectId = SelectedObjectId;", StringComparison.Ordinal));
     }
 
     [Fact]

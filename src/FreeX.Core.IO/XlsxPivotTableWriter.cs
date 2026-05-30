@@ -258,6 +258,7 @@ internal static partial class XlsxPivotTableWriter
                     ToOptionalBoolAttribute("dragToCol", metadataField?.DragToColumn),
                     ToOptionalBoolAttribute("dragToPage", metadataField?.DragToPage),
                     ToOptionalBoolAttribute("dragToData", metadataField?.DragToData),
+                    ToOptionalBoolAttribute("showDropDowns", metadataField?.ShowDropDowns),
                     new XElement(workbookNs + "items",
                         new XAttribute("count", "1"),
                         new XElement(workbookNs + "item", new XAttribute("t", "default"))));

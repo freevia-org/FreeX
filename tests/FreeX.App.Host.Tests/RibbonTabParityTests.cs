@@ -286,6 +286,34 @@ public sealed class RibbonTabParityTests
     }
 
     [Fact]
+    public void TableDesignTab_UsesExcelLikeContextualGroupOrder()
+    {
+        var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
+        var tableTab = Tab(catalog, "Table Design");
+
+        GroupNames(tableTab).Should().Equal(
+            "Properties",
+            "Tools",
+            "Table Style Options",
+            "Table Styles");
+
+        CommandTitles(Group(tableTab, "Properties")).Should().Contain(["Table Name", "Resize Table"]);
+        CommandTitles(Group(tableTab, "Tools")).Should().Contain([
+            "Summarize with PivotTable",
+            "Remove Duplicates",
+            "Convert to Range"]);
+        CommandTitles(Group(tableTab, "Table Style Options")).Should().Contain([
+            "Header Row",
+            "Total Row",
+            "First Column",
+            "Last Column",
+            "Banded Rows",
+            "Banded Columns",
+            "Filter Button"]);
+        Command(Group(tableTab, "Table Styles"), "Table Styles").KeyTip.Should().Be("Y");
+    }
+
+    [Fact]
     public void PivotTableDesignTab_SeparatesStyleGalleryFromStyleOptions()
     {
         var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();

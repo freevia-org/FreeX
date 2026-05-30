@@ -248,4 +248,28 @@ internal static partial class ExportPlanner
         return true;
     }
 
+    public static ExportOptions CreateEffectiveOptionsForFormat(ExportOptions options, ExportFormat format)
+    {
+        var normalized = options with
+        {
+            PdfLanguage = NormalizePdfLanguage(options.PdfLanguage)
+        };
+
+        if (format == ExportFormat.Pdf)
+            return normalized;
+
+        return normalized with
+        {
+            Quality = ExportQuality.Standard,
+            CreateBookmarks = false,
+            BookmarkMode = PdfBookmarkMode.None,
+            InitialView = PdfInitialView.SinglePage,
+            OpenMode = PdfOpenMode.Normal,
+            BitmapTextWhenFontsMayNotBeEmbedded = false,
+            PdfLanguage = DefaultPdfLanguage,
+            PdfConformance = PdfConformance.Standard,
+            IncludeDocumentStructureTags = false
+        };
+    }
+
 }

@@ -14,7 +14,8 @@ public sealed partial class ManageConditionalFormatsDialog
             return Reprioritize(editedRules);
 
         var result = new List<ConditionalFormat>();
-        var insertedEditedRules = false;
+        var matchingRuleCount = sheetRules.Count(rule => RangesOverlap(rule.AppliesTo, selection.Value));
+        var editedRuleIndex = 0;
 
         foreach (var rule in sheetRules)
         {
@@ -24,15 +25,20 @@ public sealed partial class ManageConditionalFormatsDialog
                 continue;
             }
 
-            if (insertedEditedRules)
-                continue;
+            matchingRuleCount--;
 
-            result.AddRange(editedRules);
-            insertedEditedRules = true;
+            if (editedRuleIndex < editedRules.Count)
+                result.Add(editedRules[editedRuleIndex++]);
+
+            if (matchingRuleCount == 0)
+            {
+                while (editedRuleIndex < editedRules.Count)
+                    result.Add(editedRules[editedRuleIndex++]);
+            }
         }
 
-        if (!insertedEditedRules)
-            result.AddRange(editedRules);
+        while (editedRuleIndex < editedRules.Count)
+            result.Add(editedRules[editedRuleIndex++]);
 
         return Reprioritize(result);
     }

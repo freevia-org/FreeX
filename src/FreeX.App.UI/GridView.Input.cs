@@ -10,6 +10,18 @@ public partial class GridView
     {
         var pos = e.GetPosition(this);
 
+        if (_objectDragKind == ObjectDragKind.Rotate)
+        {
+            var center = new Point(
+                _objectDragStartRect.Left + _objectDragStartRect.Width / 2,
+                _objectDragStartRect.Top + _objectDragStartRect.Height / 2);
+            _objectRotationPreviewDegrees = GridObjectDragPlanner.CalculateRotationDegrees(center, pos);
+            Cursor = ObjectDragCursor(_objectDragKind);
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
         if (_objectDragKind != ObjectDragKind.None)
         {
             _objectDragCurrentRect = GridObjectDragPlanner.CalculateDragRect(
@@ -151,22 +163,14 @@ public partial class GridView
         else
         {
             var selectedObjectDragKind = ObjectDragKind.None;
-            var selectedObjectUnsupportedHandle = false;
             if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
             {
                 var selectedObjectRect = GetSelectedObjectRect();
                 selectedObjectDragKind = HitTestObjectHandle(pos, selectedObjectRect);
-                selectedObjectUnsupportedHandle = IsOnUnsupportedObjectHandle(pos, selectedObjectRect);
             }
             if (selectedObjectDragKind != ObjectDragKind.None)
             {
                 Cursor = ObjectDragCursor(selectedObjectDragKind);
-                return;
-            }
-
-            if (selectedObjectUnsupportedHandle)
-            {
-                Cursor = null;
                 return;
             }
 
@@ -222,6 +226,13 @@ public partial class GridView
             columnHeaderHeight,
             edgeThreshold);
 
+    private static bool MovesObjectTopLeft(ObjectDragKind kind) =>
+        kind is ObjectDragKind.ResizeNW
+            or ObjectDragKind.ResizeN
+            or ObjectDragKind.ResizeNE
+            or ObjectDragKind.ResizeW
+            or ObjectDragKind.ResizeSW;
+
     private bool HasActiveCapturedGridDrag() =>
         _objectDragKind != ObjectDragKind.None ||
         _marginDragEdge.HasValue ||
@@ -245,12 +256,6 @@ public partial class GridView
         {
             var selRect = GetSelectedObjectRect();
             var dragKind = HitTestObjectHandle(pos, selRect);
-            if (dragKind == ObjectDragKind.None && IsOnUnsupportedObjectHandle(pos, selRect))
-            {
-                e.Handled = true;
-                return;
-            }
-
             if (dragKind != ObjectDragKind.None)
             {
                 _selectedObjectId = SelectedObjectId;
@@ -500,12 +505,19 @@ public partial class GridView
             var startRect = _objectDragStartRect;
             var currentRect = _objectDragCurrentRect;
 
+            var rotationDegrees = _objectRotationPreviewDegrees;
+
             _objectDragKind = ObjectDragKind.None;
             _objectDragCurrentRect = Rect.Empty;
+            _objectRotationPreviewDegrees = 0;
             Cursor = null;
             ReleaseMouseCapture();
 
-            if (dragKind == ObjectDragKind.Move)
+            if (dragKind == ObjectDragKind.Rotate)
+            {
+                ObjectRotated?.Invoke(id, kind, rotationDegrees);
+            }
+            else if (dragKind == ObjectDragKind.Move)
             {
                 var newAnchor = HitTestAnchorCell(new Point(currentRect.Left, currentRect.Top));
                 if (newAnchor.HasValue && newAnchor.Value != _objectDragStartAnchor)
@@ -515,8 +527,21 @@ public partial class GridView
             {
                 var newWidth  = Math.Max(GridObjectDragPlanner.MinimumObjectSize, currentRect.Width);
                 var newHeight = Math.Max(GridObjectDragPlanner.MinimumObjectSize, currentRect.Height);
-                if (Math.Abs(newWidth - startRect.Width) > 1 || Math.Abs(newHeight - startRect.Height) > 1)
+                var resized = Math.Abs(newWidth - startRect.Width) > 1 || Math.Abs(newHeight - startRect.Height) > 1;
+
+                // Directions that move the top-left edge change the anchor cell as well as the size.
+                if (resized && MovesObjectTopLeft(dragKind))
+                {
+                    var newAnchor = HitTestAnchorCell(new Point(currentRect.Left, currentRect.Top));
+                    if (newAnchor.HasValue)
+                        ObjectResizedWithAnchor?.Invoke(id, kind, newAnchor.Value, newWidth, newHeight);
+                    else
+                        ObjectResized?.Invoke(id, kind, newWidth, newHeight);
+                }
+                else if (resized)
+                {
                     ObjectResized?.Invoke(id, kind, newWidth, newHeight);
+                }
             }
 
             InvalidateVisual();
@@ -645,6 +670,7 @@ public partial class GridView
         {
             _objectDragKind = ObjectDragKind.None;
             _objectDragCurrentRect = Rect.Empty;
+            _objectRotationPreviewDegrees = 0;
             Cursor = null;
             InvalidateVisual();
         }

@@ -246,13 +246,29 @@
 
                     <!-- LANGUAGE -->
                     <StackPanel x:Name="PanelLanguage" Visibility="Collapsed">
-                        <TextBlock Text="{local:Loc Key=Options_ChooseEditingLanguages}"
+                        <TextBlock Text="{local:Loc Key=Options_ChooseDisplayLanguage}"
                                    FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
-                        <TextBlock Text="{local:Loc Key=Options_EditingLanguageEnglishUnitedStates}"
-                                   FontSize="12" Margin="0,0,0,8"/>
-                        <Button x:Name="AddLanguageButton" Content="{local:Loc Key=Options_AddALanguage}" Width="150" Height="26"
-                                HorizontalAlignment="Left" Click="AddLanguageButton_Click"/>
+                        <Grid Margin="0,0,0,9">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="230"/>
+                                <ColumnDefinition Width="240"/>
+                            </Grid.ColumnDefinitions>
+                            <Label Grid.Column="0"
+                                   Content="{local:Loc Key=Options_AppLanguage}"
+                                   Target="{Binding ElementName=OptAppLanguage}"
+                                   Padding="0"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"/>
+                            <ComboBox x:Name="OptAppLanguage" Grid.Column="1"
+                                      Height="24" VerticalAlignment="Center"
+                                      DisplayMemberPath="DisplayName"
+                                      SelectedValuePath="CultureName"
+                                      AutomationProperties.Name="{local:Loc Key=Options_AppLanguage}"
+                                      AutomationProperties.HelpText="{local:Loc Key=Options_AppLanguageHelpText}"/>
+                        </Grid>
+                        <TextBlock Text="{local:Loc Key=Options_AppLanguageRestartNotice}"
+                                   FontSize="11" Foreground="#777" TextWrapping="Wrap" Margin="0,4,0,0"/>
                     </StackPanel>
 
                     <!-- EASE OF ACCESS -->

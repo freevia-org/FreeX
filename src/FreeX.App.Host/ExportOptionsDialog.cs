@@ -30,7 +30,7 @@ internal sealed class ExportOptionsDialog : Window
 
     public ExportOptions Result { get; private set; } = ExportOptions.ExcelLikeDefault;
 
-    public ExportOptionsDialog(bool hasSelection, string? initialPdfLanguage = null)
+    public ExportOptionsDialog(bool hasSelection, string? initialPdfLanguage = null, ExportFormat format = ExportFormat.Pdf)
     {
         Title = UiText.Get("ExportOptions_ExportOptions");
         Width = 430;
@@ -83,7 +83,7 @@ internal sealed class ExportOptionsDialog : Window
         _bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_PrintTitles"));
         _bookmarkModeBox.Items.Add(UiText.Get("ExportOptions_PageNumbers"));
         _bookmarkModeBox.SelectedIndex = 0;
-        _bookmarksBox.Checked += (_, _) => _bookmarkModeBox.IsEnabled = true;
+        _bookmarksBox.Checked += (_, _) => _bookmarkModeBox.IsEnabled = _bookmarksBox.IsEnabled;
         _bookmarksBox.Unchecked += (_, _) => _bookmarkModeBox.IsEnabled = false;
         var bookmarkModePanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(22, 2, 0, 0) };
         bookmarkModePanel.Children.Add(new Label { Content = UiText.Get("ExportOptions_BookmarkMode"), Target = _bookmarkModeBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
@@ -123,6 +123,7 @@ internal sealed class ExportOptionsDialog : Window
         stack.Children.Add(_openAfterPublishBox);
 
         _openAfterPublishBox.Margin = new Thickness(0, 8, 0, 18);
+        ApplyFormatAvailability(ExportOptionsDialogPlanner.CreateFormatAvailability(format));
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var ok = new Button { Content = UiText.Ok, Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
@@ -163,7 +164,8 @@ internal sealed class ExportOptionsDialog : Window
                 GetSelectedInitialView(),
                 GetSelectedOpenMode(),
                 _bitmapTextBox.IsChecked == true,
-                pdfLanguage);
+                pdfLanguage,
+                format: format);
             DialogResult = true;
         };
         buttons.Children.Add(ok);
@@ -188,6 +190,37 @@ internal sealed class ExportOptionsDialog : Window
     {
         _fromPageBox.IsEnabled = enabled;
         _toPageBox.IsEnabled = enabled;
+    }
+
+    private void ApplyFormatAvailability(ExportOptionsFormatAvailability availability)
+    {
+        if (!availability.PdfBookmarksEnabled)
+        {
+            DisableOption(_bookmarksBox, UiText.Get("Export_BookmarksPdfOnly"));
+            DisableOption(_bookmarkModeBox, UiText.Get("Export_BookmarksPdfOnly"));
+        }
+
+        if (!availability.PdfInitialViewEnabled)
+            DisableOption(_initialViewBox, UiText.Get("Export_InitialViewPdfOnly"));
+
+        if (!availability.PdfOpenModeEnabled)
+            DisableOption(_openModeBox, UiText.Get("Export_OpenModePdfOnly"));
+
+        if (!availability.PdfLanguageEnabled)
+            DisableOption(_pdfLanguageBox, UiText.Get("Export_PdfLanguagePdfOnly"));
+
+        if (!availability.PdfBitmapTextEnabled)
+            DisableOption(_bitmapTextBox, UiText.Get("Export_BitmapTextPdfOnly"));
+
+        if (!availability.MinimumSizeEnabled)
+            DisableOption(_minimumSizeButton, UiText.Get("Export_QualityMinimumSizePdfOnly"));
+    }
+
+    private static void DisableOption(Control control, string helpText)
+    {
+        control.IsEnabled = false;
+        control.ToolTip = helpText;
+        AutomationProperties.SetHelpText(control, helpText);
     }
 
     private void FocusInvalidPageRangeInput(string? error)
@@ -228,7 +261,8 @@ internal sealed class ExportOptionsDialog : Window
         bool bitmapTextWhenFontsMayNotBeEmbedded = false,
         string? pdfLanguage = ExportPlanner.DefaultPdfLanguage,
         PdfConformance pdfConformance = PdfConformance.Standard,
-        bool includeDocumentStructureTags = false) =>
+        bool includeDocumentStructureTags = false,
+        ExportFormat format = ExportFormat.Pdf) =>
         ExportOptionsDialogPlanner.CreateResult(
             scope,
             includeDocumentProperties,
@@ -243,7 +277,8 @@ internal sealed class ExportOptionsDialog : Window
             bitmapTextWhenFontsMayNotBeEmbedded,
             pdfLanguage,
             pdfConformance,
-            includeDocumentStructureTags);
+            includeDocumentStructureTags,
+            format);
 
     private PdfBookmarkMode GetSelectedBookmarkMode() =>
         ExportOptionsDialogPlanner.BookmarkModeFromIndex(_bookmarkModeBox.SelectedIndex);
