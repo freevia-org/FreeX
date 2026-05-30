@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Shape Gradient">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="6" y="7" width="20" height="18" rx="3" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
+  <path d="M8.5 22.5L22.5 8.5" stroke="#0F6D8C" stroke-width="3" stroke-linecap="round"/>
+  <path d="M11.5 24L25 10.5" stroke="#5EB6C8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M7.5 18L18 7.5" stroke="#CDEFF4" stroke-width="3" stroke-linecap="round"/>
+  <path d="M10 11h5M10 15h9" stroke="#242424" stroke-width="1.1" stroke-linecap="round" opacity="0.55"/>
+</svg>

@@ -1141,7 +1141,7 @@ public partial class MainWindow
 
     private static RibbonCompactGroupSnapshot CaptureRibbonCompactGroupSnapshot(FrameworkElement group)
     {
-        var elements = EnumerateVisualDescendants(group)
+        var elements = EnumerateSelfVisualAndLogicalDescendants(group)
             .OfType<FrameworkElement>()
             .ToList();
         var commandLabels = elements
@@ -1158,7 +1158,11 @@ public partial class MainWindow
 
     private static RibbonCompactButtonSnapshot CaptureRibbonCompactButtonSnapshot(ButtonBase button)
     {
-        var descendants = EnumerateVisualDescendants(button)
+        var descendants = EnumerateSelfVisualAndLogicalDescendants(button)
+            .Concat(button.Content is DependencyObject contentRoot
+                ? EnumerateSelfVisualAndLogicalDescendants(contentRoot)
+                : [])
+            .Distinct()
             .OfType<FrameworkElement>()
             .ToList();
         var content = button.Content as FrameworkElement;
@@ -1207,6 +1211,9 @@ public partial class MainWindow
             largeIconChild,
             largeLabelBlock);
     }
+
+    private static IEnumerable<DependencyObject> EnumerateSelfVisualAndLogicalDescendants(DependencyObject root) =>
+        [root, .. EnumerateVisualDescendants(root), .. EnumerateLogicalDescendants(root)];
 
     private static ColumnDefinition? GetRibbonSmallButtonSpacerColumn(Grid? contentGrid)
     {

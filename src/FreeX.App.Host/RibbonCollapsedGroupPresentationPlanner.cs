@@ -20,7 +20,7 @@ internal static class RibbonCollapsedGroupPresentationPlanner
             Margin: compact ? new Thickness(0, 0, 2, 0) : new Thickness(1, 0, 3, 0),
             Padding: compact ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2),
             CaptionVisibility: captionless ? Visibility.Collapsed : Visibility.Visible,
-            CaptionFontSize: compact ? 9 : 10,
+            CaptionFontSize: 12,
             CaptionMaxWidth: compact ? 40 : 60,
             IconFontSize: compact ? 18 : 22);
     }
