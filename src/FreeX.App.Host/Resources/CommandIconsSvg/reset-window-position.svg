@@ -1,10 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Reset Window Position" shape-rendering="geometricPrecision">
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Reset Window Position">
   <rect width="32" height="32" fill="none"/>
-  <rect x="3" y="7" width="11" height="17" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1.5"/>
-  <rect x="18" y="7" width="11" height="17" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1.5"/>
-  <path d="M4 11 H13 M19 11 H28" stroke="#0F6D8C" stroke-width="1.5"/>
-  <path d="M6 15 H11 M6 18 H11 M21 15 H26 M21 18 H26" stroke="#8a8a8a" stroke-width="1"/>
-  <path d="M18 27 C14 29 10 29 7 26" fill="none" stroke="#0078d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M8 23 L7 26 L10 26" fill="none" stroke="#0078d4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M14 27 H18" stroke="#0078d4" stroke-width="2" stroke-linecap="round"/>
+  <rect x="4.5" y="7.5" width="9" height="16" rx="1.2" fill="#ffffff" stroke="#242424" stroke-width="1.3"/>
+  <rect x="18.5" y="7.5" width="9" height="16" rx="1.2" fill="#ffffff" stroke="#242424" stroke-width="1.3"/>
+  <path d="M5.5 12h7M19.5 12h7" fill="none" stroke="#0F6D8C" stroke-width="1.3"/>
+  <path d="M7 16h4M21 16h4" fill="none" stroke="#8a8a8a" stroke-width="1" stroke-linecap="round"/>
+  <path d="M18 27c-3.5 2-7.5 1.5-10.5-.8M8.5 23.8l-1 2.4 2.6.2" fill="none" stroke="#4472c4" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

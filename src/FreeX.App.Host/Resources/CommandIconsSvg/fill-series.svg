@@ -1,6 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Fill Series">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><rect fill="#f8fafc" stroke="#202124" stroke-width="1.6" x="8.64" y="12.96" width="36.72" height="25.92"/><path stroke="#cbd5e1" stroke-width="1.1" d="M20.52 12.96v25.92M32.4 12.96v25.92M8.64 25.92h36.72"/><text x="14.58" y="23.76" text-anchor="middle" font-size="11.88" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" dominant-baseline="central">1</text><text x="26.46" y="23.76" text-anchor="middle" font-size="11.88" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="600" dominant-baseline="central">2</text><path stroke="#0F6D8C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" d="M32.4 32.4h8.64m-3.24-3.24l3.24 3.24l-3.24 3.24"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Fill series">
+  <rect width="32" height="32" fill="none"/>
+  <g fill="none" stroke="#242424" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">
+    <rect x="7" y="7" width="16" height="16" rx="1.5"/>
+    <path d="M7 12.3h16M7 17.7h16M12.3 7v16M17.7 7v16"/>
+    <path d="M21.5 10.5l4 4-4 4M25.5 14.5H17"/>
+  </g>
 </svg>
-

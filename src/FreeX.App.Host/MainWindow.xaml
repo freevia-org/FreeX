@@ -163,7 +163,7 @@
                         local:RibbonTooltip.Title="Save"
                         local:RibbonTooltip.KeyTip="1"
                         local:RibbonTooltip.Description="Save the workbook.">
-                    <local:RibbonIcon Kind="Save" IconSize="16"
+                    <local:RibbonIcon Kind="Save" CommandName="Save" IconSize="16"
                                       Foreground="{StaticResource FreeXWhiteBrush}"/>
                 </Button>
                 <Button x:Name="UndoQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,2,0"
@@ -174,7 +174,7 @@
                         local:RibbonTooltip.Title="Undo"
                         local:RibbonTooltip.KeyTip="2"
                         local:RibbonTooltip.Description="Undo the last action.">
-                    <local:RibbonIcon Kind="Undo" IconSize="16"
+                    <local:RibbonIcon Kind="Undo" CommandName="Undo" IconSize="16"
                                       Foreground="{StaticResource FreeXWhiteBrush}"/>
                 </Button>
                 <Button x:Name="RedoQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,8,0"
@@ -185,7 +185,7 @@
                         local:RibbonTooltip.Title="Redo"
                         local:RibbonTooltip.KeyTip="3"
                         local:RibbonTooltip.Description="Redo the last undone action.">
-                    <local:RibbonIcon Kind="Redo" IconSize="16"
+                    <local:RibbonIcon Kind="Redo" CommandName="Redo" IconSize="16"
                                       Foreground="{StaticResource FreeXWhiteBrush}"/>
                 </Button>
                 <!-- System buttons — must be docked Right before the fill element -->
@@ -3273,9 +3273,9 @@
 
                 <!-- Expand/collapse chevron -->
                 <Button x:Name="FormulaBarExpandBtn" Grid.Column="3"
-                        Content="▼" Width="18" Height="18"
+                        Width="18" Height="18"
                         Background="Transparent" BorderThickness="0"
-                        FontSize="9" Padding="0" Margin="2,0,0,0"
+                        Padding="0" Margin="2,0,0,0"
                         VerticalAlignment="Top" Cursor="Hand"
                         Click="FormulaBarExpandBtn_Click"
                         AutomationProperties.Name="Expand Formula Bar"
@@ -3283,7 +3283,17 @@
                         AutomationProperties.AutomationId="FormulaBarExpandBtn"
                         local:RibbonTooltip.Title="Expand Formula Bar"
                         local:RibbonTooltip.KeyTip="BX"
-                        local:RibbonTooltip.Description="Expand or collapse the formula bar."/>
+                        local:RibbonTooltip.Description="Expand or collapse the formula bar.">
+                    <Path Data="M2,2 L6,6 L10,2"
+                          Width="12" Height="8"
+                          Stroke="#1F1F1F"
+                          StrokeThickness="1.45"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round"
+                          StrokeLineJoin="Round"
+                          Fill="Transparent"
+                          Stretch="Uniform"/>
+                </Button>
             </Grid>
         </Border>
 
@@ -4180,7 +4190,7 @@
 	                        ToolTip="Back to workbook"
 	                        local:RibbonTooltip.Title="Back"
 	                        local:RibbonTooltip.KeyTip="B">
-                    <local:RibbonIcon Kind="Previous" IconSize="18" Foreground="{StaticResource FreeXWhiteBrush}"/>
+                        <local:RibbonIcon CommandName="Back to workbook" Kind="Previous" IconSize="18" Foreground="{StaticResource FreeXWhiteBrush}"/>
                 </Button>
 
                 <!-- Home (active/selected when showing home view) -->
@@ -4568,7 +4578,7 @@
                                                     AutomationProperties.Name="{Binding PinAutomationName}"
                                                     AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="Pin to list">
-                                                <local:RibbonIcon Kind="Pin" IconSize="12" HorizontalAlignment="Center"/>
+                                                <local:RibbonIcon CommandName="Pin to list" Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
                                             </Button>
                                         </Grid>
                                     </Button>
@@ -4652,7 +4662,7 @@
                                                     AutomationProperties.Name="{Binding PinAutomationName}"
                                                     AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="Unpin from list">
-                                                <local:RibbonIcon Kind="Pin" IconSize="12" HorizontalAlignment="Center"/>
+                                                <local:RibbonIcon CommandName="Unpin from list" Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
                                             </Button>
                                         </Grid>
                                     </Button>

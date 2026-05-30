@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Use in Formula">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><text x="20.52" y="32.4" text-anchor="middle" font-size="17.28" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" dominant-baseline="central">fx</text><path stroke="#0F6D8C" stroke-width="1.8" d="M31.32 17.28h10.8M31.32 27h10.8M31.32 36.72h7.56"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Use in Formula">
+  <rect width="32" height="32" fill="none"/>
+  <text x="10.5" y="22.5" font-size="19" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">fx</text>
+  <path d="M18 9h8M18 14h6M18 19h8" fill="none" stroke="#0F6D8C" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M18 24h5m-2.3-2.4L23 24l-2.3 2.4" fill="none" stroke="#242424" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-
