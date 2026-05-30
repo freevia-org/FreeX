@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Calc;
@@ -175,6 +176,27 @@ public sealed class MainWindowFormulaBarSyncTests
         });
     }
 
+    [Fact]
+    public void NameBoxEnter_NavigatesRefreshesFormulaBarAndReturnsFocusToGrid()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(5, 3, "target cell");
+            harness.SetCellAddressBoxText("C5");
+
+            harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
+
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 5, 3),
+                new CellAddress(harness.CurrentSheetId, 5, 3)));
+            harness.CellAddressBoxText.Should().Be("C5");
+            harness.FormulaBarText.Should().Be("target cell");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
@@ -188,6 +210,7 @@ public sealed class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _setActiveCell;
         private readonly MethodInfo _showInlineEditor;
         private readonly MethodInfo _executeClearSelection;
+        private readonly MethodInfo _cellAddressBoxKeyDown;
 
         private MainWindowHarness(MainWindow window)
         {
@@ -222,6 +245,9 @@ public sealed class MainWindowFormulaBarSyncTests
             _executeClearSelection = typeof(MainWindow)
                 .GetMethod("ExecuteClearSelection", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteClearSelection");
+            _cellAddressBoxKeyDown = typeof(MainWindow)
+                .GetMethod("CellAddressBox_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CellAddressBox_KeyDown");
         }
 
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
@@ -235,6 +261,8 @@ public sealed class MainWindowFormulaBarSyncTests
         public string? InlineEditorText => InlineEditor?.Text;
 
         public bool InlineEditorVisible => InlineEditor?.IsVisible == true;
+
+        public bool SheetGridFocused => ReferenceEquals(Keyboard.FocusedElement, (SheetGridView)_window.FindName("SheetGrid"));
 
         public void SetCellText(uint row, uint col, string text)
         {
@@ -316,6 +344,25 @@ public sealed class MainWindowFormulaBarSyncTests
         {
             ((TextBox)_window.FindName("FormulaBar")).Text = text;
             PumpDispatcher();
+        }
+
+        public void SetCellAddressBoxText(string text)
+        {
+            ((TextBox)_window.FindName("CellAddressBox")).Text = text;
+            PumpDispatcher();
+        }
+
+        public bool PressCellAddressBoxKey(Key key)
+        {
+            var source = PresentationSource.FromVisual(_window)
+                ?? throw new InvalidOperationException("MainWindow presentation source is not available.");
+            var args = new KeyEventArgs(Keyboard.PrimaryDevice, source, Environment.TickCount, key)
+            {
+                RoutedEvent = Keyboard.KeyDownEvent
+            };
+            _cellAddressBoxKeyDown.Invoke(_window, [((TextBox)_window.FindName("CellAddressBox")), args]);
+            PumpDispatcher();
+            return args.Handled;
         }
 
         public void SetInlineEditorText(string text)
