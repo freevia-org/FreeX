@@ -135,6 +135,10 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
 {
     private readonly SheetId _sheetId;
     private readonly int _tableId;
+    private readonly string? _styleName;
+    private readonly bool _updateStyleName;
+    private readonly bool? _hasAutoFilter;
+    private readonly bool? _totalsRowShown;
     private readonly bool _showFirstColumn;
     private readonly bool _showLastColumn;
     private readonly bool _showRowStripes;
@@ -149,7 +153,11 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
         bool showFirstColumn,
         bool showLastColumn,
         bool showRowStripes,
-        bool showColumnStripes)
+        bool showColumnStripes,
+        string? styleName = null,
+        bool updateStyleName = false,
+        bool? hasAutoFilter = null,
+        bool? totalsRowShown = null)
     {
         _sheetId = sheetId;
         _tableId = tableId;
@@ -157,6 +165,10 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
         _showLastColumn = showLastColumn;
         _showRowStripes = showRowStripes;
         _showColumnStripes = showColumnStripes;
+        _styleName = styleName;
+        _updateStyleName = updateStyleName;
+        _hasAutoFilter = hasAutoFilter;
+        _totalsRowShown = totalsRowShown;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -175,7 +187,11 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
             _showFirstColumn,
             _showLastColumn,
             _showRowStripes,
-            _showColumnStripes);
+            _showColumnStripes,
+            _styleName,
+            _updateStyleName,
+            _hasAutoFilter,
+            _totalsRowShown);
 
         return new CommandOutcome(true);
     }
@@ -196,7 +212,11 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
         bool showFirstColumn,
         bool showLastColumn,
         bool showRowStripes,
-        bool showColumnStripes)
+        bool showColumnStripes,
+        string? styleName,
+        bool updateStyleName,
+        bool? hasAutoFilter,
+        bool? totalsRowShown)
     {
         var copy = new StructuredTableModel
         {
@@ -204,15 +224,15 @@ public sealed class ConfigureStructuredTableStyleOptionsCommand : IWorkbookComma
             Name = table.Name,
             DisplayName = table.DisplayName,
             Range = table.Range,
-            HasAutoFilter = table.HasAutoFilter,
-            TotalsRowShown = table.TotalsRowShown,
+            HasAutoFilter = hasAutoFilter ?? table.HasAutoFilter,
+            TotalsRowShown = totalsRowShown ?? table.TotalsRowShown,
             HeaderRowCount = table.HeaderRowCount,
             TotalsRowCount = table.TotalsRowCount,
             InsertRow = table.InsertRow,
             InsertRowShift = table.InsertRowShift,
             Published = table.Published,
             Comment = table.Comment,
-            StyleName = table.StyleName,
+            StyleName = updateStyleName ? styleName : table.StyleName,
             ShowFirstColumn = showFirstColumn,
             ShowLastColumn = showLastColumn,
             ShowRowStripes = showRowStripes,

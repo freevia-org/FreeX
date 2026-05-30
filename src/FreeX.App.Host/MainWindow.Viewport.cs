@@ -421,6 +421,7 @@ public partial class MainWindow
         HorizontalScroll.LargeChange  = Math.Max(1, scrollableColumnCount);
         RefreshValidationDropdown();
         RefreshFormulaReferenceHighlights();
+        RefreshTableContextualTab();
         RefreshPivotFieldListPane();
         RefreshSlicerTimelinePane();
     }

@@ -2940,6 +2940,111 @@
                 </Border>
             </TabItem>
 
+            <!-- TABLE DESIGN -->
+            <TabItem x:Name="TableDesignTab" Header="{local:Loc Key=MainWindow_Header_TableDesign}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JT" local:RibbonMetadata.CatalogId="TableDesignTab">
+                <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
+                    <ScrollViewer HorizontalScrollBarVisibility="Hidden"
+                                  VerticalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
+                        <StackPanel Orientation="Horizontal" MinHeight="88">
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="TableDesignPropertiesGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_TableName}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_TableName}"
+                                            local:RibbonTooltip.KeyTip="N"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RenamingTablesFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Table Name"/>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_ResizeTable}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ResizeTable}"
+                                            local:RibbonTooltip.KeyTip="Z"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ResizingStructuredTablesFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Resize Table"/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Properties}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="TableDesignToolsGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_SummarizeWithPivotTable}" Width="148" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SummarizeWithPivotTable}"
+                                            local:RibbonTooltip.KeyTip="S"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_TablePivotSummaryShortcutIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Summarize with PivotTable"/>
+                                    <Button Width="124" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableDesignRemoveDuplicatesBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RemoveDuplicates}"
+                                            local:RibbonTooltip.KeyTip="D"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeleteDuplicateRowsFromTheActiveTable}" local:RibbonMetadata.CommandName="Remove Duplicates">
+                                        <TextBlock Text="{local:Loc Key=MainWindow_Text_RemoveDuplicates}" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
+                                    </Button>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_ConvertToRange}" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ConvertToRange}"
+                                            local:RibbonTooltip.KeyTip="V"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ConvertingTablesToPlainRangesIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Convert to Range"/>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Tools}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="TableDesignStyleOptionsGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
+                                        <CheckBox x:Name="TableDesignHeaderRowBtn" Content="{local:Loc Key=MainWindow_Content_HeaderRow}" Width="102" Margin="4,1" IsChecked="True" IsEnabled="False"
+                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_HeaderRow}"
+                                                  local:RibbonTooltip.KeyTip="H"
+                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_HeaderRowsRemainVisibleForStructuredTablesInFreeX}" local:RibbonMetadata.CommandName="Header Row"/>
+                                        <CheckBox x:Name="TableDesignTotalRowBtn" Content="{local:Loc Key=MainWindow_Content_TotalRow}" Width="102" Margin="4,1" Click="TableDesignTotalRowBtn_Click"
+                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_TotalRow}"
+                                                  local:RibbonTooltip.KeyTip="T"
+                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowOrHideTheTotalsRowForTheActiveTable}" local:RibbonMetadata.CommandName="Total Row"/>
+                                    </StackPanel>
+                                    <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
+                                        <CheckBox x:Name="TableDesignFirstColumnBtn" Content="{local:Loc Key=MainWindow_Content_FirstColumn}" Width="104" Margin="4,1" Click="TableDesignFirstColumnBtn_Click"
+                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FirstColumn}"
+                                                  local:RibbonTooltip.KeyTip="FC"
+                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_EmphasizeTheFirstColumnInTheActiveTable}" local:RibbonMetadata.CommandName="First Column"/>
+                                        <CheckBox x:Name="TableDesignLastColumnBtn" Content="{local:Loc Key=MainWindow_Content_LastColumn}" Width="104" Margin="4,1" Click="TableDesignLastColumnBtn_Click"
+                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_LastColumn}"
+                                                  local:RibbonTooltip.KeyTip="L"
+                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_EmphasizeTheLastColumnInTheActiveTable}" local:RibbonMetadata.CommandName="Last Column"/>
+                                    </StackPanel>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <CheckBox x:Name="TableDesignBandedRowsBtn" Content="{local:Loc Key=MainWindow_Content_BandedRows}" Width="112" Margin="4,1" Click="TableDesignBandedRowsBtn_Click"
+                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_BandedRows}"
+                                                  local:RibbonTooltip.KeyTip="B"
+                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ToggleBandedRowFormattingForTheActiveTable}" local:RibbonMetadata.CommandName="Banded Rows"/>
+                                        <CheckBox x:Name="TableDesignBandedColumnsBtn" Content="{local:Loc Key=MainWindow_Content_BandedColumns}" Width="128" Margin="4,1" Click="TableDesignBandedColumnsBtn_Click"
+                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_BandedColumns}"
+                                                  local:RibbonTooltip.KeyTip="C"
+                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ToggleBandedColumnFormattingForTheActiveTable}" local:RibbonMetadata.CommandName="Banded Columns"/>
+                                    </StackPanel>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <CheckBox x:Name="TableDesignFilterButtonBtn" Content="{local:Loc Key=MainWindow_Content_FilterButton}" Width="112" Margin="4,1" Click="TableDesignFilterButtonBtn_Click"
+                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FilterButton}"
+                                                  local:RibbonTooltip.KeyTip="A"
+                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowOrHideAutoFilterButtonsForTheActiveTable}" local:RibbonMetadata.CommandName="Filter Button"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_TableStyleOptions}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
+                            <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="TableDesignStylesGroup">
+                                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
+                                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_Styles}" Width="92" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableDesignStylesBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_TableStyles}"
+                                            local:RibbonTooltip.KeyTip="Y"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ChooseAStyleForTheActiveStructuredTable}" local:RibbonMetadata.CommandName="Table Styles">
+                                        <Button.ContextMenu>
+                                            <ContextMenu x:Name="TableDesignStyleGalleryMenu"/>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                </StackPanel>
+                                <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_TableStyles}" Style="{StaticResource GroupLbl}"/></Border>
+                            </Grid>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
             <!-- PIVOT TABLE ANALYZE -->
             <TabItem x:Name="PivotTableAnalyzeTab" Header="{local:Loc Key=MainWindow_Header_PivotTableAnalyze}" Visibility="Collapsed" local:RibbonTooltip.KeyTip="JA" local:RibbonMetadata.CatalogId="PivotTableAnalyzeTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">

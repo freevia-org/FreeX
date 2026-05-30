@@ -219,6 +219,11 @@ public partial class MainWindow
     private void RemoveDuplicatesBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        ShowRemoveDuplicatesDialog(range);
+    }
+
+    private void ShowRemoveDuplicatesDialog(GridRange range)
+    {
         var sheet = _workbook.GetSheet(_currentSheetId);
         var columns = sheet is null
             ? RemoveDuplicatesDialog.BuildColumnChoices(range)

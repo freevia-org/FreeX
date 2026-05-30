@@ -22,6 +22,7 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             "Data",
             "Review",
             "View",
+            "Table Design",
             "PivotTable Analyze",
             "Design",
             "Help");
@@ -39,6 +40,7 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             "Help");
 
         catalog.ContextualTabs.Select(tab => tab.Header).Should().Equal(
+            "Table Design",
             "PivotTable Analyze",
             "Design");
 
@@ -50,6 +52,7 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         AssertGroups(catalog, "Data", "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline");
         AssertGroups(catalog, "Review", "Proofing", "Accessibility", "Comments", "Notes", "Protect");
         AssertGroups(catalog, "View", "Workbook Views", "Show", "Zoom", "Window");
+        AssertGroups(catalog, "Table Design", "Properties", "Tools", "Table Style Options", "Table Styles");
         AssertGroups(catalog, "PivotTable Analyze", "PivotTable", "Active Field", "Group", "Filter", "Data", "Actions", "Calculations", "Tools", "Show");
         AssertGroups(catalog, "Design", "Layout", "PivotTable Style Options", "PivotTable Styles");
         AssertGroups(catalog, "Help", "Help");
@@ -70,6 +73,7 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             ["Data"] = ("DataTab", ["DataGetTransformGroup", "DataQueriesConnectionsGroup", "DataSortFilterGroup", "DataToolsGroup", "DataForecastGroup", "DataOutlineGroup"]),
             ["Review"] = ("ReviewTab", ["ReviewProofingGroup", "ReviewAccessibilityGroup", "ReviewCommentsGroup", "ReviewNotesGroup", "ReviewProtectGroup"]),
             ["View"] = ("ViewTab", ["ViewWorkbookViewsGroup", "ViewShowGroup", "ViewZoomGroup", "ViewWindowGroup"]),
+            ["Table Design"] = ("TableDesignTab", ["TableDesignPropertiesGroup", "TableDesignToolsGroup", "TableDesignStyleOptionsGroup", "TableDesignStylesGroup"]),
             ["PivotTable Analyze"] = ("PivotTableAnalyzeTab", ["PivotTableAnalyzePivotTableGroup", "PivotTableAnalyzeActiveFieldGroup", "PivotTableAnalyzeGroupGroup", "PivotTableAnalyzeFilterGroup", "PivotTableAnalyzeDataGroup", "PivotTableAnalyzeActionsGroup", "PivotTableAnalyzeCalculationsGroup", "PivotTableAnalyzeToolsGroup", "PivotTableAnalyzeShowGroup"]),
             ["Design"] = ("PivotTableDesignTab", ["PivotTableDesignLayoutGroup", "PivotTableDesignStyleOptionsGroup", "PivotTableDesignStylesGroup"]),
             ["Help"] = ("HelpTab", ["HelpHelpGroup"])
