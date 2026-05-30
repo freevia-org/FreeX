@@ -3392,6 +3392,9 @@
                         FontSize="9" Padding="0" Margin="2,0,0,0"
                         VerticalAlignment="Top" Cursor="Hand"
                         Click="FormulaBarExpandBtn_Click"
+                        AutomationProperties.Name="Expand Formula Bar"
+                        AutomationProperties.HelpText="Expand or collapse the formula bar"
+                        AutomationProperties.AutomationId="FormulaBarExpandBtn"
                         local:RibbonTooltip.Title="Expand Formula Bar"
                         local:RibbonTooltip.KeyTip="BX"
                         local:RibbonTooltip.Description="Expand or collapse the formula bar."/>
