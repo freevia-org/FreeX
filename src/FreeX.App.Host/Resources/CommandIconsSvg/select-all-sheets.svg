@@ -1,5 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Select All Sheets">
-
-  <rect width="54" height="54" fill="none"/>
-  <g><rect fill="#f8fafc" stroke="#202124" stroke-width="1.8" x="9.72" y="11.88" width="34.56" height="25.92"/><path d="M9.72 11.88h11.88v9.72H9.72z" fill="#E6F6FA"/><path stroke="#202124" stroke-width="1.2" d="M21.6 11.88v25.92M33.48 11.88v25.92M9.72 24.84h34.56"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Select all sheets">
+  <rect width="32" height="32" fill="none"/>
+  <g fill="none" stroke="#242424" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">
+    <path d="M6 21h12c1.4 0 2.5-1.1 2.5-2.5V14c0-1.4 1.1-2.5 2.5-2.5h3"/>
+    <path d="M8 16h12"/>
+    <path d="M10 24h10c1.4 0 2.5-1.1 2.5-2.5"/>
+    <path d="M12 17.5l3 3 6-7"/>
+  </g>
 </svg>
