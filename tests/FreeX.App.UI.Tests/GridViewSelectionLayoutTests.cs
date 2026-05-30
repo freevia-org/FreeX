@@ -174,7 +174,7 @@ public sealed class GridViewSelectionLayoutTests
     }
 
     [Fact]
-    public void CalculateQuickAnalysisDataBarPreviewRects_StoresNumericValuesDuringCellScan()
+    public void CalculateQuickAnalysisDataBarPreviewRects_CalculatesMaxWithoutNumericCellList()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "QuickAnalysisPreviewLayoutPlanner.cs"));
@@ -182,11 +182,14 @@ public sealed class GridViewSelectionLayoutTests
             source.IndexOf("public static IReadOnlyList<Rect> CalculateDataBarPreviewRects", StringComparison.Ordinal)..
             source.IndexOf("public static IReadOnlyList<Rect> CalculateCellPreviewRects", StringComparison.Ordinal)];
 
-        dataBars.Should().Contain("var numericCells = new List<(DisplayCell Cell, double Value)>();");
-        dataBars.Should().Contain("numericCells.Add((cell, value));");
-        dataBars.Should().Contain("foreach (var (cell, value) in numericCells)");
+        dataBars.Should().Contain("var hasNumericCell = false;");
+        dataBars.Should().Contain("hasNumericCell = true;");
+        dataBars.Should().Contain("if (positiveValue > max)");
+        dataBars.Should().Contain("foreach (var cell in viewport.Cells)");
+        dataBars.Should().Contain("IsCellInRange(cell, range)");
         dataBars.Should().Contain("BuildRowMetricLookup(viewport.RowMetrics)");
         dataBars.Should().Contain("BuildColMetricLookup(viewport.ColMetrics)");
+        dataBars.Should().NotContain("numericCells");
         dataBars.Should().NotContain(".Where(");
         dataBars.Should().NotContain(".Select(");
         dataBars.Should().NotContain(".DefaultIfEmpty(");
