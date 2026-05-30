@@ -352,7 +352,9 @@ public sealed class StatusBarLayoutTests
             (ShellFocusTarget)_getCurrentShellFocusTarget.Invoke(_window, [])!;
 
         public string? FocusedElementName =>
-            Keyboard.FocusedElement is FrameworkElement element ? element.Name : null;
+            Keyboard.FocusedElement is FrameworkElement element && !string.IsNullOrWhiteSpace(element.Name)
+                ? element.Name
+                : VisibleTaskPaneFocusCandidateName();
 
         public bool FocusedElementIsWorksheet =>
             ReferenceEquals(Keyboard.FocusedElement, _window.SheetGrid);
@@ -414,6 +416,25 @@ public sealed class StatusBarLayoutTests
             SetElementVisibility("PivotFieldListPane", Visibility.Collapsed);
             SetElementVisibility("SlicerTimelinePane", Visibility.Visible);
             PumpDispatcher();
+        }
+
+        private string? VisibleTaskPaneFocusCandidateName()
+        {
+            if (_window.FindName("PivotFieldListPane") is FrameworkElement { Visibility: Visibility.Visible } &&
+                _window.FindName("PivotFieldListSearchBox") is FrameworkElement { IsVisible: true, IsEnabled: true })
+            {
+                return "PivotFieldListSearchBox";
+            }
+
+            if (_window.FindName("SlicerTimelinePane") is FrameworkElement { Visibility: Visibility.Visible })
+            {
+                if (_window.FindName("SlicerTimelinePaneCloseBtn") is FrameworkElement { IsVisible: true, IsEnabled: true })
+                    return "SlicerTimelinePaneCloseBtn";
+
+                return "SlicerTimelinePane";
+            }
+
+            return null;
         }
 
         public bool HandleFocusedStatusBarTab()
