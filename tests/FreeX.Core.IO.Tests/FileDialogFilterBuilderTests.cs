@@ -173,6 +173,8 @@ public sealed class FileDialogFilterBuilderTests
     [InlineData(".XLSX", "xlsx")]
     [InlineData("", "unknown")]
     [InlineData("   ", "unknown")]
+    [InlineData("*.*", "unknown")]
+    [InlineData(".tar.gz", "unknown")]
     public void FileFormatResolver_CreatesSafeFileTypeTokens(string extension, string expected)
     {
         FileFormatResolver.SafeFileTypeFromExtension(extension).Should().Be(expected);
