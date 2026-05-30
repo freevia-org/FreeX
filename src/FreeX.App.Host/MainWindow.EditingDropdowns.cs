@@ -68,7 +68,7 @@ public partial class MainWindow
             Padding = new System.Windows.Thickness(0),
             Background = System.Windows.Media.Brushes.White,
             BorderBrush = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(33, 115, 70)),
+                System.Windows.Media.Color.FromRgb(15, 109, 140)),
             BorderThickness = new System.Windows.Thickness(1),
             MaxDropDownHeight = 220,
             ToolTip = "Pick from list"

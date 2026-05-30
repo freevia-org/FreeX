@@ -640,6 +640,8 @@ public partial class MainWindow
         {
             _selectionAnchor = merge.Value.Start;
             _selectionCursor = merge.Value.End;
+            sheet!.ActiveRow = merge.Value.Start.Row;
+            sheet.ActiveCol = merge.Value.Start.Col;
             SheetGrid.SelectedRanges = null;
             SheetGrid.SelectedRange = merge.Value;
             CellAddressBox.Text = FormatCellReference(merge.Value.Start);
@@ -655,6 +657,12 @@ public partial class MainWindow
 
         _selectionAnchor = addr;
         _selectionCursor = addr;
+        if (sheet is not null)
+        {
+            sheet.ActiveRow = addr.Row;
+            sheet.ActiveCol = addr.Col;
+        }
+
         SheetGrid.SelectedRanges = null;
         SheetGrid.SelectedRange = new GridRange(addr, addr);
         CellAddressBox.Text = FormatCellReference(addr);
@@ -666,6 +674,23 @@ public partial class MainWindow
         RefreshStatusBar();
         RefreshValidationDropdown();
         UpdateCommentPreview(addr);
+    }
+
+    private void EnsureActiveCellSelection(Sheet? sheet)
+    {
+        if (sheet is null)
+            return;
+
+        if (SheetGrid.SelectedRange is { } selectedRange &&
+            selectedRange.Start.Sheet == _currentSheetId &&
+            selectedRange.End.Sheet == _currentSheetId)
+        {
+            return;
+        }
+
+        var row = Math.Clamp(sheet.ActiveRow ?? 1u, 1u, CellAddress.MaxRow);
+        var col = Math.Clamp(sheet.ActiveCol ?? 1u, 1u, CellAddress.MaxCol);
+        SetActiveCell(new CellAddress(_currentSheetId, row, col));
     }
 
     private void SelectCurrentRegionOrAll()

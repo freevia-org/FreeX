@@ -11,7 +11,7 @@ namespace FreeX.Core.IO;
 
 /// <summary>
 /// XLSX file adapter using ClosedXML.
-/// Supports standard Excel .xlsx files.
+/// Supports standard .xlsx workbook files.
 /// </summary>
 public sealed partial class XlsxFileAdapter : IFileAdapter
 {
@@ -20,13 +20,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     // so repeated styles are mapped once without materializing an XLStyle for every used cell.
     private static readonly Func<IXLCell, object?>? XlCellStyleValueAccessor = CreateXlCellStyleValueAccessor();
     public string Extension => ".xlsx";
-    public string FormatName => "Excel Workbook";
+    public string FormatName => "XLSX Workbook";
     public IReadOnlyList<FileFormatDescriptor> Formats { get; } =
     [
-        new(".xlsx", "Excel Workbook", CanOpen: true, CanSave: true),
-        new(".xlsm", "Excel Macro-Enabled Workbook", CanOpen: true, CanSave: false),
-        new(".xltx", "Excel Template", CanOpen: true, CanSave: false, OpensAsTemplate: true),
-        new(".xltm", "Excel Macro-Enabled Template", CanOpen: true, CanSave: false, OpensAsTemplate: true)
+        new(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
+        new(".xlsm", "XLSM Macro-Enabled Workbook", CanOpen: true, CanSave: false),
+        new(".xltx", "XLTX Template", CanOpen: true, CanSave: false, OpensAsTemplate: true),
+        new(".xltm", "XLTM Macro-Enabled Template", CanOpen: true, CanSave: false, OpensAsTemplate: true)
     ];
 
     /// <summary>
