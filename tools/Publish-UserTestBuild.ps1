@@ -39,8 +39,21 @@ function Assert-SafeTimestampUrl {
     }
 }
 
+function Assert-MsixCertificatePath {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $Value -PathType Leaf)) {
+        throw "MsixCertificatePath must reference an existing certificate file."
+    }
+}
+
 Assert-SafeArtifactToken -Value $RuntimeIdentifier -Label "RuntimeIdentifier"
 Assert-SafeTimestampUrl -Value $MsixTimestampUrl
+Assert-MsixCertificatePath -Value $MsixCertificatePath
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "src\FreeX.App.Host\FreeX.App.Host.csproj"

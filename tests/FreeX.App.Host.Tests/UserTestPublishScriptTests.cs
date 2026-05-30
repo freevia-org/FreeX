@@ -20,8 +20,10 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("function ConvertTo-MsixPackageVersion");
         script.Should().Contain("function Assert-SafeArtifactToken");
         script.Should().Contain("function Assert-SafeTimestampUrl");
+        script.Should().Contain("function Assert-MsixCertificatePath");
         script.Should().Contain("Assert-SafeArtifactToken -Value $RuntimeIdentifier -Label \"RuntimeIdentifier\"");
         script.Should().Contain("Assert-SafeTimestampUrl -Value $MsixTimestampUrl");
+        script.Should().Contain("Assert-MsixCertificatePath -Value $MsixCertificatePath");
         script.Should().Contain("rev-parse --short=8 HEAD");
         script.Should().Contain("$buildStamp = Get-Date -Format \"yyyyMMdd-HHmmss\"");
         script.Should().Contain("freex-$versionSlug-$buildStamp-$commitId-$RuntimeIdentifier-$modeSlug");
@@ -49,6 +51,30 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("Microsoft Excel is a trademark of Microsoft Corporation.");
         script.Should().Contain("docs/PRIVACY.md");
         script.Should().Contain("THIRD_PARTY_NOTICES.md");
+    }
+
+    [Fact]
+    public void PublishScript_RejectsDirectoryMsixCertificatePathBeforePublishing()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
+        var outputDirectory = Path.Combine(tempDirectory, "out");
+        var certificateDirectory = Path.Combine(tempDirectory, "certificate");
+        Directory.CreateDirectory(outputDirectory);
+        Directory.CreateDirectory(certificateDirectory);
+
+        try
+        {
+            var result = RunPowerShellScript(scriptPath, $"-PublishMode Msix -MsixCertificatePath \"{certificateDirectory}\" -Version 0.8.0 -OutputRoot \"{outputDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("MsixCertificatePath must reference an existing certificate file");
+            Directory.GetFileSystemEntries(outputDirectory).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]
