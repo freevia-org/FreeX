@@ -235,6 +235,23 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
+    public void Plan_SourceAppliesProfileOverridesInPlace()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));
+        var method = source.Substring(
+            source.IndexOf("private static RibbonAdaptiveLayoutResult Plan(", StringComparison.Ordinal),
+            source.IndexOf("public static IReadOnlyList<double> BuildResizeThresholds", StringComparison.Ordinal) -
+            source.IndexOf("private static RibbonAdaptiveLayoutResult Plan(", StringComparison.Ordinal));
+
+        method.Should().Contain("ApplyPlanOverridesInPlace(");
+        method.Should().NotContain("ApplyBreakpointOverrides(");
+        method.Should().NotContain("ApplyRuntimePriorityStates(");
+        method.Should().NotContain("ApplyRuntimeVisibilityStates(");
+        method.Should().NotContain("states = RibbonAdaptiveTabProfiles");
+        method.Should().NotContain("states = RibbonAdaptivePriorityPlanner");
+    }
+
+    [Fact]
     public void Plan_SourceStaysFreeOfWpfVisualTreeMeasurementWork()
     {
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));

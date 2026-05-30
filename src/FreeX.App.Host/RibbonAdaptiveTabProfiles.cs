@@ -168,20 +168,52 @@ internal static class RibbonAdaptiveTabProfiles
         string? selectedTabHeader = null)
     {
         var states = plannedStates.ToArray();
+        ApplyBreakpointOverridesInPlace(availableWidth, groupNames, states, selectedTabHeader);
+        return states;
+    }
+
+    public static void ApplyBreakpointOverridesInPlace(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states,
+        string? selectedTabHeader = null) =>
+        ApplyBreakpointOverridesInPlace(
+            availableWidth,
+            groupNames,
+            states,
+            FindProfile(groupNames, selectedTabHeader));
+
+    public static void ApplyPlanOverridesInPlace(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states,
+        string? selectedTabHeader = null)
+    {
+        var profile = FindProfile(groupNames, selectedTabHeader);
+        ApplyBreakpointOverridesInPlace(availableWidth, groupNames, states, profile);
+        profile?.ApplyRuntimeStateOverrides(availableWidth, groupNames, states);
+        profile?.ApplyRuntimeVisibilityOverrides(availableWidth, groupNames, states);
+    }
+
+    private static void ApplyBreakpointOverridesInPlace(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states,
+        RibbonAdaptiveTabProfile? profile)
+    {
         if (availableWidth <= VeryNarrowWidth)
         {
             CollapseAll(states);
-            return states;
+            return;
         }
 
-        if (FindProfile(groupNames, selectedTabHeader) is { } profile)
+        if (profile is not null)
         {
             profile.Apply(availableWidth, groupNames, states);
-            return states;
+            return;
         }
 
         ApplyGenericFallback(availableWidth, states);
-        return states;
     }
 
     public static IReadOnlyList<RibbonAdaptiveRuntimeStateOverride> GetRuntimeStateOverrides(
@@ -195,6 +227,26 @@ internal static class RibbonAdaptiveTabProfiles
         IReadOnlyList<string> groupNames,
         string? selectedTabHeader = null) =>
         FindProfile(groupNames, selectedTabHeader)?.RuntimeVisibilityFor(availableWidth, groupNames) ?? [];
+
+    public static void ApplyRuntimeStateOverridesInPlace(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states,
+        string? selectedTabHeader = null)
+    {
+        var profile = FindProfile(groupNames, selectedTabHeader);
+        profile?.ApplyRuntimeStateOverrides(availableWidth, groupNames, states);
+    }
+
+    public static void ApplyRuntimeVisibilityOverridesInPlace(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states,
+        string? selectedTabHeader = null)
+    {
+        var profile = FindProfile(groupNames, selectedTabHeader);
+        profile?.ApplyRuntimeVisibilityOverrides(availableWidth, groupNames, states);
+    }
 
     public static IReadOnlySet<int> GetFallbackProtectedGroupIndexes(
         IReadOnlyList<string> groupNames,
@@ -528,6 +580,18 @@ internal static class RibbonAdaptiveTabProfiles
             IReadOnlyList<string> groupNames) =>
             RuntimeOverridesFor(RuntimeVisibility ?? [], availableWidth, groupNames);
 
+        public void ApplyRuntimeStateOverrides(
+            double availableWidth,
+            IReadOnlyList<string> groupNames,
+            RibbonAdaptiveGroupState[] states) =>
+            ApplyRuntimeOverrides(RuntimeStates ?? [], availableWidth, groupNames, states);
+
+        public void ApplyRuntimeVisibilityOverrides(
+            double availableWidth,
+            IReadOnlyList<string> groupNames,
+            RibbonAdaptiveGroupState[] states) =>
+            ApplyRuntimeOverrides(RuntimeVisibility ?? [], availableWidth, groupNames, states);
+
         public IReadOnlyList<string> ProtectedGroupsFor(double availableWidth) =>
             (ProtectedGroups ?? [])
                 .FirstOrDefault(rule => availableWidth <= rule.MaxWidth)
@@ -558,6 +622,26 @@ internal static class RibbonAdaptiveTabProfiles
         }
 
         return decisions;
+    }
+
+    private static void ApplyRuntimeOverrides(
+        IReadOnlyList<RibbonAdaptiveRuntimeStateOverrideRule> rules,
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states)
+    {
+        foreach (var rule in rules)
+        {
+            if (availableWidth > rule.MaxWidth)
+                continue;
+
+            if (TryFindGroupIndex(groupNames, rule.GroupName, out var index) &&
+                index >= 0 &&
+                index < states.Length)
+            {
+                states[index] = rule.State;
+            }
+        }
     }
 
     private sealed record RibbonAdaptiveBreakpointRule(
