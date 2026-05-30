@@ -6,8 +6,9 @@ public static partial class FlashFillService
 {
     private delegate bool NameCleaner(string source, out string name);
 
-    // Delimiters tried in order for extract-by-delimiter and initials patterns.
+    // Delimiters tried in order for extract-by-delimiter, token casing, and initials patterns.
     private static readonly char[] Delimiters = [' ', ',', ';', ':', '|', '-', '_', '@', '.', '/', '\\'];
+    private static readonly char[] DateComponentSeparators = ['/', '-', '.'];
     private static readonly string[] LabelValueSeparators = [":", "=", "->", "=>", "-", "/", "|"];
     private static readonly HashSet<string> KnownNameTitles = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -367,6 +368,160 @@ public static partial class FlashFillService
 
         digitRun = source[(start + 1)..(end + 1)];
         return digitRun.Length > 0;
+    }
+
+    private static Func<string, string?>? TryDateComponentExtraction(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        int? partIndex = null;
+
+        foreach (var (source, expected) in examples)
+        {
+            if (!TrySplitDateLikeComponents(source, out var components))
+                return null;
+
+            var matches = new List<int>(1);
+            for (var i = 0; i < components.Length; i++)
+            {
+                if (components[i] == expected)
+                    matches.Add(i);
+            }
+
+            if (matches.Count != 1)
+                return null;
+
+            if (partIndex is null)
+                partIndex = matches[0];
+            else if (partIndex.Value != matches[0])
+                return null;
+        }
+
+        if (partIndex is null)
+            return null;
+
+        var idx = partIndex.Value;
+        return source => TrySplitDateLikeComponents(source, out var components)
+            ? components[idx]
+            : null;
+    }
+
+    private static bool TrySplitDateLikeComponents(string source, out string[] components)
+    {
+        foreach (var separator in DateComponentSeparators)
+        {
+            var parts = source.Split(separator, StringSplitOptions.TrimEntries);
+            if (parts.Length != 3 ||
+                parts.Any(part => part.Length == 0 || part.Any(c => !char.IsDigit(c))))
+            {
+                continue;
+            }
+
+            var yearIndex = Array.FindIndex(parts, part => part.Length == 4);
+            if (yearIndex < 0 ||
+                Array.FindLastIndex(parts, part => part.Length == 4) != yearIndex ||
+                (yearIndex != 0 && yearIndex != 2))
+            {
+                continue;
+            }
+
+            if (!int.TryParse(parts[yearIndex], NumberStyles.None, CultureInfo.InvariantCulture, out var year) ||
+                year < 1000)
+            {
+                continue;
+            }
+
+            var dateish = true;
+            for (var i = 0; i < parts.Length; i++)
+            {
+                if (i == yearIndex)
+                    continue;
+
+                if (parts[i].Length is < 1 or > 2 ||
+                    !int.TryParse(parts[i], NumberStyles.None, CultureInfo.InvariantCulture, out var value) ||
+                    value is < 1 or > 31)
+                {
+                    dateish = false;
+                    break;
+                }
+            }
+
+            if (!dateish)
+                continue;
+
+            components = parts;
+            return true;
+        }
+
+        components = [];
+        return false;
+    }
+
+    private static Func<string, string?>? TryDelimitedPartCaseTransform(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var delimiter in Delimiters.Where(delimiter => delimiter != ' ').Append(' '))
+        {
+            foreach (var transform in new Func<string, string>[]
+                     {
+                         s => s.ToUpperInvariant(),
+                         s => s.ToLowerInvariant(),
+                         ToProperCase
+                     })
+            {
+                if (TryDelimitedPartCaseTransform(examples, delimiter, transform, out var pattern))
+                    return pattern;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryDelimitedPartCaseTransform(
+        IReadOnlyList<(string Source, string Expected)> examples,
+        char delimiter,
+        Func<string, string> transform,
+        out Func<string, string?>? pattern)
+    {
+        pattern = null;
+        int? partIndex = null;
+        var changedAny = false;
+
+        foreach (var (source, expected) in examples)
+        {
+            var parts = source.Split(delimiter, StringSplitOptions.TrimEntries);
+            if (parts.Length < 2)
+                return false;
+
+            var matches = new List<int>(1);
+            for (var i = 0; i < parts.Length; i++)
+            {
+                if (parts[i].Length > 0 && transform(parts[i]) == expected)
+                    matches.Add(i);
+            }
+
+            if (matches.Count != 1)
+                return false;
+
+            var currentPartIndex = matches[0];
+            if (partIndex is null)
+                partIndex = currentPartIndex;
+            else if (partIndex.Value != currentPartIndex)
+                return false;
+
+            changedAny |= parts[currentPartIndex] != expected;
+        }
+
+        if (partIndex is null || !changedAny)
+            return false;
+
+        var idx = partIndex.Value;
+        pattern = source =>
+        {
+            var parts = source.Split(delimiter, StringSplitOptions.TrimEntries);
+            return idx < parts.Length && parts[idx].Length > 0
+                ? transform(parts[idx])
+                : null;
+        };
+        return true;
     }
 
     private static Func<string, string?>? TryDelimitedPartReorder(IReadOnlyList<(string Source, string Expected)> examples)

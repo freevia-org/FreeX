@@ -182,6 +182,26 @@ public sealed class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public void Fill_DateLikeComponents_ExtractsSameComponentAcrossMixedSeparators()
+    {
+        var result = FlashFillService.Fill(
+            [("2024-1-15", "1"), ("2023/12/05", "12")],
+            ["2022.7.09", "2030-11-30"]);
+
+        result.Should().BeEquivalentTo(["7", "11"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateLikeComponents_ReturnsNullWhenRemainingIsNotDateLike()
+    {
+        var result = FlashFillService.Fill(
+            [("2024-01-15", "01"), ("2023/12/05", "12")],
+            ["2022-Q3-09"]);
+
+        result.Should().BeNull();
+    }
+
     [Theory]
     [InlineData("North (Retail)", "Retail", "South (Wholesale)", "Wholesale", "East (Online)", "Online")]
     [InlineData("INV [Open]", "Open", "INV [Closed]", "Closed", "INV [Pending]", "Pending")]
@@ -393,6 +413,32 @@ public sealed class FlashFillServiceTests
             ["Owner Ada"]);
 
         result.Should().BeNull();
+    }
+
+    [Fact]
+    public void Fill_DelimitedPartCaseTransform_ProperCasesExtractedLabelValues()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Status: pending review", "Pending Review"),
+                ("Status: closed won", "Closed Won")
+            ],
+            ["Status: in progress"]);
+
+        result.Should().BeEquivalentTo(["In Progress"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DelimitedPartCaseTransform_UppercasesExtractedEmailLocalPart()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada.lovelace@example.com", "ADA.LOVELACE"),
+                ("grace.hopper@example.com", "GRACE.HOPPER")
+            ],
+            ["alan.turing@example.com"]);
+
+        result.Should().BeEquivalentTo(["ALAN.TURING"], o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -1302,6 +1348,25 @@ public sealed class FlashFillServiceTests
         result.Should().BeEquivalentTo(["alan.turing@contoso.com"], o => o.WithStrictOrdering());
     }
 
+    [Fact]
+    public void FillFromColumns_FirstLastEmail_TrimsSourceNameCells()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                [" Ada ", " Lovelace "],
+                [" Grace ", " Hopper "]
+            ],
+            ["ada.lovelace@contoso.com", "grace.hopper@contoso.com"],
+            [
+                [" Alan ", " Turing "],
+                [" Katherine ", " Johnson "]
+            ]);
+
+        result.Should().BeEquivalentTo(
+            ["alan.turing@contoso.com", "katherine.johnson@contoso.com"],
+            o => o.WithStrictOrdering());
+    }
+
     [Theory]
     [InlineData("_", "alan_turing@contoso.com")]
     [InlineData("-", "alan-turing@contoso.com")]
@@ -1354,6 +1419,22 @@ public sealed class FlashFillServiceTests
             ["alovelace@contoso.com", "ghopper@contoso.com"],
             [
                 ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo(["aturing@contoso.com"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void FillFromColumns_FirstInitialLastEmail_TrimsSourceNameCellsBeforeTakingInitial()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                [" Ada ", " Lovelace "],
+                [" Grace ", " Hopper "]
+            ],
+            ["alovelace@contoso.com", "ghopper@contoso.com"],
+            [
+                [" Alan ", " Turing "]
             ]);
 
         result.Should().BeEquivalentTo(["aturing@contoso.com"], o => o.WithStrictOrdering());
