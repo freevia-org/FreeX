@@ -120,6 +120,35 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsSpreadsheetMlWorksheetOptions()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+                xmlns:x="urn:schemas-microsoft-com:office:excel">
+              <ss:Worksheet ss:Name="Options">
+                <ss:Table/>
+                <x:WorksheetOptions>
+                  <x:DoNotDisplayGridlines/>
+                  <x:FreezePanes/>
+                  <x:FrozenNoSplit/>
+                  <x:SplitHorizontal>2</x:SplitHorizontal>
+                  <x:TopRowBottomPane>2</x:TopRowBottomPane>
+                  <x:SplitVertical>3</x:SplitVertical>
+                  <x:LeftColumnRightPane>3</x:LeftColumnRightPane>
+                </x:WorksheetOptions>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.ShowGridlines.Should().BeFalse();
+        sheet.FrozenRows.Should().Be(2);
+        sheet.FrozenCols.Should().Be(3);
+    }
+
+    [Fact]
     public void Load_ReadsSpreadsheetMlRowHeightAndHiddenState()
     {
         using var stream = StreamFromString("""
@@ -615,6 +644,38 @@ public sealed class SpreadsheetXmlFileAdapterTests
         loaded.GetSheetAt(1).IsVeryHidden.Should().BeFalse();
         loaded.GetSheetAt(2).IsHidden.Should().BeTrue();
         loaded.GetSheetAt(2).IsVeryHidden.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsSpreadsheetMlWorksheetOptions()
+    {
+        var workbook = new Workbook("XmlWorksheetOptions");
+        var sheet = workbook.AddSheet("Options");
+        sheet.ShowGridlines = false;
+        sheet.FrozenRows = 2;
+        sheet.FrozenCols = 3;
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace x = "urn:schemas-microsoft-com:office:excel";
+        var options = document.Descendants(x + "WorksheetOptions").Single();
+        options.Element(x + "DoNotDisplayGridlines").Should().NotBeNull();
+        options.Element(x + "FreezePanes").Should().NotBeNull();
+        options.Element(x + "FrozenNoSplit").Should().NotBeNull();
+        options.Element(x + "SplitHorizontal")!.Value.Should().Be("2");
+        options.Element(x + "TopRowBottomPane")!.Value.Should().Be("2");
+        options.Element(x + "SplitVertical")!.Value.Should().Be("3");
+        options.Element(x + "LeftColumnRightPane")!.Value.Should().Be("3");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.ShowGridlines.Should().BeFalse();
+        loaded.FrozenRows.Should().Be(2);
+        loaded.FrozenCols.Should().Be(3);
     }
 
     [Fact]
