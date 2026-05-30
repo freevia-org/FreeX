@@ -480,6 +480,7 @@ public static partial class FlashFillService
 
             var patternFn =
                 TryNameAbbreviations(cleanedExamples)
+                ?? TryFullNameEmailPattern(cleanedExamples)
                 ?? TryThreeTokenNameInitial(cleanedExamples)
                 ?? TryThreeTokenNameDropMiddle(cleanedExamples)
                 ?? TryDelimitedPartReorder(cleanedExamples)

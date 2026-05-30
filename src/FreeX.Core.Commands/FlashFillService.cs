@@ -27,6 +27,7 @@ public static partial class FlashFillService
             ?? TryInitials(examples)
             ?? TryNameAbbreviations(examples)
             ?? TryKnownNameCleanupDerivedPattern(examples)
+            ?? TryFullNameEmailPattern(examples)
             ?? TryKnownTitleAndSuffixRemoval(examples)
             ?? TryKnownTitleRemoval(examples)
             ?? TryKnownNameSuffixRemoval(examples)
@@ -125,6 +126,97 @@ public static partial class FlashFillService
     }
 
     // ── Pattern detectors ─────────────────────────────────────────────────────
+
+    private static Func<string, string?>? TryFullNameEmailPattern(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var separator in new[] { '.', '_', '-' })
+        {
+            var pattern = TrySharedDomainFullNameEmailPattern(
+                examples,
+                tokens => (tokens[0] + separator + tokens[1]).ToLowerInvariant());
+            if (pattern is not null)
+                return pattern;
+        }
+
+        var firstInitialLastPattern = TrySharedDomainFullNameEmailPattern(
+            examples,
+            tokens => (GetFirstInitial(tokens[0]) + tokens[1]).ToLowerInvariant());
+        if (firstInitialLastPattern is not null)
+            return firstInitialLastPattern;
+
+        foreach (var separator in new[] { '.', '_', '-' })
+        {
+            var pattern = TrySharedDomainFullNameEmailPattern(
+                examples,
+                tokens => (GetFirstInitial(tokens[0]) + separator + tokens[1]).ToLowerInvariant());
+            if (pattern is not null)
+                return pattern;
+        }
+
+        var firstLastInitialPattern = TrySharedDomainFullNameEmailPattern(
+            examples,
+            tokens => (tokens[0] + GetFirstInitial(tokens[1])).ToLowerInvariant());
+        if (firstLastInitialPattern is not null)
+            return firstLastInitialPattern;
+
+        foreach (var separator in new[] { '.', '_', '-' })
+        {
+            var pattern = TrySharedDomainFullNameEmailPattern(
+                examples,
+                tokens => (tokens[0] + separator + GetFirstInitial(tokens[1])).ToLowerInvariant());
+            if (pattern is not null)
+                return pattern;
+        }
+
+        var lastFirstInitialPattern = TrySharedDomainFullNameEmailPattern(
+            examples,
+            tokens => (tokens[1] + GetFirstInitial(tokens[0])).ToLowerInvariant());
+        if (lastFirstInitialPattern is not null)
+            return lastFirstInitialPattern;
+
+        foreach (var separator in new[] { '.', '_', '-' })
+        {
+            var pattern = TrySharedDomainFullNameEmailPattern(
+                examples,
+                tokens => (tokens[1] + separator + GetFirstInitial(tokens[0])).ToLowerInvariant());
+            if (pattern is not null)
+                return pattern;
+        }
+
+        return null;
+    }
+
+    private static Func<string, string?>? TrySharedDomainFullNameEmailPattern(
+        IReadOnlyList<(string Source, string Expected)> examples,
+        Func<string[], string> localPart)
+    {
+        string? domain = null;
+        foreach (var (source, expected) in examples)
+        {
+            if (!TrySplitWhitespaceTokens(source, 2, out var tokens))
+                return null;
+
+            var expectedPrefix = localPart(tokens) + "@";
+            if (!expected.StartsWith(expectedPrefix, StringComparison.Ordinal))
+                return null;
+
+            var currentDomain = expected[expectedPrefix.Length..];
+            if (string.IsNullOrWhiteSpace(currentDomain) || !currentDomain.Contains('.', StringComparison.Ordinal))
+                return null;
+
+            if (domain is null)
+                domain = currentDomain;
+            else if (!string.Equals(domain, currentDomain, StringComparison.Ordinal))
+                return null;
+        }
+
+        return domain is null
+            ? null
+            : source => TrySplitWhitespaceTokens(source, 2, out var tokens)
+                ? localPart(tokens) + "@" + domain
+                : null;
+    }
 
     private static Func<IReadOnlyList<string>, string>? TryFirstLastEmailPattern(
         IReadOnlyList<IReadOnlyList<string>> exampleSources,

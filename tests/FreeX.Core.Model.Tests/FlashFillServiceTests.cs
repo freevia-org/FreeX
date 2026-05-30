@@ -564,6 +564,56 @@ public sealed class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(".", "alan.turing@contoso.com")]
+    [InlineData("_", "alan_turing@contoso.com")]
+    [InlineData("-", "alan-turing@contoso.com")]
+    public void Fill_FullNamesToFirstLastEmail_LearnsSeparatorAndSharedDomain(
+        string separator,
+        string expected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", $"ada{separator}lovelace@contoso.com"),
+                ("Grace Hopper", $"grace{separator}hopper@contoso.com")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("", "aturing@contoso.com")]
+    [InlineData(".", "a.turing@contoso.com")]
+    [InlineData("_", "a_turing@contoso.com")]
+    [InlineData("-", "a-turing@contoso.com")]
+    public void Fill_FullNamesToFirstInitialLastEmail_LearnsSeparatorAndSharedDomain(
+        string separator,
+        string expected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", $"a{separator}lovelace@contoso.com"),
+                ("Grace Hopper", $"g{separator}hopper@contoso.com")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNamesToEmail_ReturnsNullWhenExampleDomainsDiffer()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", "ada.lovelace@contoso.com"),
+                ("Grace Hopper", "grace.hopper@example.org")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeNull();
+    }
+
     [Fact]
     public void Fill_DelimitedWordsInitials_BuildsInitials()
     {
@@ -1028,6 +1078,19 @@ public sealed class FlashFillServiceTests
             ["Ms. Katherine Johnson III"]);
 
         result.Should().BeEquivalentTo(["K. Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_KnownNameTitlesAndSuffixes_GeneratesEmailFromCleanedNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Dr. Ada Lovelace Jr.", "ada.lovelace@contoso.com"),
+                ("Prof Grace Hopper Sr.", "grace.hopper@contoso.com")
+            ],
+            ["Ms. Alan Turing III"]);
+
+        result.Should().BeEquivalentTo(["alan.turing@contoso.com"], o => o.WithStrictOrdering());
     }
 
     [Fact]
