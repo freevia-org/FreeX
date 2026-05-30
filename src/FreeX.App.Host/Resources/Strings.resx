@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Common_Cancel" xml:space="preserve">
+    <value>_Cancel</value>
+  </data>
+  <data name="Common_ConfirmTitle" xml:space="preserve">
+    <value>Confirm</value>
+  </data>
+  <data name="Common_ErrorTitle" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="Common_InformationTitle" xml:space="preserve">
+    <value>Information</value>
+  </data>
+  <data name="Common_Ok" xml:space="preserve">
+    <value>_OK</value>
+  </data>
+  <data name="Common_WarningTitle" xml:space="preserve">
+    <value>Warning</value>
+  </data>
+  <data name="DeferredCommand_AutoCorrectOptions_Body" xml:space="preserve">
+    <value>AutoCorrect replacement dictionaries are not implemented in FreeX. Proofing options shown here are informational until a local spelling and replacement dictionary model exists.</value>
+  </data>
+  <data name="DeferredCommand_AutoCorrectOptions_Title" xml:space="preserve">
+    <value>AutoCorrect Options</value>
+  </data>
+  <data name="DeferredCommand_EditingLanguages_Body" xml:space="preserve">
+    <value>Editing language installation and Office language packs are not implemented in FreeX. FreeX uses the local app culture and workbook content as-is.</value>
+  </data>
+  <data name="DeferredCommand_EditingLanguages_Title" xml:space="preserve">
+    <value>Editing Languages</value>
+  </data>
+  <data name="DeferredCommand_LocalAccount_Body" xml:space="preserve">
+    <value>Microsoft account integration is not implemented in FreeX. Workbooks are local files; use Options for local app settings and your normal file-system workflow for identity, storage, and sharing.</value>
+  </data>
+  <data name="DeferredCommand_LocalAccount_Title" xml:space="preserve">
+    <value>Account</value>
+  </data>
+  <data name="DeferredCommand_MultiWindow_Body" xml:space="preserve">
+    <value>{0} is deferred until FreeX has multi-window workbook hosting. It is tracked as a documented parity gap, not a silent partial implementation.</value>
+  </data>
+  <data name="DeferredCommand_OfficeAddIns_Body" xml:space="preserve">
+    <value>Office add-ins are excluded from FreeX. Add-in package metadata may be detected and retained, but add-ins are not installed, loaded, or executed.</value>
+  </data>
+  <data name="DeferredCommand_OfficeAddIns_Title" xml:space="preserve">
+    <value>Office Add-ins</value>
+  </data>
+  <data name="DeferredCommand_OnlineTemplates_Body" xml:space="preserve">
+    <value>Online template discovery depends on an external Microsoft template service and is excluded from FreeX. Create a blank workbook or open a local template file instead.</value>
+  </data>
+  <data name="DeferredCommand_OnlineTemplates_Title" xml:space="preserve">
+    <value>Online Templates</value>
+  </data>
+  <data name="DeferredCommand_PivotTable_Body" xml:space="preserve">
+    <value>FreeX loads and saves PivotTable and pivot caches metadata, including external/OLAP cache source metadata, creates and refreshes worksheet-range PivotTables from same-sheet or cross-sheet sources, supports Field List layout editing, GETPIVOTDATA, PivotChart field-button filtering and chart-type changes, Insert Slicer/Timeline authoring, slicer/timeline filtering, and preserves native PivotTable package parts where possible. Exact full-gallery PivotStyle theme semantics, full PivotChart Tools layout/design editing, and external/OLAP/data-model refresh or execution remain partial or excluded.</value>
+  </data>
+  <data name="DeferredCommand_PivotTable_Title" xml:space="preserve">
+    <value>PivotTable</value>
+  </data>
+  <data name="DeferredCommand_QuickAccessToolbar_Body" xml:space="preserve">
+    <value>Quick Access Toolbar customization is not persisted in FreeX yet, so there is no custom toolbar state to reset.</value>
+  </data>
+  <data name="DeferredCommand_QuickAccessToolbar_Title" xml:space="preserve">
+    <value>Quick Access Toolbar</value>
+  </data>
+  <data name="DeferredCommand_RibbonCustomization_Body" xml:space="preserve">
+    <value>Custom ribbon import/export is not implemented in FreeX. Custom Ribbon UI package parts are retained as unsupported XLSX metadata where safe, but FreeX does not run or edit them.</value>
+  </data>
+  <data name="DeferredCommand_RibbonCustomization_Title" xml:space="preserve">
+    <value>Ribbon Customization</value>
+  </data>
+  <data name="DeferredCommand_TrustCenter_Body" xml:space="preserve">
+    <value>Trust Center policy settings are informational in FreeX because FreeX does not execute VBA macros, Office add-ins, ActiveX controls, Power Query, or external data-model refresh.</value>
+  </data>
+  <data name="DeferredCommand_TrustCenter_Title" xml:space="preserve">
+    <value>Trust Center</value>
+  </data>
+  <data name="DeferredCommand_UnsupportedXlsxFeature_DigitalSignatureWarningSuffix" xml:space="preserve">
+    <value> Digital signatures may no longer validate after workbook edits.</value>
+  </data>
+  <data name="DeferredCommand_UnsupportedXlsxFeatureOpenWarning_Body" xml:space="preserve">
+    <value>FreeX opened this workbook, but it contains unsupported or excluded XLSX features: {0}. These features are retained as opaque package parts where safe, but will not be executed, refreshed, rendered, or edited by FreeX.{1}</value>
+  </data>
+  <data name="DeferredCommand_UnsupportedXlsxFeatureOpenWarning_Title" xml:space="preserve">
+    <value>Unsupported XLSX Features Detected</value>
+  </data>
+  <data name="DeferredCommand_UnsupportedXlsxFeatureSaveWarning_Body" xml:space="preserve">
+    <value>This workbook contains features FreeX retains as opaque package parts, but does not run, render, author, or deeply edit: {0}.{1}&#x0A;&#x0A;Continue saving?</value>
+  </data>
+  <data name="DeferredCommand_UnsupportedXlsxFeatureSaveWarning_Title" xml:space="preserve">
+    <value>Unsupported XLSX Features</value>
+  </data>
+  <data name="DeferredCommand_WorkbookTheme_Body" xml:space="preserve">
+    <value>{0} is deferred until FreeX has a workbook theme model. It is tracked as a documented parity gap, not a silent partial implementation.</value>
+  </data>
+  <data name="Startup_CrashReportsConsentPrompt" xml:space="preserve">
+    <value>FreeX can send crash reports to help stabilize tester builds. Reports include app version, runtime, operating system, session ID, exception message, and stack trace. Workbook contents, formulas, filenames, and paths are not collected intentionally, but exception details can occasionally include sensitive values.&#x0A;&#x0A;Send crash reports for this tester build?</value>
+  </data>
+  <data name="Startup_CrashReportsTitle" xml:space="preserve">
+    <value>Crash Reports</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_Charts" xml:space="preserve">
+    <value>XLSX chart package parts</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_ConditionalFormats" xml:space="preserve">
+    <value>unsupported conditional formatting</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_CustomRibbonUi" xml:space="preserve">
+    <value>custom ribbon UI</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_CustomXmlParts" xml:space="preserve">
+    <value>custom XML parts</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_DataModel" xml:space="preserve">
+    <value>Data Model / Power Pivot (excluded)</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_DigitalSignatures" xml:space="preserve">
+    <value>digital signatures</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_DrawingObjects" xml:space="preserve">
+    <value>drawing objects</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_EmbeddedObjects" xml:space="preserve">
+    <value>embedded objects</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_FormControls" xml:space="preserve">
+    <value>form controls / ActiveX controls</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_LinkedDataTypes" xml:space="preserve">
+    <value>Microsoft linked data types (excluded)</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_LiveWebQueries" xml:space="preserve">
+    <value>live web queries / web publishing</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_Macros" xml:space="preserve">
+    <value>VBA macros (excluded)</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_OfficeAddIns" xml:space="preserve">
+    <value>Office add-ins</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_PowerQuery" xml:space="preserve">
+    <value>Power Query queries (excluded)</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_SensitivityLabels" xml:space="preserve">
+    <value>sensitivity labels / IRM metadata</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_SmartArtDiagrams" xml:space="preserve">
+    <value>SmartArt diagrams</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_ThreadedComments" xml:space="preserve">
+    <value>threaded comments</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_TrackChanges" xml:space="preserve">
+    <value>track changes / revision history</value>
+  </data>
+  <data name="UnsupportedXlsxFeatureKind_UnsupportedSheetTypes" xml:space="preserve">
+    <value>chart sheets / dialog sheets / macro sheets</value>
+  </data>
+</root>
