@@ -31,17 +31,17 @@ public sealed class WatchWindowMessageFormatterTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
 
-        source.Should().Contain("Content = \"_Add Watch\"");
+        source.Should().Contain("Content = UiText.Get(\"WatchWindow_AddWatch\")");
         source.Should().Contain("IsEnabled = _addWatch is not null");
         source.Should().Contain("AutomationProperties.SetAutomationId(add, \"WatchWindowAddButton\");");
         source.Should().Contain("AddWatchDialog");
-        source.Should().Contain("Content = \"_Refresh\"");
+        source.Should().Contain("Content = UiText.Get(\"WatchWindow_Refresh\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(refresh, \"WatchWindowRefreshButton\");");
-        source.Should().Contain("Content = \"_Delete Watch\"");
+        source.Should().Contain("Content = UiText.Get(\"WatchWindow_DeleteWatch\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(_deleteButton, \"WatchWindowDeleteButton\");");
-        source.Should().Contain("Content = \"_Close\"");
+        source.Should().Contain("Content = UiText.Get(\"WatchWindow_Close\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(close, \"WatchWindowCloseButton\");");
-        source.Should().Contain("Content = \"_Close\", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true");
+        source.Should().Contain("Content = UiText.Get(\"WatchWindow_Close\"), Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true");
     }
 
     [Fact]
@@ -161,12 +161,12 @@ public sealed class WatchWindowMessageFormatterTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
 
-        source.Should().Contain("Header = \"Book\"");
-        source.Should().Contain("Header = \"Sheet\"");
-        source.Should().Contain("Header = \"Name\"");
-        source.Should().Contain("Header = \"Cell\"");
-        source.Should().Contain("Header = \"Value\"");
-        source.Should().Contain("Header = \"Formula\"");
+        source.Should().Contain("Header = UiText.Get(\"WatchWindow_Book\")");
+        source.Should().Contain("Header = UiText.Get(\"WatchWindow_Sheet\")");
+        source.Should().Contain("Header = UiText.Get(\"WatchWindow_Name\")");
+        source.Should().Contain("Header = UiText.Get(\"WatchWindow_Cell\")");
+        source.Should().Contain("Header = UiText.Get(\"WatchWindow_Value\")");
+        source.Should().Contain("Header = UiText.Get(\"WatchWindow_Formula\")");
     }
 
     [Fact]
@@ -186,10 +186,10 @@ public sealed class WatchWindowMessageFormatterTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
 
-        source.Should().Contain("new Label { Content = \"_Watches:\", Target = _listView");
-        source.Should().Contain("AutomationProperties.SetName(_listView, \"Watches\");");
+        source.Should().Contain("new Label { Content = UiText.Get(\"WatchWindow_Watches\"), Target = _listView");
+        source.Should().Contain("AutomationProperties.SetName(_listView, UiText.Get(\"WatchWindow_Watches2\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_listView, \"WatchWindowList\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_listView, \"Lists watched cells with their workbook, sheet, address, value, and formula.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_listView, UiText.Get(\"WatchWindow_ListsWatchedCellsWithTheirWorkbookSheetAddressValueAndFormula\"));");
     }
 
     [Fact]

@@ -34,10 +34,10 @@ public sealed class PivotTableDialog : Window
     private readonly SheetId _sourceSheetId;
     private readonly TextBox _sourceRangeBox = new();
     private readonly TextBox _destinationRangeBox = new();
-    private readonly RadioButton _selectTableRangeButton = new() { Content = "Select a _table or range", IsChecked = true };
-    private readonly RadioButton _newWorksheetButton = new() { Content = "_New worksheet", IsChecked = true };
-    private readonly RadioButton _existingWorksheetButton = new() { Content = "_Existing worksheet" };
-    private readonly CheckBox _openFieldListBox = new() { Content = "Open PivotTable _Fields pane", IsChecked = true };
+    private readonly RadioButton _selectTableRangeButton = new() { Content = UiText.Get("PivotTable_SelectATableOrRange"), IsChecked = true };
+    private readonly RadioButton _newWorksheetButton = new() { Content = UiText.Get("PivotTable_NewWorksheet"), IsChecked = true };
+    private readonly RadioButton _existingWorksheetButton = new() { Content = UiText.Get("PivotTable_ExistingWorksheet") };
+    private readonly CheckBox _openFieldListBox = new() { Content = UiText.Get("PivotTable_OpenPivotTableFieldsPane"), IsChecked = true };
     private readonly Action<PivotTableRangeSelectionRequest>? _requestRangeSelection;
 
     public PivotTableDialogResult Result { get; private set; }
@@ -60,7 +60,7 @@ public sealed class PivotTableDialog : Window
             destinationText,
             openFieldList: true);
 
-        Title = "Create PivotTable";
+        Title = UiText.Get("PivotTable_CreatePivotTable");
         Width = 500;
         Height = 320;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -68,21 +68,21 @@ public sealed class PivotTableDialog : Window
 
         var stack = new StackPanel { Margin = new Thickness(16) };
 
-        stack.Children.Add(CreateSectionHeader("Choose the data that you want to analyze"));
+        stack.Children.Add(CreateSectionHeader(UiText.Get("PivotTable_ChooseDataHeader")));
         _selectTableRangeButton.Margin = new Thickness(0, 0, 0, 6);
         stack.Children.Add(_selectTableRangeButton);
         _sourceRangeBox.Text = Result.SourceRangeText;
-        AutomationProperties.SetName(_sourceRangeBox, "PivotTable source range");
+        AutomationProperties.SetName(_sourceRangeBox, UiText.Get("PivotTable_PivotTableSourceRange"));
         AddLabeledReferenceEditor(
             stack,
-            "Table/_Range:",
+            UiText.Get("PivotTable_TableRangeLabel"),
             _sourceRangeBox,
-            "Select PivotTable source range",
+            UiText.Get("PivotTable_SelectPivotTableSourceRange"),
             PivotTableRangeSelectionTarget.SourceRange,
             labelMargin: new Thickness(22, 0, 0, 4),
             editorMargin: new Thickness(22, 0, 0, 8));
 
-        stack.Children.Add(CreateSectionHeader("Choose where you want the PivotTable report to be placed"));
+        stack.Children.Add(CreateSectionHeader(UiText.Get("PivotTable_ChooseDestinationHeader")));
         _newWorksheetButton.Margin = new Thickness(0, 0, 0, 4);
         _newWorksheetButton.Checked += (_, _) => UpdateDestinationState();
         _existingWorksheetButton.Checked += (_, _) => UpdateDestinationState();
@@ -90,12 +90,12 @@ public sealed class PivotTableDialog : Window
         stack.Children.Add(_existingWorksheetButton);
 
         _destinationRangeBox.Text = destinationText;
-        AutomationProperties.SetName(_destinationRangeBox, "PivotTable location");
+        AutomationProperties.SetName(_destinationRangeBox, UiText.Get("PivotTable_PivotTableLocation"));
         AddLabeledReferenceEditor(
             stack,
-            "_Location:",
+            UiText.Get("PivotTable_LocationLabel"),
             _destinationRangeBox,
-            "Select PivotTable location",
+            UiText.Get("PivotTable_SelectPivotTableLocation"),
             PivotTableRangeSelectionTarget.DestinationRange,
             labelMargin: new Thickness(22, 4, 0, 4),
             editorMargin: new Thickness(22, 0, 0, 12));
@@ -104,8 +104,8 @@ public sealed class PivotTableDialog : Window
         stack.Children.Add(_openFieldListBox);
 
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
-        var ok = new Button { Content = "_Create", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
+        var ok = new Button { Content = UiText.Get("PivotTable_Create"), Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var cancel = new Button { Content = UiText.Cancel, Width = 80, IsCancel = true };
         ok.Click += (_, _) =>
         {
             if (!ValidateInputs())
@@ -172,7 +172,7 @@ public sealed class PivotTableDialog : Window
     private static string RequireRangeText(string? value, string parameterName)
     {
         if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("Range text is required.", parameterName);
+            throw new ArgumentException(UiText.Get("PivotTable_RangeTextIsRequired"), parameterName);
 
         return value.Trim();
     }
@@ -242,7 +242,7 @@ public sealed class PivotTableDialog : Window
     {
         if (!WorkbookRangeTextCodec.TryParse(_sourceSheetId, _sourceRangeBox.Text, ResolveSheetIdByName, out _))
         {
-            ShowInvalidInputWarning("Enter a valid PivotTable source range.", _sourceRangeBox);
+            ShowInvalidInputWarning(UiText.Get("PivotTable_EnterValidSourceRange"), _sourceRangeBox);
             return false;
         }
 
@@ -250,7 +250,7 @@ public sealed class PivotTableDialog : Window
             && (!WorkbookRangeTextCodec.TryParse(_sourceSheetId, _destinationRangeBox.Text, ResolveSheetIdByName, out var destinationRange)
                 || destinationRange.Start.Sheet != _sourceSheetId))
         {
-            ShowInvalidInputWarning("Enter a destination cell on the active worksheet.", _destinationRangeBox);
+            ShowInvalidInputWarning(UiText.Get("PivotTable_EnterDestinationCellOnActiveWorksheet"), _destinationRangeBox);
             return false;
         }
 

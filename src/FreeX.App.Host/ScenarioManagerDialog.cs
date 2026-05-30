@@ -21,8 +21,8 @@ public sealed partial class ScenarioManagerDialog : Window
     private readonly TextBox _changingCellsBox = new();
     private readonly TextBox _resultCellsBox = new();
     private readonly TextBox _commentBox = new();
-    private readonly CheckBox _lockedBox = new() { Content = "_Prevent changes", Margin = new Thickness(0, 0, 0, 6) };
-    private readonly CheckBox _hiddenBox = new() { Content = "_Hide", Margin = new Thickness(0, 0, 0, 8) };
+    private readonly CheckBox _lockedBox = new() { Content = UiText.Get("ScenarioManager_PreventChanges"), Margin = new Thickness(0, 0, 0, 6) };
+    private readonly CheckBox _hiddenBox = new() { Content = UiText.Get("ScenarioManager_Hide"), Margin = new Thickness(0, 0, 0, 8) };
     private readonly string _defaultScenarioName;
     private readonly SheetId? _currentSheetId;
     private readonly Func<string, SheetId?>? _resolveSheetIdByName;
@@ -47,7 +47,7 @@ public sealed partial class ScenarioManagerDialog : Window
     {
         _currentSheetId = currentSheetId;
         _resolveSheetIdByName = resolveSheetIdByName;
-        Title = "Scenario Manager";
+        Title = UiText.Get("ScenarioManager_ScenarioManager");
         Width = 360;
         Height = 420;
         ResizeMode = ResizeMode.NoResize;
@@ -69,10 +69,10 @@ public sealed partial class ScenarioManagerDialog : Window
         Grid.SetColumn(left, 0);
         body.Children.Add(left);
 
-        left.Children.Add(new Label { Content = "_Scenarios:", Target = _scenarioList, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
-        AutomationProperties.SetName(_scenarioList, "Scenarios");
+        left.Children.Add(new Label { Content = UiText.Get("ScenarioManager_Scenarios"), Target = _scenarioList, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        AutomationProperties.SetName(_scenarioList, UiText.Get("ScenarioManager_Scenarios2"));
         AutomationProperties.SetAutomationId(_scenarioList, "ScenarioManagerScenarioList");
-        AutomationProperties.SetHelpText(_scenarioList, "Select a scenario to show, edit, or delete.");
+        AutomationProperties.SetHelpText(_scenarioList, UiText.Get("ScenarioManager_SelectAScenarioToShowEditOrDelete"));
         _scenarioList.ItemsSource = BuildScenarioItems(workbook);
         _scenarioList.DisplayMemberPath = nameof(ScenarioManagerItem.Name);
         _scenarioList.SelectionChanged += (_, _) => UpdateSelectionState();
@@ -83,7 +83,7 @@ public sealed partial class ScenarioManagerDialog : Window
 
         var editor = new GroupBox
         {
-            Header = "Add/Edit Scenario",
+            Header = UiText.Get("ScenarioManager_AddEditScenario"),
             Margin = new Thickness(0, 12, 0, 0),
             Padding = new Thickness(8)
         };
@@ -100,41 +100,41 @@ public sealed partial class ScenarioManagerDialog : Window
         fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         editor.Content = fields;
 
-        AddField(fields, row: 0, "Scenario _name:", _newNameBox);
+        AddField(fields, row: 0, UiText.Get("ScenarioManager_ScenarioName"), _newNameBox);
         _newNameBox.Text = _defaultScenarioName;
-        AddField(fields, row: 1, "Changing _cells:", _changingCellsBox);
-        AddField(fields, row: 2, "_Result cells:", _resultCellsBox);
-        AddField(fields, row: 3, "_Comment:", _commentBox);
+        AddField(fields, row: 1, UiText.Get("ScenarioManager_ChangingCells"), _changingCellsBox);
+        AddField(fields, row: 2, UiText.Get("ScenarioManager_ResultCells"), _resultCellsBox);
+        AddField(fields, row: 3, UiText.Get("ScenarioManager_Comment"), _commentBox);
         AddCheckBox(fields, row: 4, _lockedBox);
         AddCheckBox(fields, row: 5, _hiddenBox);
-        AutomationProperties.SetName(_newNameBox, "Scenario name");
+        AutomationProperties.SetName(_newNameBox, UiText.Get("ScenarioManager_ScenarioNameAutomationName"));
         AutomationProperties.SetAutomationId(_newNameBox, "ScenarioManagerScenarioNameBox");
-        AutomationProperties.SetHelpText(_newNameBox, "Enter the scenario name to add or edit.");
-        AutomationProperties.SetName(_changingCellsBox, "Changing cells");
+        AutomationProperties.SetHelpText(_newNameBox, UiText.Get("ScenarioManager_EnterTheScenarioNameToAddOrEdit"));
+        AutomationProperties.SetName(_changingCellsBox, UiText.Get("ScenarioManager_ChangingCellsAutomationName"));
         AutomationProperties.SetAutomationId(_changingCellsBox, "ScenarioManagerChangingCellsBox");
-        AutomationProperties.SetHelpText(_changingCellsBox, "Enter the worksheet cells whose values change in the scenario.");
-        AutomationProperties.SetName(_resultCellsBox, "Result cells");
+        AutomationProperties.SetHelpText(_changingCellsBox, UiText.Get("ScenarioManager_EnterTheWorksheetCellsWhoseValuesChangeInTheScenario"));
+        AutomationProperties.SetName(_resultCellsBox, UiText.Get("ScenarioManager_ResultCellsAutomationName"));
         AutomationProperties.SetAutomationId(_resultCellsBox, "ScenarioManagerResultCellsBox");
-        AutomationProperties.SetHelpText(_resultCellsBox, "Enter optional result cells to include in a scenario summary.");
-        AutomationProperties.SetName(_commentBox, "Comment");
+        AutomationProperties.SetHelpText(_resultCellsBox, UiText.Get("ScenarioManager_EnterOptionalResultCellsToIncludeInAScenarioSummary"));
+        AutomationProperties.SetName(_commentBox, UiText.Get("ScenarioManager_CommentAutomationName"));
         AutomationProperties.SetAutomationId(_commentBox, "ScenarioManagerCommentBox");
-        AutomationProperties.SetHelpText(_commentBox, "Enter an optional comment for the scenario.");
-        AutomationProperties.SetName(_lockedBox, "Prevent changes");
+        AutomationProperties.SetHelpText(_commentBox, UiText.Get("ScenarioManager_EnterAnOptionalCommentForTheScenario"));
+        AutomationProperties.SetName(_lockedBox, UiText.Get("ScenarioManager_PreventChangesAutomationName"));
         AutomationProperties.SetAutomationId(_lockedBox, "ScenarioManagerPreventChangesCheckBox");
-        AutomationProperties.SetHelpText(_lockedBox, "Prevent changes to the scenario when the sheet is protected.");
-        AutomationProperties.SetName(_hiddenBox, "Hide");
+        AutomationProperties.SetHelpText(_lockedBox, UiText.Get("ScenarioManager_PreventChangesToTheScenarioWhenTheSheetIsProtected"));
+        AutomationProperties.SetName(_hiddenBox, UiText.Get("ScenarioManager_HideAutomationName"));
         AutomationProperties.SetAutomationId(_hiddenBox, "ScenarioManagerHideCheckBox");
-        AutomationProperties.SetHelpText(_hiddenBox, "Hide the scenario when the sheet is protected.");
+        AutomationProperties.SetHelpText(_hiddenBox, UiText.Get("ScenarioManager_HideTheScenarioWhenTheSheetIsProtected"));
 
         var sideButtons = new StackPanel { Margin = new Thickness(10, 20, 0, 0) };
         Grid.SetColumn(sideButtons, 1);
         body.Children.Add(sideButtons);
-        _addButton = AddActionButton(sideButtons, "_Add...", ScenarioManagerAction.Add, isDefault: _scenarioList.Items.Count == 0);
-        _editButton = AddActionButton(sideButtons, "_Edit...", ScenarioManagerAction.Edit, isEnabled: false);
-        _deleteButton = AddActionButton(sideButtons, "_Delete", ScenarioManagerAction.Delete, isEnabled: false);
-        AddActionButton(sideButtons, "_List...", ScenarioManagerAction.List);
-        _showButton = AddActionButton(sideButtons, "_Show", ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null, isDefault: _scenarioList.SelectedItem is not null);
-        AddActionButton(sideButtons, "S_ummary...", ScenarioManagerAction.Report);
+        _addButton = AddActionButton(sideButtons, UiText.Get("ScenarioManager_Add"), ScenarioManagerAction.Add, isDefault: _scenarioList.Items.Count == 0);
+        _editButton = AddActionButton(sideButtons, UiText.Get("ScenarioManager_Edit"), ScenarioManagerAction.Edit, isEnabled: false);
+        _deleteButton = AddActionButton(sideButtons, UiText.Get("ScenarioManager_Delete"), ScenarioManagerAction.Delete, isEnabled: false);
+        AddActionButton(sideButtons, UiText.Get("ScenarioManager_List"), ScenarioManagerAction.List);
+        _showButton = AddActionButton(sideButtons, UiText.Get("ScenarioManager_Show"), ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null, isDefault: _scenarioList.SelectedItem is not null);
+        AddActionButton(sideButtons, UiText.Get("ScenarioManager_Summary"), ScenarioManagerAction.Report);
         UpdateSelectionState();
 
         var closeRow = new StackPanel
@@ -145,10 +145,10 @@ public sealed partial class ScenarioManagerDialog : Window
         };
         Grid.SetRow(closeRow, 1);
         root.Children.Add(closeRow);
-        var closeButton = new Button { Content = "_Close", Width = 72, IsCancel = true };
-        AutomationProperties.SetName(closeButton, "Close");
+        var closeButton = new Button { Content = UiText.Get("ScenarioManager_Close"), Width = 72, IsCancel = true };
+        AutomationProperties.SetName(closeButton, UiText.Get("ScenarioManager_CloseAutomationName"));
         AutomationProperties.SetAutomationId(closeButton, "ScenarioManagerCloseButton");
-        AutomationProperties.SetHelpText(closeButton, "Close the Scenario Manager dialog.");
+        AutomationProperties.SetHelpText(closeButton, UiText.Get("ScenarioManager_CloseTheScenarioManagerDialog"));
         closeRow.Children.Add(closeButton);
 
         Content = root;
@@ -196,25 +196,25 @@ public sealed partial class ScenarioManagerDialog : Window
     private static string GetActionAutomationName(ScenarioManagerAction action) =>
         action switch
         {
-            ScenarioManagerAction.Add => "Add scenario",
-            ScenarioManagerAction.Edit => "Edit scenario",
-            ScenarioManagerAction.Delete => "Delete scenario",
-            ScenarioManagerAction.List => "List scenarios",
-            ScenarioManagerAction.Show => "Show scenario",
-            ScenarioManagerAction.Report => "Scenario summary",
-            _ => "Save scenario"
+            ScenarioManagerAction.Add => UiText.Get("ScenarioManager_AddScenarioAutomationName"),
+            ScenarioManagerAction.Edit => UiText.Get("ScenarioManager_EditScenarioAutomationName"),
+            ScenarioManagerAction.Delete => UiText.Get("ScenarioManager_DeleteScenarioAutomationName"),
+            ScenarioManagerAction.List => UiText.Get("ScenarioManager_ListScenariosAutomationName"),
+            ScenarioManagerAction.Show => UiText.Get("ScenarioManager_ShowScenarioAutomationName"),
+            ScenarioManagerAction.Report => UiText.Get("ScenarioManager_ScenarioSummaryAutomationName"),
+            _ => UiText.Get("ScenarioManager_SaveScenarioAutomationName")
         };
 
     private static string GetActionHelpText(ScenarioManagerAction action) =>
         action switch
         {
-            ScenarioManagerAction.Add => "Add a scenario using the scenario fields.",
-            ScenarioManagerAction.Edit => "Edit the selected scenario using the scenario fields.",
-            ScenarioManagerAction.Delete => "Delete the selected scenario.",
-            ScenarioManagerAction.List => "Show the list of workbook scenarios.",
-            ScenarioManagerAction.Show => "Apply the selected scenario to the workbook.",
-            ScenarioManagerAction.Report => "Create a scenario summary report.",
-            _ => "Save the scenario using the scenario fields."
+            ScenarioManagerAction.Add => UiText.Get("ScenarioManager_AddAScenarioUsingTheScenarioFields"),
+            ScenarioManagerAction.Edit => UiText.Get("ScenarioManager_EditTheSelectedScenarioUsingTheScenarioFields"),
+            ScenarioManagerAction.Delete => UiText.Get("ScenarioManager_DeleteTheSelectedScenario"),
+            ScenarioManagerAction.List => UiText.Get("ScenarioManager_ShowTheListOfWorkbookScenarios"),
+            ScenarioManagerAction.Show => UiText.Get("ScenarioManager_ApplyTheSelectedScenarioToTheWorkbook"),
+            ScenarioManagerAction.Report => UiText.Get("ScenarioManager_CreateAScenarioSummaryReport"),
+            _ => UiText.Get("ScenarioManager_SaveTheScenarioUsingTheScenarioFields")
         };
 
     private void FocusInitialKeyboardTarget()

@@ -86,14 +86,14 @@ public sealed class PivotChartOptionsDialogResult : IEquatable<PivotChartOptions
 public sealed class PivotChartOptionsDialog : Window
 {
     private readonly ListBox _styleGallery = new();
-    private readonly CheckBox _showFieldButtonsBox = new() { Content = "_Show field buttons on chart" };
-    private readonly CheckBox _showReportFilterButtonsBox = new() { Content = "Report _filter buttons" };
-    private readonly CheckBox _showAxisFieldButtonsBox = new() { Content = "_Axis field buttons" };
-    private readonly CheckBox _showValueFieldButtonsBox = new() { Content = "_Value field buttons" };
-    private readonly CheckBox _showDataTableBox = new() { Content = "Show data _table" };
-    private readonly CheckBox _showDataTableLegendKeysBox = new() { Content = "Show legend _keys" };
-    private readonly CheckBox _roundedCornersBox = new() { Content = "_Rounded corners" };
-    private readonly CheckBox _showHiddenDataBox = new() { Content = "Show data in _hidden rows and columns" };
+    private readonly CheckBox _showFieldButtonsBox = new() { Content = UiText.Get("PivotChartOptions_ShowFieldButtonsOnChart") };
+    private readonly CheckBox _showReportFilterButtonsBox = new() { Content = UiText.Get("PivotChartOptions_ReportFilterButtons") };
+    private readonly CheckBox _showAxisFieldButtonsBox = new() { Content = UiText.Get("PivotChartOptions_AxisFieldButtons") };
+    private readonly CheckBox _showValueFieldButtonsBox = new() { Content = UiText.Get("PivotChartOptions_ValueFieldButtons") };
+    private readonly CheckBox _showDataTableBox = new() { Content = UiText.Get("PivotChartOptions_ShowDataTable") };
+    private readonly CheckBox _showDataTableLegendKeysBox = new() { Content = UiText.Get("PivotChartOptions_ShowLegendKeys") };
+    private readonly CheckBox _roundedCornersBox = new() { Content = UiText.Get("PivotChartOptions_RoundedCorners") };
+    private readonly CheckBox _showHiddenDataBox = new() { Content = UiText.Get("PivotChartOptions_ShowDataInHiddenRowsAndColumns") };
     private readonly ComboBox _blankDisplayBox = new();
 
     public PivotChartOptionsDialogResult Result { get; private set; }
@@ -101,7 +101,7 @@ public sealed class PivotChartOptionsDialog : Window
     public PivotChartOptionsDialog(ChartModel chart)
     {
         Result = FromChart(chart);
-        Title = "PivotChart Options";
+        Title = UiText.Get("PivotChartOptions_PivotChartOptions");
         Width = 420;
         Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -117,7 +117,7 @@ public sealed class PivotChartOptionsDialog : Window
         _styleGallery.SelectedItem = styleOptions.FirstOrDefault(option => option.StyleId == Result.ChartStyleId) ?? styleOptions[0];
         _styleGallery.Height = 126;
         _styleGallery.Margin = new Thickness(0, 0, 0, 8);
-        AutomationProperties.SetName(_styleGallery, "PivotChart style gallery");
+        AutomationProperties.SetName(_styleGallery, UiText.Get("PivotChartOptions_PivotChartStyleGallery"));
         _showFieldButtonsBox.IsChecked = Result.ShowFieldButtons;
         _showFieldButtonsBox.Margin = new Thickness(0, 0, 0, 8);
         _showReportFilterButtonsBox.IsChecked = Result.ShowReportFilterButtons;
@@ -136,9 +136,9 @@ public sealed class PivotChartOptionsDialog : Window
         _showHiddenDataBox.Margin = new Thickness(0, 0, 0, 8);
         _blankDisplayBox.ItemsSource = new[]
         {
-            new BlankDisplayChoice("Gaps", ChartBlankDisplayMode.Gap),
-            new BlankDisplayChoice("Connect data points with line", ChartBlankDisplayMode.Span),
-            new BlankDisplayChoice("Zero", ChartBlankDisplayMode.Zero)
+            new BlankDisplayChoice(UiText.Get("PivotChartOptions_BlankDisplayGaps"), ChartBlankDisplayMode.Gap),
+            new BlankDisplayChoice(UiText.Get("PivotChartOptions_BlankDisplayConnectDataPoints"), ChartBlankDisplayMode.Span),
+            new BlankDisplayChoice(UiText.Get("PivotChartOptions_BlankDisplayZero"), ChartBlankDisplayMode.Zero)
         };
         _blankDisplayBox.DisplayMemberPath = nameof(BlankDisplayChoice.Label);
         _blankDisplayBox.SelectedValuePath = nameof(BlankDisplayChoice.Mode);
@@ -147,24 +147,24 @@ public sealed class PivotChartOptionsDialog : Window
 
         var stack = new StackPanel { Margin = new Thickness(16) };
         var stylePanel = PivotDialogLayout.CreateGroupPanel();
-        stylePanel.Children.Add(new Label { Content = "Chart _style", Target = _styleGallery, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stylePanel.Children.Add(new Label { Content = UiText.Get("PivotChartOptions_ChartStyle"), Target = _styleGallery, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         stylePanel.Children.Add(_styleGallery);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Chart style", stylePanel));
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotChartOptions_ChartStyleGroup"), stylePanel));
 
         var buttonPanel = PivotDialogLayout.CreateGroupPanel();
         buttonPanel.Children.Add(_showFieldButtonsBox);
         buttonPanel.Children.Add(_showReportFilterButtonsBox);
         buttonPanel.Children.Add(_showAxisFieldButtonsBox);
         buttonPanel.Children.Add(_showValueFieldButtonsBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Field buttons", buttonPanel));
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotChartOptions_FieldButtonsGroup"), buttonPanel));
         var layoutPanel = PivotDialogLayout.CreateGroupPanel();
         layoutPanel.Children.Add(_showDataTableBox);
         layoutPanel.Children.Add(_showDataTableLegendKeysBox);
         layoutPanel.Children.Add(_roundedCornersBox);
         layoutPanel.Children.Add(_showHiddenDataBox);
-        layoutPanel.Children.Add(new Label { Content = "_Blank cells", Target = _blankDisplayBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        layoutPanel.Children.Add(new Label { Content = UiText.Get("PivotChartOptions_BlankCells"), Target = _blankDisplayBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         layoutPanel.Children.Add(_blankDisplayBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Layout", layoutPanel));
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotChartOptions_LayoutGroup"), layoutPanel));
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
         Content = stack;
         Loaded += (_, _) => FocusInitialKeyboardTarget();

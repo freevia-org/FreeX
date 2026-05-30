@@ -13,12 +13,12 @@ public sealed record RemoveDuplicatesDialogResult(IReadOnlyList<uint> SelectedCo
 public sealed partial class RemoveDuplicatesDialog : Window
 {
     private readonly List<CheckBox> _boxes = [];
-    private readonly CheckBox _hasHeadersBox = new() { Content = "_My data has headers", IsChecked = true, Margin = new Thickness(0, 0, 0, 8) };
+    private readonly CheckBox _hasHeadersBox = new() { Content = UiText.Get("RemoveDuplicates_MyDataHasHeaders"), IsChecked = true, Margin = new Thickness(0, 0, 0, 8) };
     private readonly StackPanel _columnsPanel = new();
     private readonly IReadOnlyList<RemoveDuplicateColumnChoice> _headerColumns;
     private readonly IReadOnlyList<RemoveDuplicateColumnChoice> _genericColumns;
-    private readonly Button _selectAllButton = new() { Content = "_Select All", Width = 88, Margin = new Thickness(0, 0, 8, 0) };
-    private readonly Button _unselectAllButton = new() { Content = "_Unselect All", Width = 88 };
+    private readonly Button _selectAllButton = new() { Content = UiText.Get("RemoveDuplicates_SelectAll"), Width = 88, Margin = new Thickness(0, 0, 8, 0) };
+    private readonly Button _unselectAllButton = new() { Content = UiText.Get("RemoveDuplicates_UnselectAll"), Width = 88 };
 
     public RemoveDuplicatesDialogResult? Result { get; private set; }
 
@@ -32,7 +32,7 @@ public sealed partial class RemoveDuplicatesDialog : Window
         _hasHeadersBox.IsChecked = hasHeaders;
         ApplyAutomationMetadata();
 
-        Title = "Remove Duplicates";
+        Title = UiText.Get("RemoveDuplicates_RemoveDuplicates");
         Width = 360;
         Height = 360;
         ResizeMode = ResizeMode.NoResize;
@@ -47,7 +47,7 @@ public sealed partial class RemoveDuplicatesDialog : Window
         root.Children.Add(_hasHeadersBox);
         root.Children.Add(new Label
         {
-            Content = "_Columns:",
+            Content = UiText.Get("RemoveDuplicates_Columns"),
             Target = _columnsPanel,
             Margin = new Thickness(0, 0, 0, 4),
             Padding = new Thickness(0)
@@ -172,7 +172,7 @@ public sealed partial class RemoveDuplicatesDialog : Window
         Result = selected with { HasHeaders = _hasHeadersBox.IsChecked == true };
         if (Result.SelectedColumnOffsets.Count == 0)
         {
-            DialogMessageHelper.ShowWarning(this, "Select at least one column.", Title);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("RemoveDuplicates_SelectAtLeastOneColumn"), Title);
             FocusFirstColumnChoice();
             return;
         }

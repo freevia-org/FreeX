@@ -12,19 +12,19 @@ public sealed class ObjectSizeDialog : Window
 {
     private readonly TextBox _widthBox = new();
     private readonly TextBox _heightBox = new();
-    private readonly CheckBox _lockAspectRatioBox = new() { Content = "_Lock aspect ratio", IsChecked = true };
+    private readonly CheckBox _lockAspectRatioBox = new() { Content = UiText.Get("ObjectSizing_LockAspectRatio"), IsChecked = true };
     private readonly double _originalWidth;
     private readonly double _originalHeight;
     private bool _updatingSize;
 
     public ObjectSizeDialogResult Result { get; private set; }
 
-    public ObjectSizeDialog(double width, double height, string title = "Object Size")
+    public ObjectSizeDialog(double width, double height, string? title = null)
     {
         Result = new ObjectSizeDialogResult(width, height);
         _originalWidth = Math.Max(1, width);
         _originalHeight = Math.Max(1, height);
-        Title = title;
+        Title = title ?? UiText.Get("ObjectSizing_ObjectSize");
         Width = 360;
         Height = 250;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -32,15 +32,15 @@ public sealed class ObjectSizeDialog : Window
         ShowInTaskbar = false;
         _widthBox.Text = width.ToString(CultureInfo.InvariantCulture);
         _heightBox.Text = height.ToString(CultureInfo.InvariantCulture);
-        AutomationProperties.SetName(_heightBox, "Object height");
+        AutomationProperties.SetName(_heightBox, UiText.Get("ObjectSizing_ObjectHeight"));
         AutomationProperties.SetAutomationId(_heightBox, "ObjectSizeHeightBox");
-        AutomationProperties.SetHelpText(_heightBox, "Enter the object's height.");
-        AutomationProperties.SetName(_widthBox, "Object width");
+        AutomationProperties.SetHelpText(_heightBox, UiText.Get("ObjectSizing_EnterTheObjectSHeight"));
+        AutomationProperties.SetName(_widthBox, UiText.Get("ObjectSizing_ObjectWidth"));
         AutomationProperties.SetAutomationId(_widthBox, "ObjectSizeWidthBox");
-        AutomationProperties.SetHelpText(_widthBox, "Enter the object's width.");
-        AutomationProperties.SetName(_lockAspectRatioBox, "Lock aspect ratio");
+        AutomationProperties.SetHelpText(_widthBox, UiText.Get("ObjectSizing_EnterTheObjectSWidth"));
+        AutomationProperties.SetName(_lockAspectRatioBox, UiText.Get("ObjectSizing_LockAspectRatio2"));
         AutomationProperties.SetAutomationId(_lockAspectRatioBox, "ObjectSizeLockAspectRatioCheckBox");
-        AutomationProperties.SetHelpText(_lockAspectRatioBox, "Keep the object's width and height proportional.");
+        AutomationProperties.SetHelpText(_lockAspectRatioBox, UiText.Get("ObjectSizing_KeepTheObjectSWidthAndHeightProportional"));
         _widthBox.TextChanged += WidthBox_TextChanged;
         _heightBox.TextChanged += HeightBox_TextChanged;
         Content = CreateSizeContent(Accept);
@@ -67,13 +67,13 @@ public sealed class ObjectSizeDialog : Window
     internal static double CalculateLockedAspectWidth(double height, double originalWidth, double originalHeight) =>
         originalWidth <= 0 || originalHeight <= 0 ? height : height * originalWidth / originalHeight;
 
-    internal static StackPanel CreateSingleInputContent(string label, TextBox box, Action accept, string acceptContent = "_OK")
+    internal static StackPanel CreateSingleInputContent(string label, TextBox box, Action accept, string? acceptContent = null)
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(new Label { Content = label, Target = box, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         box.Margin = new Thickness(0, 0, 0, 12);
         stack.Children.Add(box);
-        stack.Children.Add(DialogButtonRowFactory.Create(accept, 72, acceptContent: acceptContent));
+        stack.Children.Add(DialogButtonRowFactory.Create(accept, 72, acceptContent: acceptContent ?? UiText.Ok));
         return stack;
     }
 
@@ -81,7 +81,7 @@ public sealed class ObjectSizeDialog : Window
     {
         if (!TryParseSize($"{_widthBox.Text}x{_heightBox.Text}", out var result))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter positive width and height values.", Title);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("ObjectSizing_EnterPositiveWidthAndHeightValues"), Title);
             FocusInvalidSizeInput(ResolveInvalidSizeInput());
             return;
         }
@@ -169,8 +169,8 @@ public sealed class ObjectSizeDialog : Window
     private StackPanel CreateSizeContent(Action accept)
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        AddLabeledTextBox(stack, "_Height:", _heightBox);
-        AddLabeledTextBox(stack, "_Width:", _widthBox);
+        AddLabeledTextBox(stack, UiText.Get("ObjectSizing_HeightLabel"), _heightBox);
+        AddLabeledTextBox(stack, UiText.Get("ObjectSizing_WidthLabel"), _widthBox);
         stack.Children.Add(_lockAspectRatioBox);
         stack.Children.Add(DialogButtonRowFactory.Create(accept, 72));
         return stack;
@@ -192,20 +192,20 @@ public sealed class RotationDialog : Window
 
     public RotationDialogResult Result { get; private set; }
 
-    public RotationDialog(double degrees, string title = "Rotation")
+    public RotationDialog(double degrees, string? title = null)
     {
         Result = new RotationDialogResult(degrees);
-        Title = title;
+        Title = title ?? UiText.Get("ObjectSizing_Rotation");
         Width = 300;
         Height = 150;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _rotationBox.Text = degrees.ToString(CultureInfo.InvariantCulture);
-        AutomationProperties.SetName(_rotationBox, "Rotation degrees");
+        AutomationProperties.SetName(_rotationBox, UiText.Get("ObjectSizing_RotationDegrees"));
         AutomationProperties.SetAutomationId(_rotationBox, "RotationDegreesBox");
-        AutomationProperties.SetHelpText(_rotationBox, "Enter the object's rotation in degrees.");
-        Content = ObjectSizeDialog.CreateSingleInputContent("_Degrees:", _rotationBox, Accept);
+        AutomationProperties.SetHelpText(_rotationBox, UiText.Get("ObjectSizing_EnterTheObjectSRotationInDegrees"));
+        Content = ObjectSizeDialog.CreateSingleInputContent(UiText.Get("ObjectSizing_Degrees"), _rotationBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -229,7 +229,7 @@ public sealed class RotationDialog : Window
     {
         if (!TryParseRotation(_rotationBox.Text, out var result))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a numeric rotation value.", Title);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("ObjectSizing_EnterANumericRotationValue"), Title);
             FocusInvalidRotationInput();
             return;
         }
@@ -263,7 +263,7 @@ public sealed class PictureCropDialog : Window
     public PictureCropDialog(PictureModel picture)
     {
         Result = new PictureCropDialogResult(picture.CropLeft, picture.CropTop, picture.CropRight, picture.CropBottom);
-        Title = "Crop Picture";
+        Title = UiText.Get("ObjectSizing_CropPicture");
         Width = 420;
         Height = 280;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -273,18 +273,18 @@ public sealed class PictureCropDialog : Window
         _cropTopBox.Text = DrawingInputParser.FormatCropPercent(picture.CropTop);
         _cropRightBox.Text = DrawingInputParser.FormatCropPercent(picture.CropRight);
         _cropBottomBox.Text = DrawingInputParser.FormatCropPercent(picture.CropBottom);
-        AutomationProperties.SetName(_cropLeftBox, "Crop left");
+        AutomationProperties.SetName(_cropLeftBox, UiText.Get("ObjectSizing_CropLeft"));
         AutomationProperties.SetAutomationId(_cropLeftBox, "PictureCropLeftBox");
-        AutomationProperties.SetHelpText(_cropLeftBox, "Enter the left crop percentage.");
-        AutomationProperties.SetName(_cropTopBox, "Crop top");
+        AutomationProperties.SetHelpText(_cropLeftBox, UiText.Get("ObjectSizing_EnterTheLeftCropPercentage"));
+        AutomationProperties.SetName(_cropTopBox, UiText.Get("ObjectSizing_CropTop"));
         AutomationProperties.SetAutomationId(_cropTopBox, "PictureCropTopBox");
-        AutomationProperties.SetHelpText(_cropTopBox, "Enter the top crop percentage.");
-        AutomationProperties.SetName(_cropRightBox, "Crop right");
+        AutomationProperties.SetHelpText(_cropTopBox, UiText.Get("ObjectSizing_EnterTheTopCropPercentage"));
+        AutomationProperties.SetName(_cropRightBox, UiText.Get("ObjectSizing_CropRight"));
         AutomationProperties.SetAutomationId(_cropRightBox, "PictureCropRightBox");
-        AutomationProperties.SetHelpText(_cropRightBox, "Enter the right crop percentage.");
-        AutomationProperties.SetName(_cropBottomBox, "Crop bottom");
+        AutomationProperties.SetHelpText(_cropRightBox, UiText.Get("ObjectSizing_EnterTheRightCropPercentage"));
+        AutomationProperties.SetName(_cropBottomBox, UiText.Get("ObjectSizing_CropBottom"));
         AutomationProperties.SetAutomationId(_cropBottomBox, "PictureCropBottomBox");
-        AutomationProperties.SetHelpText(_cropBottomBox, "Enter the bottom crop percentage.");
+        AutomationProperties.SetHelpText(_cropBottomBox, UiText.Get("ObjectSizing_EnterTheBottomCropPercentage"));
         Content = CreateCropContent(Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -295,7 +295,7 @@ public sealed class PictureCropDialog : Window
         error = null;
         if (!DrawingInputParser.TryParseCropPercents(input, out var left, out var top, out var right, out var bottom))
         {
-            error = "Enter four crop percentages.";
+            error = UiText.Get("ObjectSizing_EnterFourCropPercentages");
             return false;
         }
 
@@ -308,7 +308,7 @@ public sealed class PictureCropDialog : Window
         var input = string.Join(", ", _cropLeftBox.Text, _cropTopBox.Text, _cropRightBox.Text, _cropBottomBox.Text);
         if (!TryCreateResult(input, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? "Enter four crop percentages.", Title);
+            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("ObjectSizing_EnterFourCropPercentages"), Title);
             FocusInvalidCropInput(ResolveInvalidCropInput(error));
             return;
         }
@@ -324,7 +324,7 @@ public sealed class PictureCropDialog : Window
 
     private TextBox ResolveInvalidCropInput(string? error)
     {
-        if (string.Equals(error, "Enter four crop percentages.", StringComparison.Ordinal))
+        if (string.Equals(error, UiText.Get("ObjectSizing_EnterFourCropPercentages"), StringComparison.Ordinal))
         {
             if (!DrawingInputParser.TryParseCropPercent(_cropLeftBox.Text, out _))
                 return _cropLeftBox;
@@ -347,10 +347,10 @@ public sealed class PictureCropDialog : Window
     private StackPanel CreateCropContent(Action accept)
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        AddCropBox(stack, "_Left:", _cropLeftBox);
-        AddCropBox(stack, "_Top:", _cropTopBox);
-        AddCropBox(stack, "_Right:", _cropRightBox);
-        AddCropBox(stack, "_Bottom:", _cropBottomBox);
+        AddCropBox(stack, UiText.Get("ObjectSizing_LeftLabel"), _cropLeftBox);
+        AddCropBox(stack, UiText.Get("ObjectSizing_TopLabel"), _cropTopBox);
+        AddCropBox(stack, UiText.Get("ObjectSizing_RightLabel"), _cropRightBox);
+        AddCropBox(stack, UiText.Get("ObjectSizing_BottomLabel"), _cropBottomBox);
         stack.Children.Add(DialogButtonRowFactory.Create(accept, 72));
         return stack;
     }

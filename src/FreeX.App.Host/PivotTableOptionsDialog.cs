@@ -46,56 +46,56 @@ public sealed record PivotTableOptionsDialogResult(
 
 public sealed partial class PivotTableOptionsDialog : Window
 {
-    private readonly CheckBox _rowGrandTotalsBox = new() { Content = "Show _row grand totals" };
-    private readonly CheckBox _columnGrandTotalsBox = new() { Content = "Show _column grand totals" };
-    private readonly CheckBox _subtotalsBox = new() { Content = "Show _subtotals" };
+    private readonly CheckBox _rowGrandTotalsBox = new() { Content = UiText.Get("PivotTableOptions_ShowRowGrandTotals") };
+    private readonly CheckBox _columnGrandTotalsBox = new() { Content = UiText.Get("PivotTableOptions_ShowColumnGrandTotals") };
+    private readonly CheckBox _subtotalsBox = new() { Content = UiText.Get("PivotTableOptions_ShowSubtotals") };
     private readonly ComboBox _subtotalPlacementBox = new();
-    private readonly CheckBox _repeatItemLabelsBox = new() { Content = "_Repeat item labels" };
-    private readonly CheckBox _blankLineBox = new() { Content = "Insert _blank line after each item" };
-    private readonly CheckBox _mergeLabelsBox = new() { Content = "_Merge and center cells with labels" };
+    private readonly CheckBox _repeatItemLabelsBox = new() { Content = UiText.Get("PivotTableOptions_RepeatItemLabels") };
+    private readonly CheckBox _blankLineBox = new() { Content = UiText.Get("PivotTableOptions_InsertBlankLineAfterEachItem") };
+    private readonly CheckBox _mergeLabelsBox = new() { Content = UiText.Get("PivotTableOptions_MergeAndCenterCellsWithLabels") };
     private readonly ComboBox _reportLayoutBox = new();
     private readonly TextBox _compactIndentBox = new() { Width = 60 };
     private readonly ComboBox _pageFieldLayoutBox = new();
     private readonly TextBox _pageWrapBox = new() { Width = 60 };
     private readonly ComboBox _styleBox = new();
-    private readonly CheckBox _rowHeadersBox = new() { Content = "Row _headers" };
-    private readonly CheckBox _columnHeadersBox = new() { Content = "Column hea_ders" };
-    private readonly CheckBox _fieldHeadersBox = new() { Content = "Display field _captions and filter drop-downs", IsChecked = true };
-    private readonly CheckBox _contextualTooltipsBox = new() { Content = "Show contextual _tooltips", IsChecked = true };
-    private readonly CheckBox _propertiesInTooltipsBox = new() { Content = "Show _properties in tooltips", IsChecked = true };
-    private readonly CheckBox _classicLayoutBox = new() { Content = "_Classic PivotTable layout (enables dragging of fields in the grid)" };
-    private readonly CheckBox _showItemsWithNoDataRowsBox = new() { Content = "Show items with no data on _rows" };
-    private readonly CheckBox _showItemsWithNoDataColumnsBox = new() { Content = "Show items with no data on _columns" };
-    private readonly CheckBox _rowStripesBox = new() { Content = "Banded _rows" };
-    private readonly CheckBox _columnStripesBox = new() { Content = "Banded c_olumns" };
+    private readonly CheckBox _rowHeadersBox = new() { Content = UiText.Get("PivotTableOptions_RowHeaders") };
+    private readonly CheckBox _columnHeadersBox = new() { Content = UiText.Get("PivotTableOptions_ColumnHeaders") };
+    private readonly CheckBox _fieldHeadersBox = new() { Content = UiText.Get("PivotTableOptions_DisplayFieldCaptionsAndFilterDropDowns"), IsChecked = true };
+    private readonly CheckBox _contextualTooltipsBox = new() { Content = UiText.Get("PivotTableOptions_ShowContextualTooltips"), IsChecked = true };
+    private readonly CheckBox _propertiesInTooltipsBox = new() { Content = UiText.Get("PivotTableOptions_ShowPropertiesInTooltips"), IsChecked = true };
+    private readonly CheckBox _classicLayoutBox = new() { Content = UiText.Get("PivotTableOptions_ClassicPivotTableLayoutEnablesDraggingOfFieldsInTheGrid") };
+    private readonly CheckBox _showItemsWithNoDataRowsBox = new() { Content = UiText.Get("PivotTableOptions_ShowItemsWithNoDataOnRows") };
+    private readonly CheckBox _showItemsWithNoDataColumnsBox = new() { Content = UiText.Get("PivotTableOptions_ShowItemsWithNoDataOnColumns") };
+    private readonly CheckBox _rowStripesBox = new() { Content = UiText.Get("PivotTableOptions_BandedRows") };
+    private readonly CheckBox _columnStripesBox = new() { Content = UiText.Get("PivotTableOptions_BandedColumns") };
     private readonly TextBox _emptyCellsBox = new() { Width = 120 };
     private readonly TextBox _errorValuesBox = new() { Width = 120 };
-    private readonly CheckBox _autofitColumnsBox = new() { Content = "_Autofit column widths on update", IsChecked = true };
-    private readonly CheckBox _preserveFormattingBox = new() { Content = "_Preserve cell formatting on update", IsChecked = true };
-    private readonly CheckBox _refreshOnOpenBox = new() { Content = "_Refresh data when opening the file" };
-    private readonly CheckBox _saveSourceDataBox = new() { Content = "_Save source data with file", IsChecked = true };
-    private readonly CheckBox _enableRefreshBox = new() { Content = "_Enable refresh", IsChecked = true };
-    private readonly CheckBox _enableShowDetailsBox = new() { Content = "Enable Show De_tails", IsChecked = true };
+    private readonly CheckBox _autofitColumnsBox = new() { Content = UiText.Get("PivotTableOptions_AutofitColumnWidthsOnUpdate"), IsChecked = true };
+    private readonly CheckBox _preserveFormattingBox = new() { Content = UiText.Get("PivotTableOptions_PreserveCellFormattingOnUpdate"), IsChecked = true };
+    private readonly CheckBox _refreshOnOpenBox = new() { Content = UiText.Get("PivotTableOptions_RefreshDataWhenOpeningTheFile") };
+    private readonly CheckBox _saveSourceDataBox = new() { Content = UiText.Get("PivotTableOptions_SaveSourceDataWithFile"), IsChecked = true };
+    private readonly CheckBox _enableRefreshBox = new() { Content = UiText.Get("PivotTableOptions_EnableRefresh"), IsChecked = true };
+    private readonly CheckBox _enableShowDetailsBox = new() { Content = UiText.Get("PivotTableOptions_EnableShowDetails"), IsChecked = true };
     private readonly CheckBox _preserveSourceSortFilterBox = new()
     {
-        Content = "Preserve source sort and _filter settings",
+        Content = UiText.Get("PivotTableOptions_PreserveSourceSortAndFilterSettings"),
         IsChecked = true
     };
     private readonly ComboBox _missingItemsLimitBox = new();
-    private readonly CheckBox _showExpandCollapseBox = new() { Content = "Show expand/collapse _buttons", IsChecked = true };
-    private readonly CheckBox _printTitlesBox = new() { Content = "Set print _titles" };
-    private readonly CheckBox _printExpandCollapseBox = new() { Content = "Print expand/collapse _buttons when displayed on PivotTable" };
+    private readonly CheckBox _showExpandCollapseBox = new() { Content = UiText.Get("PivotTableOptions_ShowExpandCollapseButtons"), IsChecked = true };
+    private readonly CheckBox _printTitlesBox = new() { Content = UiText.Get("PivotTableOptions_SetPrintTitles") };
+    private readonly CheckBox _printExpandCollapseBox = new() { Content = UiText.Get("PivotTableOptions_PrintExpandCollapseButtonsWhenDisplayedOnPivotTable") };
     private readonly TextBox _altTextTitleBox = new();
     private readonly TextBox _altTextDescriptionBox = new() { AcceptsReturn = true, Height = 90, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
     private readonly TabControl _tabs = new() { Margin = new Thickness(0, 0, 0, 12) };
-    private readonly TabItem _layoutTab = new() { Header = "_Layout & Format" };
+    private readonly TabItem _layoutTab = new() { Header = UiText.Get("PivotTableOptions_LayoutAndFormat") };
 
     public PivotTableOptionsDialogResult Result { get; private set; }
 
     public PivotTableOptionsDialog(PivotTableModel pivotTable, PivotCacheModel? cache = null)
     {
         Result = FromPivotTable(pivotTable, cache);
-        Title = "PivotTable Options";
+        Title = UiText.Get("PivotTableOptions_PivotTableOptions");
         Width = 520;
         Height = 500;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -113,11 +113,11 @@ public sealed partial class PivotTableOptionsDialog : Window
 
         _layoutTab.Content = CreateLayoutAndFormatTab();
         _tabs.Items.Add(_layoutTab);
-        _tabs.Items.Add(new TabItem { Header = "_Totals & Filters", Content = CreateTotalsAndFiltersTab() });
-        _tabs.Items.Add(new TabItem { Header = "_Display", Content = CreateDisplayTab() });
-        _tabs.Items.Add(new TabItem { Header = "_Printing", Content = CreatePrintingTab() });
-        _tabs.Items.Add(new TabItem { Header = "_Data", Content = CreateDataTab() });
-        _tabs.Items.Add(new TabItem { Header = "_Alt Text", Content = CreateAltTextTab() });
+        _tabs.Items.Add(new TabItem { Header = UiText.Get("PivotTableOptions_TotalsAndFilters"), Content = CreateTotalsAndFiltersTab() });
+        _tabs.Items.Add(new TabItem { Header = UiText.Get("PivotTableOptions_Display"), Content = CreateDisplayTab() });
+        _tabs.Items.Add(new TabItem { Header = UiText.Get("PivotTableOptions_Printing"), Content = CreatePrintingTab() });
+        _tabs.Items.Add(new TabItem { Header = UiText.Get("PivotTableOptions_Data"), Content = CreateDataTab() });
+        _tabs.Items.Add(new TabItem { Header = UiText.Get("PivotTableOptions_AltText"), Content = CreateAltTextTab() });
 
         root.Children.Add(_tabs);
         root.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
@@ -128,21 +128,21 @@ public sealed partial class PivotTableOptionsDialog : Window
     {
         var stack = CreateTabPanel();
         var layoutPanel = PivotDialogLayout.CreateGroupPanel();
-        AddLabeledControl(layoutPanel, "_Report layout", _reportLayoutBox, Enum.GetValues<PivotReportLayout>());
-        AddLabeledControl(layoutPanel, "When in compact form _indent row labels", _compactIndentBox);
-        AddLabeledControl(layoutPanel, "Display fields in report _filter area", _pageFieldLayoutBox, PageFieldLayoutLabels);
-        AddLabeledControl(layoutPanel, "Report filter fields per _column", _pageWrapBox);
+        AddLabeledControl(layoutPanel, UiText.Get("PivotTableOptions_ReportLayoutLabel"), _reportLayoutBox, Enum.GetValues<PivotReportLayout>());
+        AddLabeledControl(layoutPanel, UiText.Get("PivotTableOptions_CompactIndentLabel"), _compactIndentBox);
+        AddLabeledControl(layoutPanel, UiText.Get("PivotTableOptions_ReportFilterAreaLabel"), _pageFieldLayoutBox, PageFieldLayoutLabels);
+        AddLabeledControl(layoutPanel, UiText.Get("PivotTableOptions_ReportFilterFieldsPerColumnLabel"), _pageWrapBox);
         AddCheckBox(layoutPanel, _repeatItemLabelsBox);
         AddCheckBox(layoutPanel, _blankLineBox);
         AddCheckBox(layoutPanel, _mergeLabelsBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Layout section", layoutPanel));
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotTableOptions_LayoutSectionGroup"), layoutPanel));
 
         var formatPanel = PivotDialogLayout.CreateGroupPanel();
-        AddLabeledControl(formatPanel, "For _empty cells show:", _emptyCellsBox);
-        AddLabeledControl(formatPanel, "For error _values show:", _errorValuesBox);
+        AddLabeledControl(formatPanel, UiText.Get("PivotTableOptions_EmptyCellsLabel"), _emptyCellsBox);
+        AddLabeledControl(formatPanel, UiText.Get("PivotTableOptions_ErrorValuesLabel"), _errorValuesBox);
         AddCheckBox(formatPanel, _autofitColumnsBox);
         AddCheckBox(formatPanel, _preserveFormattingBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Format section", formatPanel));
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotTableOptions_FormatSectionGroup"), formatPanel));
         return stack;
     }
 
@@ -152,12 +152,12 @@ public sealed partial class PivotTableOptionsDialog : Window
         var totalsPanel = PivotDialogLayout.CreateGroupPanel();
         AddCheckBox(totalsPanel, _rowGrandTotalsBox);
         AddCheckBox(totalsPanel, _columnGrandTotalsBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Grand totals", totalsPanel));
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotTableOptions_GrandTotalsGroup"), totalsPanel));
 
         var filtersPanel = PivotDialogLayout.CreateGroupPanel();
         AddCheckBox(filtersPanel, _subtotalsBox);
-        AddLabeledControl(filtersPanel, "Subtotal _placement", _subtotalPlacementBox, Enum.GetValues<PivotSubtotalPlacement>());
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Filters and subtotals", filtersPanel));
+        AddLabeledControl(filtersPanel, UiText.Get("PivotTableOptions_SubtotalPlacementLabel"), _subtotalPlacementBox, Enum.GetValues<PivotSubtotalPlacement>());
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotTableOptions_FiltersAndSubtotalsGroup"), filtersPanel));
         return stack;
     }
 
@@ -165,7 +165,7 @@ public sealed partial class PivotTableOptionsDialog : Window
     {
         var stack = CreateTabPanel();
         var stylePanel = PivotDialogLayout.CreateGroupPanel();
-        AddLabeledControl(stylePanel, "PivotTable _style", _styleBox, PivotStyleCatalog.BuiltInStyleNames);
+        AddLabeledControl(stylePanel, UiText.Get("PivotTableOptions_PivotTableStyleLabel"), _styleBox, PivotStyleCatalog.BuiltInStyleNames);
         AddCheckBox(stylePanel, _rowHeadersBox);
         AddCheckBox(stylePanel, _columnHeadersBox);
         AddCheckBox(stylePanel, _fieldHeadersBox);
@@ -177,7 +177,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         AddCheckBox(stylePanel, _rowStripesBox);
         AddCheckBox(stylePanel, _columnStripesBox);
         AddCheckBox(stylePanel, _showExpandCollapseBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("PivotTable Style Options", stylePanel));
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotTableOptions_PivotTableStyleOptionsGroup"), stylePanel));
         return stack;
     }
 
@@ -190,8 +190,8 @@ public sealed partial class PivotTableOptionsDialog : Window
         AddCheckBox(dataPanel, _enableRefreshBox);
         AddCheckBox(dataPanel, _enableShowDetailsBox);
         AddCheckBox(dataPanel, _preserveSourceSortFilterBox);
-        AddLabeledControl(dataPanel, "Retain items _deleted from the data source", _missingItemsLimitBox, MissingItemsLimitLabels);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Data options", dataPanel));
+        AddLabeledControl(dataPanel, UiText.Get("PivotTableOptions_RetainItemsDeletedLabel"), _missingItemsLimitBox, MissingItemsLimitLabels);
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotTableOptions_DataOptionsGroup"), dataPanel));
         return stack;
     }
 
@@ -201,7 +201,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         var printPanel = PivotDialogLayout.CreateGroupPanel();
         AddCheckBox(printPanel, _printTitlesBox);
         AddCheckBox(printPanel, _printExpandCollapseBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Print options", printPanel));
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotTableOptions_PrintOptionsGroup"), printPanel));
         return stack;
     }
 
@@ -209,9 +209,9 @@ public sealed partial class PivotTableOptionsDialog : Window
     {
         var stack = CreateTabPanel();
         var altPanel = PivotDialogLayout.CreateGroupPanel();
-        AddLabeledControl(altPanel, "_Title:", _altTextTitleBox);
-        AddLabeledControl(altPanel, "_Description:", _altTextDescriptionBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Alt Text", altPanel));
+        AddLabeledControl(altPanel, UiText.Get("PivotTableOptions_TitleLabel"), _altTextTitleBox);
+        AddLabeledControl(altPanel, UiText.Get("PivotTableOptions_DescriptionLabel"), _altTextDescriptionBox);
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotTableOptions_AltTextGroup"), altPanel));
         return stack;
     }
 
@@ -349,14 +349,14 @@ public sealed partial class PivotTableOptionsDialog : Window
         if (!int.TryParse(_compactIndentBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var compactIndent)
             || compactIndent is < 0 or > 15)
         {
-            ShowInvalidInputWarning("Enter a compact row label indent from 0 to 15.", _compactIndentBox);
+            ShowInvalidInputWarning(UiText.Get("PivotTableOptions_EnterCompactIndent"), _compactIndentBox);
             return false;
         }
 
         if (!int.TryParse(_pageWrapBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var pageWrap)
             || pageWrap is < 0 or > 255)
         {
-            ShowInvalidInputWarning("Enter page fields per column from 0 to 255.", _pageWrapBox);
+            ShowInvalidInputWarning(UiText.Get("PivotTableOptions_EnterPageFieldsPerColumn"), _pageWrapBox);
             return false;
         }
 

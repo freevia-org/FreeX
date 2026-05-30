@@ -406,16 +406,16 @@ public sealed class ProtectionDialogTests
     {
         var source = ReadProtectionDialogSources();
 
-        source.Should().Contain("Allow all users of this worksheet to:");
-        source.Should().Contain("Header = \"Password\"");
-        source.Should().Contain("Protect worksheet and contents of locked cells");
-        source.Should().Contain("Caution: lost or forgotten passwords cannot be recovered.");
+        source.Should().Contain("Header = UiText.Get(\"Protection_AllowAllUsersOfThisWorksheetTo\")");
+        source.Should().Contain("Header = UiText.Get(\"Protection_Password\")");
+        source.Should().Contain("UiText.Get(\"Protection_ProtectWorksheetContents\")");
+        source.Should().Contain("UiText.Get(\"Protection_CautionLostOrForgottenPasswordsCannotBeRecovered\")");
         source.Should().Contain("ConfirmPasswordDialog");
-        source.Should().Contain("Confirm Password");
+        source.Should().Contain("UiText.Get(\"Protection_ConfirmPassword\")");
         source.Should().NotContain("_Confirm password:");
-        source.Should().Contain("Select locked cells");
-        source.Should().Contain("Edit scenarios");
-        source.Should().Contain("Choose which protected-sheet actions remain available.");
+        source.Should().Contain("UiText.Get(\"Protection_PermissionSelectLockedCells\")");
+        source.Should().Contain("UiText.Get(\"Protection_PermissionEditScenarios\")");
+        source.Should().Contain("UiText.Get(\"Protection_ChooseWhichProtectedSheetActionsRemainAvailable\")");
         source.Should().NotContain("current enforcement is limited");
     }
 

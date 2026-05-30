@@ -218,10 +218,10 @@ public sealed class PasteSpecialDialogTests
     {
         var source = ReadPasteSpecialDialogSources();
 
-        source.Should().Contain("Content = \"_OK\"");
-        source.Should().Contain("Content = \"_Cancel\"");
-        source.Should().Contain("SetAutomationMetadata(ok, \"OK\", \"PasteSpecialOkButton\", \"Apply the selected Paste Special options.\");");
-        source.Should().Contain("SetAutomationMetadata(cancel, \"Cancel\", \"PasteSpecialCancelButton\", \"Close the Paste Special dialog without applying changes.\");");
+        source.Should().Contain("Content = UiText.Ok");
+        source.Should().Contain("Content = UiText.Cancel");
+        source.Should().Contain("SetAutomationMetadata(ok, UiText.Get(\"PasteSpecial_OkAutomationName\"), \"PasteSpecialOkButton\", UiText.Get(\"PasteSpecial_ApplyTheSelectedPasteSpecialOptions\"));");
+        source.Should().Contain("SetAutomationMetadata(cancel, UiText.Get(\"PasteSpecial_CancelAutomationName\"), \"PasteSpecialCancelButton\", UiText.Get(\"PasteSpecial_CloseThePasteSpecialDialogWithoutApplyingChanges\"));");
     }
 
     [Fact]
@@ -240,8 +240,8 @@ public sealed class PasteSpecialDialogTests
     {
         var source = ReadPasteSpecialDialogSources();
 
-        source.Should().Contain("Header = \"Paste\"");
-        source.Should().Contain("Header = \"Operation\"");
+        source.Should().Contain("Header = UiText.Get(\"PasteSpecial_PasteGroup\")");
+        source.Should().Contain("Header = UiText.Get(\"PasteSpecial_OperationGroup\")");
         source.Should().Contain("CreatePasteOptionsPanel");
         source.Should().Contain("CreateOperationGroup");
         source.Should().Contain("_pasteLinkButton");

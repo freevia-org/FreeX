@@ -11,7 +11,7 @@ public sealed partial class TextToColumnsDialog
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(new Label
         {
-            Content = "_Column:",
+            Content = UiText.Get("TextToColumns_ColumnLabel"),
             Target = _formatColumnBox,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 4, 8, 0)
@@ -26,7 +26,7 @@ public sealed partial class TextToColumnsDialog
 
         return new GroupBox
         {
-            Header = "Column data format",
+            Header = UiText.Get("TextToColumns_ColumnDataFormatGroup"),
             Content = root,
             Padding = new Thickness(8),
             Margin = new Thickness(0, 10, 0, 0)
@@ -55,9 +55,9 @@ public sealed partial class TextToColumnsDialog
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddAdvancedLabel(grid, "_Decimal separator:", _decimalSeparatorBox, 0, 0);
+        AddAdvancedLabel(grid, UiText.Get("TextToColumns_DecimalSeparatorLabel"), _decimalSeparatorBox, 0, 0);
         AddAdvancedTextBox(grid, _decimalSeparatorBox, 0, 1);
-        AddAdvancedLabel(grid, "_Thousands separator:", _thousandsSeparatorBox, 0, 2);
+        AddAdvancedLabel(grid, UiText.Get("TextToColumns_ThousandsSeparatorLabel"), _thousandsSeparatorBox, 0, 2);
         AddAdvancedTextBox(grid, _thousandsSeparatorBox, 0, 3);
         Grid.SetRow(_trailingMinusBox, 1);
         Grid.SetColumnSpan(_trailingMinusBox, 4);
@@ -66,7 +66,7 @@ public sealed partial class TextToColumnsDialog
 
         return new GroupBox
         {
-            Header = "Advanced",
+            Header = UiText.Get("TextToColumns_AdvancedGroup"),
             Content = grid,
             Padding = new Thickness(8),
             Margin = new Thickness(0, 8, 0, 0)
@@ -119,7 +119,7 @@ public sealed partial class TextToColumnsDialog
         try
         {
             _formatColumnBox.ItemsSource = Enumerable.Range(1, columnCount)
-                .Select(index => $"Column {index}")
+                .Select(index => UiText.Format("TextToColumns_ColumnHeader", index))
                 .ToList();
             _formatColumnBox.SelectedIndex = Math.Min(selectedIndex, columnCount - 1);
         }

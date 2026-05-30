@@ -17,17 +17,17 @@ public sealed class ConditionalFormatThresholdDialog : Window
     public ConditionalFormatThresholdDialog(string thresholdText = "0")
     {
         Result = CreateResult(thresholdText);
-        Title = "New Formatting Rule";
+        Title = UiText.Get("Remaining_NewFormattingRule");
         Width = 360;
         Height = 150;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _thresholdBox.Text = Result.ThresholdText;
-        AutomationProperties.SetName(_thresholdBox, "Conditional format threshold");
+        AutomationProperties.SetName(_thresholdBox, UiText.Get("Remaining_ConditionalFormatThreshold"));
         AutomationProperties.SetAutomationId(_thresholdBox, "ConditionalFormatThresholdBox");
-        AutomationProperties.SetHelpText(_thresholdBox, "Enter the value for the conditional formatting rule threshold.");
-        Content = ObjectSizeDialog.CreateSingleInputContent("Format cells greater _than:", _thresholdBox, Accept);
+        AutomationProperties.SetHelpText(_thresholdBox, UiText.Get("Remaining_EnterTheValueForTheConditionalFormattingRuleThreshold"));
+        Content = ObjectSizeDialog.CreateSingleInputContent(UiText.Get("Remaining_FormatCellsGreaterThan"), _thresholdBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -44,7 +44,7 @@ public sealed class ConditionalFormatThresholdDialog : Window
         result = CreateResult(thresholdText ?? "");
         if (string.IsNullOrWhiteSpace(result.ThresholdText))
         {
-            error = "Enter a threshold value.";
+            error = UiText.Get("Remaining_EnterThresholdValue");
             return false;
         }
 
@@ -56,7 +56,7 @@ public sealed class ConditionalFormatThresholdDialog : Window
     {
         if (!TryCreateResult(_thresholdBox.Text, out var result, out var error))
         {
-            ShowInvalidInputWarning(error ?? "Enter a threshold value.");
+            ShowInvalidInputWarning(error ?? UiText.Get("Remaining_EnterThresholdValue"));
             return;
         }
 
@@ -85,17 +85,17 @@ public sealed class RowHeightDialog : Window
     public RowHeightDialog(double height = 20)
     {
         Result = new RowHeightDialogResult(height);
-        Title = "Row Height";
+        Title = UiText.Get("Remaining_RowHeight");
         Width = 320;
         Height = 150;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _heightBox.Text = height.ToString(CultureInfo.InvariantCulture);
-        AutomationProperties.SetName(_heightBox, "Row height");
+        AutomationProperties.SetName(_heightBox, UiText.Get("Remaining_RowHeight"));
         AutomationProperties.SetAutomationId(_heightBox, "RowHeightBox");
-        AutomationProperties.SetHelpText(_heightBox, "Enter a row height from 0 to 409.5.");
-        Content = ObjectSizeDialog.CreateSingleInputContent("Row _height:", _heightBox, Accept);
+        AutomationProperties.SetHelpText(_heightBox, UiText.Get("Remaining_EnterARowHeightFrom0To4095"));
+        Content = ObjectSizeDialog.CreateSingleInputContent(UiText.Get("Remaining_RowHeight2"), _heightBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -115,7 +115,7 @@ public sealed class RowHeightDialog : Window
         error = null;
         if (input is null || !WorksheetSizeInputParser.TryParseSizeInRange(input, 0, MaximumExcelRowHeight, out var height))
         {
-            error = "Enter a row height from 0 to 409.5.";
+            error = UiText.Get("Remaining_EnterRowHeightFrom0To4095");
             return false;
         }
 
@@ -127,7 +127,7 @@ public sealed class RowHeightDialog : Window
     {
         if (!TryCreateResult(_heightBox.Text, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? "Enter a row height from 0 to 409.", Title);
+            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("Remaining_EnterARowHeightFrom0To409"), Title);
             FocusInvalidHeightInput();
             return;
         }
@@ -149,17 +149,17 @@ public sealed class ColumnWidthDialog : Window
     public ColumnWidthDialog(double width = 8)
     {
         Result = new ColumnWidthDialogResult(width);
-        Title = "Column Width";
+        Title = UiText.Get("Remaining_ColumnWidth");
         Width = 320;
         Height = 150;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _widthBox.Text = width.ToString(CultureInfo.InvariantCulture);
-        AutomationProperties.SetName(_widthBox, "Column width");
+        AutomationProperties.SetName(_widthBox, UiText.Get("Remaining_ColumnWidth"));
         AutomationProperties.SetAutomationId(_widthBox, "ColumnWidthBox");
-        AutomationProperties.SetHelpText(_widthBox, "Enter a column width from 0 to 255.");
-        Content = ObjectSizeDialog.CreateSingleInputContent("Column _width:", _widthBox, Accept);
+        AutomationProperties.SetHelpText(_widthBox, UiText.Get("Remaining_EnterAColumnWidthFrom0To255"));
+        Content = ObjectSizeDialog.CreateSingleInputContent(UiText.Get("Remaining_ColumnWidth2"), _widthBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -179,7 +179,7 @@ public sealed class ColumnWidthDialog : Window
         error = null;
         if (input is null || !WorksheetSizeInputParser.TryParseSizeInRange(input, 0, MaximumExcelColumnWidth, out var width))
         {
-            error = "Enter a column width from 0 to 255.";
+            error = UiText.Get("Remaining_EnterColumnWidthFrom0To255");
             return false;
         }
 
@@ -191,7 +191,7 @@ public sealed class ColumnWidthDialog : Window
     {
         if (!TryCreateResult(_widthBox.Text, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? "Enter a column width from 0 to 255.", Title);
+            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("Remaining_EnterAColumnWidthFrom0To255"), Title);
             FocusInvalidWidthInput();
             return;
         }

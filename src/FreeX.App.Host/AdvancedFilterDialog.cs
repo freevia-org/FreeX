@@ -35,12 +35,12 @@ public sealed partial class AdvancedFilterDialog : Window
     private readonly TextBox _copyToBox = new();
     private readonly DockPanel _copyToEditor;
     private readonly Label _copyToLabel;
-    private readonly RadioButton _filterInPlaceButton = new() { Content = "_Filter the list, in-place", IsChecked = true };
-    private readonly RadioButton _copyToAnotherLocationButton = new() { Content = "_Copy to another location" };
-    private readonly CheckBox _uniqueBox = new() { Content = "_Unique records only" };
+    private readonly RadioButton _filterInPlaceButton = new() { Content = UiText.Get("AdvancedFilter_FilterTheListInPlace"), IsChecked = true };
+    private readonly RadioButton _copyToAnotherLocationButton = new() { Content = UiText.Get("AdvancedFilter_CopyToAnotherLocation") };
+    private readonly CheckBox _uniqueBox = new() { Content = UiText.Get("AdvancedFilter_UniqueRecordsOnly") };
     private readonly TextBlock _copyToHint = new()
     {
-        Text = "Copy to is available when Copy to another location is selected.",
+        Text = UiText.Get("AdvancedFilter_CopyToIsAvailableWhenCopyToAnotherLocationIsSelected"),
         TextWrapping = TextWrapping.Wrap,
         Foreground = SystemColors.GrayTextBrush,
         Margin = new Thickness(0, 2, 0, 0)
@@ -58,8 +58,8 @@ public sealed partial class AdvancedFilterDialog : Window
         _sheetId = sheetId;
         _resolveSheetId = resolveSheetId ?? (_ => null);
         _requestRangeSelection = requestRangeSelection;
-        _copyToEditor = CreateReferenceEditor(_copyToBox, "Select copy-to cell", AdvancedFilterRangeSelectionTarget.CopyTo);
-        Title = "Advanced Filter";
+        _copyToEditor = CreateReferenceEditor(_copyToBox, UiText.Get("AdvancedFilter_SelectCopyToCell"), AdvancedFilterRangeSelectionTarget.CopyTo);
+        Title = UiText.Get("AdvancedFilter_AdvancedFilter");
         Width = 420;
         Height = 340;
         ResizeMode = ResizeMode.NoResize;
@@ -67,15 +67,15 @@ public sealed partial class AdvancedFilterDialog : Window
         ShowInTaskbar = false;
 
         _listRangeBox.Text = defaultListRange;
-        AutomationProperties.SetName(_listRangeBox, "List range");
+        AutomationProperties.SetName(_listRangeBox, UiText.Get("AdvancedFilter_ListRange"));
         AutomationProperties.SetAutomationId(_listRangeBox, "AdvancedFilterListRangeBox");
-        AutomationProperties.SetHelpText(_listRangeBox, "Enter the list range to filter, including column labels.");
-        AutomationProperties.SetName(_criteriaRangeBox, "Criteria range");
+        AutomationProperties.SetHelpText(_listRangeBox, UiText.Get("AdvancedFilter_EnterTheListRangeToFilterIncludingColumnLabels"));
+        AutomationProperties.SetName(_criteriaRangeBox, UiText.Get("AdvancedFilter_CriteriaRange"));
         AutomationProperties.SetAutomationId(_criteriaRangeBox, "AdvancedFilterCriteriaRangeBox");
-        AutomationProperties.SetHelpText(_criteriaRangeBox, "Enter the criteria range, including criteria labels.");
-        AutomationProperties.SetName(_copyToBox, "Copy to");
+        AutomationProperties.SetHelpText(_criteriaRangeBox, UiText.Get("AdvancedFilter_EnterTheCriteriaRangeIncludingCriteriaLabels"));
+        AutomationProperties.SetName(_copyToBox, UiText.Get("AdvancedFilter_CopyTo"));
         AutomationProperties.SetAutomationId(_copyToBox, "AdvancedFilterCopyToBox");
-        AutomationProperties.SetHelpText(_copyToBox, "Enter the destination cell or one-row header range when copying filtered records.");
+        AutomationProperties.SetHelpText(_copyToBox, UiText.Get("AdvancedFilter_EnterTheDestinationCellOrOneRowHeaderRangeWhenCopyingFilteredRecords"));
         ApplyAutomationMetadata();
         var root = new DockPanel { Margin = new Thickness(12) };
         DockPanel.SetDock(root, Dock.Top);
@@ -83,7 +83,7 @@ public sealed partial class AdvancedFilterDialog : Window
         var content = new StackPanel();
         root.Children.Add(content);
 
-        var actionGroup = new GroupBox { Header = "Action", Margin = new Thickness(0, 0, 0, 10) };
+        var actionGroup = new GroupBox { Header = UiText.Get("AdvancedFilter_Action"), Margin = new Thickness(0, 0, 0, 10) };
         var actionPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 8) };
         _filterInPlaceButton.Margin = new Thickness(0, 0, 0, 4);
         _copyToAnotherLocationButton.Margin = new Thickness(0, 0, 0, 0);
@@ -97,9 +97,9 @@ public sealed partial class AdvancedFilterDialog : Window
         var rangesGrid = new Grid();
         rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         rangesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        AddReferenceRow(rangesGrid, 0, "_List range:", _listRangeBox, "Select list range", AdvancedFilterRangeSelectionTarget.ListRange);
-        AddReferenceRow(rangesGrid, 1, "Criteria _range:", _criteriaRangeBox, "Select criteria range", AdvancedFilterRangeSelectionTarget.CriteriaRange);
-        _copyToLabel = AddReferenceRow(rangesGrid, 2, "Copy _to:", _copyToBox, "Select copy-to cell", AdvancedFilterRangeSelectionTarget.CopyTo, _copyToEditor);
+        AddReferenceRow(rangesGrid, 0, UiText.Get("AdvancedFilter_ListRange2"), _listRangeBox, UiText.Get("AdvancedFilter_SelectListRange"), AdvancedFilterRangeSelectionTarget.ListRange);
+        AddReferenceRow(rangesGrid, 1, UiText.Get("AdvancedFilter_CriteriaRange2"), _criteriaRangeBox, UiText.Get("AdvancedFilter_SelectCriteriaRange"), AdvancedFilterRangeSelectionTarget.CriteriaRange);
+        _copyToLabel = AddReferenceRow(rangesGrid, 2, UiText.Get("AdvancedFilter_CopyTo2"), _copyToBox, UiText.Get("AdvancedFilter_SelectCopyToCell"), AdvancedFilterRangeSelectionTarget.CopyTo, _copyToEditor);
         content.Children.Add(rangesGrid);
         content.Children.Add(_copyToHint);
 
@@ -107,7 +107,7 @@ public sealed partial class AdvancedFilterDialog : Window
         content.Children.Add(_uniqueBox);
         content.Children.Add(new TextBlock
         {
-            Text = "Criteria should include column labels in the first row, matching Excel Advanced Filter.",
+            Text = UiText.Get("AdvancedFilter_CriteriaShouldIncludeColumnLabelsInTheFirstRowMatchingExcelAdvancedFilte"),
             TextWrapping = TextWrapping.Wrap,
             Foreground = SystemColors.GrayTextBrush,
             Margin = new Thickness(0, 10, 0, 0)
@@ -120,17 +120,17 @@ public sealed partial class AdvancedFilterDialog : Window
 
     private void ApplyAutomationMetadata()
     {
-        AutomationProperties.SetName(_filterInPlaceButton, "Filter the list, in-place");
+        AutomationProperties.SetName(_filterInPlaceButton, UiText.Get("AdvancedFilter_FilterTheListInPlaceAutomationName"));
         AutomationProperties.SetAutomationId(_filterInPlaceButton, "AdvancedFilterInPlaceButton");
-        AutomationProperties.SetHelpText(_filterInPlaceButton, "Filter the list in its current location.");
+        AutomationProperties.SetHelpText(_filterInPlaceButton, UiText.Get("AdvancedFilter_FilterTheListInItsCurrentLocation"));
 
-        AutomationProperties.SetName(_copyToAnotherLocationButton, "Copy to another location");
+        AutomationProperties.SetName(_copyToAnotherLocationButton, UiText.Get("AdvancedFilter_CopyToAnotherLocationAutomationName"));
         AutomationProperties.SetAutomationId(_copyToAnotherLocationButton, "AdvancedFilterCopyToAnotherLocationButton");
-        AutomationProperties.SetHelpText(_copyToAnotherLocationButton, "Copy filtered records to the Copy to destination.");
+        AutomationProperties.SetHelpText(_copyToAnotherLocationButton, UiText.Get("AdvancedFilter_CopyFilteredRecordsToTheCopyToDestination"));
 
-        AutomationProperties.SetName(_uniqueBox, "Unique records only");
+        AutomationProperties.SetName(_uniqueBox, UiText.Get("AdvancedFilter_UniqueRecordsOnlyAutomationName"));
         AutomationProperties.SetAutomationId(_uniqueBox, "AdvancedFilterUniqueRecordsOnlyBox");
-        AutomationProperties.SetHelpText(_uniqueBox, "Show or copy only unique records.");
+        AutomationProperties.SetHelpText(_uniqueBox, UiText.Get("AdvancedFilter_ShowOrCopyOnlyUniqueRecords"));
     }
 
     private DockPanel CreateReferenceEditor(
@@ -223,15 +223,15 @@ public sealed partial class AdvancedFilterDialog : Window
     private void FocusInvalidRangeInput(string? error)
     {
         TextBox target;
-        if (string.Equals(error, "Enter a valid criteria range.", StringComparison.Ordinal))
+        if (string.Equals(error, UiText.Get("AdvancedFilter_EnterValidCriteriaRange"), StringComparison.Ordinal))
         {
             target = _criteriaRangeBox;
         }
-        else if (string.Equals(error, "Criteria range must include headers and at least one criteria row.", StringComparison.Ordinal))
+        else if (string.Equals(error, UiText.Get("AdvancedFilter_CriteriaRangeMustIncludeHeaders"), StringComparison.Ordinal))
         {
             target = _criteriaRangeBox;
         }
-        else if (string.Equals(error, "Enter a valid copy-to cell or one-row header range.", StringComparison.Ordinal))
+        else if (string.Equals(error, UiText.Get("AdvancedFilter_EnterValidCopyToRange"), StringComparison.Ordinal))
         {
             _copyToAnotherLocationButton.IsChecked = true;
             UpdateCopyToState();
@@ -258,7 +258,7 @@ public sealed partial class AdvancedFilterDialog : Window
                 out var result,
                 out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? "Enter valid filter ranges.", Title);
+            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("AdvancedFilter_EnterValidFilterRanges"), Title);
             FocusInvalidRangeInput(error);
             return;
         }

@@ -23,7 +23,7 @@ public sealed class PivotFieldGroupingDialog : Window
     private readonly TextBox _startBox = new();
     private readonly TextBox _endBox = new();
     private readonly TextBox _intervalBox = new();
-    private readonly CheckBox _ungroupBox = new() { Content = "_Ungroup selected field" };
+    private readonly CheckBox _ungroupBox = new() { Content = UiText.Get("PivotFieldGrouping_UngroupSelectedField") };
     private readonly IReadOnlyList<PivotSourceFieldOption> _fields;
 
     public PivotFieldGroupingDialogResult Result { get; private set; }
@@ -34,7 +34,7 @@ public sealed class PivotFieldGroupingDialog : Window
         _fields = CreateFieldOptions(fieldNameList);
         Result = FromPivotField(fieldNameList, currentField);
 
-        Title = "Group Pivot Field";
+        Title = UiText.Get("PivotFieldGrouping_GroupPivotField");
         Width = 420;
         Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -113,19 +113,19 @@ public sealed class PivotFieldGroupingDialog : Window
         var stack = new StackPanel { Margin = new Thickness(16) };
 
         var selectionPanel = PivotDialogLayout.CreateGroupPanel();
-        AddCombo(selectionPanel, "_Field", _fieldBox, _fields);
+        AddCombo(selectionPanel, UiText.Get("PivotFieldGrouping_FieldLabel"), _fieldBox, _fields);
         _fieldBox.DisplayMemberPath = nameof(PivotSourceFieldOption.Name);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Selection", selectionPanel));
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotFieldGrouping_SelectionGroup"), selectionPanel));
 
         var groupingPanel = PivotDialogLayout.CreateGroupPanel();
-        AddCombo(groupingPanel, "_Group by", _groupingBox, Enum.GetValues<PivotFieldGrouping>());
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Group by", groupingPanel));
+        AddCombo(groupingPanel, UiText.Get("PivotFieldGrouping_GroupByLabel"), _groupingBox, Enum.GetValues<PivotFieldGrouping>());
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotFieldGrouping_GroupByGroup"), groupingPanel));
 
         var rangePanel = PivotDialogLayout.CreateGroupPanel();
-        AddTextBox(rangePanel, "_Starting at", _startBox);
-        AddTextBox(rangePanel, "_Ending at", _endBox);
-        AddTextBox(rangePanel, "_By", _intervalBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Range", rangePanel));
+        AddTextBox(rangePanel, UiText.Get("PivotFieldGrouping_StartingAtLabel"), _startBox);
+        AddTextBox(rangePanel, UiText.Get("PivotFieldGrouping_EndingAtLabel"), _endBox);
+        AddTextBox(rangePanel, UiText.Get("PivotFieldGrouping_ByLabel"), _intervalBox);
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotFieldGrouping_RangeGroup"), rangePanel));
         _ungroupBox.Margin = new Thickness(0, 0, 0, 16);
         stack.Children.Add(_ungroupBox);
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
@@ -150,13 +150,13 @@ public sealed class PivotFieldGroupingDialog : Window
             : PivotFieldGrouping.None;
         if (_ungroupBox.IsChecked != true && !TryParseOptionalFiniteDouble(_startBox.Text, out _))
         {
-            ShowInvalidInputWarning("Enter a valid starting value or leave it blank.", _startBox);
+            ShowInvalidInputWarning(UiText.Get("PivotFieldGrouping_EnterValidStartingValue"), _startBox);
             return;
         }
 
         if (_ungroupBox.IsChecked != true && !TryParseOptionalFiniteDouble(_endBox.Text, out _))
         {
-            ShowInvalidInputWarning("Enter a valid ending value or leave it blank.", _endBox);
+            ShowInvalidInputWarning(UiText.Get("PivotFieldGrouping_EnterValidEndingValue"), _endBox);
             return;
         }
 
@@ -165,7 +165,7 @@ public sealed class PivotFieldGroupingDialog : Window
             && grouping == PivotFieldGrouping.NumberRange
             && !TryParsePositiveInterval(_intervalBox.Text, out groupInterval))
         {
-            ShowInvalidInputWarning("Enter a positive grouping interval.", _intervalBox);
+            ShowInvalidInputWarning(UiText.Get("PivotFieldGrouping_EnterPositiveGroupingInterval"), _intervalBox);
             return;
         }
 

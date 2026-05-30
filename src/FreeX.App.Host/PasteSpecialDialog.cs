@@ -95,39 +95,39 @@ public sealed partial class PasteSpecialDialog : Window
 
     public PasteSpecialDialog()
     {
-        Title = "Paste Special";
+        Title = UiText.Get("PasteSpecial_PasteSpecial");
         Width = 470; Height = 550;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
 
-        _rbAll      = new RadioButton { Content = "_All",            IsChecked = true, Margin = new Thickness(0, 0, 0, 6) };
-        _rbValues   = new RadioButton { Content = "_Values",    Margin = new Thickness(0, 0, 0, 6) };
-        _rbFormulas = new RadioButton { Content = "_Formulas",  Margin = new Thickness(0, 0, 0, 6) };
-        _rbFormats  = new RadioButton { Content = "Forma_ts",   Margin = new Thickness(0, 0, 0, 6) };
-        _rbComments = new RadioButton { Content = "_Comments and notes", Margin = new Thickness(0, 0, 0, 6) };
-        _rbValidation = new RadioButton { Content = "Validatio_n", Margin = new Thickness(0, 0, 0, 6) };
-        _rbAllUsingSourceTheme = new RadioButton { Content = "All using source t_heme", Margin = new Thickness(0, 0, 0, 6) };
-        _rbAllExceptBorders = new RadioButton { Content = "All e_xcept borders", Margin = new Thickness(0, 0, 0, 6) };
-        _rbAllMergingConditionalFormats = new RadioButton { Content = "All merging conditional _formats", Margin = new Thickness(0, 0, 0, 6) };
-        _rbColumnWidths = new RadioButton { Content = "Column _widths", Margin = new Thickness(0, 0, 0, 6) };
-        _rbFormulasAndNumberFormats = new RadioButton { Content = "Formulas and number fo_rmats", Margin = new Thickness(0, 0, 0, 6) };
-        _rbValuesAndNumberFormats = new RadioButton { Content = "Values and number for_mats", Margin = new Thickness(0, 0, 0, 6) };
-        _rbValuesAndSourceFormatting = new RadioButton { Content = "Values and source f_ormatting", Margin = new Thickness(0, 0, 0, 6) };
-        _rbText = new RadioButton { Content = "T_ext", Margin = new Thickness(0, 0, 0, 6) };
-        _rbUnicodeText = new RadioButton { Content = "_Unicode Text", Margin = new Thickness(0, 0, 0, 6) };
-        _rbPicture  = new RadioButton { Content = "_Picture",        Margin = new Thickness(0, 0, 0, 6) };
-        _rbLinkedPicture = new RadioButton { Content = "_Linked picture", Margin = new Thickness(0, 0, 0, 6) };
-        _pasteLinkButton = new Button { Content = "Paste _Link", Width = 96, Margin = new Thickness(0, 0, 8, 0) };
-        _skipBlanks = new CheckBox { Content = "S_kip blanks", Margin = new Thickness(0, 0, 0, 8) };
-        _transpose  = new CheckBox { Content = "Transpos_e", Margin = new Thickness(0, 4, 0, 8) };
-        _keepColumnWidths = new CheckBox { Content = "Keep source column _widths", Margin = new Thickness(0, 0, 0, 8) };
-        _opNone = CreateOperationButton("_None", isChecked: true);
-        _opAdd = CreateOperationButton("_Add");
-        _opSubtract = CreateOperationButton("_Subtract");
-        _opMultiply = CreateOperationButton("_Multiply");
-        _opDivide = CreateOperationButton("_Divide");
+        _rbAll      = new RadioButton { Content = UiText.Get("PasteSpecial_All"),            IsChecked = true, Margin = new Thickness(0, 0, 0, 6) };
+        _rbValues   = new RadioButton { Content = UiText.Get("PasteSpecial_Values"),    Margin = new Thickness(0, 0, 0, 6) };
+        _rbFormulas = new RadioButton { Content = UiText.Get("PasteSpecial_Formulas"),  Margin = new Thickness(0, 0, 0, 6) };
+        _rbFormats  = new RadioButton { Content = UiText.Get("PasteSpecial_Formats"),   Margin = new Thickness(0, 0, 0, 6) };
+        _rbComments = new RadioButton { Content = UiText.Get("PasteSpecial_CommentsAndNotes"), Margin = new Thickness(0, 0, 0, 6) };
+        _rbValidation = new RadioButton { Content = UiText.Get("PasteSpecial_Validation"), Margin = new Thickness(0, 0, 0, 6) };
+        _rbAllUsingSourceTheme = new RadioButton { Content = UiText.Get("PasteSpecial_AllUsingSourceTheme"), Margin = new Thickness(0, 0, 0, 6) };
+        _rbAllExceptBorders = new RadioButton { Content = UiText.Get("PasteSpecial_AllExceptBorders"), Margin = new Thickness(0, 0, 0, 6) };
+        _rbAllMergingConditionalFormats = new RadioButton { Content = UiText.Get("PasteSpecial_AllMergingConditionalFormats"), Margin = new Thickness(0, 0, 0, 6) };
+        _rbColumnWidths = new RadioButton { Content = UiText.Get("PasteSpecial_ColumnWidths"), Margin = new Thickness(0, 0, 0, 6) };
+        _rbFormulasAndNumberFormats = new RadioButton { Content = UiText.Get("PasteSpecial_FormulasAndNumberFormats"), Margin = new Thickness(0, 0, 0, 6) };
+        _rbValuesAndNumberFormats = new RadioButton { Content = UiText.Get("PasteSpecial_ValuesAndNumberFormats"), Margin = new Thickness(0, 0, 0, 6) };
+        _rbValuesAndSourceFormatting = new RadioButton { Content = UiText.Get("PasteSpecial_ValuesAndSourceFormatting"), Margin = new Thickness(0, 0, 0, 6) };
+        _rbText = new RadioButton { Content = UiText.Get("PasteSpecial_Text"), Margin = new Thickness(0, 0, 0, 6) };
+        _rbUnicodeText = new RadioButton { Content = UiText.Get("PasteSpecial_UnicodeText"), Margin = new Thickness(0, 0, 0, 6) };
+        _rbPicture  = new RadioButton { Content = UiText.Get("PasteSpecial_Picture"),        Margin = new Thickness(0, 0, 0, 6) };
+        _rbLinkedPicture = new RadioButton { Content = UiText.Get("PasteSpecial_LinkedPicture"), Margin = new Thickness(0, 0, 0, 6) };
+        _pasteLinkButton = new Button { Content = UiText.Get("PasteSpecial_PasteLink"), Width = 96, Margin = new Thickness(0, 0, 8, 0) };
+        _skipBlanks = new CheckBox { Content = UiText.Get("PasteSpecial_SkipBlanks"), Margin = new Thickness(0, 0, 0, 8) };
+        _transpose  = new CheckBox { Content = UiText.Get("PasteSpecial_Transpose"), Margin = new Thickness(0, 4, 0, 8) };
+        _keepColumnWidths = new CheckBox { Content = UiText.Get("PasteSpecial_KeepSourceColumnWidths"), Margin = new Thickness(0, 0, 0, 8) };
+        _opNone = CreateOperationButton(UiText.Get("PasteSpecial_OperationNone"), isChecked: true);
+        _opAdd = CreateOperationButton(UiText.Get("PasteSpecial_OperationAdd"));
+        _opSubtract = CreateOperationButton(UiText.Get("PasteSpecial_OperationSubtract"));
+        _opMultiply = CreateOperationButton(UiText.Get("PasteSpecial_OperationMultiply"));
+        _opDivide = CreateOperationButton(UiText.Get("PasteSpecial_OperationDivide"));
         ApplyAutomationMetadata();
 
         stack.Children.Add(CreatePasteGroup());

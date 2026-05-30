@@ -10200,4 +10200,2743 @@
   <data name="PrintPreview_ZoomPageWidth" xml:space="preserve">
     <value>Page Width</value>
   </data>
+  <data name="TextToColumns_Delimited" xml:space="preserve">
+    <value>_Delimited</value>
+  </data>
+  <data name="TextToColumns_FixedWidth" xml:space="preserve">
+    <value>Fi_xed width</value>
+  </data>
+  <data name="TextToColumns_Tab" xml:space="preserve">
+    <value>_Tab</value>
+  </data>
+  <data name="TextToColumns_Semicolon" xml:space="preserve">
+    <value>_Semicolon</value>
+  </data>
+  <data name="TextToColumns_Comma" xml:space="preserve">
+    <value>_Comma</value>
+  </data>
+  <data name="TextToColumns_Space" xml:space="preserve">
+    <value>S_pace</value>
+  </data>
+  <data name="TextToColumns_Other" xml:space="preserve">
+    <value>_Other:</value>
+  </data>
+  <data name="TextToColumns_TreatConsecutiveDelimitersAsOne" xml:space="preserve">
+    <value>_Treat consecutive delimiters as one</value>
+  </data>
+  <data name="TextToColumns_General" xml:space="preserve">
+    <value>_General</value>
+  </data>
+  <data name="TextToColumns_Text" xml:space="preserve">
+    <value>_Text</value>
+  </data>
+  <data name="TextToColumns_Date" xml:space="preserve">
+    <value>_Date:</value>
+  </data>
+  <data name="TextToColumns_DoNotImportColumnSkip" xml:space="preserve">
+    <value>Do not import column (_skip)</value>
+  </data>
+  <data name="TextToColumns_TrailingMinusForNegativeNumbers" xml:space="preserve">
+    <value>_Trailing minus for negative numbers</value>
+  </data>
+  <data name="TextToColumns_TextToColumns" xml:space="preserve">
+    <value>Text to Columns</value>
+  </data>
+  <data name="TextToColumns_DataPreview" xml:space="preserve">
+    <value>Data preview</value>
+  </data>
+  <data name="TextToColumns_PreviewSampleRow1" xml:space="preserve">
+    <value>East,42,Open</value>
+  </data>
+  <data name="TextToColumns_PreviewSampleRow2" xml:space="preserve">
+    <value>West,7,Closed</value>
+  </data>
+  <data name="TextToColumns_PreviewSampleRow3" xml:space="preserve">
+    <value>North,18,Ready</value>
+  </data>
+  <data name="TextToColumns_ClickTheRulerToCreateABreakLineDragToMoveItOrRightClickALineToRemoveIt" xml:space="preserve">
+    <value>Click the ruler to create a break line, drag to move it, or right-click a line to remove it.</value>
+  </data>
+  <data name="TextToColumns_Breaks" xml:space="preserve">
+    <value>_Breaks:</value>
+  </data>
+  <data name="TextToColumns_FixedWidth2" xml:space="preserve">
+    <value>Fixed width</value>
+  </data>
+  <data name="TextToColumns_EnterASingleDestinationCellSuchAsF2" xml:space="preserve">
+    <value>Enter a single destination cell, such as F2.</value>
+  </data>
+  <data name="TextToColumns_EnterAtLeastOneFixedWidthBreakPosition" xml:space="preserve">
+    <value>Enter at least one fixed-width break position.</value>
+  </data>
+  <data name="TextToColumns_SelectAtLeastOneDelimiter" xml:space="preserve">
+    <value>Select at least one delimiter.</value>
+  </data>
+  <data name="TextToColumns_CustomDelimiterIsRequired" xml:space="preserve">
+    <value>Custom delimiter is required.</value>
+  </data>
+  <data name="TextToColumns_EnterASingleDecimalSeparator" xml:space="preserve">
+    <value>Enter a single decimal separator.</value>
+  </data>
+  <data name="TextToColumns_EnterASingleThousandsSeparator" xml:space="preserve">
+    <value>Enter a single thousands separator.</value>
+  </data>
+  <data name="PivotCalculated_CalculatedField" xml:space="preserve">
+    <value>Calculated Field</value>
+  </data>
+  <data name="PivotCalculated_InsertField" xml:space="preserve">
+    <value>Insert _Field</value>
+  </data>
+  <data name="PivotCalculated_CalculatedItem" xml:space="preserve">
+    <value>Calculated Item</value>
+  </data>
+  <data name="PivotCalculated_AvailableFields" xml:space="preserve">
+    <value>Available fields</value>
+  </data>
+  <data name="PivotCalculated_AvailableItems" xml:space="preserve">
+    <value>Available items</value>
+  </data>
+  <data name="RemoveDuplicates_MyDataHasHeaders" xml:space="preserve">
+    <value>_My data has headers</value>
+  </data>
+  <data name="RemoveDuplicates_SelectAll" xml:space="preserve">
+    <value>_Select All</value>
+  </data>
+  <data name="RemoveDuplicates_UnselectAll" xml:space="preserve">
+    <value>_Unselect All</value>
+  </data>
+  <data name="RemoveDuplicates_RemoveDuplicates" xml:space="preserve">
+    <value>Remove Duplicates</value>
+  </data>
+  <data name="RemoveDuplicates_Columns" xml:space="preserve">
+    <value>_Columns:</value>
+  </data>
+  <data name="RemoveDuplicates_SelectAtLeastOneColumn" xml:space="preserve">
+    <value>Select at least one column.</value>
+  </data>
+  <data name="SymbolPicker_Symbol" xml:space="preserve">
+    <value>Symbol</value>
+  </data>
+  <data name="Hyperlink_ScreenTip" xml:space="preserve">
+    <value>_ScreenTip...</value>
+  </data>
+  <data name="Hyperlink_Bookmark" xml:space="preserve">
+    <value>_Bookmark...</value>
+  </data>
+  <data name="Hyperlink_InsertHyperlink" xml:space="preserve">
+    <value>Insert Hyperlink</value>
+  </data>
+  <data name="Hyperlink_LinkTo" xml:space="preserve">
+    <value>Link _to:</value>
+  </data>
+  <data name="Hyperlink_LinkTo2" xml:space="preserve">
+    <value>Link to</value>
+  </data>
+  <data name="Hyperlink_ChooseTheKindOfHyperlinkToInsert" xml:space="preserve">
+    <value>Choose the kind of hyperlink to insert.</value>
+  </data>
+  <data name="Hyperlink_TextToDisplay" xml:space="preserve">
+    <value>Text to display</value>
+  </data>
+  <data name="Hyperlink_EnterTheTextShownInTheCellForTheHyperlink" xml:space="preserve">
+    <value>Enter the text shown in the cell for the hyperlink.</value>
+  </data>
+  <data name="Hyperlink_SetScreenTip" xml:space="preserve">
+    <value>Set ScreenTip</value>
+  </data>
+  <data name="Hyperlink_SetTheTextShownWhenPointingToTheHyperlink" xml:space="preserve">
+    <value>Set the text shown when pointing to the hyperlink.</value>
+  </data>
+  <data name="Hyperlink_SelectPlaceInDocument" xml:space="preserve">
+    <value>Select place in document</value>
+  </data>
+  <data name="Hyperlink_ChooseABookmarkDefinedNameOrCellReferenceInThisWorkbook" xml:space="preserve">
+    <value>Choose a bookmark, defined name, or cell reference in this workbook.</value>
+  </data>
+  <data name="Hyperlink_TextToDisplay2" xml:space="preserve">
+    <value>Text to _display:</value>
+  </data>
+  <data name="Hyperlink_Address" xml:space="preserve">
+    <value>_Address:</value>
+  </data>
+  <data name="Protection_Password" xml:space="preserve">
+    <value>Password</value>
+  </data>
+  <data name="Protection_CautionLostOrForgottenPasswordsCannotBeRecovered" xml:space="preserve">
+    <value>Caution: lost or forgotten passwords cannot be recovered.</value>
+  </data>
+  <data name="Protection_AllowAllUsersOfThisWorksheetTo" xml:space="preserve">
+    <value>Allow all users of this worksheet to:</value>
+  </data>
+  <data name="Protection_ChooseWhichProtectedSheetActionsRemainAvailable" xml:space="preserve">
+    <value>Choose which protected-sheet actions remain available.</value>
+  </data>
+  <data name="Protection_ConfirmPassword" xml:space="preserve">
+    <value>Confirm Password</value>
+  </data>
+  <data name="Protection_ReenterPasswordToProceed" xml:space="preserve">
+    <value>Reenter password to proceed.</value>
+  </data>
+  <data name="Protection_Password2" xml:space="preserve">
+    <value>_Password:</value>
+  </data>
+  <data name="Protection_TheConfirmationPasswordDoesNotMatch" xml:space="preserve">
+    <value>The confirmation password does not match.</value>
+  </data>
+  <data name="ManageConditionalFormats_ConditionalFormattingRulesManager" xml:space="preserve">
+    <value>Conditional Formatting Rules Manager</value>
+  </data>
+  <data name="ManageConditionalFormats_ShowFormattingRulesFor" xml:space="preserve">
+    <value>Show formatting _rules for:</value>
+  </data>
+  <data name="ManageConditionalFormats_Apply" xml:space="preserve">
+    <value>_Apply</value>
+  </data>
+  <data name="ManageConditionalFormats_NewRule" xml:space="preserve">
+    <value>_New Rule...</value>
+  </data>
+  <data name="ManageConditionalFormats_EditRule" xml:space="preserve">
+    <value>_Edit Rule</value>
+  </data>
+  <data name="ManageConditionalFormats_DuplicateRule" xml:space="preserve">
+    <value>D_uplicate Rule</value>
+  </data>
+  <data name="ManageConditionalFormats_DeleteRule" xml:space="preserve">
+    <value>_Delete Rule</value>
+  </data>
+  <data name="ManageConditionalFormats_MoveSelectedRuleUp" xml:space="preserve">
+    <value>Move selected rule up</value>
+  </data>
+  <data name="ManageConditionalFormats_MoveSelectedRuleDown" xml:space="preserve">
+    <value>Move selected rule down</value>
+  </data>
+  <data name="ManageConditionalFormats_Rules" xml:space="preserve">
+    <value>_Rules:</value>
+  </data>
+  <data name="ManageConditionalFormats_MoveUp" xml:space="preserve">
+    <value>Move Up</value>
+  </data>
+  <data name="ManageConditionalFormats_MoveDown" xml:space="preserve">
+    <value>Move Down</value>
+  </data>
+  <data name="ManageConditionalFormats_ConditionalFormattingRules" xml:space="preserve">
+    <value>Conditional formatting rules</value>
+  </data>
+  <data name="GoalSeekStatus_GoalSeekStatus" xml:space="preserve">
+    <value>Goal Seek Status</value>
+  </data>
+  <data name="GoalSeekStatus_KeepResult" xml:space="preserve">
+    <value>_Keep Result</value>
+  </data>
+  <data name="GoalSeekStatus_RestoreOriginalValues" xml:space="preserve">
+    <value>_Restore Original Values</value>
+  </data>
+  <data name="GoalSeekStatus_ReportsWhetherGoalSeekReachedTheTargetValue" xml:space="preserve">
+    <value>Reports whether Goal Seek reached the target value.</value>
+  </data>
+  <data name="GoalSeekStatus_KeepResult2" xml:space="preserve">
+    <value>Keep Result</value>
+  </data>
+  <data name="GoalSeekStatus_KeepTheGoalSeekResultInTheChangingCell" xml:space="preserve">
+    <value>Keep the Goal Seek result in the changing cell.</value>
+  </data>
+  <data name="GoalSeekStatus_RestoreOriginalValues2" xml:space="preserve">
+    <value>Restore Original Values</value>
+  </data>
+  <data name="GoalSeekStatus_RestoreTheOriginalWorkbookValuesBeforeGoalSeekRan" xml:space="preserve">
+    <value>Restore the original workbook values before Goal Seek ran.</value>
+  </data>
+  <data name="GoalSeekStatus_Ok" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="GoalSeekStatus_CloseTheGoalSeekStatusDialog" xml:space="preserve">
+    <value>Close the Goal Seek status dialog.</value>
+  </data>
+  <data name="GoToSpecial_Numbers" xml:space="preserve">
+    <value>_Numbers</value>
+  </data>
+  <data name="GoToSpecial_Text" xml:space="preserve">
+    <value>_Text</value>
+  </data>
+  <data name="GoToSpecial_Logicals" xml:space="preserve">
+    <value>_Logicals</value>
+  </data>
+  <data name="GoToSpecial_Errors" xml:space="preserve">
+    <value>_Errors</value>
+  </data>
+  <data name="GoToSpecial_GoToSpecial" xml:space="preserve">
+    <value>Go To Special</value>
+  </data>
+  <data name="GoToSpecial_Select" xml:space="preserve">
+    <value>Select</value>
+  </data>
+  <data name="GoToSpecial_ValuesForConstantsAndFormulas" xml:space="preserve">
+    <value>Values for constants and formulas</value>
+  </data>
+  <data name="Remaining_NewFormattingRule" xml:space="preserve">
+    <value>New Formatting Rule</value>
+  </data>
+  <data name="Remaining_RowHeight" xml:space="preserve">
+    <value>Row Height</value>
+  </data>
+  <data name="Remaining_ColumnWidth" xml:space="preserve">
+    <value>Column Width</value>
+  </data>
+  <data name="Remaining_ConditionalFormatThreshold" xml:space="preserve">
+    <value>Conditional format threshold</value>
+  </data>
+  <data name="Remaining_EnterTheValueForTheConditionalFormattingRuleThreshold" xml:space="preserve">
+    <value>Enter the value for the conditional formatting rule threshold.</value>
+  </data>
+  <data name="Remaining_EnterARowHeightFrom0To4095" xml:space="preserve">
+    <value>Enter a row height from 0 to 409.5.</value>
+  </data>
+  <data name="Remaining_EnterAColumnWidthFrom0To255" xml:space="preserve">
+    <value>Enter a column width from 0 to 255.</value>
+  </data>
+  <data name="Remaining_FormatCellsGreaterThan" xml:space="preserve">
+    <value>Format cells greater _than:</value>
+  </data>
+  <data name="Remaining_RowHeight2" xml:space="preserve">
+    <value>Row _height:</value>
+  </data>
+  <data name="Remaining_EnterARowHeightFrom0To409" xml:space="preserve">
+    <value>Enter a row height from 0 to 409.</value>
+  </data>
+  <data name="Remaining_ColumnWidth2" xml:space="preserve">
+    <value>Column _width:</value>
+  </data>
+  <data name="Sparkline_SelectDataRange" xml:space="preserve">
+    <value>_Select Data Range</value>
+  </data>
+  <data name="Sparkline_SelectDataRange2" xml:space="preserve">
+    <value>Select Data Range</value>
+  </data>
+  <data name="Sparkline_SelectLocationRange" xml:space="preserve">
+    <value>Select _Location Range</value>
+  </data>
+  <data name="Sparkline_SelectLocationRange2" xml:space="preserve">
+    <value>Select Location Range</value>
+  </data>
+  <data name="Sparkline_InsertSparkline" xml:space="preserve">
+    <value>Insert Sparkline</value>
+  </data>
+  <data name="Sparkline_DataRange" xml:space="preserve">
+    <value>_Data range:</value>
+  </data>
+  <data name="Sparkline_LocationRange" xml:space="preserve">
+    <value>_Location range:</value>
+  </data>
+  <data name="Sparkline_SparklineType" xml:space="preserve">
+    <value>Sparkline _type:</value>
+  </data>
+  <data name="Sparkline_SelectSparklineDataRange" xml:space="preserve">
+    <value>Select sparkline data range</value>
+  </data>
+  <data name="Sparkline_SelectTheWorksheetDataRangeForTheSparkline" xml:space="preserve">
+    <value>Select the worksheet data range for the sparkline.</value>
+  </data>
+  <data name="Sparkline_SelectSparklineLocationRange" xml:space="preserve">
+    <value>Select sparkline location range</value>
+  </data>
+  <data name="Sparkline_SelectTheDestinationCellForTheSparkline" xml:space="preserve">
+    <value>Select the destination cell for the sparkline.</value>
+  </data>
+  <data name="Sparkline_SparklineDataRange" xml:space="preserve">
+    <value>Sparkline data range</value>
+  </data>
+  <data name="Sparkline_EnterTheWorksheetDataRangeForTheSparkline" xml:space="preserve">
+    <value>Enter the worksheet data range for the sparkline.</value>
+  </data>
+  <data name="Sparkline_SparklineLocationRange" xml:space="preserve">
+    <value>Sparkline location range</value>
+  </data>
+  <data name="Sparkline_EnterTheDestinationCellForTheSparkline" xml:space="preserve">
+    <value>Enter the destination cell for the sparkline.</value>
+  </data>
+  <data name="Sparkline_SparklineTypeAutomationName" xml:space="preserve">
+    <value>Sparkline type</value>
+  </data>
+  <data name="Sparkline_ChooseWhetherTheSparklineIsLineColumnOrWinLoss" xml:space="preserve">
+    <value>Choose whether the sparkline is line, column, or win/loss.</value>
+  </data>
+  <data name="Consolidate_Delete" xml:space="preserve">
+    <value>_Delete</value>
+  </data>
+  <data name="Consolidate_TopRow" xml:space="preserve">
+    <value>_Top row</value>
+  </data>
+  <data name="Consolidate_LeftColumn" xml:space="preserve">
+    <value>Left _column</value>
+  </data>
+  <data name="Consolidate_CreateLinksToSourceData" xml:space="preserve">
+    <value>Create _links to source data</value>
+  </data>
+  <data name="Consolidate_Consolidate" xml:space="preserve">
+    <value>Consolidate</value>
+  </data>
+  <data name="Consolidate_Function" xml:space="preserve">
+    <value>_Function:</value>
+  </data>
+  <data name="Consolidate_Reference" xml:space="preserve">
+    <value>_Reference:</value>
+  </data>
+  <data name="Consolidate_Add" xml:space="preserve">
+    <value>_Add</value>
+  </data>
+  <data name="Consolidate_AllReferences" xml:space="preserve">
+    <value>_All references:</value>
+  </data>
+  <data name="Consolidate_DestinationCell" xml:space="preserve">
+    <value>_Destination cell:</value>
+  </data>
+  <data name="Consolidate_UseLabelsIn" xml:space="preserve">
+    <value>Use labels in:</value>
+  </data>
+  <data name="Consolidate_WriteFormulasThatReferenceTheSourceCellsWhileKeepingTheConsolidatedResul" xml:space="preserve">
+    <value>Write formulas that reference the source cells while keeping the consolidated result value.</value>
+  </data>
+  <data name="Consolidate_Reference2" xml:space="preserve">
+    <value>Reference</value>
+  </data>
+  <data name="Consolidate_EnterASourceRangeToAddToTheAllReferencesList" xml:space="preserve">
+    <value>Enter a source range to add to the All references list.</value>
+  </data>
+  <data name="Consolidate_AllReferences2" xml:space="preserve">
+    <value>All references</value>
+  </data>
+  <data name="Consolidate_ListsTheSourceRangesThatWillBeConsolidated" xml:space="preserve">
+    <value>Lists the source ranges that will be consolidated.</value>
+  </data>
+  <data name="Consolidate_DestinationCell2" xml:space="preserve">
+    <value>Destination cell</value>
+  </data>
+  <data name="Consolidate_EnterTheUpperLeftDestinationCellForTheConsolidatedResult" xml:space="preserve">
+    <value>Enter the upper-left destination cell for the consolidated result.</value>
+  </data>
+  <data name="Consolidate_SelectReferenceRange" xml:space="preserve">
+    <value>Select reference range</value>
+  </data>
+  <data name="Consolidate_SelectDestinationCell" xml:space="preserve">
+    <value>Select destination cell</value>
+  </data>
+  <data name="Consolidate_EnterAValidSourceRange" xml:space="preserve">
+    <value>Enter a valid source range.</value>
+  </data>
+  <data name="Consolidate_AddTheReferenceBeforeClickingOk" xml:space="preserve">
+    <value>Add the reference before clicking OK.</value>
+  </data>
+  <data name="Consolidate_AddReferenceAutomationName" xml:space="preserve">
+    <value>Add reference</value>
+  </data>
+  <data name="Consolidate_AddTheReferenceRangeToTheAllReferencesList" xml:space="preserve">
+    <value>Add the reference range to the All references list.</value>
+  </data>
+  <data name="Consolidate_DeleteReferenceAutomationName" xml:space="preserve">
+    <value>Delete reference</value>
+  </data>
+  <data name="Consolidate_DeleteTheSelectedReferenceRange" xml:space="preserve">
+    <value>Delete the selected reference range.</value>
+  </data>
+  <data name="Consolidate_FunctionAutomationName" xml:space="preserve">
+    <value>Function</value>
+  </data>
+  <data name="Consolidate_ChooseTheFunctionUsedToCombineSourceRanges" xml:space="preserve">
+    <value>Choose the function used to combine source ranges.</value>
+  </data>
+  <data name="Consolidate_TopRowLabelsAutomationName" xml:space="preserve">
+    <value>Top row labels</value>
+  </data>
+  <data name="Consolidate_UseLabelsFromTheTopRowOfEachSourceRange" xml:space="preserve">
+    <value>Use labels from the top row of each source range.</value>
+  </data>
+  <data name="Consolidate_LeftColumnLabelsAutomationName" xml:space="preserve">
+    <value>Left column labels</value>
+  </data>
+  <data name="Consolidate_UseLabelsFromTheLeftColumnOfEachSourceRange" xml:space="preserve">
+    <value>Use labels from the left column of each source range.</value>
+  </data>
+  <data name="Consolidate_CreateLinksToSourceDataAutomationName" xml:space="preserve">
+    <value>Create links to source data</value>
+  </data>
+  <data name="Consolidate_CreateFormulasThatLinkTheResultToTheSourceCells" xml:space="preserve">
+    <value>Create formulas that link the result to the source cells.</value>
+  </data>
+  <data name="Consolidate_EnterValidConsolidationRanges" xml:space="preserve">
+    <value>Enter valid consolidation ranges.</value>
+  </data>
+  <data name="ExportOptions_ActiveSheetS" xml:space="preserve">
+    <value>Active _sheet(s)</value>
+  </data>
+  <data name="ExportOptions_SelectedRange" xml:space="preserve">
+    <value>Selected _range</value>
+  </data>
+  <data name="ExportOptions_Workbook" xml:space="preserve">
+    <value>_Workbook</value>
+  </data>
+  <data name="ExportOptions_IncludeDocumentProperties" xml:space="preserve">
+    <value>_Include document properties</value>
+  </data>
+  <data name="ExportOptions_OpenAfterPublishing" xml:space="preserve">
+    <value>_Open after publishing</value>
+  </data>
+  <data name="ExportOptions_IgnorePrintAreas" xml:space="preserve">
+    <value>_Ignore print areas</value>
+  </data>
+  <data name="ExportOptions_CreatePdfBookmarks" xml:space="preserve">
+    <value>Create _PDF bookmarks</value>
+  </data>
+  <data name="ExportOptions_BitmapTextWhenFontsMayNotBeEmbedded" xml:space="preserve">
+    <value>_Bitmap text when fonts may not be embedded</value>
+  </data>
+  <data name="ExportOptions_PdfACompliantNotSupported" xml:space="preserve">
+    <value>PDF/_A compliant (not supported)</value>
+  </data>
+  <data name="ExportOptions_DocumentStructureTagsNotSupported" xml:space="preserve">
+    <value>Document structure _tags (not supported)</value>
+  </data>
+  <data name="ExportOptions_Standard" xml:space="preserve">
+    <value>_Standard</value>
+  </data>
+  <data name="ExportOptions_MinimumSize" xml:space="preserve">
+    <value>_Minimum size</value>
+  </data>
+  <data name="ExportOptions_All" xml:space="preserve">
+    <value>_All</value>
+  </data>
+  <data name="ExportOptions_Pages" xml:space="preserve">
+    <value>_Pages</value>
+  </data>
+  <data name="ExportOptions_ExportOptions" xml:space="preserve">
+    <value>Export Options</value>
+  </data>
+  <data name="ExportOptions_SelectACellRangeBeforeExportingTheSelection" xml:space="preserve">
+    <value>Select a cell range before exporting the selection.</value>
+  </data>
+  <data name="ExportOptions_PublishWhat" xml:space="preserve">
+    <value>Publish what</value>
+  </data>
+  <data name="ExportOptions_PageRange" xml:space="preserve">
+    <value>Page range</value>
+  </data>
+  <data name="ExportOptions_From" xml:space="preserve">
+    <value>_From</value>
+  </data>
+  <data name="ExportOptions_To" xml:space="preserve">
+    <value>t_o</value>
+  </data>
+  <data name="ExportOptions_PdfXpsOptions" xml:space="preserve">
+    <value>PDF/XPS options</value>
+  </data>
+  <data name="ExportOptions_BookmarkMode" xml:space="preserve">
+    <value>Bookmark _mode:</value>
+  </data>
+  <data name="ExportOptions_InitialView" xml:space="preserve">
+    <value>Initial _view:</value>
+  </data>
+  <data name="ExportOptions_OpenMode" xml:space="preserve">
+    <value>Open _mode:</value>
+  </data>
+  <data name="ExportOptions_PdfLanguage" xml:space="preserve">
+    <value>PDF _language:</value>
+  </data>
+  <data name="ExportOptions_FreeXSCurrentPdfExporterCannotWritePdfAConformanceMetadata" xml:space="preserve">
+    <value>FreeX&apos;s current PDF exporter cannot write PDF/A conformance metadata.</value>
+  </data>
+  <data name="ExportOptions_FreeXSCurrentPdfExporterCannotWriteTaggedPdfStructureTrees" xml:space="preserve">
+    <value>FreeX&apos;s current PDF exporter cannot write tagged PDF structure trees.</value>
+  </data>
+  <data name="ExportOptions_FromPage" xml:space="preserve">
+    <value>From page</value>
+  </data>
+  <data name="ExportOptions_ToPage" xml:space="preserve">
+    <value>To page</value>
+  </data>
+  <data name="ExportOptions_SheetNames" xml:space="preserve">
+    <value>Sheet names</value>
+  </data>
+  <data name="ExportOptions_PrintTitles" xml:space="preserve">
+    <value>Print titles</value>
+  </data>
+  <data name="ExportOptions_PageNumbers" xml:space="preserve">
+    <value>Page numbers</value>
+  </data>
+  <data name="ExportOptions_SinglePage" xml:space="preserve">
+    <value>Single page</value>
+  </data>
+  <data name="ExportOptions_OneContinuousColumn" xml:space="preserve">
+    <value>One continuous column</value>
+  </data>
+  <data name="ExportOptions_TwoColumnsOddPagesLeft" xml:space="preserve">
+    <value>Two columns, odd pages left</value>
+  </data>
+  <data name="ExportOptions_TwoColumnsOddPagesRight" xml:space="preserve">
+    <value>Two columns, odd pages right</value>
+  </data>
+  <data name="ExportOptions_Normal" xml:space="preserve">
+    <value>Normal</value>
+  </data>
+  <data name="ExportOptions_BookmarksVisible" xml:space="preserve">
+    <value>Bookmarks visible</value>
+  </data>
+  <data name="ExportOptions_FullScreen" xml:space="preserve">
+    <value>Full screen</value>
+  </data>
+  <data name="SheetName_RenameSheet" xml:space="preserve">
+    <value>Rename Sheet</value>
+  </data>
+  <data name="SheetName_SheetName" xml:space="preserve">
+    <value>Sheet name</value>
+  </data>
+  <data name="SheetName_EnterAWorksheetNameUpTo31Characters" xml:space="preserve">
+    <value>Enter a worksheet name up to 31 characters.</value>
+  </data>
+  <data name="SheetName_SheetName2" xml:space="preserve">
+    <value>Sheet _name:</value>
+  </data>
+  <data name="PivotFieldGrouping_UngroupSelectedField" xml:space="preserve">
+    <value>_Ungroup selected field</value>
+  </data>
+  <data name="PivotFieldGrouping_GroupPivotField" xml:space="preserve">
+    <value>Group Pivot Field</value>
+  </data>
+  <data name="PivotChartOptions_ShowFieldButtonsOnChart" xml:space="preserve">
+    <value>_Show field buttons on chart</value>
+  </data>
+  <data name="PivotChartOptions_ReportFilterButtons" xml:space="preserve">
+    <value>Report _filter buttons</value>
+  </data>
+  <data name="PivotChartOptions_AxisFieldButtons" xml:space="preserve">
+    <value>_Axis field buttons</value>
+  </data>
+  <data name="PivotChartOptions_ValueFieldButtons" xml:space="preserve">
+    <value>_Value field buttons</value>
+  </data>
+  <data name="PivotChartOptions_ShowDataTable" xml:space="preserve">
+    <value>Show data _table</value>
+  </data>
+  <data name="PivotChartOptions_ShowLegendKeys" xml:space="preserve">
+    <value>Show legend _keys</value>
+  </data>
+  <data name="PivotChartOptions_RoundedCorners" xml:space="preserve">
+    <value>_Rounded corners</value>
+  </data>
+  <data name="PivotChartOptions_ShowDataInHiddenRowsAndColumns" xml:space="preserve">
+    <value>Show data in _hidden rows and columns</value>
+  </data>
+  <data name="PivotChartOptions_PivotChartOptions" xml:space="preserve">
+    <value>PivotChart Options</value>
+  </data>
+  <data name="PivotChartOptions_ChartStyle" xml:space="preserve">
+    <value>Chart _style</value>
+  </data>
+  <data name="PivotChartOptions_BlankCells" xml:space="preserve">
+    <value>_Blank cells</value>
+  </data>
+  <data name="PivotChartOptions_PivotChartStyleGallery" xml:space="preserve">
+    <value>PivotChart style gallery</value>
+  </data>
+  <data name="WorkbookStatistics_WorkbookStatistics" xml:space="preserve">
+    <value>Workbook Statistics</value>
+  </data>
+  <data name="WorkbookStatistics_SummarizesSheetCellFormulaCommentAndObjectCountsForTheWorkbook" xml:space="preserve">
+    <value>Summarizes sheet, cell, formula, comment, and object counts for the workbook.</value>
+  </data>
+  <data name="PivotTableDataSource_ChangePivotTableDataSource" xml:space="preserve">
+    <value>Change PivotTable Data Source</value>
+  </data>
+  <data name="PivotTableDataSource_PivotTableSourceRange" xml:space="preserve">
+    <value>PivotTable source range</value>
+  </data>
+  <data name="PivotTableDataSource_SelectPivotTableSourceRange" xml:space="preserve">
+    <value>Select PivotTable source range</value>
+  </data>
+  <data name="UnhideSheet_UnhideSheet" xml:space="preserve">
+    <value>Unhide Sheet</value>
+  </data>
+  <data name="UnhideSheet_UnhideSheet2" xml:space="preserve">
+    <value>_Unhide sheet:</value>
+  </data>
+  <data name="UnhideSheet_SelectTheHiddenWorksheetToMakeVisible" xml:space="preserve">
+    <value>Select the hidden worksheet to make visible.</value>
+  </data>
+  <data name="UnhideSheet_Ok" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="UnhideSheet_UnhideTheSelectedWorksheet" xml:space="preserve">
+    <value>Unhide the selected worksheet.</value>
+  </data>
+  <data name="UnhideSheet_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="UnhideSheet_CloseTheUnhideSheetDialogWithoutChangingWorksheetVisibility" xml:space="preserve">
+    <value>Close the Unhide Sheet dialog without changing worksheet visibility.</value>
+  </data>
+  <data name="Sort_CustomSort" xml:space="preserve">
+    <value>Custom Sort</value>
+  </data>
+  <data name="Sort_MyDataHasHeaders" xml:space="preserve">
+    <value>My data has _headers</value>
+  </data>
+  <data name="Sort_SortLevels" xml:space="preserve">
+    <value>Sort levels</value>
+  </data>
+  <data name="Sort_SortBy" xml:space="preserve">
+    <value>Sort by</value>
+  </data>
+  <data name="Sort_SortOn" xml:space="preserve">
+    <value>Sort On</value>
+  </data>
+  <data name="Sort_AddLevel" xml:space="preserve">
+    <value>_Add Level</value>
+  </data>
+  <data name="Sort_DeleteLevel" xml:space="preserve">
+    <value>_Delete Level</value>
+  </data>
+  <data name="Sort_CopyLevel" xml:space="preserve">
+    <value>_Copy Level</value>
+  </data>
+  <data name="Sort_MoveUp" xml:space="preserve">
+    <value>Move _Up</value>
+  </data>
+  <data name="Sort_MoveDown" xml:space="preserve">
+    <value>Move Do_wn</value>
+  </data>
+  <data name="Sort_Options" xml:space="preserve">
+    <value>_Options...</value>
+  </data>
+  <data name="Sort_Order" xml:space="preserve">
+    <value>Order</value>
+  </data>
+  <data name="Sort_Color" xml:space="preserve">
+    <value>Color</value>
+  </data>
+  <data name="ObjectSizing_LockAspectRatio" xml:space="preserve">
+    <value>_Lock aspect ratio</value>
+  </data>
+  <data name="ObjectSizing_CropPicture" xml:space="preserve">
+    <value>Crop Picture</value>
+  </data>
+  <data name="ObjectSizing_ObjectHeight" xml:space="preserve">
+    <value>Object height</value>
+  </data>
+  <data name="ObjectSizing_EnterTheObjectSHeight" xml:space="preserve">
+    <value>Enter the object&apos;s height.</value>
+  </data>
+  <data name="ObjectSizing_ObjectWidth" xml:space="preserve">
+    <value>Object width</value>
+  </data>
+  <data name="ObjectSizing_EnterTheObjectSWidth" xml:space="preserve">
+    <value>Enter the object&apos;s width.</value>
+  </data>
+  <data name="ObjectSizing_LockAspectRatio2" xml:space="preserve">
+    <value>Lock aspect ratio</value>
+  </data>
+  <data name="ObjectSizing_KeepTheObjectSWidthAndHeightProportional" xml:space="preserve">
+    <value>Keep the object&apos;s width and height proportional.</value>
+  </data>
+  <data name="ObjectSizing_RotationDegrees" xml:space="preserve">
+    <value>Rotation degrees</value>
+  </data>
+  <data name="ObjectSizing_EnterTheObjectSRotationInDegrees" xml:space="preserve">
+    <value>Enter the object&apos;s rotation in degrees.</value>
+  </data>
+  <data name="ObjectSizing_CropLeft" xml:space="preserve">
+    <value>Crop left</value>
+  </data>
+  <data name="ObjectSizing_EnterTheLeftCropPercentage" xml:space="preserve">
+    <value>Enter the left crop percentage.</value>
+  </data>
+  <data name="ObjectSizing_CropTop" xml:space="preserve">
+    <value>Crop top</value>
+  </data>
+  <data name="ObjectSizing_EnterTheTopCropPercentage" xml:space="preserve">
+    <value>Enter the top crop percentage.</value>
+  </data>
+  <data name="ObjectSizing_CropRight" xml:space="preserve">
+    <value>Crop right</value>
+  </data>
+  <data name="ObjectSizing_EnterTheRightCropPercentage" xml:space="preserve">
+    <value>Enter the right crop percentage.</value>
+  </data>
+  <data name="ObjectSizing_CropBottom" xml:space="preserve">
+    <value>Crop bottom</value>
+  </data>
+  <data name="ObjectSizing_EnterTheBottomCropPercentage" xml:space="preserve">
+    <value>Enter the bottom crop percentage.</value>
+  </data>
+  <data name="ObjectSizing_EnterPositiveWidthAndHeightValues" xml:space="preserve">
+    <value>Enter positive width and height values.</value>
+  </data>
+  <data name="ObjectSizing_Degrees" xml:space="preserve">
+    <value>_Degrees:</value>
+  </data>
+  <data name="ObjectSizing_EnterANumericRotationValue" xml:space="preserve">
+    <value>Enter a numeric rotation value.</value>
+  </data>
+  <data name="ObjectSizing_EnterFourCropPercentages" xml:space="preserve">
+    <value>Enter four crop percentages.</value>
+  </data>
+  <data name="Zoom_Custom" xml:space="preserve">
+    <value>_Custom:</value>
+  </data>
+  <data name="Zoom_FitSelection" xml:space="preserve">
+    <value>Fit _selection</value>
+  </data>
+  <data name="Zoom_Zoom" xml:space="preserve">
+    <value>Zoom</value>
+  </data>
+  <data name="Zoom_Magnification" xml:space="preserve">
+    <value>Magnification</value>
+  </data>
+  <data name="Zoom_CustomZoomPercent" xml:space="preserve">
+    <value>Custom zoom percent</value>
+  </data>
+  <data name="Zoom_EnterAWholeZoomPercentageFrom10To400" xml:space="preserve">
+    <value>Enter a whole zoom percentage from 10 to 400.</value>
+  </data>
+  <data name="Zoom_EnterAValidZoomPercent" xml:space="preserve">
+    <value>Enter a valid zoom percent.</value>
+  </data>
+  <data name="PivotChartType_ChangePivotChartType" xml:space="preserve">
+    <value>Change PivotChart Type</value>
+  </data>
+  <data name="PivotChartType_RecommendedPivotCharts" xml:space="preserve">
+    <value>_Recommended PivotCharts</value>
+  </data>
+  <data name="PivotChartType_ChartCategoriesAndChartSubtypeGalleryMatchTheInsertChartPicker" xml:space="preserve">
+    <value>Chart categories and Chart subtype gallery match the Insert Chart picker.</value>
+  </data>
+  <data name="PivotChartType_AllCharts" xml:space="preserve">
+    <value>_All Charts</value>
+  </data>
+  <data name="Subtotal_Subtotal" xml:space="preserve">
+    <value>Subtotal</value>
+  </data>
+  <data name="Subtotal_AtEachChangeIn" xml:space="preserve">
+    <value>_At each change in:</value>
+  </data>
+  <data name="Subtotal_UseFunction" xml:space="preserve">
+    <value>_Use function:</value>
+  </data>
+  <data name="Subtotal_AddSubtotalTo" xml:space="preserve">
+    <value>_Add subtotal to:</value>
+  </data>
+  <data name="Subtotal_ReplaceCurrentSubtotals" xml:space="preserve">
+    <value>_Replace current subtotals</value>
+  </data>
+  <data name="Subtotal_PageBreakBetweenGroups" xml:space="preserve">
+    <value>_Page break between groups</value>
+  </data>
+  <data name="Subtotal_SummaryBelowData" xml:space="preserve">
+    <value>_Summary below data</value>
+  </data>
+  <data name="Subtotal_RemoveAll" xml:space="preserve">
+    <value>_Remove All</value>
+  </data>
+  <data name="Subtotal_UnsupportedSubtotalFunction" xml:space="preserve">
+    <value>Unsupported SUBTOTAL function.</value>
+  </data>
+  <data name="Subtotal_AtLeastOneSubtotalColumnIsRequired" xml:space="preserve">
+    <value>At least one subtotal column is required.</value>
+  </data>
+  <data name="PivotTableOptions_ShowRowGrandTotals" xml:space="preserve">
+    <value>Show _row grand totals</value>
+  </data>
+  <data name="PivotTableOptions_ShowColumnGrandTotals" xml:space="preserve">
+    <value>Show _column grand totals</value>
+  </data>
+  <data name="PivotTableOptions_ShowSubtotals" xml:space="preserve">
+    <value>Show _subtotals</value>
+  </data>
+  <data name="PivotTableOptions_RepeatItemLabels" xml:space="preserve">
+    <value>_Repeat item labels</value>
+  </data>
+  <data name="PivotTableOptions_InsertBlankLineAfterEachItem" xml:space="preserve">
+    <value>Insert _blank line after each item</value>
+  </data>
+  <data name="PivotTableOptions_MergeAndCenterCellsWithLabels" xml:space="preserve">
+    <value>_Merge and center cells with labels</value>
+  </data>
+  <data name="PivotTableOptions_RowHeaders" xml:space="preserve">
+    <value>Row _headers</value>
+  </data>
+  <data name="PivotTableOptions_ColumnHeaders" xml:space="preserve">
+    <value>Column hea_ders</value>
+  </data>
+  <data name="PivotTableOptions_DisplayFieldCaptionsAndFilterDropDowns" xml:space="preserve">
+    <value>Display field _captions and filter drop-downs</value>
+  </data>
+  <data name="PivotTableOptions_ShowContextualTooltips" xml:space="preserve">
+    <value>Show contextual _tooltips</value>
+  </data>
+  <data name="PivotTableOptions_ShowPropertiesInTooltips" xml:space="preserve">
+    <value>Show _properties in tooltips</value>
+  </data>
+  <data name="PivotTableOptions_ClassicPivotTableLayoutEnablesDraggingOfFieldsInTheGrid" xml:space="preserve">
+    <value>_Classic PivotTable layout (enables dragging of fields in the grid)</value>
+  </data>
+  <data name="PivotTableOptions_ShowItemsWithNoDataOnRows" xml:space="preserve">
+    <value>Show items with no data on _rows</value>
+  </data>
+  <data name="PivotTableOptions_ShowItemsWithNoDataOnColumns" xml:space="preserve">
+    <value>Show items with no data on _columns</value>
+  </data>
+  <data name="PivotTableOptions_BandedRows" xml:space="preserve">
+    <value>Banded _rows</value>
+  </data>
+  <data name="PivotTableOptions_BandedColumns" xml:space="preserve">
+    <value>Banded c_olumns</value>
+  </data>
+  <data name="PivotTableOptions_AutofitColumnWidthsOnUpdate" xml:space="preserve">
+    <value>_Autofit column widths on update</value>
+  </data>
+  <data name="PivotTableOptions_PreserveCellFormattingOnUpdate" xml:space="preserve">
+    <value>_Preserve cell formatting on update</value>
+  </data>
+  <data name="PivotTableOptions_RefreshDataWhenOpeningTheFile" xml:space="preserve">
+    <value>_Refresh data when opening the file</value>
+  </data>
+  <data name="PivotTableOptions_SaveSourceDataWithFile" xml:space="preserve">
+    <value>_Save source data with file</value>
+  </data>
+  <data name="PivotTableOptions_EnableRefresh" xml:space="preserve">
+    <value>_Enable refresh</value>
+  </data>
+  <data name="PivotTableOptions_EnableShowDetails" xml:space="preserve">
+    <value>Enable Show De_tails</value>
+  </data>
+  <data name="PivotTableOptions_PreserveSourceSortAndFilterSettings" xml:space="preserve">
+    <value>Preserve source sort and _filter settings</value>
+  </data>
+  <data name="PivotTableOptions_ShowExpandCollapseButtons" xml:space="preserve">
+    <value>Show expand/collapse _buttons</value>
+  </data>
+  <data name="PivotTableOptions_SetPrintTitles" xml:space="preserve">
+    <value>Set print _titles</value>
+  </data>
+  <data name="PivotTableOptions_PrintExpandCollapseButtonsWhenDisplayedOnPivotTable" xml:space="preserve">
+    <value>Print expand/collapse _buttons when displayed on PivotTable</value>
+  </data>
+  <data name="PivotTableOptions_LayoutAndFormat" xml:space="preserve">
+    <value>_Layout &amp; Format</value>
+  </data>
+  <data name="PivotTableOptions_PivotTableOptions" xml:space="preserve">
+    <value>PivotTable Options</value>
+  </data>
+  <data name="PivotTableOptions_TotalsAndFilters" xml:space="preserve">
+    <value>_Totals &amp; Filters</value>
+  </data>
+  <data name="PivotTableOptions_Display" xml:space="preserve">
+    <value>_Display</value>
+  </data>
+  <data name="PivotTableOptions_Printing" xml:space="preserve">
+    <value>_Printing</value>
+  </data>
+  <data name="PivotTableOptions_Data" xml:space="preserve">
+    <value>_Data</value>
+  </data>
+  <data name="PivotTableOptions_AltText" xml:space="preserve">
+    <value>_Alt Text</value>
+  </data>
+  <data name="WatchWindow_WatchWindow" xml:space="preserve">
+    <value>Watch Window</value>
+  </data>
+  <data name="WatchWindow_AddWatch" xml:space="preserve">
+    <value>_Add Watch</value>
+  </data>
+  <data name="WatchWindow_AddTheCurrentWorksheetSelectionToTheWatchWindow" xml:space="preserve">
+    <value>Add the current worksheet selection to the Watch Window.</value>
+  </data>
+  <data name="WatchWindow_Refresh" xml:space="preserve">
+    <value>_Refresh</value>
+  </data>
+  <data name="WatchWindow_DeleteWatch" xml:space="preserve">
+    <value>_Delete Watch</value>
+  </data>
+  <data name="WatchWindow_Close" xml:space="preserve">
+    <value>_Close</value>
+  </data>
+  <data name="WatchWindow_Watches" xml:space="preserve">
+    <value>_Watches:</value>
+  </data>
+  <data name="WatchWindow_Book" xml:space="preserve">
+    <value>Book</value>
+  </data>
+  <data name="WatchWindow_Sheet" xml:space="preserve">
+    <value>Sheet</value>
+  </data>
+  <data name="WatchWindow_Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="WatchWindow_Cell" xml:space="preserve">
+    <value>Cell</value>
+  </data>
+  <data name="WatchWindow_Value" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="WatchWindow_Formula" xml:space="preserve">
+    <value>Formula</value>
+  </data>
+  <data name="WatchWindow_AddWatch2" xml:space="preserve">
+    <value>Add Watch</value>
+  </data>
+  <data name="WatchWindow_RefreshWatches" xml:space="preserve">
+    <value>Refresh watches</value>
+  </data>
+  <data name="WatchWindow_RefreshValuesAndFormulasForWatchedCells" xml:space="preserve">
+    <value>Refresh values and formulas for watched cells.</value>
+  </data>
+  <data name="WatchWindow_DeleteWatch2" xml:space="preserve">
+    <value>Delete Watch</value>
+  </data>
+  <data name="WatchWindow_DeleteTheSelectedWatchedCells" xml:space="preserve">
+    <value>Delete the selected watched cells.</value>
+  </data>
+  <data name="WatchWindow_CloseWatchWindow" xml:space="preserve">
+    <value>Close Watch Window</value>
+  </data>
+  <data name="WatchWindow_CloseTheWatchWindow" xml:space="preserve">
+    <value>Close the Watch Window.</value>
+  </data>
+  <data name="WatchWindow_Watches2" xml:space="preserve">
+    <value>Watches</value>
+  </data>
+  <data name="WatchWindow_ListsWatchedCellsWithTheirWorkbookSheetAddressValueAndFormula" xml:space="preserve">
+    <value>Lists watched cells with their workbook, sheet, address, value, and formula.</value>
+  </data>
+  <data name="PivotSlicerTimeline_InsertSlicer" xml:space="preserve">
+    <value>Insert Slicer</value>
+  </data>
+  <data name="PivotSlicerTimeline_InsertTimeline" xml:space="preserve">
+    <value>Insert Timeline</value>
+  </data>
+  <data name="SpellCheck_Change" xml:space="preserve">
+    <value>_Change</value>
+  </data>
+  <data name="SpellCheck_ChangeAll" xml:space="preserve">
+    <value>Change A_ll</value>
+  </data>
+  <data name="SpellCheck_Spelling" xml:space="preserve">
+    <value>Spelling</value>
+  </data>
+  <data name="SpellCheck_NotInDictionary" xml:space="preserve">
+    <value>Not in _Dictionary:</value>
+  </data>
+  <data name="SpellCheck_Suggestions" xml:space="preserve">
+    <value>_Suggestions:</value>
+  </data>
+  <data name="SpellCheck_ChangeTo" xml:space="preserve">
+    <value>_Change to:</value>
+  </data>
+  <data name="SpellCheck_IgnoreOnce" xml:space="preserve">
+    <value>Ignore _Once</value>
+  </data>
+  <data name="SpellCheck_IgnoreAll" xml:space="preserve">
+    <value>Ignore _All</value>
+  </data>
+  <data name="SpellCheck_AddToDictionary" xml:space="preserve">
+    <value>Add to _Dictionary</value>
+  </data>
+  <data name="SpellCheck_Cancel" xml:space="preserve">
+    <value>Ca_ncel</value>
+  </data>
+  <data name="SpellCheck_NotInDictionary2" xml:space="preserve">
+    <value>Not in Dictionary</value>
+  </data>
+  <data name="SpellCheck_ShowsTheWordThatWasNotFoundInTheDictionary" xml:space="preserve">
+    <value>Shows the word that was not found in the dictionary.</value>
+  </data>
+  <data name="SpellCheck_ChangeTo2" xml:space="preserve">
+    <value>Change to</value>
+  </data>
+  <data name="SpellCheck_EnterTheReplacementTextForTheMisspelledWord" xml:space="preserve">
+    <value>Enter the replacement text for the misspelled word.</value>
+  </data>
+  <data name="SpellCheck_Suggestions2" xml:space="preserve">
+    <value>Suggestions</value>
+  </data>
+  <data name="SpellCheck_ChooseASuggestedSpellingReplacement" xml:space="preserve">
+    <value>Choose a suggested spelling replacement.</value>
+  </data>
+  <data name="SpellCheck_CancelSpelling" xml:space="preserve">
+    <value>Cancel spelling</value>
+  </data>
+  <data name="SpellCheck_CloseTheSpellingDialogWithoutApplyingASpellingAction" xml:space="preserve">
+    <value>Close the spelling dialog without applying a spelling action.</value>
+  </data>
+  <data name="AdvancedFilter_FilterTheListInPlace" xml:space="preserve">
+    <value>_Filter the list, in-place</value>
+  </data>
+  <data name="AdvancedFilter_FilterTheListInPlaceAutomationName" xml:space="preserve">
+    <value>Filter the list, in-place</value>
+  </data>
+  <data name="AdvancedFilter_FilterTheListInItsCurrentLocation" xml:space="preserve">
+    <value>Filter the list in its current location.</value>
+  </data>
+  <data name="AdvancedFilter_CopyToAnotherLocation" xml:space="preserve">
+    <value>_Copy to another location</value>
+  </data>
+  <data name="AdvancedFilter_CopyToAnotherLocationAutomationName" xml:space="preserve">
+    <value>Copy to another location</value>
+  </data>
+  <data name="AdvancedFilter_CopyFilteredRecordsToTheCopyToDestination" xml:space="preserve">
+    <value>Copy filtered records to the Copy to destination.</value>
+  </data>
+  <data name="AdvancedFilter_UniqueRecordsOnly" xml:space="preserve">
+    <value>_Unique records only</value>
+  </data>
+  <data name="AdvancedFilter_UniqueRecordsOnlyAutomationName" xml:space="preserve">
+    <value>Unique records only</value>
+  </data>
+  <data name="AdvancedFilter_ShowOrCopyOnlyUniqueRecords" xml:space="preserve">
+    <value>Show or copy only unique records.</value>
+  </data>
+  <data name="AdvancedFilter_CopyToIsAvailableWhenCopyToAnotherLocationIsSelected" xml:space="preserve">
+    <value>Copy to is available when Copy to another location is selected.</value>
+  </data>
+  <data name="AdvancedFilter_AdvancedFilter" xml:space="preserve">
+    <value>Advanced Filter</value>
+  </data>
+  <data name="AdvancedFilter_Action" xml:space="preserve">
+    <value>Action</value>
+  </data>
+  <data name="AdvancedFilter_CriteriaShouldIncludeColumnLabelsInTheFirstRowMatchingExcelAdvancedFilte" xml:space="preserve">
+    <value>Criteria should include column labels in the first row, matching Excel Advanced Filter.</value>
+  </data>
+  <data name="AdvancedFilter_ListRange" xml:space="preserve">
+    <value>List range</value>
+  </data>
+  <data name="AdvancedFilter_EnterTheListRangeToFilterIncludingColumnLabels" xml:space="preserve">
+    <value>Enter the list range to filter, including column labels.</value>
+  </data>
+  <data name="AdvancedFilter_CriteriaRange" xml:space="preserve">
+    <value>Criteria range</value>
+  </data>
+  <data name="AdvancedFilter_EnterTheCriteriaRangeIncludingCriteriaLabels" xml:space="preserve">
+    <value>Enter the criteria range, including criteria labels.</value>
+  </data>
+  <data name="AdvancedFilter_CopyTo" xml:space="preserve">
+    <value>Copy to</value>
+  </data>
+  <data name="AdvancedFilter_EnterTheDestinationCellOrOneRowHeaderRangeWhenCopyingFilteredRecords" xml:space="preserve">
+    <value>Enter the destination cell or one-row header range when copying filtered records.</value>
+  </data>
+  <data name="AdvancedFilter_SelectCopyToCell" xml:space="preserve">
+    <value>Select copy-to cell</value>
+  </data>
+  <data name="AdvancedFilter_ListRange2" xml:space="preserve">
+    <value>_List range:</value>
+  </data>
+  <data name="AdvancedFilter_SelectListRange" xml:space="preserve">
+    <value>Select list range</value>
+  </data>
+  <data name="AdvancedFilter_CriteriaRange2" xml:space="preserve">
+    <value>Criteria _range:</value>
+  </data>
+  <data name="AdvancedFilter_SelectCriteriaRange" xml:space="preserve">
+    <value>Select criteria range</value>
+  </data>
+  <data name="AdvancedFilter_CopyTo2" xml:space="preserve">
+    <value>Copy _to:</value>
+  </data>
+  <data name="AdvancedFilter_EnterValidFilterRanges" xml:space="preserve">
+    <value>Enter valid filter ranges.</value>
+  </data>
+  <data name="InsertFunction_InsertFunction" xml:space="preserve">
+    <value>Insert Function</value>
+  </data>
+  <data name="InsertFunction_SearchForAFunction" xml:space="preserve">
+    <value>Search for a _function:</value>
+  </data>
+  <data name="InsertFunction_Go" xml:space="preserve">
+    <value>_Go</value>
+  </data>
+  <data name="InsertFunction_OrSelectACategory" xml:space="preserve">
+    <value>Or select a _category:</value>
+  </data>
+  <data name="InsertFunction_SelectAFunction" xml:space="preserve">
+    <value>Select a _function:</value>
+  </data>
+  <data name="InsertFunction_FormulaSyntaxAndHelp" xml:space="preserve">
+    <value>Formula syntax and help</value>
+  </data>
+  <data name="InsertFunction_HelpOnThisFunction" xml:space="preserve">
+    <value>_Help on this function</value>
+  </data>
+  <data name="InsertFunction_Functions" xml:space="preserve">
+    <value>Functions</value>
+  </data>
+  <data name="GoTo_GoTo" xml:space="preserve">
+    <value>Go To</value>
+  </data>
+  <data name="GoTo_GoTo2" xml:space="preserve">
+    <value>_Go to:</value>
+  </data>
+  <data name="GoTo_RecentReferencesAndDefinedNames" xml:space="preserve">
+    <value>Recent references and defined names</value>
+  </data>
+  <data name="GoTo_Reference" xml:space="preserve">
+    <value>_Reference:</value>
+  </data>
+  <data name="GoTo_Special" xml:space="preserve">
+    <value>S_pecial...</value>
+  </data>
+  <data name="GoTo_ListsRecentReferencesAndDefinedNamesAvailableForNavigation" xml:space="preserve">
+    <value>Lists recent references and defined names available for navigation.</value>
+  </data>
+  <data name="GoTo_Reference2" xml:space="preserve">
+    <value>Reference</value>
+  </data>
+  <data name="GoTo_EnterACellReferenceRangeOrDefinedNameToNavigateTo" xml:space="preserve">
+    <value>Enter a cell reference, range, or defined name to navigate to.</value>
+  </data>
+  <data name="GoTo_ReferenceIsNotValid" xml:space="preserve">
+    <value>Reference is not valid.</value>
+  </data>
+  <data name="PageBreak_InsertRowPageBreak" xml:space="preserve">
+    <value>Insert _row page break</value>
+  </data>
+  <data name="PageBreak_InsertColumnPageBreak" xml:space="preserve">
+    <value>Insert _column page break</value>
+  </data>
+  <data name="PageBreak_ResetAllPageBreaks" xml:space="preserve">
+    <value>_Reset all page breaks</value>
+  </data>
+  <data name="PageBreak_PageBreaks" xml:space="preserve">
+    <value>Page Breaks</value>
+  </data>
+  <data name="PageBreak_RowPageBreak" xml:space="preserve">
+    <value>Row page break</value>
+  </data>
+  <data name="PageBreak_EnterTheRowNumberWhereTheHorizontalPageBreakShouldBeInserted" xml:space="preserve">
+    <value>Enter the row number where the horizontal page break should be inserted.</value>
+  </data>
+  <data name="PageBreak_ColumnPageBreak" xml:space="preserve">
+    <value>Column page break</value>
+  </data>
+  <data name="PageBreak_EnterTheColumnNumberOrLetterWhereTheVerticalPageBreakShouldBeInserted" xml:space="preserve">
+    <value>Enter the column number or letter where the vertical page break should be inserted.</value>
+  </data>
+  <data name="PageBreak_EnterAColumnNumberOrLetterWithinTheWorksheetForThePageBreak" xml:space="preserve">
+    <value>Enter a column number or letter within the worksheet for the page break.</value>
+  </data>
+  <data name="PageBreak_EnterARowNumberWithinTheWorksheetForThePageBreak" xml:space="preserve">
+    <value>Enter a row number within the worksheet for the page break.</value>
+  </data>
+  <data name="PivotTable_SelectATableOrRange" xml:space="preserve">
+    <value>Select a _table or range</value>
+  </data>
+  <data name="PivotTable_NewWorksheet" xml:space="preserve">
+    <value>_New worksheet</value>
+  </data>
+  <data name="PivotTable_ExistingWorksheet" xml:space="preserve">
+    <value>_Existing worksheet</value>
+  </data>
+  <data name="PivotTable_OpenPivotTableFieldsPane" xml:space="preserve">
+    <value>Open PivotTable _Fields pane</value>
+  </data>
+  <data name="PivotTable_CreatePivotTable" xml:space="preserve">
+    <value>Create PivotTable</value>
+  </data>
+  <data name="PivotTable_Create" xml:space="preserve">
+    <value>_Create</value>
+  </data>
+  <data name="PivotTable_PivotTableSourceRange" xml:space="preserve">
+    <value>PivotTable source range</value>
+  </data>
+  <data name="PivotTable_PivotTableLocation" xml:space="preserve">
+    <value>PivotTable location</value>
+  </data>
+  <data name="PivotTable_RangeTextIsRequired" xml:space="preserve">
+    <value>Range text is required.</value>
+  </data>
+  <data name="AutoFilter_AddCurrentSelectionToFilter" xml:space="preserve">
+    <value>_Add current selection to filter</value>
+  </data>
+  <data name="AutoFilter_NoSort" xml:space="preserve">
+    <value>_No sort</value>
+  </data>
+  <data name="AutoFilter_SortAToZ" xml:space="preserve">
+    <value>Sort _A to Z</value>
+  </data>
+  <data name="AutoFilter_SortZToA" xml:space="preserve">
+    <value>Sort _Z to A</value>
+  </data>
+  <data name="AutoFilter_ClearFilterFrom2" xml:space="preserve">
+    <value>_Clear Filter From</value>
+  </data>
+  <data name="AutoFilter_FilterByColor2" xml:space="preserve">
+    <value>Filter by Color</value>
+  </data>
+  <data name="AutoFilter_TextFilters" xml:space="preserve">
+    <value>_Text Filters</value>
+  </data>
+  <data name="AutoFilter_NumberFilters" xml:space="preserve">
+    <value>_Number Filters</value>
+  </data>
+  <data name="AutoFilter_DateFilters" xml:space="preserve">
+    <value>_Date Filters</value>
+  </data>
+  <data name="AutoFilter_CustomFilter" xml:space="preserve">
+    <value>Custom filter</value>
+  </data>
+  <data name="AutoFilter_CriteriaTemplate" xml:space="preserve">
+    <value>Criteria _template</value>
+  </data>
+  <data name="AutoFilter_ExcelFilterCriteriaTemplates" xml:space="preserve">
+    <value>Excel filter criteria templates</value>
+  </data>
+  <data name="AutoFilter_ValueForTheSelectedTypedFilter" xml:space="preserve">
+    <value>Value for the selected typed filter</value>
+  </data>
+  <data name="AutoFilter_ValueForTheSecondTypedFilter" xml:space="preserve">
+    <value>Value for the second typed filter</value>
+  </data>
+  <data name="AutoFilter_GeneratedCriterionThatWillBeApplied" xml:space="preserve">
+    <value>Generated criterion that will be applied.</value>
+  </data>
+  <data name="AutoFilter_AutoFilter" xml:space="preserve">
+    <value>AutoFilter</value>
+  </data>
+  <data name="AutoFilter_Search2" xml:space="preserve">
+    <value>_Search</value>
+  </data>
+  <data name="AutoFilter_Search3" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="AutoFilter_SelectAll2" xml:space="preserve">
+    <value>_Select All</value>
+  </data>
+  <data name="AutoFilter_ClearAll" xml:space="preserve">
+    <value>_Clear All</value>
+  </data>
+  <data name="AutoFilter_ShowRowsWhere" xml:space="preserve">
+    <value>Show rows where:</value>
+  </data>
+  <data name="AutoFilter_DatePreset" xml:space="preserve">
+    <value>Date _preset</value>
+  </data>
+  <data name="AutoFilter_FilterOperator" xml:space="preserve">
+    <value>Filter _operator</value>
+  </data>
+  <data name="AutoFilter_FilterValue" xml:space="preserve">
+    <value>Filter _value</value>
+  </data>
+  <data name="AutoFilter_AndOr" xml:space="preserve">
+    <value>_And / Or</value>
+  </data>
+  <data name="AutoFilter_SecondOperator" xml:space="preserve">
+    <value>Second o_perator</value>
+  </data>
+  <data name="AutoFilter_SecondValue" xml:space="preserve">
+    <value>Second va_lue</value>
+  </data>
+  <data name="AutoFilter_CriteriaText" xml:space="preserve">
+    <value>_Criteria text</value>
+  </data>
+  <data name="AutoFilter_FilterValues" xml:space="preserve">
+    <value>Filter values</value>
+  </data>
+  <data name="PivotStyleGallery_PivotTableStyles" xml:space="preserve">
+    <value>PivotTable Styles</value>
+  </data>
+  <data name="PivotStyleGallery_PivotTableStyle" xml:space="preserve">
+    <value>_PivotTable style:</value>
+  </data>
+  <data name="PivotStyleGallery_PivotTableStyleGallery" xml:space="preserve">
+    <value>PivotTable style gallery</value>
+  </data>
+  <data name="ScenarioManager_PreventChanges" xml:space="preserve">
+    <value>_Prevent changes</value>
+  </data>
+  <data name="ScenarioManager_Hide" xml:space="preserve">
+    <value>_Hide</value>
+  </data>
+  <data name="ScenarioManager_ScenarioManager" xml:space="preserve">
+    <value>Scenario Manager</value>
+  </data>
+  <data name="ScenarioManager_Scenarios" xml:space="preserve">
+    <value>_Scenarios:</value>
+  </data>
+  <data name="ScenarioManager_AddEditScenario" xml:space="preserve">
+    <value>Add/Edit Scenario</value>
+  </data>
+  <data name="ScenarioManager_Close" xml:space="preserve">
+    <value>_Close</value>
+  </data>
+  <data name="ScenarioManager_Scenarios2" xml:space="preserve">
+    <value>Scenarios</value>
+  </data>
+  <data name="ScenarioManager_SelectAScenarioToShowEditOrDelete" xml:space="preserve">
+    <value>Select a scenario to show, edit, or delete.</value>
+  </data>
+  <data name="ScenarioManager_ScenarioName" xml:space="preserve">
+    <value>Scenario _name:</value>
+  </data>
+  <data name="ScenarioManager_ScenarioNameAutomationName" xml:space="preserve">
+    <value>Scenario name</value>
+  </data>
+  <data name="ScenarioManager_EnterTheScenarioNameToAddOrEdit" xml:space="preserve">
+    <value>Enter the scenario name to add or edit.</value>
+  </data>
+  <data name="ScenarioManager_ChangingCells" xml:space="preserve">
+    <value>Changing _cells:</value>
+  </data>
+  <data name="ScenarioManager_ChangingCellsAutomationName" xml:space="preserve">
+    <value>Changing cells</value>
+  </data>
+  <data name="ScenarioManager_EnterTheWorksheetCellsWhoseValuesChangeInTheScenario" xml:space="preserve">
+    <value>Enter the worksheet cells whose values change in the scenario.</value>
+  </data>
+  <data name="ScenarioManager_ResultCells" xml:space="preserve">
+    <value>_Result cells:</value>
+  </data>
+  <data name="ScenarioManager_ResultCellsAutomationName" xml:space="preserve">
+    <value>Result cells</value>
+  </data>
+  <data name="ScenarioManager_EnterOptionalResultCellsToIncludeInAScenarioSummary" xml:space="preserve">
+    <value>Enter optional result cells to include in a scenario summary.</value>
+  </data>
+  <data name="ScenarioManager_Comment" xml:space="preserve">
+    <value>_Comment:</value>
+  </data>
+  <data name="ScenarioManager_CommentAutomationName" xml:space="preserve">
+    <value>Comment</value>
+  </data>
+  <data name="ScenarioManager_EnterAnOptionalCommentForTheScenario" xml:space="preserve">
+    <value>Enter an optional comment for the scenario.</value>
+  </data>
+  <data name="ScenarioManager_Add" xml:space="preserve">
+    <value>_Add...</value>
+  </data>
+  <data name="ScenarioManager_AddScenarioAutomationName" xml:space="preserve">
+    <value>Add scenario</value>
+  </data>
+  <data name="ScenarioManager_AddAScenarioUsingTheScenarioFields" xml:space="preserve">
+    <value>Add a scenario using the scenario fields.</value>
+  </data>
+  <data name="ScenarioManager_Edit" xml:space="preserve">
+    <value>_Edit...</value>
+  </data>
+  <data name="ScenarioManager_EditScenarioAutomationName" xml:space="preserve">
+    <value>Edit scenario</value>
+  </data>
+  <data name="ScenarioManager_EditTheSelectedScenarioUsingTheScenarioFields" xml:space="preserve">
+    <value>Edit the selected scenario using the scenario fields.</value>
+  </data>
+  <data name="ScenarioManager_Delete" xml:space="preserve">
+    <value>_Delete</value>
+  </data>
+  <data name="ScenarioManager_DeleteScenarioAutomationName" xml:space="preserve">
+    <value>Delete scenario</value>
+  </data>
+  <data name="ScenarioManager_DeleteTheSelectedScenario" xml:space="preserve">
+    <value>Delete the selected scenario.</value>
+  </data>
+  <data name="ScenarioManager_List" xml:space="preserve">
+    <value>_List...</value>
+  </data>
+  <data name="ScenarioManager_ListScenariosAutomationName" xml:space="preserve">
+    <value>List scenarios</value>
+  </data>
+  <data name="ScenarioManager_ShowTheListOfWorkbookScenarios" xml:space="preserve">
+    <value>Show the list of workbook scenarios.</value>
+  </data>
+  <data name="ScenarioManager_Show" xml:space="preserve">
+    <value>_Show</value>
+  </data>
+  <data name="ScenarioManager_ShowScenarioAutomationName" xml:space="preserve">
+    <value>Show scenario</value>
+  </data>
+  <data name="ScenarioManager_ApplyTheSelectedScenarioToTheWorkbook" xml:space="preserve">
+    <value>Apply the selected scenario to the workbook.</value>
+  </data>
+  <data name="ScenarioManager_Summary" xml:space="preserve">
+    <value>S_ummary...</value>
+  </data>
+  <data name="ScenarioManager_ScenarioSummaryAutomationName" xml:space="preserve">
+    <value>Scenario summary</value>
+  </data>
+  <data name="ScenarioManager_CreateAScenarioSummaryReport" xml:space="preserve">
+    <value>Create a scenario summary report.</value>
+  </data>
+  <data name="ScenarioManager_SaveScenarioAutomationName" xml:space="preserve">
+    <value>Save scenario</value>
+  </data>
+  <data name="ScenarioManager_SaveTheScenarioUsingTheScenarioFields" xml:space="preserve">
+    <value>Save the scenario using the scenario fields.</value>
+  </data>
+  <data name="ScenarioManager_PreventChangesAutomationName" xml:space="preserve">
+    <value>Prevent changes</value>
+  </data>
+  <data name="ScenarioManager_PreventChangesToTheScenarioWhenTheSheetIsProtected" xml:space="preserve">
+    <value>Prevent changes to the scenario when the sheet is protected.</value>
+  </data>
+  <data name="ScenarioManager_HideAutomationName" xml:space="preserve">
+    <value>Hide</value>
+  </data>
+  <data name="ScenarioManager_HideTheScenarioWhenTheSheetIsProtected" xml:space="preserve">
+    <value>Hide the scenario when the sheet is protected.</value>
+  </data>
+  <data name="ScenarioManager_CloseAutomationName" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="ScenarioManager_CloseTheScenarioManagerDialog" xml:space="preserve">
+    <value>Close the Scenario Manager dialog.</value>
+  </data>
+  <data name="PasteSpecial_PasteSpecial" xml:space="preserve">
+    <value>Paste Special</value>
+  </data>
+  <data name="PasteSpecial_All" xml:space="preserve">
+    <value>_All</value>
+  </data>
+  <data name="PasteSpecial_AllAutomationName" xml:space="preserve">
+    <value>Paste all</value>
+  </data>
+  <data name="PasteSpecial_PasteAllCellContentsAndFormatting" xml:space="preserve">
+    <value>Paste all cell contents and formatting.</value>
+  </data>
+  <data name="PasteSpecial_Values" xml:space="preserve">
+    <value>_Values</value>
+  </data>
+  <data name="PasteSpecial_ValuesAutomationName" xml:space="preserve">
+    <value>Paste values</value>
+  </data>
+  <data name="PasteSpecial_PasteOnlyCellValues" xml:space="preserve">
+    <value>Paste only cell values.</value>
+  </data>
+  <data name="PasteSpecial_Formulas" xml:space="preserve">
+    <value>_Formulas</value>
+  </data>
+  <data name="PasteSpecial_FormulasAutomationName" xml:space="preserve">
+    <value>Paste formulas</value>
+  </data>
+  <data name="PasteSpecial_PasteFormulasWithoutChangingExistingFormatting" xml:space="preserve">
+    <value>Paste formulas without changing existing formatting.</value>
+  </data>
+  <data name="PasteSpecial_Formats" xml:space="preserve">
+    <value>Forma_ts</value>
+  </data>
+  <data name="PasteSpecial_FormatsAutomationName" xml:space="preserve">
+    <value>Paste formats</value>
+  </data>
+  <data name="PasteSpecial_PasteOnlyCellFormatting" xml:space="preserve">
+    <value>Paste only cell formatting.</value>
+  </data>
+  <data name="PasteSpecial_CommentsAndNotes" xml:space="preserve">
+    <value>_Comments and notes</value>
+  </data>
+  <data name="PasteSpecial_CommentsAndNotesAutomationName" xml:space="preserve">
+    <value>Paste comments and notes</value>
+  </data>
+  <data name="PasteSpecial_PasteOnlyCommentsAndNotes" xml:space="preserve">
+    <value>Paste only comments and notes.</value>
+  </data>
+  <data name="PasteSpecial_Validation" xml:space="preserve">
+    <value>Validatio_n</value>
+  </data>
+  <data name="PasteSpecial_ValidationAutomationName" xml:space="preserve">
+    <value>Paste validation</value>
+  </data>
+  <data name="PasteSpecial_PasteOnlyDataValidationRules" xml:space="preserve">
+    <value>Paste only data validation rules.</value>
+  </data>
+  <data name="PasteSpecial_AllUsingSourceTheme" xml:space="preserve">
+    <value>All using source t_heme</value>
+  </data>
+  <data name="PasteSpecial_AllUsingSourceThemeAutomationName" xml:space="preserve">
+    <value>Paste all using source theme</value>
+  </data>
+  <data name="PasteSpecial_PasteAllContentUsingTheCopiedSourceTheme" xml:space="preserve">
+    <value>Paste all content using the copied source theme.</value>
+  </data>
+  <data name="PasteSpecial_AllExceptBorders" xml:space="preserve">
+    <value>All e_xcept borders</value>
+  </data>
+  <data name="PasteSpecial_AllExceptBordersAutomationName" xml:space="preserve">
+    <value>Paste all except borders</value>
+  </data>
+  <data name="PasteSpecial_PasteAllContentAndFormattingExceptCellBorders" xml:space="preserve">
+    <value>Paste all content and formatting except cell borders.</value>
+  </data>
+  <data name="PasteSpecial_AllMergingConditionalFormats" xml:space="preserve">
+    <value>All merging conditional _formats</value>
+  </data>
+  <data name="PasteSpecial_AllMergingConditionalFormatsAutomationName" xml:space="preserve">
+    <value>Paste all merging conditional formats</value>
+  </data>
+  <data name="PasteSpecial_PasteAllContentWhileMergingConditionalFormattingRules" xml:space="preserve">
+    <value>Paste all content while merging conditional formatting rules.</value>
+  </data>
+  <data name="PasteSpecial_ColumnWidths" xml:space="preserve">
+    <value>Column _widths</value>
+  </data>
+  <data name="PasteSpecial_ColumnWidthsAutomationName" xml:space="preserve">
+    <value>Paste column widths</value>
+  </data>
+  <data name="PasteSpecial_PasteOnlyCopiedColumnWidths" xml:space="preserve">
+    <value>Paste only copied column widths.</value>
+  </data>
+  <data name="PasteSpecial_FormulasAndNumberFormats" xml:space="preserve">
+    <value>Formulas and number fo_rmats</value>
+  </data>
+  <data name="PasteSpecial_FormulasAndNumberFormatsAutomationName" xml:space="preserve">
+    <value>Paste formulas and number formats</value>
+  </data>
+  <data name="PasteSpecial_PasteFormulasAndNumberFormats" xml:space="preserve">
+    <value>Paste formulas and number formats.</value>
+  </data>
+  <data name="PasteSpecial_ValuesAndNumberFormats" xml:space="preserve">
+    <value>Values and number for_mats</value>
+  </data>
+  <data name="PasteSpecial_ValuesAndNumberFormatsAutomationName" xml:space="preserve">
+    <value>Paste values and number formats</value>
+  </data>
+  <data name="PasteSpecial_PasteValuesAndNumberFormats" xml:space="preserve">
+    <value>Paste values and number formats.</value>
+  </data>
+  <data name="PasteSpecial_ValuesAndSourceFormatting" xml:space="preserve">
+    <value>Values and source f_ormatting</value>
+  </data>
+  <data name="PasteSpecial_ValuesAndSourceFormattingAutomationName" xml:space="preserve">
+    <value>Paste values and source formatting</value>
+  </data>
+  <data name="PasteSpecial_PasteValuesWithCopiedSourceFormatting" xml:space="preserve">
+    <value>Paste values with copied source formatting.</value>
+  </data>
+  <data name="PasteSpecial_Text" xml:space="preserve">
+    <value>T_ext</value>
+  </data>
+  <data name="PasteSpecial_TextAutomationName" xml:space="preserve">
+    <value>Paste text</value>
+  </data>
+  <data name="PasteSpecial_PasteClipboardText" xml:space="preserve">
+    <value>Paste clipboard text.</value>
+  </data>
+  <data name="PasteSpecial_UnicodeText" xml:space="preserve">
+    <value>_Unicode Text</value>
+  </data>
+  <data name="PasteSpecial_UnicodeTextAutomationName" xml:space="preserve">
+    <value>Paste Unicode text</value>
+  </data>
+  <data name="PasteSpecial_PasteClipboardUnicodeText" xml:space="preserve">
+    <value>Paste clipboard Unicode text.</value>
+  </data>
+  <data name="PasteSpecial_Picture" xml:space="preserve">
+    <value>_Picture</value>
+  </data>
+  <data name="PasteSpecial_PictureAutomationName" xml:space="preserve">
+    <value>Paste picture</value>
+  </data>
+  <data name="PasteSpecial_PasteCopiedCellsAsAPicture" xml:space="preserve">
+    <value>Paste copied cells as a picture.</value>
+  </data>
+  <data name="PasteSpecial_LinkedPicture" xml:space="preserve">
+    <value>_Linked picture</value>
+  </data>
+  <data name="PasteSpecial_LinkedPictureAutomationName" xml:space="preserve">
+    <value>Paste linked picture</value>
+  </data>
+  <data name="PasteSpecial_PasteCopiedCellsAsALinkedPicture" xml:space="preserve">
+    <value>Paste copied cells as a linked picture.</value>
+  </data>
+  <data name="PasteSpecial_PasteLink" xml:space="preserve">
+    <value>Paste _Link</value>
+  </data>
+  <data name="PasteSpecial_PasteLinkAutomationName" xml:space="preserve">
+    <value>Paste Link</value>
+  </data>
+  <data name="PasteSpecial_PasteFormulasThatLinkToTheCopiedCells" xml:space="preserve">
+    <value>Paste formulas that link to the copied cells.</value>
+  </data>
+  <data name="PasteSpecial_SkipBlanks" xml:space="preserve">
+    <value>S_kip blanks</value>
+  </data>
+  <data name="PasteSpecial_SkipBlanksAutomationName" xml:space="preserve">
+    <value>Skip blanks</value>
+  </data>
+  <data name="PasteSpecial_SkipBlankCellsFromTheCopiedRange" xml:space="preserve">
+    <value>Skip blank cells from the copied range.</value>
+  </data>
+  <data name="PasteSpecial_Transpose" xml:space="preserve">
+    <value>Transpos_e</value>
+  </data>
+  <data name="PasteSpecial_TransposeAutomationName" xml:space="preserve">
+    <value>Transpose</value>
+  </data>
+  <data name="PasteSpecial_SwitchCopiedRowsAndColumnsWhilePasting" xml:space="preserve">
+    <value>Switch copied rows and columns while pasting.</value>
+  </data>
+  <data name="PasteSpecial_KeepSourceColumnWidths" xml:space="preserve">
+    <value>Keep source column _widths</value>
+  </data>
+  <data name="PasteSpecial_KeepSourceColumnWidthsAutomationName" xml:space="preserve">
+    <value>Keep source column widths</value>
+  </data>
+  <data name="PasteSpecial_ApplyTheCopiedSourceColumnWidths" xml:space="preserve">
+    <value>Apply the copied source column widths.</value>
+  </data>
+  <data name="PasteSpecial_OkAutomationName" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="PasteSpecial_ApplyTheSelectedPasteSpecialOptions" xml:space="preserve">
+    <value>Apply the selected Paste Special options.</value>
+  </data>
+  <data name="PasteSpecial_CancelAutomationName" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="PasteSpecial_CloseThePasteSpecialDialogWithoutApplyingChanges" xml:space="preserve">
+    <value>Close the Paste Special dialog without applying changes.</value>
+  </data>
+  <data name="LegalNotices_LegalNotices" xml:space="preserve">
+    <value>Legal Notices</value>
+  </data>
+  <data name="LegalNotices_TheseNoticesArePackagedWithThisFreeXExecutableForOfflineReview" xml:space="preserve">
+    <value>These notices are packaged with this FreeX executable for offline review.</value>
+  </data>
+  <data name="LegalNotices_ShowsTheLegalPrivacyAndThirdPartyNoticesPackagedWithThisFreeXExecutable" xml:space="preserve">
+    <value>Shows the legal, privacy, and third-party notices packaged with this FreeX executable.</value>
+  </data>
+  <data name="LegalNotices_LegalNoticesSummary" xml:space="preserve">
+    <value>Legal notices summary</value>
+  </data>
+  <data name="LegalNotices_LegalNoticeSections" xml:space="preserve">
+    <value>Legal notice sections</value>
+  </data>
+  <data name="LegalNotices_ChooseALegalNoticeSectionToReadAndCopy" xml:space="preserve">
+    <value>Choose a legal notice section to read and copy.</value>
+  </data>
+  <data name="LegalNotices_ReadOnlyLegalNoticeTextUseCtrlCToCopySelectedText" xml:space="preserve">
+    <value>Read-only legal notice text. Use Ctrl+C to copy selected text.</value>
+  </data>
+  <data name="SortOptions_SortOptions" xml:space="preserve">
+    <value>Sort Options</value>
+  </data>
+  <data name="SortOptions_CaseSensitive" xml:space="preserve">
+    <value>_Case sensitive</value>
+  </data>
+  <data name="SortOptions_FirstKeySortOrder" xml:space="preserve">
+    <value>First key sort order</value>
+  </data>
+  <data name="SortOptions_FirstKeySortOrderLabel" xml:space="preserve">
+    <value>_First key sort order:</value>
+  </data>
+  <data name="SortOptions_SortTopToBottom" xml:space="preserve">
+    <value>Sort top to _bottom</value>
+  </data>
+  <data name="SortOptions_SortLeftToRight" xml:space="preserve">
+    <value>Sort left to _right</value>
+  </data>
+  <data name="SortOptions_Orientation" xml:space="preserve">
+    <value>Orientation</value>
+  </data>
+  <data name="AutoFilter_ApplyThisColorFilter" xml:space="preserve">
+    <value>Apply this color filter.</value>
+  </data>
+  <data name="AutoFilter_CellColor" xml:space="preserve">
+    <value>Cell Color</value>
+  </data>
+  <data name="AutoFilter_ClearFilterFromHeader" xml:space="preserve">
+    <value>_Clear Filter From &quot;{0}&quot;</value>
+  </data>
+  <data name="AutoFilter_ConnectorAnd" xml:space="preserve">
+    <value>And</value>
+  </data>
+  <data name="AutoFilter_ConnectorOr" xml:space="preserve">
+    <value>Or</value>
+  </data>
+  <data name="AutoFilter_DatePresetCustom" xml:space="preserve">
+    <value>Custom</value>
+  </data>
+  <data name="AutoFilter_DatePresetLastMonth" xml:space="preserve">
+    <value>Last Month</value>
+  </data>
+  <data name="AutoFilter_DatePresetLastWeek" xml:space="preserve">
+    <value>Last Week</value>
+  </data>
+  <data name="AutoFilter_DatePresetLastYear" xml:space="preserve">
+    <value>Last Year</value>
+  </data>
+  <data name="AutoFilter_DatePresetNextMonth" xml:space="preserve">
+    <value>Next Month</value>
+  </data>
+  <data name="AutoFilter_DatePresetNextWeek" xml:space="preserve">
+    <value>Next Week</value>
+  </data>
+  <data name="AutoFilter_DatePresetNextYear" xml:space="preserve">
+    <value>Next Year</value>
+  </data>
+  <data name="AutoFilter_DatePresetThisMonth" xml:space="preserve">
+    <value>This Month</value>
+  </data>
+  <data name="AutoFilter_DatePresetThisWeek" xml:space="preserve">
+    <value>This Week</value>
+  </data>
+  <data name="AutoFilter_DatePresetThisYear" xml:space="preserve">
+    <value>This Year</value>
+  </data>
+  <data name="AutoFilter_DatePresetToday" xml:space="preserve">
+    <value>Today</value>
+  </data>
+  <data name="AutoFilter_DatePresetTomorrow" xml:space="preserve">
+    <value>Tomorrow</value>
+  </data>
+  <data name="AutoFilter_DatePresetYesterday" xml:space="preserve">
+    <value>Yesterday</value>
+  </data>
+  <data name="AutoFilter_EnterFilterValue" xml:space="preserve">
+    <value>Enter a filter value.</value>
+  </data>
+  <data name="AutoFilter_EnterFirstBetweenValue" xml:space="preserve">
+    <value>Enter the first value for the between filter.</value>
+  </data>
+  <data name="AutoFilter_EnterSecondBetweenValue" xml:space="preserve">
+    <value>Enter the second value for the between filter.</value>
+  </data>
+  <data name="AutoFilter_EnterValidTopOrBottomCount" xml:space="preserve">
+    <value>Enter a valid top or bottom count.</value>
+  </data>
+  <data name="AutoFilter_FilterByCellColor" xml:space="preserve">
+    <value>Filter by cell color {0}</value>
+  </data>
+  <data name="AutoFilter_FilterByFontColor" xml:space="preserve">
+    <value>Filter by font color {0}</value>
+  </data>
+  <data name="AutoFilter_FilterByNoFill" xml:space="preserve">
+    <value>Filter by no fill</value>
+  </data>
+  <data name="AutoFilter_FilterFamilyOperatorToolTip" xml:space="preserve">
+    <value>{0} operator</value>
+  </data>
+  <data name="AutoFilter_FontColor" xml:space="preserve">
+    <value>Font Color</value>
+  </data>
+  <data name="AutoFilter_Items" xml:space="preserve">
+    <value>Items</value>
+  </data>
+  <data name="AutoFilter_MaximumLabel" xml:space="preserve">
+    <value>And _maximum:</value>
+  </data>
+  <data name="AutoFilter_MinimumLabel" xml:space="preserve">
+    <value>_Minimum:</value>
+  </data>
+  <data name="AutoFilter_Percent" xml:space="preserve">
+    <value>Percent</value>
+  </data>
+  <data name="AutoFilter_SecondFilterFamilyOperatorToolTip" xml:space="preserve">
+    <value>Second {0} operator</value>
+  </data>
+  <data name="AutoFilter_ShowLabel" xml:space="preserve">
+    <value>_Show:</value>
+  </data>
+  <data name="AutoFilter_SortLargestToSmallest" xml:space="preserve">
+    <value>Sort _Largest to Smallest</value>
+  </data>
+  <data name="AutoFilter_SortNewestToOldest" xml:space="preserve">
+    <value>Sort _Newest to Oldest</value>
+  </data>
+  <data name="AutoFilter_SortOldestToNewest" xml:space="preserve">
+    <value>Sort _Oldest to Newest</value>
+  </data>
+  <data name="AutoFilter_SortSmallestToLargest" xml:space="preserve">
+    <value>Sort _Smallest to Largest</value>
+  </data>
+  <data name="AutoFilter_TitleWithHeader" xml:space="preserve">
+    <value>AutoFilter - {0}</value>
+  </data>
+  <data name="GoalSeekStatus_FailureSummary" xml:space="preserve">
+    <value>Goal Seek could not find a solution.
+Target value: {0}
+Current value: {1}
+Changing cell value: {2}</value>
+  </data>
+  <data name="GoalSeekStatus_SuccessSummary" xml:space="preserve">
+    <value>Goal Seek found a solution.
+Target value: {0}
+Current value: {1}
+Changing cell value: {2}</value>
+  </data>
+  <data name="GoToSpecial_Blanks" xml:space="preserve">
+    <value>_Blanks</value>
+  </data>
+  <data name="GoToSpecial_ColumnDifferences" xml:space="preserve">
+    <value>Column diff_erences</value>
+  </data>
+  <data name="GoToSpecial_Comments" xml:space="preserve">
+    <value>Co_mments</value>
+  </data>
+  <data name="GoToSpecial_ConditionalFormats" xml:space="preserve">
+    <value>Conditional forma_ts</value>
+  </data>
+  <data name="GoToSpecial_Constants" xml:space="preserve">
+    <value>_Constants</value>
+  </data>
+  <data name="GoToSpecial_CurrentRegion" xml:space="preserve">
+    <value>Current _region</value>
+  </data>
+  <data name="GoToSpecial_DataValidation" xml:space="preserve">
+    <value>Data valid_ation</value>
+  </data>
+  <data name="GoToSpecial_Dependents" xml:space="preserve">
+    <value>Depe_ndents</value>
+  </data>
+  <data name="GoToSpecial_Formulas" xml:space="preserve">
+    <value>_Formulas</value>
+  </data>
+  <data name="GoToSpecial_LastCell" xml:space="preserve">
+    <value>_Last cell</value>
+  </data>
+  <data name="GoToSpecial_Objects" xml:space="preserve">
+    <value>_Objects</value>
+  </data>
+  <data name="GoToSpecial_Precedents" xml:space="preserve">
+    <value>_Precedents</value>
+  </data>
+  <data name="GoToSpecial_RowDifferences" xml:space="preserve">
+    <value>Row _differences</value>
+  </data>
+  <data name="GoToSpecial_VisibleCellsOnly" xml:space="preserve">
+    <value>_Visible cells only</value>
+  </data>
+  <data name="Hyperlink_AddressAutomationName" xml:space="preserve">
+    <value>Address</value>
+  </data>
+  <data name="Hyperlink_AddressHelpText" xml:space="preserve">
+    <value>Enter the file path or web page address for the hyperlink.</value>
+  </data>
+  <data name="Hyperlink_CellReferenceAutomationName" xml:space="preserve">
+    <value>Cell reference or defined name</value>
+  </data>
+  <data name="Hyperlink_CellReferenceHelpText" xml:space="preserve">
+    <value>Enter a cell reference or defined name in this workbook.</value>
+  </data>
+  <data name="Hyperlink_CellReferenceLabel" xml:space="preserve">
+    <value>Type the cell _reference:</value>
+  </data>
+  <data name="Hyperlink_EmailAddressAutomationName" xml:space="preserve">
+    <value>E-mail address</value>
+  </data>
+  <data name="Hyperlink_EmailAddressHelpText" xml:space="preserve">
+    <value>Enter the email address for the hyperlink.</value>
+  </data>
+  <data name="Hyperlink_EmailAddressLabel" xml:space="preserve">
+    <value>_E-mail address:</value>
+  </data>
+  <data name="Hyperlink_EnterAddress" xml:space="preserve">
+    <value>Enter an address.</value>
+  </data>
+  <data name="Hyperlink_EnterEmailAddress" xml:space="preserve">
+    <value>Enter an email address.</value>
+  </data>
+  <data name="Hyperlink_EnterHyperlinkDetails" xml:space="preserve">
+    <value>Enter hyperlink details.</value>
+  </data>
+  <data name="Hyperlink_EnterNewDocumentName" xml:space="preserve">
+    <value>Enter a new document name.</value>
+  </data>
+  <data name="Hyperlink_EnterValidCellReferenceOrDefinedName" xml:space="preserve">
+    <value>Enter a valid cell reference or defined name.</value>
+  </data>
+  <data name="Hyperlink_EnterValidEmailAddress" xml:space="preserve">
+    <value>Enter a valid email address.</value>
+  </data>
+  <data name="Hyperlink_LinkTypeCreateNewDocument" xml:space="preserve">
+    <value>Create New Document</value>
+  </data>
+  <data name="Hyperlink_LinkTypeEmailAddress" xml:space="preserve">
+    <value>E-mail Address</value>
+  </data>
+  <data name="Hyperlink_LinkTypeExistingFileOrWebPage" xml:space="preserve">
+    <value>Existing File or Web Page</value>
+  </data>
+  <data name="Hyperlink_LinkTypePlaceInThisDocument" xml:space="preserve">
+    <value>Place in This Document</value>
+  </data>
+  <data name="Hyperlink_NewDocumentAutomationName" xml:space="preserve">
+    <value>Name of new document</value>
+  </data>
+  <data name="Hyperlink_NewDocumentHelpText" xml:space="preserve">
+    <value>Enter the name of the new document to create.</value>
+  </data>
+  <data name="Hyperlink_NewDocumentLabel" xml:space="preserve">
+    <value>Name of new _document:</value>
+  </data>
+  <data name="InsertFunction_FunctionHelpMessage" xml:space="preserve">
+    <value>{0}()`n`n{1}</value>
+  </data>
+  <data name="InsertFunction_FunctionHelpTitle" xml:space="preserve">
+    <value>Function Help</value>
+  </data>
+  <data name="InsertFunction_SelectFunctionForHelpMessage" xml:space="preserve">
+    <value>Select a function to see its syntax and description. Use search or category filtering to narrow the list.</value>
+  </data>
+  <data name="LegalNotices_CloseButton" xml:space="preserve">
+    <value>_Close</value>
+  </data>
+  <data name="ManageConditionalFormats_DateLast7Days" xml:space="preserve">
+    <value>Last 7 Days</value>
+  </data>
+  <data name="ManageConditionalFormats_DateLastMonth" xml:space="preserve">
+    <value>Last Month</value>
+  </data>
+  <data name="ManageConditionalFormats_DateLastWeek" xml:space="preserve">
+    <value>Last Week</value>
+  </data>
+  <data name="ManageConditionalFormats_DateNextMonth" xml:space="preserve">
+    <value>Next Month</value>
+  </data>
+  <data name="ManageConditionalFormats_DateNextWeek" xml:space="preserve">
+    <value>Next Week</value>
+  </data>
+  <data name="ManageConditionalFormats_DateThisMonth" xml:space="preserve">
+    <value>This Month</value>
+  </data>
+  <data name="ManageConditionalFormats_DateThisWeek" xml:space="preserve">
+    <value>This Week</value>
+  </data>
+  <data name="ManageConditionalFormats_DateToday" xml:space="preserve">
+    <value>Today</value>
+  </data>
+  <data name="ManageConditionalFormats_DateTomorrow" xml:space="preserve">
+    <value>Tomorrow</value>
+  </data>
+  <data name="ManageConditionalFormats_DateYesterday" xml:space="preserve">
+    <value>Yesterday</value>
+  </data>
+  <data name="ManageConditionalFormats_DefaultNewRuleType" xml:space="preserve">
+    <value>Data Bar</value>
+  </data>
+  <data name="ManageConditionalFormats_AppliesToColumn" xml:space="preserve">
+    <value>Applies To</value>
+  </data>
+  <data name="ManageConditionalFormats_CollapseDialogAndSelectAppliesToRange" xml:space="preserve">
+    <value>Collapse dialog and select Applies To range</value>
+  </data>
+  <data name="ManageConditionalFormats_FormatColumn" xml:space="preserve">
+    <value>Format</value>
+  </data>
+  <data name="ManageConditionalFormats_FormatPreviewSample" xml:space="preserve">
+    <value>AaBbCcYyZz</value>
+  </data>
+  <data name="ManageConditionalFormats_IconFlagCustomIcons" xml:space="preserve">
+    <value>custom icons</value>
+  </data>
+  <data name="ManageConditionalFormats_IconFlagIconsOnly" xml:space="preserve">
+    <value>icons only</value>
+  </data>
+  <data name="ManageConditionalFormats_IconFlagReverse" xml:space="preserve">
+    <value>reverse</value>
+  </data>
+  <data name="ManageConditionalFormats_ListSeparator" xml:space="preserve">
+    <value>, </value>
+  </data>
+  <data name="ManageConditionalFormats_OperatorBetween" xml:space="preserve">
+    <value>between</value>
+  </data>
+  <data name="ManageConditionalFormats_OperatorNotBetween" xml:space="preserve">
+    <value>not between</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleAboveAverage" xml:space="preserve">
+    <value>Above Average</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleBelowAverage" xml:space="preserve">
+    <value>Below Average</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleCellValue" xml:space="preserve">
+    <value>Cell Value {0} {1}</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleCellValueBetween" xml:space="preserve">
+    <value>Cell Value {0} {1} and {2}</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleDataBar" xml:space="preserve">
+    <value>Data Bar</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleDataBarOnly" xml:space="preserve">
+    <value>Data Bar (bar only)</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleDateOccurring" xml:space="preserve">
+    <value>Date occurring: {0}</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleDuplicateValues" xml:space="preserve">
+    <value>Duplicate Values</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleFormula" xml:space="preserve">
+    <value>Formula: ={0}</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleIconSet" xml:space="preserve">
+    <value>Icon Set: {0}</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleIconSetWithFlags" xml:space="preserve">
+    <value>Icon Set: {0} ({1})</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleTextBeginsWith" xml:space="preserve">
+    <value>Text begins with &quot;{0}&quot;</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleTextContains" xml:space="preserve">
+    <value>Text contains &quot;{0}&quot;</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleTextDoesNotContain" xml:space="preserve">
+    <value>Text does not contain &quot;{0}&quot;</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleTextEndsWith" xml:space="preserve">
+    <value>Text ends with &quot;{0}&quot;</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleThreeColorScale" xml:space="preserve">
+    <value>3-Color Scale</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleTwoColorScale" xml:space="preserve">
+    <value>2-Color Scale</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleUniqueValues" xml:space="preserve">
+    <value>Unique Values</value>
+  </data>
+  <data name="ManageConditionalFormats_RuleTypeColumn" xml:space="preserve">
+    <value>Rule (Type)</value>
+  </data>
+  <data name="ManageConditionalFormats_ScopeCurrentSelection" xml:space="preserve">
+    <value>Current Selection</value>
+  </data>
+  <data name="ManageConditionalFormats_ScopeThisTable" xml:space="preserve">
+    <value>This Table</value>
+  </data>
+  <data name="ManageConditionalFormats_ScopeThisWorksheet" xml:space="preserve">
+    <value>This Worksheet</value>
+  </data>
+  <data name="ManageConditionalFormats_SelectAppliesToRange" xml:space="preserve">
+    <value>Select Applies To range</value>
+  </data>
+  <data name="ManageConditionalFormats_SelectAppliesToRangeHelpText" xml:space="preserve">
+    <value>Collapse dialog and select a worksheet range for this conditional format rule.</value>
+  </data>
+  <data name="ManageConditionalFormats_StopIfTrueColumn" xml:space="preserve">
+    <value>Stop If True</value>
+  </data>
+  <data name="ManageConditionalFormats_Yes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="ObjectSizing_BottomLabel" xml:space="preserve">
+    <value>_Bottom:</value>
+  </data>
+  <data name="ObjectSizing_HeightLabel" xml:space="preserve">
+    <value>_Height:</value>
+  </data>
+  <data name="ObjectSizing_LeftLabel" xml:space="preserve">
+    <value>_Left:</value>
+  </data>
+  <data name="ObjectSizing_ObjectSize" xml:space="preserve">
+    <value>Object Size</value>
+  </data>
+  <data name="ObjectSizing_RightLabel" xml:space="preserve">
+    <value>_Right:</value>
+  </data>
+  <data name="ObjectSizing_Rotation" xml:space="preserve">
+    <value>Rotation</value>
+  </data>
+  <data name="ObjectSizing_TopLabel" xml:space="preserve">
+    <value>_Top:</value>
+  </data>
+  <data name="ObjectSizing_WidthLabel" xml:space="preserve">
+    <value>_Width:</value>
+  </data>
+  <data name="PageBreak_ColumnLabel" xml:space="preserve">
+    <value>_Column:</value>
+  </data>
+  <data name="PageBreak_RowLabel" xml:space="preserve">
+    <value>_Row:</value>
+  </data>
+  <data name="PasteSpecial_OperationAdd" xml:space="preserve">
+    <value>_Add</value>
+  </data>
+  <data name="PasteSpecial_OperationAddAutomationName" xml:space="preserve">
+    <value>Operation add</value>
+  </data>
+  <data name="PasteSpecial_AddCopiedValuesToDestinationValues" xml:space="preserve">
+    <value>Add copied values to destination values.</value>
+  </data>
+  <data name="PasteSpecial_OperationDivide" xml:space="preserve">
+    <value>_Divide</value>
+  </data>
+  <data name="PasteSpecial_OperationDivideAutomationName" xml:space="preserve">
+    <value>Operation divide</value>
+  </data>
+  <data name="PasteSpecial_DivideDestinationValuesByCopiedValues" xml:space="preserve">
+    <value>Divide destination values by copied values.</value>
+  </data>
+  <data name="PasteSpecial_OperationGroup" xml:space="preserve">
+    <value>Operation</value>
+  </data>
+  <data name="PasteSpecial_OperationMultiply" xml:space="preserve">
+    <value>_Multiply</value>
+  </data>
+  <data name="PasteSpecial_OperationMultiplyAutomationName" xml:space="preserve">
+    <value>Operation multiply</value>
+  </data>
+  <data name="PasteSpecial_MultiplyDestinationValuesByCopiedValues" xml:space="preserve">
+    <value>Multiply destination values by copied values.</value>
+  </data>
+  <data name="PasteSpecial_OperationNone" xml:space="preserve">
+    <value>_None</value>
+  </data>
+  <data name="PasteSpecial_OperationNoneAutomationName" xml:space="preserve">
+    <value>Operation none</value>
+  </data>
+  <data name="PasteSpecial_PasteWithoutAMathematicalOperation" xml:space="preserve">
+    <value>Paste without a mathematical operation.</value>
+  </data>
+  <data name="PasteSpecial_OperationSubtract" xml:space="preserve">
+    <value>_Subtract</value>
+  </data>
+  <data name="PasteSpecial_OperationSubtractAutomationName" xml:space="preserve">
+    <value>Operation subtract</value>
+  </data>
+  <data name="PasteSpecial_SubtractCopiedValuesFromDestinationValues" xml:space="preserve">
+    <value>Subtract copied values from destination values.</value>
+  </data>
+  <data name="PasteSpecial_PasteGroup" xml:space="preserve">
+    <value>Paste</value>
+  </data>
+  <data name="PivotCalculated_AvailableFieldsLabel" xml:space="preserve">
+    <value>Available _fields</value>
+  </data>
+  <data name="PivotCalculated_AvailableItemsLabel" xml:space="preserve">
+    <value>Available _items</value>
+  </data>
+  <data name="PivotCalculated_EnterCalculatedFieldFormula" xml:space="preserve">
+    <value>Enter a calculated field formula.</value>
+  </data>
+  <data name="PivotCalculated_EnterCalculatedFieldName" xml:space="preserve">
+    <value>Enter a calculated field name.</value>
+  </data>
+  <data name="PivotCalculated_EnterCalculatedItemFormula" xml:space="preserve">
+    <value>Enter a calculated item formula.</value>
+  </data>
+  <data name="PivotCalculated_EnterCalculatedItemName" xml:space="preserve">
+    <value>Enter a calculated item name.</value>
+  </data>
+  <data name="PivotCalculated_FieldAndItemGroup" xml:space="preserve">
+    <value>Field and item</value>
+  </data>
+  <data name="PivotCalculated_FieldsGroup" xml:space="preserve">
+    <value>Fields</value>
+  </data>
+  <data name="PivotCalculated_FormulaLabel" xml:space="preserve">
+    <value>_Formula:</value>
+  </data>
+  <data name="PivotCalculated_InsertIntoFormulaGroup" xml:space="preserve">
+    <value>Insert into formula</value>
+  </data>
+  <data name="PivotCalculated_InsertItem" xml:space="preserve">
+    <value>Insert _Item</value>
+  </data>
+  <data name="PivotCalculated_ItemFormulaLabel" xml:space="preserve">
+    <value>Item _formula:</value>
+  </data>
+  <data name="PivotCalculated_NameAndFormulaGroup" xml:space="preserve">
+    <value>Name and formula</value>
+  </data>
+  <data name="PivotCalculated_NameLabel" xml:space="preserve">
+    <value>_Name:</value>
+  </data>
+  <data name="PivotCalculated_SourceFieldLabel" xml:space="preserve">
+    <value>Source _field:</value>
+  </data>
+  <data name="PivotChartOptions_BlankDisplayConnectDataPoints" xml:space="preserve">
+    <value>Connect data points with line</value>
+  </data>
+  <data name="PivotChartOptions_BlankDisplayGaps" xml:space="preserve">
+    <value>Gaps</value>
+  </data>
+  <data name="PivotChartOptions_BlankDisplayZero" xml:space="preserve">
+    <value>Zero</value>
+  </data>
+  <data name="PivotChartOptions_ChartStyleGroup" xml:space="preserve">
+    <value>Chart style</value>
+  </data>
+  <data name="PivotChartOptions_FieldButtonsGroup" xml:space="preserve">
+    <value>Field buttons</value>
+  </data>
+  <data name="PivotChartOptions_LayoutGroup" xml:space="preserve">
+    <value>Layout</value>
+  </data>
+  <data name="PivotFieldGrouping_ByLabel" xml:space="preserve">
+    <value>_By</value>
+  </data>
+  <data name="PivotFieldGrouping_EndingAtLabel" xml:space="preserve">
+    <value>_Ending at</value>
+  </data>
+  <data name="PivotFieldGrouping_EnterPositiveGroupingInterval" xml:space="preserve">
+    <value>Enter a positive grouping interval.</value>
+  </data>
+  <data name="PivotFieldGrouping_EnterValidEndingValue" xml:space="preserve">
+    <value>Enter a valid ending value or leave it blank.</value>
+  </data>
+  <data name="PivotFieldGrouping_EnterValidStartingValue" xml:space="preserve">
+    <value>Enter a valid starting value or leave it blank.</value>
+  </data>
+  <data name="PivotFieldGrouping_FieldLabel" xml:space="preserve">
+    <value>_Field</value>
+  </data>
+  <data name="PivotFieldGrouping_GroupByGroup" xml:space="preserve">
+    <value>Group by</value>
+  </data>
+  <data name="PivotFieldGrouping_GroupByLabel" xml:space="preserve">
+    <value>_Group by</value>
+  </data>
+  <data name="PivotFieldGrouping_RangeGroup" xml:space="preserve">
+    <value>Range</value>
+  </data>
+  <data name="PivotFieldGrouping_SelectionGroup" xml:space="preserve">
+    <value>Selection</value>
+  </data>
+  <data name="PivotFieldGrouping_StartingAtLabel" xml:space="preserve">
+    <value>_Starting at</value>
+  </data>
+  <data name="PivotSlicerTimeline_ChooseDateFieldsGroup" xml:space="preserve">
+    <value>Choose date fields</value>
+  </data>
+  <data name="PivotSlicerTimeline_ChooseFieldsGroup" xml:space="preserve">
+    <value>Choose fields</value>
+  </data>
+  <data name="PivotSlicerTimeline_DateFieldToConnectLabel" xml:space="preserve">
+    <value>_Date field to connect</value>
+  </data>
+  <data name="PivotSlicerTimeline_DefaultSlicerName" xml:space="preserve">
+    <value>{0} Slicer</value>
+  </data>
+  <data name="PivotSlicerTimeline_DefaultTimelineName" xml:space="preserve">
+    <value>{0} Timeline</value>
+  </data>
+  <data name="PivotSlicerTimeline_EnterSlicerCaption" xml:space="preserve">
+    <value>Enter a slicer caption.</value>
+  </data>
+  <data name="PivotSlicerTimeline_EnterSlicerOptions" xml:space="preserve">
+    <value>Enter slicer options.</value>
+  </data>
+  <data name="PivotSlicerTimeline_EnterTimelineCaption" xml:space="preserve">
+    <value>Enter a timeline caption.</value>
+  </data>
+  <data name="PivotSlicerTimeline_EnterTimelineOptions" xml:space="preserve">
+    <value>Enter timeline options.</value>
+  </data>
+  <data name="PivotSlicerTimeline_FieldToConnectLabel" xml:space="preserve">
+    <value>_Field to connect</value>
+  </data>
+  <data name="PivotSlicerTimeline_SelectDateFieldToConnect" xml:space="preserve">
+    <value>Select a date field to connect.</value>
+  </data>
+  <data name="PivotSlicerTimeline_SelectFieldToConnect" xml:space="preserve">
+    <value>Select a field to connect.</value>
+  </data>
+  <data name="PivotSlicerTimeline_SlicerCaptionLabel" xml:space="preserve">
+    <value>Slicer _caption</value>
+  </data>
+  <data name="PivotSlicerTimeline_TimelineCaptionLabel" xml:space="preserve">
+    <value>Timeline _caption</value>
+  </data>
+  <data name="PivotTable_ChooseDataHeader" xml:space="preserve">
+    <value>Choose the data that you want to analyze</value>
+  </data>
+  <data name="PivotTable_ChooseDestinationHeader" xml:space="preserve">
+    <value>Choose where you want the PivotTable report to be placed</value>
+  </data>
+  <data name="PivotTable_EnterDestinationCellOnActiveWorksheet" xml:space="preserve">
+    <value>Enter a destination cell on the active worksheet.</value>
+  </data>
+  <data name="PivotTable_EnterValidSourceRange" xml:space="preserve">
+    <value>Enter a valid PivotTable source range.</value>
+  </data>
+  <data name="PivotTable_LocationLabel" xml:space="preserve">
+    <value>_Location:</value>
+  </data>
+  <data name="PivotTable_SelectPivotTableLocation" xml:space="preserve">
+    <value>Select PivotTable location</value>
+  </data>
+  <data name="PivotTable_SelectPivotTableSourceRange" xml:space="preserve">
+    <value>Select PivotTable source range</value>
+  </data>
+  <data name="PivotTable_TableRangeLabel" xml:space="preserve">
+    <value>Table/_Range:</value>
+  </data>
+  <data name="PivotTableDataSource_EnterValidSourceRange" xml:space="preserve">
+    <value>Enter a valid PivotTable source range.</value>
+  </data>
+  <data name="PivotTableDataSource_TableRangeLabel" xml:space="preserve">
+    <value>Table/_Range:</value>
+  </data>
+  <data name="PivotTableOptions_AltTextGroup" xml:space="preserve">
+    <value>Alt Text</value>
+  </data>
+  <data name="PivotTableOptions_CompactIndentLabel" xml:space="preserve">
+    <value>When in compact form _indent row labels</value>
+  </data>
+  <data name="PivotTableOptions_DataOptionsGroup" xml:space="preserve">
+    <value>Data options</value>
+  </data>
+  <data name="PivotTableOptions_DescriptionLabel" xml:space="preserve">
+    <value>_Description:</value>
+  </data>
+  <data name="PivotTableOptions_EmptyCellsLabel" xml:space="preserve">
+    <value>For _empty cells show:</value>
+  </data>
+  <data name="PivotTableOptions_EnterCompactIndent" xml:space="preserve">
+    <value>Enter a compact row label indent from 0 to 15.</value>
+  </data>
+  <data name="PivotTableOptions_EnterPageFieldsPerColumn" xml:space="preserve">
+    <value>Enter page fields per column from 0 to 255.</value>
+  </data>
+  <data name="PivotTableOptions_ErrorValuesLabel" xml:space="preserve">
+    <value>For error _values show:</value>
+  </data>
+  <data name="PivotTableOptions_FiltersAndSubtotalsGroup" xml:space="preserve">
+    <value>Filters and subtotals</value>
+  </data>
+  <data name="PivotTableOptions_FormatSectionGroup" xml:space="preserve">
+    <value>Format section</value>
+  </data>
+  <data name="PivotTableOptions_GrandTotalsGroup" xml:space="preserve">
+    <value>Grand totals</value>
+  </data>
+  <data name="PivotTableOptions_LayoutSectionGroup" xml:space="preserve">
+    <value>Layout section</value>
+  </data>
+  <data name="PivotTableOptions_PivotTableStyleLabel" xml:space="preserve">
+    <value>PivotTable _style</value>
+  </data>
+  <data name="PivotTableOptions_PivotTableStyleOptionsGroup" xml:space="preserve">
+    <value>PivotTable Style Options</value>
+  </data>
+  <data name="PivotTableOptions_PrintOptionsGroup" xml:space="preserve">
+    <value>Print options</value>
+  </data>
+  <data name="PivotTableOptions_ReportFilterAreaLabel" xml:space="preserve">
+    <value>Display fields in report _filter area</value>
+  </data>
+  <data name="PivotTableOptions_ReportFilterFieldsPerColumnLabel" xml:space="preserve">
+    <value>Report filter fields per _column</value>
+  </data>
+  <data name="PivotTableOptions_ReportLayoutLabel" xml:space="preserve">
+    <value>_Report layout</value>
+  </data>
+  <data name="PivotTableOptions_RetainItemsDeletedLabel" xml:space="preserve">
+    <value>Retain items _deleted from the data source</value>
+  </data>
+  <data name="PivotTableOptions_SubtotalPlacementLabel" xml:space="preserve">
+    <value>Subtotal _placement</value>
+  </data>
+  <data name="PivotTableOptions_TitleLabel" xml:space="preserve">
+    <value>_Title:</value>
+  </data>
+  <data name="Protection_PermissionDeleteColumns" xml:space="preserve">
+    <value>Delete columns</value>
+  </data>
+  <data name="Protection_PermissionDeleteRows" xml:space="preserve">
+    <value>Delete rows</value>
+  </data>
+  <data name="Protection_PermissionEditObjects" xml:space="preserve">
+    <value>Edit objects</value>
+  </data>
+  <data name="Protection_PermissionEditScenarios" xml:space="preserve">
+    <value>Edit scenarios</value>
+  </data>
+  <data name="Protection_PermissionFormatCells" xml:space="preserve">
+    <value>Format cells</value>
+  </data>
+  <data name="Protection_PermissionFormatColumns" xml:space="preserve">
+    <value>Format columns</value>
+  </data>
+  <data name="Protection_PermissionFormatRows" xml:space="preserve">
+    <value>Format rows</value>
+  </data>
+  <data name="Protection_PermissionInsertColumns" xml:space="preserve">
+    <value>Insert columns</value>
+  </data>
+  <data name="Protection_PermissionInsertHyperlinks" xml:space="preserve">
+    <value>Insert hyperlinks</value>
+  </data>
+  <data name="Protection_PermissionInsertRows" xml:space="preserve">
+    <value>Insert rows</value>
+  </data>
+  <data name="Protection_PermissionSelectLockedCells" xml:space="preserve">
+    <value>Select locked cells</value>
+  </data>
+  <data name="Protection_PermissionSelectUnlockedCells" xml:space="preserve">
+    <value>Select unlocked cells</value>
+  </data>
+  <data name="Protection_PermissionSort" xml:space="preserve">
+    <value>Sort</value>
+  </data>
+  <data name="Protection_PermissionUseAutoFilter" xml:space="preserve">
+    <value>Use AutoFilter</value>
+  </data>
+  <data name="Protection_PermissionUsePivotTableReports" xml:space="preserve">
+    <value>Use PivotTable reports</value>
+  </data>
+  <data name="Protection_ProtectSheetTitle" xml:space="preserve">
+    <value>Protect Sheet</value>
+  </data>
+  <data name="Protection_ProtectTitlePrefix" xml:space="preserve">
+    <value>Protect </value>
+  </data>
+  <data name="Protection_ProtectWorksheetContents" xml:space="preserve">
+    <value>Protect worksheet and contents of locked cells</value>
+  </data>
+  <data name="Remaining_EnterColumnWidthFrom0To255" xml:space="preserve">
+    <value>Enter a column width from 0 to 255.</value>
+  </data>
+  <data name="Remaining_EnterRowHeightFrom0To4095" xml:space="preserve">
+    <value>Enter a row height from 0 to 409.5.</value>
+  </data>
+  <data name="Remaining_EnterThresholdValue" xml:space="preserve">
+    <value>Enter a threshold value.</value>
+  </data>
+  <data name="SheetName_EnterValidSheetName" xml:space="preserve">
+    <value>Enter a valid sheet name.</value>
+  </data>
+  <data name="SheetName_InvalidApostrophe" xml:space="preserve">
+    <value>Sheet name is invalid: it cannot begin or end with an apostrophe.</value>
+  </data>
+  <data name="SheetName_InvalidBlank" xml:space="preserve">
+    <value>Sheet name is invalid: it cannot be blank.</value>
+  </data>
+  <data name="SheetName_InvalidCharacters" xml:space="preserve">
+    <value>Sheet name is invalid: it cannot contain : \ / ? * [ or ].</value>
+  </data>
+  <data name="SheetName_InvalidTooLong" xml:space="preserve">
+    <value>Sheet name is invalid: it cannot exceed 31 characters.</value>
+  </data>
+  <data name="Sort_ColumnLabel" xml:space="preserve">
+    <value>Column {0}</value>
+  </data>
+  <data name="Sort_OrderAToZ" xml:space="preserve">
+    <value>A to Z</value>
+  </data>
+  <data name="Sort_OrderOnBottom" xml:space="preserve">
+    <value>On Bottom</value>
+  </data>
+  <data name="Sort_OrderOnTop" xml:space="preserve">
+    <value>On Top</value>
+  </data>
+  <data name="Sort_OrderZToA" xml:space="preserve">
+    <value>Z to A</value>
+  </data>
+  <data name="Sort_RowLabel" xml:space="preserve">
+    <value>Row {0}</value>
+  </data>
+  <data name="Sort_SortByHeader" xml:space="preserve">
+    <value>Sort by</value>
+  </data>
+  <data name="Sort_SortByRowHeader" xml:space="preserve">
+    <value>Sort by row</value>
+  </data>
+  <data name="Sort_SortOnCellColor" xml:space="preserve">
+    <value>Cell Color</value>
+  </data>
+  <data name="Sort_SortOnCellValues" xml:space="preserve">
+    <value>Cell Values</value>
+  </data>
+  <data name="Sort_SortOnFontColor" xml:space="preserve">
+    <value>Font Color</value>
+  </data>
+  <data name="SortOptions_FirstKeyJanToDecShort" xml:space="preserve">
+    <value>Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec</value>
+  </data>
+  <data name="SortOptions_FirstKeyJanuaryToDecember" xml:space="preserve">
+    <value>January, February, March, April, May, June, July, August, September, October, November, December</value>
+  </data>
+  <data name="SortOptions_FirstKeyNormal" xml:space="preserve">
+    <value>Normal</value>
+  </data>
+  <data name="SortOptions_FirstKeySundayToSaturday" xml:space="preserve">
+    <value>Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday</value>
+  </data>
+  <data name="SortOptions_FirstKeySunToSatShort" xml:space="preserve">
+    <value>Sun, Mon, Tue, Wed, Thu, Fri, Sat</value>
+  </data>
+  <data name="Sparkline_InvalidDataRange" xml:space="preserve">
+    <value>Invalid data range.</value>
+  </data>
+  <data name="Sparkline_InvalidLocationCell" xml:space="preserve">
+    <value>Invalid location cell.</value>
+  </data>
+  <data name="SpellCheck_ReplaceAllOccurrencesHelpText" xml:space="preserve">
+    <value>Replace all occurrences.</value>
+  </data>
+  <data name="SpellCheck_ReplaceThisOccurrenceHelpText" xml:space="preserve">
+    <value>Replace this occurrence.</value>
+  </data>
+  <data name="SpellCheck_AddTheWordToTheCustomDictionaryHelpText" xml:space="preserve">
+    <value>Add the word to the custom dictionary.</value>
+  </data>
+  <data name="SpellCheck_IgnoreAllOccurrencesHelpText" xml:space="preserve">
+    <value>Ignore all occurrences.</value>
+  </data>
+  <data name="SpellCheck_IgnoreThisOccurrenceHelpText" xml:space="preserve">
+    <value>Ignore this occurrence.</value>
+  </data>
+  <data name="Subtotal_ColumnLabel" xml:space="preserve">
+    <value>Column {0}</value>
+  </data>
+  <data name="Subtotal_FunctionAverage" xml:space="preserve">
+    <value>Average</value>
+  </data>
+  <data name="Subtotal_FunctionCount" xml:space="preserve">
+    <value>Count</value>
+  </data>
+  <data name="Subtotal_FunctionCountNumbers" xml:space="preserve">
+    <value>Count Numbers</value>
+  </data>
+  <data name="Subtotal_FunctionMax" xml:space="preserve">
+    <value>Max</value>
+  </data>
+  <data name="Subtotal_FunctionMin" xml:space="preserve">
+    <value>Min</value>
+  </data>
+  <data name="Subtotal_FunctionProduct" xml:space="preserve">
+    <value>Product</value>
+  </data>
+  <data name="Subtotal_FunctionStdDev" xml:space="preserve">
+    <value>StdDev</value>
+  </data>
+  <data name="Subtotal_FunctionStdDevp" xml:space="preserve">
+    <value>StdDevp</value>
+  </data>
+  <data name="Subtotal_FunctionSum" xml:space="preserve">
+    <value>Sum</value>
+  </data>
+  <data name="Subtotal_FunctionVar" xml:space="preserve">
+    <value>Var</value>
+  </data>
+  <data name="Subtotal_FunctionVarp" xml:space="preserve">
+    <value>Varp</value>
+  </data>
+  <data name="TextToColumns_ColumnHeader" xml:space="preserve">
+    <value>Column {0}</value>
+  </data>
+  <data name="TextToColumns_ChooseDelimitersInstruction" xml:space="preserve">
+    <value>Choose the delimiters that separate your selected text.</value>
+  </data>
+  <data name="TextToColumns_ChooseFileTypeInstruction" xml:space="preserve">
+    <value>Choose the file type that best describes your data.</value>
+  </data>
+  <data name="TextToColumns_SelectColumnFormatAndDestinationInstruction" xml:space="preserve">
+    <value>Select each column and set the data format and destination.</value>
+  </data>
+  <data name="TextToColumns_TextWizardStepOf3" xml:space="preserve">
+    <value>Text Wizard - Step {0} of 3</value>
+  </data>
+  <data name="WatchWindow_ThisWorkbook" xml:space="preserve">
+    <value>This Workbook</value>
+  </data>
+  <data name="Zoom_MustBeBetween10And400" xml:space="preserve">
+    <value>Zoom must be between 10% and 400%.</value>
+  </data>
+  <data name="Zoom_MustBeWholePercentBetween10And400" xml:space="preserve">
+    <value>Zoom must be a whole percent between 10% and 400%.</value>
+  </data>
+  <data name="AdvancedFilter_CriteriaRangeMustIncludeHeaders" xml:space="preserve">
+    <value>Criteria range must include headers and at least one criteria row.</value>
+  </data>
+  <data name="AdvancedFilter_EnterValidCopyToRange" xml:space="preserve">
+    <value>Enter a valid copy-to cell or one-row header range.</value>
+  </data>
+  <data name="AdvancedFilter_EnterValidCriteriaRange" xml:space="preserve">
+    <value>Enter a valid criteria range.</value>
+  </data>
+  <data name="AdvancedFilter_EnterValidListRange" xml:space="preserve">
+    <value>Enter a valid list range.</value>
+  </data>
+  <data name="AdvancedFilter_ListRangeMustIncludeHeaders" xml:space="preserve">
+    <value>List range must include headers and at least one data row.</value>
+  </data>
+  <data name="Consolidate_AtLeastOneSourceRangeRequired" xml:space="preserve">
+    <value>At least one source range is required.</value>
+  </data>
+  <data name="Consolidate_EnterAtLeastOneValidSourceRange" xml:space="preserve">
+    <value>Enter at least one valid source range.</value>
+  </data>
+  <data name="Consolidate_EnterValidDestinationCell" xml:space="preserve">
+    <value>Enter a valid destination cell.</value>
+  </data>
+  <data name="Consolidate_EnterValidSourceRange" xml:space="preserve">
+    <value>Enter a valid source range.</value>
+  </data>
+  <data name="Consolidate_EnterValidSourceRangeWithPart" xml:space="preserve">
+    <value>Enter a valid source range: {0}.</value>
+  </data>
+  <data name="Consolidate_FunctionCountNumbers" xml:space="preserve">
+    <value>Count Numbers</value>
+  </data>
+  <data name="Consolidate_FunctionStdDev" xml:space="preserve">
+    <value>StdDev</value>
+  </data>
+  <data name="Consolidate_FunctionStdDevp" xml:space="preserve">
+    <value>StdDevp</value>
+  </data>
+  <data name="Consolidate_SourceRangesMustBeSameSize" xml:space="preserve">
+    <value>Source ranges must be the same size.</value>
+  </data>
+  <data name="RemoveDuplicates_ColumnLabel" xml:space="preserve">
+    <value>Column {0}</value>
+  </data>
+  <data name="ScenarioManager_EnterScenarioDetails" xml:space="preserve">
+    <value>Enter scenario details.</value>
+  </data>
+  <data name="ScenarioManager_EnterScenarioName" xml:space="preserve">
+    <value>Enter a scenario name.</value>
+  </data>
+  <data name="ScenarioManager_EnterScenarioResultCells" xml:space="preserve">
+    <value>Enter scenario result cells.</value>
+  </data>
+  <data name="ScenarioManager_EnterValidChangingCellsReference" xml:space="preserve">
+    <value>Enter a valid changing cells reference.</value>
+  </data>
+  <data name="ScenarioManager_EnterValidResultCellsReference" xml:space="preserve">
+    <value>Enter a valid result cells reference.</value>
+  </data>
+  <data name="Sparkline_KindWinLoss" xml:space="preserve">
+    <value>Win/Loss</value>
+  </data>
+  <data name="TextToColumns_AdvancedGroup" xml:space="preserve">
+    <value>Advanced</value>
+  </data>
+  <data name="TextToColumns_BackButton" xml:space="preserve">
+    <value>&lt; _Back</value>
+  </data>
+  <data name="TextToColumns_ColumnDataFormatGroup" xml:space="preserve">
+    <value>Column data format</value>
+  </data>
+  <data name="TextToColumns_ColumnLabel" xml:space="preserve">
+    <value>_Column:</value>
+  </data>
+  <data name="TextToColumns_DecimalSeparatorLabel" xml:space="preserve">
+    <value>_Decimal separator:</value>
+  </data>
+  <data name="TextToColumns_DelimitersGroup" xml:space="preserve">
+    <value>Delimiters</value>
+  </data>
+  <data name="TextToColumns_DestinationLabel" xml:space="preserve">
+    <value>_Destination:</value>
+  </data>
+  <data name="TextToColumns_FinishButton" xml:space="preserve">
+    <value>_Finish</value>
+  </data>
+  <data name="TextToColumns_NextButton" xml:space="preserve">
+    <value>_Next &gt;</value>
+  </data>
+  <data name="TextToColumns_OriginalDataTypeGroup" xml:space="preserve">
+    <value>Original data type</value>
+  </data>
+  <data name="TextToColumns_SelectDestinationCell" xml:space="preserve">
+    <value>Select destination cell</value>
+  </data>
+  <data name="TextToColumns_TextQualifierLabel" xml:space="preserve">
+    <value>Text _qualifier:</value>
+  </data>
+  <data name="TextToColumns_TextQualifierNone" xml:space="preserve">
+    <value>{none}</value>
+  </data>
+  <data name="TextToColumns_ThousandsSeparatorLabel" xml:space="preserve">
+    <value>_Thousands separator:</value>
+  </data>
 </root>

@@ -19,7 +19,7 @@ public sealed partial class LegalNoticesDialog : Window
 
     internal LegalNoticesDialog(IReadOnlyList<LegalNoticeDocument> documents)
     {
-        Title = "Legal Notices";
+        Title = UiText.Get("LegalNotices_LegalNotices");
         Width = 840;
         Height = 620;
         MinWidth = 620;
@@ -28,9 +28,9 @@ public sealed partial class LegalNoticesDialog : Window
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = false;
 
-        AutomationProperties.SetName(this, "Legal Notices");
+        AutomationProperties.SetName(this, UiText.Get("LegalNotices_LegalNotices"));
         AutomationProperties.SetAutomationId(this, "LegalNoticesDialog");
-        AutomationProperties.SetHelpText(this, "Shows the legal, privacy, and third-party notices packaged with this FreeX executable.");
+        AutomationProperties.SetHelpText(this, UiText.Get("LegalNotices_ShowsTheLegalPrivacyAndThirdPartyNoticesPackagedWithThisFreeXExecutable"));
 
         Content = CreateContent(documents);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
@@ -42,11 +42,11 @@ public sealed partial class LegalNoticesDialog : Window
 
         var intro = new TextBlock
         {
-            Text = "These notices are packaged with this FreeX executable for offline review.",
+            Text = UiText.Get("LegalNotices_TheseNoticesArePackagedWithThisFreeXExecutableForOfflineReview"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 10)
         };
-        AutomationProperties.SetName(intro, "Legal notices summary");
+        AutomationProperties.SetName(intro, UiText.Get("LegalNotices_LegalNoticesSummary"));
         AutomationProperties.SetAutomationId(intro, "LegalNoticesSummaryText");
         DockPanel.SetDock(intro, Dock.Top);
         root.Children.Add(intro);
@@ -55,15 +55,15 @@ public sealed partial class LegalNoticesDialog : Window
             Close,
             buttonWidth: 84,
             rowMargin: new Thickness(0, 12, 0, 0),
-            acceptContent: "_Close");
+            acceptContent: UiText.Get("LegalNotices_CloseButton"));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(buttonRow);
 
         _tabControl.ItemsSource = documents.Select(CreateTabItem).ToList();
         _tabControl.SelectedIndex = documents.Count > 0 ? 0 : -1;
-        AutomationProperties.SetName(_tabControl, "Legal notice sections");
+        AutomationProperties.SetName(_tabControl, UiText.Get("LegalNotices_LegalNoticeSections"));
         AutomationProperties.SetAutomationId(_tabControl, "LegalNoticesSectionTabs");
-        AutomationProperties.SetHelpText(_tabControl, "Choose a legal notice section to read and copy.");
+        AutomationProperties.SetHelpText(_tabControl, UiText.Get("LegalNotices_ChooseALegalNoticeSectionToReadAndCopy"));
         root.Children.Add(_tabControl);
 
         return root;
@@ -88,7 +88,7 @@ public sealed partial class LegalNoticesDialog : Window
         };
         AutomationProperties.SetName(textBox, document.Title);
         AutomationProperties.SetAutomationId(textBox, $"LegalNotices{CreateAutomationIdSegment(document.Title)}Text");
-        AutomationProperties.SetHelpText(textBox, "Read-only legal notice text. Use Ctrl+C to copy selected text.");
+        AutomationProperties.SetHelpText(textBox, UiText.Get("LegalNotices_ReadOnlyLegalNoticeTextUseCtrlCToCopySelectedText"));
 
         return new TabItem
         {

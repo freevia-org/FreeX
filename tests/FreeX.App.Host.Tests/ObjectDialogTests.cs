@@ -190,11 +190,11 @@ public sealed class ObjectDialogTests
 
         objectSizeSource.Should().Contain("_widthBox");
         objectSizeSource.Should().Contain("_heightBox");
-        objectSizeSource.Should().Contain("_Height:");
-        objectSizeSource.Should().Contain("_Width:");
+        objectSizeSource.Should().Contain("UiText.Get(\"ObjectSizing_HeightLabel\")");
+        objectSizeSource.Should().Contain("UiText.Get(\"ObjectSizing_WidthLabel\")");
         objectSizeSource.Should().Contain("new Label { Content = label, Target = box");
         objectSizeSource.Should().Contain("_lockAspectRatioBox");
-        objectSizeSource.Should().Contain("Content = \"_Lock aspect ratio\"");
+        objectSizeSource.Should().Contain("Content = UiText.Get(\"ObjectSizing_LockAspectRatio\")");
         objectSizeSource.Should().Contain("CalculateLockedAspectHeight");
         objectSizeSource.Should().Contain("CalculateLockedAspectWidth");
     }
@@ -204,15 +204,15 @@ public sealed class ObjectDialogTests
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
 
-        source.Should().Contain("AutomationProperties.SetName(_heightBox, \"Object height\");");
+        source.Should().Contain("AutomationProperties.SetName(_heightBox, UiText.Get(\"ObjectSizing_ObjectHeight\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_heightBox, \"ObjectSizeHeightBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_heightBox, \"Enter the object's height.\");");
-        source.Should().Contain("AutomationProperties.SetName(_widthBox, \"Object width\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_heightBox, UiText.Get(\"ObjectSizing_EnterTheObjectSHeight\"));");
+        source.Should().Contain("AutomationProperties.SetName(_widthBox, UiText.Get(\"ObjectSizing_ObjectWidth\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_widthBox, \"ObjectSizeWidthBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_widthBox, \"Enter the object's width.\");");
-        source.Should().Contain("AutomationProperties.SetName(_lockAspectRatioBox, \"Lock aspect ratio\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_widthBox, UiText.Get(\"ObjectSizing_EnterTheObjectSWidth\"));");
+        source.Should().Contain("AutomationProperties.SetName(_lockAspectRatioBox, UiText.Get(\"ObjectSizing_LockAspectRatio2\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_lockAspectRatioBox, \"ObjectSizeLockAspectRatioCheckBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_lockAspectRatioBox, \"Keep the object's width and height proportional.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_lockAspectRatioBox, UiText.Get(\"ObjectSizing_KeepTheObjectSWidthAndHeightProportional\"));");
     }
 
     [Fact]
@@ -242,7 +242,7 @@ public sealed class ObjectDialogTests
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        source.Should().Contain("Enter positive width and height values.");
+        source.Should().Contain("UiText.Get(\"ObjectSizing_EnterPositiveWidthAndHeightValues\")");
         source.Should().Contain("FocusInvalidSizeInput(ResolveInvalidSizeInput());");
         source.Should().Contain("private TextBox ResolveInvalidSizeInput()");
         source.Should().Contain("if (!TryParsePositiveSize(_heightBox.Text))");
@@ -283,8 +283,8 @@ public sealed class ObjectDialogTests
     {
         var source = ReadObjectDialogSources();
 
-        source.Should().Contain("AddTextRow(grid, 0, \"Text to _display:\", _displayBox, displayText)");
-        source.Should().Contain("AddTextRow(grid, 1, \"_Address:\", _targetBox, target)");
+        source.Should().Contain("AddTextRow(grid, 0, UiText.Get(\"Hyperlink_TextToDisplay2\"), _displayBox, displayText)");
+        source.Should().Contain("AddTextRow(grid, 1, UiText.Get(\"Hyperlink_Address\"), _targetBox, target)");
         source.Should().Contain("new Label");
         source.Should().Contain("Content = label");
         source.Should().Contain("Target = box");
@@ -395,7 +395,7 @@ public sealed class ObjectDialogTests
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
 
-        source.Should().Contain("ObjectSizeDialog.CreateSingleInputContent(\"_Degrees:\", _rotationBox, Accept)");
+        source.Should().Contain("ObjectSizeDialog.CreateSingleInputContent(UiText.Get(\"ObjectSizing_Degrees\"), _rotationBox, Accept)");
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_rotationBox);");
@@ -407,9 +407,9 @@ public sealed class ObjectDialogTests
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
 
-        source.Should().Contain("AutomationProperties.SetName(_rotationBox, \"Rotation degrees\");");
+        source.Should().Contain("AutomationProperties.SetName(_rotationBox, UiText.Get(\"ObjectSizing_RotationDegrees\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_rotationBox, \"RotationDegreesBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_rotationBox, \"Enter the object's rotation in degrees.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_rotationBox, UiText.Get(\"ObjectSizing_EnterTheObjectSRotationInDegrees\"));");
     }
 
     [Fact]
@@ -418,7 +418,7 @@ public sealed class ObjectDialogTests
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        source.Should().Contain("Enter a numeric rotation value.");
+        source.Should().Contain("UiText.Get(\"ObjectSizing_EnterANumericRotationValue\")");
         source.Should().Contain("FocusInvalidRotationInput();");
         source.Should().Contain("private void FocusInvalidRotationInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_rotationBox);");
@@ -449,10 +449,10 @@ public sealed class ObjectDialogTests
         source.Should().Contain("_cropTopBox");
         source.Should().Contain("_cropRightBox");
         source.Should().Contain("_cropBottomBox");
-        source.Should().Contain("_Left:");
-        source.Should().Contain("_Top:");
-        source.Should().Contain("_Right:");
-        source.Should().Contain("_Bottom:");
+        source.Should().Contain("UiText.Get(\"ObjectSizing_LeftLabel\")");
+        source.Should().Contain("UiText.Get(\"ObjectSizing_TopLabel\")");
+        source.Should().Contain("UiText.Get(\"ObjectSizing_RightLabel\")");
+        source.Should().Contain("UiText.Get(\"ObjectSizing_BottomLabel\")");
         source.Should().Contain("new Label { Content = label, Target = box");
     }
 
@@ -461,18 +461,18 @@ public sealed class ObjectDialogTests
     {
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class PictureCropDialog", "");
 
-        source.Should().Contain("AutomationProperties.SetName(_cropLeftBox, \"Crop left\");");
+        source.Should().Contain("AutomationProperties.SetName(_cropLeftBox, UiText.Get(\"ObjectSizing_CropLeft\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_cropLeftBox, \"PictureCropLeftBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_cropLeftBox, \"Enter the left crop percentage.\");");
-        source.Should().Contain("AutomationProperties.SetName(_cropTopBox, \"Crop top\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_cropLeftBox, UiText.Get(\"ObjectSizing_EnterTheLeftCropPercentage\"));");
+        source.Should().Contain("AutomationProperties.SetName(_cropTopBox, UiText.Get(\"ObjectSizing_CropTop\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_cropTopBox, \"PictureCropTopBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_cropTopBox, \"Enter the top crop percentage.\");");
-        source.Should().Contain("AutomationProperties.SetName(_cropRightBox, \"Crop right\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_cropTopBox, UiText.Get(\"ObjectSizing_EnterTheTopCropPercentage\"));");
+        source.Should().Contain("AutomationProperties.SetName(_cropRightBox, UiText.Get(\"ObjectSizing_CropRight\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_cropRightBox, \"PictureCropRightBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_cropRightBox, \"Enter the right crop percentage.\");");
-        source.Should().Contain("AutomationProperties.SetName(_cropBottomBox, \"Crop bottom\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_cropRightBox, UiText.Get(\"ObjectSizing_EnterTheRightCropPercentage\"));");
+        source.Should().Contain("AutomationProperties.SetName(_cropBottomBox, UiText.Get(\"ObjectSizing_CropBottom\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_cropBottomBox, \"PictureCropBottomBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_cropBottomBox, \"Enter the bottom crop percentage.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_cropBottomBox, UiText.Get(\"ObjectSizing_EnterTheBottomCropPercentage\"));");
     }
 
     [Fact]
@@ -491,7 +491,7 @@ public sealed class ObjectDialogTests
         var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class PictureCropDialog", "");
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        source.Should().Contain("error ?? \"Enter four crop percentages.\"");
+        source.Should().Contain("error ?? UiText.Get(\"ObjectSizing_EnterFourCropPercentages\")");
         source.Should().Contain("FocusInvalidCropInput(ResolveInvalidCropInput(error));");
         source.Should().Contain("private TextBox ResolveInvalidCropInput(string? error)");
         source.Should().Contain("return _cropLeftBox;");
@@ -651,14 +651,14 @@ public sealed class ObjectDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextEntryDialogs.cs")));
 
-        source.Should().Contain("Existing File or Web Page");
-        source.Should().Contain("Create New Document");
-        source.Should().Contain("Place in This Document");
-        source.Should().Contain("E-mail Address");
+        source.Should().Contain("UiText.Get(\"Hyperlink_LinkTypeExistingFileOrWebPage\")");
+        source.Should().Contain("UiText.Get(\"Hyperlink_LinkTypeCreateNewDocument\")");
+        source.Should().Contain("UiText.Get(\"Hyperlink_LinkTypePlaceInThisDocument\")");
+        source.Should().Contain("UiText.Get(\"Hyperlink_LinkTypeEmailAddress\")");
         source.Should().Contain("_screenTipButton");
         source.Should().Contain("_bookmarkButton");
-        source.Should().Contain("Content = \"_ScreenTip...\"");
-        source.Should().Contain("Content = \"_Bookmark...\"");
+        source.Should().Contain("Content = UiText.Get(\"Hyperlink_ScreenTip\")");
+        source.Should().Contain("Content = UiText.Get(\"Hyperlink_Bookmark\")");
         source.Should().Contain("ScreenTipDialog");
         source.Should().Contain("BookmarkDialog");
         source.Should().Contain("_screenTipButton.Click +=");
@@ -670,10 +670,10 @@ public sealed class ObjectDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs"));
 
-        source.Should().Contain("new Label { Content = \"Link _to:\", Target = _linkTypes");
-        source.Should().Contain("AutomationProperties.SetName(_linkTypes, \"Link to\");");
+        source.Should().Contain("new Label { Content = UiText.Get(\"Hyperlink_LinkTo\"), Target = _linkTypes");
+        source.Should().Contain("AutomationProperties.SetName(_linkTypes, UiText.Get(\"Hyperlink_LinkTo2\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_linkTypes, \"HyperlinkLinkTypeList\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_linkTypes, \"Choose the kind of hyperlink to insert.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_linkTypes, UiText.Get(\"Hyperlink_ChooseTheKindOfHyperlinkToInsert\"));");
     }
 
     [Fact]
@@ -681,23 +681,23 @@ public sealed class ObjectDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_displayBox, \"Text to display\");");
+        source.Should().Contain("AutomationProperties.SetName(_displayBox, UiText.Get(\"Hyperlink_TextToDisplay\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_displayBox, \"HyperlinkDisplayTextBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_displayBox, \"Enter the text shown in the cell for the hyperlink.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_displayBox, UiText.Get(\"Hyperlink_EnterTheTextShownInTheCellForTheHyperlink\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_targetBox, \"HyperlinkTargetTextBox\");");
         source.Should().Contain("AutomationProperties.SetName(_targetBox, automationName);");
     }
 
     [Theory]
-    [InlineData(0, "_Address:", "Address", "Enter the file path or web page address for the hyperlink.")]
-    [InlineData(1, "Name of new _document:", "Name of new document", "Enter the name of the new document to create.")]
-    [InlineData(2, "Type the cell _reference:", "Cell reference or defined name", "Enter a cell reference or defined name in this workbook.")]
-    [InlineData(3, "_E-mail address:", "E-mail address", "Enter the email address for the hyperlink.")]
+    [InlineData(0, "Hyperlink_Address", "Hyperlink_AddressAutomationName", "Hyperlink_AddressHelpText")]
+    [InlineData(1, "Hyperlink_NewDocumentLabel", "Hyperlink_NewDocumentAutomationName", "Hyperlink_NewDocumentHelpText")]
+    [InlineData(2, "Hyperlink_CellReferenceLabel", "Hyperlink_CellReferenceAutomationName", "Hyperlink_CellReferenceHelpText")]
+    [InlineData(3, "Hyperlink_EmailAddressLabel", "Hyperlink_EmailAddressAutomationName", "Hyperlink_EmailAddressHelpText")]
     public void HyperlinkDialog_TargetFieldTracksSelectedLinkType(
         int selectedIndex,
-        string expectedLabel,
-        string expectedAutomationName,
-        string expectedHelpText)
+        string expectedLabelKey,
+        string expectedAutomationNameKey,
+        string expectedHelpTextKey)
     {
         StaTestRunner.Run(() =>
         {
@@ -710,11 +710,11 @@ public sealed class ObjectDialogTests
 
                 linkTypes.SelectedIndex = selectedIndex;
 
-                targetLabel.Content.Should().Be(expectedLabel);
+                targetLabel.Content.Should().Be(UiText.Get(expectedLabelKey));
                 targetLabel.Target.Should().BeSameAs(targetBox);
-                AutomationProperties.GetName(targetBox).Should().Be(expectedAutomationName);
+                AutomationProperties.GetName(targetBox).Should().Be(UiText.Get(expectedAutomationNameKey));
                 AutomationProperties.GetAutomationId(targetBox).Should().Be("HyperlinkTargetTextBox");
-                AutomationProperties.GetHelpText(targetBox).Should().Be(expectedHelpText);
+                AutomationProperties.GetHelpText(targetBox).Should().Be(UiText.Get(expectedHelpTextKey));
             }
             finally
             {
@@ -728,12 +728,12 @@ public sealed class ObjectDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_screenTipButton, \"Set ScreenTip\");");
+        source.Should().Contain("AutomationProperties.SetName(_screenTipButton, UiText.Get(\"Hyperlink_SetScreenTip\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_screenTipButton, \"HyperlinkScreenTipButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_screenTipButton, \"Set the text shown when pointing to the hyperlink.\");");
-        source.Should().Contain("AutomationProperties.SetName(_bookmarkButton, \"Select place in document\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_screenTipButton, UiText.Get(\"Hyperlink_SetTheTextShownWhenPointingToTheHyperlink\"));");
+        source.Should().Contain("AutomationProperties.SetName(_bookmarkButton, UiText.Get(\"Hyperlink_SelectPlaceInDocument\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_bookmarkButton, \"HyperlinkBookmarkButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_bookmarkButton, \"Choose a bookmark, defined name, or cell reference in this workbook.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_bookmarkButton, UiText.Get(\"Hyperlink_ChooseABookmarkDefinedNameOrCellReferenceInThisWorkbook\"));");
     }
 
     [Fact]
@@ -764,7 +764,7 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
         source.Should().Contain("if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))");
-        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter hyperlink details.\");");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"Hyperlink_EnterHyperlinkDetails\"));");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("_targetBox.Focus();");
         source.Should().Contain("_targetBox.SelectAll();");
