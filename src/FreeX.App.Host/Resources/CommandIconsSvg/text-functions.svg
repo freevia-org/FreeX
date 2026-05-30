@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Text Functions">
+  <rect width="32" height="32" fill="none"/>
+  <text x="11.5" y="23" font-size="20" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">T</text>
+  <path d="M18 11h8M18 16h6M18 21h7" fill="none" stroke="#0F6D8C" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M7 9h10" fill="none" stroke="#8a8a8a" stroke-width="1.4" stroke-linecap="round"/>
+</svg>

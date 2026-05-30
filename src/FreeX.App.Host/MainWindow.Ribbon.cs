@@ -229,23 +229,44 @@ public partial class MainWindow
         stack.Children.Add(chevron);
     }
 
-    private static TextBlock CreateRibbonDropdownChevron(RibbonCommandContentLayout layout)
+    private static FrameworkElement CreateRibbonDropdownChevron(RibbonCommandContentLayout layout)
     {
-        var chevron = new TextBlock
-        {
-            Text = "\uE70D",
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = layout == RibbonCommandContentLayout.IconOnly ? 7 : 8,
-            Width = 10,
-            Height = 8,
-            LineHeight = 8,
-            TextAlignment = TextAlignment.Center,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            IsHitTestVisible = false
-        };
+        var chevron = CreateRibbonChevronGlyph(
+            width: 10,
+            height: 8,
+            brush: BrushFromRgb(31, 31, 31),
+            pointsUp: false);
         RibbonMetadata.SetRole(chevron, RibbonMetadataRole.DropdownChevron);
         return chevron;
+    }
+
+    private static FrameworkElement CreateRibbonChevronGlyph(double width, double height, Brush brush, bool pointsUp)
+    {
+        var path = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse(pointsUp ? "M2,6 L6,2 L10,6" : "M2,2 L6,6 L10,2"),
+            Stroke = brush,
+            StrokeThickness = 1.45,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Fill = Brushes.Transparent,
+            Stretch = Stretch.None,
+            SnapsToDevicePixels = true,
+            IsHitTestVisible = false
+        };
+
+        return new Viewbox
+        {
+            Width = width,
+            Height = height,
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Child = path,
+            IsHitTestVisible = false,
+            SnapsToDevicePixels = true
+        };
     }
 
     private void EnsureRibbonDropdownZoneHandler(ButtonBase button)
@@ -1605,18 +1626,21 @@ public partial class MainWindow
     private static (Brush? SlotBackground, Brush? SlotBorder, Brush GlyphBrush) GetRibbonIconAccentBrushes(
         RibbonCommandIconAccent accent)
     {
+        static (Brush? SlotBackground, Brush? SlotBorder, Brush GlyphBrush) Glyph(byte r, byte g, byte b) =>
+            (Brushes.Transparent, null, BrushFromRgb(r, g, b));
+
         return accent switch
         {
-            RibbonCommandIconAccent.Green => (BrushFromRgb(230, 246, 250), BrushFromRgb(15, 109, 140), BrushFromRgb(23, 50, 77)),
-            RibbonCommandIconAccent.Chart => (BrushFromRgb(232, 241, 252), BrushFromRgb(68, 114, 196), BrushFromRgb(47, 84, 150)),
-            RibbonCommandIconAccent.Data => (BrushFromRgb(229, 243, 250), BrushFromRgb(0, 120, 170), BrushFromRgb(0, 92, 135)),
-            RibbonCommandIconAccent.Theme => (BrushFromRgb(241, 236, 250), BrushFromRgb(112, 48, 160), BrushFromRgb(85, 35, 125)),
-            RibbonCommandIconAccent.Fill => (BrushFromRgb(255, 248, 218), BrushFromRgb(191, 144, 0), BrushFromRgb(116, 88, 0)),
-            RibbonCommandIconAccent.Color => (BrushFromRgb(255, 235, 235), BrushFromRgb(192, 0, 0), BrushFromRgb(150, 0, 0)),
-            RibbonCommandIconAccent.Border => (BrushFromRgb(245, 245, 245), BrushFromRgb(96, 96, 96), BrushFromRgb(31, 31, 31)),
-            RibbonCommandIconAccent.Warning => (BrushFromRgb(255, 244, 214), BrushFromRgb(214, 157, 0), BrushFromRgb(138, 91, 0)),
-            RibbonCommandIconAccent.Protect => (BrushFromRgb(230, 246, 250), BrushFromRgb(15, 109, 140), BrushFromRgb(23, 50, 77)),
-            RibbonCommandIconAccent.Help => (BrushFromRgb(235, 242, 255), BrushFromRgb(68, 114, 196), BrushFromRgb(47, 84, 150)),
+            RibbonCommandIconAccent.Green => Glyph(23, 50, 77),
+            RibbonCommandIconAccent.Chart => Glyph(47, 84, 150),
+            RibbonCommandIconAccent.Data => Glyph(0, 92, 135),
+            RibbonCommandIconAccent.Theme => Glyph(85, 35, 125),
+            RibbonCommandIconAccent.Fill => Glyph(116, 88, 0),
+            RibbonCommandIconAccent.Color => Glyph(150, 0, 0),
+            RibbonCommandIconAccent.Border => Glyph(31, 31, 31),
+            RibbonCommandIconAccent.Warning => Glyph(138, 91, 0),
+            RibbonCommandIconAccent.Protect => Glyph(23, 50, 77),
+            RibbonCommandIconAccent.Help => Glyph(47, 84, 150),
             _ => (Brushes.Transparent, null, Brushes.Black)
         };
     }

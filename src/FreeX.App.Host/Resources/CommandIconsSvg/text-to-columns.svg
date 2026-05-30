@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Text to Columns">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><text x="13.5" y="29.16" font-size="16.2" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">A</text><path stroke="#0F6D8C" stroke-width="1.8" d="M27 10.8v32.4"/><text x="32.4" y="25.92" font-size="10.8" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">A</text><text x="32.4" y="37.8" font-size="10.8" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle" dominant-baseline="central">B</text>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Text to Columns">
+  <rect width="32" height="32" fill="none"/>
+  <text x="9.5" y="20" font-size="14" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">A</text>
+  <path d="M16 6.5v19" fill="none" stroke="#0F6D8C" stroke-width="1.7" stroke-linecap="round"/>
+  <text x="22" y="15" font-size="9.5" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">A</text>
+  <text x="22" y="25" font-size="9.5" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">B</text>
 </svg>
-
