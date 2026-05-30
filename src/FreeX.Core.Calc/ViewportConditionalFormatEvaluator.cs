@@ -217,7 +217,7 @@ internal static class ViewportConditionalFormatEvaluator
 
             double sum = 0, min = double.MaxValue, max = double.MinValue;
             int count = 0;
-            List<(CellAddress Address, double Value)>? rankedValues =
+            List<(CellAddress Address, double Value, int Index)>? rankedValues =
                 cf.RuleType == CfRuleType.Top10 ? [] : null;
             Dictionary<string, int>? valueCounts =
                 cf.RuleType is CfRuleType.DuplicateValues or CfRuleType.UniqueValues
@@ -236,8 +236,8 @@ internal static class ViewportConditionalFormatEvaluator
                     sum += x;
                     if (x < min) min = x;
                     if (x > max) max = x;
+                    rankedValues?.Add((a, x, count));
                     count++;
-                    rankedValues?.Add((a, x));
                 }
             }
 
@@ -255,7 +255,7 @@ internal static class ViewportConditionalFormatEvaluator
 
     private static IReadOnlySet<CellAddress>? ResolveTopBottomMatches(
         ConditionalFormat cf,
-        IReadOnlyList<(CellAddress Address, double Value)>? rankedValues)
+        List<(CellAddress Address, double Value, int Index)>? rankedValues)
     {
         if (cf.RuleType != CfRuleType.Top10 || rankedValues is null || rankedValues.Count == 0)
             return null;
@@ -266,12 +266,23 @@ internal static class ViewportConditionalFormatEvaluator
                 : cf.TopBottomRank,
             1,
             rankedValues.Count);
-        var ordered = cf.AboveAverage
-            ? rankedValues.OrderByDescending(item => item.Value)
-            : rankedValues.OrderBy(item => item.Value);
-        return ordered.Take(take)
-            .Select(item => item.Address)
-            .ToHashSet();
+        rankedValues.Sort(cf.AboveAverage
+            ? static (left, right) =>
+            {
+                var valueOrder = right.Value.CompareTo(left.Value);
+                return valueOrder != 0 ? valueOrder : left.Index.CompareTo(right.Index);
+            }
+            : static (left, right) =>
+            {
+                var valueOrder = left.Value.CompareTo(right.Value);
+                return valueOrder != 0 ? valueOrder : left.Index.CompareTo(right.Index);
+            });
+
+        var result = new HashSet<CellAddress>(take);
+        for (var i = 0; i < take; i++)
+            result.Add(rankedValues[i].Address);
+
+        return result;
     }
 
     private static IEnumerable<(CellAddress Address, ScalarValue Value)> EnumerateAggregateValues(
