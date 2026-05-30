@@ -7,6 +7,52 @@ namespace FreeX.App.Host.Tests;
 public sealed class WorkbookThemeWorkflowTests
 {
     [Fact]
+    public void WorkbookThemeCatalog_ExposesPageLayoutThemePresetDepth()
+    {
+        WorkbookThemeCatalog.ThemePresets.Select(option => option.Label)
+            .Should().Equal("Office", "FreeX Colorful", "Grayscale", "Customize...");
+
+        WorkbookThemeCatalog.ColorPresets.Select(option => option.Label)
+            .Should().Equal("Office", "FreeX Colorful", "Grayscale", "Customize Colors...");
+
+        WorkbookThemeCatalog.FontPresets.Select(option => (option.Label, option.MajorFontName, option.MinorFontName))
+            .Should().Equal(
+                ("Office", "Aptos Display", "Aptos"),
+                ("Arial", "Arial", "Arial"),
+                ("Times New Roman", "Times New Roman", "Times New Roman"),
+                ("Customize Fonts...", "Aptos Display", "Aptos"));
+
+        WorkbookThemeCatalog.EffectPresets.Select(option => (option.Label, option.EffectsName))
+            .Should().Equal(
+                ("Office", "Office"),
+                ("Subtle", "Subtle"),
+                ("Refined", "Refined"),
+                ("Customize Effects...", "Office"));
+    }
+
+    [Fact]
+    public void WorkbookThemeCatalog_PresetsApplyExistingWorkflowBehavior()
+    {
+        WorkbookThemeCatalog.ThemePresets.Single(option => option.Label == "FreeX Colorful")
+            .CreateTheme()
+            .GetColor(WorkbookThemeColorSlot.Accent2)
+            .Should().Be(new CellColor(233, 113, 50));
+
+        var customNamedTheme = WorkbookTheme.Office.WithName("Keep Name");
+        WorkbookThemeCatalog.ColorPresets.Single(option => option.Label == "Grayscale")
+            .ApplyColors(customNamedTheme)
+            .Name.Should().Be("Keep Name");
+
+        WorkbookThemeCatalog.FontPresets.Single(option => option.Label == "Times New Roman")
+            .Should().Match<WorkbookThemeFontPresetOption>(option =>
+                option.MajorFontName == "Times New Roman" &&
+                option.MinorFontName == "Times New Roman");
+
+        WorkbookThemeCatalog.EffectPresets.Single(option => option.Label == "Refined")
+            .EffectsName.Should().Be("Refined");
+    }
+
+    [Fact]
     public void CreateColorfulTheme_UsesNamedThemeFontsEffectsAndPalette()
     {
         var theme = WorkbookThemeWorkflow.CreateColorfulTheme();

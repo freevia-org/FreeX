@@ -34,6 +34,14 @@ public sealed class RibbonRuntimeCatalogPlannerTests
             .Should()
             .Equal("Themes", "Colors", "Fonts", "Effects");
 
+        Surface(surfaces, "Themes").Groups.Select(group => (group.Name, Items: string.Join("|", group.Items)))
+            .Should()
+            .Equal(
+                ("Themes", "Office|FreeX Colorful|Grayscale|Customize..."),
+                ("Colors", "Office|FreeX Colorful|Grayscale|Customize Colors..."),
+                ("Fonts", "Office|Arial|Times New Roman|Customize Fonts..."),
+                ("Effects", "Office|Subtle|Refined|Customize Effects..."));
+
         Surface(surfaces, "PivotTable Styles").Groups.Select(group => (group.Name, group.Items.Count))
             .Should()
             .Equal(("Light", 28), ("Medium", 28), ("Dark", 28));
@@ -65,6 +73,12 @@ public sealed class RibbonRuntimeCatalogPlannerTests
         Surface(surfaces, "Number Format Dropdown").ItemCount.Should()
             .Be(HomeNumberFormatDropdownPlanner.Options.Count);
         Surface(surfaces, "Conditional Formatting Icon Sets").ItemCount.Should().Be(ConditionalFormatIconSetPlanner.Options.Count);
+        Surface(surfaces, "Themes").ItemCount.Should().Be(
+            WorkbookThemeCatalog.ThemePresets.Count +
+            WorkbookThemeCatalog.ColorPresets.Count +
+            WorkbookThemeCatalog.FontPresets.Count +
+            WorkbookThemeCatalog.EffectPresets.Count);
+        Surface(surfaces, "Themes").Source.Should().Be(nameof(WorkbookThemeCatalog));
         Surface(surfaces, "PivotTable Styles").ItemCount.Should().Be(PivotStyleCatalog.BuiltInStyleNames.Length);
     }
 
