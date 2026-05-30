@@ -8,6 +8,7 @@ internal static class RibbonAdaptiveTabProfiles
     [
         new(
             Name: "Home",
+            CatalogId: "HomeTab",
             RequiredGroups: ["Clipboard", "Font", "Alignment", "Number"],
             Defaults: [],
             Breakpoints:
@@ -18,6 +19,7 @@ internal static class RibbonAdaptiveTabProfiles
             ]),
         new(
             Name: "Insert",
+            CatalogId: "InsertTab",
             RequiredGroups: ["Tables", "Illustrations"],
             Defaults:
             [
@@ -49,6 +51,7 @@ internal static class RibbonAdaptiveTabProfiles
             RequiresMeasuredCorrection: true),
         new(
             Name: "Formulas",
+            CatalogId: "FormulasTab",
             RequiredGroups: ["Function Library", "Formula Auditing"],
             Defaults:
             [
@@ -95,6 +98,7 @@ internal static class RibbonAdaptiveTabProfiles
             RequiresMeasuredCorrection: true),
         new(
             Name: "Page Layout",
+            CatalogId: "PageLayoutTab",
             RequiredGroups: ["Themes", "Page Setup"],
             Defaults:
             [
@@ -111,6 +115,7 @@ internal static class RibbonAdaptiveTabProfiles
             ]),
         new(
             Name: "Review",
+            CatalogId: "ReviewTab",
             RequiredGroups: ["Proofing", "Accessibility", "Comments"],
             Defaults: [],
             Breakpoints:
@@ -121,6 +126,7 @@ internal static class RibbonAdaptiveTabProfiles
             DisablePriorityExpansion: true),
         new(
             Name: "View",
+            CatalogId: "ViewTab",
             RequiredGroups: ["Workbook Views", "Show", "Window"],
             Defaults:
             [
@@ -136,6 +142,7 @@ internal static class RibbonAdaptiveTabProfiles
             RequiresMeasuredCorrection: true),
         new(
             Name: "Draw",
+            CatalogId: "DrawTab",
             RequiredGroups: ["Tools", "Pens", "Convert"],
             Defaults: [],
             Breakpoints:
@@ -147,6 +154,7 @@ internal static class RibbonAdaptiveTabProfiles
             RequiresMeasuredCorrection: true),
         new(
             Name: "Tiny",
+            CatalogId: "HelpTab",
             RequiredGroups: [],
             Defaults: [],
             Breakpoints: [],
@@ -392,15 +400,55 @@ internal static class RibbonAdaptiveTabProfiles
             states[i] = RibbonAdaptiveGroupState.Collapsed;
     }
 
-    private static readonly IReadOnlyDictionary<string, string> DataGroupCatalogIds =
-        new Dictionary<string, string>(StringComparer.Ordinal)
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> GroupCatalogIds =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
         {
-            ["Get & Transform Data"] = "DataGetTransformGroup",
-            ["Queries & Connections"] = "DataQueriesConnectionsGroup",
-            ["Sort & Filter"] = "DataSortFilterGroup",
-            ["Data Tools"] = "DataToolsGroup",
-            ["Forecast"] = "DataForecastGroup",
-            ["Outline"] = "DataOutlineGroup"
+            ["Clipboard"] = ["HomeClipboardGroup"],
+            ["Font"] = ["HomeFontGroup"],
+            ["Alignment"] = ["HomeAlignmentGroup"],
+            ["Number"] = ["HomeNumberGroup"],
+            ["Styles"] = ["HomeStylesGroup"],
+            ["Cells"] = ["HomeCellsGroup"],
+            ["Editing"] = ["HomeEditingGroup"],
+            ["Tables"] = ["InsertTablesGroup"],
+            ["Illustrations"] = ["InsertIllustrationsGroup"],
+            ["Charts"] = ["InsertChartsGroup"],
+            ["Sparklines"] = ["InsertSparklinesGroup"],
+            ["Filters"] = ["InsertFiltersGroup"],
+            ["Links"] = ["InsertLinksGroup"],
+            ["Comments"] = ["InsertCommentsGroup", "ReviewCommentsGroup"],
+            ["Text"] = ["InsertTextGroup"],
+            ["Symbols"] = ["InsertSymbolsGroup"],
+            ["Tools"] = ["DrawToolsGroup", "PivotTableAnalyzeToolsGroup"],
+            ["Pens"] = ["DrawPensGroup"],
+            ["Convert"] = ["DrawConvertGroup"],
+            ["Arrange"] = ["DrawArrangeGroup", "PageLayoutArrangeGroup"],
+            ["Format"] = ["DrawFormatGroup"],
+            ["Themes"] = ["PageLayoutThemesGroup"],
+            ["Page Setup"] = ["PageLayoutPageSetupGroup"],
+            ["Scale to Fit"] = ["PageLayoutScaleToFitGroup"],
+            ["Sheet Options"] = ["PageLayoutSheetOptionsGroup"],
+            ["Function Library"] = ["FormulasFunctionLibraryGroup"],
+            ["Defined Names"] = ["FormulasDefinedNamesGroup"],
+            ["Formula Auditing"] = ["FormulasFormulaAuditingGroup"],
+            ["Calculation"] = ["FormulasCalculationGroup"],
+            ["Get & Transform Data"] = ["DataGetTransformGroup"],
+            ["Queries & Connections"] = ["DataQueriesConnectionsGroup"],
+            ["Sort & Filter"] = ["DataSortFilterGroup"],
+            ["Data Tools"] = ["DataToolsGroup"],
+            ["Forecast"] = ["DataForecastGroup"],
+            ["Outline"] = ["DataOutlineGroup"],
+            ["Proofing"] = ["ReviewProofingGroup"],
+            ["Accessibility"] = ["ReviewAccessibilityGroup"],
+            ["Notes"] = ["ReviewNotesGroup"],
+            ["Protect"] = ["ReviewProtectGroup"],
+            ["Workbook Views"] = ["ViewWorkbookViewsGroup"],
+            ["Show"] = ["ViewShowGroup", "PivotTableAnalyzeShowGroup"],
+            ["Zoom"] = ["ViewZoomGroup"],
+            ["Window"] = ["ViewWindowGroup"],
+            ["Help"] = ["HelpHelpGroup"],
+            ["PivotTable"] = ["PivotTableAnalyzePivotTableGroup"],
+            ["Layout"] = ["PivotTableDesignLayoutGroup"]
         };
 
     private static bool ContainsGroup(IReadOnlyList<string> groupNames, string groupName) =>
@@ -426,8 +474,8 @@ internal static class RibbonAdaptiveTabProfiles
 
     private static bool IsGroupKeyMatch(string candidate, string profileGroupName) =>
         string.Equals(candidate, profileGroupName, StringComparison.Ordinal) ||
-        (DataGroupCatalogIds.TryGetValue(profileGroupName, out var dataCatalogId) &&
-            string.Equals(candidate, dataCatalogId, StringComparison.Ordinal));
+        (GroupCatalogIds.TryGetValue(profileGroupName, out var catalogIds) &&
+            catalogIds.Contains(candidate, StringComparer.Ordinal));
 
     private sealed record RibbonAdaptiveTabProfile(
         string Name,
