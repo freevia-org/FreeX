@@ -55,6 +55,32 @@ public class DependencyGraphTests
     }
 
     [Fact]
+    public void RecalcEngine_ReturnsSharedEmptyReportForChangedValueCellsWithoutDependents()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
+        var afterPlan = source[
+            source.IndexOf("var plan = _graph.GetRecalcOrder(changedForTraversal);", StringComparison.Ordinal)..
+            source.IndexOf("var recalculated = new List<CellAddress>();", StringComparison.Ordinal)];
+
+        afterPlan.Should().Contain("plan.OrderedCells.Count == 0");
+        afterPlan.Should().Contain("plan.CyclicCells.Count == 0");
+        afterPlan.Should().Contain("_volatileCells.Count == 0");
+        afterPlan.Should().Contain("!HasChangedFormulaCells(workbook, changedCells)");
+        afterPlan.Should().Contain("return EmptyReport;");
+        source.Should().Contain("private static bool HasChangedFormulaCells");
+        source.Should().NotContain("changedCells.Where");
+
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new NumberValue(42));
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+
+        engine.Recalculate(workbook, [a1]).Should().BeSameAs(engine.Recalculate(workbook, [a1]));
+    }
+
+    [Fact]
     public void DependencyGraph_ReturnsSharedEmptyPlanWhenChangedCellsHaveNoDependents()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
