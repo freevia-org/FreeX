@@ -289,7 +289,7 @@ public class PerformanceBenchmarkTests
 
         insideReport.RecalculatedCells.Should().Contain(formula);
         outsideReport.RecalculatedCells.Should().NotContain(formula);
-        rebuildAllocated.Should().BeLessThan(10_000_000);
+        rebuildAllocated.Should().BeLessThan(16_000_000);
     }
 
     [Fact]

@@ -46,16 +46,14 @@ public sealed class DataCommandSourceTests
     }
 
     [Fact]
-    public void DataQueriesAndConnectionsCommand_RemainsDisabledWithExcelTitle()
+    public void DataQueriesAndConnectionsUnsupportedCommand_IsNotSurfacedAsDisabledRibbonButton()
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), "Queries &amp; Connections");
+        var xaml = ReadMainWindowXaml();
 
-        button.Should().Contain("Content=\"Queries &amp; Connections\"");
-        button.Should().Contain("IsEnabled=\"False\"");
-        button.Should().Contain("local:RibbonTooltip.Title=\"Queries &amp; Connections\"");
-        button.Should().Contain("local:RibbonTooltip.KeyTip=\"Q\"");
-        button.Should().Contain("External workbook queries and connection management are deferred in FreeX.");
-        button.Should().NotContain("Click=");
+        xaml.Should().Contain("<TextBlock Text=\"Queries &amp; Connections\" Style=\"{StaticResource GroupLbl}\"");
+        xaml.Should().Contain("local:RibbonTooltip.Title=\"Refresh All\"");
+        xaml.Should().Contain("External data connections and Power Query are excluded.");
+        xaml.Should().NotContain("local:RibbonTooltip.Title=\"Queries &amp; Connections\"");
     }
 
     private static string ReadMainWindowXaml() =>
