@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Use in Formula">
   <rect width="32" height="32" fill="none"/>
-  <text x="10.5" y="22.5" font-size="19" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">fx</text>
-  <path d="M18 9h8M18 14h6M18 19h8" fill="none" stroke="#0F6D8C" stroke-width="1.8" stroke-linecap="round"/>
-  <path d="M18 24h5m-2.3-2.4L23 24l-2.3 2.4" fill="none" stroke="#242424" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="10.5" y="21.5" font-size="17" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">fx</text>
+  <rect x="18.5" y="8.5" width="8" height="12" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1.5"/>
+  <path d="M18.5 12.5h8M22.5 8.5v12" fill="none" stroke="#8a8a8a" stroke-width="1"/>
+  <path d="M15.5 24.5h8M20.5 21.5l3 3l-3 3" fill="none" stroke="#0F6D8C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

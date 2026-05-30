@@ -4,6 +4,6 @@
     <rect x="7" y="8" width="18" height="16" rx="1.5"/>
     <path d="M7 13h18M12 8v16"/>
   </g>
-  <text x="16" y="11.2" font-family="Segoe UI, Arial, sans-serif" font-size="5.2" font-weight="700" text-anchor="middle" fill="#242424">A</text>
-  <text x="9.5" y="19" font-family="Segoe UI, Arial, sans-serif" font-size="5.2" font-weight="700" text-anchor="middle" fill="#242424">1</text>
+  <text x="16" y="12" font-family="Segoe UI, Arial, sans-serif" font-size="7.8" font-weight="700" text-anchor="middle" fill="#242424">A</text>
+  <text x="9.5" y="20" font-family="Segoe UI, Arial, sans-serif" font-size="7.8" font-weight="700" text-anchor="middle" fill="#242424">1</text>
 </svg>

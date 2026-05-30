@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="3D Bar Chart">
+  <rect width="32" height="32" fill="none"/>
+  <path d="M7.5 24V7M7 24.5h19" fill="none" stroke="#242424" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M9 10h12v4H9zM21 10l2-2v4l-2 2zM9 10l2-2h12" fill="#5b9bd5" stroke="#242424" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M9 18h16v4H9zM25 18l2-2v4l-2 2zM9 18l2-2h16" fill="#ed7d31" stroke="#242424" stroke-width="1" stroke-linejoin="round"/>
+</svg>
