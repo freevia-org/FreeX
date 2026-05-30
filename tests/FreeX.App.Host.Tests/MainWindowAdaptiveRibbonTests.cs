@@ -329,7 +329,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Zoom", harness.DebugActiveRibbonChildren);
             harness.VisibleViewShowCheckBoxLabels.Should().Contain(
                 ["Gridlines", "Headings", "Formula Bar"],
-                "Excel keeps the Show checkbox group visible at medium workbook widths before collapsing Macros");
+                "Excel keeps the Show checkbox group visible at medium workbook widths before collapsing lower-priority view groups");
         });
     }
 

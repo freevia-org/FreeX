@@ -29,10 +29,10 @@ internal static class RibbonAdaptiveTabProfiles
                 Rule(
                     1120,
                     states: [State("Tables", RibbonAdaptiveGroupState.SmallWithLabels)],
-                    collapseGroups: ["Add-ins", "Tours", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments"]),
+                    collapseGroups: ["Sparklines", "Filters", "Links", "Text", "Symbols", "Comments"]),
                 Rule(
                     1320,
-                    collapseGroups: ["Add-ins", "Tours", "Sparklines", "Filters", "Links", "Text", "Symbols", "Comments"])
+                    collapseGroups: ["Sparklines", "Filters", "Links", "Text", "Symbols", "Comments"])
             ],
             RuntimeStates:
             [
@@ -62,7 +62,7 @@ internal static class RibbonAdaptiveTabProfiles
             RequiresMeasuredCorrection: true),
         new(
             Name: "Data",
-            RequiredGroups: ["Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools"],
+            RequiredGroups: ["Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools"],
             Defaults:
             [
                 State("Get & Transform Data", RibbonAdaptiveGroupState.Full),
@@ -75,10 +75,10 @@ internal static class RibbonAdaptiveTabProfiles
                 Rule(
                     1120,
                     states: [State("Sort & Filter", RibbonAdaptiveGroupState.IconOnly)],
-                    collapseGroups: ["Queries & Connections", "Data Types", "Outline"]),
+                    collapseGroups: ["Queries & Connections", "Outline"]),
                 Rule(
                     1320,
-                    collapseGroups: ["Data Types", "Outline"])
+                    collapseGroups: ["Outline"])
             ],
             RuntimeVisibility:
             [
@@ -125,12 +125,11 @@ internal static class RibbonAdaptiveTabProfiles
                 State("Workbook Views", RibbonAdaptiveGroupState.Full),
                 State("Show", RibbonAdaptiveGroupState.Full),
                 State("Zoom", RibbonAdaptiveGroupState.Full),
-                State("Window", RibbonAdaptiveGroupState.Full),
-                State("Macros", RibbonAdaptiveGroupState.Collapsed)
+                State("Window", RibbonAdaptiveGroupState.Full)
             ],
             Breakpoints:
             [
-                Rule(760, collapseGroups: ["Show", "Macros"])
+                Rule(760, collapseGroups: ["Show"])
             ],
             RequiresMeasuredCorrection: true),
         new(

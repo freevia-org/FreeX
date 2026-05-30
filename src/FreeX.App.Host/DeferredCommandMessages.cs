@@ -7,57 +7,57 @@ public static class DeferredCommandMessages
     public static DeferredCommandMessage WorkbookTheme(string commandName) =>
         new(
             commandName,
-            $"{commandName} is deferred until FreeX has a workbook theme model. It is tracked as a documented parity gap, not a silent partial implementation.");
+            UiText.Format("DeferredCommand_WorkbookTheme_Body", commandName));
 
     public static DeferredCommandMessage MultiWindow(string commandName) =>
         new(
             commandName,
-            $"{commandName} is deferred until FreeX has multi-window workbook hosting. It is tracked as a documented parity gap, not a silent partial implementation.");
+            UiText.Format("DeferredCommand_MultiWindow_Body", commandName));
 
     public static DeferredCommandMessage OnlineTemplatesExcluded() =>
         new(
-            "Online Templates",
-            "Online template discovery depends on an external Microsoft template service and is excluded from FreeX. Create a blank workbook or open a local template file instead.");
+            UiText.Get("DeferredCommand_OnlineTemplates_Title"),
+            UiText.Get("DeferredCommand_OnlineTemplates_Body"));
 
     public static DeferredCommandMessage LocalAccountInfo() =>
         new(
-            "Account",
-            "Microsoft account integration is not implemented in FreeX. Workbooks are local files; use Options for local app settings and your normal file-system workflow for identity, storage, and sharing.");
+            UiText.Get("DeferredCommand_LocalAccount_Title"),
+            UiText.Get("DeferredCommand_LocalAccount_Body"));
 
     public static DeferredCommandMessage PivotTableModelFirst() =>
         new(
-            "PivotTable",
-            "FreeX loads and saves PivotTable and pivot caches metadata, including external/OLAP cache source metadata, creates and refreshes worksheet-range PivotTables from same-sheet or cross-sheet sources, supports Field List layout editing, GETPIVOTDATA, PivotChart field-button filtering and chart-type changes, Insert Slicer/Timeline authoring, slicer/timeline filtering, and preserves native PivotTable package parts where possible. Exact full-gallery PivotStyle theme semantics, full PivotChart Tools layout/design editing, and external/OLAP/data-model refresh or execution remain partial or excluded.");
+            UiText.Get("DeferredCommand_PivotTable_Title"),
+            UiText.Get("DeferredCommand_PivotTable_Body"));
 
     public static DeferredCommandMessage AutoCorrectOptions() =>
         new(
-            "AutoCorrect Options",
-            "AutoCorrect replacement dictionaries are not implemented in FreeX. Proofing options shown here are informational until a local spelling and replacement dictionary model exists.");
+            UiText.Get("DeferredCommand_AutoCorrectOptions_Title"),
+            UiText.Get("DeferredCommand_AutoCorrectOptions_Body"));
 
     public static DeferredCommandMessage EditingLanguages() =>
         new(
-            "Editing Languages",
-            "Editing language installation and Office language packs are not implemented in FreeX. FreeX uses the local app culture and workbook content as-is.");
+            UiText.Get("DeferredCommand_EditingLanguages_Title"),
+            UiText.Get("DeferredCommand_EditingLanguages_Body"));
 
     public static DeferredCommandMessage RibbonCustomizationImportExport() =>
         new(
-            "Ribbon Customization",
-            "Custom ribbon import/export is not implemented in FreeX. Custom Ribbon UI package parts are retained as unsupported XLSX metadata where safe, but FreeX does not run or edit them.");
+            UiText.Get("DeferredCommand_RibbonCustomization_Title"),
+            UiText.Get("DeferredCommand_RibbonCustomization_Body"));
 
     public static DeferredCommandMessage QuickAccessToolbarReset() =>
         new(
-            "Quick Access Toolbar",
-            "Quick Access Toolbar customization is not persisted in FreeX yet, so there is no custom toolbar state to reset.");
+            UiText.Get("DeferredCommand_QuickAccessToolbar_Title"),
+            UiText.Get("DeferredCommand_QuickAccessToolbar_Body"));
 
     public static DeferredCommandMessage OfficeAddIns() =>
         new(
-            "Office Add-ins",
-            "Office add-ins are excluded from FreeX. Add-in package metadata may be detected and retained, but add-ins are not installed, loaded, or executed.");
+            UiText.Get("DeferredCommand_OfficeAddIns_Title"),
+            UiText.Get("DeferredCommand_OfficeAddIns_Body"));
 
     public static DeferredCommandMessage TrustCenterSettings() =>
         new(
-            "Trust Center",
-            "Trust Center policy settings are informational in FreeX because FreeX does not execute VBA macros, Office add-ins, ActiveX controls, Power Query, or external data-model refresh.");
+            UiText.Get("DeferredCommand_TrustCenter_Title"),
+            UiText.Get("DeferredCommand_TrustCenter_Body"));
 
     public static DeferredCommandMessage UnsupportedXlsxFeatureSaveWarning(XlsxFeatureReport report)
     {
@@ -67,9 +67,11 @@ public static class DeferredCommandMessages
             FormatUnsupportedXlsxFeatureList(report));
 
         return new(
-            "Unsupported XLSX Features",
-            "This workbook contains features FreeX retains as opaque package parts, but does not run, render, author, or deeply edit: " +
-            $"{featureList}.{DigitalSignatureWarning(report)}\n\nContinue saving?");
+            UiText.Get("DeferredCommand_UnsupportedXlsxFeatureSaveWarning_Title"),
+            UiText.Format(
+                "DeferredCommand_UnsupportedXlsxFeatureSaveWarning_Body",
+                featureList,
+                DigitalSignatureWarning(report)));
     }
 
     public static DeferredCommandMessage UnsupportedXlsxFeatureOpenWarning(XlsxFeatureReport report)
@@ -80,33 +82,34 @@ public static class DeferredCommandMessages
             FormatUnsupportedXlsxFeatureList(report));
 
         return new(
-            "Unsupported XLSX Features Detected",
-            "FreeX opened this workbook, but it contains unsupported or excluded XLSX features: " +
-            $"{featureList}. These features are retained as opaque package parts where safe, but will not be executed, refreshed, rendered, or edited by FreeX." +
-            DigitalSignatureWarning(report));
+            UiText.Get("DeferredCommand_UnsupportedXlsxFeatureOpenWarning_Title"),
+            UiText.Format(
+                "DeferredCommand_UnsupportedXlsxFeatureOpenWarning_Body",
+                featureList,
+                DigitalSignatureWarning(report)));
     }
 
     public static string FormatUnsupportedXlsxFeatureKind(XlsxUnsupportedFeatureKind kind) => kind switch
     {
-        XlsxUnsupportedFeatureKind.Macros => "VBA macros (excluded)",
-        XlsxUnsupportedFeatureKind.Charts => "XLSX chart package parts",
-        XlsxUnsupportedFeatureKind.EmbeddedObjects => "embedded objects",
-        XlsxUnsupportedFeatureKind.CustomXmlParts => "custom XML parts",
-        XlsxUnsupportedFeatureKind.ConditionalFormats => "unsupported conditional formatting",
-        XlsxUnsupportedFeatureKind.DrawingObjects => "drawing objects",
-        XlsxUnsupportedFeatureKind.PowerQuery => "Power Query queries (excluded)",
-        XlsxUnsupportedFeatureKind.DataModel => "Data Model / Power Pivot (excluded)",
-        XlsxUnsupportedFeatureKind.LinkedDataTypes => "Microsoft linked data types (excluded)",
-        XlsxUnsupportedFeatureKind.ThreadedComments => "threaded comments",
-        XlsxUnsupportedFeatureKind.TrackChanges => "track changes / revision history",
-        XlsxUnsupportedFeatureKind.FormControls => "form controls / ActiveX controls",
-        XlsxUnsupportedFeatureKind.DigitalSignatures => "digital signatures",
-        XlsxUnsupportedFeatureKind.CustomRibbonUi => "custom ribbon UI",
-        XlsxUnsupportedFeatureKind.OfficeAddIns => "Office add-ins",
-        XlsxUnsupportedFeatureKind.LiveWebQueries => "live web queries / web publishing",
-        XlsxUnsupportedFeatureKind.SensitivityLabels => "sensitivity labels / IRM metadata",
-        XlsxUnsupportedFeatureKind.SmartArtDiagrams => "SmartArt diagrams",
-        XlsxUnsupportedFeatureKind.UnsupportedSheetTypes => "chart sheets / dialog sheets / macro sheets",
+        XlsxUnsupportedFeatureKind.Macros => UiText.Get("UnsupportedXlsxFeatureKind_Macros"),
+        XlsxUnsupportedFeatureKind.Charts => UiText.Get("UnsupportedXlsxFeatureKind_Charts"),
+        XlsxUnsupportedFeatureKind.EmbeddedObjects => UiText.Get("UnsupportedXlsxFeatureKind_EmbeddedObjects"),
+        XlsxUnsupportedFeatureKind.CustomXmlParts => UiText.Get("UnsupportedXlsxFeatureKind_CustomXmlParts"),
+        XlsxUnsupportedFeatureKind.ConditionalFormats => UiText.Get("UnsupportedXlsxFeatureKind_ConditionalFormats"),
+        XlsxUnsupportedFeatureKind.DrawingObjects => UiText.Get("UnsupportedXlsxFeatureKind_DrawingObjects"),
+        XlsxUnsupportedFeatureKind.PowerQuery => UiText.Get("UnsupportedXlsxFeatureKind_PowerQuery"),
+        XlsxUnsupportedFeatureKind.DataModel => UiText.Get("UnsupportedXlsxFeatureKind_DataModel"),
+        XlsxUnsupportedFeatureKind.LinkedDataTypes => UiText.Get("UnsupportedXlsxFeatureKind_LinkedDataTypes"),
+        XlsxUnsupportedFeatureKind.ThreadedComments => UiText.Get("UnsupportedXlsxFeatureKind_ThreadedComments"),
+        XlsxUnsupportedFeatureKind.TrackChanges => UiText.Get("UnsupportedXlsxFeatureKind_TrackChanges"),
+        XlsxUnsupportedFeatureKind.FormControls => UiText.Get("UnsupportedXlsxFeatureKind_FormControls"),
+        XlsxUnsupportedFeatureKind.DigitalSignatures => UiText.Get("UnsupportedXlsxFeatureKind_DigitalSignatures"),
+        XlsxUnsupportedFeatureKind.CustomRibbonUi => UiText.Get("UnsupportedXlsxFeatureKind_CustomRibbonUi"),
+        XlsxUnsupportedFeatureKind.OfficeAddIns => UiText.Get("UnsupportedXlsxFeatureKind_OfficeAddIns"),
+        XlsxUnsupportedFeatureKind.LiveWebQueries => UiText.Get("UnsupportedXlsxFeatureKind_LiveWebQueries"),
+        XlsxUnsupportedFeatureKind.SensitivityLabels => UiText.Get("UnsupportedXlsxFeatureKind_SensitivityLabels"),
+        XlsxUnsupportedFeatureKind.SmartArtDiagrams => UiText.Get("UnsupportedXlsxFeatureKind_SmartArtDiagrams"),
+        XlsxUnsupportedFeatureKind.UnsupportedSheetTypes => UiText.Get("UnsupportedXlsxFeatureKind_UnsupportedSheetTypes"),
         _ => kind.ToString()
     };
 
@@ -118,7 +121,7 @@ public static class DeferredCommandMessages
 
     private static string DigitalSignatureWarning(XlsxFeatureReport report) =>
         report.Features.Any(feature => feature.Kind == XlsxUnsupportedFeatureKind.DigitalSignatures)
-            ? " Digital signatures may no longer validate after workbook edits."
+            ? UiText.Get("DeferredCommand_UnsupportedXlsxFeature_DigitalSignatureWarningSuffix")
             : string.Empty;
 }
 

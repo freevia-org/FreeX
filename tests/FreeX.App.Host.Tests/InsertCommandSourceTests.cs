@@ -51,10 +51,8 @@ public sealed class InsertCommandSourceTests
     }
 
     [Theory]
-    [InlineData("Get Add-ins", "GA")]
-    [InlineData("My Add-ins", "AI")]
-    [InlineData("3D Map", "3D")]
-    public void InsertDeferredAddInAndTourCommands_RemainDisabledWithoutClickHandlers(string title, string keyTip)
+    [InlineData("Equation", "EQ")]
+    public void InsertDeferredTextAndSymbolCommands_RemainDisabledWithoutClickHandlers(string title, string keyTip)
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
 
@@ -65,16 +63,13 @@ public sealed class InsertCommandSourceTests
     }
 
     [Theory]
-    [InlineData("Object", "O")]
-    [InlineData("Equation", "EQ")]
-    public void InsertDeferredTextAndSymbolCommands_RemainDisabledWithoutClickHandlers(string title, string keyTip)
+    [InlineData("Get Add-ins")]
+    [InlineData("My Add-ins")]
+    [InlineData("3D Map")]
+    [InlineData("Object")]
+    public void InsertOutOfScopeCommands_AreNotSurfacedAsDisabledRibbonButtons(string title)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
-
-        button.Should().Contain("IsEnabled=\"False\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().NotContain("Click=");
+        ReadMainWindowXaml().Should().NotContain($"local:RibbonTooltip.Title=\"{title}\"");
     }
 
     [Fact]
