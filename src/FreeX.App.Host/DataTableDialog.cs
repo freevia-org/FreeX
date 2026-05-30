@@ -56,7 +56,11 @@ public sealed class DataTableDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
         AutomationProperties.SetName(_rowInputBox, "Row input cell");
+        AutomationProperties.SetAutomationId(_rowInputBox, "DataTableRowInputCellBox");
+        AutomationProperties.SetHelpText(_rowInputBox, "Enter the worksheet cell that supplies row input values for the data table.");
         AutomationProperties.SetName(_columnInputBox, "Column input cell");
+        AutomationProperties.SetAutomationId(_columnInputBox, "DataTableColumnInputCellBox");
+        AutomationProperties.SetHelpText(_columnInputBox, "Enter the worksheet cell that supplies column input values for the data table.");
 
         var root = new StackPanel { Margin = new Thickness(12) };
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 10) };

@@ -2257,12 +2257,38 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
-    public void DataTableDialog_CellInputEditorsExposeAutomationNames()
+    public void DataTableDialog_CellInputEditorsExposeAutomationMetadata()
     {
-        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataTableDialog.cs"));
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var range = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 8, 5));
+            var dialog = new DataTableDialog(sheetId, range);
+            dialog.Show();
+            try
+            {
+                AssertTextBoxAutomation(
+                    "DataTableRowInputCellBox",
+                    "Row input cell",
+                    "Enter the worksheet cell that supplies row input values for the data table.");
+                AssertTextBoxAutomation(
+                    "DataTableColumnInputCellBox",
+                    "Column input cell",
+                    "Enter the worksheet cell that supplies column input values for the data table.");
 
-        source.Should().Contain("AutomationProperties.SetName(_rowInputBox, \"Row input cell\");");
-        source.Should().Contain("AutomationProperties.SetName(_columnInputBox, \"Column input cell\");");
+                void AssertTextBoxAutomation(string automationId, string name, string helpText)
+                {
+                    var textBox = FindVisualChildren<TextBox>(dialog)
+                        .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
+                    AutomationProperties.GetName(textBox).Should().Be(name);
+                    AutomationProperties.GetHelpText(textBox).Should().Be(helpText);
+                }
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
