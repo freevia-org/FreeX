@@ -235,11 +235,7 @@ public partial class MainWindow
         _currentXlsxFeatureReport = null;
         UpdateTitleBar();
         RecalculateWorkbook();
-        SheetGrid.SelectedRange = null;
-        _selectionAnchor = null;
-        _selectionCursor = null;
-        CellAddressBox.Text = "A1";
-        FormulaBar.Text = "";
+        SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
         RefreshSheetTabs();
         RefreshToolbar();
         UpdateViewport();
