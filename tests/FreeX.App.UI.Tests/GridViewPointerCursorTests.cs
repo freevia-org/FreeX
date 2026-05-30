@@ -463,6 +463,34 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void ResizeMouseUpAndLostCaptureClearPreviewState()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Input.cs"));
+        var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
+        var resizeMouseUp = source[
+            source.IndexOf("if (_resizeTarget != ResizeTarget.None)", mouseUpStart, StringComparison.Ordinal)..
+            source.IndexOf("protected override void OnMouseLeave", StringComparison.Ordinal)];
+        var lostCapture = source[
+            source.IndexOf("protected override void OnLostMouseCapture", StringComparison.Ordinal)..];
+
+        resizeMouseUp.Should().Contain("_resizeTarget = ResizeTarget.None;");
+        resizeMouseUp.Should().Contain("_resizeIndex = 0;");
+        resizeMouseUp.Should().Contain("_resizeDragStart = 0;");
+        resizeMouseUp.Should().Contain("_resizeSizeStart = 0;");
+        resizeMouseUp.Should().Contain("_resizeLinePos = 0;");
+
+        lostCapture.Should().Contain("_resizeTarget = ResizeTarget.None;");
+        lostCapture.Should().Contain("_resizeIndex = 0;");
+        lostCapture.Should().Contain("_resizeDragStart = 0;");
+        lostCapture.Should().Contain("_resizeSizeStart = 0;");
+        lostCapture.Should().Contain("_resizeLinePos = 0;");
+        lostCapture.IndexOf("_resizeLinePos = 0;", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(lostCapture.IndexOf("ResizeCanceled?.Invoke();", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void LostMouseCaptureClearsCapturedPointerDragStates()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
