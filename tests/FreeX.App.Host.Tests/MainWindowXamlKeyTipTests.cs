@@ -648,6 +648,7 @@ public sealed class MainWindowXamlKeyTipTests
             ["CheckForUpdatesBtn_Click"] = "HelpCheckForUpdatesButton",
             ["SendFeedbackBtn_Click"] = "HelpFeedbackButton",
             ["AboutBtn_Click"] = "HelpAboutFreeXButton",
+            ["LegalNoticesBtn_Click"] = "HelpLegalNoticesButton",
         };
 
         foreach (var (clickHandler, automationId) in expected)
@@ -721,6 +722,8 @@ public sealed class MainWindowXamlKeyTipTests
         source.Should().Contain("ShowOwnedDialog(dlg)");
         source.Should().Contain("ShowOwnedMessage(");
         source.Should().Contain("AppInfo.AboutText");
+        source.Should().Contain("var dialog = new LegalNoticesDialog();");
+        source.Should().Contain("ShowOwnedDialog(dialog);");
         invokeButtonSource.Should().Contain("IInvokeProvider");
         invokeButtonSource.Should().Contain("Dispatcher.BeginInvoke");
         invokeButtonSource.Should().Contain("ButtonBase.ClickEvent");

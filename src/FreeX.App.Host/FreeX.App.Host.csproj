@@ -14,6 +14,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="FreeX.Legal.ProjectLicense.txt" />
+    <EmbeddedResource Include="..\..\docs\LEGAL_NOTICES.md" LogicalName="FreeX.Legal.LegalNotices.md" />
+    <EmbeddedResource Include="..\..\docs\PRIVACY.md" LogicalName="FreeX.Legal.PrivacyNotice.md" />
+    <EmbeddedResource Include="..\..\THIRD_PARTY_NOTICES.md" LogicalName="FreeX.Legal.ThirdPartyNotices.md" />
+    <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeX.Legal.ThirdPartyLicenses.md" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.7" />
     <PackageReference Include="PDFsharp-WPF" Version="6.2.4" />

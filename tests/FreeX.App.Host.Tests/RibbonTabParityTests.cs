@@ -315,7 +315,7 @@ public sealed class RibbonTabParityTests
     }
 
     [Fact]
-    public void HelpTab_ExposesExcelLikeSupportTrainingAndWhatsNewCommands()
+    public void HelpTab_ExposesOnlineFeedbackAboutAndLegalCommands()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var helpTab = ExtractTabXaml(xaml, "Help", "</TabControl>");
@@ -327,7 +327,8 @@ public sealed class RibbonTabParityTests
             "Feedback",
             "Copy Diagnostics",
             "Check for Updates",
-            "About FreeX");
+            "About FreeX",
+            "Legal Notices");
     }
 
     private static string ExtractTabXaml(string xaml, string header, string nextHeader)
