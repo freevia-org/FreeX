@@ -67,6 +67,27 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     }
 
     [Fact]
+    public void RuntimeVisibilityOverrides_UseDataCatalogIdsAsStableGroupKeys()
+    {
+        var groupKeys = new[] { "DataGetTransformGroup", "DataSortFilterGroup", "DataToolsGroup" };
+
+        var decisions = RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityOverrides(
+            1120,
+            groupKeys,
+            selectedTabHeader: "DataTab");
+
+        decisions.Should().Contain(decision =>
+            decision.Index == Array.IndexOf(groupKeys, "DataSortFilterGroup") &&
+            decision.State == RibbonAdaptiveGroupState.IconOnly);
+        decisions.Should().Contain(decision =>
+            decision.Index == Array.IndexOf(groupKeys, "DataToolsGroup") &&
+            decision.State == RibbonAdaptiveGroupState.IconOnly);
+        RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(groupKeys, selectedTabHeader: "DataTab")
+            .Should()
+            .BeTrue();
+    }
+
+    [Fact]
     public void ApplyRuntimeVisibilityStates_ContributesMediumDataPriorityIconOnlyStatesToPurePlan()
     {
         var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast" };

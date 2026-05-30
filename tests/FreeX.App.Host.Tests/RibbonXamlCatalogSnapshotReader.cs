@@ -58,6 +58,7 @@ internal static class RibbonXamlCatalogSnapshotReader
 
         return new RibbonTabDefinition(
             header,
+            AttributeValue(tab, Local + "RibbonMetadata.CatalogId"),
             AttributeValue(tab, Xaml + "Name"),
             AttributeValue(tab, Local + "RibbonTooltip.KeyTip"),
             string.Equals(AttributeValue(tab, "Visibility"), "Collapsed", StringComparison.Ordinal),
@@ -74,6 +75,7 @@ internal static class RibbonXamlCatalogSnapshotReader
 
         return new RibbonGroupDefinition(
             groupName,
+            AttributeValue(group, Local + "RibbonMetadata.CatalogId"),
             group
                 .Descendants()
                 .Where(IsRibbonCommandElement)

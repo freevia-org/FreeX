@@ -32,7 +32,7 @@ public partial class MainWindow
         if (availableWidth <= 0)
             return;
 
-        var selectedTabHeader = GetRibbonAdaptiveTabHeader(activePanel);
+        var selectedTabHeader = GetRibbonAdaptiveTabIdentity(activePanel);
         _ribbonMeasuredOverflowCache.Clear();
         var cacheKey = controlCacheKey;
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups;
@@ -333,8 +333,16 @@ public partial class MainWindow
         return Math.Max(0, availableWidth ?? 0);
     }
 
-    private static string GetRibbonAdaptiveTabHeader(DependencyObject element) =>
-        FindVisualAncestor<TabItem>(element)?.Header?.ToString() ?? "";
+    private static string GetRibbonAdaptiveTabIdentity(DependencyObject element)
+    {
+        if (FindVisualAncestor<TabItem>(element) is not { } tab)
+            return "";
+
+        if (RibbonMetadata.TryGetCatalogId(tab, out var catalogId))
+            return catalogId;
+
+        return tab.Header?.ToString() ?? "";
+    }
 
     private void ApplyRibbonMeasuredOverflowFallback(
         StackPanel activePanel,
@@ -481,6 +489,7 @@ public partial class MainWindow
     private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(RibbonCompactGroupSnapshot snapshot, Button collapsedButton)
     {
         var name = GetRibbonGroupName(snapshot.Group);
+        var catalogId = GetRibbonGroupCatalogId(snapshot.Group);
         var fullWidth = MeasureRibbonGroupWidth(snapshot, RibbonCompactLevel.Full);
         var smallWidth = MeasureRibbonGroupWidth(snapshot, RibbonCompactLevel.SmallWithLabels);
         var iconWidth = MeasureRibbonGroupWidth(snapshot, RibbonCompactLevel.IconOnly);
@@ -488,7 +497,7 @@ public partial class MainWindow
         var collapsedWidth = Math.Max(48, collapsedButton.DesiredSize.Width);
         RibbonAdaptiveStateApplicator.ApplyGroup(snapshot, RibbonCompactLevel.Full);
 
-        return new RibbonAdaptiveGroup(name, fullWidth, smallWidth, iconWidth, collapsedWidth);
+        return new RibbonAdaptiveGroup(name, fullWidth, smallWidth, iconWidth, collapsedWidth, catalogId);
     }
 
     private static double MeasureRibbonGroupWidth(RibbonCompactGroupSnapshot snapshot, RibbonCompactLevel level)
@@ -519,12 +528,12 @@ public partial class MainWindow
 
     private static string CreateRibbonAdaptiveMeasurementCacheKey(StackPanel activePanel, IReadOnlyList<FrameworkElement> groups)
     {
-        var tabName = GetRibbonAdaptiveTabHeader(activePanel);
+        var tabName = GetRibbonAdaptiveTabIdentity(activePanel);
         return string.Join(
             "|",
             tabName,
             groups.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            string.Join(";", groups.Select(group => $"{GetRibbonGroupName(group)}:{group.GetHashCode():X}")));
+            string.Join(";", groups.Select(group => $"{GetRibbonGroupName(group)}:{GetRibbonGroupCatalogId(group)}:{group.GetHashCode():X}")));
     }
 
     private void UpdateRibbonResizeThresholdCache(
@@ -835,6 +844,9 @@ public partial class MainWindow
 
         return "Commands";
     }
+
+    private static string? GetRibbonGroupCatalogId(FrameworkElement group) =>
+        RibbonMetadata.TryGetCatalogId(group, out var catalogId) ? catalogId : null;
 
     private static string CreateGroupKeyTip(string groupName, ISet<string>? usedKeyTips = null)
     {

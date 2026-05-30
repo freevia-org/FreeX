@@ -2419,7 +2419,7 @@
             </TabItem>
 
             <!-- ── DATA ──────────────────────────────────────────────── -->
-            <TabItem Header="Data" local:RibbonTooltip.KeyTip="A">
+            <TabItem Header="Data" local:RibbonTooltip.KeyTip="A" local:RibbonMetadata.CatalogId="DataTab">
                 <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
@@ -2427,7 +2427,7 @@
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
                         <!-- ▌Get &amp; Transform Data ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataGetTransformGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Get Data"    Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="GetDataBtn_Click"
@@ -2440,7 +2440,7 @@
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
                         <!-- ▌Queries &amp; Connections ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataQueriesConnectionsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Refresh All" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshAllBtn_Click"
@@ -2453,7 +2453,7 @@
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
                         <!-- ▌Sort &amp; Filter ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataSortFilterGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Vertical">
@@ -2504,7 +2504,7 @@
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
                         <!-- ▌Data Tools ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataToolsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Vertical">
@@ -2547,7 +2547,7 @@
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
                         <!-- ▌Forecast ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataForecastGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="What-If Analysis" Width="116" Height="22" Margin="1,1"
@@ -2576,7 +2576,7 @@
                         <Rectangle Width="1" Fill="#CCCCCC" Margin="3,4,5,16"/>
 
                         <!-- ▌Outline ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}">
+                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataOutlineGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Horizontal">
