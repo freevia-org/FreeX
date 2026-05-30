@@ -22,6 +22,86 @@ public sealed class ChartDataLabelFormatterTests
     }
 
     [Fact]
+    public void FormatDataLabel_OmitsValueWhenShowValueDisabled()
+    {
+        var chart = new ChartModel
+        {
+            ShowDataLabelValue = false,
+            ShowDataLabelSeriesName = true,
+            ShowDataLabelCategoryName = true,
+            DataLabelSeparator = ChartDataLabelSeparator.Semicolon
+        };
+
+        ChartDataLabelFormatter.FormatDataLabel(chart, "Sales", "Q1", 1234.5)
+            .Should().Be("Sales; Q1");
+    }
+
+    [Fact]
+    public void FormatDataLabel_OmitsValueLeavingSingleCategoryName()
+    {
+        var chart = new ChartModel
+        {
+            ShowDataLabelValue = false,
+            ShowDataLabelCategoryName = true
+        };
+
+        ChartDataLabelFormatter.FormatDataLabel(chart, "Sales", "Q1", 1234.5)
+            .Should().Be("Q1");
+    }
+
+    [Fact]
+    public void FormatDataLabel_FallsBackToValueWhenNoContentEnabled()
+    {
+        var chart = new ChartModel { ShowDataLabelValue = false };
+
+        ChartDataLabelFormatter.FormatDataLabel(chart, "Sales", "Q1", 1234.5)
+            .Should().Be("1234.5");
+    }
+
+    [Fact]
+    public void GetPieLabelFormat_OmitsValuePlaceholderWhenShowValueDisabled()
+    {
+        var chart = new ChartModel
+        {
+            ShowDataLabelValue = false,
+            ShowDataLabelCategoryName = true,
+            DataLabelSeparator = ChartDataLabelSeparator.Semicolon
+        };
+
+        ChartDataLabelFormatter.GetPieLabelFormat(chart, "Share")
+            .Should().Be("{1}");
+    }
+
+    [Fact]
+    public void GetPieLabelFormat_KeepsPercentageWhenValueDisabled()
+    {
+        var chart = new ChartModel
+        {
+            ShowDataLabelValue = false,
+            ShowDataLabelPercentage = true,
+            ShowDataLabelCategoryName = true,
+            DataLabelSeparator = ChartDataLabelSeparator.NewLine
+        };
+
+        ChartDataLabelFormatter.GetPieLabelFormat(chart, "Share")
+            .Should().Be($"{{1}}{Environment.NewLine}{{2:0%}}");
+    }
+
+    [Fact]
+    public void ShouldUseNativeValueLabels_FalseWhenValueDisabled()
+    {
+        var chart = new ChartModel
+        {
+            ShowDataLabels = true,
+            ShowDataLabelValue = false,
+            ShowDataLabelCategoryName = true
+        };
+
+        ChartDataLabelFormatter.ShouldUseNativeValueLabels(chart).Should().BeFalse();
+        ChartDataLabelFormatter.ShouldUseAnnotationLabels(chart).Should().BeTrue();
+    }
+
+    [Fact]
     public void FormatDataLabel_AssemblesAnnotationTextWithoutListOrJoin()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
@@ -30,8 +110,8 @@ public sealed class ChartDataLabelFormatterTests
             source.IndexOf("public static string FormatDataLabel", StringComparison.Ordinal)..
             source.IndexOf("public static string GetPieLabelFormat", StringComparison.Ordinal)];
 
-        formatDataLabel.Should().Contain("var valueText = FormatLabelValue(chart, value);");
-        formatDataLabel.Should().Contain("return (hasSeriesName, hasCategoryName) switch");
+        formatDataLabel.Should().Contain("var valueText = hasValue ? FormatLabelValue(chart, value) : \"\";");
+        formatDataLabel.Should().Contain("return (hasSeriesName, hasCategoryName, hasValue) switch");
         formatDataLabel.Should().NotContain("new List<string>");
         formatDataLabel.Should().NotContain("parts.Add(");
         formatDataLabel.Should().NotContain("string.Join(");

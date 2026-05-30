@@ -638,6 +638,8 @@ public sealed class ChartDialogTests
             "ChartAreaLegend_ShowLegend",
             "ChartAreaLegend_OverlayLegend",
             "ChartDataLabels_ShowDataLabels",
+            "ChartDataLabels_Value",
+            "ChartDataLabels_LegendKey",
             "ChartDataLabels_CategoryName",
             "ChartDataLabels_SeriesName",
             "ChartDataLabels_Percentage",
@@ -695,6 +697,8 @@ public sealed class ChartDialogTests
         var labels = new[]
         {
             "ChartDataLabels_ShowDataLabels",
+            "ChartDataLabels_Value",
+            "ChartDataLabels_LegendKey",
             "ChartDataLabels_CategoryName",
             "ChartDataLabels_SeriesName",
             "ChartDataLabels_Percentage",
@@ -840,6 +844,8 @@ public sealed class ChartDialogTests
         var result = ChartDataLabelsDialog.CreateResult(
             showDataLabels: true,
             position: ChartDataLabelPosition.OutsideEnd,
+            showValue: false,
+            showLegendKey: true,
             showCategoryName: true,
             showSeriesName: false,
             showPercentage: true,
@@ -856,6 +862,8 @@ public sealed class ChartDialogTests
         result.ToOptions().Should().Be(new ChartLayoutOptions(
             ShowDataLabels: true,
             DataLabelPosition: ChartDataLabelPosition.OutsideEnd,
+            ShowDataLabelValue: false,
+            ShowDataLabelLegendKey: true,
             ShowDataLabelCategoryName: true,
             ShowDataLabelSeriesName: false,
             ShowDataLabelPercentage: true,
@@ -868,6 +876,26 @@ public sealed class ChartDialogTests
             DataLabelBorderThickness: 1.5,
             DataLabelFontSize: 12,
             DataLabelAngle: -45));
+    }
+
+    [Fact]
+    public void ChartDataLabelsDialog_FromChart_RoundTripsValueAndLegendKeyToggles()
+    {
+        var chart = new ChartModel
+        {
+            ShowDataLabels = true,
+            ShowDataLabelValue = false,
+            ShowDataLabelLegendKey = true,
+            ShowDataLabelCategoryName = true
+        };
+
+        var result = ChartDataLabelsDialog.FromChart(chart);
+
+        result.ShowValue.Should().BeFalse();
+        result.ShowLegendKey.Should().BeTrue();
+        result.ShowCategoryName.Should().BeTrue();
+        result.ToOptions().ShowDataLabelValue.Should().BeFalse();
+        result.ToOptions().ShowDataLabelLegendKey.Should().BeTrue();
     }
 
     [Fact]

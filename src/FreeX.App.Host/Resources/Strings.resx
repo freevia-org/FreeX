@@ -387,6 +387,12 @@
   <data name="ChartDataLabels_ShowDataLabels" xml:space="preserve">
     <value>_Show data labels</value>
   </data>
+  <data name="ChartDataLabels_Value" xml:space="preserve">
+    <value>_Value</value>
+  </data>
+  <data name="ChartDataLabels_LegendKey" xml:space="preserve">
+    <value>Legend _key</value>
+  </data>
   <data name="ChartDataLabels_CategoryName" xml:space="preserve">
     <value>_Category name</value>
   </data>

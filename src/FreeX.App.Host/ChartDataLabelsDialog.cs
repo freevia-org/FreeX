@@ -12,6 +12,8 @@ namespace FreeX.App.Host;
 public sealed record ChartDataLabelsDialogResult(
     bool ShowDataLabels,
     ChartDataLabelPosition Position,
+    bool ShowValue,
+    bool ShowLegendKey,
     bool ShowCategoryName,
     bool ShowSeriesName,
     bool ShowPercentage,
@@ -28,6 +30,8 @@ public sealed record ChartDataLabelsDialogResult(
     public ChartLayoutOptions ToOptions() => new(
         ShowDataLabels: ShowDataLabels,
         DataLabelPosition: Position,
+        ShowDataLabelValue: ShowValue,
+        ShowDataLabelLegendKey: ShowLegendKey,
         ShowDataLabelCategoryName: ShowCategoryName,
         ShowDataLabelSeriesName: ShowSeriesName,
         ShowDataLabelPercentage: ShowPercentage,
@@ -45,6 +49,8 @@ public sealed record ChartDataLabelsDialogResult(
 public sealed class ChartDataLabelsDialog : Window
 {
     private readonly CheckBox _showBox = new() { Content = UiText.Get("ChartDataLabels_ShowDataLabels") };
+    private readonly CheckBox _valueBox = new() { Content = UiText.Get("ChartDataLabels_Value") };
+    private readonly CheckBox _legendKeyBox = new() { Content = UiText.Get("ChartDataLabels_LegendKey") };
     private readonly CheckBox _categoryBox = new() { Content = UiText.Get("ChartDataLabels_CategoryName") };
     private readonly CheckBox _seriesBox = new() { Content = UiText.Get("ChartDataLabels_SeriesName") };
     private readonly CheckBox _percentageBox = new() { Content = UiText.Get("ChartDataLabels_Percentage") };
@@ -78,6 +84,8 @@ public sealed class ChartDataLabelsDialog : Window
     public static ChartDataLabelsDialogResult FromChart(ChartModel chart) => CreateResult(
         chart.ShowDataLabels,
         chart.DataLabelPosition,
+        chart.ShowDataLabelValue,
+        chart.ShowDataLabelLegendKey,
         chart.ShowDataLabelCategoryName,
         chart.ShowDataLabelSeriesName,
         chart.ShowDataLabelPercentage,
@@ -94,6 +102,8 @@ public sealed class ChartDataLabelsDialog : Window
     public static ChartDataLabelsDialogResult CreateResult(
         bool showDataLabels,
         ChartDataLabelPosition position,
+        bool showValue,
+        bool showLegendKey,
         bool showCategoryName,
         bool showSeriesName,
         bool showPercentage,
@@ -106,8 +116,8 @@ public sealed class ChartDataLabelsDialog : Window
         double borderThickness,
         double fontSize,
         double angle) =>
-        new(showDataLabels, position, showCategoryName, showSeriesName, showPercentage, separator, numberFormat,
-            showCallouts, fillColor, borderColor, textColor, borderThickness, fontSize, angle);
+        new(showDataLabels, position, showValue, showLegendKey, showCategoryName, showSeriesName, showPercentage,
+            separator, numberFormat, showCallouts, fillColor, borderColor, textColor, borderThickness, fontSize, angle);
 
     private StackPanel CreateContent()
     {
@@ -116,6 +126,8 @@ public sealed class ChartDataLabelsDialog : Window
             var stack = new StackPanel();
             ChartDialogHelpers.AddCheck(stack, _showBox);
             ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartDataLabels_PositionLabel"), _positionBox, Enum.GetValues<ChartDataLabelPosition>());
+            ChartDialogHelpers.AddCheck(stack, _valueBox);
+            ChartDialogHelpers.AddCheck(stack, _legendKeyBox);
             ChartDialogHelpers.AddCheck(stack, _categoryBox);
             ChartDialogHelpers.AddCheck(stack, _seriesBox);
             ChartDialogHelpers.AddCheck(stack, _percentageBox);
@@ -142,6 +154,8 @@ public sealed class ChartDataLabelsDialog : Window
     {
         _showBox.IsChecked = result.ShowDataLabels;
         _positionBox.SelectedItem = result.Position;
+        _valueBox.IsChecked = result.ShowValue;
+        _legendKeyBox.IsChecked = result.ShowLegendKey;
         _categoryBox.IsChecked = result.ShowCategoryName;
         _seriesBox.IsChecked = result.ShowSeriesName;
         _percentageBox.IsChecked = result.ShowPercentage;
@@ -197,6 +211,8 @@ public sealed class ChartDataLabelsDialog : Window
         Result = CreateResult(
             _showBox.IsChecked == true,
             ChartDialogHelpers.Selected(_positionBox, ChartDataLabelPosition.BestFit),
+            _valueBox.IsChecked == true,
+            _legendKeyBox.IsChecked == true,
             _categoryBox.IsChecked == true,
             _seriesBox.IsChecked == true,
             _percentageBox.IsChecked == true,

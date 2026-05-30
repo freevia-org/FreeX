@@ -17,35 +17,47 @@ public static class ChartDataLabelFormatter
 
     public static string FormatDataLabel(ChartModel chart, string seriesName, string categoryName, double value)
     {
-        var valueText = FormatLabelValue(chart, value);
         var hasSeriesName = chart.ShowDataLabelSeriesName && !string.IsNullOrWhiteSpace(seriesName);
         var hasCategoryName = chart.ShowDataLabelCategoryName && !string.IsNullOrWhiteSpace(categoryName);
-
-        if (!hasSeriesName && !hasCategoryName)
-            return valueText;
-
+        var hasValue = chart.ShowDataLabelValue || (!hasSeriesName && !hasCategoryName);
+        var valueText = hasValue ? FormatLabelValue(chart, value) : "";
         var separator = GetDataLabelSeparatorText(chart.DataLabelSeparator);
-        return (hasSeriesName, hasCategoryName) switch
+
+        return (hasSeriesName, hasCategoryName, hasValue) switch
         {
-            (true, true) => $"{seriesName}{separator}{categoryName}{separator}{valueText}",
-            (true, false) => $"{seriesName}{separator}{valueText}",
-            _ => $"{categoryName}{separator}{valueText}"
+            (true, true, true) => $"{seriesName}{separator}{categoryName}{separator}{valueText}",
+            (true, true, false) => $"{seriesName}{separator}{categoryName}",
+            (true, false, true) => $"{seriesName}{separator}{valueText}",
+            (true, false, false) => seriesName,
+            (false, true, true) => $"{categoryName}{separator}{valueText}",
+            (false, true, false) => categoryName,
+            _ => valueText
         };
     }
 
     public static string GetPieLabelFormat(ChartModel chart, string seriesName)
     {
+        var separator = GetDataLabelSeparatorText(chart.DataLabelSeparator);
+        var nameParts = (chart.ShowDataLabelSeriesName, chart.ShowDataLabelCategoryName) switch
+        {
+            (true, true) => $"{seriesName}{separator}{{1}}",
+            (true, false) => seriesName,
+            (false, true) => "{1}",
+            _ => ""
+        };
         var valuePart = chart.ShowDataLabelPercentage
             ? "{2:0%}"
-            : GetPieValueFormat(chart.DataLabelNumberFormat);
-        var separator = GetDataLabelSeparatorText(chart.DataLabelSeparator);
-        if (chart.ShowDataLabelSeriesName && chart.ShowDataLabelCategoryName)
-            return $"{seriesName}{separator}{{1}}{separator}{valuePart}";
-        if (chart.ShowDataLabelSeriesName)
-            return $"{seriesName}{separator}{valuePart}";
-        if (chart.ShowDataLabelCategoryName)
-            return $"{{1}}{separator}{valuePart}";
-        return valuePart;
+            : chart.ShowDataLabelValue
+                ? GetPieValueFormat(chart.DataLabelNumberFormat)
+                : "";
+
+        if (valuePart.Length == 0 && nameParts.Length == 0)
+            return GetPieValueFormat(chart.DataLabelNumberFormat);
+        if (valuePart.Length == 0)
+            return nameParts;
+        if (nameParts.Length == 0)
+            return valuePart;
+        return $"{nameParts}{separator}{valuePart}";
     }
 
     public static string? GetNativeValueLabelFormat(ChartModel chart, int valueIndex)
@@ -65,6 +77,7 @@ public static class ChartDataLabelFormatter
 
     public static bool ShouldUseNativeValueLabels(ChartModel chart) =>
         chart.ShowDataLabels
+            && chart.ShowDataLabelValue
             && !chart.ShowDataLabelCategoryName
             && !chart.ShowDataLabelSeriesName
             && !ShouldRenderPercentageLabels(chart)
@@ -75,6 +88,7 @@ public static class ChartDataLabelFormatter
         chart.ShowDataLabels
             && (chart.ShowDataLabelCategoryName
                 || chart.ShowDataLabelSeriesName
+                || !chart.ShowDataLabelValue
                 || ShouldRenderPercentageLabels(chart)
                 || IsPercentStackedChart(chart)
                 || RequiresDataLabelAnnotationFormatting(chart));
