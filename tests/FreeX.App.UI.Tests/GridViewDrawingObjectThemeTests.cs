@@ -542,6 +542,33 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void GridObjectDragPlanner_ExposesSharedMinimumResizeSizeForMouseCommit()
+    {
+        var start = new Rect(10, 20, 80, 40);
+
+        GridObjectDragPlanner.MinimumObjectSize.Should().Be(8);
+        GridObjectDragPlanner.CalculateDragRect(
+                ObjectDragKind.ResizeSE,
+                start,
+                new Point(start.Right, start.Bottom),
+                new Point(start.Left - 100, start.Top - 100))
+            .Should()
+            .Be(new Rect(
+                start.Left,
+                start.Top,
+                GridObjectDragPlanner.MinimumObjectSize,
+                GridObjectDragPlanner.MinimumObjectSize));
+
+        var inputSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Input.cs"));
+        var mouseUpObjectCommit = inputSource[
+            inputSource.IndexOf("if (_objectDragKind != ObjectDragKind.None)", StringComparison.Ordinal)..
+            inputSource.IndexOf("if (_marginDragEdge.HasValue)", StringComparison.Ordinal)];
+
+        mouseUpObjectCommit.Should().Contain("GridObjectDragPlanner.MinimumObjectSize");
+        mouseUpObjectCommit.Should().NotContain("Math.Max(8");
+    }
+
+    [Fact]
     public void GridObjectDragPlanner_DoesNotTreatUnsupportedTopLeftHandlesAsMove()
     {
         var start = new Rect(10, 20, 80, 40);
