@@ -136,6 +136,28 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void AdvancedFamilyRenderers_AggregateTotalsWhileCollectingValues()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.AdvancedFamilies.cs"));
+        var pareto = source[
+            source.IndexOf("internal static PlotModel BuildParetoModel", StringComparison.Ordinal)..
+            source.IndexOf("internal static PlotModel BuildBoxAndWhiskerModel", StringComparison.Ordinal)];
+        var treemap = source[
+            source.IndexOf("internal static PlotModel BuildTreemapModel", StringComparison.Ordinal)..
+            source.IndexOf("internal static PlotModel BuildSunburstModel", StringComparison.Ordinal)];
+        var funnel = source[
+            source.IndexOf("internal static PlotModel BuildFunnelModel", StringComparison.Ordinal)..];
+
+        pareto.Should().Contain("total += v;");
+        pareto.Should().NotContain("total += values[index].Value");
+        treemap.Should().Contain("total += v;");
+        treemap.Should().NotContain("total += values[index].Value");
+        funnel.Should().Contain("if (value > maxVal)");
+        funnel.Should().NotContain("values[index].Value > maxVal");
+    }
+
+    [Fact]
     public void StockRenderer_BuildsDateAxisXValuesWithoutLinqScaffolding()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
