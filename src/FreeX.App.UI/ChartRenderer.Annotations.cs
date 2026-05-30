@@ -12,28 +12,31 @@ public static partial class ChartRenderer
         if (!chart.IsPivotChart || !chart.ShowPivotChartFieldButtons)
             return;
 
-        var captions = new List<string>();
+        var index = 0;
         if (chart.ShowPivotChartReportFilterButtons)
-            captions.Add(string.IsNullOrWhiteSpace(chart.PivotTableName) ? "PivotTable" : chart.PivotTableName);
+            AddPivotChartFieldButtonAnnotation(
+                model,
+                string.IsNullOrWhiteSpace(chart.PivotTableName) ? "PivotTable" : chart.PivotTableName,
+                index++);
         if (chart.ShowPivotChartAxisFieldButtons)
-            captions.Add("Axis Fields");
+            AddPivotChartFieldButtonAnnotation(model, "Axis Fields", index++);
         if (chart.ShowPivotChartValueFieldButtons)
-            captions.Add("Values");
+            AddPivotChartFieldButtonAnnotation(model, "Values", index);
+    }
 
-        for (var index = 0; index < captions.Count; index++)
+    private static void AddPivotChartFieldButtonAnnotation(PlotModel model, string text, int index)
+    {
+        model.Annotations.Add(new TextAnnotation
         {
-            model.Annotations.Add(new TextAnnotation
-            {
-                Text = captions[index],
-                TextPosition = new DataPoint(index * 1.2, 0),
-                Stroke = OxyColor.FromRgb(128, 128, 128),
-                StrokeThickness = 1,
-                Background = OxyColor.FromRgb(242, 242, 242),
-                TextColor = OxyColor.FromRgb(64, 64, 64),
-                FontSize = 10,
-                Padding = new OxyThickness(4, 2, 4, 2)
-            });
-        }
+            Text = text,
+            TextPosition = new DataPoint(index * 1.2, 0),
+            Stroke = OxyColor.FromRgb(128, 128, 128),
+            StrokeThickness = 1,
+            Background = OxyColor.FromRgb(242, 242, 242),
+            TextColor = OxyColor.FromRgb(64, 64, 64),
+            FontSize = 10,
+            Padding = new OxyThickness(4, 2, 4, 2)
+        });
     }
 
     private static void AddChartDataTableAnnotations(

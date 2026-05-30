@@ -763,6 +763,22 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void PivotChartFieldButtons_AddAnnotationsWithoutCaptionList()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.Annotations.cs"));
+        var fieldButtons = source[
+            source.IndexOf("private static void AddPivotChartFieldButtons", StringComparison.Ordinal)..
+            source.IndexOf("private static void AddPivotChartFieldButtonAnnotation", StringComparison.Ordinal)];
+
+        fieldButtons.Should().Contain("var index = 0;");
+        fieldButtons.Should().Contain("AddPivotChartFieldButtonAnnotation(");
+        fieldButtons.Should().NotContain("new List<string>");
+        fieldButtons.Should().NotContain("captions.Add(");
+        fieldButtons.Should().NotContain("captions.Count");
+    }
+
+    [Fact]
     public void PivotChartRenderer_HidesFieldButtonAnnotationsWhenDisabled()
     {
         var sheetId = SheetId.New();
