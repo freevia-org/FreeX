@@ -10,9 +10,13 @@ public partial class GridView
     private const double HandleSize = 8.0;
     private const double HandleHitPad = 4.0;
 
+    private const double RotationGripDiameter = 10.0;
+
     private static readonly Brush HandleFill = new SolidColorBrush(Colors.White);
     private static readonly Pen HandlePen = new(new SolidColorBrush(Color.FromRgb(0x20, 0x7A, 0xC5)), 1.0);
     private static readonly Pen SelectionBorderPen = new(new SolidColorBrush(Color.FromRgb(0x20, 0x7A, 0xC5)), 1.5);
+    private static readonly Brush RotationGripFill = new SolidColorBrush(Colors.White);
+    private static readonly Pen RotationGripPen = new(new SolidColorBrush(Color.FromRgb(0x20, 0x7A, 0xC5)), 1.0);
 
     static GridView()
     {
@@ -21,6 +25,9 @@ public partial class GridView
         HandlePen.Freeze();
         ((SolidColorBrush)((Pen)SelectionBorderPen).Brush).Freeze();
         SelectionBorderPen.Freeze();
+        RotationGripFill.Freeze();
+        ((SolidColorBrush)((Pen)RotationGripPen).Brush).Freeze();
+        RotationGripPen.Freeze();
 
         var dragFillBrush = new SolidColorBrush(Color.FromArgb(40, 0x20, 0x7A, 0xC5));
         dragFillBrush.Freeze();
@@ -90,9 +97,18 @@ public partial class GridView
         return null;
     }
 
+    // v1 simplification: the selection frame and handles stay axis-aligned around the
+    // object's (unrotated) bounding box; we do not rotate the handle frame to match
+    // RotationDegrees. Rotated handle hit-testing is out of scope for v1.
     internal void DrawObjectSelectionHandles(DrawingContext dc, Rect r)
     {
         dc.DrawRectangle(null, SelectionBorderPen, r);
+
+        // Office-style rotation grip: a small circle above the top-center handle with a connector line.
+        var topCenter = new Point(r.Left + r.Width / 2, r.Top);
+        var gripCenter = new Point(topCenter.X, r.Top - GridObjectDragPlanner.RotationGripOffset);
+        dc.DrawLine(HandlePen, topCenter, new Point(gripCenter.X, gripCenter.Y + RotationGripDiameter / 2));
+        dc.DrawEllipse(RotationGripFill, RotationGripPen, gripCenter, RotationGripDiameter / 2, RotationGripDiameter / 2);
 
         var handles = GetHandleRects(r);
         foreach (var h in handles)
@@ -132,6 +148,18 @@ public partial class GridView
 
     internal void RenderObjectDragPreview(DrawingContext dc, Rect baseRect)
     {
+        if (_objectDragKind == ObjectDragKind.Rotate)
+        {
+            // Preview the rotation by drawing the dashed frame rotated about the object center.
+            dc.PushTransform(new RotateTransform(
+                _objectRotationPreviewDegrees,
+                baseRect.Left + baseRect.Width / 2,
+                baseRect.Top + baseRect.Height / 2));
+            dc.DrawRectangle(DragPreviewFill, DragPreviewPen, baseRect);
+            dc.Pop();
+            return;
+        }
+
         var previewRect = CalculateDragPreviewRect(baseRect);
         dc.DrawRectangle(DragPreviewFill, DragPreviewPen, previewRect);
     }
@@ -146,13 +174,20 @@ public partial class GridView
     }
 
     private Rect _objectDragCurrentRect;
+    private double _objectRotationPreviewDegrees;
 
     private static Cursor ObjectDragCursor(ObjectDragKind kind) => kind switch
     {
         ObjectDragKind.Move      => Cursors.SizeAll,
+        ObjectDragKind.ResizeNW  => Cursors.SizeNWSE,
         ObjectDragKind.ResizeSE  => Cursors.SizeNWSE,
-        ObjectDragKind.ResizeE   => Cursors.SizeWE,
+        ObjectDragKind.ResizeNE  => Cursors.SizeNESW,
+        ObjectDragKind.ResizeSW  => Cursors.SizeNESW,
+        ObjectDragKind.ResizeN   => Cursors.SizeNS,
         ObjectDragKind.ResizeS   => Cursors.SizeNS,
+        ObjectDragKind.ResizeE   => Cursors.SizeWE,
+        ObjectDragKind.ResizeW   => Cursors.SizeWE,
+        ObjectDragKind.Rotate    => Cursors.Cross,
         _ => Cursors.Arrow
     };
 

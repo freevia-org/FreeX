@@ -3,11 +3,29 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
 
-public enum ObjectDragKind { None, Move, ResizeSE, ResizeE, ResizeS }
+public enum ObjectDragKind
+{
+    None,
+    Move,
+    ResizeNW,
+    ResizeN,
+    ResizeNE,
+    ResizeE,
+    ResizeSE,
+    ResizeS,
+    ResizeSW,
+    ResizeW,
+    Rotate
+}
 
 public static class GridObjectDragPlanner
 {
     public const double MinimumObjectSize = 8;
+
+    /// <summary>
+    /// Vertical distance (in pixels) of the rotation grip's center above the top edge of the object.
+    /// </summary>
+    public const double RotationGripOffset = 20;
 
     public static Rect CalculateDragRect(
         ObjectDragKind dragKind,
@@ -18,30 +36,86 @@ public static class GridObjectDragPlanner
     {
         var dx = currentPosition.X - startPosition.X;
         var dy = currentPosition.Y - startPosition.Y;
-        return dragKind switch
+
+        // Track each edge independently so opposite edges stay fixed and the rect
+        // never inverts when an edge is dragged past its anchor.
+        var left = startRect.Left;
+        var top = startRect.Top;
+        var right = startRect.Right;
+        var bottom = startRect.Bottom;
+
+        switch (dragKind)
         {
-            ObjectDragKind.Move => new Rect(
-                startRect.X + dx,
-                startRect.Y + dy,
-                startRect.Width,
-                startRect.Height),
-            ObjectDragKind.ResizeSE => new Rect(
-                startRect.X,
-                startRect.Y,
-                Math.Max(minimumSize, startRect.Width + dx),
-                Math.Max(minimumSize, startRect.Height + dy)),
-            ObjectDragKind.ResizeE => new Rect(
-                startRect.X,
-                startRect.Y,
-                Math.Max(minimumSize, startRect.Width + dx),
-                startRect.Height),
-            ObjectDragKind.ResizeS => new Rect(
-                startRect.X,
-                startRect.Y,
-                startRect.Width,
-                Math.Max(minimumSize, startRect.Height + dy)),
-            _ => startRect
-        };
+            case ObjectDragKind.Move:
+                return new Rect(startRect.X + dx, startRect.Y + dy, startRect.Width, startRect.Height);
+            case ObjectDragKind.ResizeNW:
+                left += dx;
+                top += dy;
+                break;
+            case ObjectDragKind.ResizeN:
+                top += dy;
+                break;
+            case ObjectDragKind.ResizeNE:
+                right += dx;
+                top += dy;
+                break;
+            case ObjectDragKind.ResizeE:
+                right += dx;
+                break;
+            case ObjectDragKind.ResizeSE:
+                right += dx;
+                bottom += dy;
+                break;
+            case ObjectDragKind.ResizeS:
+                bottom += dy;
+                break;
+            case ObjectDragKind.ResizeSW:
+                left += dx;
+                bottom += dy;
+                break;
+            case ObjectDragKind.ResizeW:
+                left += dx;
+                break;
+            default:
+                return startRect;
+        }
+
+        // Clamp each axis to the minimum size while keeping the un-dragged edge fixed.
+        var movesLeft = dragKind is ObjectDragKind.ResizeNW or ObjectDragKind.ResizeW or ObjectDragKind.ResizeSW;
+        if (right - left < minimumSize)
+        {
+            if (movesLeft)
+                left = right - minimumSize;
+            else
+                right = left + minimumSize;
+        }
+
+        var movesTop = dragKind is ObjectDragKind.ResizeNW or ObjectDragKind.ResizeN or ObjectDragKind.ResizeNE;
+        if (bottom - top < minimumSize)
+        {
+            if (movesTop)
+                top = bottom - minimumSize;
+            else
+                bottom = top + minimumSize;
+        }
+
+        return new Rect(left, top, right - left, bottom - top);
+    }
+
+    /// <summary>
+    /// Computes the rotation angle (in degrees, clockwise, 0 = pointer straight up) of the
+    /// pointer relative to the object center. Returns 0 when the pointer is at the center.
+    /// </summary>
+    public static double CalculateRotationDegrees(Point center, Point pointer)
+    {
+        var dx = pointer.X - center.X;
+        var dy = pointer.Y - center.Y;
+        if (dx == 0 && dy == 0)
+            return 0;
+
+        // Atan2(dx, -dy) gives 0 for straight up and increases clockwise (screen Y grows downward).
+        var degrees = Math.Atan2(dx, -dy) * (180.0 / Math.PI);
+        return degrees < 0 ? degrees + 360 : degrees;
     }
 
     public static ObjectDragKind HitTestHandle(
@@ -54,6 +128,14 @@ public static class GridObjectDragPlanner
             return ObjectDragKind.None;
 
         var pad = handleHitPadding + handleSize / 2;
+
+        // Rotation grip sits above the top-center handle with a connector line.
+        var gripCenter = new Point(
+            objectRect.Left + objectRect.Width / 2,
+            objectRect.Top - RotationGripOffset);
+        if (Math.Abs(position.X - gripCenter.X) <= pad && Math.Abs(position.Y - gripCenter.Y) <= pad)
+            return ObjectDragKind.Rotate;
+
         var nearLeft = Math.Abs(position.X - objectRect.Left) <= pad;
         var nearTop = Math.Abs(position.Y - objectRect.Top) <= pad;
         var nearRight = Math.Abs(position.X - objectRect.Right) <= pad;
@@ -61,10 +143,17 @@ public static class GridObjectDragPlanner
         var inVertical = position.Y >= objectRect.Top - pad && position.Y <= objectRect.Bottom + pad;
         var inHorizontal = position.X >= objectRect.Left - pad && position.X <= objectRect.Right + pad;
 
+        // Corners take priority over edges (a corner is near two perpendicular edges).
+        if (nearLeft && nearTop) return ObjectDragKind.ResizeNW;
+        if (nearRight && nearTop) return ObjectDragKind.ResizeNE;
         if (nearRight && nearBottom) return ObjectDragKind.ResizeSE;
-        if (nearRight && inVertical) return ObjectDragKind.ResizeE;
+        if (nearLeft && nearBottom) return ObjectDragKind.ResizeSW;
+
+        // Edges: anywhere along the edge line within the object's span.
+        if (nearTop && inHorizontal) return ObjectDragKind.ResizeN;
         if (nearBottom && inHorizontal) return ObjectDragKind.ResizeS;
-        if (nearLeft && inVertical || nearTop && inHorizontal) return ObjectDragKind.None;
+        if (nearRight && inVertical) return ObjectDragKind.ResizeE;
+        if (nearLeft && inVertical) return ObjectDragKind.ResizeW;
         if (objectRect.Contains(position)) return ObjectDragKind.Move;
         return ObjectDragKind.None;
     }

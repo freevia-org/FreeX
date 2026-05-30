@@ -495,4 +495,56 @@ public partial class MainWindow
         TryExecuteCommand(cmd, "Resize Object");
         UpdateViewport();
     }
+
+    // Resizing from a handle that moves the top-left corner (N/W/NW/NE/SW) changes both the
+    // anchor cell and the size; commit them together so the operation round-trips as one undo step.
+    private void OnObjectResizedWithAnchor(
+        Guid id,
+        FreeX.App.UI.ObjectKind kind,
+        Core.Model.CellAddress newAnchor,
+        double width,
+        double height)
+    {
+        var anchor = new Core.Model.CellAddress(_currentSheetId, newAnchor.Row, newAnchor.Col);
+        IReadOnlyList<IWorkbookCommand>? commands = kind switch
+        {
+            FreeX.App.UI.ObjectKind.Picture =>
+            [
+                new RepositionPictureCommand(_currentSheetId, id, anchor),
+                new ResizePictureCommand(_currentSheetId, id, width, height)
+            ],
+            FreeX.App.UI.ObjectKind.Shape =>
+            [
+                new RepositionShapeCommand(_currentSheetId, id, anchor),
+                new ResizeDrawingShapeCommand(_currentSheetId, id, width, height)
+            ],
+            FreeX.App.UI.ObjectKind.TextBox =>
+            [
+                new RepositionTextBoxCommand(_currentSheetId, id, anchor),
+                new ResizeTextBoxCommand(_currentSheetId, id, width, height)
+            ],
+            _ => null
+        };
+        if (commands is null) return;
+        TryExecuteCommand(
+            new CompositeWorkbookCommand("Resize Object", commands),
+            "Resize Object");
+        UpdateViewport();
+    }
+
+    private void OnObjectRotated(Guid id, FreeX.App.UI.ObjectKind kind, double degrees)
+    {
+        var rotationKind = kind switch
+        {
+            FreeX.App.UI.ObjectKind.Picture => SelectionPaneObjectKind.Picture,
+            FreeX.App.UI.ObjectKind.Shape   => SelectionPaneObjectKind.Shape,
+            FreeX.App.UI.ObjectKind.TextBox => SelectionPaneObjectKind.TextBox,
+            _ => (SelectionPaneObjectKind?)null
+        };
+        if (rotationKind is not { } resolvedKind) return;
+        TryExecuteCommand(
+            new SetDrawingObjectRotationCommand(_currentSheetId, resolvedKind, id, degrees),
+            "Rotate Object");
+        UpdateViewport();
+    }
 }
