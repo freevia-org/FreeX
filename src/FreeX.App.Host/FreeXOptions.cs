@@ -32,6 +32,9 @@ public sealed class FreeXOptions
     public int    DefaultSheetCount{ get; set; } = 1;
     public string UserName         { get; set; } = Environment.UserName;
 
+    // Language
+    public string AppLanguage { get; set; } = AppLanguageCatalog.SystemDefaultCultureName;
+
     // Formulas
     public bool AutoCalculate { get; set; } = true;
     public bool UseR1C1ReferenceStyle { get; set; }

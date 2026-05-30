@@ -428,14 +428,30 @@ public partial class MainWindow
 
     private void ShowOptionsDialog()
     {
+        var previousAppLanguage = AppLanguageCatalog.NormalizeCultureName(_options.AppLanguage);
         var dlg = new OptionsDialog(_options, _workbook.DisabledFormulaErrorCodes);
         if (ShowOwnedDialog(dlg) == true)
         {
             _options = dlg.Result;
+            var appLanguageChanged = !StringComparer.OrdinalIgnoreCase.Equals(
+                previousAppLanguage,
+                AppLanguageCatalog.NormalizeCultureName(_options.AppLanguage));
+            if (appLanguageChanged)
+                AppLocalization.ApplyAppLanguage(_options.AppLanguage);
+
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
             ApplyOptionsWorksheetViewSettings();
             ApplyOptionsToView();
             UpdateViewport();
+
+            if (appLanguageChanged)
+            {
+                ShowOwnedMessage(
+                    UiText.Get("Options_AppLanguageRestartMessage"),
+                    UiText.Get("Options_Language"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
         }
     }
 

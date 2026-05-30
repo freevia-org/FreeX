@@ -7,7 +7,16 @@ namespace FreeX.App.Host;
 
 internal static class AppLocalization
 {
+    private static readonly CultureInfo StartupUiCulture = CultureInfo.CurrentUICulture;
     private static int _wpfLanguageMetadataApplied;
+
+    public static void ApplyAppLanguage(string? cultureName)
+    {
+        var uiCulture = AppLanguageCatalog.ResolveCulture(cultureName, StartupUiCulture);
+
+        CultureInfo.DefaultThreadCurrentUICulture = uiCulture;
+        Thread.CurrentThread.CurrentUICulture = uiCulture;
+    }
 
     public static void ApplyCurrentCultureToWpf()
     {
