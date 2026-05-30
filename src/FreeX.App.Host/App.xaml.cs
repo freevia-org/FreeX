@@ -21,6 +21,8 @@ public partial class App : Application
 
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
+        AppLocalization.ApplyCurrentCultureToWpf();
+
         // Configure Serilog
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
@@ -148,8 +150,8 @@ public partial class App : Application
         // Use MessageBox directly here: IUserMessageService is not yet available at this early
         // startup point (before the main window is shown), so we fall back to a raw call.
         var result = MessageBox.Show(
-            "FreeX can send crash reports to help stabilize tester builds. Reports include app version, runtime, operating system, session ID, exception message, and stack trace. Workbook contents, formulas, filenames, and paths are not collected intentionally, but exception details can occasionally include sensitive values.\n\nSend crash reports for this tester build?",
-            "Crash Reports",
+            UiText.Get("Startup_CrashReportsConsentPrompt"),
+            UiText.Get("Startup_CrashReportsTitle"),
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
         CrashAnalyticsConsentPlanner.ApplyConsent(options, result == MessageBoxResult.Yes);

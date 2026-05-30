@@ -10,44 +10,54 @@ namespace FreeX.App.Host;
 /// </summary>
 public sealed class WpfUserMessageService : IUserMessageService
 {
-    public void ShowError(string message, string title = "Error")
+    private const string DefaultErrorTitle = "Error";
+    private const string DefaultWarningTitle = "Warning";
+    private const string DefaultInformationTitle = "Information";
+    private const string DefaultConfirmTitle = "Confirm";
+
+    public void ShowError(string message, string title = DefaultErrorTitle)
     {
         MessageBox.Show(
             Application.Current.MainWindow,
             message,
-            title,
+            ResolveDefaultTitle(title, DefaultErrorTitle, UiText.ErrorTitle),
             MessageBoxButton.OK,
             MessageBoxImage.Error);
     }
 
-    public void ShowWarning(string message, string title = "Warning")
+    public void ShowWarning(string message, string title = DefaultWarningTitle)
     {
         MessageBox.Show(
             Application.Current.MainWindow,
             message,
-            title,
+            ResolveDefaultTitle(title, DefaultWarningTitle, UiText.WarningTitle),
             MessageBoxButton.OK,
             MessageBoxImage.Warning);
     }
 
-    public void ShowInfo(string message, string title = "Information")
+    public void ShowInfo(string message, string title = DefaultInformationTitle)
     {
         MessageBox.Show(
             Application.Current.MainWindow,
             message,
-            title,
+            ResolveDefaultTitle(title, DefaultInformationTitle, UiText.InformationTitle),
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }
 
-    public bool AskYesNo(string message, string title = "Confirm")
+    public bool AskYesNo(string message, string title = DefaultConfirmTitle)
     {
         var result = MessageBox.Show(
             Application.Current.MainWindow,
             message,
-            title,
+            ResolveDefaultTitle(title, DefaultConfirmTitle, UiText.ConfirmTitle),
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
         return result == MessageBoxResult.Yes;
     }
+
+    private static string ResolveDefaultTitle(string title, string defaultTitle, string localizedTitle) =>
+        string.Equals(title, defaultTitle, StringComparison.Ordinal)
+            ? localizedTitle
+            : title;
 }
