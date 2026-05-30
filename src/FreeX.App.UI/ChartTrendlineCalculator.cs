@@ -26,22 +26,28 @@ public static class ChartTrendlineCalculator
         out double rSquared)
     {
         rSquared = 0;
-        var matches = new List<(double Actual, double Predicted)>();
+        var count = 0;
+        var sumActual = 0.0;
+        var sumActualSquared = 0.0;
+        var residual = 0.0;
         foreach (var point in sourcePoints)
         {
-            if (TryInterpolateTrendY(trendPoints, point.X, out var predicted))
-                matches.Add((point.Y, predicted));
+            if (!TryInterpolateTrendY(trendPoints, point.X, out var predicted))
+                continue;
+
+            count++;
+            sumActual += point.Y;
+            sumActualSquared += point.Y * point.Y;
+            residual += Math.Pow(point.Y - predicted, 2);
         }
 
-        if (matches.Count < 2)
+        if (count < 2)
             return false;
 
-        var mean = matches.Average(match => match.Actual);
-        var total = matches.Sum(match => Math.Pow(match.Actual - mean, 2));
+        var total = sumActualSquared - (sumActual * sumActual / count);
         if (Math.Abs(total) < double.Epsilon)
             return false;
 
-        var residual = matches.Sum(match => Math.Pow(match.Actual - match.Predicted, 2));
         rSquared = 1 - (residual / total);
         return !double.IsNaN(rSquared) && !double.IsInfinity(rSquared);
     }
