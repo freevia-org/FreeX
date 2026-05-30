@@ -35,6 +35,7 @@ internal sealed record RibbonScreenshotTourCapture(
 }
 
 internal sealed record RibbonScreenshotTourPlan(
+    string? Context,
     IReadOnlyList<RibbonScreenshotTourTab> Tabs,
     IReadOnlyList<RibbonScreenshotTourWidth> Widths,
     IReadOnlyList<RibbonScreenshotTourPhase> Phases,
@@ -73,6 +74,12 @@ internal static class RibbonScreenshotTourPlanner
         new("Help", "Help")
     ];
 
+    public static IReadOnlyList<RibbonScreenshotTourTab> TableContextTabs { get; } =
+    [
+        .. DefaultTabs,
+        new("Table Design", "Table_Design")
+    ];
+
     public static IReadOnlyList<RibbonScreenshotTourWidth> DefaultWidths { get; } =
     [
         new("max", null),
@@ -100,15 +107,45 @@ internal static class RibbonScreenshotTourPlanner
         CreatePlan(requestedTabs, requestedWidths, burstMode: false);
 
     public static RibbonScreenshotTourPlan CreatePlan(string? requestedTabs, string? requestedWidths, bool burstMode)
+        => CreatePlan(requestedTabs, requestedWidths, burstMode, context: null);
+
+    public static RibbonScreenshotTourPlan CreatePlan(
+        string? requestedTabs,
+        string? requestedWidths,
+        bool burstMode,
+        string? context)
     {
-        var tabs = FilterTabs(DefaultTabs, requestedTabs);
+        var normalizedContext = NormalizeContext(context);
+        var tabs = FilterTabs(TabsForContext(normalizedContext), requestedTabs);
         var widths = ParseWidths(requestedWidths);
         var phases = burstMode ? BurstPhases : DefaultPhases;
         var captures = widths
             .SelectMany(width => tabs.SelectMany(tab => phases.Select(phase => new RibbonScreenshotTourCapture(tab, width, phase))))
             .ToList();
 
-        return new RibbonScreenshotTourPlan(tabs, widths, phases, captures);
+        return new RibbonScreenshotTourPlan(normalizedContext, tabs, widths, phases, captures);
+    }
+
+    public static IReadOnlyList<RibbonScreenshotTourTab> TabsForContext(string? context) =>
+        NormalizeContext(context) switch
+        {
+            null => DefaultTabs,
+            "table" => TableContextTabs,
+            var unknown => throw new InvalidOperationException(
+                $"Ribbon screenshot tour context '{unknown}' is not supported. Valid contexts: table.")
+        };
+
+    public static string? NormalizeContext(string? context)
+    {
+        if (string.IsNullOrWhiteSpace(context))
+            return null;
+
+        var normalized = context.Trim().Replace('_', '-').ToLowerInvariant();
+        return normalized switch
+        {
+            "table" or "table-design" or "structured-table" => "table",
+            _ => normalized
+        };
     }
 
     public static IReadOnlyList<RibbonScreenshotTourTab> FilterTabs(

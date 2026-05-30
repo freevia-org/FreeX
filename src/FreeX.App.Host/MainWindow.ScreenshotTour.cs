@@ -34,7 +34,8 @@ public partial class MainWindow
             ? RibbonScreenshotTourPlanner.CreatePlan(
                 Environment.GetEnvironmentVariable("FREEX_SS_TOUR_TABS"),
                 Environment.GetEnvironmentVariable("FREEX_SS_TOUR_WIDTHS"),
-                ribbonBurstTour)
+                ribbonBurstTour,
+                Environment.GetEnvironmentVariable("FREEX_SS_TOUR_CONTEXT"))
             : null;
 
         var outputDir = Path.GetFullPath(
@@ -71,6 +72,7 @@ public partial class MainWindow
 
     private async Task CaptureRibbonTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
     {
+        await PrepareRibbonScreenshotTourContextAsync(plan.Context);
         DeleteStaleRibbonScreenshotTourCaptures(outputDir, plan);
 
         if (plan.IsBurst)
@@ -126,6 +128,81 @@ public partial class MainWindow
         UpdateLayout();
 
         await CaptureCurrentWindowAsync(outputDir, capture.FileName, ScreenshotTourCaptureHeight);
+    }
+
+    private async Task PrepareRibbonScreenshotTourContextAsync(string? context)
+    {
+        if (context is null)
+            return;
+
+        switch (context)
+        {
+            case "table":
+                EnsureTableDesignScreenshotTourContext();
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown ribbon screenshot tour context '{context}'.");
+        }
+
+        UpdateViewport();
+        UpdateLayout();
+        await WaitForRibbonScreenshotRenderPassAsync();
+    }
+
+    private void EnsureTableDesignScreenshotTourContext()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId) ?? _workbook.Sheets.FirstOrDefault();
+        if (sheet is null)
+            return;
+
+        var headers = new[] { "Region", "Product", "Sales" };
+        var rows = new[]
+        {
+            new object[] { "North", "Coffee", 1280d },
+            new object[] { "South", "Tea", 960d },
+            new object[] { "West", "Cocoa", 1140d }
+        };
+
+        for (var col = 0; col < headers.Length; col++)
+            sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)(col + 1)), new TextValue(headers[col]));
+
+        for (var row = 0; row < rows.Length; row++)
+        {
+            for (var col = 0; col < headers.Length; col++)
+            {
+                var address = new CellAddress(sheet.Id, (uint)(row + 2), (uint)(col + 1));
+                if (rows[row][col] is double number)
+                    sheet.SetCell(address, new NumberValue(number));
+                else
+                    sheet.SetCell(address, new TextValue(rows[row][col].ToString() ?? ""));
+            }
+        }
+
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3));
+        var table = sheet.StructuredTables
+            .FirstOrDefault(candidate => string.Equals(candidate.Name, "TourTable", StringComparison.OrdinalIgnoreCase));
+        if (table is null)
+        {
+            table = new StructuredTableModel
+            {
+                Id = sheet.StructuredTables.Count == 0 ? 1 : sheet.StructuredTables.Max(candidate => candidate.Id) + 1,
+                Name = "TourTable",
+                DisplayName = "TourTable",
+                Range = range,
+                HasAutoFilter = true,
+                HeaderRowCount = 1,
+                StyleName = "TableStyleMedium2",
+                ShowRowStripes = true
+            };
+
+            for (var index = 0; index < headers.Length; index++)
+                table.Columns.Add(new StructuredTableColumnModel(index + 1, headers[index]));
+
+            sheet.StructuredTables.Add(table);
+        }
+
+        if (SheetGrid is not null)
+            SheetGrid.SelectedRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 2, 2));
     }
 
     private async Task CaptureRibbonBurstTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
@@ -224,6 +301,7 @@ public partial class MainWindow
             Tool: "FREEX_SS_TOUR",
             OutputDirectory: outputDir,
             CatalogEvidenceTarget: "docs/UI_TEST_CATALOG.md",
+            Context: plan.Context,
             BurstMode: plan.IsBurst,
             CaptureLogicalHeight: ScreenshotTourCaptureHeight,
             PlannedCaptureCount: plan.Captures.Count,
@@ -260,6 +338,7 @@ public partial class MainWindow
         string Tool,
         string OutputDirectory,
         string CatalogEvidenceTarget,
+        string? Context,
         bool BurstMode,
         double CaptureLogicalHeight,
         int PlannedCaptureCount,
