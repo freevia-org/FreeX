@@ -236,6 +236,8 @@ public partial class MainWindow : Window
         SheetGrid.SplitPaneScrollbarScrolled += OnSplitPaneScrollbarScrolled;
         SheetGrid.ObjectMoved   += OnObjectMoved;
         SheetGrid.ObjectResized += OnObjectResized;
+        SheetGrid.ObjectResizedWithAnchor += OnObjectResizedWithAnchor;
+        SheetGrid.ObjectRotated += OnObjectRotated;
         SheetGrid.MouseMove  += SheetGrid_MouseMove;
         SheetGrid.MouseUp    += SheetGrid_MouseUp;
         SheetGrid.MouseWheel += SheetGrid_MouseWheel;

@@ -533,9 +533,9 @@ public sealed class GridViewDrawingObjectThemeTests
             .Should().Be(ObjectDragKind.ResizeSE);
         GridObjectDragPlanner.HitTestHandle(new Point(start.Right, start.Top + 10), start)
             .Should().Be(ObjectDragKind.ResizeE);
-        GridObjectDragPlanner.HitTestHandle(new Point(start.Left + 10, start.Bottom), start)
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left + 30, start.Bottom), start)
             .Should().Be(ObjectDragKind.ResizeS);
-        GridObjectDragPlanner.HitTestHandle(new Point(start.Left + 10, start.Top + 10), start)
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left + 30, start.Top + 10), start)
             .Should().Be(ObjectDragKind.Move);
         GridObjectDragPlanner.HitTestHandle(new Point(start.Left - 20, start.Top - 20), start)
             .Should().Be(ObjectDragKind.None);
@@ -571,34 +571,34 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
-    public void GridObjectDragPlanner_DoesNotTreatUnsupportedTopLeftHandlesAsMove()
+    public void GridObjectDragPlanner_HitTestsAllEightResizeHandlesAndRotation()
     {
         var start = new Rect(10, 20, 80, 40);
 
         GridObjectDragPlanner.HitTestHandle(new Point(start.Left, start.Top), start)
-            .Should().Be(ObjectDragKind.None);
-        GridObjectDragPlanner.IsUnsupportedHandleZone(new Point(start.Left, start.Top), start)
-            .Should().BeTrue();
+            .Should().Be(ObjectDragKind.ResizeNW);
         GridObjectDragPlanner.HitTestHandle(new Point(start.Left + start.Width / 2, start.Top), start)
-            .Should().Be(ObjectDragKind.None);
-        GridObjectDragPlanner.IsUnsupportedHandleZone(new Point(start.Left + start.Width / 2, start.Top), start)
-            .Should().BeTrue();
-        GridObjectDragPlanner.HitTestHandle(new Point(start.Left, start.Top + start.Height / 2), start)
-            .Should().Be(ObjectDragKind.None);
-        GridObjectDragPlanner.IsUnsupportedHandleZone(new Point(start.Left, start.Top + start.Height / 2), start)
-            .Should().BeTrue();
+            .Should().Be(ObjectDragKind.ResizeN);
         GridObjectDragPlanner.HitTestHandle(new Point(start.Right, start.Top), start)
+            .Should().Be(ObjectDragKind.ResizeNE);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left, start.Top + start.Height / 2), start)
+            .Should().Be(ObjectDragKind.ResizeW);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Right, start.Top + start.Height / 2), start)
             .Should().Be(ObjectDragKind.ResizeE);
-        GridObjectDragPlanner.IsUnsupportedHandleZone(new Point(start.Right, start.Top), start)
-            .Should().BeFalse();
         GridObjectDragPlanner.HitTestHandle(new Point(start.Left, start.Bottom), start)
+            .Should().Be(ObjectDragKind.ResizeSW);
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Left + start.Width / 2, start.Bottom), start)
             .Should().Be(ObjectDragKind.ResizeS);
-        GridObjectDragPlanner.IsUnsupportedHandleZone(new Point(start.Left, start.Bottom), start)
-            .Should().BeFalse();
+        GridObjectDragPlanner.HitTestHandle(new Point(start.Right, start.Bottom), start)
+            .Should().Be(ObjectDragKind.ResizeSE);
+
+        // Rotation grip sits above the top-center handle.
+        GridObjectDragPlanner.HitTestHandle(
+                new Point(start.Left + start.Width / 2, start.Top - GridObjectDragPlanner.RotationGripOffset), start)
+            .Should().Be(ObjectDragKind.Rotate);
+
         GridObjectDragPlanner.HitTestHandle(new Point(start.Left + 16, start.Top + 16), start)
             .Should().Be(ObjectDragKind.Move);
-        GridObjectDragPlanner.IsUnsupportedHandleZone(new Point(start.Left + 16, start.Top + 16), start)
-            .Should().BeFalse();
     }
 
     [Fact]
