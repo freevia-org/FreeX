@@ -25,7 +25,22 @@ function Assert-SafeArtifactToken {
     }
 }
 
+function Assert-SafeTimestampUrl {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return
+    }
+
+    $timestampUri = $null
+    if (-not [System.Uri]::TryCreate($Value, [System.UriKind]::Absolute, [ref]$timestampUri) -or
+        $timestampUri.Scheme -notin @("http", "https")) {
+        throw "MsixTimestampUrl must be an absolute http or https URL."
+    }
+}
+
 Assert-SafeArtifactToken -Value $RuntimeIdentifier -Label "RuntimeIdentifier"
+Assert-SafeTimestampUrl -Value $MsixTimestampUrl
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "src\FreeX.App.Host\FreeX.App.Host.csproj"
