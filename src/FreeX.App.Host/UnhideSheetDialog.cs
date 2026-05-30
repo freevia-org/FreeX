@@ -10,8 +10,8 @@ public sealed record UnhideSheetDialogResult(string SheetName);
 public sealed class UnhideSheetDialog : Window
 {
     private readonly ListBox _sheetBox = new();
-    private readonly Button _okButton = new() { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-    private readonly Button _cancelButton = new() { Content = "_Cancel", Width = 72, IsCancel = true };
+    private readonly Button _okButton = new() { Content = UiText.Ok, Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+    private readonly Button _cancelButton = new() { Content = UiText.Cancel, Width = 72, IsCancel = true };
 
     public UnhideSheetDialogResult Result { get; private set; }
 
@@ -20,7 +20,7 @@ public sealed class UnhideSheetDialog : Window
         var names = hiddenSheetNames.ToList();
         var selected = names.FirstOrDefault() ?? "";
         Result = CreateResult(selected);
-        Title = "Unhide Sheet";
+        Title = UiText.Get("UnhideSheet_UnhideSheet");
         Width = 340;
         Height = 160;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -29,22 +29,22 @@ public sealed class UnhideSheetDialog : Window
         _sheetBox.ItemsSource = names;
         _sheetBox.SelectedItem = selected;
         _sheetBox.SelectionMode = SelectionMode.Single;
-        AutomationProperties.SetName(_sheetBox, "Unhide sheet");
+        AutomationProperties.SetName(_sheetBox, UiText.Get("UnhideSheet_UnhideSheet"));
         AutomationProperties.SetAutomationId(_sheetBox, "UnhideSheetList");
-        AutomationProperties.SetHelpText(_sheetBox, "Select the hidden worksheet to make visible.");
+        AutomationProperties.SetHelpText(_sheetBox, UiText.Get("UnhideSheet_SelectTheHiddenWorksheetToMakeVisible"));
         _sheetBox.SelectionChanged += (_, _) => UpdateButtonState();
         _sheetBox.MouseDoubleClick += (_, _) => Accept();
 
-        AutomationProperties.SetName(_okButton, "OK");
+        AutomationProperties.SetName(_okButton, UiText.Get("UnhideSheet_Ok"));
         AutomationProperties.SetAutomationId(_okButton, "UnhideSheetOkButton");
-        AutomationProperties.SetHelpText(_okButton, "Unhide the selected worksheet.");
+        AutomationProperties.SetHelpText(_okButton, UiText.Get("UnhideSheet_UnhideTheSelectedWorksheet"));
         _okButton.Click += (_, _) => Accept();
-        AutomationProperties.SetName(_cancelButton, "Cancel");
+        AutomationProperties.SetName(_cancelButton, UiText.Get("UnhideSheet_Cancel"));
         AutomationProperties.SetAutomationId(_cancelButton, "UnhideSheetCancelButton");
-        AutomationProperties.SetHelpText(_cancelButton, "Close the Unhide Sheet dialog without changing worksheet visibility.");
+        AutomationProperties.SetHelpText(_cancelButton, UiText.Get("UnhideSheet_CloseTheUnhideSheetDialogWithoutChangingWorksheetVisibility"));
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new Label { Content = "_Unhide sheet:", Target = _sheetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = UiText.Get("UnhideSheet_UnhideSheet2"), Target = _sheetBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _sheetBox.Margin = new Thickness(0, 0, 0, 12);
         _sheetBox.MinHeight = 64;
         stack.Children.Add(_sheetBox);

@@ -146,9 +146,9 @@ public sealed class ManageConditionalFormatsDialogTests
         source.Should().Contain("typeof(Button)");
         source.Should().Contain("new Binding(nameof(ConditionalFormat.AppliesTo))");
         source.Should().Contain("new AppliesToRangeConverter(_sheet.Id)");
-        source.Should().Contain("ToolTipProperty, \"Collapse dialog and select Applies To range\"");
-        source.Should().Contain("AutomationProperties.NameProperty, \"Select Applies To range\"");
-        source.Should().Contain("AutomationProperties.HelpTextProperty");
+        source.Should().Contain("ToolTipProperty, UiText.Get(\"ManageConditionalFormats_CollapseDialogAndSelectAppliesToRange\")");
+        source.Should().Contain("AutomationProperties.NameProperty, UiText.Get(\"ManageConditionalFormats_SelectAppliesToRange\")");
+        source.Should().Contain("AutomationProperties.HelpTextProperty, UiText.Get(\"ManageConditionalFormats_SelectAppliesToRangeHelpText\")");
         source.Should().Contain("RangePickerButton_Click");
         source.Should().Contain("AppliesToRangeSelectionRequest = CreateAppliesToRangeSelectionRequest");
         source.Should().Contain("_requestAppliesToRangeSelection?.Invoke(AppliesToRangeSelectionRequest)");
@@ -210,10 +210,10 @@ public sealed class ManageConditionalFormatsDialogTests
     {
         var source = ReadManageConditionalFormatsDialogSource();
 
-        source.Should().Contain("Header = \"Format\"");
+        source.Should().Contain("Header = UiText.Get(\"ManageConditionalFormats_FormatColumn\")");
         source.Should().Contain("typeof(Border)");
         source.Should().Contain("typeof(TextBlock)");
-        source.Should().Contain("AaBbCcYyZz");
+        source.Should().Contain("UiText.Get(\"ManageConditionalFormats_FormatPreviewSample\")");
         source.Should().Contain("new PreviewForegroundBrushConverter()");
         source.Should().Contain("new PreviewFontWeightConverter()");
         source.Should().Contain("new PreviewFontStyleConverter()");
@@ -242,24 +242,24 @@ public sealed class ManageConditionalFormatsDialogTests
     {
         var source = ReadManageConditionalFormatsDialogSource();
 
-        foreach (var content in new[]
+        foreach (var key in new[]
         {
-            "_OK",
-            "_Cancel",
-            "_Apply",
-            "_New Rule...",
-            "_Edit Rule",
-            "D_uplicate Rule",
-            "_Delete Rule"
+            "ManageConditionalFormats_Apply",
+            "ManageConditionalFormats_NewRule",
+            "ManageConditionalFormats_EditRule",
+            "ManageConditionalFormats_DuplicateRule",
+            "ManageConditionalFormats_DeleteRule"
         })
-        source.Should().Contain($"Content = \"{content}\"");
+        source.Should().Contain($"UiText.Get(\"{key}\")");
 
-        source.Should().Contain("Content = \"Show formatting _rules for:\"");
+        source.Should().Contain("Content = UiText.Get(\"ManageConditionalFormats_ShowFormattingRulesFor\")");
+        source.Should().Contain("Content = UiText.Ok");
+        source.Should().Contain("Content = UiText.Cancel");
         source.Should().Contain("Target = _scopeBox");
-        source.Should().Contain("ToolTip = \"Move selected rule up\"");
-        source.Should().Contain("ToolTip = \"Move selected rule down\"");
-        source.Should().Contain("AutomationProperties.SetName(_moveUpBtn, \"Move Up\")");
-        source.Should().Contain("AutomationProperties.SetName(_moveDownBtn, \"Move Down\")");
+        source.Should().Contain("ToolTip = UiText.Get(\"ManageConditionalFormats_MoveSelectedRuleUp\")");
+        source.Should().Contain("ToolTip = UiText.Get(\"ManageConditionalFormats_MoveSelectedRuleDown\")");
+        source.Should().Contain("AutomationProperties.SetName(_moveUpBtn, UiText.Get(\"ManageConditionalFormats_MoveUp\"))");
+        source.Should().Contain("AutomationProperties.SetName(_moveDownBtn, UiText.Get(\"ManageConditionalFormats_MoveDown\"))");
     }
 
     [Fact]
@@ -267,9 +267,9 @@ public sealed class ManageConditionalFormatsDialogTests
     {
         var source = ReadManageConditionalFormatsDialogSource();
 
-        source.Should().Contain("ScopeSheet     = \"This Worksheet\"");
-        source.Should().Contain("ScopeSelection = \"Current Selection\"");
-        source.Should().Contain("_scopeBox.SelectedItem = selection.HasValue ? ScopeSelection : ScopeSheet");
+        source.Should().Contain("CreateScopeItem(ConditionalFormatScope.Sheet, UiText.Get(\"ManageConditionalFormats_ScopeThisWorksheet\"))");
+        source.Should().Contain("CreateScopeItem(ConditionalFormatScope.Selection, UiText.Get(\"ManageConditionalFormats_ScopeCurrentSelection\"))");
+        source.Should().Contain("_scopeBox.SelectedItem = selection.HasValue ? selectionScope : sheetScope");
     }
 
     [Fact]
@@ -288,8 +288,8 @@ public sealed class ManageConditionalFormatsDialogTests
     {
         var source = ReadManageConditionalFormatsDialogSource();
 
-        source.Should().Contain("new Label { Content = \"_Rules:\", Target = _listView");
-        source.Should().Contain("AutomationProperties.SetName(_listView, \"Conditional formatting rules\");");
+        source.Should().Contain("new Label { Content = UiText.Get(\"ManageConditionalFormats_Rules\"), Target = _listView");
+        source.Should().Contain("AutomationProperties.SetName(_listView, UiText.Get(\"ManageConditionalFormats_ConditionalFormattingRules\"));");
     }
 
     [Fact]
@@ -303,8 +303,10 @@ public sealed class ManageConditionalFormatsDialogTests
 
             var scope = GetControl<ComboBox>(dialog, "_scopeBox");
 
-            scope.SelectedItem.Should().Be("Current Selection");
-            scope.Items.Cast<string>().Should().Equal("This Worksheet", "Current Selection");
+            ((ComboBoxItem)scope.SelectedItem).Content.Should().Be(UiText.Get("ManageConditionalFormats_ScopeCurrentSelection"));
+            ScopeContents(scope).Should().Equal(
+                UiText.Get("ManageConditionalFormats_ScopeThisWorksheet"),
+                UiText.Get("ManageConditionalFormats_ScopeCurrentSelection"));
 
             dialog.Close();
         });
@@ -323,7 +325,10 @@ public sealed class ManageConditionalFormatsDialogTests
 
             var scope = GetControl<ComboBox>(dialog, "_scopeBox");
 
-            scope.Items.Cast<string>().Should().Equal("This Worksheet", "This Table", "Current Selection");
+            ScopeContents(scope).Should().Equal(
+                UiText.Get("ManageConditionalFormats_ScopeThisWorksheet"),
+                UiText.Get("ManageConditionalFormats_ScopeThisTable"),
+                UiText.Get("ManageConditionalFormats_ScopeCurrentSelection"));
 
             dialog.Close();
         });
@@ -342,7 +347,8 @@ public sealed class ManageConditionalFormatsDialogTests
             var selection = new GridRange(new CellAddress(sheet.Id, 3, 3), new CellAddress(sheet.Id, 3, 3));
             var dialog = new ManageConditionalFormatsDialog(sheet, selection);
 
-            GetControl<ComboBox>(dialog, "_scopeBox").SelectedItem = "This Table";
+            var scopeBox = GetControl<ComboBox>(dialog, "_scopeBox");
+            scopeBox.SelectedItem = ScopeItem(scopeBox, UiText.Get("ManageConditionalFormats_ScopeThisTable"));
             var listView = GetControl<ListView>(dialog, "_listView");
 
             listView.Items.Cast<ConditionalFormat>().Should().ContainSingle(rule => rule.AppliesTo.Start.Row == 3);
@@ -533,8 +539,8 @@ public sealed class ManageConditionalFormatsDialogTests
     {
         var source = ReadManageConditionalFormatsDialogSource();
 
-        source.Should().Contain("Content = \"_New Rule...\"");
-        source.Should().Contain("DefaultNewRuleType = \"Data Bar\"");
+        source.Should().Contain("Content = UiText.Get(\"ManageConditionalFormats_NewRule\")");
+        source.Should().Contain("DefaultNewRuleType => UiText.Get(\"ManageConditionalFormats_DefaultNewRuleType\")");
         source.Should().Contain("new NewConditionalFormatRuleDialog(DefaultNewRuleType, defaultRange)");
         source.Should().NotContain("new NewConditionalFormatRuleDialog(\"Greater Than\", defaultRange)");
         source.Should().NotContain("new ConditionalFormatDialog(\"Greater Than\", defaultRange)");
@@ -666,6 +672,17 @@ public sealed class ManageConditionalFormatsDialogTests
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
+
+    private static IReadOnlyList<string> ScopeContents(ComboBox scope) =>
+        scope.Items
+            .Cast<ComboBoxItem>()
+            .Select(item => item.Content?.ToString() ?? "")
+            .ToList();
+
+    private static ComboBoxItem ScopeItem(ComboBox scope, string content) =>
+        scope.Items
+            .Cast<ComboBoxItem>()
+            .Single(item => Equals(item.Content, content));
 
     private static string ReadManageConditionalFormatsDialogSource() =>
         string.Join(

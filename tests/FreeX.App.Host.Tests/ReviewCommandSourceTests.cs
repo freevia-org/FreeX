@@ -18,8 +18,8 @@ public sealed class ReviewCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
-        button.Should().Contain($"Content=\"{content}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -40,8 +40,8 @@ public sealed class ReviewCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
-        button.Should().Contain($"Content=\"{content}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -58,8 +58,8 @@ public sealed class ReviewCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
-        button.Should().Contain($"Content=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", title);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -83,7 +83,7 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("WorkbookProtectionWorkflow.CreateCommand(_workbook, pwd)");
         source.Should().Contain("new AllowEditRangeDialog(");
         source.Should().Contain("TryExecuteCommand(command, \"Allow Users to Edit Ranges\")");
-        source.Should().Contain("_messageService.ShowInfo(successMessage, \"Allow Users to Edit Ranges\")");
+        source.Should().Contain("_messageService.ShowInfo(successMessage, UiText.Get(\"MainWindowMessage_AllowEditRangesTitle\"))");
         source.Should().Contain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
         source.Should().Contain("_shareService.ShareFileAsync(this, _currentFilePath, _workbook.Name)");
     }
@@ -97,7 +97,7 @@ public sealed class ReviewCommandSourceTests
         var searchIndex = 0;
         while (true)
         {
-            var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", searchIndex, StringComparison.Ordinal);
+            var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", searchIndex, StringComparison.Ordinal);
             if (titleIndex < 0)
                 break;
 

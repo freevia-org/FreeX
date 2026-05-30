@@ -193,7 +193,7 @@ public sealed class FindReplaceDialogXamlTests
     [Fact]
     public void FindNextButton_IsDefaultAction()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FindReplaceDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FindReplaceDialog.xaml");
 
         xaml.Should().Contain("<Button x:Name=\"FindNextBtn\"");
         xaml.Should().Contain("x:Name=\"FindNextBtn\" Content=\"_Find Next\" Width=\"80\" Margin=\"0,0,8,0\" IsDefault=\"True\"");
@@ -372,15 +372,15 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("FindClearFormatButton_Click");
         source.Should().Contain("ReplaceWithClearFormatButton_Click");
         source.Should().Contain("UpdateFormatStateButtons");
-        source.Should().Contain("For_mat Set...");
+        source.Should().Contain("UiText.Get(\"FindReplace_FormatSetButton\")");
         source.Should().Contain("replacementFormat: _replaceFormatDiff");
         source.Should().Contain("FindResultsGrid_SelectionChanged");
         source.Should().Contain("_navigateTo(row.Address)");
         source.Should().Contain("BuildFindResultRows(_getWorkbook(), _results)");
         source.Should().Contain("OptionsExpander_Expanded");
-        source.Should().Contain("OptionsExpander.Header = \"_Options <<\"");
+        source.Should().Contain("OptionsExpander.Header = UiText.Get(\"FindReplace_OptionsExpanded\")");
         source.Should().Contain("OptionsExpander_Collapsed");
-        source.Should().Contain("OptionsExpander.Header = \"_Options >>\"");
+        source.Should().Contain("OptionsExpander.Header = UiText.Get(\"FindReplace_Options\")");
     }
 
     [Fact]
@@ -436,7 +436,7 @@ public sealed class FindReplaceDialogXamlTests
 
         source.Should().Contain("ShowBlankSearchWarning()");
         source.Should().Contain("private bool ShowBlankSearchWarning()");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Enter text in Find what.\", Title);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"FindReplace_FindWhatRequired\"), Title);");
         source.Should().Contain("FocusSearchBox();");
         source.Should().Contain("private void FocusSearchBox()");
         source.Should().Contain("var target = FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;");
@@ -444,7 +444,7 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     private static XDocument LoadDialogXaml() =>
-        XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FindReplaceDialog.xaml"));
+        XamlLocalizationTestHelper.LoadLocalizedXaml("FindReplaceDialog.xaml");
 
     private static void InvokePrivate(FindReplaceDialog dialog, string methodName)
     {

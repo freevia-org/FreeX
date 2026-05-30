@@ -6,14 +6,9 @@ namespace FreeX.App.Host;
 
 public sealed class SortOptionsDialog : Window
 {
-    private static readonly string[] FirstKeySortOrders =
-    [
-        "Normal",
-        "Sun, Mon, Tue, Wed, Thu, Fri, Sat",
-        "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday",
-        "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec",
-        "January, February, March, April, May, June, July, August, September, October, November, December"
-    ];
+    private const string NormalFirstKeySortOrder = "Normal";
+
+    private sealed record FirstKeySortOrderChoice(string Label, string Value);
 
     private readonly CheckBox _caseSensitiveBox;
     private readonly ComboBox _firstKeySortOrderBox;
@@ -26,7 +21,7 @@ public sealed class SortOptionsDialog : Window
     {
         current ??= new SortDialogOptions();
         Result = current;
-        Title = "Sort Options";
+        Title = UiText.Get("SortOptions_SortOptions");
         Width = 330;
         Height = 260;
         ResizeMode = ResizeMode.NoResize;
@@ -40,7 +35,7 @@ public sealed class SortOptionsDialog : Window
 
         _caseSensitiveBox = new CheckBox
         {
-            Content = "_Case sensitive",
+            Content = UiText.Get("SortOptions_CaseSensitive"),
             IsChecked = current.CaseSensitive,
             Margin = new Thickness(0, 0, 0, 10)
         };
@@ -48,25 +43,27 @@ public sealed class SortOptionsDialog : Window
 
         _firstKeySortOrderBox = new ComboBox
         {
-            ItemsSource = FirstKeySortOrders,
-            SelectedItem = NormalizeFirstKeySortOrder(current.FirstKeySortOrder),
+            ItemsSource = CreateFirstKeySortOrders(),
+            DisplayMemberPath = nameof(FirstKeySortOrderChoice.Label),
+            SelectedValuePath = nameof(FirstKeySortOrderChoice.Value),
+            SelectedValue = NormalizeFirstKeySortOrder(current.FirstKeySortOrder),
             Margin = new Thickness(0, 0, 0, 10)
         };
         body.Children.Add(new Label
         {
-            Content = "_First key sort order:",
+            Content = UiText.Get("SortOptions_FirstKeySortOrderLabel"),
             Target = _firstKeySortOrderBox,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 0, 3)
         });
         body.Children.Add(_firstKeySortOrderBox);
 
-        _topToBottomButton = new RadioButton { Content = "Sort top to _bottom", IsChecked = !current.LeftToRight };
-        _leftToRightButton = new RadioButton { Content = "Sort left to _right", IsChecked = current.LeftToRight };
+        _topToBottomButton = new RadioButton { Content = UiText.Get("SortOptions_SortTopToBottom"), IsChecked = !current.LeftToRight };
+        _leftToRightButton = new RadioButton { Content = UiText.Get("SortOptions_SortLeftToRight"), IsChecked = current.LeftToRight };
 
         var orientation = new GroupBox
         {
-            Header = "Orientation",
+            Header = UiText.Get("SortOptions_Orientation"),
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 10),
             Content = new StackPanel
@@ -85,15 +82,28 @@ public sealed class SortOptionsDialog : Window
             Result = new SortDialogOptions(
                 CaseSensitive: _caseSensitiveBox.IsChecked == true,
                 LeftToRight: _leftToRightButton.IsChecked == true,
-                FirstKeySortOrder: _firstKeySortOrderBox.SelectedItem as string ?? "Normal");
+                FirstKeySortOrder: _firstKeySortOrderBox.SelectedValue as string ?? NormalFirstKeySortOrder);
             DialogResult = true;
         }, buttonWidth: 72));
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
+    private static IReadOnlyList<FirstKeySortOrderChoice> CreateFirstKeySortOrders() =>
+        [
+            new(UiText.Get("SortOptions_FirstKeyNormal"), NormalFirstKeySortOrder),
+            new(UiText.Get("SortOptions_FirstKeySunToSatShort"), "Sun, Mon, Tue, Wed, Thu, Fri, Sat"),
+            new(UiText.Get("SortOptions_FirstKeySundayToSaturday"), "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday"),
+            new(UiText.Get("SortOptions_FirstKeyJanToDecShort"), "Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec"),
+            new(UiText.Get("SortOptions_FirstKeyJanuaryToDecember"), "January, February, March, April, May, June, July, August, September, October, November, December")
+        ];
+
     private static string NormalizeFirstKeySortOrder(string? value) =>
-        FirstKeySortOrders.FirstOrDefault(order => string.Equals(order, value, StringComparison.Ordinal)) ?? "Normal";
+        CreateFirstKeySortOrders()
+            .FirstOrDefault(order =>
+                string.Equals(order.Value, value, StringComparison.Ordinal) ||
+                string.Equals(order.Label, value, StringComparison.Ordinal))
+            ?.Value ?? NormalFirstKeySortOrder;
 
     private void FocusInitialKeyboardTarget()
     {

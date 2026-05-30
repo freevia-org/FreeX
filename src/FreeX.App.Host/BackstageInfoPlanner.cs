@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -20,7 +21,7 @@ public static class BackstageInfoPlanner
         var accessibilityIssues = AccessibilityCheckerService.FindIssues(workbook);
         var formulaIssues = FormulaAuditingService.FindFormulaErrorIssues(workbook);
         var filePath = string.IsNullOrWhiteSpace(currentFilePath)
-            ? "Not saved yet"
+            ? UiText.Get("Backstage_Info_NotSavedYet")
             : currentFilePath;
         var format = string.IsNullOrWhiteSpace(currentFilePath)
             ? ".xlsx"
@@ -29,7 +30,7 @@ public static class BackstageInfoPlanner
         return new BackstageInfoPlan(
             workbook.Name,
             filePath,
-            workbook.Sheets.Count.ToString(),
+            workbook.Sheets.Count.ToString(CultureInfo.CurrentCulture),
             string.IsNullOrWhiteSpace(format) ? ".xlsx" : format,
             WorkbookStatisticsFormatter.Format(statistics),
             FormatAccessibilitySummary(accessibilityIssues.Count),
@@ -37,15 +38,15 @@ public static class BackstageInfoPlanner
     }
 
     private static string FormatAccessibilitySummary(int issueCount) =>
-        FormatIssueSummary(issueCount, "No accessibility issues found");
+        FormatIssueSummary(issueCount, UiText.Get("Backstage_Info_NoAccessibilityIssues"));
 
     private static string FormatFormulaErrorSummary(int issueCount) =>
-        FormatIssueSummary(issueCount, "No formula errors found");
+        FormatIssueSummary(issueCount, UiText.Get("Backstage_Info_NoFormulaErrors"));
 
     private static string FormatIssueSummary(int issueCount, string emptySummary) =>
         issueCount == 0
             ? emptySummary
             : issueCount == 1
-                ? "1 issue found"
-                : $"{issueCount} issues found";
+                ? UiText.Get("Backstage_Info_OneIssueFound")
+                : UiText.Format("Backstage_Info_MultipleIssuesFound", issueCount);
 }

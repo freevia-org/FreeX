@@ -24,8 +24,8 @@ public sealed class HyperlinkDialog : Window
 {
     private readonly TextBox _targetBox = new();
     private readonly TextBox _displayBox = new();
-    private readonly Button _screenTipButton = new() { Content = "_ScreenTip..." };
-    private readonly Button _bookmarkButton = new() { Content = "_Bookmark..." };
+    private readonly Button _screenTipButton = new() { Content = UiText.Get("Hyperlink_ScreenTip") };
+    private readonly Button _bookmarkButton = new() { Content = UiText.Get("Hyperlink_Bookmark") };
     private readonly ListBox _linkTypes = new();
     private readonly Label _targetLabel;
     private string _screenTip = "";
@@ -36,7 +36,7 @@ public sealed class HyperlinkDialog : Window
     public HyperlinkDialog(string target = "https://", string displayText = "")
     {
         Result = CreateResult(target, displayText);
-        Title = "Insert Hyperlink";
+        Title = UiText.Get("Hyperlink_InsertHyperlink");
         Width = 560;
         Height = 300;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -48,37 +48,37 @@ public sealed class HyperlinkDialog : Window
         _linkTypes.Width = 170;
         _linkTypes.ItemsSource = new[]
         {
-            "Existing File or Web Page",
-            "Create New Document",
-            "Place in This Document",
-            "E-mail Address"
+            UiText.Get("Hyperlink_LinkTypeExistingFileOrWebPage"),
+            UiText.Get("Hyperlink_LinkTypeCreateNewDocument"),
+            UiText.Get("Hyperlink_LinkTypePlaceInThisDocument"),
+            UiText.Get("Hyperlink_LinkTypeEmailAddress")
         };
         _linkTypes.SelectedIndex = 0;
-        AutomationProperties.SetName(_linkTypes, "Link to");
+        AutomationProperties.SetName(_linkTypes, UiText.Get("Hyperlink_LinkTo2"));
         AutomationProperties.SetAutomationId(_linkTypes, "HyperlinkLinkTypeList");
-        AutomationProperties.SetHelpText(_linkTypes, "Choose the kind of hyperlink to insert.");
-        linkTypePanel.Children.Add(new Label { Content = "Link _to:", Target = _linkTypes, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        AutomationProperties.SetHelpText(_linkTypes, UiText.Get("Hyperlink_ChooseTheKindOfHyperlinkToInsert"));
+        linkTypePanel.Children.Add(new Label { Content = UiText.Get("Hyperlink_LinkTo"), Target = _linkTypes, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         linkTypePanel.Children.Add(_linkTypes);
         DockPanel.SetDock(linkTypePanel, Dock.Left);
         root.Children.Add(linkTypePanel);
 
         var grid = DialogGrid(3);
-        AddTextRow(grid, 0, "Text to _display:", _displayBox, displayText);
-        AutomationProperties.SetName(_displayBox, "Text to display");
+        AddTextRow(grid, 0, UiText.Get("Hyperlink_TextToDisplay2"), _displayBox, displayText);
+        AutomationProperties.SetName(_displayBox, UiText.Get("Hyperlink_TextToDisplay"));
         AutomationProperties.SetAutomationId(_displayBox, "HyperlinkDisplayTextBox");
-        AutomationProperties.SetHelpText(_displayBox, "Enter the text shown in the cell for the hyperlink.");
-        _targetLabel = AddTextRow(grid, 1, "_Address:", _targetBox, target);
+        AutomationProperties.SetHelpText(_displayBox, UiText.Get("Hyperlink_EnterTheTextShownInTheCellForTheHyperlink"));
+        _targetLabel = AddTextRow(grid, 1, UiText.Get("Hyperlink_Address"), _targetBox, target);
         AutomationProperties.SetAutomationId(_targetBox, "HyperlinkTargetTextBox");
         _linkTypes.SelectionChanged += (_, _) => UpdateTargetFieldForLinkType();
         UpdateTargetFieldForLinkType();
         _screenTipButton.Click += ScreenTipButton_Click;
         _bookmarkButton.Click += BookmarkButton_Click;
-        AutomationProperties.SetName(_screenTipButton, "Set ScreenTip");
+        AutomationProperties.SetName(_screenTipButton, UiText.Get("Hyperlink_SetScreenTip"));
         AutomationProperties.SetAutomationId(_screenTipButton, "HyperlinkScreenTipButton");
-        AutomationProperties.SetHelpText(_screenTipButton, "Set the text shown when pointing to the hyperlink.");
-        AutomationProperties.SetName(_bookmarkButton, "Select place in document");
+        AutomationProperties.SetHelpText(_screenTipButton, UiText.Get("Hyperlink_SetTheTextShownWhenPointingToTheHyperlink"));
+        AutomationProperties.SetName(_bookmarkButton, UiText.Get("Hyperlink_SelectPlaceInDocument"));
         AutomationProperties.SetAutomationId(_bookmarkButton, "HyperlinkBookmarkButton");
-        AutomationProperties.SetHelpText(_bookmarkButton, "Choose a bookmark, defined name, or cell reference in this workbook.");
+        AutomationProperties.SetHelpText(_bookmarkButton, UiText.Get("Hyperlink_ChooseABookmarkDefinedNameOrCellReferenceInThisWorkbook"));
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
         _screenTipButton.Width = 96;
         _screenTipButton.Margin = new Thickness(0, 0, 8, 0);
@@ -131,17 +131,17 @@ public sealed class HyperlinkDialog : Window
         {
             error = linkType switch
             {
-                HyperlinkLinkType.PlaceInThisDocument => "Enter a valid cell reference or defined name.",
-                HyperlinkLinkType.EmailAddress => "Enter an email address.",
-                HyperlinkLinkType.CreateNewDocument => "Enter a new document name.",
-                _ => "Enter an address."
+                HyperlinkLinkType.PlaceInThisDocument => UiText.Get("Hyperlink_EnterValidCellReferenceOrDefinedName"),
+                HyperlinkLinkType.EmailAddress => UiText.Get("Hyperlink_EnterEmailAddress"),
+                HyperlinkLinkType.CreateNewDocument => UiText.Get("Hyperlink_EnterNewDocumentName"),
+                _ => UiText.Get("Hyperlink_EnterAddress")
             };
             return false;
         }
 
         if (linkType == HyperlinkLinkType.EmailAddress && !IsValidEmailAddressTarget(result.Target))
         {
-            error = "Enter a valid email address.";
+            error = UiText.Get("Hyperlink_EnterValidEmailAddress");
             return false;
         }
 
@@ -161,10 +161,10 @@ public sealed class HyperlinkDialog : Window
     {
         var (label, automationName, helpText) = SelectedLinkType switch
         {
-            HyperlinkLinkType.CreateNewDocument => ("Name of new _document:", "Name of new document", "Enter the name of the new document to create."),
-            HyperlinkLinkType.PlaceInThisDocument => ("Type the cell _reference:", "Cell reference or defined name", "Enter a cell reference or defined name in this workbook."),
-            HyperlinkLinkType.EmailAddress => ("_E-mail address:", "E-mail address", "Enter the email address for the hyperlink."),
-            _ => ("_Address:", "Address", "Enter the file path or web page address for the hyperlink.")
+            HyperlinkLinkType.CreateNewDocument => (UiText.Get("Hyperlink_NewDocumentLabel"), UiText.Get("Hyperlink_NewDocumentAutomationName"), UiText.Get("Hyperlink_NewDocumentHelpText")),
+            HyperlinkLinkType.PlaceInThisDocument => (UiText.Get("Hyperlink_CellReferenceLabel"), UiText.Get("Hyperlink_CellReferenceAutomationName"), UiText.Get("Hyperlink_CellReferenceHelpText")),
+            HyperlinkLinkType.EmailAddress => (UiText.Get("Hyperlink_EmailAddressLabel"), UiText.Get("Hyperlink_EmailAddressAutomationName"), UiText.Get("Hyperlink_EmailAddressHelpText")),
+            _ => (UiText.Get("Hyperlink_Address"), UiText.Get("Hyperlink_AddressAutomationName"), UiText.Get("Hyperlink_AddressHelpText"))
         };
 
         _targetLabel.Content = label;
@@ -176,7 +176,7 @@ public sealed class HyperlinkDialog : Window
     {
         if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))
         {
-            ShowInvalidInputWarning(error ?? "Enter hyperlink details.");
+            ShowInvalidInputWarning(error ?? UiText.Get("Hyperlink_EnterHyperlinkDetails"));
             return;
         }
 

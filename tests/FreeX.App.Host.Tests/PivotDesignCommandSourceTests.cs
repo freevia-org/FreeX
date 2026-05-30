@@ -23,8 +23,8 @@ public sealed class PivotDesignCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
 
-        button.Should().Contain($"Content=\"{content}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -58,7 +58,7 @@ public sealed class PivotDesignCommandSourceTests
 
     private static string ExtractButtonElementByTitle(string xaml, string title)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
+        var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", StringComparison.Ordinal);
         titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} PivotTable Design command should be present");
 
         var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);

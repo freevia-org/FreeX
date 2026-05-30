@@ -20,7 +20,7 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>, INotifyProper
 {
     private uint _columnOffset;
     private bool _ascending;
-    private string _sortOn = "Cell Values";
+    private string _sortOn = UiText.Get("Sort_SortOnCellValues");
     private string _targetColor = "";
     private IReadOnlyList<SortColorChoice> _colorChoices = [new SortColorChoice("")];
 
@@ -103,20 +103,20 @@ public sealed partial class SortDialog
 {
     private static readonly IReadOnlyList<SortDirectionChoice> DirectionChoices =
     [
-        new("A to Z", true),
-        new("Z to A", false)
+        new(UiText.Get("Sort_OrderAToZ"), true),
+        new(UiText.Get("Sort_OrderZToA"), false)
     ];
 
     private static readonly IReadOnlyList<SortDirectionChoice> ColorDirectionChoices =
     [
-        new("On Top", true),
-        new("On Bottom", false)
+        new(UiText.Get("Sort_OrderOnTop"), true),
+        new(UiText.Get("Sort_OrderOnBottom"), false)
     ];
 
     private static readonly IReadOnlyList<SortOnChoice> SortOnChoices =
     [
-        new("Cell Values"),
-        new("Cell Color"),
-        new("Font Color")
+        new(UiText.Get("Sort_SortOnCellValues")),
+        new(UiText.Get("Sort_SortOnCellColor")),
+        new(UiText.Get("Sort_SortOnFontColor"))
     ];
 }

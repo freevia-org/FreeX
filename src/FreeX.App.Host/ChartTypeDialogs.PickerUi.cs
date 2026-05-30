@@ -17,17 +17,17 @@ public sealed partial class InsertChartDialog
         var heading = new StackPanel();
         heading.Children.Add(new TextBlock
         {
-            Text = "Choose a chart type",
+            Text = UiText.Get("ChartTypePicker_ChooseChartTypeHeading"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 2)
         });
-        heading.Children.Add(CreateInlineHelp("Recently used and suggested for your data"));
+        heading.Children.Add(CreateInlineHelp(UiText.Get("ChartTypePicker_RecommendedHelpText")));
         grid.Children.Add(heading);
         gallery.Margin = new Thickness(0, 34, 12, 0);
-        AutomationProperties.SetName(gallery, "Chart subtype gallery");
+        AutomationProperties.SetName(gallery, UiText.Get("ChartTypePicker_SubtypeGalleryAutomationName"));
         Grid.SetRow(gallery, 1);
         grid.Children.Add(gallery);
-        var preview = CreatePreviewPanel("Preview", "Recommended chart preview");
+        var preview = CreatePreviewPanel(UiText.Get("ChartTypePicker_PreviewTitle"), UiText.Get("ChartTypePicker_RecommendedPreviewBody"));
         Grid.SetColumn(preview, 1);
         Grid.SetRowSpan(preview, 2);
         grid.Children.Add(preview);
@@ -45,10 +45,10 @@ public sealed partial class InsertChartDialog
         categoryList.DisplayMemberPath = nameof(ChartTypePickerCategory.Name);
         categoryList.Width = 150;
         categoryList.Margin = new Thickness(0, 24, 12, 0);
-        AutomationProperties.SetName(categoryList, "Chart categories");
+        AutomationProperties.SetName(categoryList, UiText.Get("ChartTypePicker_CategoriesAutomationName"));
         subtypeGallery.DisplayMemberPath = nameof(ChartTypeGalleryChoice.SubtypeName);
         subtypeGallery.Margin = new Thickness(0, 24, 12, 0);
-        AutomationProperties.SetName(subtypeGallery, "Chart subtype gallery");
+        AutomationProperties.SetName(subtypeGallery, UiText.Get("ChartTypePicker_SubtypeGalleryAutomationName"));
         categoryList.SelectionChanged += (_, _) =>
         {
             if (categoryList.SelectedItem is not ChartTypePickerCategory category)
@@ -71,18 +71,18 @@ public sealed partial class InsertChartDialog
         var heading = new StackPanel();
         heading.Children.Add(new TextBlock
         {
-            Text = "All Charts",
+            Text = UiText.Get("ChartTypePicker_AllChartsHeading"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 2)
         });
-        heading.Children.Add(CreateInlineHelp("Choose a subtype to see how the chart will represent categories and values."));
+        heading.Children.Add(CreateInlineHelp(UiText.Get("ChartTypePicker_AllChartsHelpText")));
         grid.Children.Add(heading);
         Grid.SetRow(categoryList, 1);
         grid.Children.Add(categoryList);
         Grid.SetColumn(subtypeGallery, 1);
         Grid.SetRow(subtypeGallery, 1);
         grid.Children.Add(subtypeGallery);
-        var preview = CreatePreviewPanel("Preview", "Chart preview");
+        var preview = CreatePreviewPanel(UiText.Get("ChartTypePicker_PreviewTitle"), UiText.Get("ChartTypePicker_ChartPreviewBody"));
         Grid.SetColumn(preview, 2);
         Grid.SetRowSpan(preview, 2);
         grid.Children.Add(preview);
@@ -125,7 +125,7 @@ public sealed partial class InsertChartDialog
                     },
                     new TextBlock
                     {
-                        Text = "Chart preview sample",
+                        Text = UiText.Get("ChartTypePicker_PreviewSampleLabel"),
                         FontWeight = FontWeights.SemiBold,
                         Margin = new Thickness(0, 0, 0, 8)
                     },

@@ -39,23 +39,23 @@ public sealed class FillSeriesStepDialog : Window
 {
     private readonly TextBox _stepBox = new();
     private readonly TextBox _stopBox = new();
-    private readonly RadioButton _rowsButton = new() { Content = "_Rows", GroupName = "SeriesIn" };
-    private readonly RadioButton _columnsButton = new() { Content = "_Columns", GroupName = "SeriesIn", IsChecked = true };
-    private readonly RadioButton _linearButton = new() { Content = "_Linear", GroupName = "SeriesType", IsChecked = true };
-    private readonly RadioButton _growthButton = new() { Content = "_Growth", GroupName = "SeriesType" };
-    private readonly RadioButton _dateButton = new() { Content = "_Date", GroupName = "SeriesType" };
-    private readonly RadioButton _autoFillButton = new() { Content = "_AutoFill", GroupName = "SeriesType" };
-    private readonly RadioButton _dayButton = new() { Content = "Da_y", GroupName = "DateUnit", IsChecked = true };
-    private readonly RadioButton _weekdayButton = new() { Content = "_Weekday", GroupName = "DateUnit" };
-    private readonly RadioButton _monthButton = new() { Content = "_Month", GroupName = "DateUnit" };
-    private readonly RadioButton _yearButton = new() { Content = "Y_ear", GroupName = "DateUnit" };
+    private readonly RadioButton _rowsButton = new() { Content = UiText.Get("FillSeriesStep_Rows"), GroupName = "SeriesIn" };
+    private readonly RadioButton _columnsButton = new() { Content = UiText.Get("FillSeriesStep_Columns"), GroupName = "SeriesIn", IsChecked = true };
+    private readonly RadioButton _linearButton = new() { Content = UiText.Get("FillSeriesStep_Linear"), GroupName = "SeriesType", IsChecked = true };
+    private readonly RadioButton _growthButton = new() { Content = UiText.Get("FillSeriesStep_Growth"), GroupName = "SeriesType" };
+    private readonly RadioButton _dateButton = new() { Content = UiText.Get("FillSeriesStep_Date"), GroupName = "SeriesType" };
+    private readonly RadioButton _autoFillButton = new() { Content = UiText.Get("FillSeriesStep_AutoFill"), GroupName = "SeriesType" };
+    private readonly RadioButton _dayButton = new() { Content = UiText.Get("FillSeriesStep_Day"), GroupName = "DateUnit", IsChecked = true };
+    private readonly RadioButton _weekdayButton = new() { Content = UiText.Get("FillSeriesStep_Weekday"), GroupName = "DateUnit" };
+    private readonly RadioButton _monthButton = new() { Content = UiText.Get("FillSeriesStep_Month"), GroupName = "DateUnit" };
+    private readonly RadioButton _yearButton = new() { Content = UiText.Get("FillSeriesStep_Year"), GroupName = "DateUnit" };
 
     public FillSeriesStepDialogResult Result { get; private set; } = new(1);
 
     public FillSeriesStepDialog(double step = 1)
     {
         Result = new FillSeriesStepDialogResult(step);
-        Title = "Series";
+        Title = UiText.Get("FillSeriesStep_Title");
         Width = 380;
         Height = 340;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -63,12 +63,12 @@ public sealed class FillSeriesStepDialog : Window
         ShowInTaskbar = false;
         _stepBox.Text = step.ToString(CultureInfo.InvariantCulture);
         _stopBox.Text = "";
-        AutomationProperties.SetName(_stepBox, "Step value");
+        AutomationProperties.SetName(_stepBox, UiText.Get("FillSeriesStep_StepValueAutomationName"));
         AutomationProperties.SetAutomationId(_stepBox, "FillSeriesStepValueBox");
-        AutomationProperties.SetHelpText(_stepBox, "Enter the amount to increment each value in the series.");
-        AutomationProperties.SetName(_stopBox, "Stop value");
+        AutomationProperties.SetHelpText(_stepBox, UiText.Get("FillSeriesStep_StepValueHelpText"));
+        AutomationProperties.SetName(_stopBox, UiText.Get("FillSeriesStep_StopValueAutomationName"));
         AutomationProperties.SetAutomationId(_stopBox, "FillSeriesStopValueBox");
-        AutomationProperties.SetHelpText(_stopBox, "Enter the optional final value for the series.");
+        AutomationProperties.SetHelpText(_stopBox, UiText.Get("FillSeriesStep_StopValueHelpText"));
         _linearButton.Checked += (_, _) => UpdateDateUnitAvailability();
         _growthButton.Checked += (_, _) => UpdateDateUnitAvailability();
         _dateButton.Checked += (_, _) => UpdateDateUnitAvailability();
@@ -109,7 +109,7 @@ public sealed class FillSeriesStepDialog : Window
         error = null;
         if (input is null || !FillSeriesPlanner.TryParseStep(input, out var step))
         {
-            error = "Enter a numeric step value.";
+            error = UiText.Get("FillSeriesStep_InvalidStepMessage");
             return false;
         }
 
@@ -152,7 +152,7 @@ public sealed class FillSeriesStepDialog : Window
         {
             if (!TryParseOptionalFiniteDouble(stopText, out var parsedStop))
             {
-                error = "Enter a numeric stop value or leave it blank.";
+                error = UiText.Get("FillSeriesStep_InvalidStopMessage");
                 return false;
             }
 
@@ -166,14 +166,14 @@ public sealed class FillSeriesStepDialog : Window
     private UIElement CreateSeriesContent()
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new TextBlock { Text = "Series in", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
+        stack.Children.Add(new TextBlock { Text = UiText.Get("FillSeriesStep_SeriesInHeader"), FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) });
         stack.Children.Add(CreateHorizontalRow(_rowsButton, _columnsButton));
-        stack.Children.Add(new TextBlock { Text = "Type", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 6) });
+        stack.Children.Add(new TextBlock { Text = UiText.Get("FillSeriesStep_TypeHeader"), FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 6) });
         stack.Children.Add(CreateHorizontalRow(_linearButton, _growthButton, _dateButton, _autoFillButton));
-        stack.Children.Add(new TextBlock { Text = "Date unit", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 6) });
+        stack.Children.Add(new TextBlock { Text = UiText.Get("FillSeriesStep_DateUnitHeader"), FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 6) });
         stack.Children.Add(CreateHorizontalRow(_dayButton, _weekdayButton, _monthButton, _yearButton));
-        stack.Children.Add(CreateLabeledTextBox("Step _value:", _stepBox));
-        stack.Children.Add(CreateLabeledTextBox("S_top value:", _stopBox));
+        stack.Children.Add(CreateLabeledTextBox(UiText.Get("FillSeriesStep_StepValueLabel"), _stepBox));
+        stack.Children.Add(CreateLabeledTextBox(UiText.Get("FillSeriesStep_StopValueLabel"), _stopBox));
         stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
         return stack;
     }
@@ -189,8 +189,8 @@ public sealed class FillSeriesStepDialog : Window
                 out var result,
                 out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? "Enter a numeric step value.", Title);
-            if (string.Equals(error, "Enter a numeric stop value or leave it blank.", StringComparison.Ordinal))
+            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("FillSeriesStep_InvalidStepMessage"), Title);
+            if (string.Equals(error, UiText.Get("FillSeriesStep_InvalidStopMessage"), StringComparison.Ordinal))
                 FocusInvalidStopInput();
             else
                 FocusInvalidStepInput();

@@ -103,17 +103,17 @@ public sealed class BackstageRecentFileListPlannerTests
         var plan = BackstageRecentFileListPlanner.Build(entries, filter: null);
 
         var recent = plan.RecentItems.Single();
-        recent.OpenAutomationName.Should().Be("Open recent file Budget.xlsx");
-        recent.OpenAutomationHelpText.Should().Be(@"Open C:\Work\Budget.xlsx");
-        recent.PinAutomationName.Should().Be("Pin Budget.xlsx");
-        recent.PinAutomationHelpText.Should().Be("Keep this workbook in the pinned files list.");
-        recent.RemoveAutomationName.Should().Be("Remove Budget.xlsx from recent files");
-        recent.RemoveAutomationHelpText.Should().Be("Remove this workbook from the recent files list without deleting it.");
+        recent.OpenAutomationName.Should().Be(UiText.Format("Backstage_Recent_OpenRecentFileAutomationName", "Budget.xlsx"));
+        recent.OpenAutomationHelpText.Should().Be(UiText.Format("Backstage_Recent_OpenAutomationHelpText", @"C:\Work\Budget.xlsx"));
+        recent.PinAutomationName.Should().Be(UiText.Format("Backstage_Recent_PinAutomationName", "Budget.xlsx"));
+        recent.PinAutomationHelpText.Should().Be(UiText.Get("Backstage_Recent_PinHelpText"));
+        recent.RemoveAutomationName.Should().Be(UiText.Format("Backstage_Recent_RemoveAutomationName", "Budget.xlsx"));
+        recent.RemoveAutomationHelpText.Should().Be(UiText.Get("Backstage_Recent_RemoveAutomationHelpText"));
 
         var pinned = plan.PinnedItems.Single();
-        pinned.OpenAutomationName.Should().Be("Open pinned file Forecast.xlsx");
-        pinned.PinAutomationName.Should().Be("Unpin Forecast.xlsx");
-        pinned.PinAutomationHelpText.Should().Be("Remove this workbook from the pinned files list.");
+        pinned.OpenAutomationName.Should().Be(UiText.Format("Backstage_Recent_OpenPinnedFileAutomationName", "Forecast.xlsx"));
+        pinned.PinAutomationName.Should().Be(UiText.Format("Backstage_Recent_UnpinAutomationName", "Forecast.xlsx"));
+        pinned.PinAutomationHelpText.Should().Be(UiText.Get("Backstage_Recent_UnpinHelpText"));
     }
 
     [Fact]

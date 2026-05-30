@@ -17,16 +17,16 @@ public partial class MainWindow
         if (sheet is null || SheetGrid.SelectedRange is not { } sourceRange)
         {
             _messageService.ShowInfo(
-                "Select a source range with a header row before creating a PivotTable.",
-                "Insert PivotTable");
+                UiText.Get("MainWindowMessage_PivotTableSelectSourceRange"),
+                UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
             return;
         }
 
         if (sourceRange.RowCount < 2 || sourceRange.ColCount < 2)
         {
             _messageService.ShowInfo(
-                "PivotTable source data must include at least two columns and a header row.",
-                "Insert PivotTable");
+                UiText.Get("MainWindowMessage_PivotTableSourceMinimumShape"),
+                UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
             return;
         }
 
@@ -41,7 +41,9 @@ public partial class MainWindow
 
         if (!TryParseWorkbookRange(_currentSheetId, dialog.Result.SourceRangeText, out var dialogSourceRange))
         {
-            _messageService.ShowWarning("Enter a valid PivotTable source range.", "Insert PivotTable");
+            _messageService.ShowWarning(
+                UiText.Get("MainWindowMessage_PivotTableInvalidSourceRange"),
+                UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
             return;
         }
 
@@ -81,7 +83,9 @@ public partial class MainWindow
         if (!TryParseWorkbookRange(_currentSheetId, dialog.Result.DestinationRangeText, out var targetRange) ||
             targetRange.Start.Sheet != _currentSheetId)
         {
-            _messageService.ShowWarning("Enter a destination cell on the active worksheet.", "Insert PivotTable");
+            _messageService.ShowWarning(
+                UiText.Get("MainWindowMessage_PivotTableInvalidDestinationCell"),
+                UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
             return;
         }
 
@@ -135,8 +139,8 @@ public partial class MainWindow
         if (pivotTable is null)
         {
             _messageService.ShowInfo(
-                "Select a cell inside an existing PivotTable, or open a workbook with a PivotTable on the active sheet.",
-                "Refresh PivotTable");
+                UiText.Get("MainWindowMessage_PivotTableSelectExistingForRefresh"),
+                UiText.Get("MainWindowMessage_RefreshPivotTableTitle"));
             return;
         }
 
@@ -160,8 +164,8 @@ public partial class MainWindow
             if (showMessage)
             {
                 _messageService.ShowInfo(
-                    "Select a value cell inside an existing PivotTable before showing detail rows.",
-                    "Show PivotTable Details");
+                    UiText.Get("MainWindowMessage_PivotTableSelectValueForDetails"),
+                    UiText.Get("MainWindowMessage_ShowPivotTableDetailsTitle"));
             }
 
             return false;
@@ -248,8 +252,8 @@ public partial class MainWindow
         if (pivotTable is null)
         {
             _messageService.ShowInfo(
-                "Select a cell inside an existing PivotTable before showing the field list.",
-                "PivotTable Fields");
+                UiText.Get("MainWindowMessage_PivotTableSelectExistingForFieldList"),
+                UiText.Get("MainWindowMessage_PivotTableFieldsTitle"));
             return;
         }
 
@@ -534,7 +538,7 @@ public partial class MainWindow
             pivotTable.DataFields.Count > 0)
         {
             Owner = this,
-            Title = $"{PivotUiPlanner.FieldCaption(headers, sourceIndex.Value)} Filter"
+            Title = UiText.Format("MainWindowMessage_PivotFieldFilterTitle", PivotUiPlanner.FieldCaption(headers, sourceIndex.Value))
         };
         if (dialog.ShowDialog() != true)
             return;
@@ -783,7 +787,9 @@ public partial class MainWindow
     {
         if (dataFields.Count == 0)
         {
-            _messageService.ShowInfo("A PivotTable requires at least one value field.", "PivotTable Fields");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_PivotTableRequiresValueField"),
+                UiText.Get("MainWindowMessage_PivotTableFieldsTitle"));
             return;
         }
 

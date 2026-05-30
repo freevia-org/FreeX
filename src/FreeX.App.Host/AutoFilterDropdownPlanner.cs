@@ -97,7 +97,7 @@ public enum AutoFilterMenuEntryKind
 
 public static class AutoFilterDropdownPlanner
 {
-    public const string BlankDisplayText = "(Blanks)";
+    public static string BlankDisplayText => UiText.Get("AutoFilter_BlankDisplayText");
 
     public static bool TryPlan(GridRange currentRegion, CellAddress activeCell, out AutoFilterDropdownPlan plan)
     {
@@ -151,15 +151,15 @@ public static class AutoFilterDropdownPlanner
 
         var entries = new List<AutoFilterMenuEntry>
         {
-            new("Sort A to Z", AutoFilterMenuEntryKind.SortAscending),
-            new("Sort Z to A", AutoFilterMenuEntryKind.SortDescending),
+            new(UiText.Get("AutoFilter_SortAscending"), AutoFilterMenuEntryKind.SortAscending),
+            new(UiText.Get("AutoFilter_SortDescending"), AutoFilterMenuEntryKind.SortDescending),
             new(string.Empty, AutoFilterMenuEntryKind.Separator),
-            new($"Clear Filter From \"{headerText}\"", AutoFilterMenuEntryKind.ClearFilter),
-            new("Filter by Color", AutoFilterMenuEntryKind.FilterByColor),
+            new(UiText.Format("AutoFilter_ClearFilterFrom", headerText), AutoFilterMenuEntryKind.ClearFilter),
+            new(UiText.Get("AutoFilter_FilterByColor"), AutoFilterMenuEntryKind.FilterByColor),
             filterEntry,
             new(string.Empty, AutoFilterMenuEntryKind.Separator),
-            new("Search", AutoFilterMenuEntryKind.Search),
-            new("(Select All)", AutoFilterMenuEntryKind.SelectAll),
+            new(UiText.Get("AutoFilter_Search"), AutoFilterMenuEntryKind.Search),
+            new(UiText.Get("AutoFilter_SelectAll"), AutoFilterMenuEntryKind.SelectAll),
             new(string.Empty, AutoFilterMenuEntryKind.Separator)
         };
 
@@ -210,7 +210,7 @@ public static class AutoFilterDropdownPlanner
         options.AddRange(fillColors.Select(color =>
             new AutoFilterColorOption(ColorInputParser.FormatHexColor(color), AutoFilterColorFilterKind.CellFillColor, color)));
         if (hasNoFill && fillColors.Count > 0)
-            options.Add(new AutoFilterColorOption("No Fill", AutoFilterColorFilterKind.NoFill, null));
+            options.Add(new AutoFilterColorOption(UiText.Get("AutoFilter_NoFill"), AutoFilterColorFilterKind.NoFill, null));
         options.AddRange(fontColors.Select(color =>
             new AutoFilterColorOption(ColorInputParser.FormatHexColor(color), AutoFilterColorFilterKind.FontColor, color)));
         return options;
@@ -250,5 +250,5 @@ public static class AutoFilterDropdownPlanner
     }
 
     private static string FormatBlankHeader(uint absoluteColumn) =>
-        $"Column {CellAddress.NumberToColumnName(absoluteColumn)}";
+        UiText.Format("AutoFilter_ColumnHeader", CellAddress.NumberToColumnName(absoluteColumn));
 }

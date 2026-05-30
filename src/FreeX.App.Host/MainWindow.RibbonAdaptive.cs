@@ -692,7 +692,7 @@ public partial class MainWindow
 
         button.SetResourceReference(StyleProperty, "RibbonTallButton");
         RibbonTooltip.SetTitle(button, groupName);
-        RibbonTooltip.SetDescription(button, $"Show the {groupName} commands.");
+        RibbonTooltip.SetDescription(button, UiText.Format("MainWindow_RibbonCollapsedGroupTooltipFormat", groupName));
         RibbonTooltip.SetKeyTip(button, CreateGroupKeyTip(groupName, usedKeyTips));
         button.Loaded += (_, _) => EnsureCollapsedGroupChevronAdorner(button);
         button.Click += (_, _) =>
@@ -865,7 +865,7 @@ public partial class MainWindow
         if (RibbonMetadata.TryGetGroupName(group, out var groupName))
             return groupName;
 
-        return "Commands";
+        return UiText.Get("MainWindow_RibbonCollapsedGroupFallbackName");
     }
 
     private static string? GetRibbonGroupCatalogId(FrameworkElement group) =>
@@ -909,7 +909,8 @@ public partial class MainWindow
         if (TryGetCachedActiveRibbonPanel(tabItem, out var cachedPanel))
             return cachedPanel;
 
-        if (string.Equals(tabItem.Header?.ToString(), "Home", StringComparison.Ordinal) &&
+        if (RibbonMetadata.TryGetCatalogId(tabItem, out var catalogId) &&
+            string.Equals(catalogId, "HomeTab", StringComparison.Ordinal) &&
             HomeRibbonPanel is not null)
         {
             return CacheActiveRibbonPanel(tabItem, HomeRibbonPanel);

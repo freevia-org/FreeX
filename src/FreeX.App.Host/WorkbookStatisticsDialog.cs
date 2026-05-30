@@ -9,7 +9,7 @@ public sealed class WorkbookStatisticsDialog : Window
 {
     public WorkbookStatisticsDialog(WorkbookStatistics statistics)
     {
-        Title = "Workbook Statistics";
+        Title = UiText.Get("WorkbookStatistics_WorkbookStatistics");
         Width = 360;
         Height = 260;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -31,9 +31,9 @@ public sealed class WorkbookStatisticsDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         };
-        AutomationProperties.SetName(statisticsBlock, "Workbook statistics");
+        AutomationProperties.SetName(statisticsBlock, UiText.Get("WorkbookStatistics_WorkbookStatistics"));
         AutomationProperties.SetAutomationId(statisticsBlock, "WorkbookStatisticsSummary");
-        AutomationProperties.SetHelpText(statisticsBlock, "Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
+        AutomationProperties.SetHelpText(statisticsBlock, UiText.Get("WorkbookStatistics_SummarizesSheetCellFormulaCommentAndObjectCountsForTheWorkbook"));
         stack.Children.Add(statisticsBlock);
         stack.Children.Add(DialogButtonRowFactory.CreateOkOnly(() => Window.GetWindow(stack)!.DialogResult = true, buttonWidth: 76));
         return stack;

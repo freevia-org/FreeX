@@ -17,17 +17,17 @@ public sealed class SheetNameDialog : Window
     public SheetNameDialog(string currentName)
     {
         Result = CreateResult(currentName);
-        Title = "Rename Sheet";
+        Title = UiText.Get("SheetName_RenameSheet");
         Width = 340;
         Height = 150;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _nameBox.Text = currentName;
-        AutomationProperties.SetName(_nameBox, "Sheet name");
+        AutomationProperties.SetName(_nameBox, UiText.Get("SheetName_SheetName"));
         AutomationProperties.SetAutomationId(_nameBox, "SheetNameBox");
-        AutomationProperties.SetHelpText(_nameBox, "Enter a worksheet name up to 31 characters.");
-        Content = ObjectSizeDialog.CreateSingleInputContent("Sheet _name:", _nameBox, Accept);
+        AutomationProperties.SetHelpText(_nameBox, UiText.Get("SheetName_EnterAWorksheetNameUpTo31Characters"));
+        Content = ObjectSizeDialog.CreateSingleInputContent(UiText.Get("SheetName_SheetName2"), _nameBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -38,25 +38,25 @@ public sealed class SheetNameDialog : Window
         result = CreateResult(sheetName ?? "");
         if (string.IsNullOrWhiteSpace(result.SheetName))
         {
-            error = "Sheet name is invalid: it cannot be blank.";
+            error = UiText.Get("SheetName_InvalidBlank");
             return false;
         }
 
         if (result.SheetName.Length > 31)
         {
-            error = "Sheet name is invalid: it cannot exceed 31 characters.";
+            error = UiText.Get("SheetName_InvalidTooLong");
             return false;
         }
 
         if (Workbook.ContainsInvalidSheetNameCharacter(result.SheetName))
         {
-            error = "Sheet name is invalid: it cannot contain : \\ / ? * [ or ].";
+            error = UiText.Get("SheetName_InvalidCharacters");
             return false;
         }
 
         if (result.SheetName.StartsWith('\'') || result.SheetName.EndsWith('\''))
         {
-            error = "Sheet name is invalid: it cannot begin or end with an apostrophe.";
+            error = UiText.Get("SheetName_InvalidApostrophe");
             return false;
         }
 
@@ -68,7 +68,7 @@ public sealed class SheetNameDialog : Window
     {
         if (!TryCreateResult(_nameBox.Text, out var result, out var error))
         {
-            ShowInvalidInputWarning(error ?? "Enter a valid sheet name.");
+            ShowInvalidInputWarning(error ?? UiText.Get("SheetName_EnterValidSheetName"));
             return;
         }
 

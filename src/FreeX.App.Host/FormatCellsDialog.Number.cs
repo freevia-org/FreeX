@@ -92,7 +92,7 @@ public partial class FormatCellsDialog
             && (!int.TryParse(NumberDecimalPlacesBox.Text.Trim(), out var decimals) || decimals is < 0 or > 30))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;
-            ShowInvalidInputWarning("Enter decimal places from 0 to 30.", NumberDecimalPlacesBox);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidDecimalPlacesMessage"), NumberDecimalPlacesBox);
             return false;
         }
 
@@ -100,7 +100,7 @@ public partial class FormatCellsDialog
             && !FormatCellsInputParser.IsSupportedCustomNumberFormat(NumberFormatCombo.Text))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Number;
-            ShowInvalidInputWarning("Enter a valid custom number format.", NumberFormatCombo);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidCustomNumberFormatMessage"), NumberFormatCombo);
             return false;
         }
 

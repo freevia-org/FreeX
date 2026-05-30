@@ -21,16 +21,16 @@ public partial class DataValidationDialog
         {
             error = typeTag switch
             {
-                "List" => "Source is required.",
-                "Custom" => "Formula is required.",
-                _ => "Value is required."
+                "List" => UiText.Get("DataValidation_SourceRequired"),
+                "Custom" => UiText.Get("DataValidation_FormulaRequired"),
+                _ => UiText.Get("DataValidation_ValueRequired")
             };
             return false;
         }
 
         if (RequiresSecondFormula(typeTag, operatorTag) && string.IsNullOrWhiteSpace(second))
         {
-            error = "Maximum is required.";
+            error = UiText.Get("DataValidation_MaximumRequired");
             return false;
         }
 

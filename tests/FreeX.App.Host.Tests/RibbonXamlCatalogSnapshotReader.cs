@@ -69,9 +69,9 @@ internal static class RibbonXamlCatalogSnapshotReader
     {
         var groupName = group
             .Descendants(Presentation + "TextBlock")
-            .FirstOrDefault(IsGroupLabel)?
-            .Attribute("Text")?
-            .Value ?? "";
+            .Where(IsGroupLabel)
+            .Select(label => AttributeValue(label, "Text"))
+            .FirstOrDefault() ?? "";
 
         return new RibbonGroupDefinition(
             groupName,
@@ -87,6 +87,7 @@ internal static class RibbonXamlCatalogSnapshotReader
     private static RibbonCommandDefinition ReadCommand(XElement element)
     {
         var title =
+            AttributeValue(element, Local + "RibbonMetadata.CommandName") ??
             AttributeValue(element, Local + "RibbonTooltip.Title") ??
             AttributeValue(element, "Content") ??
             AttributeValue(element, "Header") ??
@@ -203,7 +204,7 @@ internal static class RibbonXamlCatalogSnapshotReader
             : null;
 
     private static string? AttributeValue(XElement element, XName name) =>
-        element.Attribute(name)?.Value;
+        LocalizedXamlTestSupport.ResolveLocalizedValue(element.Attribute(name)?.Value);
 }
 
 internal sealed record RibbonXamlCatalogSnapshot(

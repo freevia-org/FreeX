@@ -42,8 +42,8 @@ public sealed partial class SelectDataSourceDialog
         if (parsed is null)
         {
             return new SelectDataSourcePreview(
-                [new SelectDataSourceSeriesPreview("Series 1", sourceRangeText.Trim())],
-                [new SelectDataSourceCategoryPreview("Category labels")],
+                [new SelectDataSourceSeriesPreview(UiText.Format("SelectDataSource_SeriesNameFormat", 1), sourceRangeText.Trim())],
+                [new SelectDataSourceCategoryPreview(UiText.Get("SelectDataSource_CategoryLabelsFallback"))],
                 "");
         }
 
@@ -70,14 +70,14 @@ public sealed partial class SelectDataSourceDialog
         var series = new List<SelectDataSourceSeriesPreview>();
         for (var col = firstSeriesColumn; col <= range.EndCol; col++)
         {
-            var seriesName = $"Series {series.Count + 1}";
+            var seriesName = UiText.Format("SelectDataSource_SeriesNameFormat", series.Count + 1);
             series.Add(new SelectDataSourceSeriesPreview(
                 seriesName,
                 FormatRangeReference(range.SheetName, col, firstDataRow, col, range.EndRow)));
         }
 
         if (series.Count == 0)
-            series.Add(new SelectDataSourceSeriesPreview("Series 1", sourceRangeText.Trim()));
+            series.Add(new SelectDataSourceSeriesPreview(UiText.Format("SelectDataSource_SeriesNameFormat", 1), sourceRangeText.Trim()));
 
         return series;
     }
@@ -88,10 +88,10 @@ public sealed partial class SelectDataSourceDialog
     {
         var categories = new List<SelectDataSourceCategoryPreview>();
         for (var row = categoryStartRow; row <= range.EndRow; row++)
-            categories.Add(new SelectDataSourceCategoryPreview($"Category {categories.Count + 1}"));
+            categories.Add(new SelectDataSourceCategoryPreview(UiText.Format("SelectDataSource_CategoryNameFormat", categories.Count + 1)));
 
         if (categories.Count == 0)
-            categories.Add(new SelectDataSourceCategoryPreview("Category labels"));
+            categories.Add(new SelectDataSourceCategoryPreview(UiText.Get("SelectDataSource_CategoryLabelsFallback")));
 
         return categories;
     }

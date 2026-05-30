@@ -9,17 +9,17 @@ public partial class PivotLabelFilterDialog : Window
 {
     private static readonly (string Label, PivotLabelFilterKind Kind)[] Options =
     [
-        ("Equals", PivotLabelFilterKind.Equals),
-        ("Does Not Equal", PivotLabelFilterKind.DoesNotEqual),
-        ("Begins With", PivotLabelFilterKind.BeginsWith),
-        ("Ends With", PivotLabelFilterKind.EndsWith),
-        ("Contains", PivotLabelFilterKind.Contains),
-        ("Does Not Contain", PivotLabelFilterKind.DoesNotContain),
-        ("Greater Than", PivotLabelFilterKind.GreaterThan),
-        ("Greater Than Or Equal To", PivotLabelFilterKind.GreaterThanOrEqual),
-        ("Less Than", PivotLabelFilterKind.LessThan),
-        ("Less Than Or Equal To", PivotLabelFilterKind.LessThanOrEqual),
-        ("Between", PivotLabelFilterKind.Between)
+        (UiText.Get("PivotLabelFilter_Equals"), PivotLabelFilterKind.Equals),
+        (UiText.Get("PivotLabelFilter_DoesNotEqual"), PivotLabelFilterKind.DoesNotEqual),
+        (UiText.Get("PivotLabelFilter_BeginsWith"), PivotLabelFilterKind.BeginsWith),
+        (UiText.Get("PivotLabelFilter_EndsWith"), PivotLabelFilterKind.EndsWith),
+        (UiText.Get("PivotLabelFilter_Contains"), PivotLabelFilterKind.Contains),
+        (UiText.Get("PivotLabelFilter_DoesNotContain"), PivotLabelFilterKind.DoesNotContain),
+        (UiText.Get("PivotLabelFilter_GreaterThan"), PivotLabelFilterKind.GreaterThan),
+        (UiText.Get("PivotLabelFilter_GreaterThanOrEqualTo"), PivotLabelFilterKind.GreaterThanOrEqual),
+        (UiText.Get("PivotLabelFilter_LessThan"), PivotLabelFilterKind.LessThan),
+        (UiText.Get("PivotLabelFilter_LessThanOrEqualTo"), PivotLabelFilterKind.LessThanOrEqual),
+        (UiText.Get("PivotLabelFilter_Between"), PivotLabelFilterKind.Between)
     ];
 
     private readonly int _sourceFieldIndex;
@@ -41,7 +41,7 @@ public partial class PivotLabelFilterDialog : Window
         var value = LabelFilterValueBox.Text.Trim();
         if (value.Length == 0)
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a label filter value.", "Label Filter");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("PivotLabelFilter_ValueRequiredMessage"), UiText.Get("PivotLabelFilter_LabelFilter"));
             FocusInvalidLabelValue(LabelFilterValueBox);
             return;
         }
@@ -50,7 +50,7 @@ public partial class PivotLabelFilterDialog : Window
         var value2 = kind == PivotLabelFilterKind.Between ? LabelFilterValue2Box.Text.Trim() : "";
         if (kind == PivotLabelFilterKind.Between && value2.Length == 0)
         {
-            DialogMessageHelper.ShowWarning(this, "Enter an ending label filter value.", "Label Filter");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("PivotLabelFilter_EndingValueRequiredMessage"), UiText.Get("PivotLabelFilter_LabelFilter"));
             FocusInvalidLabelValue(LabelFilterValue2Box);
             return;
         }

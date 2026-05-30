@@ -17,9 +17,9 @@ public sealed record PageBreakDialogResult(PageBreakDialogAction Action, uint? R
 
 public sealed class PageBreakDialog : Window
 {
-    private readonly RadioButton _insertRowButton = new() { Content = "Insert _row page break", IsChecked = true };
-    private readonly RadioButton _insertColumnButton = new() { Content = "Insert _column page break" };
-    private readonly RadioButton _resetAllButton = new() { Content = "_Reset all page breaks" };
+    private readonly RadioButton _insertRowButton = new() { Content = UiText.Get("PageBreak_InsertRowPageBreak"), IsChecked = true };
+    private readonly RadioButton _insertColumnButton = new() { Content = UiText.Get("PageBreak_InsertColumnPageBreak") };
+    private readonly RadioButton _resetAllButton = new() { Content = UiText.Get("PageBreak_ResetAllPageBreaks") };
     private readonly TextBox _rowBreakBox = new();
     private readonly TextBox _columnBreakBox = new();
 
@@ -27,7 +27,7 @@ public sealed class PageBreakDialog : Window
 
     public PageBreakDialog(string defaultValue)
     {
-        Title = "Page Breaks";
+        Title = UiText.Get("PageBreak_PageBreaks");
         Width = 360;
         Height = 240;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -79,7 +79,7 @@ public sealed class PageBreakDialog : Window
         {
             if (!PageLayoutInputParser.TryParseColumnBreakValue(_columnBreakBox.Text, out var columnBreak))
             {
-                DialogMessageHelper.ShowWarning(this, "Enter a column number or letter within the worksheet for the page break.", Title);
+                DialogMessageHelper.ShowWarning(this, UiText.Get("PageBreak_EnterAColumnNumberOrLetterWithinTheWorksheetForThePageBreak"), Title);
                 FocusInvalidBreakInput(_columnBreakBox);
                 return;
             }
@@ -91,7 +91,7 @@ public sealed class PageBreakDialog : Window
             if (!uint.TryParse(_rowBreakBox.Text.Trim(), out var rowBreak) ||
                 !PageLayoutInputParser.IsValidRowBreak(rowBreak))
             {
-                DialogMessageHelper.ShowWarning(this, "Enter a row number within the worksheet for the page break.", Title);
+                DialogMessageHelper.ShowWarning(this, UiText.Get("PageBreak_EnterARowNumberWithinTheWorksheetForThePageBreak"), Title);
                 FocusInvalidBreakInput(_rowBreakBox);
                 return;
             }
@@ -141,21 +141,21 @@ public sealed class PageBreakDialog : Window
         _resetAllButton.IsChecked = result.Action == PageBreakDialogAction.Clear;
         _rowBreakBox.Text = (result.RowBreak ?? 2).ToString(CultureInfo.InvariantCulture);
         _columnBreakBox.Text = (result.ColumnBreak ?? 2).ToString(CultureInfo.InvariantCulture);
-        AutomationProperties.SetName(_rowBreakBox, "Row page break");
+        AutomationProperties.SetName(_rowBreakBox, UiText.Get("PageBreak_RowPageBreak"));
         AutomationProperties.SetAutomationId(_rowBreakBox, "PageBreakRowBreakBox");
-        AutomationProperties.SetHelpText(_rowBreakBox, "Enter the row number where the horizontal page break should be inserted.");
-        AutomationProperties.SetName(_columnBreakBox, "Column page break");
+        AutomationProperties.SetHelpText(_rowBreakBox, UiText.Get("PageBreak_EnterTheRowNumberWhereTheHorizontalPageBreakShouldBeInserted"));
+        AutomationProperties.SetName(_columnBreakBox, UiText.Get("PageBreak_ColumnPageBreak"));
         AutomationProperties.SetAutomationId(_columnBreakBox, "PageBreakColumnBreakBox");
-        AutomationProperties.SetHelpText(_columnBreakBox, "Enter the column number or letter where the vertical page break should be inserted.");
+        AutomationProperties.SetHelpText(_columnBreakBox, UiText.Get("PageBreak_EnterTheColumnNumberOrLetterWhereTheVerticalPageBreakShouldBeInserted"));
     }
 
     private UIElement CreateContent()
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
         stack.Children.Add(_insertRowButton);
-        stack.Children.Add(CreateNumberRow("_Row:", _rowBreakBox));
+        stack.Children.Add(CreateNumberRow(UiText.Get("PageBreak_RowLabel"), _rowBreakBox));
         stack.Children.Add(_insertColumnButton);
-        stack.Children.Add(CreateNumberRow("_Column:", _columnBreakBox));
+        stack.Children.Add(CreateNumberRow(UiText.Get("PageBreak_ColumnLabel"), _columnBreakBox));
         _resetAllButton.Margin = new Thickness(0, 4, 0, 12);
         stack.Children.Add(_resetAllButton);
         stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));

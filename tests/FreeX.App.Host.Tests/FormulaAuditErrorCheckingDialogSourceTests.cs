@@ -35,15 +35,16 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "EvaluateFormulaDialog.cs"));
 
-        source.Should().Contain("Evaluation:");
-        source.Should().Contain("Step _In");
-        source.Should().Contain("Step _Out");
+        source.Should().Contain("UiText.Get(\"EvaluateFormula_EvaluationLabel\")");
+        source.Should().Contain("UiText.Get(\"EvaluateFormula_StepInButton\")");
+        source.Should().Contain("UiText.Get(\"EvaluateFormula_StepOutButton\")");
         source.Should().Contain("_session.StepOut()");
-        source.Should().Contain("_Restart");
-        source.Should().Contain("Help on this _Function");
+        source.Should().Contain("UiText.Get(\"EvaluateFormula_RestartButton\")");
+        source.Should().Contain("UiText.Get(\"EvaluateFormula_HelpButton\")");
         source.Should().NotContain("_Help on this formula");
         source.Should().Contain("ShowFormulaHelp");
         source.Should().NotContain("SystemSounds.Asterisk.Play");
+        UiText.Get("EvaluateFormula_HelpButton").Should().Be("Help on this _Function");
     }
 
     [Fact]
@@ -51,8 +52,9 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "EvaluateFormulaDialog.cs"));
 
-        source.Should().Contain("Content = \"_Evaluate\", Width = 80, Height = 26, IsDefault = true");
-        source.Should().Contain("Content = \"_Close\", Width = 80, Height = 26, IsCancel = true");
+        source.Should().Contain("Content = UiText.Get(\"EvaluateFormula_EvaluateButton\"), Width = 80, Height = 26, IsDefault = true");
+        source.Should().Contain("Content = UiText.Get(\"EvaluateFormula_CloseButton\"), Width = 80, Height = 26, IsCancel = true");
+        UiText.Get("EvaluateFormula_EvaluateButton").Should().Be("_Evaluate");
     }
 
     [Fact]
@@ -61,7 +63,7 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "EvaluateFormulaDialog.cs"));
 
         source.Should().Contain("private readonly Button _stepInButton;");
-        source.Should().Contain("_stepInButton = new Button { Content = \"Step _In\"");
+        source.Should().Contain("_stepInButton = new Button { Content = UiText.Get(\"EvaluateFormula_StepInButton\")");
         source.Should().Contain("_session.StepIn()");
         source.Should().NotContain("_stepInButton.Click += (_, _) =>\r\n        {\r\n            _session.MoveNext();");
         source.Should().Contain("_stepInButton.IsEnabled = _session.CanStepIn;");

@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace FreeX.App.Host;
 
 public sealed record BackstageRecentFileListPlan(
@@ -83,14 +85,18 @@ public sealed class RecentFileViewModel
         Directory = System.IO.Path.GetDirectoryName(entry.Path) ?? "";
         LastOpenedText = FormatDate(entry.LastOpened);
         IsPinned = entry.IsPinned;
-        OpenAutomationName = IsPinned ? $"Open pinned file {FileName}" : $"Open recent file {FileName}";
-        OpenAutomationHelpText = $"Open {Path}";
-        PinAutomationName = IsPinned ? $"Unpin {FileName}" : $"Pin {FileName}";
+        OpenAutomationName = IsPinned
+            ? UiText.Format("Backstage_Recent_OpenPinnedFileAutomationName", FileName)
+            : UiText.Format("Backstage_Recent_OpenRecentFileAutomationName", FileName);
+        OpenAutomationHelpText = UiText.Format("Backstage_Recent_OpenAutomationHelpText", Path);
+        PinAutomationName = IsPinned
+            ? UiText.Format("Backstage_Recent_UnpinAutomationName", FileName)
+            : UiText.Format("Backstage_Recent_PinAutomationName", FileName);
         PinAutomationHelpText = IsPinned
-            ? "Remove this workbook from the pinned files list."
-            : "Keep this workbook in the pinned files list.";
-        RemoveAutomationName = $"Remove {FileName} from recent files";
-        RemoveAutomationHelpText = "Remove this workbook from the recent files list without deleting it.";
+            ? UiText.Get("Backstage_Recent_UnpinHelpText")
+            : UiText.Get("Backstage_Recent_PinHelpText");
+        RemoveAutomationName = UiText.Format("Backstage_Recent_RemoveAutomationName", FileName);
+        RemoveAutomationHelpText = UiText.Get("Backstage_Recent_RemoveAutomationHelpText");
     }
 
     private static string FormatDate(DateTimeOffset timestamp)
@@ -98,10 +104,25 @@ public sealed class RecentFileViewModel
         var localTimestamp = timestamp.ToLocalTime();
         var now = DateTimeOffset.Now;
         var diff = now - localTimestamp;
-        if (diff.TotalHours < 1) return "Just now";
-        if (diff.TotalDays < 1) return "Today at " + localTimestamp.ToString("h:mm tt");
-        if (diff.TotalDays < 2) return "Yesterday at " + localTimestamp.ToString("h:mm tt");
-        if (diff.TotalDays < 7) return localTimestamp.DayOfWeek + " at " + localTimestamp.ToString("h:mm tt");
-        return localTimestamp.Year == now.Year ? localTimestamp.ToString("MMM d") : localTimestamp.ToString("MMM d, yyyy");
+        if (diff.TotalHours < 1)
+            return UiText.Get("Backstage_Recent_LastOpenedJustNow");
+
+        var time = localTimestamp.ToString(UiText.Get("Backstage_Recent_LastOpenedTimeFormat"), CultureInfo.CurrentCulture);
+        if (diff.TotalDays < 1)
+            return UiText.Format("Backstage_Recent_LastOpenedTodayAt", time);
+
+        if (diff.TotalDays < 2)
+            return UiText.Format("Backstage_Recent_LastOpenedYesterdayAt", time);
+
+        if (diff.TotalDays < 7)
+        {
+            var dayName = localTimestamp.ToString("dddd", CultureInfo.CurrentCulture);
+            return UiText.Format("Backstage_Recent_LastOpenedWeekdayAt", dayName, time);
+        }
+
+        var formatKey = localTimestamp.Year == now.Year
+            ? "Backstage_Recent_LastOpenedDateFormat"
+            : "Backstage_Recent_LastOpenedDateWithYearFormat";
+        return localTimestamp.ToString(UiText.Get(formatKey), CultureInfo.CurrentCulture);
     }
 }

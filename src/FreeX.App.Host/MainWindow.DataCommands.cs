@@ -24,7 +24,11 @@ public partial class MainWindow
             {
                 ["reason"] = "no_adapter"
             });
-            ShowOwnedMessage("No import adapters are available.", "Get Data", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoImportAdapters"),
+                UiText.Get("MainWindowMessage_GetDataTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
             return;
         }
 
@@ -79,7 +83,7 @@ public partial class MainWindow
                     format?.FormatName ?? adapter.FormatName,
                     diagnostic.Reason,
                     errorDetail: diagnostic.Detail));
-            ShowOwnedMessage(diagnostic.UserMessage, "Get Data", MessageBoxButton.OK, MessageBoxImage.Error);
+            ShowOwnedMessage(diagnostic.UserMessage, UiText.Get("MainWindowMessage_GetDataTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -113,8 +117,8 @@ public partial class MainWindow
         if (!TextToColumnsDialog.CanConvertRange(range))
         {
             _messageService.ShowInfo(
-                "Text to Columns works on one column at a time. Select a single column of cells and try again.",
-                "Text to Columns");
+                UiText.Get("MainWindowMessage_TextToColumnsSingleColumnRequired"),
+                UiText.Get("MainWindowMessage_TextToColumnsTitle"));
             return;
         }
 
@@ -130,7 +134,9 @@ public partial class MainWindow
         var edits = BuildTextToColumnsEdits(currentRange, dialog.Result);
         if (sheet is not null &&
             TextToColumnsPlanner.FindOverwriteTargets(sheet, edits, currentRange).Count > 0 &&
-            !_messageService.AskYesNo("There's already data here. Do you want to replace it?", "Text to Columns"))
+            !_messageService.AskYesNo(
+                UiText.Get("MainWindowMessage_TextToColumnsReplaceDataPrompt"),
+                UiText.Get("MainWindowMessage_TextToColumnsTitle")))
         {
             return;
         }
@@ -238,7 +244,11 @@ public partial class MainWindow
                 }))
             return;
 
-        ShowOwnedMessage($"Removed {command?.RemovedRowCount ?? 0} duplicate rows.", "Remove Duplicates", MessageBoxButton.OK, MessageBoxImage.Information);
+        ShowOwnedMessage(
+            UiText.Format("MainWindowMessage_RemoveDuplicatesRemovedRows", command?.RemovedRowCount ?? 0),
+            UiText.Get("MainWindowMessage_RemoveDuplicatesTitle"),
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
         UpdateViewport();
     }
 
@@ -379,7 +389,9 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            _messageService.ShowInfo("Select a range with a header row and data rows.", "Subtotal");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_SubtotalSelectRange"),
+                UiText.Get("MainWindowMessage_SubtotalTitle"));
             return;
         }
 
@@ -482,7 +494,9 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            _messageService.ShowInfo("Select a two-column range with headers and at least two data rows.", "Forecast Sheet");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_ForecastSheetSelectRange"),
+                UiText.Get("MainWindowMessage_ForecastSheetTitle"));
             return;
         }
 
@@ -512,7 +526,9 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            _messageService.ShowInfo("Select the data table range, including the formula row and input values.", "Data Table");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_DataTableSelectRange"),
+                UiText.Get("MainWindowMessage_DataTableTitle"));
             return;
         }
 

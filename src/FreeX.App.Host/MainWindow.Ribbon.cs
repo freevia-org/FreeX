@@ -27,8 +27,7 @@ public partial class MainWindow
             if (button.Content is not string label || string.IsNullOrWhiteSpace(label))
                 continue;
 
-            var title = RibbonTooltip.GetTitle(button);
-            var commandName = string.IsNullOrWhiteSpace(title) ? label : title;
+            var commandName = GetRibbonButtonCommandName(button);
             var layoutKind = RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
             ApplyRibbonCommandSize(button, layoutKind);
             if (layoutKind is RibbonCommandLayoutKind.Small)
@@ -173,8 +172,7 @@ public partial class MainWindow
         if (button.Content is not string text)
             return null;
 
-        var title = RibbonTooltip.GetTitle(button);
-        var commandName = string.IsNullOrWhiteSpace(title) ? text : title;
+        var commandName = GetRibbonButtonCommandName(button);
         var layoutKind = RibbonCommandPresentationPlanner.GetLayoutKind(commandName, text);
         ApplyRibbonCommandSize(button, layoutKind);
         if (layoutKind is RibbonCommandLayoutKind.Small)
@@ -939,7 +937,7 @@ public partial class MainWindow
 
         foreach (var button in surface.Buttons)
         {
-            var title = GetRibbonButtonTitleOrLabel(button);
+            var title = GetRibbonButtonCommandName(button);
             var groupName = FindRibbonOwningGroupName(button);
             if ((string.Equals(groupName, "Charts", StringComparison.Ordinal) &&
                  !RibbonCommandPresentationPlanner.IsInsertRibbonChartCommand(title)) ||
@@ -966,6 +964,14 @@ public partial class MainWindow
         return "";
     }
 
+    private static string GetRibbonButtonCommandName(ButtonBase button)
+    {
+        if (RibbonMetadata.TryGetCommandName(button, out var commandName))
+            return commandName;
+
+        return GetRibbonButtonTitleOrLabel(button);
+    }
+
     private static string GetRibbonButtonTitleOrLabel(ButtonBase button)
     {
         var title = RibbonTooltip.GetTitle(button);
@@ -978,6 +984,21 @@ public partial class MainWindow
         var label = FindRibbonContentLabel(button.Content);
 
         return label ?? "";
+    }
+
+    private static string GetRibbonButtonDisplayLabel(ButtonBase button)
+    {
+        if (button.Content is string text && !string.IsNullOrWhiteSpace(text))
+            return text.Trim();
+
+        if (FindRibbonContentLabel(button.Content) is { } label)
+            return label;
+
+        var title = RibbonTooltip.GetTitle(button);
+        if (!string.IsNullOrWhiteSpace(title))
+            return title.Trim();
+
+        return RibbonMetadata.TryGetCommandName(button, out var commandName) ? commandName : "";
     }
 
     private static string? FindRibbonContentLabel(object? content)
@@ -1103,7 +1124,7 @@ public partial class MainWindow
             return false;
         }
 
-        var commandName = GetRibbonButtonTitleOrLabel(button);
+        var commandName = GetRibbonButtonCommandName(button);
         if (string.IsNullOrWhiteSpace(commandName))
             return false;
 
@@ -1132,16 +1153,17 @@ public partial class MainWindow
             return false;
         }
 
-        var commandName = GetRibbonButtonTitleOrLabel(button);
+        var commandName = GetRibbonButtonCommandName(button);
         if (string.IsNullOrWhiteSpace(commandName))
             return false;
 
-        element.Width = GetSmallRibbonCommandWidth(commandName);
+        var label = GetRibbonButtonDisplayLabel(button);
+        element.Width = GetSmallRibbonCommandWidth(label);
         element.Height = 24;
         SetRibbonCompactWidths(button, element.Width, 24);
         if (button is Control control)
             control.Padding = new Thickness(4, 2, 4, 2);
-        button.Content = CreateRibbonCommandContent(commandName, commandName, RibbonCommandLayoutKind.Small);
+        button.Content = CreateRibbonCommandContent(commandName, label, RibbonCommandLayoutKind.Small);
         button.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
         button.HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left;
         button.VerticalContentAlignment = System.Windows.VerticalAlignment.Center;
@@ -1176,11 +1198,11 @@ public partial class MainWindow
 
         var hadUnreplacedIcon = ContainsUnreplacedRibbonIcon(commandButton.Content);
         var hadRibbonCommandLabel = ContainsRibbonCommandLabel(commandButton.Content);
-        var commandName = GetRibbonButtonTitleOrLabel(commandButton);
+        var commandName = GetRibbonButtonCommandName(commandButton);
         if (string.IsNullOrWhiteSpace(commandName))
             return false;
 
-        var label = commandName;
+        var label = GetRibbonButtonDisplayLabel(commandButton);
         var layoutKind = IsFixedHeightIconOnlyRibbonButton(commandButton, hadUnreplacedIcon, hadRibbonCommandLabel) ||
                          (!hadUnreplacedIcon &&
                           hadRibbonCommandLabel &&
@@ -1262,7 +1284,7 @@ public partial class MainWindow
 
         if (tall)
         {
-            var tallLabel = FindRibbonContentLabel(button.Content) ?? GetRibbonButtonTitleOrLabel(button);
+            var tallLabel = GetRibbonButtonDisplayLabel(button);
             element.Width = Math.Max(element.Width is > 0 ? element.Width : 0, GetLargeRibbonCommandWidth(tallLabel));
             element.Height = Math.Max(element.Height is > 0 ? element.Height : 0, 76);
             SetRibbonCompactWidths(button, element.Width, 38);
@@ -1421,6 +1443,9 @@ public partial class MainWindow
 
     private static string GetStaticRibbonIconCommandName(ButtonBase owner, string fallback)
     {
+        if (RibbonMetadata.TryGetCommandName(owner, out var commandName))
+            return commandName;
+
         var title = owner is FrameworkElement element
             ? RibbonTooltip.GetTitle(element)
             : null;
@@ -1682,7 +1707,7 @@ public partial class MainWindow
         switch (layoutKind)
         {
             case RibbonCommandLayoutKind.Large:
-                button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetLargeRibbonCommandWidth(GetRibbonButtonTitleOrLabel(button)));
+                button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetLargeRibbonCommandWidth(GetRibbonButtonDisplayLabel(button)));
                 button.Height = 76;
                 button.Padding = new Thickness(3, 2, 3, 2);
                 button.VerticalAlignment = System.Windows.VerticalAlignment.Center;
@@ -1767,7 +1792,7 @@ public partial class MainWindow
 
     private static void NormalizeDenseRibbonColumnButton(Button button)
     {
-        var commandName = GetRibbonButtonTitleOrLabel(button);
+        var commandName = GetRibbonButtonCommandName(button);
         if (string.IsNullOrWhiteSpace(commandName))
             return;
 

@@ -13,7 +13,7 @@ public partial class MainWindow
         var doc = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService);
         var sheet = _workbook.GetSheet(_currentSheetId);
         var settings = sheet is null
-            ? new PrintSettingsPlan(["Print active sheet"])
+            ? new PrintSettingsPlan([UiText.Get("MainWindowPrintSettings_ActiveSheet")])
             : PrintSettingsPlanner.Build(sheet);
         var dialog = new PrintPreviewDialog(
             _workbook.Name,
@@ -36,7 +36,7 @@ public partial class MainWindow
         var document = PrintRenderer.RenderWorksheet(_workbook, _currentSheetId, _viewportService, ignorePrintArea: settings.IgnorePrintArea);
         var sheet = _workbook.GetSheet(_currentSheetId);
         var plan = sheet is null
-            ? new PrintSettingsPlan(["Print active sheet"])
+            ? new PrintSettingsPlan([UiText.Get("MainWindowPrintSettings_ActiveSheet")])
             : PrintSettingsPlanner.Build(sheet, settings.IgnorePrintArea);
         return (document, plan);
     }
@@ -52,8 +52,8 @@ public partial class MainWindow
 
         var saveDlg = new Microsoft.Win32.SaveFileDialog
         {
-            Title      = "Export as PDF / XPS",
-            Filter     = "PDF files (*.pdf)|*.pdf|XPS files (*.xps)|*.xps",
+            Title      = UiText.Get("MainWindowDialog_ExportPdfXpsTitle"),
+            Filter     = UiText.Get("MainWindowDialog_ExportPdfXpsFilter"),
             DefaultExt = ".pdf",
             FileName   = _workbook.Name,
             AddExtension = true,
@@ -68,8 +68,8 @@ public partial class MainWindow
         if (!ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError))
         {
             ShowOwnedMessage(
-                publishOptionsError ?? "Unsupported export options.",
-                "Export Options",
+                publishOptionsError ?? UiText.Get("MainWindowMessage_ExportUnsupportedOptions"),
+                UiText.Get("MainWindowMessage_ExportOptionsTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;
@@ -107,8 +107,8 @@ public partial class MainWindow
                 pdfLanguage: options.PdfLanguage);
 
             ShowOwnedMessage(
-                $"{optionSummary}\n\nSaved PDF file:\n{pdfPath}",
-                "Export PDF",
+                UiText.Format("MainWindowMessage_ExportPdfSavedFormat", optionSummary, pdfPath),
+                UiText.Get("MainWindowMessage_ExportPdfTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             RecordDiagnosticEvent("export_completed", new Dictionary<string, string?>
@@ -129,8 +129,8 @@ public partial class MainWindow
                 ["reason"] = ex.GetType().Name
             });
             ShowOwnedMessage(
-                $"Failed to save PDF file:\n{ex.Message}",
-                "Export Error",
+                UiText.Format("MainWindowMessage_ExportPdfFailed", ex.Message),
+                UiText.Get("MainWindowMessage_ExportErrorTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             return false;
@@ -184,11 +184,11 @@ public partial class MainWindow
             if (showSuccessMessage)
             {
                 var detail = string.IsNullOrWhiteSpace(optionSummary)
-                    ? $"Saved XPS file:\n{xpsPath}"
-                    : $"{optionSummary}\n\nSaved XPS file:\n{xpsPath}";
+                    ? UiText.Format("MainWindowMessage_ExportXpsSavedFormat", xpsPath)
+                    : UiText.Format("MainWindowMessage_ExportXpsSavedWithOptionsFormat", optionSummary, xpsPath);
                 ShowOwnedMessage(
                     detail,
-                    "Export XPS",
+                    UiText.Get("MainWindowMessage_ExportXpsTitle"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
             }
@@ -211,8 +211,8 @@ public partial class MainWindow
                 ["reason"] = ex.GetType().Name
             });
             ShowOwnedMessage(
-                $"Failed to save XPS file:\n{ex.Message}",
-                "Export Error",
+                UiText.Format("MainWindowMessage_ExportXpsFailed", ex.Message),
+                UiText.Get("MainWindowMessage_ExportErrorTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             return false;

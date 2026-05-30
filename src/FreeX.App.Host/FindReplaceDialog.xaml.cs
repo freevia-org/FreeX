@@ -77,8 +77,8 @@ public sealed partial class FindReplaceDialog : Window
             _navigateTo(row.Address);
     }
 
-    private void OptionsExpander_Expanded(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options <<";
-    private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e) => OptionsExpander.Header = "_Options >>";
+    private void OptionsExpander_Expanded(object sender, RoutedEventArgs e) => OptionsExpander.Header = UiText.Get("FindReplace_OptionsExpanded");
+    private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e) => OptionsExpander.Header = UiText.Get("FindReplace_Options");
     private void FindFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _findFormatDiff, FindFormatButton, ReplaceFindFormatButton);
     private void ReplaceWithFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _replaceFormatDiff, ReplaceWithFormatButton);
     private void ChooseFindFormatFromCellButton_Click(object sender, RoutedEventArgs e) => PickFormatFromCell(ref _findFormatDiff);
@@ -140,14 +140,14 @@ public sealed partial class FindReplaceDialog : Window
 
         if (_results.Count == 0)
         {
-            StatusLabel.Text = "No matches found.";
+            StatusLabel.Text = UiText.Get("FindReplace_NoMatchesFound");
             _currentIndex = -1;
             return;
         }
 
         _currentIndex = (_currentIndex + 1) % _results.Count;
         var result = _results[_currentIndex];
-        StatusLabel.Text = $"Match {_currentIndex + 1} of {_results.Count}";
+        StatusLabel.Text = UiText.Format("FindReplace_MatchStatus", _currentIndex + 1, _results.Count);
         _navigateTo(result.Address);
     }
 
@@ -165,7 +165,9 @@ public sealed partial class FindReplaceDialog : Window
             matchEntireCell: MatchEntireBox.IsChecked == true);
 
         UpdateResultsGrid();
-        StatusLabel.Text = _results.Count == 0 ? "No matches found." : $"{_results.Count} cell(s) found.";
+        StatusLabel.Text = _results.Count == 0
+            ? UiText.Get("FindReplace_NoMatchesFound")
+            : UiText.Format("FindReplace_CellsFoundStatus", _results.Count);
     }
 
     private void ReplaceAll_Click(object sender, RoutedEventArgs e)
@@ -183,7 +185,9 @@ public sealed partial class FindReplaceDialog : Window
         if (ShowReplaceFailureWarning(result.Failure))
             return;
 
-        StatusLabel.Text = result.ReplacedCount == 0 ? "No matches found." : $"Replaced {result.ReplacedCount} cell(s).";
+        StatusLabel.Text = result.ReplacedCount == 0
+            ? UiText.Get("FindReplace_NoMatchesFound")
+            : UiText.Format("FindReplace_ReplacedCellsStatus", result.ReplacedCount);
         _results = [];
         _currentIndex = -1;
         UpdateResultsGrid();
@@ -216,11 +220,11 @@ public sealed partial class FindReplaceDialog : Window
 
         if (!result.Replaced)
         {
-            StatusLabel.Text = "No replaceable match found.";
+            StatusLabel.Text = UiText.Get("FindReplace_NoReplaceableMatchFound");
             return;
         }
 
-        StatusLabel.Text = "Replaced 1 cell.";
+        StatusLabel.Text = UiText.Get("FindReplace_ReplacedOneCell");
         _results = [];
         _currentIndex = -1;
         UpdateResultsGrid();
@@ -231,7 +235,7 @@ public sealed partial class FindReplaceDialog : Window
         if (failure is null)
             return false;
 
-        DialogMessageHelper.ShowWarning(this, failure.ErrorMessage ?? "The replacement could not be completed.", Title);
+        DialogMessageHelper.ShowWarning(this, failure.ErrorMessage ?? UiText.Get("FindReplace_ReplacementFailed"), Title);
         FocusSearchBox();
         return true;
     }
@@ -240,7 +244,7 @@ public sealed partial class FindReplaceDialog : Window
 
     private bool ShowBlankSearchWarning()
     {
-        DialogMessageHelper.ShowWarning(this, "Enter text in Find what.", Title);
+        DialogMessageHelper.ShowWarning(this, UiText.Get("FindReplace_FindWhatRequired"), Title);
         FocusSearchBox();
         return true;
     }
@@ -277,34 +281,34 @@ public sealed partial class FindReplaceDialog : Window
             : _getActiveSelectionCell();
         if (address is null)
         {
-            StatusLabel.Text = "Select a result cell or worksheet cell to choose its format.";
+            StatusLabel.Text = UiText.Get("FindReplace_SelectFormatSourceStatus");
             return;
         }
 
         var diff = FindReplaceDialogPlanner.CreateFormatDiffFromCell(_getWorkbook(), address.Value);
         if (diff is null)
         {
-            StatusLabel.Text = "No cell format found.";
+            StatusLabel.Text = UiText.Get("FindReplace_NoCellFormatFoundStatus");
             return;
         }
 
         target = diff;
         StatusLabel.Text = FindResultsGrid.SelectedItem is FindResultRow
-            ? "Format chosen from selected result cell."
-            : "Format chosen from active worksheet cell.";
+            ? UiText.Get("FindReplace_FormatChosenFromResultStatus")
+            : UiText.Get("FindReplace_FormatChosenFromWorksheetStatus");
         UpdateFormatStateButtons();
     }
 
     private void UpdateFormatStateButtons()
     {
-        SetFormatState(_findFormatDiff is not null, "Find format is set", FindFormatButton, FindClearFormatButton);
-        SetFormatState(_findFormatDiff is not null, "Find format is set", ReplaceFindFormatButton, ReplaceFindClearFormatButton);
-        SetFormatState(_replaceFormatDiff is not null, "Replace format is set", ReplaceWithFormatButton, ReplaceWithClearFormatButton);
+        SetFormatState(_findFormatDiff is not null, UiText.Get("FindReplace_FindFormatSetToolTip"), FindFormatButton, FindClearFormatButton);
+        SetFormatState(_findFormatDiff is not null, UiText.Get("FindReplace_FindFormatSetToolTip"), ReplaceFindFormatButton, ReplaceFindClearFormatButton);
+        SetFormatState(_replaceFormatDiff is not null, UiText.Get("FindReplace_ReplaceFormatSetToolTip"), ReplaceWithFormatButton, ReplaceWithClearFormatButton);
     }
 
     private static void SetFormatState(bool isSet, string toolTip, Button formatButton, Button clearButton)
     {
-        formatButton.Content = isSet ? "For_mat Set..." : "For_mat...";
+        formatButton.Content = isSet ? UiText.Get("FindReplace_FormatSetButton") : UiText.Get("FindReplace_Format");
         formatButton.ToolTip = isSet ? toolTip : null;
         clearButton.Visibility = isSet ? Visibility.Visible : Visibility.Collapsed;
     }

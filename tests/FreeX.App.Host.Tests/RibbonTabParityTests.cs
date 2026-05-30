@@ -133,7 +133,7 @@ public sealed class RibbonTabParityTests
 
         File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_SURFACE_PARITY.md"))
             .Should()
-            .Contain("| Bring Forward/Send Backward | Implemented | |");
+            .Contain("| Bring Forward/Send Backward | Implemented |");
     }
 
     [Fact]

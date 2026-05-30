@@ -12,7 +12,7 @@ public sealed class GoalSeekStatusDialog : Window
 
     public GoalSeekStatusDialog(GoalSeekResult result, double targetValue)
     {
-        Title = "Goal Seek Status";
+        Title = UiText.Get("GoalSeekStatus_GoalSeekStatus");
         Width = 380;
         Height = result.Converged ? 190 : 170;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -26,9 +26,9 @@ public sealed class GoalSeekStatusDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16)
         };
-        AutomationProperties.SetName(statusBlock, "Goal Seek status");
+        AutomationProperties.SetName(statusBlock, UiText.Get("GoalSeekStatus_GoalSeekStatus"));
         AutomationProperties.SetAutomationId(statusBlock, "GoalSeekStatusSummary");
-        AutomationProperties.SetHelpText(statusBlock, "Reports whether Goal Seek reached the target value.");
+        AutomationProperties.SetHelpText(statusBlock, UiText.Get("GoalSeekStatus_ReportsWhetherGoalSeekReachedTheTargetValue"));
         stack.Children.Add(statusBlock);
 
         var buttons = new StackPanel
@@ -41,14 +41,14 @@ public sealed class GoalSeekStatusDialog : Window
         {
             var keepButton = new Button
             {
-                Content = "_Keep Result",
+                Content = UiText.Get("GoalSeekStatus_KeepResult"),
                 Width = 104,
                 Margin = new Thickness(4, 0, 0, 0),
                 IsDefault = true
             };
-            AutomationProperties.SetName(keepButton, "Keep Result");
+            AutomationProperties.SetName(keepButton, UiText.Get("GoalSeekStatus_KeepResult2"));
             AutomationProperties.SetAutomationId(keepButton, "GoalSeekKeepResultButton");
-            AutomationProperties.SetHelpText(keepButton, "Keep the Goal Seek result in the changing cell.");
+            AutomationProperties.SetHelpText(keepButton, UiText.Get("GoalSeekStatus_KeepTheGoalSeekResultInTheChangingCell"));
             keepButton.Click += (_, _) =>
             {
                 ApplyResult = true;
@@ -58,29 +58,29 @@ public sealed class GoalSeekStatusDialog : Window
 
             var restoreButton = new Button
             {
-                Content = "_Restore Original Values",
+                Content = UiText.Get("GoalSeekStatus_RestoreOriginalValues"),
                 Width = 152,
                 Margin = new Thickness(4, 0, 0, 0),
                 IsCancel = true
             };
-            AutomationProperties.SetName(restoreButton, "Restore Original Values");
+            AutomationProperties.SetName(restoreButton, UiText.Get("GoalSeekStatus_RestoreOriginalValues2"));
             AutomationProperties.SetAutomationId(restoreButton, "GoalSeekRestoreOriginalValuesButton");
-            AutomationProperties.SetHelpText(restoreButton, "Restore the original workbook values before Goal Seek ran.");
+            AutomationProperties.SetHelpText(restoreButton, UiText.Get("GoalSeekStatus_RestoreTheOriginalWorkbookValuesBeforeGoalSeekRan"));
             buttons.Children.Add(restoreButton);
         }
         else
         {
             var okButton = new Button
             {
-                Content = "_OK",
+                Content = UiText.Ok,
                 Width = 76,
                 Margin = new Thickness(4, 0, 0, 0),
                 IsDefault = true,
                 IsCancel = true
             };
-            AutomationProperties.SetName(okButton, "OK");
+            AutomationProperties.SetName(okButton, UiText.Get("GoalSeekStatus_Ok"));
             AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
-            AutomationProperties.SetHelpText(okButton, "Close the Goal Seek status dialog.");
+            AutomationProperties.SetHelpText(okButton, UiText.Get("GoalSeekStatus_CloseTheGoalSeekStatusDialog"));
             okButton.Click += (_, _) => DialogResult = false;
             buttons.Children.Add(okButton);
         }
@@ -99,8 +99,8 @@ public sealed class GoalSeekStatusDialog : Window
         var currentValue = result.ActualResult.ToString("G10", CultureInfo.InvariantCulture);
         var changingCellValue = result.FoundValue.ToString("G10", CultureInfo.InvariantCulture);
         return result.Converged
-            ? $"Goal Seek found a solution.\nTarget value: {target}\nCurrent value: {currentValue}\nChanging cell value: {changingCellValue}"
-            : $"Goal Seek could not find a solution.\nTarget value: {target}\nCurrent value: {currentValue}\nChanging cell value: {changingCellValue}";
+            ? UiText.Format("GoalSeekStatus_SuccessSummary", target, currentValue, changingCellValue)
+            : UiText.Format("GoalSeekStatus_FailureSummary", target, currentValue, changingCellValue);
     }
 
     private void FocusInitialKeyboardTarget()

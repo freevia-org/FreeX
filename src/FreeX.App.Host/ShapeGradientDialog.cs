@@ -12,8 +12,8 @@ public sealed class ShapeGradientDialog : Window
 {
     private readonly TextBox _startColorBox = new();
     private readonly TextBox _endColorBox = new();
-    private readonly Button _startColorButton = new() { Content = "_Start Color..." };
-    private readonly Button _endColorButton = new() { Content = "_End Color..." };
+    private readonly Button _startColorButton = new() { Content = UiText.Get("ShapeGradient_StartColorButton") };
+    private readonly Button _endColorButton = new() { Content = UiText.Get("ShapeGradient_EndColorButton") };
     private readonly TextBlock _startColorText = new();
     private readonly TextBlock _endColorText = new();
     private CellColor _startColor = new(31, 119, 180);
@@ -24,7 +24,7 @@ public sealed class ShapeGradientDialog : Window
     public ShapeGradientDialog()
     {
         Result = new ShapeGradientDialogResult(_startColor, _endColor);
-        Title = "Shape Gradient";
+        Title = UiText.Get("ShapeGradient_Title");
         Width = 420;
         Height = 240;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -59,7 +59,7 @@ public sealed class ShapeGradientDialog : Window
         error = null;
         if (!DrawingInputParser.TryParseGradientColors(input, out var startColor, out var endColor))
         {
-            error = "Enter two RGB colors separated by a semicolon.";
+            error = UiText.Get("ShapeGradient_InvalidGradientMessage");
             return false;
         }
 
@@ -71,14 +71,14 @@ public sealed class ShapeGradientDialog : Window
     {
         if (!DrawingInputParser.TryParseRgbColor(_startColorBox.Text, out var startColor))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter an RGB color as R,G,B.", Title);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("ShapeGradient_InvalidRgbColorMessage"), Title);
             FocusInvalidColorInput(_startColorBox);
             return;
         }
 
         if (!DrawingInputParser.TryParseRgbColor(_endColorBox.Text, out var endColor))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter an RGB color as R,G,B.", Title);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("ShapeGradient_InvalidRgbColorMessage"), Title);
             FocusInvalidColorInput(_endColorBox);
             return;
         }
@@ -109,11 +109,11 @@ public sealed class ShapeGradientDialog : Window
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddStopRow(grid, 0, "Stop 1 _color (RGB):", _startColorBox, "0%", _startColorButton);
-        AddStopRow(grid, 1, "Stop 2 c_olor (RGB):", _endColorBox, "100%", _endColorButton);
+        AddStopRow(grid, 0, UiText.Get("ShapeGradient_Stop1ColorLabel"), _startColorBox, "0%", _startColorButton);
+        AddStopRow(grid, 1, UiText.Get("ShapeGradient_Stop2ColorLabel"), _endColorBox, "100%", _endColorButton);
         stack.Children.Add(new GroupBox
         {
-            Header = "Gradient stops",
+            Header = UiText.Get("ShapeGradient_GradientStopsGroup"),
             Content = grid,
             Margin = new Thickness(0, 0, 0, 12)
         });
@@ -166,8 +166,8 @@ public sealed class ShapeGradientDialog : Window
 
     private void UpdateColorText()
     {
-        _startColorText.Text = $"Start: {FormatColor(_startColor)}";
-        _endColorText.Text = $"End: {FormatColor(_endColor)}";
+        _startColorText.Text = UiText.Format("ShapeGradient_StartColorSummary", FormatColor(_startColor));
+        _endColorText.Text = UiText.Format("ShapeGradient_EndColorSummary", FormatColor(_endColor));
     }
 
     private static string FormatColor(CellColor color) =>

@@ -13,10 +13,10 @@ public sealed record CreateNamesFromSelectionDialogResult(
 
 public sealed class CreateNamesFromSelectionDialog : Window
 {
-    private readonly CheckBox _topRow = new() { Content = "_Top row", IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _leftColumn = new() { Content = "_Left column", IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _bottomRow = new() { Content = "_Bottom row", Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _rightColumn = new() { Content = "_Right column", Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _topRow = new() { Content = UiText.Get("CreateNamesFromSelection_TopRow"), IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _leftColumn = new() { Content = UiText.Get("CreateNamesFromSelection_LeftColumn"), IsChecked = true, Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _bottomRow = new() { Content = UiText.Get("CreateNamesFromSelection_BottomRow"), Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _rightColumn = new() { Content = UiText.Get("CreateNamesFromSelection_RightColumn"), Margin = new Thickness(0, 4, 0, 0) };
 
     public CreateNamesFromSelectionDialogResult Result { get; private set; } =
         new(UseTopRow: true, UseLeftColumn: true, UseBottomRow: false, UseRightColumn: false);
@@ -28,7 +28,7 @@ public sealed class CreateNamesFromSelectionDialog : Window
 
     public CreateNamesFromSelectionDialog()
     {
-        Title = "Create Names from Selection";
+        Title = UiText.Get("CreateNamesFromSelection_Title");
         Width = 280;
         Height = 230;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -38,27 +38,27 @@ public sealed class CreateNamesFromSelectionDialog : Window
         SetOptionAutomationMetadata(
             _topRow,
             "CreateNamesTopRowCheckBox",
-            "Use the top row of the selection as names.");
+            UiText.Get("CreateNamesFromSelection_TopRowHelpText"));
         SetOptionAutomationMetadata(
             _leftColumn,
             "CreateNamesLeftColumnCheckBox",
-            "Use the left column of the selection as names.");
+            UiText.Get("CreateNamesFromSelection_LeftColumnHelpText"));
         SetOptionAutomationMetadata(
             _bottomRow,
             "CreateNamesBottomRowCheckBox",
-            "Use the bottom row of the selection as names.");
+            UiText.Get("CreateNamesFromSelection_BottomRowHelpText"));
         SetOptionAutomationMetadata(
             _rightColumn,
             "CreateNamesRightColumnCheckBox",
-            "Use the right column of the selection as names.");
+            UiText.Get("CreateNamesFromSelection_RightColumnHelpText"));
         root.Children.Add(new TextBlock
         {
-            Text = "Create names from values in the:",
+            Text = UiText.Get("CreateNamesFromSelection_IntroText"),
             Margin = new Thickness(0, 0, 0, 6)
         });
-        var group = new GroupBox { Header = "Create names from", Margin = new Thickness(0, 0, 0, 10) };
-        AutomationProperties.SetName(group, "Create names from selected labels");
-        AutomationProperties.SetHelpText(group, "Choose which row or column labels Excel uses to create named ranges.");
+        var group = new GroupBox { Header = UiText.Get("CreateNamesFromSelection_GroupHeader"), Margin = new Thickness(0, 0, 0, 10) };
+        AutomationProperties.SetName(group, UiText.Get("CreateNamesFromSelection_GroupAutomationName"));
+        AutomationProperties.SetHelpText(group, UiText.Get("CreateNamesFromSelection_GroupHelpText"));
         var options = new StackPanel { Margin = new Thickness(8, 4, 8, 8) };
         options.Children.Add(_topRow);
         options.Children.Add(_leftColumn);
@@ -68,7 +68,7 @@ public sealed class CreateNamesFromSelectionDialog : Window
         root.Children.Add(group);
         root.Children.Add(new TextBlock
         {
-            Text = "Excel creates named ranges from the selected row or column labels.",
+            Text = UiText.Get("CreateNamesFromSelection_BodyText"),
             TextWrapping = TextWrapping.Wrap,
             Foreground = SystemColors.GrayTextBrush,
             Margin = new Thickness(0, 0, 0, 10)
@@ -96,7 +96,7 @@ public sealed class CreateNamesFromSelectionDialog : Window
         result = new CreateNamesFromSelectionDialogResult(useTopRow, useLeftColumn, useBottomRow, useRightColumn);
         if (!useTopRow && !useLeftColumn && !useBottomRow && !useRightColumn)
         {
-            error = "Select at least one row or column label position.";
+            error = UiText.Get("CreateNamesFromSelection_NoSelectionMessage");
             return false;
         }
 
@@ -116,7 +116,7 @@ public sealed class CreateNamesFromSelectionDialog : Window
         {
             MessageBox.Show(
                 this,
-                error ?? "Select at least one row or column label position.",
+                error ?? UiText.Get("CreateNamesFromSelection_NoSelectionMessage"),
                 Title,
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);

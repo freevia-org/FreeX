@@ -148,9 +148,9 @@ public sealed partial class AutoFilterDialog
     public static (string Ascending, string Descending) GetSortLabels(AutoFilterMenuFilterKind filterKind) =>
         filterKind switch
         {
-            AutoFilterMenuFilterKind.Number => ("Sort _Smallest to Largest", "Sort _Largest to Smallest"),
-            AutoFilterMenuFilterKind.Date => ("Sort _Oldest to Newest", "Sort _Newest to Oldest"),
-            _ => ("Sort _A to Z", "Sort _Z to A")
+            AutoFilterMenuFilterKind.Number => (UiText.Get("AutoFilter_SortSmallestToLargest"), UiText.Get("AutoFilter_SortLargestToSmallest")),
+            AutoFilterMenuFilterKind.Date => (UiText.Get("AutoFilter_SortOldestToNewest"), UiText.Get("AutoFilter_SortNewestToOldest")),
+            _ => (UiText.Get("AutoFilter_SortAToZ"), UiText.Get("AutoFilter_SortZToA"))
         };
 
     private void SetSortLabels(AutoFilterMenuFilterKind filterKind)
@@ -167,9 +167,9 @@ public sealed partial class AutoFilterDialog
         var panel = _betweenCriteriaPanel;
         panel.Orientation = Orientation.Horizontal;
         panel.Margin = new Thickness(0, 4, 0, 4);
-        panel.Children.Add(new Label { Content = "_Minimum:", Target = _betweenMinBox, Padding = new Thickness(0), Margin = new Thickness(0, 3, 6, 0) });
+        panel.Children.Add(new Label { Content = UiText.Get("AutoFilter_MinimumLabel"), Target = _betweenMinBox, Padding = new Thickness(0), Margin = new Thickness(0, 3, 6, 0) });
         panel.Children.Add(_betweenMinBox);
-        panel.Children.Add(new Label { Content = "And _maximum:", Target = _betweenMaxBox, Padding = new Thickness(0), Margin = new Thickness(10, 3, 6, 0) });
+        panel.Children.Add(new Label { Content = UiText.Get("AutoFilter_MaximumLabel"), Target = _betweenMaxBox, Padding = new Thickness(0), Margin = new Thickness(10, 3, 6, 0) });
         panel.Children.Add(_betweenMaxBox);
         return panel;
     }
@@ -180,7 +180,7 @@ public sealed partial class AutoFilterDialog
         var panel = _topBottomCriteriaPanel;
         panel.Orientation = Orientation.Horizontal;
         panel.Margin = new Thickness(0, 4, 0, 4);
-        panel.Children.Add(new Label { Content = "_Show:", Target = _topBottomCountBox, Padding = new Thickness(0), Margin = new Thickness(0, 3, 6, 0) });
+        panel.Children.Add(new Label { Content = UiText.Get("AutoFilter_ShowLabel"), Target = _topBottomCountBox, Padding = new Thickness(0), Margin = new Thickness(0, 3, 6, 0) });
         panel.Children.Add(_topBottomCountBox);
         panel.Children.Add(_topBottomUnitText);
         return panel;
@@ -190,7 +190,7 @@ public sealed partial class AutoFilterDialog
     {
         _filterByColorPanel.Children.Clear();
         _colorChoiceButtons.Clear();
-        foreach (var section in colorOptions.GroupBy(option => option.Kind == AutoFilterColorFilterKind.FontColor ? "Font Color" : "Cell Color"))
+        foreach (var section in colorOptions.GroupBy(option => option.Kind == AutoFilterColorFilterKind.FontColor ? UiText.Get("AutoFilter_FontColor") : UiText.Get("AutoFilter_CellColor")))
         {
             _filterByColorPanel.Children.Add(new TextBlock
             {
@@ -224,14 +224,14 @@ public sealed partial class AutoFilterDialog
             ToolTip = option.Label
         };
         AutomationProperties.SetName(button, CreateColorChoiceAutomationName(option));
-        AutomationProperties.SetHelpText(button, "Apply this color filter.");
+        AutomationProperties.SetHelpText(button, UiText.Get("AutoFilter_ApplyThisColorFilter"));
         button.PreviewKeyDown += ColorChoiceButton_PreviewKeyDown;
 
         var content = new StackPanel { Orientation = Orientation.Horizontal };
         content.Children.Add(CreateColorSwatch(option));
         content.Children.Add(new TextBlock
         {
-            Text = option.Kind == AutoFilterColorFilterKind.NoFill ? "No Fill" : ColorInputParser.FormatHexColor(option.Color!.Value),
+            Text = option.Kind == AutoFilterColorFilterKind.NoFill ? UiText.Get("AutoFilter_NoFill") : ColorInputParser.FormatHexColor(option.Color!.Value),
             Margin = new Thickness(4, 0, 0, 0),
             VerticalAlignment = System.Windows.VerticalAlignment.Center
         });
@@ -243,9 +243,9 @@ public sealed partial class AutoFilterDialog
     private static string CreateColorChoiceAutomationName(AutoFilterColorOption option) =>
         option.Kind switch
         {
-            AutoFilterColorFilterKind.FontColor => $"Filter by font color {option.Label}",
-            AutoFilterColorFilterKind.NoFill => "Filter by no fill",
-            _ => $"Filter by cell color {option.Label}"
+            AutoFilterColorFilterKind.FontColor => UiText.Format("AutoFilter_FilterByFontColor", option.Label),
+            AutoFilterColorFilterKind.NoFill => UiText.Get("AutoFilter_FilterByNoFill"),
+            _ => UiText.Format("AutoFilter_FilterByCellColor", option.Label)
         };
 
     private void ColorChoiceButton_PreviewKeyDown(object sender, KeyEventArgs e)

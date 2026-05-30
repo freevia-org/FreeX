@@ -31,9 +31,18 @@ internal sealed class SelectionPaneDialogItem(SelectionPaneItem item)
 {
     public SelectionPaneItem Source { get; } = item;
     public string Name { get; set; } = item.Name;
-    public string Kind => Source.Kind.ToString();
+    public string Kind => Source.Kind switch
+    {
+        SelectionPaneObjectKind.Chart => UiText.Get("SelectionPane_ObjectKindChart"),
+        SelectionPaneObjectKind.Picture => UiText.Get("SelectionPane_ObjectKindPicture"),
+        SelectionPaneObjectKind.Shape => UiText.Get("SelectionPane_ObjectKindShape"),
+        SelectionPaneObjectKind.TextBox => UiText.Get("SelectionPane_ObjectKindTextBox"),
+        _ => Source.Kind.ToString()
+    };
     public bool IsVisible { get; set; } = item.IsVisible;
 }
+
+internal sealed record SelectionPaneFilterChoice(string Value, string Label);
 
 public sealed partial class SelectionPaneDialog : Window
 {
@@ -44,12 +53,12 @@ public sealed partial class SelectionPaneDialog : Window
     private readonly TextBox _searchBox = new() { Width = 180, Margin = new Thickness(0, 0, 8, 0) };
     private readonly ComboBox _filterBox = new() { Width = 110, Margin = new Thickness(0, 0, 0, 0) };
     private readonly TextBox _renameBox = new() { Width = 180, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _renameButton = new() { Content = "_Rename", Width = 78, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _toggleVisibilityButton = new() { Content = CreateEyeIcon(), Width = 32, Margin = new Thickness(0, 0, 6, 0), ToolTip = "Toggle visibility" };
-    private readonly Button _moveUpButton = new() { Content = "_Bring Forward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _moveDownButton = new() { Content = "Send _Backward", Width = 104, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _showAllButton = new() { Content = "Show _All", Width = 82, Margin = new Thickness(0, 0, 6, 0) };
-    private readonly Button _hideAllButton = new() { Content = "_Hide All", Width = 82, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _renameButton = new() { Content = UiText.Get("SelectionPane_RenameButton"), Width = 78, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _toggleVisibilityButton = new() { Content = CreateEyeIcon(), Width = 32, Margin = new Thickness(0, 0, 6, 0), ToolTip = UiText.Get("SelectionPane_ToggleVisibilityToolTip") };
+    private readonly Button _moveUpButton = new() { Content = UiText.Get("SelectionPane_BringForwardButton"), Width = 104, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _moveDownButton = new() { Content = UiText.Get("SelectionPane_SendBackwardButton"), Width = 104, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _showAllButton = new() { Content = UiText.Get("SelectionPane_ShowAllButton"), Width = 82, Margin = new Thickness(0, 0, 6, 0) };
+    private readonly Button _hideAllButton = new() { Content = UiText.Get("SelectionPane_HideAllButton"), Width = 82, Margin = new Thickness(0, 0, 6, 0) };
     private Point? _dragStartPoint;
     private SelectionPaneDialogItem? _dragItem;
 
@@ -59,7 +68,7 @@ public sealed partial class SelectionPaneDialog : Window
     {
         _sourceItems = items;
         Result = new SelectionPaneDialogResult(SelectionPaneDialogAction.ApplyVisibility, null, [], [], []);
-        Title = "Selection Pane";
+        Title = UiText.Get("SelectionPane_Title");
         Width = 380;
         Height = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -67,8 +76,8 @@ public sealed partial class SelectionPaneDialog : Window
         ShowInTaskbar = false;
 
         _list.Margin = new Thickness(0, 0, 0, 10);
-        AutomationProperties.SetName(_list, "Objects");
-        AutomationProperties.SetHelpText(_list, "Workbook objects available for selection, rename, visibility, and stacking order changes.");
+        AutomationProperties.SetName(_list, UiText.Get("SelectionPane_ObjectListAutomationName"));
+        AutomationProperties.SetHelpText(_list, UiText.Get("SelectionPane_ObjectListHelpText"));
         _list.AllowDrop = true;
         _list.PreviewMouseLeftButtonDown += List_PreviewMouseLeftButtonDown;
         _list.MouseMove += List_MouseMove;
@@ -85,52 +94,53 @@ public sealed partial class SelectionPaneDialog : Window
         if (_list.Items.Count > 0)
             _list.SelectedIndex = 0;
         _list.ItemTemplate = CreateItemTemplate();
-        AutomationProperties.SetName(_searchBox, "Search objects");
-        AutomationProperties.SetHelpText(_searchBox, "Filter selection pane objects by name or object type.");
+        AutomationProperties.SetName(_searchBox, UiText.Get("SelectionPane_SearchAutomationName"));
+        AutomationProperties.SetHelpText(_searchBox, UiText.Get("SelectionPane_SearchHelpText"));
         _searchBox.TextChanged += (_, _) => ApplySearchAndFilter();
-        _filterBox.ItemsSource = new[] { "All", "Visible", "Hidden", "Charts", "Pictures", "Shapes", "Text Boxes" };
+        _filterBox.ItemsSource = CreateFilterChoices();
+        _filterBox.DisplayMemberPath = nameof(SelectionPaneFilterChoice.Label);
         _filterBox.SelectedIndex = 0;
-        AutomationProperties.SetName(_filterBox, "Object filter");
-        AutomationProperties.SetHelpText(_filterBox, "Show all objects or limit the list to visible, hidden, or a specific object type.");
+        AutomationProperties.SetName(_filterBox, UiText.Get("SelectionPane_FilterAutomationName"));
+        AutomationProperties.SetHelpText(_filterBox, UiText.Get("SelectionPane_FilterHelpText"));
         _filterBox.SelectionChanged += (_, _) => ApplySearchAndFilter();
-        AutomationProperties.SetName(_renameBox, "Object name");
-        AutomationProperties.SetHelpText(_renameBox, "Edit the selected object's name.");
-        AutomationProperties.SetName(_renameButton, "Rename selected object");
-        AutomationProperties.SetHelpText(_renameButton, "Apply the typed name to the selected object.");
+        AutomationProperties.SetName(_renameBox, UiText.Get("SelectionPane_ObjectNameAutomationName"));
+        AutomationProperties.SetHelpText(_renameBox, UiText.Get("SelectionPane_ObjectNameHelpText"));
+        AutomationProperties.SetName(_renameButton, UiText.Get("SelectionPane_RenameButtonAutomationName"));
+        AutomationProperties.SetHelpText(_renameButton, UiText.Get("SelectionPane_RenameButtonHelpText"));
         _renameButton.Click += (_, _) => RenameSelectedItem();
-        AutomationProperties.SetName(_toggleVisibilityButton, "Toggle selected object visibility");
-        AutomationProperties.SetHelpText(_toggleVisibilityButton, "Show or hide the selected object.");
+        AutomationProperties.SetName(_toggleVisibilityButton, UiText.Get("SelectionPane_ToggleVisibilityAutomationName"));
+        AutomationProperties.SetHelpText(_toggleVisibilityButton, UiText.Get("SelectionPane_ToggleVisibilityHelpText"));
         _toggleVisibilityButton.Click += (_, _) => ToggleSelectedVisibility();
 
-        AutomationProperties.SetName(_moveUpButton, "Bring selected object forward");
-        AutomationProperties.SetHelpText(_moveUpButton, "Move the selected object forward within its object type stack.");
-        AutomationProperties.SetName(_moveDownButton, "Send selected object backward");
-        AutomationProperties.SetHelpText(_moveDownButton, "Move the selected object backward within its object type stack.");
+        AutomationProperties.SetName(_moveUpButton, UiText.Get("SelectionPane_BringForwardAutomationName"));
+        AutomationProperties.SetHelpText(_moveUpButton, UiText.Get("SelectionPane_BringForwardHelpText"));
+        AutomationProperties.SetName(_moveDownButton, UiText.Get("SelectionPane_SendBackwardAutomationName"));
+        AutomationProperties.SetHelpText(_moveDownButton, UiText.Get("SelectionPane_SendBackwardHelpText"));
         _moveUpButton.Click += (_, _) => AcceptMove(SelectionPaneDialogAction.MoveUp);
         _moveDownButton.Click += (_, _) => AcceptMove(SelectionPaneDialogAction.MoveDown);
-        AutomationProperties.SetName(_showAllButton, "Show all objects");
-        AutomationProperties.SetHelpText(_showAllButton, "Mark every listed object visible.");
-        AutomationProperties.SetName(_hideAllButton, "Hide all objects");
-        AutomationProperties.SetHelpText(_hideAllButton, "Mark every listed object hidden.");
+        AutomationProperties.SetName(_showAllButton, UiText.Get("SelectionPane_ShowAllAutomationName"));
+        AutomationProperties.SetHelpText(_showAllButton, UiText.Get("SelectionPane_ShowAllHelpText"));
+        AutomationProperties.SetName(_hideAllButton, UiText.Get("SelectionPane_HideAllAutomationName"));
+        AutomationProperties.SetHelpText(_hideAllButton, UiText.Get("SelectionPane_HideAllHelpText"));
         _showAllButton.Click += (_, _) => SetAllVisibility(true);
         _hideAllButton.Click += (_, _) => SetAllVisibility(false);
 
-        var okButton = new Button { Content = "_OK", Width = 78, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
-        AutomationProperties.SetName(okButton, "Apply selection pane changes");
-        AutomationProperties.SetHelpText(okButton, "Apply visibility, rename, and stacking order changes.");
+        var okButton = new Button { Content = UiText.Ok, Width = 78, Margin = new Thickness(0, 0, 6, 0), IsDefault = true };
+        AutomationProperties.SetName(okButton, UiText.Get("SelectionPane_OkAutomationName"));
+        AutomationProperties.SetHelpText(okButton, UiText.Get("SelectionPane_OkHelpText"));
         okButton.Click += (_, _) => AcceptVisibility();
-        var cancelButton = new Button { Content = "_Cancel", Width = 78, IsCancel = true };
-        AutomationProperties.SetName(cancelButton, "Cancel selection pane changes");
-        AutomationProperties.SetHelpText(cancelButton, "Close the selection pane without applying pending changes.");
+        var cancelButton = new Button { Content = UiText.Cancel, Width = 78, IsCancel = true };
+        AutomationProperties.SetName(cancelButton, UiText.Get("SelectionPane_CancelAutomationName"));
+        AutomationProperties.SetHelpText(cancelButton, UiText.Get("SelectionPane_CancelHelpText"));
 
         var searchRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        searchRow.Children.Add(new Label { Content = "_Search:", Target = _searchBox, Padding = new Thickness(0, 4, 6, 0) });
+        searchRow.Children.Add(new Label { Content = UiText.Get("SelectionPane_SearchLabel"), Target = _searchBox, Padding = new Thickness(0, 4, 6, 0) });
         searchRow.Children.Add(_searchBox);
-        searchRow.Children.Add(new Label { Content = "_Filter:", Target = _filterBox, Padding = new Thickness(0, 4, 6, 0) });
+        searchRow.Children.Add(new Label { Content = UiText.Get("SelectionPane_FilterLabel"), Target = _filterBox, Padding = new Thickness(0, 4, 6, 0) });
         searchRow.Children.Add(_filterBox);
 
         var renameRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
-        renameRow.Children.Add(new Label { Content = "_Name:", Target = _renameBox, Padding = new Thickness(0, 4, 6, 0) });
+        renameRow.Children.Add(new Label { Content = UiText.Get("SelectionPane_NameLabel"), Target = _renameBox, Padding = new Thickness(0, 4, 6, 0) });
         renameRow.Children.Add(_renameBox);
         renameRow.Children.Add(_renameButton);
         renameRow.Children.Add(_toggleVisibilityButton);
@@ -164,6 +174,17 @@ public sealed partial class SelectionPaneDialog : Window
         DialogFocus.FocusAndSelect(_searchBox);
     }
 
+    private static IReadOnlyList<SelectionPaneFilterChoice> CreateFilterChoices() =>
+    [
+        new(SelectionPaneFilterValues.All, UiText.Get("SelectionPane_FilterAll")),
+        new(SelectionPaneFilterValues.Visible, UiText.Get("SelectionPane_FilterVisible")),
+        new(SelectionPaneFilterValues.Hidden, UiText.Get("SelectionPane_FilterHidden")),
+        new(SelectionPaneFilterValues.Charts, UiText.Get("SelectionPane_FilterCharts")),
+        new(SelectionPaneFilterValues.Pictures, UiText.Get("SelectionPane_FilterPictures")),
+        new(SelectionPaneFilterValues.Shapes, UiText.Get("SelectionPane_FilterShapes")),
+        new(SelectionPaneFilterValues.TextBoxes, UiText.Get("SelectionPane_FilterTextBoxes"))
+    ];
+
     private static DataTemplate CreateItemTemplate()
     {
         var panel = new FrameworkElementFactory(typeof(StackPanel));
@@ -173,9 +194,9 @@ public sealed partial class SelectionPaneDialog : Window
         var checkBox = new FrameworkElementFactory(typeof(CheckBox));
         checkBox.SetValue(CheckBox.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
         checkBox.SetValue(FrameworkElement.WidthProperty, 24.0);
-        checkBox.SetValue(CheckBox.ToolTipProperty, "Show or hide object");
-        checkBox.SetValue(AutomationProperties.NameProperty, "Object visibility");
-        checkBox.SetValue(AutomationProperties.HelpTextProperty, "Toggle whether this object is visible.");
+        checkBox.SetValue(CheckBox.ToolTipProperty, UiText.Get("SelectionPane_ItemVisibilityToolTip"));
+        checkBox.SetValue(AutomationProperties.NameProperty, UiText.Get("SelectionPane_ItemVisibilityAutomationName"));
+        checkBox.SetValue(AutomationProperties.HelpTextProperty, UiText.Get("SelectionPane_ItemVisibilityHelpText"));
         checkBox.SetBinding(CheckBox.IsCheckedProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.IsVisible)) { Mode = System.Windows.Data.BindingMode.TwoWay });
         panel.AppendChild(checkBox);
 
@@ -184,9 +205,9 @@ public sealed partial class SelectionPaneDialog : Window
         name.SetValue(TextBox.WidthProperty, 160.0);
         name.SetValue(TextBox.BorderThicknessProperty, new Thickness(0));
         name.SetValue(TextBox.BackgroundProperty, Brushes.Transparent);
-        name.SetValue(TextBox.ToolTipProperty, "Rename object");
-        name.SetValue(AutomationProperties.NameProperty, "Object name");
-        name.SetValue(AutomationProperties.HelpTextProperty, "Edit this object's display name.");
+        name.SetValue(TextBox.ToolTipProperty, UiText.Get("SelectionPane_ItemRenameToolTip"));
+        name.SetValue(AutomationProperties.NameProperty, UiText.Get("SelectionPane_ObjectNameAutomationName"));
+        name.SetValue(AutomationProperties.HelpTextProperty, UiText.Get("SelectionPane_ObjectNameHelpText"));
         name.SetBinding(TextBox.TextProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.Name))
         {
             Mode = System.Windows.Data.BindingMode.TwoWay,

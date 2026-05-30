@@ -83,7 +83,7 @@ public sealed class OpenWorkbookLoader
         }
         else
         {
-            progress.Report(new OpenProgressUpdate("Opening workbook", OpenWorkbookProgressPlanner.FormatLoadingFileDetail("calculating", TimeSpan.Zero), 98));
+            progress.Report(new OpenProgressUpdate(OpenWorkbookProgressPlanner.ProgressTitle(), OpenWorkbookProgressPlanner.FormatLoadingFileDetail("calculating", TimeSpan.Zero), 98));
         }
 
         return new OpenWorkbookResult(
@@ -102,7 +102,7 @@ public sealed class OpenWorkbookLoader
         TimeSpan expectedDuration,
         Func<T> work)
     {
-        progress.Report(new OpenProgressUpdate("Opening workbook", OpenWorkbookProgressPlanner.FormatLoadingFileDetail(detail, TimeSpan.Zero), startPercent));
+        progress.Report(new OpenProgressUpdate(OpenWorkbookProgressPlanner.ProgressTitle(), OpenWorkbookProgressPlanner.FormatLoadingFileDetail(detail, TimeSpan.Zero), startPercent));
         using var cancellation = new CancellationTokenSource();
         var progressTask = ReportStageProgressAsync(
             progress,
@@ -121,7 +121,7 @@ public sealed class OpenWorkbookLoader
             cancellation.Cancel();
             try { await progressTask; }
             catch (OperationCanceledException) { }
-            progress.Report(new OpenProgressUpdate("Opening workbook", OpenWorkbookProgressPlanner.FormatLoadingFileDetail(detail, TimeSpan.Zero), endPercent));
+            progress.Report(new OpenProgressUpdate(OpenWorkbookProgressPlanner.ProgressTitle(), OpenWorkbookProgressPlanner.FormatLoadingFileDetail(detail, TimeSpan.Zero), endPercent));
         }
     }
 
@@ -138,12 +138,12 @@ public sealed class OpenWorkbookLoader
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
             var percent = OpenWorkbookProgressPlanner.CalculateStageProgress(startPercent, endPercent, stopwatch.Elapsed, expectedDuration);
-            progress.Report(new OpenProgressUpdate("Opening workbook", OpenWorkbookProgressPlanner.FormatLoadingFileDetail(detail, stopwatch.Elapsed), percent));
+            progress.Report(new OpenProgressUpdate(OpenWorkbookProgressPlanner.ProgressTitle(), OpenWorkbookProgressPlanner.FormatLoadingFileDetail(detail, stopwatch.Elapsed), percent));
         }
     }
 
     private static void ReportReadingProgress(IProgress<OpenProgressUpdate> progress) =>
-        progress.Report(new OpenProgressUpdate("Opening workbook", OpenWorkbookProgressPlanner.FormatLoadingFileDetail("reading", TimeSpan.Zero), 8));
+        progress.Report(new OpenProgressUpdate(OpenWorkbookProgressPlanner.ProgressTitle(), OpenWorkbookProgressPlanner.FormatLoadingFileDetail("reading", TimeSpan.Zero), 8));
 
     private static FileStream OpenFileStream(string path)
     {

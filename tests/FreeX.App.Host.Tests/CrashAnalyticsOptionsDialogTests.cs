@@ -8,7 +8,7 @@ public sealed class CrashAnalyticsOptionsDialogTests
     [Fact]
     public void OptionsDialog_ExposesCrashAnalyticsOptInInTrustCenter()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
 
         xaml.Should().Contain("x:Name=\"OptCrashAnalytics\"");

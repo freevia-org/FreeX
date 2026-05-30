@@ -277,6 +277,7 @@ public sealed partial class UiTestCatalogInventoryTests
             .Select(tab => tab.Attribute("Header")?.Value)
             .Where(header => !string.IsNullOrWhiteSpace(header))
             .Cast<string>()
+            .Select(header => LocalizedXamlTestSupport.ResolveLocalizedValue(header) ?? header)
             .ToArray();
     }
 
@@ -291,6 +292,7 @@ public sealed partial class UiTestCatalogInventoryTests
             .Select(tab => tab.Attribute("Header")?.Value)
             .Where(header => !string.IsNullOrWhiteSpace(header))
             .Cast<string>()
+            .Select(header => LocalizedXamlTestSupport.ResolveLocalizedValue(header) ?? header)
             .ToArray();
     }
 

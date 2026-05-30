@@ -78,11 +78,28 @@ public partial class FormatCellsDialog : Window
         DlgFontNameBox.SelectedItem = s.FontName;
         DlgFontSizeBox.ItemsSource  = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36" };
         DlgFontSizeBox.Text         = s.FontSize.ToString("0.#");
-        DlgFontStyleList.ItemsSource = new[] { "Regular", "Italic", "Bold", "Bold Italic" };
+        DlgFontStyleList.ItemsSource = new[]
+        {
+            UiText.Get("FormatCells_FontStyleRegular"),
+            UiText.Get("FormatCells_FontStyleItalic"),
+            UiText.Get("FormatCells_FontStyleBold"),
+            UiText.Get("FormatCells_FontStyleBoldItalic")
+        };
         DlgFontStyleList.SelectedItem = FontStyleLabel(s.Bold, s.Italic);
-        DlgUnderlineStyleBox.ItemsSource = new[] { "None", "Single", "Double", "Single Accounting", "Double Accounting" };
+        DlgUnderlineStyleBox.ItemsSource = new[]
+        {
+            UiText.Get("FormatCells_UnderlineNone"),
+            UiText.Get("FormatCells_UnderlineSingle"),
+            UiText.Get("FormatCells_UnderlineDouble"),
+            UiText.Get("FormatCells_UnderlineSingleAccounting"),
+            UiText.Get("FormatCells_UnderlineDoubleAccounting")
+        };
         DlgDoubleUnderlineCheck.IsChecked = s.DoubleUnderline;
-        DlgUnderlineStyleBox.SelectedItem = s.DoubleUnderline ? "Double" : s.Underline ? "Single" : "None";
+        DlgUnderlineStyleBox.SelectedItem = s.DoubleUnderline
+            ? UiText.Get("FormatCells_UnderlineDouble")
+            : s.Underline
+                ? UiText.Get("FormatCells_UnderlineSingle")
+                : UiText.Get("FormatCells_UnderlineNone");
         DlgStrikeCheck.IsChecked    = s.Strikethrough;
         DlgSuperscriptCheck.IsChecked = s.Superscript;
         DlgSubscriptCheck.IsChecked = s.Subscript;
@@ -170,7 +187,7 @@ public partial class FormatCellsDialog : Window
         if (DlgUnderlineStyleBox.SelectedItem is not string underline)
             return;
 
-        DlgDoubleUnderlineCheck.IsChecked = underline is "Double" or "Double Accounting";
+        DlgDoubleUnderlineCheck.IsChecked = IsDoubleUnderlineSelected(underline);
         UpdateFontPreview();
     }
 
@@ -207,21 +224,21 @@ public partial class FormatCellsDialog : Window
         if (!TryParseRequiredColor(DlgFontColorBox.Text, out var fontColor))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;
-            ShowInvalidInputWarning("Enter a font color as #RRGGBB or R, G, B.", DlgFontColorBox);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidFontColorMessage"), DlgFontColorBox);
             return;
         }
 
         if (!TryParseOptionalColor(DlgFillColorBox.Text, out var fillColor))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;
-            ShowInvalidInputWarning("Enter a fill color as #RRGGBB or R, G, B, or leave it blank.", DlgFillColorBox);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidFillColorMessage"), DlgFillColorBox);
             return;
         }
 
         if (!TryParseOptionalColor(DlgFillPatternColorBox.Text, out var fillPatternColor))
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Fill;
-            ShowInvalidInputWarning("Enter a pattern color as #RRGGBB or R, G, B, or leave it blank.", DlgFillPatternColorBox);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidPatternColorMessage"), DlgFillPatternColorBox);
             return;
         }
 
@@ -237,7 +254,7 @@ public partial class FormatCellsDialog : Window
         if (fontSize is null)
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Font;
-            ShowInvalidInputWarning("Enter a positive font size.", DlgFontSizeBox);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidFontSizeMessage"), DlgFontSizeBox);
             return;
         }
 
@@ -250,7 +267,7 @@ public partial class FormatCellsDialog : Window
         if (indentLevel is null)
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;
-            ShowInvalidInputWarning("Enter an indent level from 0 to 15.", DlgIndentLevelBox);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidIndentLevelMessage"), DlgIndentLevelBox);
             return;
         }
 
@@ -258,7 +275,7 @@ public partial class FormatCellsDialog : Window
         if (textRotation is null)
         {
             Tabs.SelectedIndex = (int)FormatCellsDialogTab.Alignment;
-            ShowInvalidInputWarning("Enter a text rotation from -90 to 90 degrees, or 255 for vertical text.", DlgTextRotationBox);
+            ShowInvalidInputWarning(UiText.Get("FormatCells_InvalidTextRotationMessage"), DlgTextRotationBox);
             return;
         }
 

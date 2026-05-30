@@ -21,7 +21,7 @@ public sealed partial class FunctionArgumentsDialog : Window
         _functionName = function.Name.Trim().ToUpperInvariant();
         _arguments = GetArgumentSpecs(_functionName);
 
-        Title = "Function Arguments";
+        Title = UiText.Get("FunctionArguments_Title");
         Width = 520;
         Height = Math.Max(300, Math.Min(620, 220 + (_arguments.Count * 58)));
         ResizeMode = ResizeMode.NoResize;
@@ -53,11 +53,11 @@ public sealed partial class FunctionArgumentsDialog : Window
         for (var index = 0; index < _arguments.Count; index++)
             AddArgumentRow(body, _arguments[index], argumentLabels[index]);
 
-        body.Children.Add(new TextBlock { Text = "Formula result =", Margin = new Thickness(0, 12, 0, 2) });
+        body.Children.Add(new TextBlock { Text = UiText.Get("FunctionArguments_FormulaResultLabel"), Margin = new Thickness(0, 12, 0, 2) });
         _formulaPreview.FontWeight = FontWeights.SemiBold;
         _formulaPreview.TextWrapping = TextWrapping.Wrap;
-        AutomationProperties.SetName(_formulaPreview, "Formula result");
-        AutomationProperties.SetHelpText(_formulaPreview, "Shows the formula that will be inserted from the current argument values.");
+        AutomationProperties.SetName(_formulaPreview, UiText.Get("FunctionArguments_FormulaResultAutomationName"));
+        AutomationProperties.SetHelpText(_formulaPreview, UiText.Get("FunctionArguments_FormulaResultHelpText"));
         body.Children.Add(_formulaPreview);
         UpdatePreview();
 
@@ -71,7 +71,7 @@ public sealed partial class FunctionArgumentsDialog : Window
         if (KnownArguments.TryGetValue(normalized, out var arguments))
             return arguments;
 
-        return [new FunctionArgumentSpec("Number1", "The first value, reference, or expression.")];
+        return [new FunctionArgumentSpec("Number1", UiText.Get("FunctionArguments_DefaultArgumentDescription"))];
     }
 
     public static string CreateFormula(string functionName, IEnumerable<string?> arguments)
@@ -169,11 +169,11 @@ public sealed partial class FunctionArgumentsDialog : Window
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
             Margin = new Thickness(0, 12, 0, 0)
         };
-        var help = new Button { Content = "_Help on this function", Width = 146, Margin = new Thickness(0, 0, 8, 0) };
+        var help = new Button { Content = UiText.Get("FunctionArguments_HelpButton"), Width = 146, Margin = new Thickness(0, 0, 8, 0) };
         help.Click += (_, _) => ShowFunctionHelp();
-        var ok = new Button { Content = "_OK", Width = 76, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var ok = new Button { Content = UiText.Ok, Width = 76, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
         ok.Click += (_, _) => Accept();
-        var cancel = new Button { Content = "_Cancel", Width = 76, IsCancel = true };
+        var cancel = new Button { Content = UiText.Cancel, Width = 76, IsCancel = true };
         btnRow.Children.Add(help);
         btnRow.Children.Add(ok);
         btnRow.Children.Add(cancel);
@@ -184,7 +184,7 @@ public sealed partial class FunctionArgumentsDialog : Window
     {
         DialogMessageHelper.ShowInfo(this,
             $"{_functionName}()\n\n{string.Join(Environment.NewLine, _arguments.Select(argument => $"{argument.Name}: {argument.Description}"))}",
-            "Function Help");
+            UiText.Get("FunctionArguments_HelpTitle"));
     }
 
     private void FocusInitialKeyboardTarget()

@@ -11,7 +11,7 @@ public sealed class HomeBorderCommandSourceTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var button = ExtractButtonElementByClickHandler(xaml, "BorderPickerBtn_Click");
 
-        button.Should().Contain("local:RibbonTooltip.Title=\"Borders\"");
+        button.ShouldContainInvariantCommandName("Borders");
         button.Should().Contain("local:RibbonTooltip.KeyTip=\"B\"");
         button.Should().Contain("<Button.ContextMenu>");
     }
@@ -43,7 +43,7 @@ public sealed class HomeBorderCommandSourceTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var menuItem = ExtractMenuItemElementByClickHandler(xaml, handler);
 
-        menuItem.Should().Contain($"Header=\"{header}\"");
+        menuItem.ShouldContainLocalizedAttribute("Header", header);
         menuItem.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         menuItem.Should().Contain($"Click=\"{handler}\"");
         menuItem.Should().Contain($"<local:BorderMenuIcon Kind=\"{iconKind}\"/>");
@@ -69,7 +69,7 @@ public sealed class HomeBorderCommandSourceTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var menuItem = ExtractMenuItemElementByClickHandler(xaml, handler);
 
-        menuItem.Should().Contain($"Header=\"{header}\"");
+        menuItem.ShouldContainLocalizedAttribute("Header", header);
         menuItem.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         menuItem.Should().Contain($"Click=\"{handler}\"");
         menuItem.Should().Contain($"<local:BorderMenuIcon Kind=\"{iconKind}\"/>");

@@ -13,7 +13,7 @@ public sealed class GoalSeekDialogXamlTests
     [Fact]
     public void Dialog_ExposesAccessKeyedInputLabelsAndButtons()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("GoalSeekDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         AssertLabelTargets(document, presentation, "_Set cell:", "SetCellBox");
@@ -53,7 +53,7 @@ public sealed class GoalSeekDialogXamlTests
     [Fact]
     public void Dialog_InputFieldsExposeAutomationMetadata()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("GoalSeekDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -63,24 +63,24 @@ public sealed class GoalSeekDialogXamlTests
             xaml,
             "SetCellBox",
             "GoalSeekSetCellBox",
-            "Set cell",
-            "Enter the formula cell that Goal Seek should solve.");
+            UiText.Get("GoalSeek_SetCellAutomationName"),
+            UiText.Get("GoalSeek_SetCellHelpText"));
         AssertTextBoxAutomation(
             document,
             presentation,
             xaml,
             "ToValueBox",
             "GoalSeekToValueBox",
-            "To value",
-            "Enter the target value for the set cell.");
+            UiText.Get("GoalSeek_ToValueAutomationName"),
+            UiText.Get("GoalSeek_ToValueHelpText"));
         AssertTextBoxAutomation(
             document,
             presentation,
             xaml,
             "ChangingCellBox",
             "GoalSeekChangingCellBox",
-            "By changing cell",
-            "Enter the cell whose value Goal Seek can change.");
+            UiText.Get("GoalSeek_ByChangingCellAutomationName"),
+            UiText.Get("GoalSeek_ByChangingCellHelpText"));
 
         static void AssertTextBoxAutomation(
             XDocument document,
@@ -127,7 +127,7 @@ public sealed class GoalSeekDialogXamlTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekDialog.xaml.cs"));
 
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, error, \"Goal Seek\");");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, error, UiText.Get(\"GoalSeek_GoalSeek\"));");
         source.Should().Contain("FocusInvalidInput(error);");
         source.Should().Contain("private void FocusInvalidInput(string error)");
         source.Should().Contain("DialogFocus.FocusAndSelect(target);");

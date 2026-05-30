@@ -23,7 +23,7 @@ public sealed class FormulaCommandSourceTests
     {
         var button = ExtractCommandElementByTitle(ReadFormulasTabXaml(), title, handler);
 
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -40,8 +40,8 @@ public sealed class FormulaCommandSourceTests
     {
         var button = ExtractCommandElementByTitle(ReadMainWindowXaml(), title);
 
-        button.Should().Contain($"Content=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", title);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -61,7 +61,7 @@ public sealed class FormulaCommandSourceTests
     {
         var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header);
 
-        item.Should().Contain($"Header=\"{header}\"");
+        item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         item.Should().Contain($"Click=\"{handler}\"");
     }
@@ -89,10 +89,10 @@ public sealed class FormulaCommandSourceTests
     private static string ReadFormulasTabXaml()
     {
         var xaml = ReadMainWindowXaml();
-        var start = xaml.IndexOf("<TabItem Header=\"Formulas\"", StringComparison.Ordinal);
+        var start = xaml.IndexOf("<TabItem Header=\"{local:Loc Key=MainWindow_Header_Formulas}\"", StringComparison.Ordinal);
         start.Should().BeGreaterThanOrEqualTo(0, "the Formulas ribbon tab should be present");
 
-        var end = xaml.IndexOf("<TabItem Header=\"Data\"", start, StringComparison.Ordinal);
+        var end = xaml.IndexOf("<TabItem Header=\"{local:Loc Key=MainWindow_Header_Data}\"", start, StringComparison.Ordinal);
         end.Should().BeGreaterThan(start, "the Data ribbon tab should follow the Formulas ribbon tab");
         return xaml[start..end];
     }
@@ -102,7 +102,7 @@ public sealed class FormulaCommandSourceTests
         var searchIndex = 0;
         while (true)
         {
-            var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", searchIndex, StringComparison.Ordinal);
+            var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", searchIndex, StringComparison.Ordinal);
             titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} formula command should be present");
 
             var start = xaml.LastIndexOf('<', titleIndex);
@@ -131,16 +131,6 @@ public sealed class FormulaCommandSourceTests
         }
     }
 
-    private static string ExtractMenuItemElementByHeader(string xaml, string header)
-    {
-        var headerIndex = xaml.IndexOf($"Header=\"{header}\"", StringComparison.Ordinal);
-        headerIndex.Should().BeGreaterThanOrEqualTo(0, $"the {header} formula menu item should be present");
-
-        var start = xaml.LastIndexOf("<MenuItem", headerIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {header} formula menu item should be a MenuItem");
-
-        var end = xaml.IndexOf("/>", headerIndex, StringComparison.Ordinal);
-        end.Should().BeGreaterThan(headerIndex, $"the {header} formula menu item should be self-closing");
-        return xaml[start..(end + 2)];
-    }
+    private static string ExtractMenuItemElementByHeader(string xaml, string header) =>
+        xaml.ExtractElementByLocalizedAttributeValue("MenuItem", "Header", header);
 }

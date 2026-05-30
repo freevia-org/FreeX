@@ -13,7 +13,7 @@ public sealed class DataValidationDialogTests
     [Fact]
     public void DataValidationDialog_ContainsRangePickerButtonsForBothFormulaFields()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("DataValidationDialog.xaml");
 
         xaml.Should().Contain("x:Name=\"UseSelectionButton\"");
         xaml.Should().Contain("x:Name=\"UseSelection2Button\"");
@@ -92,12 +92,12 @@ public sealed class DataValidationDialogTests
     [Fact]
     public void DataValidationDialog_UsesExcelStyleSettingsInputAndErrorTabs()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("DataValidationDialog.xaml");
 
         xaml.Should().Contain("<TabControl");
-        xaml.Should().Contain("Header=\"_Settings\"");
-        xaml.Should().Contain("Header=\"_Input Message\"");
-        xaml.Should().Contain("Header=\"_Error Alert\"");
+        xaml.ShouldContainLocalizedAttribute("Header", "_Settings");
+        xaml.ShouldContainLocalizedAttribute("Header", "_Input Message");
+        xaml.ShouldContainLocalizedAttribute("Header", "_Error Alert");
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public sealed class DataValidationDialogTests
     [Fact]
     public void DataValidationDialog_OrdersAllowTypesLikeExcel()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("DataValidationDialog.xaml");
         var expectedOrder = new[]
         {
             "Content=\"Any Value\"",
@@ -197,7 +197,7 @@ public sealed class DataValidationDialogTests
     [Fact]
     public void DataValidationDialog_ExposesKeyboardAccessKeysForOptionsAndButtons()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("DataValidationDialog.xaml");
 
         foreach (var content in new[]
         {
@@ -221,7 +221,7 @@ public sealed class DataValidationDialogTests
             "_OK",
             "_Cancel"
         })
-            xaml.Should().Contain($"Content=\"{content}\"");
+            xaml.ShouldContainLocalizedAttribute("Content", content);
     }
 
     [Fact]
@@ -238,7 +238,7 @@ public sealed class DataValidationDialogTests
     [Fact]
     public void DataValidationDialogInvalidCriteria_ReturnsToSettingsTabAndKeyboardFocusesInvalidFormula()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("DataValidationDialog.xaml");
         var codeBehind = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml.cs"));
 
         xaml.Should().Contain("<TabControl x:Name=\"ValidationTabs\"");
@@ -252,7 +252,7 @@ public sealed class DataValidationDialogTests
     [Fact]
     public void DataValidationDialog_UsesExcelLikeSectionLabelsAndListSourcePicker()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("DataValidationDialog.xaml");
 
         xaml.Should().Contain("Validation criteria");
         xaml.Should().Contain("When selecting cell, show this input message");
@@ -265,7 +265,7 @@ public sealed class DataValidationDialogTests
     [Fact]
     public void DataValidationDialog_EditableCaptionsAreAccessKeyLabelsWithTargets()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("DataValidationDialog.xaml");
 
         foreach (var expected in new[]
         {
@@ -292,9 +292,10 @@ public sealed class DataValidationDialogTests
     {
         var codeBehind = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataValidationDialog.xaml.cs"));
 
-        codeBehind.Should().Contain("Formula1Label.Content = \"_Source:\"");
-        codeBehind.Should().Contain("Formula1Label.Content = \"_Formula:\"");
-        codeBehind.Should().Contain("Formula1Label.Content = (opTag == \"Between\" || opTag == \"NotBetween\") ? \"_Minimum:\" : \"_Value:\"");
+        codeBehind.Should().Contain("Formula1Label.Content = UiText.Get(\"DataValidation_Source\")");
+        codeBehind.Should().Contain("Formula1Label.Content = UiText.Get(\"DataValidation_Formula\")");
+        codeBehind.Should().Contain("UiText.Get(\"DataValidation_Minimum\")");
+        codeBehind.Should().Contain("UiText.Get(\"DataValidation_Value\")");
         codeBehind.Should().NotContain("Formula1Label.Text =");
     }
 

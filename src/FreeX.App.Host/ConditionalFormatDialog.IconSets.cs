@@ -10,7 +10,11 @@ public partial class ConditionalFormatDialog
 
     private static string[] BuildIconOverrideChoices()
     {
-        var choices = new List<string> { "(Default)", "No Icon" };
+        var choices = new List<string>
+        {
+            UiText.Get("ConditionalFormatDialog_IconOverride_Default"),
+            UiText.Get("ConditionalFormatDialog_IconOverride_NoIcon")
+        };
         foreach (var option in ConditionalFormatIconSetPlanner.Options)
         {
             for (var i = 0; i < option.IconCount; i++)
@@ -22,18 +26,18 @@ public partial class ConditionalFormatDialog
 
     private static string IconOverrideToChoice(CfIconOverride? ovr)
     {
-        if (ovr is null) return "(Default)";
-        if (string.Equals(ovr.IconSet, "NoIcons", StringComparison.OrdinalIgnoreCase)) return "No Icon";
+        if (ovr is null) return UiText.Get("ConditionalFormatDialog_IconOverride_Default");
+        if (string.Equals(ovr.IconSet, "NoIcons", StringComparison.OrdinalIgnoreCase)) return UiText.Get("ConditionalFormatDialog_IconOverride_NoIcon");
         var option = ConditionalFormatIconSetPlanner.Options
             .FirstOrDefault(o => string.Equals(o.Style, ovr.IconSet, StringComparison.Ordinal));
-        if (option is null) return "(Default)";
+        if (option is null) return UiText.Get("ConditionalFormatDialog_IconOverride_Default");
         return $"{option.Label} {ovr.IconId + 1}|{option.Style}|{ovr.IconId}";
     }
 
     private static CfIconOverride? ChoiceToIconOverride(string? choice)
     {
-        if (choice is null or "(Default)") return null;
-        if (choice == "No Icon") return new CfIconOverride("NoIcons", 0);
+        if (choice is null || choice == UiText.Get("ConditionalFormatDialog_IconOverride_Default")) return null;
+        if (choice == UiText.Get("ConditionalFormatDialog_IconOverride_NoIcon")) return new CfIconOverride("NoIcons", 0);
         var parts = choice.Split('|');
         if (parts.Length == 3 && int.TryParse(parts[2], out var iconId))
             return new CfIconOverride(parts[1], iconId);
@@ -90,7 +94,7 @@ public partial class ConditionalFormatDialog
                 Margin = new Thickness(0, 2, 0, 2),
                 Children =
                 {
-                    new TextBlock { Text = $"Icon {i + 1}  when  ≥", Width = 110, VerticalAlignment = System.Windows.VerticalAlignment.Center },
+                    new TextBlock { Text = UiText.Format("ConditionalFormatDialog_IconThresholdTextFormat", i + 1), Width = 110, VerticalAlignment = System.Windows.VerticalAlignment.Center },
                     typeBox,
                     valueBox,
                     overrideBox

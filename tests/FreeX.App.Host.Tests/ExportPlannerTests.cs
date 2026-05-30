@@ -119,7 +119,10 @@ public class ExportPlannerTests
             Quality: ExportQuality.Standard));
 
         ExportPlanner.DescribeOptions(ExportOptions.ExcelLikeDefault)
-            .Should().Be("Active sheet only; standard quality; document properties are not included.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeActiveSheet"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded")));
     }
 
     [Fact]
@@ -136,14 +139,22 @@ public class ExportPlannerTests
             BitmapTextWhenFontsMayNotBeEmbedded: true);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Selection; pages 2-4; minimum size; print areas are ignored; document properties are included; bookmarks use sheet names; bitmap text when fonts may not be embedded; open after publishing.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeSelection"),
+                UiText.Format("Export_PageRangeMultiple", 2, 4),
+                UiText.Get("Export_QualityMinimumSize"),
+                UiText.Get("Export_PrintAreasIgnored"),
+                UiText.Get("Export_DocumentPropertiesIncluded"),
+                UiText.Get("Export_BookmarksSheetNames"),
+                UiText.Get("Export_BitmapTextWhenFontsMayNotBeEmbedded"),
+                UiText.Get("Export_OpenAfterPublishing")));
     }
 
     [Theory]
-    [InlineData("sheet", "bookmarks use sheet names")]
-    [InlineData("print-title", "bookmarks use print titles")]
-    [InlineData("page-number", "bookmarks use page numbers")]
-    public void ExportOptions_DescribePdfBookmarkModes(string mode, string expectedPart)
+    [InlineData("sheet", "Export_BookmarksSheetNames")]
+    [InlineData("print-title", "Export_BookmarksPrintTitles")]
+    [InlineData("page-number", "Export_BookmarksPageNumbers")]
+    public void ExportOptions_DescribePdfBookmarkModes(string mode, string expectedPartKey)
     {
         var bookmarkMode = mode switch
         {
@@ -158,7 +169,11 @@ public class ExportPlannerTests
             BookmarkMode: bookmarkMode);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be($"Entire workbook; standard quality; document properties are included; {expectedPart}.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeEntireWorkbook"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesIncluded"),
+                UiText.Get(expectedPartKey)));
     }
 
     [Fact]
@@ -172,7 +187,12 @@ public class ExportPlannerTests
             OpenMode: PdfOpenMode.FullScreen);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Active sheet only; standard quality; opens as one continuous column; opens full screen; document properties are not included.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeActiveSheet"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_InitialViewOneColumn"),
+                UiText.Get("Export_OpenModeFullScreen"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded")));
     }
 
     [Fact]
@@ -185,7 +205,11 @@ public class ExportPlannerTests
             PdfLanguage: "uk-UA");
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Active sheet only; standard quality; document properties are not included; PDF language uk-UA.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeActiveSheet"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded"),
+                UiText.Format("Export_PdfLanguage", "uk-UA")));
     }
 
     [Fact]
@@ -199,7 +223,12 @@ public class ExportPlannerTests
             IncludeDocumentStructureTags: true);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Active sheet only; standard quality; document properties are not included; PDF/A compliance is not supported; tagged PDF structure is not supported.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeActiveSheet"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded"),
+                UiText.Get("Export_PdfANotSupported"),
+                UiText.Get("Export_TaggedPdfNotSupported")));
     }
 
     [Fact]
@@ -215,7 +244,7 @@ public class ExportPlannerTests
             .Should()
             .BeFalse();
 
-        error.Should().Be("PDF/A compliance is not supported by the current PDF exporter.");
+        error.Should().Be(UiText.Get("Export_PdfAUnsupportedError"));
     }
 
     [Fact]
@@ -231,7 +260,7 @@ public class ExportPlannerTests
             .Should()
             .BeFalse();
 
-        error.Should().Be("Tagged PDF structure is not supported by the current PDF exporter.");
+        error.Should().Be(UiText.Get("Export_TaggedPdfUnsupportedError"));
     }
 
     [Fact]
@@ -251,7 +280,12 @@ public class ExportPlannerTests
         error.Should().BeNull();
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
             .Should()
-            .Be("Active sheet only; standard quality; document properties are not included; PDF/A compliance is PDF-only and not supported; tagged PDF structure is PDF-only and not supported.");
+            .Be(ExportSummary(
+                UiText.Get("Export_ScopeActiveSheet"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded"),
+                UiText.Get("Export_PdfAPdfOnlyUnsupported"),
+                UiText.Get("Export_TaggedPdfPdfOnlyUnsupported")));
     }
 
     [Fact]
@@ -282,7 +316,11 @@ public class ExportPlannerTests
             OpenAfterPublish: true);
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Selection; standard quality; document properties are included; open after publishing.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeSelection"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesIncluded"),
+                UiText.Get("Export_OpenAfterPublishing")));
     }
 
     [Fact]
@@ -295,7 +333,11 @@ public class ExportPlannerTests
             BookmarkMode: PdfBookmarkMode.PrintTitles);
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Entire workbook; standard quality; document properties are included; bookmarks are PDF-only.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeEntireWorkbook"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesIncluded"),
+                UiText.Get("Export_BookmarksPdfOnly")));
     }
 
     [Fact]
@@ -308,7 +350,11 @@ public class ExportPlannerTests
             PdfLanguage: "uk-UA");
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Entire workbook; standard quality; document properties are not included; PDF language is PDF-only.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeEntireWorkbook"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded"),
+                UiText.Get("Export_PdfLanguagePdfOnly")));
     }
 
     [Fact]
@@ -322,7 +368,12 @@ public class ExportPlannerTests
             OpenMode: PdfOpenMode.FullScreen);
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Active sheet only; standard quality; PDF initial view is PDF-only; PDF open mode is PDF-only; document properties are not included.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeActiveSheet"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_InitialViewPdfOnly"),
+                UiText.Get("Export_OpenModePdfOnly"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded")));
     }
 
     [Fact]
@@ -335,7 +386,10 @@ public class ExportPlannerTests
             Quality: ExportQuality.MinimumSize);
 
         ExportPlanner.DescribeOptions(options, ExportFormat.Xps)
-            .Should().Be("Selection; minimum size is PDF-only; document properties are not included.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeSelection"),
+                UiText.Get("Export_QualityMinimumSizePdfOnly"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded")));
     }
 
     [Fact]
@@ -347,7 +401,10 @@ public class ExportPlannerTests
             OpenAfterPublish: false);
 
         ExportPlanner.DescribeOptions(options)
-            .Should().Be("Entire workbook; standard quality; document properties are not included.");
+            .Should().Be(ExportSummary(
+                UiText.Get("Export_ScopeEntireWorkbook"),
+                UiText.Get("Export_QualityStandard"),
+                UiText.Get("Export_DocumentPropertiesNotIncluded")));
     }
 
     [Fact]
@@ -424,15 +481,19 @@ public class ExportPlannerTests
     }
 
     [Theory]
-    [InlineData("From page must be less than or equal to To page.", "4", 1)]
+    [InlineData("Export_PageRangeFromLessThanToError", "4", 1)]
     [InlineData("Enter a valid page range.", "2", 1)]
     [InlineData("Enter a valid page range.", "0", 0)]
     [InlineData("Enter a valid page range.", "x", 0)]
     public void ExportOptionsDialogPlanner_SelectsInvalidPageRangeFocusTarget(
-        string error,
+        string errorOrKey,
         string fromPageText,
         int expected)
     {
+        var error = errorOrKey.StartsWith("Export_", StringComparison.Ordinal)
+            ? UiText.Get(errorOrKey)
+            : errorOrKey;
+
         ((int)ExportOptionsDialogPlanner.ResolveInvalidPageRangeFocusTarget(error, fromPageText)).Should().Be(expected);
     }
 
@@ -460,18 +521,21 @@ public class ExportPlannerTests
     [Theory]
     [InlineData(" uk_ua ", true, "uk-UA", null)]
     [InlineData("", true, "en-US", null)]
-    [InlineData("not a culture", false, "en-US", "Enter a valid PDF language tag, for example en-US.")]
+    [InlineData("not a culture", false, "en-US", "Export_InvalidPdfLanguage")]
     public void TryNormalizePdfLanguage_ValidatesTypedLanguageTags(
         string input,
         bool expectedSuccess,
         string expectedLanguage,
-        string? expectedError)
+        string? expectedErrorKey)
     {
         ExportPlanner.TryNormalizePdfLanguage(input, out var language, out var error)
             .Should()
             .Be(expectedSuccess);
 
         language.Should().Be(expectedLanguage);
+        var expectedError = expectedErrorKey is null
+            ? null
+            : UiText.Format(expectedErrorKey, ExportPlanner.DefaultPdfLanguage);
         error.Should().Be(expectedError);
     }
 
@@ -482,28 +546,28 @@ public class ExportPlannerTests
 
         foreach (var expected in new[]
         {
-            "Content = \"Active _sheet(s)\"",
-            "Content = \"Selected _range\"",
-            "Content = \"_Workbook\"",
-            "Content = \"_Include document properties\"",
-            "Content = \"_Open after publishing\"",
-            "Content = \"_Ignore print areas\"",
-            "Content = \"Create _PDF bookmarks\"",
-            "Content = \"_Bitmap text when fonts may not be embedded\"",
-            "Content = \"PDF/_A compliant (not supported)\"",
-            "Content = \"Document structure _tags (not supported)\"",
-            "Content = \"PDF _language:\"",
+            "Content = UiText.Get(\"ExportOptions_ActiveSheetS\")",
+            "Content = UiText.Get(\"ExportOptions_SelectedRange\")",
+            "Content = UiText.Get(\"ExportOptions_Workbook\")",
+            "Content = UiText.Get(\"ExportOptions_IncludeDocumentProperties\")",
+            "Content = UiText.Get(\"ExportOptions_OpenAfterPublishing\")",
+            "Content = UiText.Get(\"ExportOptions_IgnorePrintAreas\")",
+            "Content = UiText.Get(\"ExportOptions_CreatePdfBookmarks\")",
+            "Content = UiText.Get(\"ExportOptions_BitmapTextWhenFontsMayNotBeEmbedded\")",
+            "Content = UiText.Get(\"ExportOptions_PdfACompliantNotSupported\")",
+            "Content = UiText.Get(\"ExportOptions_DocumentStructureTagsNotSupported\")",
+            "Content = UiText.Get(\"ExportOptions_PdfLanguage\")",
             "Target = _pdfLanguageBox",
-            "Content = \"_Standard\"",
-            "Content = \"_Minimum size\"",
-            "Content = \"_All\"",
-            "Content = \"_Pages\"",
+            "Content = UiText.Get(\"ExportOptions_Standard\")",
+            "Content = UiText.Get(\"ExportOptions_MinimumSize\")",
+            "Content = UiText.Get(\"ExportOptions_All\")",
+            "Content = UiText.Get(\"ExportOptions_Pages\")",
             "_fromPageBox.IsEnabled = false",
             "Target = _fromPageBox",
-            "Content = \"t_o\"",
+            "Content = UiText.Get(\"ExportOptions_To\")",
             "Target = _toPageBox",
-            "Content = \"_OK\"",
-            "Content = \"_Cancel\""
+            "Content = UiText.Ok",
+            "Content = UiText.Cancel"
         })
             source.Should().Contain(expected);
 
@@ -516,19 +580,19 @@ public class ExportPlannerTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
 
-        source.Should().Contain("Content = \"Active _sheet(s)\", IsChecked = true");
-        source.Should().Contain("Content = \"Selected _range\"");
-        source.Should().Contain("Content = \"_Workbook\"");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_ActiveSheetS\"), IsChecked = true");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_SelectedRange\")");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_Workbook\")");
         source.Should().Contain("_selectionButton.IsEnabled = hasSelection;");
-        source.Should().Contain("Content = \"_All\", GroupName = \"PageRange\", IsChecked = true");
-        source.Should().Contain("Content = \"_Pages\", GroupName = \"PageRange\"");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_All\"), GroupName = \"PageRange\", IsChecked = true");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_Pages\"), GroupName = \"PageRange\"");
         source.Should().Contain("_allPagesButton.Checked += (_, _) => SetPageRangeFieldsEnabled(false);");
         source.Should().Contain("_pagesRangeButton.Checked += (_, _) =>");
         source.Should().Contain("SetPageRangeFieldsEnabled(true);");
         source.Should().Contain("DialogFocus.FocusAndSelect(_fromPageBox);");
-        source.Should().Contain("Content = \"_Standard\", IsChecked = true");
-        source.Should().Contain("Content = \"_Minimum size\"");
-        source.Should().Contain("Content = \"_Open after publishing\"");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_Standard\"), IsChecked = true");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_MinimumSize\")");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_OpenAfterPublishing\")");
         source.Should().Contain("ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error)");
         source.Should().Contain("_minimumSizeButton.IsChecked == true");
         source.Should().Contain("_openAfterPublishBox.IsChecked == true");
@@ -539,8 +603,8 @@ public class ExportPlannerTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_fromPageBox, \"From page\");");
-        source.Should().Contain("AutomationProperties.SetName(_toPageBox, \"To page\");");
+        source.Should().Contain("AutomationProperties.SetName(_fromPageBox, UiText.Get(\"ExportOptions_FromPage\"));");
+        source.Should().Contain("AutomationProperties.SetName(_toPageBox, UiText.Get(\"ExportOptions_ToPage\"));");
     }
 
     [Fact]
@@ -548,9 +612,9 @@ public class ExportPlannerTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetHelpText(_selectionButton, \"Select a cell range before exporting the selection.\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_pdfABox, \"FreeX's current PDF exporter cannot write PDF/A conformance metadata.\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_structureTagsBox, \"FreeX's current PDF exporter cannot write tagged PDF structure trees.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_selectionButton, UiText.Get(\"ExportOptions_SelectACellRangeBeforeExportingTheSelection\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_pdfABox, UiText.Get(\"ExportOptions_FreeXSCurrentPdfExporterCannotWritePdfAConformanceMetadata\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_structureTagsBox, UiText.Get(\"ExportOptions_FreeXSCurrentPdfExporterCannotWriteTaggedPdfStructureTrees\"));");
     }
 
     [Fact]
@@ -590,7 +654,7 @@ public class ExportPlannerTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
 
         source.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, pdfLanguageError, \"Export Options\");");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, pdfLanguageError, UiText.Get(\"ExportOptions_ExportOptions\"));");
         source.Should().Contain("FocusInvalidPdfLanguageInput();");
         source.Should().Contain("private void FocusInvalidPdfLanguageInput()");
         source.Should().Contain("_pdfLanguageBox.Focus();");
@@ -646,21 +710,28 @@ public class ExportPlannerTests
     [InlineData(null, null, 3, true, null)]
     [InlineData(1, 2, 3, true, null)]
     [InlineData(3, 3, 3, true, null)]
-    [InlineData(4, 4, 3, false, "Page range starts after the last exportable page (3).")]
-    [InlineData(1, 4, 3, false, "Page range ends after the last exportable page (3).")]
-    [InlineData(1, 1, 0, false, "There are no exportable pages.")]
+    [InlineData(4, 4, 3, false, "Export_PageRangeStartsAfterLastPage")]
+    [InlineData(1, 4, 3, false, "Export_PageRangeEndsAfterLastPage")]
+    [InlineData(1, 1, 0, false, "Export_NoExportablePagesError")]
     public void TryValidatePageRange_ChecksRenderedPageCount(
         int? fromPage,
         int? toPage,
         int pageCount,
         bool expectedSuccess,
-        string? expectedError)
+        string? expectedErrorKey)
     {
         var pageRange = fromPage is null || toPage is null ? null : new ExportPageRange(fromPage.Value, toPage.Value);
 
         var success = ExportPlanner.TryValidatePageRange(pageRange, pageCount, out var error);
 
         success.Should().Be(expectedSuccess);
+        var expectedError = expectedErrorKey switch
+        {
+            "Export_PageRangeStartsAfterLastPage" => UiText.Format(expectedErrorKey, pageCount),
+            "Export_PageRangeEndsAfterLastPage" => UiText.Format(expectedErrorKey, pageCount),
+            null => null,
+            _ => UiText.Get(expectedErrorKey)
+        };
         error.Should().Be(expectedError);
     }
 
@@ -670,7 +741,12 @@ public class ExportPlannerTests
         var request = ExportPlanner.PlanExport(@"C:\temp\report.pdf");
 
         ExportPlanner.DescribeRequest(request).Should().Be(
-            "Options: Active sheet only; standard quality; document properties are not included.");
+            UiText.Format(
+                "Export_RequestDescription",
+                ExportSummary(
+                    UiText.Get("Export_ScopeActiveSheet"),
+                    UiText.Get("Export_QualityStandard"),
+                    UiText.Get("Export_DocumentPropertiesNotIncluded"))));
     }
 
     [Fact]
@@ -684,7 +760,12 @@ public class ExportPlannerTests
                 OpenAfterPublish: false));
 
         ExportPlanner.DescribeRequest(request).Should().Be(
-            "Options: Active sheet only; standard quality; document properties are included.");
+            UiText.Format(
+                "Export_RequestDescription",
+                ExportSummary(
+                    UiText.Get("Export_ScopeActiveSheet"),
+                    UiText.Get("Export_QualityStandard"),
+                    UiText.Get("Export_DocumentPropertiesIncluded"))));
     }
 
     [Fact]
@@ -708,7 +789,7 @@ public class ExportPlannerTests
     public void PdfFallbackMessage_ExplainsWindowsPrintPipelineAndXpsConversion()
     {
         ExportPlanner.PdfFallbackMessage.Should().Be(
-            "PDF export uses FreeX's print renderer. XPS export remains available for Windows print-pipeline workflows.");
+            UiText.Get("Export_PdfFallbackMessage"));
     }
 
     [Fact]
@@ -2045,7 +2126,7 @@ public class ExportPlannerTests
                 var action = () => PdfDocumentExporter.Save(document, path, null, new ExportPageRange(3, 3));
 
                 action.Should().Throw<InvalidOperationException>()
-                    .WithMessage("Page range starts after the last exportable page (2).");
+                    .WithMessage(UiText.Format("Export_PageRangeStartsAfterLastPage", 2));
                 File.Exists(path).Should().BeFalse();
             }
             finally
@@ -2068,7 +2149,7 @@ public class ExportPlannerTests
                 var action = () => PdfDocumentExporter.Save(document, path, null, new ExportPageRange(1, 3));
 
                 action.Should().Throw<InvalidOperationException>()
-                    .WithMessage("Page range ends after the last exportable page (2).");
+                    .WithMessage(UiText.Format("Export_PageRangeEndsAfterLastPage", 2));
                 File.Exists(path).Should().BeFalse();
             }
             finally
@@ -2819,7 +2900,7 @@ public class ExportPlannerTests
     [Fact]
     public void PrintPreviewDialog_CreateTitle_IncludesWorkbookName()
     {
-        PrintPreviewDialog.CreateTitle("Book1").Should().Be("Print Preview - Book1");
+        PrintPreviewDialog.CreateTitle("Book1").Should().Be(UiText.Format("PrintPreview_TitleFormat", "Book1"));
     }
 
     [Fact]
@@ -2827,7 +2908,7 @@ public class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = \"_Print...\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");
         source.Should().Contain("ShowNativePrintDialog");
         source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange)");
         source.Should().Contain("PrintDocument(paginator");
@@ -3050,7 +3131,7 @@ public class ExportPlannerTests
         var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("var zoomBox = new ComboBox");
-        source.Should().Contain("Content = \"_Zoom:\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_ZoomLabel\")");
         source.Should().Contain("Target = zoomBox");
     }
 
@@ -3059,17 +3140,17 @@ public class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("SetToolbarAutomation(firstButton, \"PrintPreviewFirstPageButton\", \"First page\"");
-        source.Should().Contain("SetToolbarAutomation(previousButton, \"PrintPreviewPreviousPageButton\", \"Previous page\"");
-        source.Should().Contain("SetToolbarAutomation(nextButton, \"PrintPreviewNextPageButton\", \"Next page\"");
-        source.Should().Contain("SetToolbarAutomation(lastButton, \"PrintPreviewLastPageButton\", \"Last page\"");
+        source.Should().Contain("SetToolbarAutomation(firstButton, \"PrintPreviewFirstPageButton\", UiText.Get(\"PrintPreview_FirstPageAutomationName\")");
+        source.Should().Contain("SetToolbarAutomation(previousButton, \"PrintPreviewPreviousPageButton\", UiText.Get(\"PrintPreview_PreviousPageAutomationName\")");
+        source.Should().Contain("SetToolbarAutomation(nextButton, \"PrintPreviewNextPageButton\", UiText.Get(\"PrintPreview_NextPageAutomationName\")");
+        source.Should().Contain("SetToolbarAutomation(lastButton, \"PrintPreviewLastPageButton\", UiText.Get(\"PrintPreview_LastPageAutomationName\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(printButton, \"PrintPreviewPrintButton\")");
-        source.Should().Contain("SetToolbarAutomation(closeButton, \"PrintPreviewCloseButton\", \"Close preview\"");
+        source.Should().Contain("SetToolbarAutomation(closeButton, \"PrintPreviewCloseButton\", UiText.Get(\"PrintPreview_CloseAutomationName\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(pageNumberBox, \"PrintPreviewPageNumberBox\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(pageStatusText, \"PrintPreviewPageStatusText\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(zoomBox, \"PrintPreviewZoomBox\")");
-        source.Should().Contain("SetToolbarAutomation(marginsButton, \"PrintPreviewMarginsButton\", \"Margins\"");
-        source.Should().Contain("SetToolbarAutomation(pageSetupButton, \"PrintPreviewPageSetupButton\", \"Page Setup\"");
+        source.Should().Contain("SetToolbarAutomation(marginsButton, \"PrintPreviewMarginsButton\", UiText.Get(\"PrintPreview_MarginsAutomationName\")");
+        source.Should().Contain("SetToolbarAutomation(pageSetupButton, \"PrintPreviewPageSetupButton\", UiText.Get(\"PrintPreview_PageSetupAutomationName\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(settingsSummaryText, \"PrintPreviewSettingsSummaryText\")");
         source.Should().Contain("private static void SetToolbarAutomation(Control control, string automationId, string name, string helpText)");
     }
@@ -3091,7 +3172,7 @@ public class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = \"_Page:\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PageLabel\")");
         source.Should().Contain("pageNumberBox");
         source.Should().Contain("pageStatusText");
         source.Should().Contain("CreateNavigationState(1, totalPages).StatusText");
@@ -3099,7 +3180,7 @@ public class ExportPlannerTests
         source.Should().Contain("NavigationCommands.GoToPage");
         source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out var pageNumber)");
         source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
-        source.Should().Contain("Enter a page number from 1 to");
+        source.Should().Contain("UiText.Format(\"PrintPreview_InvalidPageNumberMessage\", totalPages)");
         source.Should().Contain("pageNumberBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(pageNumberBox);");
     }
@@ -3109,13 +3190,13 @@ public class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = \"Pr_inter:\"");
-        source.Should().Contain("Content = \"_Copies:\"");
-        source.Should().Contain("Content = \"C_ollated\"");
-        source.Should().Contain("Content = \"_Sides:\"");
-        source.Should().Contain("Print One Sided");
-        source.Should().Contain("Flip pages on long edge");
-        source.Should().Contain("Flip pages on short edge");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PrinterLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CopiesLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CollatedLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_SidesLabel\")");
+        source.Should().Contain("sidesBox.Items.Add(UiText.Get(\"PrintPreview_SidesOneSided\"))");
+        source.Should().Contain("sidesBox.Items.Add(UiText.Get(\"PrintPreview_SidesFlipLongEdge\"))");
+        source.Should().Contain("sidesBox.Items.Add(UiText.Get(\"PrintPreview_SidesFlipShortEdge\"))");
         source.Should().Contain("printerBox");
         source.Should().Contain("copiesBox");
         source.Should().Contain("collatedBox");
@@ -3128,7 +3209,7 @@ public class ExportPlannerTests
         source.Should().Contain("dialog.PrintTicket.Duplexing = ResolvePrintTicketDuplexing(sidesMode)");
         source.Should().Contain("ResolveSelectedSidesMode(sidesBox)");
         source.Should().Contain("collatedBox.IsChecked == true");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Enter a copy count from 1 to 999.\", Title);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"PrintPreview_InvalidCopiesMessage\"), Title);");
         source.Should().Contain("copiesBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(copiesBox);");
         source.Should().Contain("AutomationProperties.SetHelpText");
@@ -3140,9 +3221,9 @@ public class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = \"_All pages\"");
-        source.Should().Contain("Content = \"Current pag_e\"");
-        source.Should().Contain("Content = \"Pa_ges\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_AllPagesLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CurrentPageLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PagesLabel\")");
         source.Should().Contain("fromPageBox");
         source.Should().Contain("toPageBox");
         source.Should().Contain("PrintPreviewPageRangeMode.CurrentPage");
@@ -3159,11 +3240,21 @@ public class ExportPlannerTests
     public void PrintPreviewDialog_PrintRangeAccessKeysAreUnique()
     {
         var source = ReadPrintPreviewDialogSources();
-        var rangeLabels = new[] { "_All pages", "Current pag_e", "Pa_ges" };
+        var rangeLabels = new[]
+        {
+            UiText.Get("PrintPreview_AllPagesLabel"),
+            UiText.Get("PrintPreview_CurrentPageLabel"),
+            UiText.Get("PrintPreview_PagesLabel")
+        };
 
         var accessKeys = rangeLabels.Select(ExtractAccessKey).ToList();
 
-        source.Should().ContainAll(rangeLabels.Select(label => $"Content = \"{label}\""));
+        source.Should().ContainAll(
+            [
+                "Content = UiText.Get(\"PrintPreview_AllPagesLabel\")",
+                "Content = UiText.Get(\"PrintPreview_CurrentPageLabel\")",
+                "Content = UiText.Get(\"PrintPreview_PagesLabel\")"
+            ]);
         accessKeys.Should().OnlyHaveUniqueItems("Print Preview range choices share one access-key scope");
     }
 
@@ -3203,6 +3294,9 @@ public class ExportPlannerTests
         pdf.Internals.Catalog.Elements
             .GetDictionary("/ViewerPreferences")
             ?.Elements.GetBoolean("/DisplayDocTitle", false) == true;
+
+    private static string ExportSummary(params string[] parts) =>
+        UiText.Format("Export_OptionsSentence", string.Join(UiText.Get("Export_OptionsSeparator"), parts));
 
     private static string ReadPrintPreviewDialogSources() =>
         string.Join(

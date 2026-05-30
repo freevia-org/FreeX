@@ -18,27 +18,27 @@ public static class ChartTypePickerPlanner
 {
     private static readonly ChartTypePickerOption[] Options =
     [
-        new(ChartType.Column, "Clustered Column", true),
-        new(ChartType.StackedColumn, "Stacked Column"),
-        new(ChartType.PercentStackedColumn, "100% Stacked Column"),
-        new(ChartType.ThreeDColumn, "3D Column"),
-        new(ChartType.Line, "Line", true),
-        new(ChartType.ThreeDLine, "3D Line"),
-        new(ChartType.Pie, "Pie", true),
-        new(ChartType.ThreeDPie, "3D Pie"),
-        new(ChartType.Doughnut, "Doughnut"),
-        new(ChartType.Bar, "Clustered Bar", true),
-        new(ChartType.StackedBar, "Stacked Bar"),
-        new(ChartType.PercentStackedBar, "100% Stacked Bar"),
-        new(ChartType.ThreeDBar, "3D Bar"),
-        new(ChartType.Scatter, "Scatter", true),
-        new(ChartType.Bubble, "Bubble"),
-        new(ChartType.Area, "Area"),
-        new(ChartType.ThreeDArea, "3D Area"),
-        new(ChartType.Radar, "Radar"),
-        new(ChartType.Stock, "Stock"),
-        new(ChartType.Surface, "Surface"),
-        new(ChartType.ThreeDSurface, "3D Surface")
+        new(ChartType.Column, UiText.Get("ChartType_ClusteredColumn"), true),
+        new(ChartType.StackedColumn, UiText.Get("ChartType_StackedColumn")),
+        new(ChartType.PercentStackedColumn, UiText.Get("ChartType_PercentStackedColumn")),
+        new(ChartType.ThreeDColumn, UiText.Get("ChartType_ThreeDColumn")),
+        new(ChartType.Line, UiText.Get("ChartType_Line"), true),
+        new(ChartType.ThreeDLine, UiText.Get("ChartType_ThreeDLine")),
+        new(ChartType.Pie, UiText.Get("ChartType_Pie"), true),
+        new(ChartType.ThreeDPie, UiText.Get("ChartType_ThreeDPie")),
+        new(ChartType.Doughnut, UiText.Get("ChartType_Doughnut")),
+        new(ChartType.Bar, UiText.Get("ChartType_ClusteredBar"), true),
+        new(ChartType.StackedBar, UiText.Get("ChartType_StackedBar")),
+        new(ChartType.PercentStackedBar, UiText.Get("ChartType_PercentStackedBar")),
+        new(ChartType.ThreeDBar, UiText.Get("ChartType_ThreeDBar")),
+        new(ChartType.Scatter, UiText.Get("ChartType_Scatter"), true),
+        new(ChartType.Bubble, UiText.Get("ChartType_Bubble")),
+        new(ChartType.Area, UiText.Get("ChartType_Area")),
+        new(ChartType.ThreeDArea, UiText.Get("ChartType_ThreeDArea")),
+        new(ChartType.Radar, UiText.Get("ChartType_Radar")),
+        new(ChartType.Stock, UiText.Get("ChartType_Stock")),
+        new(ChartType.Surface, UiText.Get("ChartType_Surface")),
+        new(ChartType.ThreeDSurface, UiText.Get("ChartType_ThreeDSurface"))
     ];
 
     public static IReadOnlyList<ChartTypePickerOption> GetSupportedOptions() =>
@@ -62,15 +62,15 @@ public static class ChartTypePickerPlanner
         var supported = GetSupportedOptions();
         return new (string Name, ChartType[] Types)[]
             {
-                ("Column", [ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn, ChartType.ThreeDColumn]),
-                ("Line", [ChartType.Line, ChartType.ThreeDLine]),
-                ("Pie", [ChartType.Pie, ChartType.ThreeDPie, ChartType.Doughnut]),
-                ("Bar", [ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.ThreeDBar]),
-                ("Area", [ChartType.Area, ChartType.ThreeDArea]),
-                ("X Y (Scatter)", [ChartType.Scatter, ChartType.Bubble]),
-                ("Stock", [ChartType.Stock]),
-                ("Radar", [ChartType.Radar]),
-                ("Surface", [ChartType.Surface, ChartType.ThreeDSurface])
+                (UiText.Get("ChartTypeCategory_Column"), [ChartType.Column, ChartType.StackedColumn, ChartType.PercentStackedColumn, ChartType.ThreeDColumn]),
+                (UiText.Get("ChartTypeCategory_Line"), [ChartType.Line, ChartType.ThreeDLine]),
+                (UiText.Get("ChartTypeCategory_Pie"), [ChartType.Pie, ChartType.ThreeDPie, ChartType.Doughnut]),
+                (UiText.Get("ChartTypeCategory_Bar"), [ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.ThreeDBar]),
+                (UiText.Get("ChartTypeCategory_Area"), [ChartType.Area, ChartType.ThreeDArea]),
+                (UiText.Get("ChartTypeCategory_Scatter"), [ChartType.Scatter, ChartType.Bubble]),
+                (UiText.Get("ChartTypeCategory_Stock"), [ChartType.Stock]),
+                (UiText.Get("ChartTypeCategory_Radar"), [ChartType.Radar]),
+                (UiText.Get("ChartTypeCategory_Surface"), [ChartType.Surface, ChartType.ThreeDSurface])
             }
             .Select(category => new ChartTypePickerCategory(
                 category.Name,
@@ -89,7 +89,7 @@ public static class ChartTypePickerPlanner
                 option.Type,
                 category.Name,
                 option.DisplayName,
-                $"Preview: {option.DisplayName}",
+                UiText.Format("ChartTypePicker_PreviewTextFormat", option.DisplayName),
                 option.IsRecommended)))
             .ToList();
 
@@ -97,9 +97,9 @@ public static class ChartTypePickerPlanner
         GetRecommendedOptions()
             .Select(option => new ChartTypeGalleryChoice(
                 option.Type,
-                "Recommended Charts",
+                UiText.Get("ChartTypePicker_RecommendedCategory"),
                 option.DisplayName,
-                $"Preview: {option.DisplayName}",
+                UiText.Format("ChartTypePicker_PreviewTextFormat", option.DisplayName),
                 IsRecommended: true))
             .ToList();
 }

@@ -32,8 +32,8 @@ public sealed class SparklineDialog : Window
     private readonly TextBox _dataRangeBox = new();
     private readonly TextBox _locationBox = new();
     private readonly ComboBox _kindBox = new();
-    private readonly Button _dataRangePickerButton = new() { Content = "_Select Data Range", Width = 132, ToolTip = "Select Data Range" };
-    private readonly Button _locationPickerButton = new() { Content = "Select _Location Range", Width = 152, ToolTip = "Select Location Range" };
+    private readonly Button _dataRangePickerButton = new() { Content = UiText.Get("Sparkline_SelectDataRange"), Width = 132, ToolTip = UiText.Get("Sparkline_SelectDataRange2") };
+    private readonly Button _locationPickerButton = new() { Content = UiText.Get("Sparkline_SelectLocationRange"), Width = 152, ToolTip = UiText.Get("Sparkline_SelectLocationRange2") };
     private readonly Action<SparklineRangeSelectionRequest>? _requestRangeSelection;
 
     public SparklineDialogResult Result { get; private set; }
@@ -49,7 +49,7 @@ public sealed class SparklineDialog : Window
         _sheetId = sheetId;
         _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(dataRangeText, locationText, kind);
-        Title = "Insert Sparkline";
+        Title = UiText.Get("Sparkline_InsertSparkline");
         Width = 380;
         Height = 240;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -58,30 +58,30 @@ public sealed class SparklineDialog : Window
         _dataRangePickerButton.Click += (_, _) => RequestRangeSelection(SparklineRangeSelectionTarget.DataRange, _dataRangeBox);
         _locationPickerButton.Click += (_, _) => RequestRangeSelection(SparklineRangeSelectionTarget.Location, _locationBox);
 
-        AutomationProperties.SetName(_dataRangePickerButton, "Select sparkline data range");
+        AutomationProperties.SetName(_dataRangePickerButton, UiText.Get("Sparkline_SelectSparklineDataRange"));
         AutomationProperties.SetAutomationId(_dataRangePickerButton, "SparklineDataRangePickerButton");
-        AutomationProperties.SetHelpText(_dataRangePickerButton, "Select the worksheet data range for the sparkline.");
-        AutomationProperties.SetName(_locationPickerButton, "Select sparkline location range");
+        AutomationProperties.SetHelpText(_dataRangePickerButton, UiText.Get("Sparkline_SelectTheWorksheetDataRangeForTheSparkline"));
+        AutomationProperties.SetName(_locationPickerButton, UiText.Get("Sparkline_SelectSparklineLocationRange"));
         AutomationProperties.SetAutomationId(_locationPickerButton, "SparklineLocationRangePickerButton");
-        AutomationProperties.SetHelpText(_locationPickerButton, "Select the destination cell for the sparkline.");
+        AutomationProperties.SetHelpText(_locationPickerButton, UiText.Get("Sparkline_SelectTheDestinationCellForTheSparkline"));
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new Label { Content = "_Data range:", Target = _dataRangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = UiText.Get("Sparkline_DataRange"), Target = _dataRangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _dataRangeBox.Text = Result.DataRangeText;
-        AutomationProperties.SetName(_dataRangeBox, "Sparkline data range");
+        AutomationProperties.SetName(_dataRangeBox, UiText.Get("Sparkline_SparklineDataRange"));
         AutomationProperties.SetAutomationId(_dataRangeBox, "SparklineDataRangeBox");
-        AutomationProperties.SetHelpText(_dataRangeBox, "Enter the worksheet data range for the sparkline.");
+        AutomationProperties.SetHelpText(_dataRangeBox, UiText.Get("Sparkline_EnterTheWorksheetDataRangeForTheSparkline"));
         stack.Children.Add(CreateRangePickerRow(_dataRangeBox, _dataRangePickerButton));
-        stack.Children.Add(new Label { Content = "_Location range:", Target = _locationBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = UiText.Get("Sparkline_LocationRange"), Target = _locationBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _locationBox.Text = Result.LocationText;
-        AutomationProperties.SetName(_locationBox, "Sparkline location range");
+        AutomationProperties.SetName(_locationBox, UiText.Get("Sparkline_SparklineLocationRange"));
         AutomationProperties.SetAutomationId(_locationBox, "SparklineLocationRangeBox");
-        AutomationProperties.SetHelpText(_locationBox, "Enter the destination cell for the sparkline.");
+        AutomationProperties.SetHelpText(_locationBox, UiText.Get("Sparkline_EnterTheDestinationCellForTheSparkline"));
         stack.Children.Add(CreateRangePickerRow(_locationBox, _locationPickerButton));
-        stack.Children.Add(new Label { Content = "Sparkline _type:", Target = _kindBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
-        AutomationProperties.SetName(_kindBox, "Sparkline type");
+        stack.Children.Add(new Label { Content = UiText.Get("Sparkline_SparklineType"), Target = _kindBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        AutomationProperties.SetName(_kindBox, UiText.Get("Sparkline_SparklineTypeAutomationName"));
         AutomationProperties.SetAutomationId(_kindBox, "SparklineTypeBox");
-        AutomationProperties.SetHelpText(_kindBox, "Choose whether the sparkline is line, column, or win/loss.");
+        AutomationProperties.SetHelpText(_kindBox, UiText.Get("Sparkline_ChooseWhetherTheSparklineIsLineColumnOrWinLoss"));
         _kindBox.ItemsSource = Enum.GetValues<SparklineKindChoice>()
             .Select(choice => new ComboBoxItem
             {
@@ -121,9 +121,9 @@ public sealed class SparklineDialog : Window
         return SparklineDialogPlanner.ValidateInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId) switch
         {
             SparklineDialogValidationResult.InvalidDataRange =>
-                ShowInvalidInputWarning("Invalid data range.", _dataRangeBox),
+                ShowInvalidInputWarning(UiText.Get("Sparkline_InvalidDataRange"), _dataRangeBox),
             SparklineDialogValidationResult.InvalidLocation =>
-                ShowInvalidInputWarning("Invalid location cell.", _locationBox),
+                ShowInvalidInputWarning(UiText.Get("Sparkline_InvalidLocationCell"), _locationBox),
             _ => true
         };
     }
