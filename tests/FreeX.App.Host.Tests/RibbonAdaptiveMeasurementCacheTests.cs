@@ -84,6 +84,8 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             resized.GroupMeasurementCount.Should().Be(0);
             resized.CompactSnapshotCaptureCount.Should().Be(0);
             resized.ResizeThresholdRebuildCount.Should().Be(0);
+            resized.StateApplyCount.Should().BeGreaterThan(0, "a new width band should evaluate the compact state without remeasuring groups");
+            resized.StateChangedGroupCount.Should().BeLessThanOrEqualTo(resized.StateApplyCount * 9);
             resized.MeasurementCacheKey.Should().Be(warm.MeasurementCacheKey);
             resized.ResizeThresholdCacheKey.Should().Be(warm.ResizeThresholdCacheKey);
             resized.CompactSnapshotCacheKey.Should().Be(warm.CompactSnapshotCacheKey);
@@ -97,6 +99,9 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             sameWidth.LayoutPlanComputeCount.Should().Be(0, "the pure layout plan should be reused when the tab metrics and width are unchanged");
             sameWidth.LayoutPlanCacheHitCount.Should().Be(1);
             sameWidth.AppliedStateSkipCount.Should().Be(1, "a second pass at the same width should hit the applied-state guard instead of reapplying the ribbon tree");
+            sameWidth.StateApplyCount.Should().Be(0, "the applied-state guard should skip the tree mutation path completely");
+            sameWidth.StateChangedGroupCount.Should().Be(0);
+            sameWidth.CollapsedFootprintApplyCount.Should().Be(0);
         });
     }
 
@@ -174,12 +179,17 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
 
             harness.SelectRibbonTab("Insert", 1280);
             harness.UpdateCompact(force: true);
+            harness.ResetDiagnostics();
             harness.SetWidth(900);
             harness.UpdateCompact(force: true);
 
             var firstPassAtWidth = harness.Diagnostics;
             firstPassAtWidth.MeasuredOverflowMeasurementCount.Should()
                 .BeGreaterThan(0, "Insert relies on measured correction at compact Excel widths");
+            firstPassAtWidth.StateApplyCount.Should()
+                .BeGreaterThan(0, "measured correction should apply only the candidate states it changes");
+            firstPassAtWidth.StateChangedGroupCount.Should()
+                .BeLessThan(firstPassAtWidth.StateApplyCount * 9, "measured correction should not reapply every ribbon group on every correction step");
 
             harness.ResetDiagnostics();
             harness.UpdateCompact(force: true);

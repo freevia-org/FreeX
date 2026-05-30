@@ -64,6 +64,8 @@ public sealed class RibbonResizeCoordinatorTests
         method.Should().NotContain("DispatcherPriority.Send");
         method.Should().Contain("UpdateRibbonCompactMode(force: false)");
         method.Should().Contain("UpdateActiveRibbonLayoutBeforeFirstFrame()");
+        method.Should().Contain("RibbonCompactUpdateRequiresLayout(result)");
+        method.Should().Contain("_ribbonFallbackSkippedCompactLayoutCount");
     }
 
     [Fact]
@@ -233,9 +235,9 @@ public sealed class RibbonResizeCoordinatorTests
             queued.RequestCount.Should().Be(1);
             queued.PostedCount.Should().Be(1);
             queued.LastMergedWork.Should().Be("CompactOnly");
-            queued.FirstFrameLayoutUpdateCount.Should().BeGreaterThan(
+            queued.FirstFrameLayoutUpdateCount.Should().Be(
                 0,
-                "explicit resize completion should settle the compacted ribbon before the queued render fallback is visible");
+                "explicit resize completion should not force a layout pass when the compact state is already current");
 
             harness.PumpDispatcher();
 
@@ -243,6 +245,7 @@ public sealed class RibbonResizeCoordinatorTests
             executed.ExecutedCount.Should().Be(1);
             executed.ForcedNormalizeCount.Should().Be(0);
             executed.ForcedCompactCount.Should().Be(1);
+            executed.SkippedCompactLayoutCount.Should().Be(1);
             executed.LastExecutedWork.Should().Be("CompactOnly");
         });
     }
