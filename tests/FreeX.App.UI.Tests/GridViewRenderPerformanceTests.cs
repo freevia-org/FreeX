@@ -174,6 +174,25 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderAutofillPreview_ReusesFrozenStaticDashedPen()
+    {
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
+        var overlaysSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var renderAutofill = overlaysSource[
+            overlaysSource.IndexOf("private void RenderAutofillPreview", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private void RenderMarchingAnts", StringComparison.Ordinal)];
+
+        gridViewSource.Should().Contain("private static readonly Pen AutofillPreviewPen = MakeAutofillPreviewPen();");
+        gridViewSource.Should().Contain("private static Pen MakeAutofillPreviewPen()");
+        gridViewSource.Should().Contain("DashStyle = new DashStyle([4.0, 4.0], 0)");
+        gridViewSource.Should().Contain("pen.Freeze();");
+        renderAutofill.Should().Contain("dc.DrawRectangle(null, AutofillPreviewPen, rect);");
+        renderAutofill.Should().NotContain("new Pen");
+        renderAutofill.Should().NotContain("new SolidColorBrush");
+        renderAutofill.Should().NotContain("new DashStyle");
+    }
+
+    [Fact]
     public void OnRender_SkipsHeavyVisualLayersDuringLiveResize()
     {
         var properties = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
