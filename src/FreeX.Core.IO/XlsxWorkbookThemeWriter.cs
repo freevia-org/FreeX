@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -28,7 +29,8 @@ internal static class XlsxWorkbookThemeWriter
                 new XElement(drawingNs + "themeElements",
                     CreateColorSchemeElement(theme, drawingNs),
                     CreateFontSchemeElement(theme, drawingNs),
-                    CreateFormatSchemeElement(theme, drawingNs))));
+                    CreateFormatSchemeElement(theme, drawingNs)),
+                CreateThemeSupplementElements(theme, drawingNs)));
     }
 
     private static XElement CreateColorSchemeElement(WorkbookTheme theme, XNamespace drawingNs)
@@ -103,4 +105,36 @@ internal static class XlsxWorkbookThemeWriter
 
     private static string FormatColor(CellColor color) =>
         $"{color.R:X2}{color.G:X2}{color.B:X2}";
+
+    private static IEnumerable<XElement> CreateThemeSupplementElements(WorkbookTheme theme, XNamespace drawingNs)
+    {
+        if (string.IsNullOrWhiteSpace(theme.NativeThemeSupplementXml))
+            return [];
+
+        try
+        {
+            using var stringReader = new StringReader($"<themeSupplement>{theme.NativeThemeSupplementXml}</themeSupplement>");
+            using var xmlReader = XmlReader.Create(
+                stringReader,
+                new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit,
+                    XmlResolver = null
+                });
+            var document = XDocument.Load(xmlReader);
+            return document.Root!
+                .Elements()
+                .Where(element => IsSupportedThemeSupplementElement(element, drawingNs))
+                .Select(element => new XElement(element))
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private static bool IsSupportedThemeSupplementElement(XElement element, XNamespace drawingNs) =>
+        element.Name.Namespace == drawingNs
+        && element.Name != drawingNs + "themeElements";
 }

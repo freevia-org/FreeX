@@ -14,8 +14,14 @@ internal sealed record SelectionPaneDialogReorderPlan(
 
 internal sealed record SelectionPaneDragMovePlan(
     int DraggedIndex,
-    int TargetIndex,
+    int InsertIndex,
     IReadOnlyList<SelectionPaneMoveChange> MoveChanges);
+
+public enum SelectionPaneDropPlacement
+{
+    Before,
+    After
+}
 
 internal static class SelectionPaneFilterValues
 {
@@ -72,19 +78,17 @@ internal static class SelectionPaneDialogStatePlanner
     public static SelectionPaneDialogReorderPlan? PlanDragReorder(
         IReadOnlyList<SelectionPaneDialogItemState> items,
         Guid draggedId,
-        Guid targetId)
+        Guid targetId,
+        SelectionPaneDropPlacement placement = SelectionPaneDropPlacement.Before)
     {
-        var dragPlan = CreateDragMovePlan(items, draggedId, targetId);
+        var dragPlan = CreateDragMovePlan(items, draggedId, targetId, placement);
         if (dragPlan is null)
             return null;
 
         var orderedIds = CreateOrderedIds(items);
         var dragged = orderedIds[dragPlan.DraggedIndex];
         orderedIds.RemoveAt(dragPlan.DraggedIndex);
-        var targetIndex = dragPlan.TargetIndex;
-        if (dragPlan.DraggedIndex < targetIndex)
-            targetIndex--;
-        orderedIds.Insert(targetIndex, dragged);
+        orderedIds.Insert(dragPlan.InsertIndex, dragged);
         return new SelectionPaneDialogReorderPlan(orderedIds, dragPlan.MoveChanges);
     }
 
@@ -154,13 +158,15 @@ internal static class SelectionPaneDialogStatePlanner
     public static IReadOnlyList<SelectionPaneMoveChange> CreateDragMoveChanges(
         IReadOnlyList<(SelectionPaneObjectKind Kind, Guid Id)> currentOrder,
         Guid draggedId,
-        Guid targetId) =>
-        CreateDragMovePlan(currentOrder, draggedId, targetId)?.MoveChanges ?? [];
+        Guid targetId,
+        SelectionPaneDropPlacement placement = SelectionPaneDropPlacement.Before) =>
+        CreateDragMovePlan(currentOrder, draggedId, targetId, placement)?.MoveChanges ?? [];
 
     private static SelectionPaneDragMovePlan? CreateDragMovePlan(
         IReadOnlyList<SelectionPaneDialogItemState> items,
         Guid draggedId,
-        Guid targetId)
+        Guid targetId,
+        SelectionPaneDropPlacement placement)
     {
         var (draggedIndex, targetIndex) = FindDragIndexes(items, draggedId, targetId);
         if (draggedIndex < 0 || targetIndex < 0 || draggedIndex == targetIndex)
@@ -171,13 +177,14 @@ internal static class SelectionPaneDialogStatePlanner
         if (dragged.Kind != target.Kind)
             return null;
 
-        return CreateDragMovePlan(dragged.Kind, dragged.Id, draggedIndex, targetIndex);
+        return CreateDragMovePlan(dragged.Kind, dragged.Id, draggedIndex, targetIndex, placement);
     }
 
     private static SelectionPaneDragMovePlan? CreateDragMovePlan(
         IReadOnlyList<(SelectionPaneObjectKind Kind, Guid Id)> currentOrder,
         Guid draggedId,
-        Guid targetId)
+        Guid targetId,
+        SelectionPaneDropPlacement placement)
     {
         var (draggedIndex, targetIndex) = FindDragIndexes(currentOrder, draggedId, targetId);
         if (draggedIndex < 0 || targetIndex < 0 || draggedIndex == targetIndex)
@@ -188,22 +195,30 @@ internal static class SelectionPaneDialogStatePlanner
         if (dragged.Kind != target.Kind)
             return null;
 
-        return CreateDragMovePlan(dragged.Kind, dragged.Id, draggedIndex, targetIndex);
+        return CreateDragMovePlan(dragged.Kind, dragged.Id, draggedIndex, targetIndex, placement);
     }
 
     private static SelectionPaneDragMovePlan CreateDragMovePlan(
         SelectionPaneObjectKind kind,
         Guid draggedId,
         int draggedIndex,
-        int targetIndex)
+        int targetIndex,
+        SelectionPaneDropPlacement placement)
     {
-        var moves = new List<SelectionPaneMoveChange>(Math.Abs(draggedIndex - targetIndex));
-        var forward = draggedIndex > targetIndex;
+        var insertIndex = placement == SelectionPaneDropPlacement.After ? targetIndex + 1 : targetIndex;
+        if (draggedIndex < insertIndex)
+            insertIndex--;
+
+        if (insertIndex == draggedIndex)
+            return new SelectionPaneDragMovePlan(draggedIndex, insertIndex, []);
+
+        var moves = new List<SelectionPaneMoveChange>(Math.Abs(draggedIndex - insertIndex));
+        var forward = draggedIndex > insertIndex;
         var step = forward ? -1 : 1;
-        for (var index = draggedIndex; index != targetIndex; index += step)
+        for (var index = draggedIndex; index != insertIndex; index += step)
             moves.Add(new SelectionPaneMoveChange(kind, draggedId, forward));
 
-        return new SelectionPaneDragMovePlan(draggedIndex, targetIndex, moves);
+        return new SelectionPaneDragMovePlan(draggedIndex, insertIndex, moves);
     }
 
     private static bool MatchesSearch(SelectionPaneDialogItemState item, string search) =>
@@ -339,8 +354,9 @@ public sealed partial class SelectionPaneDialog
     public static IReadOnlyList<SelectionPaneMoveChange> CreateDragMoveChanges(
         IReadOnlyList<(SelectionPaneObjectKind Kind, Guid Id)> currentOrder,
         Guid draggedId,
-        Guid targetId) =>
-        SelectionPaneDialogStatePlanner.CreateDragMoveChanges(currentOrder, draggedId, targetId);
+        Guid targetId,
+        SelectionPaneDropPlacement placement = SelectionPaneDropPlacement.Before) =>
+        SelectionPaneDialogStatePlanner.CreateDragMoveChanges(currentOrder, draggedId, targetId, placement);
 
     private static IReadOnlyList<SelectionPaneDialogItemState> ToDialogItemStates(
         IReadOnlyList<SelectionPaneItem> originalItems,

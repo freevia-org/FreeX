@@ -49,6 +49,18 @@ public sealed class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void TableContextTabs_ExtendDefaultTourWithTableDesignContextualTab()
+    {
+        RibbonScreenshotTourPlanner.TableContextTabs
+            .Should()
+            .Equal(
+            [
+                .. RibbonScreenshotTourPlanner.DefaultTabs,
+                new("Table Design", "Table_Design")
+            ]);
+    }
+
+    [Fact]
     public void DefaultWidths_CoverRepresentativeRibbonWidths()
     {
         RibbonScreenshotTourPlanner.DefaultWidths
@@ -173,6 +185,29 @@ public sealed class RibbonScreenshotTourPlannerTests
         act.Should()
             .Throw<InvalidOperationException>()
             .WithMessage("*tab list contains empty entry*position(s): 2*");
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData(" table ", "table")]
+    [InlineData("table-design", "table")]
+    [InlineData("structured_table", "table")]
+    public void NormalizeContext_AcceptsExcelContextAliases(string? context, string? expected)
+    {
+        RibbonScreenshotTourPlanner.NormalizeContext(context)
+            .Should()
+            .Be(expected);
+    }
+
+    [Fact]
+    public void TabsForContext_RejectsUnsupportedContexts()
+    {
+        var act = () => RibbonScreenshotTourPlanner.TabsForContext("chart");
+
+        act.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*context 'chart' is not supported*Valid contexts: table*");
     }
 
     [Fact]
@@ -337,15 +372,41 @@ public sealed class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void CreatePlan_WithTableContext_AllowsContextualTableDesignCapture()
+    {
+        var plan = RibbonScreenshotTourPlanner.CreatePlan("Table Design", "900", burstMode: false, context: "table");
+
+        plan.Context.Should().Be("table");
+        plan.Tabs.Should().Equal([new("Table Design", "Table_Design")]);
+        plan.Captures
+            .Select(capture => capture.OutputFileName)
+            .Should()
+            .Equal(["900_Table_Design.png"]);
+    }
+
+    [Fact]
+    public void CreatePlan_RejectsContextualTableTabWithoutSeedContext()
+    {
+        var act = () => RibbonScreenshotTourPlanner.CreatePlan("Table Design", "900");
+
+        act.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*unknown tab(s): Table Design*");
+    }
+
+    [Fact]
     public void MainWindowScreenshotTour_UsesPlannerForEnvironmentFilters()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ScreenshotTour.cs"));
 
         source.Should().Contain("RibbonScreenshotTourPlanner.CreatePlan");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_BURST\")");
+        source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_CONTEXT\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_TABS\")");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_WIDTHS\")");
         source.Should().Contain("RibbonScreenshotTourPlan?");
+        source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
+        source.Should().Contain("EnsureTableDesignScreenshotTourContext");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");

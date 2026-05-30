@@ -11,7 +11,8 @@ public sealed record WorkbookTheme(
     IReadOnlyDictionary<WorkbookThemeColorSlot, CellColor> Colors,
     string? NativeColorSchemeXml = null,
     string? NativeFontSchemeXml = null,
-    string? NativeFormatSchemeXml = null)
+    string? NativeFormatSchemeXml = null,
+    string? NativeThemeSupplementXml = null)
 {
     private static readonly IReadOnlyDictionary<WorkbookThemeColorSlot, CellColor> OfficeColors =
         new Dictionary<WorkbookThemeColorSlot, CellColor>
@@ -84,6 +85,12 @@ public sealed record WorkbookTheme(
         this with
         {
             NativeFontSchemeXml = string.IsNullOrWhiteSpace(fontSchemeXml) ? null : fontSchemeXml.Trim()
+        };
+
+    public WorkbookTheme WithNativeThemeSupplementXml(string? themeSupplementXml) =>
+        this with
+        {
+            NativeThemeSupplementXml = string.IsNullOrWhiteSpace(themeSupplementXml) ? null : themeSupplementXml.Trim()
         };
 
     public WorkbookTheme WithColor(WorkbookThemeColorSlot slot, CellColor color)

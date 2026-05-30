@@ -127,6 +127,7 @@ public static partial class NumberFormatter
         string? color = null;
         FormatCondition? condition = null;
         int index = 0;
+        var retainedDirectives = new System.Text.StringBuilder();
 
         while (index < section.Length && section[index] == '[')
         {
@@ -155,10 +156,17 @@ public static partial class NumberFormatter
                 continue;
             }
 
+            if (IsRetainedSectionDirective(token))
+            {
+                retainedDirectives.Append(section, index, close - index + 1);
+                index = SkipInterDirectiveWhitespace(section, close + 1);
+                continue;
+            }
+
             break;
         }
 
-        return new ParsedSection(section[index..], color, condition);
+        return new ParsedSection(retainedDirectives + section[index..], color, condition);
     }
 
     private static int SkipInterDirectiveWhitespace(string section, int index)
@@ -184,5 +192,13 @@ public static partial class NumberFormatter
 
         condition = null;
         return false;
+    }
+
+    private static bool IsRetainedSectionDirective(string token)
+    {
+        var trimmed = token.Trim();
+        return trimmed.StartsWith('$') ||
+            trimmed.StartsWith("DBNum", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("NatNum", StringComparison.OrdinalIgnoreCase);
     }
 }
