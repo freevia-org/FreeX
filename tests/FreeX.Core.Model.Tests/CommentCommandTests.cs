@@ -283,6 +283,155 @@ public class CommentCommandTests
     }
 
     [Fact]
+    public void UpdateThreadedCommentReplyCommand_UpdatesOnlySelectedReplyAndUndoRestoresThread()
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var original = new ThreadedComment("Root", "Quinn")
+        {
+            Replies =
+            [
+                new CommentReply("First", "Codex"),
+                new CommentReply("Second", "User")
+            ],
+            IsResolved = true
+        };
+        sheet.ThreadedComments[addr] = original;
+
+        var command = new UpdateThreadedCommentReplyCommand(sheet.Id, addr, replyIndex: 1, text: "Updated second");
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.AffectedCells.Should().ContainSingle().Which.Should().Be(addr);
+        sheet.ThreadedComments[addr].Should().BeEquivalentTo(original with
+        {
+            Replies =
+            [
+                new CommentReply("First", "Codex"),
+                new CommentReply("Updated second", "User")
+            ]
+        });
+
+        command.Revert(ctx);
+
+        sheet.ThreadedComments[addr].Should().Be(original);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(1)]
+    public void UpdateThreadedCommentReplyCommand_InvalidReplyIndex_FailsAndPreservesThread(int replyIndex)
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var original = new ThreadedComment("Root", "Quinn")
+        {
+            Replies = [new CommentReply("Only reply", "Codex")]
+        };
+        sheet.ThreadedComments[addr] = original;
+
+        var outcome = new UpdateThreadedCommentReplyCommand(sheet.Id, addr, replyIndex, "Updated").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("No threaded comment reply");
+        sheet.ThreadedComments[addr].Should().Be(original);
+    }
+
+    [Fact]
+    public void UpdateThreadedCommentReplyCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var original = new ThreadedComment("Root", "Quinn")
+        {
+            Replies = [new CommentReply("Reply", "Codex")]
+        };
+        sheet.ThreadedComments[addr] = original;
+
+        var outcome = new UpdateThreadedCommentReplyCommand(sheet.Id, addr, replyIndex: 0, text: "Updated").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.ThreadedComments[addr].Should().Be(original);
+    }
+
+    [Fact]
+    public void DeleteThreadedCommentReplyCommand_RemovesOnlySelectedReplyAndUndoRestoresThread()
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var original = new ThreadedComment("Root", "Quinn")
+        {
+            Replies =
+            [
+                new CommentReply("First", "Codex"),
+                new CommentReply("Second", "User"),
+                new CommentReply("Third", "Reviewer")
+            ],
+            IsResolved = true
+        };
+        sheet.ThreadedComments[addr] = original;
+
+        var command = new DeleteThreadedCommentReplyCommand(sheet.Id, addr, replyIndex: 1);
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.AffectedCells.Should().ContainSingle().Which.Should().Be(addr);
+        sheet.ThreadedComments[addr].Should().BeEquivalentTo(original with
+        {
+            Replies =
+            [
+                new CommentReply("First", "Codex"),
+                new CommentReply("Third", "Reviewer")
+            ]
+        });
+
+        command.Revert(ctx);
+
+        sheet.ThreadedComments[addr].Should().Be(original);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(1)]
+    public void DeleteThreadedCommentReplyCommand_InvalidReplyIndex_FailsAndPreservesThread(int replyIndex)
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var original = new ThreadedComment("Root", "Quinn")
+        {
+            Replies = [new CommentReply("Only reply", "Codex")]
+        };
+        sheet.ThreadedComments[addr] = original;
+
+        var outcome = new DeleteThreadedCommentReplyCommand(sheet.Id, addr, replyIndex).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("No threaded comment reply");
+        sheet.ThreadedComments[addr].Should().Be(original);
+    }
+
+    [Fact]
+    public void DeleteThreadedCommentReplyCommand_RejectsProtectedSheetWithoutEditObjectsPermission()
+    {
+        var (_, sheet, ctx) = Setup();
+        sheet.IsProtected = true;
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var original = new ThreadedComment("Root", "Quinn")
+        {
+            Replies = [new CommentReply("Reply", "Codex")]
+        };
+        sheet.ThreadedComments[addr] = original;
+
+        var outcome = new DeleteThreadedCommentReplyCommand(sheet.Id, addr, replyIndex: 0).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("protected");
+        sheet.ThreadedComments[addr].Should().Be(original);
+    }
+
+    [Fact]
     public void ResolveThreadedCommentCommand_TogglesResolvedStateAndUndoRestoresThread()
     {
         var (_, sheet, ctx) = Setup();
