@@ -21352,6 +21352,91 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_RoundTripsStructuredTableStyleOptionsWithoutNamedStyle()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableStyleOptionsOnlyTest");
+        var sheet = workbook.GetSheetAt(0);
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            HasAutoFilter = true,
+            ShowFirstColumn = true,
+            ShowLastColumn = true,
+            ShowColumnStripes = true
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Category"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        sheet.StructuredTables.Add(table);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!);
+            var styleInfo = tableXml.Root!.Element(workbookNs + "tableStyleInfo");
+            styleInfo.Should().NotBeNull();
+            styleInfo!.Attribute("name").Should().BeNull();
+            styleInfo.Attribute("showFirstColumn")!.Value.Should().Be("1");
+            styleInfo.Attribute("showLastColumn")!.Value.Should().Be("1");
+            styleInfo.Attribute("showRowStripes")!.Value.Should().Be("0");
+            styleInfo.Attribute("showColumnStripes")!.Value.Should().Be("1");
+        }
+
+        saved.Position = 0;
+        var roundTrippedTable = adapter.Load(saved).GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        roundTrippedTable.StyleName.Should().BeNull();
+        roundTrippedTable.ShowFirstColumn.Should().BeTrue();
+        roundTrippedTable.ShowLastColumn.Should().BeTrue();
+        roundTrippedTable.ShowRowStripes.Should().BeFalse();
+        roundTrippedTable.ShowColumnStripes.Should().BeTrue();
+    }
+
+    [Fact]
+    public void XlsxAdapter_FreshSave_PreservesStructuredTableNativeStyleInfoWithoutNamedStyle()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableNativeStyleInfoOnlyTest");
+        var sheet = workbook.GetSheetAt(0);
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            HasAutoFilter = true,
+            NativeStyleInfoAttributes = new Dictionary<string, string> { ["pivot"] = "0" },
+            NativeStyleInfoChildXmls = ["<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{FREEX-TABLE-STYLE-OPTIONS-ONLY}\" /></extLst>"]
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Category"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        sheet.StructuredTables.Add(table);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read);
+        XNamespace styleWorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!);
+        var styleInfo = tableXml.Root!.Element(styleWorkbookNs + "tableStyleInfo");
+        styleInfo.Should().NotBeNull();
+        styleInfo!.Attribute("name").Should().BeNull();
+        styleInfo.Attribute("pivot")!.Value.Should().Be("0");
+        styleInfo.Attribute("showFirstColumn")!.Value.Should().Be("0");
+        styleInfo.Attribute("showLastColumn")!.Value.Should().Be("0");
+        styleInfo.Attribute("showRowStripes")!.Value.Should().Be("0");
+        styleInfo.Attribute("showColumnStripes")!.Value.Should().Be("0");
+        styleInfo.ToString(System.Xml.Linq.SaveOptions.DisableFormatting).Should().Contain("{FREEX-TABLE-STYLE-OPTIONS-ONLY}");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadSave_RoundTripsStructuredTableRootNativeMetadata()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableRootMetadataTest");
