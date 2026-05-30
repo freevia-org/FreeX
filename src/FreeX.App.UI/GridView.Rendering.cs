@@ -192,7 +192,7 @@ public partial class GridView
         _borderPenCache.Clear();
         _fillPatternPenCache.Clear();
         _typefaceCache.Clear();
-        foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions))
+        foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions, EditingCell))
         {
             var cell = layout.Cell;
             var rect = layout.Rect;

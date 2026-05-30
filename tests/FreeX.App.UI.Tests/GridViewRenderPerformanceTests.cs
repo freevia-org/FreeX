@@ -673,7 +673,7 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("ResolveSplitPaneRegion(isTopPane, isLeftPane)");
         calculateLayouts.Should().Contain("new List<SplitPaneCellLayout>(cells.Count)");
         calculateLayouts.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
-        calculateLayouts.Should().Contain("occupied ??= BuildOccupiedCells(cells)");
+        calculateLayouts.Should().Contain("occupied ??= BuildOccupiedCells(cells, editingCell)");
         calculateLayouts.Should().Contain("foreach (var cell in cells)");
         calculateLayouts.Should().NotContain("occupied.Add((cell.Row, cell.Col))");
         buildOccupiedCells.Should().Contain("occupied.Add((cell.Row, cell.Col))");
@@ -689,7 +689,7 @@ public sealed class GridViewRenderPerformanceTests
             "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
 
         source.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
-        source.Should().Contain("occupied ??= BuildOccupiedCells(cells);");
+        source.Should().Contain("occupied ??= BuildOccupiedCells(cells, editingCell);");
 
         var sheetId = SheetId.New();
         var cells = new List<DisplayCell>();

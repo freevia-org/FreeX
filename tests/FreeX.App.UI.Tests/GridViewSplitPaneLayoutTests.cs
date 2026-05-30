@@ -196,6 +196,37 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void CalculateSplitPaneCellLayouts_TreatsEditingCellAsOverflowOccupied()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0)],
+                [
+                    new ColMetric(1, 64, 0),
+                    new ColMetric(2, 80, 64),
+                    new ColMetric(3, 64, 144)
+                ],
+                [
+                    Cell(1, 1, "overflow"),
+                    new DisplayCell(1, 2, BlankValue.Instance, "", null, StyleId.Default, null),
+                    Cell(1, 3, "stop")
+                ]));
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(
+            viewport,
+            editingCell: new CellAddress(sheetId, 1, 2));
+
+        layouts.Single(layout => layout.Cell.Col == 1).TextClipRect
+            .Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight, 64, 18));
+    }
+
+    [Fact]
     public void CalculateSplitPaneCellLayouts_DoesNotOverflowShrinkToFitTextAcrossEmptyCells()
     {
         var viewport = new ViewportModel(

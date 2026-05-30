@@ -151,6 +151,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             return;
 
         sheet.ShowGridlines = optionsElement.Element(ExcelNs + "DoNotDisplayGridlines") is null;
+        sheet.PrintGridlines = optionsElement.Element(ExcelNs + "Print")?.Element(ExcelNs + "Gridlines") is not null;
         if (optionsElement.Element(ExcelNs + "FreezePanes") is null)
             return;
 
@@ -532,12 +533,15 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     {
         var frozenRows = sheet.FrozenRows is > 0 and <= CellAddress.MaxRow ? sheet.FrozenRows : 0;
         var frozenCols = sheet.FrozenCols is > 0 and <= CellAddress.MaxCol ? sheet.FrozenCols : 0;
-        if (sheet.ShowGridlines && frozenRows == 0 && frozenCols == 0)
+        if (sheet.ShowGridlines && !sheet.PrintGridlines && frozenRows == 0 && frozenCols == 0)
             return null;
 
         return new XElement(
             ExcelNs + "WorksheetOptions",
             sheet.ShowGridlines ? null : new XElement(ExcelNs + "DoNotDisplayGridlines"),
+            sheet.PrintGridlines
+                ? new XElement(ExcelNs + "Print", new XElement(ExcelNs + "Gridlines"))
+                : null,
             frozenRows > 0 || frozenCols > 0
                 ? new object?[]
                 {

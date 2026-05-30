@@ -7,7 +7,8 @@ public static class SplitPaneCellLayoutPlanner
 {
     public static IReadOnlyList<SplitPaneCellLayout> CalculateLayouts(
         ViewportModel viewport,
-        IReadOnlyList<GridRange>? mergedRegions = null)
+        IReadOnlyList<GridRange>? mergedRegions = null,
+        CellAddress? editingCell = null)
     {
         if (viewport.SplitPanes is not { } splitPanes)
             return [];
@@ -68,7 +69,7 @@ public static class SplitPaneCellLayoutPlanner
             var textClipRect = rect;
             if (CanOverflowSplitPaneText(cell, merge))
             {
-                occupied ??= BuildOccupiedCells(cells);
+                occupied ??= BuildOccupiedCells(cells, editingCell);
                 var renderWidth = width + SumEmptyOverflowColumnWidths(cell, colMetrics, occupied);
                 textClipRect = new Rect(x, y, renderWidth, height);
             }
@@ -109,12 +110,12 @@ public static class SplitPaneCellLayoutPlanner
     private static bool CanOverflowSplitPaneText(DisplayCell cell, GridRange? merge) =>
         GridView.CanOverflowCellText(cell.Style, cell.RawValue, cell.DisplayText, merge);
 
-    private static HashSet<(uint Row, uint Col)> BuildOccupiedCells(IReadOnlyList<DisplayCell> cells)
+    private static HashSet<(uint Row, uint Col)> BuildOccupiedCells(IReadOnlyList<DisplayCell> cells, CellAddress? editingCell)
     {
         var occupied = new HashSet<(uint Row, uint Col)>();
         foreach (var cell in cells)
         {
-            if (GridView.IsOverflowOccupied(cell, editingCell: null))
+            if (GridView.IsOverflowOccupied(cell, editingCell))
                 occupied.Add((cell.Row, cell.Col));
         }
 
