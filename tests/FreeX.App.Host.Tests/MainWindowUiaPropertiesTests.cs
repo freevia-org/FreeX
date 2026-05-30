@@ -112,6 +112,27 @@ public sealed class MainWindowUiaPropertiesTests
     // ── Worksheet grid ────────────────────────────────────────────────────
 
     [Fact]
+    public void StatusZoomButtons_ExposeAutomationNameHelpTextAndIds()
+    {
+        var document = LoadMainWindowXaml();
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var buttons = document
+            .Descendants(presentation + "Button")
+            .Where(element => element.Attribute(x + "Name")?.Value is "StatusZoomOutButton" or "StatusZoomInButton")
+            .ToDictionary(element => element.Attribute(x + "Name")!.Value);
+
+        buttons.Should().ContainKeys("StatusZoomOutButton", "StatusZoomInButton");
+        buttons["StatusZoomOutButton"].Attribute("AutomationProperties.Name")?.Value.Should().Be("Zoom Out");
+        buttons["StatusZoomOutButton"].Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
+        buttons["StatusZoomOutButton"].Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("StatusZoomOutButton");
+        buttons["StatusZoomInButton"].Attribute("AutomationProperties.Name")?.Value.Should().Be("Zoom In");
+        buttons["StatusZoomInButton"].Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
+        buttons["StatusZoomInButton"].Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("StatusZoomInButton");
+    }
+
+    [Fact]
     public void SheetGrid_ExposesAutomationName()
     {
         var document = LoadMainWindowXaml();
