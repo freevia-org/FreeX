@@ -642,6 +642,10 @@ public partial class GridView
                 RowResized?.Invoke(_resizeIndex, newSize);
 
             _resizeTarget = ResizeTarget.None;
+            _resizeIndex = 0;
+            _resizeDragStart = 0;
+            _resizeSizeStart = 0;
+            _resizeLinePos = 0;
             Cursor = null;
             ReleaseMouseCapture();
             InvalidateVisual();
@@ -706,6 +710,10 @@ public partial class GridView
         if (_resizeTarget != ResizeTarget.None)
         {
             _resizeTarget = ResizeTarget.None;
+            _resizeIndex = 0;
+            _resizeDragStart = 0;
+            _resizeSizeStart = 0;
+            _resizeLinePos = 0;
             Cursor = null;
             ResizeCanceled?.Invoke();
             InvalidateVisual();

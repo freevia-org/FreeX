@@ -17,10 +17,14 @@ namespace FreeX.App.Host;
 /// </summary>
 public partial class App : Application
 {
+    private static FreeXOptions? _startupOptions;
+
     public static ServiceProvider Services { get; private set; } = null!;
 
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
+        var options = FreeXOptions.Load();
+        AppLocalization.ApplyAppLanguage(options.AppLanguage);
         AppLocalization.ApplyCurrentCultureToWpf();
 
         // Configure Serilog
@@ -36,12 +40,19 @@ public partial class App : Application
 
         // Configure DI
         var serviceCollection = new ServiceCollection();
-        ConfigureServices(serviceCollection);
+        _startupOptions = options;
+        try
+        {
+            ConfigureServices(serviceCollection);
+        }
+        finally
+        {
+            _startupOptions = null;
+        }
         Services = serviceCollection.BuildServiceProvider();
         var crashAnalytics = Services.GetRequiredService<ICrashAnalytics>();
         var crashAnalyticsOptions = Services.GetRequiredService<AppCrashAnalyticsOptions>();
         var diagnosticsMetadata = Services.GetRequiredService<AppDiagnosticsMetadata>();
-        var options = Services.GetRequiredService<FreeXOptions>();
         PromptForCrashAnalyticsConsentIfNeeded(options, crashAnalyticsOptions);
         if (options.CrashAnalyticsEnabled != crashAnalyticsOptions.IsEnabled)
         {
@@ -70,7 +81,7 @@ public partial class App : Application
             builder.AddSerilog();
         });
 
-        var options = FreeXOptions.Load();
+        var options = _startupOptions ?? FreeXOptions.Load();
         services.AddSingleton(options);
 
         // Local tester diagnostics. No network upload; files stay under LocalAppData.
