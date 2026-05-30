@@ -289,6 +289,77 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsSpreadsheetMlNumberFormatStyles()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Styles>
+                <ss:Style ss:ID="currency">
+                  <ss:NumberFormat ss:Format="$#,##0.00"/>
+                </ss:Style>
+                <ss:Style ss:ID="percent">
+                  <ss:NumberFormat ss:Format="0.0%"/>
+                </ss:Style>
+              </ss:Styles>
+              <ss:Worksheet ss:Name="Styles">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell ss:StyleID="currency"><ss:Data ss:Type="Number">12.5</ss:Data></ss:Cell>
+                    <ss:Cell ss:StyleID="percent"/>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+        workbook.GetStyle(sheet.GetStyleOnly(1, 2)!.Value).NumberFormat.Should().Be("0.0%");
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsSpreadsheetMlNumberFormatStyles()
+    {
+        var workbook = new Workbook("XmlStyles");
+        var sheet = workbook.AddSheet("Styles");
+        var currency = workbook.RegisterStyle(new CellStyle { NumberFormat = "$#,##0.00" });
+        var percent = workbook.RegisterStyle(new CellStyle { NumberFormat = "0.0%" });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell
+        {
+            Value = new NumberValue(12.5),
+            StyleId = currency
+        });
+        sheet.SetStyleOnly(1, 2, percent);
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var styles = document.Descendants(ss + "Style").ToList();
+        styles.Should().HaveCount(2);
+        var savedFormats = styles
+            .Select(style => style.Element(ss + "NumberFormat")!.Attribute(ss + "Format")!.Value)
+            .ToList();
+        savedFormats.Should().BeEquivalentTo(["$#,##0.00", "0.0%"]);
+        var cells = document.Descendants(ss + "Cell").ToList();
+        cells.Should().HaveCount(2);
+        cells.Select(cell => cell.Attribute(ss + "StyleID")?.Value)
+            .Should().OnlyContain(styleId => !string.IsNullOrWhiteSpace(styleId));
+        cells.Single(cell => cell.Attribute(ss + "Index")?.Value == "2").Element(ss + "Data").Should().BeNull();
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loaded.GetStyle(loadedSheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+        loaded.GetStyle(loadedSheet.GetStyleOnly(1, 2)!.Value).NumberFormat.Should().Be("0.0%");
+    }
+
+    [Fact]
     public void Load_AdvancesImplicitCellIndexPastMergeAcrossSpan()
     {
         using var stream = StreamFromString("""
@@ -733,6 +804,45 @@ public sealed class SpreadsheetXmlFileAdapterTests
             "Open source",
             ""));
         sheet.Comments[address].Should().Be("Check generated output");
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlNumberFormatStyles()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row amount="12.5"/>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <ss:Style ss:ID="money">
+                      <ss:NumberFormat ss:Format="$#,##0.00"/>
+                    </ss:Style>
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Generated">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell ss:StyleID="money">
+                          <ss:Data ss:Type="Number"><xsl:value-of select="row/@amount"/></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
     }
 
     [Fact]

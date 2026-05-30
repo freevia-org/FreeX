@@ -94,7 +94,77 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             var sameWidth = harness.Diagnostics;
             sameWidth.GroupMeasurementCount.Should().Be(0);
             sameWidth.ResizeThresholdRebuildCount.Should().Be(0);
+            sameWidth.LayoutPlanComputeCount.Should().Be(0, "the pure layout plan should be reused when the tab metrics and width are unchanged");
+            sameWidth.LayoutPlanCacheHitCount.Should().Be(1);
             sameWidth.AppliedStateSkipCount.Should().Be(1, "a second pass at the same width should hit the applied-state guard instead of reapplying the ribbon tree");
+        });
+    }
+
+    [Fact]
+    public void AdaptiveCompaction_CachesPureLayoutPlansPerMeasuredTabAndWidth()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonAdaptiveDiagnosticsHarness.Create();
+
+            harness.SelectRibbonTab("Data", 1280);
+            harness.UpdateCompact(force: true);
+
+            harness.ResetDiagnostics();
+            harness.SetWidth(900);
+            harness.UpdateCompact(force: true);
+
+            var firstPassAtWidth = harness.Diagnostics;
+            firstPassAtWidth.GroupMeasurementCount.Should().Be(0);
+            firstPassAtWidth.ResizeThresholdRebuildCount.Should().Be(0);
+            (firstPassAtWidth.LayoutPlanComputeCount + firstPassAtWidth.LayoutPlanCacheHitCount)
+                .Should()
+                .BeGreaterThan(0, "resizing or forcing compaction should produce a deterministic layout plan without remeasuring groups");
+
+            harness.ResetDiagnostics();
+            harness.UpdateCompact(force: true);
+
+            var repeatedWidth = harness.Diagnostics;
+            repeatedWidth.GroupMeasurementCount.Should().Be(0);
+            repeatedWidth.ResizeThresholdRebuildCount.Should().Be(0);
+            repeatedWidth.LayoutPlanComputeCount.Should().Be(0);
+            repeatedWidth.LayoutPlanCacheHitCount.Should().Be(1);
+        });
+    }
+
+    [Fact]
+    public void AdaptiveCompaction_ReusesMeasurementsAcrossResizeWidthsForEveryMainRibbonTab()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonAdaptiveDiagnosticsHarness.Create();
+
+            foreach (var tab in new[] { "Home", "Insert", "Draw", "Page Layout", "Formulas", "Data", "Review", "View", "Help" })
+            {
+                harness.SelectRibbonTab(tab, 1280);
+                harness.UpdateCompact(force: true);
+
+                var warm = harness.Diagnostics;
+                warm.MeasurementCacheKey.Should().NotBeNullOrWhiteSpace($"{tab} should warm a stable group measurement cache key");
+                warm.ResizeThresholdCacheKey.Should().NotBeNullOrWhiteSpace($"{tab} should warm resize thresholds");
+                warm.CompactSnapshotCacheKey.Should().NotBeNullOrWhiteSpace($"{tab} should warm compact snapshots");
+
+                harness.ResetDiagnostics();
+                harness.SetWidth(1100);
+                harness.UpdateCompact();
+
+                var resized = harness.Diagnostics;
+                resized.MeasurementInvalidationCount.Should().Be(0, $"{tab} width-only resize should not invalidate adaptive caches");
+                resized.GroupMeasurementCount.Should().Be(0, $"{tab} width-only resize should reuse measured group widths");
+                resized.CompactSnapshotCaptureCount.Should().Be(0, $"{tab} width-only resize should reuse compact snapshots");
+                resized.ResizeThresholdRebuildCount.Should().Be(0, $"{tab} width-only resize should reuse resize thresholds");
+                (resized.LayoutPlanComputeCount + resized.LayoutPlanCacheHitCount)
+                    .Should()
+                    .BeGreaterThan(0, $"{tab} should plan or reuse a deterministic layout without rebuilding measured metrics");
+                resized.MeasurementCacheKey.Should().Be(warm.MeasurementCacheKey, $"{tab} should keep the same measured group cache across width-only resize");
+                resized.ResizeThresholdCacheKey.Should().Be(warm.ResizeThresholdCacheKey, $"{tab} should keep the same threshold cache across width-only resize");
+                resized.CompactSnapshotCacheKey.Should().Be(warm.CompactSnapshotCacheKey, $"{tab} should keep the same snapshot cache across width-only resize");
+            }
         });
     }
 

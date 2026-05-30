@@ -58,6 +58,7 @@ public partial class MainWindow
             _ribbonAdaptiveMeasurementCacheKey = cacheKey;
             _ribbonAdaptiveGroupCache = adaptiveGroups;
             _ribbonAdaptiveFixedChromeWidthCache = fixedChromeWidth;
+            ResetRibbonAdaptiveLayoutPlanCache(cacheKey);
             _ribbonCorrectedStateCache.Clear();
             _ribbonMeasuredOverflowCache.Clear();
         }
@@ -66,7 +67,12 @@ public partial class MainWindow
         if (_ribbonAdaptiveStateDiffInvalidated)
             _ribbonMeasuredOverflowCache.Clear();
 
-        var layout = RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth, selectedTabHeader);
+        var layout = GetCachedRibbonAdaptiveLayout(
+            cacheKey,
+            availableWidth,
+            adaptiveGroups,
+            fixedChromeWidth,
+            selectedTabHeader);
         var layoutStates = layout.States.ToArray();
         var plannedStates = layoutStates.ToArray();
 
@@ -94,7 +100,8 @@ public partial class MainWindow
             groupSnapshots,
             collapsedButtons,
             plannedStates,
-            _ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates);
+            _ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates,
+            availableWidth);
         SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
         var requiresMeasuredCorrection = cachedCorrectionNeedsExpansion ||
             layout.RequiresMeasuredCorrection &&
@@ -218,6 +225,7 @@ public partial class MainWindow
         _lastRibbonAdaptiveAppliedStateKey = null;
         _lastRibbonAdaptiveAppliedStates = null;
         _lastRibbonCollapsedFootprintMode = null;
+        ResetRibbonAdaptiveLayoutPlanCache(null);
         _ribbonCorrectedStateCache.Clear();
         _ribbonMeasuredOverflowCache.Clear();
         _ribbonAdaptiveStateDiffInvalidated = true;
@@ -229,6 +237,8 @@ public partial class MainWindow
             _ribbonAdaptiveGroupMeasurementCount,
             _ribbonCompactSnapshotCaptureCount,
             _ribbonResizeThresholdRebuildCount,
+            _ribbonAdaptiveLayoutPlanComputeCount,
+            _ribbonAdaptiveLayoutPlanCacheHitCount,
             _ribbonMeasuredOverflowMeasurementCount,
             _ribbonCorrectedStateCacheHitCount,
             _ribbonAppliedStateSkipCount,
@@ -242,6 +252,8 @@ public partial class MainWindow
         _ribbonAdaptiveGroupMeasurementCount = 0;
         _ribbonCompactSnapshotCaptureCount = 0;
         _ribbonResizeThresholdRebuildCount = 0;
+        _ribbonAdaptiveLayoutPlanComputeCount = 0;
+        _ribbonAdaptiveLayoutPlanCacheHitCount = 0;
         _ribbonMeasuredOverflowMeasurementCount = 0;
         _ribbonCorrectedStateCacheHitCount = 0;
         _ribbonAppliedStateSkipCount = 0;
@@ -252,6 +264,56 @@ public partial class MainWindow
             _normalizedRibbonStaticTabs.Remove(selectedTab);
         }
     }
+
+    private RibbonAdaptiveLayoutResult GetCachedRibbonAdaptiveLayout(
+        string measurementCacheKey,
+        double availableWidth,
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        double fixedChromeWidth,
+        string? selectedTabHeader)
+    {
+        if (!string.Equals(_ribbonAdaptiveLayoutPlanCacheKey, measurementCacheKey, StringComparison.Ordinal))
+            ResetRibbonAdaptiveLayoutPlanCache(measurementCacheKey);
+
+        var planCacheKey = CreateRibbonAdaptiveLayoutPlanCacheEntryKey(
+            measurementCacheKey,
+            availableWidth,
+            fixedChromeWidth,
+            selectedTabHeader);
+        if (_ribbonAdaptiveLayoutPlanCache.TryGetValue(planCacheKey, out var cachedLayout))
+        {
+            _ribbonAdaptiveLayoutPlanCacheHitCount++;
+            return cachedLayout;
+        }
+
+        _ribbonAdaptiveLayoutPlanComputeCount++;
+        var layout = RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth, selectedTabHeader);
+        var cached = new RibbonAdaptiveLayoutResult(
+            layout.States.ToArray(),
+            layout.PlannedWidth,
+            layout.RequiresMeasuredCorrection);
+        _ribbonAdaptiveLayoutPlanCache[planCacheKey] = cached;
+        return cached;
+    }
+
+    private void ResetRibbonAdaptiveLayoutPlanCache(string? measurementCacheKey)
+    {
+        _ribbonAdaptiveLayoutPlanCacheKey = measurementCacheKey;
+        _ribbonAdaptiveLayoutPlanCache.Clear();
+    }
+
+    private static string CreateRibbonAdaptiveLayoutPlanCacheEntryKey(
+        string measurementCacheKey,
+        double availableWidth,
+        double fixedChromeWidth,
+        string? selectedTabHeader) =>
+        string.Join(
+            "|",
+            measurementCacheKey,
+            selectedTabHeader ?? "",
+            Math.Round(Math.Max(0, availableWidth), 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            Math.Round(Math.Max(0, fixedChromeWidth), 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            GetCollapsedRibbonFootprintMode(availableWidth));
 
     private double GetRibbonAvailableWidth(StackPanel activePanel)
     {
@@ -290,14 +352,14 @@ public partial class MainWindow
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates) &&
                RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
         {
-            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
+            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null, availableWidth);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
         }
 
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates) &&
                RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false, runtimeVisibilityProtectedGroupIndexes))
         {
-            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
+            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null, availableWidth);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
         }
     }
@@ -319,13 +381,13 @@ public partial class MainWindow
                 continue;
 
             plannedStates[index] = expandedState;
-            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
+            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null, availableWidth);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
             if (!RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
                 continue;
 
             plannedStates[index] = currentState;
-            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null);
+            ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null, availableWidth);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
         }
     }
@@ -394,13 +456,15 @@ public partial class MainWindow
         IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
         IReadOnlyList<Button> collapsedButtons,
         IReadOnlyList<RibbonAdaptiveGroupState> plannedStates,
-        IReadOnlyList<RibbonAdaptiveGroupState>? previousStates)
+        IReadOnlyList<RibbonAdaptiveGroupState>? previousStates,
+        double availableWidth = 0)
     {
         for (var i = 0; i < groupSnapshots.Count; i++)
         {
             if (previousStates is not null &&
                 i < previousStates.Count &&
-                previousStates[i] == plannedStates[i])
+                previousStates[i] == plannedStates[i] &&
+                !ShouldKeepRibbonGroupLabelsAtIconWidth(groupSnapshots[i], plannedStates[i], availableWidth))
             {
                 continue;
             }
@@ -417,7 +481,11 @@ public partial class MainWindow
                     ApplyRibbonGroupCompactSnapshot(groupSnapshots[i], RibbonCompactLevel.SmallWithLabels);
                     break;
                 case RibbonAdaptiveGroupState.IconOnly:
-                    ApplyRibbonGroupCompactSnapshot(groupSnapshots[i], RibbonCompactLevel.IconOnly);
+                    ApplyRibbonGroupCompactSnapshot(
+                        groupSnapshots[i],
+                        ShouldKeepRibbonGroupLabelsAtIconWidth(groupSnapshots[i], plannedStates[i], availableWidth)
+                            ? RibbonCompactLevel.SmallWithLabels
+                            : RibbonCompactLevel.IconOnly);
                     break;
                 case RibbonAdaptiveGroupState.Collapsed:
                     groupSnapshots[i].Group.Visibility = Visibility.Collapsed;
@@ -426,6 +494,14 @@ public partial class MainWindow
             }
         }
     }
+
+    private static bool ShouldKeepRibbonGroupLabelsAtIconWidth(
+        RibbonCompactGroupSnapshot snapshot,
+        RibbonAdaptiveGroupState plannedState,
+        double availableWidth) =>
+        plannedState == RibbonAdaptiveGroupState.IconOnly &&
+        availableWidth > 820 &&
+        string.Equals(GetRibbonGroupName(snapshot.Group), "Tables", StringComparison.Ordinal);
 
     private static void SetCollapsedRibbonButtonFootprint(IReadOnlyList<Button> collapsedButtons, double availableWidth)
     {
@@ -1065,7 +1141,7 @@ public partial class MainWindow
 
     private static RibbonCompactGroupSnapshot CaptureRibbonCompactGroupSnapshot(FrameworkElement group)
     {
-        var elements = EnumerateVisualDescendants(group)
+        var elements = EnumerateSelfVisualAndLogicalDescendants(group)
             .OfType<FrameworkElement>()
             .ToList();
         var commandLabels = elements
@@ -1082,7 +1158,11 @@ public partial class MainWindow
 
     private static RibbonCompactButtonSnapshot CaptureRibbonCompactButtonSnapshot(ButtonBase button)
     {
-        var descendants = EnumerateVisualDescendants(button)
+        var descendants = EnumerateSelfVisualAndLogicalDescendants(button)
+            .Concat(button.Content is DependencyObject contentRoot
+                ? EnumerateSelfVisualAndLogicalDescendants(contentRoot)
+                : [])
+            .Distinct()
             .OfType<FrameworkElement>()
             .ToList();
         var content = button.Content as FrameworkElement;
@@ -1131,6 +1211,9 @@ public partial class MainWindow
             largeIconChild,
             largeLabelBlock);
     }
+
+    private static IEnumerable<DependencyObject> EnumerateSelfVisualAndLogicalDescendants(DependencyObject root) =>
+        [root, .. EnumerateVisualDescendants(root), .. EnumerateLogicalDescendants(root)];
 
     private static ColumnDefinition? GetRibbonSmallButtonSpacerColumn(Grid? contentGrid)
     {

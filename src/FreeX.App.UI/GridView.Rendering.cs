@@ -427,7 +427,7 @@ public partial class GridView
         var rowLookup = rowLookupAll;
         var colLookup = colLookupAll;
 
-        var occupied = GetOccupiedCellLookup(viewport, EditingCell);
+        HashSet<(uint Row, uint Col)>? occupied = null;
 
         foreach (var cell in viewport.Cells)
         {
@@ -473,6 +473,7 @@ public partial class GridView
 
             if (canOverflow)
             {
+                occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
                 uint nextCol = colMetric.Col + 1;
                 while (colLookup.TryGetValue(nextCol, out var nextMetric)
                        && !occupied.Contains((cell.Row, nextCol)))
@@ -609,16 +610,21 @@ public partial class GridView
         dc.DrawLine(GridPen, new Point(right, top), new Point(right, bottom));
     }
 
+    private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);
+
     private static Dictionary<(uint Row, uint Col), CellStyle> BuildRenderCellStyleLookup(IReadOnlyList<DisplayCell> cells)
     {
-        var lookup = new Dictionary<(uint Row, uint Col), CellStyle>();
+        Dictionary<(uint Row, uint Col), CellStyle>? lookup = null;
         foreach (var cell in cells)
         {
             if (cell.Style is { } style)
+            {
+                lookup ??= new Dictionary<(uint Row, uint Col), CellStyle>(cells.Count);
                 lookup.Add((cell.Row, cell.Col), style);
+            }
         }
 
-        return lookup;
+        return lookup ?? EmptyRenderCellStyleLookup;
     }
 
     private RenderCellLookupCache GetRenderCellLookups(ViewportModel viewport)

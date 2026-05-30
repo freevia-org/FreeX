@@ -18,19 +18,6 @@ public partial class MainWindow
     [DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
 
-    private static readonly (string Header, string FileName)[] TourTabs =
-    [
-        ("Home", "Home"),
-        ("Insert", "Insert"),
-        ("Draw", "Draw"),
-        ("Page Layout", "Page_Layout"),
-        ("Formulas", "Formulas"),
-        ("Data", "Data"),
-        ("Review", "Review"),
-        ("View", "View"),
-        ("Help", "Help"),
-    ];
-
     // Activated by FREEX_SS_TOUR=1 env var.  Output lands in <repo-root>/screenshots/.
     private void TryStartScreenshotTour()
     {
@@ -49,21 +36,36 @@ public partial class MainWindow
     {
         if (ribbonTour)
         {
-            await Task.Delay(1200);
-            await CaptureAllTabsAsync(outputDir, "max");
+            var requestedWidths = GetScreenshotTourRequestedWidths();
+            if (requestedWidths.Count > 0)
+            {
+                WindowState = WindowState.Normal;
+                Height = 768;
+                foreach (var width in requestedWidths)
+                {
+                    Width = width;
+                    await Task.Delay(600);
+                    await CaptureAllTabsAsync(outputDir, width.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+            }
+            else
+            {
+                await Task.Delay(1200);
+                await CaptureAllTabsAsync(outputDir, "max");
 
-            WindowState = WindowState.Normal;
-            Width = 1100; Height = 768;
-            await Task.Delay(600);
-            await CaptureAllTabsAsync(outputDir, "1100");
+                WindowState = WindowState.Normal;
+                Width = 1100; Height = 768;
+                await Task.Delay(600);
+                await CaptureAllTabsAsync(outputDir, "1100");
 
-            Width = 900;
-            await Task.Delay(600);
-            await CaptureAllTabsAsync(outputDir, "900");
+                Width = 900;
+                await Task.Delay(600);
+                await CaptureAllTabsAsync(outputDir, "900");
 
-            Width = 750;
-            await Task.Delay(600);
-            await CaptureAllTabsAsync(outputDir, "750");
+                Width = 750;
+                await Task.Delay(600);
+                await CaptureAllTabsAsync(outputDir, "750");
+            }
         }
 
         if (backstageTour)
@@ -89,7 +91,7 @@ public partial class MainWindow
 
     private async Task CaptureAllTabsAsync(string outputDir, string label)
     {
-        foreach (var (header, fileName) in TourTabs)
+        foreach (var (header, fileName) in GetScreenshotTourTabs())
         {
             var tab = RibbonTabs.Items
                 .OfType<System.Windows.Controls.TabItem>()
@@ -106,6 +108,15 @@ public partial class MainWindow
             await CaptureCurrentWindowAsync(outputDir, $"{label}_{fileName}", ScreenshotTourCaptureHeight);
         }
     }
+
+    private static IReadOnlyList<(string Header, string FileName)> GetScreenshotTourTabs()
+        => RibbonScreenshotTourPlanner.FilterTabs(
+            RibbonScreenshotTourPlanner.DefaultTabs,
+            Environment.GetEnvironmentVariable("FREEX_SS_TOUR_TABS"));
+
+    private static IReadOnlyList<double> GetScreenshotTourRequestedWidths()
+        => RibbonScreenshotTourPlanner.ParseWidths(
+            Environment.GetEnvironmentVariable("FREEX_SS_TOUR_WIDTHS"));
 
     private async Task CaptureCurrentWindowAsync(string outputDir, string fileName, double logicalHeight)
     {

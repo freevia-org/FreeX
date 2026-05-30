@@ -7,12 +7,14 @@ public enum ObjectDragKind { None, Move, ResizeSE, ResizeE, ResizeS }
 
 public static class GridObjectDragPlanner
 {
+    public const double MinimumObjectSize = 8;
+
     public static Rect CalculateDragRect(
         ObjectDragKind dragKind,
         Rect startRect,
         Point startPosition,
         Point currentPosition,
-        double minimumSize = 8)
+        double minimumSize = MinimumObjectSize)
     {
         var dx = currentPosition.X - startPosition.X;
         var dy = currentPosition.Y - startPosition.Y;

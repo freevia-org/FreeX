@@ -496,8 +496,8 @@ public partial class GridView
             }
             else
             {
-                var newWidth  = Math.Max(8, currentRect.Width);
-                var newHeight = Math.Max(8, currentRect.Height);
+                var newWidth  = Math.Max(GridObjectDragPlanner.MinimumObjectSize, currentRect.Width);
+                var newHeight = Math.Max(GridObjectDragPlanner.MinimumObjectSize, currentRect.Height);
                 if (Math.Abs(newWidth - startRect.Width) > 1 || Math.Abs(newHeight - startRect.Height) > 1)
                     ObjectResized?.Invoke(id, kind, newWidth, newHeight);
             }

@@ -389,12 +389,20 @@ public partial class MainWindow
             FormulaBar.Height       = 84;
             FormulaBar.AcceptsReturn = true;
             FormulaBarExpandBtn.Content = "▲";
+            System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, "Collapse Formula Bar");
+            System.Windows.Automation.AutomationProperties.SetHelpText(FormulaBarExpandBtn, "Collapse the formula bar to a single-line editor");
+            RibbonTooltip.SetTitle(FormulaBarExpandBtn, "Collapse Formula Bar");
+            RibbonTooltip.SetDescription(FormulaBarExpandBtn, "Collapse the formula bar to a single-line editor.");
         }
         else
         {
             FormulaBar.ClearValue(System.Windows.Controls.TextBox.HeightProperty);
             FormulaBar.AcceptsReturn = false;
             FormulaBarExpandBtn.Content = "▼";
+            System.Windows.Automation.AutomationProperties.SetName(FormulaBarExpandBtn, "Expand Formula Bar");
+            System.Windows.Automation.AutomationProperties.SetHelpText(FormulaBarExpandBtn, "Expand the formula bar to a multi-line editor");
+            RibbonTooltip.SetTitle(FormulaBarExpandBtn, "Expand Formula Bar");
+            RibbonTooltip.SetDescription(FormulaBarExpandBtn, "Expand the formula bar to a multi-line editor.");
         }
     }
 

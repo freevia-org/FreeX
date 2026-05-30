@@ -722,7 +722,7 @@ public partial class MainWindow
                     UpdateRibbonCompactMode(force: true);
                 }
             }),
-            DispatcherPriority.Send);
+            DispatcherPriority.Render);
     }
 
     internal RibbonFallbackDiagnosticsSnapshot GetRibbonFallbackDiagnosticsForTests() =>
@@ -1015,9 +1015,7 @@ public partial class MainWindow
             {
                 if (RibbonMetadata.IsCommandLabel(textBlock))
                 {
-                    textBlock.FontSize = string.Equals(textBlock.Uid, "RibbonCompactRowLabel", StringComparison.Ordinal)
-                        ? 9
-                        : 12;
+                    textBlock.FontSize = 12;
                     textBlock.TextTrimming = TextTrimming.CharacterEllipsis;
                     textBlock.VerticalAlignment = System.Windows.VerticalAlignment.Center;
                     if (tall)
@@ -1160,7 +1158,7 @@ public partial class MainWindow
                          .Where(RibbonMetadata.IsCommandLabel))
             {
                 textBlock.Uid = "RibbonCompactRowLabel";
-                textBlock.FontSize = 9;
+                textBlock.FontSize = 12;
             }
         }
 
@@ -1338,24 +1336,13 @@ public partial class MainWindow
 
     private static FrameworkElement CreateStaticRibbonCommandIcon(ButtonBase owner, RibbonIcon source, bool tall)
     {
-        var commandName = source.Kind == RibbonCommandIconKind.Previous
+        var commandName = !string.IsNullOrWhiteSpace(source.CommandName)
+            ? source.CommandName.Trim()
+            : source.Kind == RibbonCommandIconKind.Previous
             ? "Back to workbook"
             : GetStaticRibbonIconCommandName(owner, source.Kind.ToString());
         var fallbackIcon = new RibbonCommandIcon(source.Kind);
         var iconSize = IsWhiteBrush(source.Foreground) ? source.IconSize : tall ? 32 : 22;
-        if (IsWhiteBrush(source.Foreground))
-        {
-            var fallbackElement = RibbonIconFactory.CreateIcon(
-                fallbackIcon,
-                iconSize,
-                source.Foreground ?? owner.Foreground);
-            RibbonMetadata.SetRole(fallbackElement, RibbonMetadataRole.CommandIcon);
-            fallbackElement.HorizontalAlignment = source.HorizontalAlignment;
-            fallbackElement.VerticalAlignment = source.VerticalAlignment;
-            fallbackElement.Margin = source.Margin;
-            return fallbackElement;
-        }
-
         var commandIcon = RibbonIconFactory.CreateCommandIcon(
             commandName,
             fallbackIcon,
@@ -1757,7 +1744,7 @@ public partial class MainWindow
     private static double GetIconLabelRowRibbonCommandWidth(string label)
     {
         var length = string.IsNullOrWhiteSpace(label) ? 0 : label.Trim().Length;
-        return Math.Min(210, 72 + length * 7);
+        return Math.Min(156, 48 + length * 5.8);
     }
 
     private static double GetLargeRibbonCommandWidth(string label)

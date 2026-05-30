@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -222,6 +223,8 @@ public sealed partial class AutoFilterDialog
             Margin = new Thickness(0, 0, 6, 6),
             ToolTip = option.Label
         };
+        AutomationProperties.SetName(button, CreateColorChoiceAutomationName(option));
+        AutomationProperties.SetHelpText(button, "Apply this color filter.");
         button.PreviewKeyDown += ColorChoiceButton_PreviewKeyDown;
 
         var content = new StackPanel { Orientation = Orientation.Horizontal };
@@ -236,6 +239,14 @@ public sealed partial class AutoFilterDialog
         button.Click += (_, _) => ApplyColorChoice(colorFilter);
         return button;
     }
+
+    private static string CreateColorChoiceAutomationName(AutoFilterColorOption option) =>
+        option.Kind switch
+        {
+            AutoFilterColorFilterKind.FontColor => $"Filter by font color {option.Label}",
+            AutoFilterColorFilterKind.NoFill => "Filter by no fill",
+            _ => $"Filter by cell color {option.Label}"
+        };
 
     private void ColorChoiceButton_PreviewKeyDown(object sender, KeyEventArgs e)
     {
