@@ -65,6 +65,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
     public void Save(Workbook workbook, Stream stream)
     {
+        var styleIds = CreateNumberFormatStyleIds(workbook);
         var document = new XDocument(
             new XDeclaration("1.0", "utf-8", null),
             new XProcessingInstruction("mso-application", "progid=\"Excel.Sheet\""),
@@ -73,7 +74,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 new XAttribute(XNamespace.Xmlns + "ss", SpreadsheetNs),
                 new XAttribute(XNamespace.Xmlns + "o", OfficeNs),
                 new XAttribute(XNamespace.Xmlns + "x", ExcelNs),
-                workbook.Sheets.Select(ToWorksheetElement)));
+                ToStylesElement(workbook, styleIds),
+                workbook.Sheets.Select(sheet => ToWorksheetElement(sheet, styleIds))));
 
         var settings = new XmlWriterSettings
         {
@@ -406,17 +408,51 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         return columnIndex + mergeAcross + 1;
     }
 
-    private static XElement ToWorksheetElement(Sheet sheet) =>
+    private static Dictionary<StyleId, string> CreateNumberFormatStyleIds(Workbook workbook)
+    {
+        var styleIds = new Dictionary<StyleId, string>();
+        for (var index = 1; index < workbook.StyleCount; index++)
+        {
+            var styleId = new StyleId(index);
+            var style = workbook.GetStyle(styleId);
+            if (string.IsNullOrWhiteSpace(style.NumberFormat) ||
+                string.Equals(style.NumberFormat, CellStyle.Default.NumberFormat, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            styleIds[styleId] = $"s{index}";
+        }
+
+        return styleIds;
+    }
+
+    private static XElement? ToStylesElement(Workbook workbook, IReadOnlyDictionary<StyleId, string> styleIds)
+    {
+        if (styleIds.Count == 0)
+            return null;
+
+        return new XElement(
+            SpreadsheetNs + "Styles",
+            styleIds.Select(entry => new XElement(
+                SpreadsheetNs + "Style",
+                new XAttribute(SpreadsheetIdAttribute, entry.Value),
+                new XElement(
+                    SpreadsheetNs + "NumberFormat",
+                    new XAttribute(SpreadsheetFormatAttribute, workbook.GetStyle(entry.Key).NumberFormat)))));
+    }
+
+    private static XElement ToWorksheetElement(Sheet sheet, IReadOnlyDictionary<StyleId, string> styleIds) =>
         new(
             SpreadsheetNs + "Worksheet",
             new XAttribute(SpreadsheetNameAttribute, sheet.Name),
             ToWorksheetVisibilityAttribute(sheet),
             new XElement(
                 SpreadsheetNs + "Table",
-                ToTableElements(sheet)));
+                ToTableElements(sheet, styleIds)));
 
-    private static IEnumerable<XElement> ToTableElements(Sheet sheet) =>
-        ToColumnElements(sheet).Concat(ToRowElements(sheet));
+    private static IEnumerable<XElement> ToTableElements(Sheet sheet, IReadOnlyDictionary<StyleId, string> styleIds) =>
+        ToColumnElements(sheet).Concat(ToRowElements(sheet, styleIds));
 
     private static XAttribute? ToWorksheetVisibilityAttribute(Sheet sheet)
     {
@@ -494,6 +530,27 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 Comment: comment));
         }
 
+        foreach (var (key, styleId) in sheet.GetStyleOnlyEntries()
+                     .Where(entry => !emitted.Contains((entry.Key.Row, entry.Key.Col)) && entry.StyleId != StyleId.Default)
+                     .OrderBy(entry => entry.Key.Row)
+                     .ThenBy(entry => entry.Key.Col))
+        {
+            var address = new CellAddress(sheet.Id, key.Row, key.Col);
+            if (IsCoveredByMergeNonAnchor(sheet, address))
+                continue;
+
+            mergeStarts.TryGetValue((key.Row, key.Col), out var mergeRange);
+            emitted.Add((key.Row, key.Col));
+            cells.Add(new SpreadsheetXmlCell(
+                key.Row,
+                key.Col,
+                new Cell { StyleId = styleId },
+                mergeRange,
+                HyperlinkTarget: null,
+                HyperlinkMetadata: null,
+                Comment: null));
+        }
+
         foreach (var mergeRange in sheet.MergedRegions
                      .Where(region => !emitted.Contains((region.Start.Row, region.Start.Col)))
                      .OrderBy(region => region.Start.Row)
@@ -540,7 +597,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             ? new XAttribute(SpreadsheetWidthAttribute, width.ToString("R", CultureInfo.InvariantCulture))
             : null;
 
-    private static IEnumerable<XElement> ToRowElements(Sheet sheet)
+    private static IEnumerable<XElement> ToRowElements(Sheet sheet, IReadOnlyDictionary<StyleId, string> styleIds)
     {
         var cellsByRow = EnumerateXmlCells(sheet)
             .GroupBy(entry => entry.Row)
@@ -553,10 +610,14 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             .OrderBy(row => row);
 
         foreach (var rowIndex in rowIndexes)
-            yield return ToRowElement(sheet, rowIndex, cellsByRow.GetValueOrDefault(rowIndex) ?? []);
+            yield return ToRowElement(sheet, rowIndex, cellsByRow.GetValueOrDefault(rowIndex) ?? [], styleIds);
     }
 
-    private static XElement ToRowElement(Sheet sheet, uint rowIndex, IEnumerable<SpreadsheetXmlCell> cells)
+    private static XElement ToRowElement(
+        Sheet sheet,
+        uint rowIndex,
+        IEnumerable<SpreadsheetXmlCell> cells,
+        IReadOnlyDictionary<StyleId, string> styleIds)
     {
         var rowElement = new XElement(
             SpreadsheetNs + "Row",
@@ -565,7 +626,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             sheet.HiddenRows.Contains(rowIndex) ? new XAttribute(SpreadsheetHiddenAttribute, "1") : null);
 
         foreach (var cell in cells)
-            rowElement.Add(ToCellElement(cell));
+            rowElement.Add(ToCellElement(cell, styleIds));
 
         return rowElement;
     }
@@ -584,9 +645,12 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static bool IsPositiveFinite(double value) =>
         value > 0 && !double.IsNaN(value) && !double.IsInfinity(value);
 
-    private static XElement ToCellElement(SpreadsheetXmlCell cell)
+    private static XElement ToCellElement(SpreadsheetXmlCell cell, IReadOnlyDictionary<StyleId, string> styleIds)
     {
         var element = new XElement(SpreadsheetNs + "Cell", new XAttribute(SpreadsheetIndexAttribute, cell.Col));
+        if (styleIds.TryGetValue(cell.Cell.StyleId, out var styleName))
+            element.SetAttributeValue(SpreadsheetStyleIdAttribute, styleName);
+
         if (cell.MergeRange is { } mergeRange)
         {
             if (mergeRange.ColCount > 1)
