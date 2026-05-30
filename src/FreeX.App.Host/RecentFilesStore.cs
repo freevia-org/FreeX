@@ -85,11 +85,12 @@ public sealed class RecentFilesStore
     {
         try
         {
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(StorePath)!);
-            File.WriteAllText(StorePath, JsonSerializer.Serialize(Entries));
+            // Atomic write: a failed/interrupted save never corrupts the existing recent.json.
+            AtomicFileWriter.WriteAllText(StorePath, JsonSerializer.Serialize(Entries));
         }
         catch (Exception ex)
         {
+            // Non-critical store; a failure here only loses recent-files history, not user data.
             System.Diagnostics.Debug.WriteLine($"[RecentFiles] Failed to save: {ex.Message}");
         }
     }

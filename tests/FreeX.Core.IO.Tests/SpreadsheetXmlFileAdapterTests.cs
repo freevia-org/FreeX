@@ -665,6 +665,52 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlHyperlinksAndComments()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row name="Review" url="https://example.com/review" note="Check generated output"/>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Generated">
+                    <ss:Table>
+                      <xsl:for-each select="row">
+                        <ss:Row>
+                          <ss:Cell ss:HRef="{@url}" ss:HRefScreenTip="Open source">
+                            <ss:Data ss:Type="String"><xsl:value-of select="@name"/></ss:Data>
+                            <ss:Comment ss:Author="XSLT">
+                              <ss:Data><xsl:value-of select="@note"/></ss:Data>
+                            </ss:Comment>
+                          </ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.GetCell(address)!.Value.Should().Be(new TextValue("Review"));
+        sheet.Hyperlinks[address].Should().Be("https://example.com/review");
+        sheet.HyperlinkMetadata[address].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open source",
+            ""));
+        sheet.Comments[address].Should().Be("Check generated output");
+    }
+
+    [Fact]
     public void LoadTransformed_UsesCurrentStreamPositionsAndLeavesInputStreamsOpen()
     {
         using var source = PositionedStreamFromString("ignored", "<rows><row name=\"Gamma\"/></rows>");
