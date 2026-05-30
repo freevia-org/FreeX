@@ -69,6 +69,16 @@ public class ClipboardTests
     }
 
     [Fact]
+    public void Deserialize_ExcelQuotedCells_PreservesEmbeddedTabsNewlinesAndQuotes()
+    {
+        var rows = ClipboardSerializer.Deserialize("A\t\"two\tpart\"\tC\r\n\"line\r\nbreak\"\t\"say \"\"hi\"\"\"");
+
+        Assert.Equal(2, rows.Length);
+        Assert.Equal(["A", "two\tpart", "C"], rows[0]);
+        Assert.Equal(["line\r\nbreak", "say \"hi\""], rows[1]);
+    }
+
+    [Fact]
     public void Serialize_CellWithTab_QuotesCell()
     {
         var workbook = new Workbook("test");
