@@ -456,10 +456,15 @@ public partial class MainWindow
             return;
         }
 
-        var enableShadow = !shape.HasShadowEffect;
+        var effectPreset = shape.GetEffectiveEffectPreset() == DrawingShapeEffectPreset.None
+            ? DrawingShapeEffectPreset.Shadow
+            : DrawingShapeEffectPreset.None;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Shape Effects",
-                sheetId => new SetDrawingShapeEffectCommand(sheetId, GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty, enableShadow)))
+                sheetId => new SetDrawingShapeEffectCommand(
+                    sheetId,
+                    GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty,
+                    effectPreset)))
             return;
 
         SetActiveCell(shape.Anchor);

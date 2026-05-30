@@ -2909,6 +2909,7 @@ public partial class FileAdapterSmokeTests
             FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.5),
             OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.5),
             HasShadowEffect = true,
+            EffectPreset = DrawingShapeEffectPreset.Shadow,
             Title = "Approval marker title",
             AltText = "Approval marker"
         });
@@ -2946,6 +2947,7 @@ public partial class FileAdapterSmokeTests
         shape.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.5));
         shape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.5));
         shape.HasShadowEffect.Should().BeTrue();
+        shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Shadow);
         shape.Title.Should().Be("Approval marker title");
         shape.AltText.Should().Be("Approval marker");
     }
@@ -2987,6 +2989,7 @@ public partial class FileAdapterSmokeTests
         shape.GradientFillEndColor.Should().Be(new CellColor(238, 248, 255));
         shape.OutlineColor.Should().Be(new CellColor(17, 34, 51));
         shape.HasShadowEffect.Should().BeTrue();
+        shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Shadow);
     }
 
     [Fact]
@@ -3017,6 +3020,7 @@ public partial class FileAdapterSmokeTests
             OutlineColor = new CellColor(30, 40, 50),
             GradientFillEndColor = new CellColor(240, 245, 250),
             HasShadowEffect = true,
+            EffectPreset = DrawingShapeEffectPreset.Shadow,
             Title = "Approval marker title",
             AltText = "Approval marker"
         });
@@ -3057,6 +3061,7 @@ public partial class FileAdapterSmokeTests
         loadedShape.Title.Should().Be("Approval marker title");
         loadedShape.GradientFillEndColor.Should().Be(new CellColor(240, 245, 250));
         loadedShape.HasShadowEffect.Should().BeTrue();
+        loadedShape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Shadow);
     }
 
     [Fact]

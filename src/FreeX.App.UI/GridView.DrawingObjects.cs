@@ -242,12 +242,31 @@ public partial class GridView
 
     private static void DrawShapeAuthoredEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, DrawingShapeModel shape)
     {
-        if (!shape.HasShadowEffect)
-            return;
+        switch (shape.GetEffectiveEffectPreset())
+        {
+            case DrawingShapeEffectPreset.Shadow:
+                DrawShapeShadowEffect(dc, kind, rect, offsetX: 3, offsetY: 3, alpha: 58);
+                break;
+            case DrawingShapeEffectPreset.Glow:
+                DrawShapeOutlineEffect(dc, kind, rect, MakeBrushAlpha(96, 91, 155, 213), thickness: 6, inflate: 3);
+                break;
+            case DrawingShapeEffectPreset.SoftEdges:
+                DrawShapeOutlineEffect(dc, kind, rect, MakeBrushAlpha(54, 128, 128, 128), thickness: 8, inflate: 2);
+                break;
+        }
+    }
 
+    private static void DrawShapeShadowEffect(
+        DrawingContext dc,
+        DrawingShapeKind kind,
+        Rect rect,
+        double offsetX,
+        double offsetY,
+        byte alpha)
+    {
         var shadowRect = rect;
-        shadowRect.Offset(3, 3);
-        var shadowBrush = MakeBrushAlpha(58, 0, 0, 0);
+        shadowRect.Offset(offsetX, offsetY);
+        var shadowBrush = MakeBrushAlpha(alpha, 0, 0, 0);
         var shadowPen = new Pen(shadowBrush, 2);
         shadowPen.Freeze();
 
@@ -261,6 +280,33 @@ public partial class GridView
                 break;
             case DrawingShapeKind.Line:
                 dc.DrawLine(shadowPen, shadowRect.TopLeft, shadowRect.BottomRight);
+                break;
+        }
+    }
+
+    private static void DrawShapeOutlineEffect(
+        DrawingContext dc,
+        DrawingShapeKind kind,
+        Rect rect,
+        Brush brush,
+        double thickness,
+        double inflate)
+    {
+        var effectRect = rect;
+        effectRect.Inflate(inflate, inflate);
+        var pen = new Pen(brush, thickness);
+        pen.Freeze();
+
+        switch (kind)
+        {
+            case DrawingShapeKind.Rectangle:
+                dc.DrawRectangle(null, pen, effectRect);
+                break;
+            case DrawingShapeKind.Ellipse:
+                dc.DrawEllipse(null, pen, new Point(effectRect.Left + effectRect.Width / 2, effectRect.Top + effectRect.Height / 2), effectRect.Width / 2, effectRect.Height / 2);
+                break;
+            case DrawingShapeKind.Line:
+                dc.DrawLine(pen, effectRect.TopLeft, effectRect.BottomRight);
                 break;
         }
     }

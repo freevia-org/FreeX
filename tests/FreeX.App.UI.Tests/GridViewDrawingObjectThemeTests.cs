@@ -228,6 +228,23 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void DrawingObjectRendering_UsesAuthoredEffectPresetMetadata()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var authoredEffect = source[
+            source.IndexOf("private static void DrawShapeAuthoredEffect", StringComparison.Ordinal)..
+            source.IndexOf("private static void DrawTextBoxThemeEffect", StringComparison.Ordinal)];
+
+        authoredEffect.Should().Contain("shape.GetEffectiveEffectPreset()");
+        authoredEffect.Should().Contain("DrawingShapeEffectPreset.Shadow");
+        authoredEffect.Should().Contain("DrawingShapeEffectPreset.Glow");
+        authoredEffect.Should().Contain("DrawingShapeEffectPreset.SoftEdges");
+        authoredEffect.Should().Contain("DrawShapeShadowEffect");
+        authoredEffect.Should().Contain("DrawShapeOutlineEffect");
+    }
+
+    [Fact]
     public void NativeSlicerRendering_DrawsSelectedTilesWithoutMaterializingArray()
     {
         var source = File.ReadAllText(FindWorkspaceFile(

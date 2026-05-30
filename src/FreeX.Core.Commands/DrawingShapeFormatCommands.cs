@@ -122,21 +122,36 @@ public sealed class SetDrawingShapeEffectCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly Guid _shapeId;
-    private readonly bool _hasShadowEffect;
-    private bool _previous;
+    private readonly DrawingShapeEffectPreset _effectPreset;
+    private bool _previousHasShadowEffect;
+    private DrawingShapeEffectPreset _previousEffectPreset;
     private bool _applied;
 
     public string Label => "Shape Effects";
 
     public SetDrawingShapeEffectCommand(SheetId sheetId, Guid shapeId, bool hasShadowEffect)
+        : this(
+            sheetId,
+            shapeId,
+            hasShadowEffect ? DrawingShapeEffectPreset.Shadow : DrawingShapeEffectPreset.None)
+    {
+    }
+
+    public SetDrawingShapeEffectCommand(
+        SheetId sheetId,
+        Guid shapeId,
+        DrawingShapeEffectPreset effectPreset)
     {
         _sheetId = sheetId;
         _shapeId = shapeId;
-        _hasShadowEffect = hasShadowEffect;
+        _effectPreset = effectPreset;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (!Enum.IsDefined(_effectPreset))
+            return new CommandOutcome(false, "Drawing shape effect preset is not supported.");
+
         var sheet = ctx.GetSheet(_sheetId);
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
@@ -145,8 +160,10 @@ public sealed class SetDrawingShapeEffectCommand : IWorkbookCommand
         if (shape is null)
             return new CommandOutcome(false, "Drawing shape was not found.");
 
-        _previous = shape.HasShadowEffect;
-        shape.HasShadowEffect = _hasShadowEffect;
+        _previousHasShadowEffect = shape.HasShadowEffect;
+        _previousEffectPreset = shape.EffectPreset;
+        shape.EffectPreset = _effectPreset;
+        shape.HasShadowEffect = _effectPreset == DrawingShapeEffectPreset.Shadow;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
     }
@@ -156,7 +173,8 @@ public sealed class SetDrawingShapeEffectCommand : IWorkbookCommand
         if (!_applied) return;
         var shape = ctx.GetSheet(_sheetId).DrawingShapes.FirstOrDefault(item => item.Id == _shapeId);
         if (shape is null) return;
-        shape.HasShadowEffect = _previous;
+        shape.HasShadowEffect = _previousHasShadowEffect;
+        shape.EffectPreset = _previousEffectPreset;
         _applied = false;
     }
 }

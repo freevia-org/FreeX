@@ -149,7 +149,8 @@ internal static class NativeJsonVisualDtoMapper
         GradientFillEndColor = shape.GradientFillEndColor is { } gradientEnd ? FormatColor(gradientEnd) : null,
         FillThemeColor = FromThemeColorReference(shape.FillThemeColor),
         OutlineThemeColor = FromThemeColorReference(shape.OutlineThemeColor),
-        HasShadowEffect = shape.HasShadowEffect,
+        HasShadowEffect = shape.GetEffectiveEffectPreset() == DrawingShapeEffectPreset.Shadow,
+        EffectPreset = ValidEnumOrDefault(shape.GetEffectiveEffectPreset(), DrawingShapeEffectPreset.None),
         Title = shape.Title,
         AltText = shape.AltText
     };
@@ -164,6 +165,10 @@ internal static class NativeJsonVisualDtoMapper
 
         try
         {
+            var effectPreset = ValidEnumOrDefault(shapeDto.EffectPreset, DrawingShapeEffectPreset.None);
+            if (effectPreset == DrawingShapeEffectPreset.None && shapeDto.HasShadowEffect)
+                effectPreset = DrawingShapeEffectPreset.Shadow;
+
             return new DrawingShapeModel
             {
                 Anchor = CellAddress.Parse(shapeDto.Anchor, sheetId),
@@ -178,7 +183,8 @@ internal static class NativeJsonVisualDtoMapper
                 GradientFillEndColor = shapeDto.GradientFillEndColor is { } gradientEnd ? ParseColor(gradientEnd) : null,
                 FillThemeColor = ToThemeColorReference(shapeDto.FillThemeColor),
                 OutlineThemeColor = ToThemeColorReference(shapeDto.OutlineThemeColor),
-                HasShadowEffect = shapeDto.HasShadowEffect,
+                HasShadowEffect = effectPreset == DrawingShapeEffectPreset.Shadow,
+                EffectPreset = effectPreset,
                 Title = shapeDto.Title,
                 AltText = shapeDto.AltText
             };
@@ -296,6 +302,7 @@ internal class DrawingShapeDto
     public ThemeColorReferenceDto? FillThemeColor { get; set; }
     public ThemeColorReferenceDto? OutlineThemeColor { get; set; }
     public bool HasShadowEffect { get; set; }
+    public DrawingShapeEffectPreset EffectPreset { get; set; }
     public string? Title { get; set; }
     public string? AltText { get; set; }
 }

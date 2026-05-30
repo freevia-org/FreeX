@@ -43,7 +43,8 @@ internal sealed record XlsxShapePackagePart(
     CellColor? GradientFillEndColor,
     WorkbookThemeColorReference? FillThemeColor,
     WorkbookThemeColorReference? OutlineThemeColor,
-    bool HasShadowEffect);
+    bool HasShadowEffect,
+    DrawingShapeEffectPreset EffectPreset);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
     IReadOnlyList<XlsxChartPackagePart> ChartParts,
@@ -227,9 +228,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                                     XlsxDrawingColorReader.TryReadThemeColorReference(outlineFill, drawingNs, out var readOutlineThemeColor)
                 ? readOutlineThemeColor
                 : (WorkbookThemeColorReference?)null;
-            var hasShadowEffect = spPr?
-                .Element(drawingNs + "effectLst")?
-                .Element(drawingNs + "outerShdw") is not null;
+            var effectPreset = ReadDrawingShapeEffectPreset(spPr?.Element(drawingNs + "effectLst"), drawingNs);
+            var hasShadowEffect = effectPreset == DrawingShapeEffectPreset.Shadow;
             var text = string.Concat(shapeElement
                 .Element(spreadsheetDrawingNs + "txBody")?
                 .Descendants(drawingNs + "t")
@@ -268,7 +268,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                     gradientFill.EndColor,
                     fillThemeColor,
                     outlineThemeColor,
-                    hasShadowEffect));
+                    hasShadowEffect,
+                    effectPreset));
         }
 
         return (textBoxes, shapes);
@@ -398,6 +399,20 @@ internal static partial class XlsxWorksheetDrawingPartReader
         return colors is { Count: >= 2 }
             ? (colors[0], colors[^1])
             : (colors?.FirstOrDefault(), null);
+    }
+
+    private static DrawingShapeEffectPreset ReadDrawingShapeEffectPreset(
+        XElement? effectList,
+        XNamespace drawingNs)
+    {
+        if (effectList?.Element(drawingNs + "outerShdw") is not null)
+            return DrawingShapeEffectPreset.Shadow;
+        if (effectList?.Element(drawingNs + "glow") is not null)
+            return DrawingShapeEffectPreset.Glow;
+        if (effectList?.Element(drawingNs + "softEdge") is not null)
+            return DrawingShapeEffectPreset.SoftEdges;
+
+        return DrawingShapeEffectPreset.None;
     }
 
     private static DrawingShapeKind? ToDrawingShapeKind(string? preset) =>
