@@ -2900,7 +2900,7 @@ public class ExportPlannerTests
     [Fact]
     public void PrintPreviewDialog_CreateTitle_IncludesWorkbookName()
     {
-        PrintPreviewDialog.CreateTitle("Book1").Should().Be("Print Preview - Book1");
+        PrintPreviewDialog.CreateTitle("Book1").Should().Be(UiText.Format("PrintPreview_TitleFormat", "Book1"));
     }
 
     [Fact]
@@ -2908,7 +2908,7 @@ public class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = \"_Print...\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");
         source.Should().Contain("ShowNativePrintDialog");
         source.Should().Contain("ResolvePrintPaginator(previewDocument, selectedPageRangeMode, currentPrintPage, selectedPageRange)");
         source.Should().Contain("PrintDocument(paginator");
@@ -3131,7 +3131,7 @@ public class ExportPlannerTests
         var source = ReadPrintPreviewDialogSources();
 
         source.Should().Contain("var zoomBox = new ComboBox");
-        source.Should().Contain("Content = \"_Zoom:\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_ZoomLabel\")");
         source.Should().Contain("Target = zoomBox");
     }
 
@@ -3140,17 +3140,17 @@ public class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("SetToolbarAutomation(firstButton, \"PrintPreviewFirstPageButton\", \"First page\"");
-        source.Should().Contain("SetToolbarAutomation(previousButton, \"PrintPreviewPreviousPageButton\", \"Previous page\"");
-        source.Should().Contain("SetToolbarAutomation(nextButton, \"PrintPreviewNextPageButton\", \"Next page\"");
-        source.Should().Contain("SetToolbarAutomation(lastButton, \"PrintPreviewLastPageButton\", \"Last page\"");
+        source.Should().Contain("SetToolbarAutomation(firstButton, \"PrintPreviewFirstPageButton\", UiText.Get(\"PrintPreview_FirstPageAutomationName\")");
+        source.Should().Contain("SetToolbarAutomation(previousButton, \"PrintPreviewPreviousPageButton\", UiText.Get(\"PrintPreview_PreviousPageAutomationName\")");
+        source.Should().Contain("SetToolbarAutomation(nextButton, \"PrintPreviewNextPageButton\", UiText.Get(\"PrintPreview_NextPageAutomationName\")");
+        source.Should().Contain("SetToolbarAutomation(lastButton, \"PrintPreviewLastPageButton\", UiText.Get(\"PrintPreview_LastPageAutomationName\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(printButton, \"PrintPreviewPrintButton\")");
-        source.Should().Contain("SetToolbarAutomation(closeButton, \"PrintPreviewCloseButton\", \"Close preview\"");
+        source.Should().Contain("SetToolbarAutomation(closeButton, \"PrintPreviewCloseButton\", UiText.Get(\"PrintPreview_CloseAutomationName\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(pageNumberBox, \"PrintPreviewPageNumberBox\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(pageStatusText, \"PrintPreviewPageStatusText\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(zoomBox, \"PrintPreviewZoomBox\")");
-        source.Should().Contain("SetToolbarAutomation(marginsButton, \"PrintPreviewMarginsButton\", \"Margins\"");
-        source.Should().Contain("SetToolbarAutomation(pageSetupButton, \"PrintPreviewPageSetupButton\", \"Page Setup\"");
+        source.Should().Contain("SetToolbarAutomation(marginsButton, \"PrintPreviewMarginsButton\", UiText.Get(\"PrintPreview_MarginsAutomationName\")");
+        source.Should().Contain("SetToolbarAutomation(pageSetupButton, \"PrintPreviewPageSetupButton\", UiText.Get(\"PrintPreview_PageSetupAutomationName\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(settingsSummaryText, \"PrintPreviewSettingsSummaryText\")");
         source.Should().Contain("private static void SetToolbarAutomation(Control control, string automationId, string name, string helpText)");
     }
@@ -3172,7 +3172,7 @@ public class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = \"_Page:\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PageLabel\")");
         source.Should().Contain("pageNumberBox");
         source.Should().Contain("pageStatusText");
         source.Should().Contain("CreateNavigationState(1, totalPages).StatusText");
@@ -3180,7 +3180,7 @@ public class ExportPlannerTests
         source.Should().Contain("NavigationCommands.GoToPage");
         source.Should().Contain("TryParsePageNumber(pageNumberBox.Text, totalPages, out var pageNumber)");
         source.Should().Contain("ShowInvalidPageNumberWarning(pageNumberBox, totalPages)");
-        source.Should().Contain("Enter a page number from 1 to");
+        source.Should().Contain("UiText.Format(\"PrintPreview_InvalidPageNumberMessage\", totalPages)");
         source.Should().Contain("pageNumberBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(pageNumberBox);");
     }
@@ -3190,13 +3190,13 @@ public class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = \"Pr_inter:\"");
-        source.Should().Contain("Content = \"_Copies:\"");
-        source.Should().Contain("Content = \"C_ollated\"");
-        source.Should().Contain("Content = \"_Sides:\"");
-        source.Should().Contain("Print One Sided");
-        source.Should().Contain("Flip pages on long edge");
-        source.Should().Contain("Flip pages on short edge");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PrinterLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CopiesLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CollatedLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_SidesLabel\")");
+        source.Should().Contain("sidesBox.Items.Add(UiText.Get(\"PrintPreview_SidesOneSided\"))");
+        source.Should().Contain("sidesBox.Items.Add(UiText.Get(\"PrintPreview_SidesFlipLongEdge\"))");
+        source.Should().Contain("sidesBox.Items.Add(UiText.Get(\"PrintPreview_SidesFlipShortEdge\"))");
         source.Should().Contain("printerBox");
         source.Should().Contain("copiesBox");
         source.Should().Contain("collatedBox");
@@ -3209,7 +3209,7 @@ public class ExportPlannerTests
         source.Should().Contain("dialog.PrintTicket.Duplexing = ResolvePrintTicketDuplexing(sidesMode)");
         source.Should().Contain("ResolveSelectedSidesMode(sidesBox)");
         source.Should().Contain("collatedBox.IsChecked == true");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Enter a copy count from 1 to 999.\", Title);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"PrintPreview_InvalidCopiesMessage\"), Title);");
         source.Should().Contain("copiesBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(copiesBox);");
         source.Should().Contain("AutomationProperties.SetHelpText");
@@ -3221,9 +3221,9 @@ public class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = \"_All pages\"");
-        source.Should().Contain("Content = \"Current pag_e\"");
-        source.Should().Contain("Content = \"Pa_ges\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_AllPagesLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CurrentPageLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PagesLabel\")");
         source.Should().Contain("fromPageBox");
         source.Should().Contain("toPageBox");
         source.Should().Contain("PrintPreviewPageRangeMode.CurrentPage");
@@ -3240,11 +3240,21 @@ public class ExportPlannerTests
     public void PrintPreviewDialog_PrintRangeAccessKeysAreUnique()
     {
         var source = ReadPrintPreviewDialogSources();
-        var rangeLabels = new[] { "_All pages", "Current pag_e", "Pa_ges" };
+        var rangeLabels = new[]
+        {
+            UiText.Get("PrintPreview_AllPagesLabel"),
+            UiText.Get("PrintPreview_CurrentPageLabel"),
+            UiText.Get("PrintPreview_PagesLabel")
+        };
 
         var accessKeys = rangeLabels.Select(ExtractAccessKey).ToList();
 
-        source.Should().ContainAll(rangeLabels.Select(label => $"Content = \"{label}\""));
+        source.Should().ContainAll(
+            [
+                "Content = UiText.Get(\"PrintPreview_AllPagesLabel\")",
+                "Content = UiText.Get(\"PrintPreview_CurrentPageLabel\")",
+                "Content = UiText.Get(\"PrintPreview_PagesLabel\")"
+            ]);
         accessKeys.Should().OnlyHaveUniqueItems("Print Preview range choices share one access-key scope");
     }
 

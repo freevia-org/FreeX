@@ -9832,4 +9832,241 @@
 <data name="FormatCells_UnderlineDoubleAccounting" xml:space="preserve">
     <value>Double Accounting</value>
   </data>
+  <data name="PrintPreview_AllPagesAutomationName" xml:space="preserve">
+    <value>All pages</value>
+  </data>
+  <data name="PrintPreview_AllPagesLabel" xml:space="preserve">
+    <value>_All pages</value>
+  </data>
+  <data name="PrintPreview_AllPagesToolTip" xml:space="preserve">
+    <value>Print every page in the preview.</value>
+  </data>
+  <data name="PrintPreview_CloseAutomationName" xml:space="preserve">
+    <value>Close preview</value>
+  </data>
+  <data name="PrintPreview_CloseButton" xml:space="preserve">
+    <value>_Close Preview</value>
+  </data>
+  <data name="PrintPreview_CloseHelpText" xml:space="preserve">
+    <value>Return to the workbook.</value>
+  </data>
+  <data name="PrintPreview_CloseToolTip" xml:space="preserve">
+    <value>Return to the workbook.</value>
+  </data>
+  <data name="PrintPreview_CollatedAutomationName" xml:space="preserve">
+    <value>Collated</value>
+  </data>
+  <data name="PrintPreview_CollatedHelpText" xml:space="preserve">
+    <value>When checked, multiple copies print as collated sets.</value>
+  </data>
+  <data name="PrintPreview_CollatedLabel" xml:space="preserve">
+    <value>C_ollated</value>
+  </data>
+  <data name="PrintPreview_CollatedToolTip" xml:space="preserve">
+    <value>Print multiple copies as collated sets when the printer supports collation.</value>
+  </data>
+  <data name="PrintPreview_CopiesAutomationName" xml:space="preserve">
+    <value>Copies</value>
+  </data>
+  <data name="PrintPreview_CopiesHelpText" xml:space="preserve">
+    <value>Enter a copy count from 1 to 999.</value>
+  </data>
+  <data name="PrintPreview_CopiesLabel" xml:space="preserve">
+    <value>_Copies:</value>
+  </data>
+  <data name="PrintPreview_CopiesToolTip" xml:space="preserve">
+    <value>Number of copies to send to the Windows print dialog.</value>
+  </data>
+  <data name="PrintPreview_CurrentPageAutomationName" xml:space="preserve">
+    <value>Current page</value>
+  </data>
+  <data name="PrintPreview_CurrentPageLabel" xml:space="preserve">
+    <value>Current pag_e</value>
+  </data>
+  <data name="PrintPreview_CurrentPageToolTip" xml:space="preserve">
+    <value>Print only the page number shown in the Page box.</value>
+  </data>
+  <data name="PrintPreview_DefaultScopeActiveSheet" xml:space="preserve">
+    <value>Print active sheet</value>
+  </data>
+  <data name="PrintPreview_FirstPageAutomationName" xml:space="preserve">
+    <value>First page</value>
+  </data>
+  <data name="PrintPreview_FirstPageButton" xml:space="preserve">
+    <value>_First Page</value>
+  </data>
+  <data name="PrintPreview_FirstPageHelpText" xml:space="preserve">
+    <value>Go to the first preview page.</value>
+  </data>
+  <data name="PrintPreview_FromPageAutomationName" xml:space="preserve">
+    <value>From page</value>
+  </data>
+  <data name="PrintPreview_InvalidCopiesMessage" xml:space="preserve">
+    <value>Enter a copy count from 1 to 999.</value>
+  </data>
+  <data name="PrintPreview_InvalidPageNumberMessage" xml:space="preserve">
+    <value>Enter a page number from 1 to {0}.</value>
+  </data>
+  <data name="PrintPreview_InvalidPageRangeMessage" xml:space="preserve">
+    <value>Enter a valid page range.</value>
+  </data>
+  <data name="PrintPreview_LastPageAutomationName" xml:space="preserve">
+    <value>Last page</value>
+  </data>
+  <data name="PrintPreview_LastPageButton" xml:space="preserve">
+    <value>_Last Page</value>
+  </data>
+  <data name="PrintPreview_LastPageHelpText" xml:space="preserve">
+    <value>Go to the last preview page.</value>
+  </data>
+  <data name="PrintPreview_MarginsAutomationName" xml:space="preserve">
+    <value>Margins</value>
+  </data>
+  <data name="PrintPreview_MarginsButton" xml:space="preserve">
+    <value>_Margins</value>
+  </data>
+  <data name="PrintPreview_MarginsHelpText" xml:space="preserve">
+    <value>Review worksheet margin settings before printing.</value>
+  </data>
+  <data name="PrintPreview_MarginsToolTip" xml:space="preserve">
+    <value>Review worksheet margin settings before printing.</value>
+  </data>
+  <data name="PrintPreview_NextPageAutomationName" xml:space="preserve">
+    <value>Next page</value>
+  </data>
+  <data name="PrintPreview_NextPageButton" xml:space="preserve">
+    <value>_Next Page</value>
+  </data>
+  <data name="PrintPreview_NextPageHelpText" xml:space="preserve">
+    <value>Go to the next preview page.</value>
+  </data>
+  <data name="PrintPreview_NoInstalledPrintersHelpText" xml:space="preserve">
+    <value>No installed printers were detected. Use Print to choose a printer in the Windows print dialog.</value>
+  </data>
+  <data name="PrintPreview_NoInstalledPrintersToolTip" xml:space="preserve">
+    <value>No installed printers were detected. Print opens the Windows print dialog so a printer can be chosen there.</value>
+  </data>
+  <data name="PrintPreview_PageLabel" xml:space="preserve">
+    <value>_Page:</value>
+  </data>
+  <data name="PrintPreview_PageNumberAutomationName" xml:space="preserve">
+    <value>Page number</value>
+  </data>
+  <data name="PrintPreview_PageNumberHelpText" xml:space="preserve">
+    <value>Enter a preview page number and press Enter.</value>
+  </data>
+  <data name="PrintPreview_PageRangeToText" xml:space="preserve">
+    <value>to</value>
+  </data>
+  <data name="PrintPreview_PageSetupAutomationName" xml:space="preserve">
+    <value>Page Setup</value>
+  </data>
+  <data name="PrintPreview_PageSetupButton" xml:space="preserve">
+    <value>Page _Setup...</value>
+  </data>
+  <data name="PrintPreview_PageSetupHelpText" xml:space="preserve">
+    <value>Open Page Setup options for paper, orientation, margins, and scaling.</value>
+  </data>
+  <data name="PrintPreview_PageSetupToolTip" xml:space="preserve">
+    <value>Use Page Layout settings to change paper, orientation, margins, and scaling.</value>
+  </data>
+  <data name="PrintPreview_PageStatusAutomationName" xml:space="preserve">
+    <value>Page status</value>
+  </data>
+  <data name="PrintPreview_PageStatusHelpText" xml:space="preserve">
+    <value>Shows the current preview page and total page count.</value>
+  </data>
+  <data name="PrintPreview_PagesAutomationName" xml:space="preserve">
+    <value>Pages</value>
+  </data>
+  <data name="PrintPreview_PagesLabel" xml:space="preserve">
+    <value>Pa_ges</value>
+  </data>
+  <data name="PrintPreview_PagesToolTip" xml:space="preserve">
+    <value>Print only the entered page range.</value>
+  </data>
+  <data name="PrintPreview_PreviousPageAutomationName" xml:space="preserve">
+    <value>Previous page</value>
+  </data>
+  <data name="PrintPreview_PreviousPageButton" xml:space="preserve">
+    <value>_Previous Page</value>
+  </data>
+  <data name="PrintPreview_PreviousPageHelpText" xml:space="preserve">
+    <value>Go to the previous preview page.</value>
+  </data>
+  <data name="PrintPreview_PrintAutomationName" xml:space="preserve">
+    <value>Print</value>
+  </data>
+  <data name="PrintPreview_PrintButton" xml:space="preserve">
+    <value>_Print...</value>
+  </data>
+  <data name="PrintPreview_PrintHelpText" xml:space="preserve">
+    <value>Opens the Windows print dialog and applies the selected printer and copies when possible.</value>
+  </data>
+  <data name="PrintPreview_PrintToolTip" xml:space="preserve">
+    <value>Open the Windows print dialog with the selected printer and copy count.</value>
+  </data>
+  <data name="PrintPreview_PrinterAutomationName" xml:space="preserve">
+    <value>Printer</value>
+  </data>
+  <data name="PrintPreview_PrinterHelpText" xml:space="preserve">
+    <value>Selects the initial printer for the Windows print dialog.</value>
+  </data>
+  <data name="PrintPreview_PrinterLabel" xml:space="preserve">
+    <value>Pr_inter:</value>
+  </data>
+  <data name="PrintPreview_PrinterToolTip" xml:space="preserve">
+    <value>Choose the printer used when Print opens the Windows print dialog.</value>
+  </data>
+  <data name="PrintPreview_SettingsSummaryAutomationName" xml:space="preserve">
+    <value>Print settings summary</value>
+  </data>
+  <data name="PrintPreview_SettingsSummaryHelpText" xml:space="preserve">
+    <value>Summarizes the active print scope and page setup options.</value>
+  </data>
+  <data name="PrintPreview_SidesAutomationName" xml:space="preserve">
+    <value>Sides</value>
+  </data>
+  <data name="PrintPreview_SidesFlipLongEdge" xml:space="preserve">
+    <value>Flip pages on long edge</value>
+  </data>
+  <data name="PrintPreview_SidesFlipShortEdge" xml:space="preserve">
+    <value>Flip pages on short edge</value>
+  </data>
+  <data name="PrintPreview_SidesHelpText" xml:space="preserve">
+    <value>Selects one-sided or two-sided duplex printing for the Windows print dialog.</value>
+  </data>
+  <data name="PrintPreview_SidesLabel" xml:space="preserve">
+    <value>_Sides:</value>
+  </data>
+  <data name="PrintPreview_SidesOneSided" xml:space="preserve">
+    <value>Print One Sided</value>
+  </data>
+  <data name="PrintPreview_SidesToolTip" xml:space="preserve">
+    <value>Choose one-sided or duplex printing when the printer supports it.</value>
+  </data>
+  <data name="PrintPreview_StatusAutomationName" xml:space="preserve">
+    <value>Print status</value>
+  </data>
+  <data name="PrintPreview_StatusHelpText" xml:space="preserve">
+    <value>Shows the selected printer, copy count, and preview page count.</value>
+  </data>
+  <data name="PrintPreview_TitleFormat" xml:space="preserve">
+    <value>Print Preview - {0}</value>
+  </data>
+  <data name="PrintPreview_ToPageAutomationName" xml:space="preserve">
+    <value>To page</value>
+  </data>
+  <data name="PrintPreview_ZoomAutomationName" xml:space="preserve">
+    <value>Zoom</value>
+  </data>
+  <data name="PrintPreview_ZoomHelpText" xml:space="preserve">
+    <value>Select a print preview zoom level.</value>
+  </data>
+  <data name="PrintPreview_ZoomLabel" xml:space="preserve">
+    <value>_Zoom:</value>
+  </data>
+  <data name="PrintPreview_ZoomPageWidth" xml:space="preserve">
+    <value>Page Width</value>
+  </data>
 </root>

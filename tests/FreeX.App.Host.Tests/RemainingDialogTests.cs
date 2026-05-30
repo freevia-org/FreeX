@@ -1447,17 +1447,17 @@ public sealed class RemainingDialogTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = \"_Previous Page\"");
-        source.Should().Contain("Content = \"_Next Page\"");
-        source.Should().Contain("Content = \"_First Page\"");
-        source.Should().Contain("Content = \"_Last Page\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PreviousPageButton\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_NextPageButton\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_FirstPageButton\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_LastPageButton\")");
         source.Should().Contain("NavigationCommands.FirstPage");
         source.Should().Contain("NavigationCommands.LastPage");
-        source.Should().Contain("Content = \"_Zoom:\"");
-        source.Should().Contain("Content = \"_Margins\"");
-        source.Should().Contain("Content = \"Page _Setup...\"");
-        source.Should().Contain("Content = \"_Print...\"");
-        source.Should().Contain("Content = \"_Close Preview\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_ZoomLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_MarginsButton\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PageSetupButton\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CloseButton\")");
         source.Should().Contain("IsCancel = true");
         source.Should().Contain("closeButton.Click += (_, _) => Close();");
     }

@@ -25,7 +25,7 @@ public enum PrintPreviewSidesMode
 public sealed partial class PrintPreviewDialog
 {
     public static string CreateTitle(string workbookName) =>
-        $"Print Preview - {workbookName.Trim()}";
+        UiText.Format("PrintPreview_TitleFormat", workbookName.Trim());
 
     public static bool TryParseCopyCount(string? text, out int copies)
     {
@@ -53,7 +53,7 @@ public sealed partial class PrintPreviewDialog
 
     private void ShowInvalidCopiesWarning(TextBox copiesBox)
     {
-        DialogMessageHelper.ShowWarning(this, "Enter a copy count from 1 to 999.", Title);
+        DialogMessageHelper.ShowWarning(this, UiText.Get("PrintPreview_InvalidCopiesMessage"), Title);
         copiesBox.Focus();
         copiesBox.SelectAll();
         Keyboard.Focus(copiesBox);
@@ -61,7 +61,7 @@ public sealed partial class PrintPreviewDialog
 
     private void ShowInvalidPageNumberWarning(TextBox pageNumberBox, int totalPages)
     {
-        DialogMessageHelper.ShowWarning(this, $"Enter a page number from 1 to {totalPages}.", Title);
+        DialogMessageHelper.ShowWarning(this, UiText.Format("PrintPreview_InvalidPageNumberMessage", totalPages), Title);
         pageNumberBox.Focus();
         pageNumberBox.SelectAll();
         Keyboard.Focus(pageNumberBox);
@@ -85,8 +85,8 @@ public sealed partial class PrintPreviewDialog
 
     private void ShowInvalidPageRangeWarning(TextBox fromPageBox, TextBox toPageBox, string? error)
     {
-        DialogMessageHelper.ShowWarning(this, error ?? "Enter a valid page range.", Title);
-        var target = string.Equals(error, "From page must be less than or equal to To page.", StringComparison.OrdinalIgnoreCase)
+        DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("PrintPreview_InvalidPageRangeMessage"), Title);
+        var target = string.Equals(error, UiText.Get("Export_PageRangeFromLessThanToError"), StringComparison.OrdinalIgnoreCase)
             ? toPageBox
             : fromPageBox;
         target.Focus();
@@ -144,8 +144,8 @@ public sealed partial class PrintPreviewDialog
         }
 
         printerBox.IsEnabled = false;
-        printerBox.ToolTip = "No installed printers were detected. Print opens the Windows print dialog so a printer can be chosen there.";
-        AutomationProperties.SetHelpText(printerBox, "No installed printers were detected. Use Print to choose a printer in the Windows print dialog.");
+        printerBox.ToolTip = UiText.Get("PrintPreview_NoInstalledPrintersToolTip");
+        AutomationProperties.SetHelpText(printerBox, UiText.Get("PrintPreview_NoInstalledPrintersHelpText"));
     }
 
     private static void RefreshPrintStatus(TextBlock statusText, ComboBox printerBox, TextBox copiesBox, int totalPages)
