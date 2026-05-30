@@ -147,7 +147,7 @@ internal static class XlsxStructuredTableWriter
             workbookNs + "tableColumns",
             new XAttribute("count", columns.Count.ToString(CultureInfo.InvariantCulture)),
             columns.Select(column => ToColumnXml(column, workbookNs))));
-        if (!string.IsNullOrWhiteSpace(table.StyleName))
+        if (ShouldWriteStyleInfo(table))
             root.Add(ToStyleInfoXml(table, workbookNs));
         foreach (var nativeChildXml in (table.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
         {
@@ -210,11 +210,12 @@ internal static class XlsxStructuredTableWriter
     {
         var element = new XElement(
             workbookNs + "tableStyleInfo",
-            new XAttribute("name", table.StyleName!),
             new XAttribute("showFirstColumn", table.ShowFirstColumn ? "1" : "0"),
             new XAttribute("showLastColumn", table.ShowLastColumn ? "1" : "0"),
             new XAttribute("showRowStripes", table.ShowRowStripes ? "1" : "0"),
             new XAttribute("showColumnStripes", table.ShowColumnStripes ? "1" : "0"));
+        if (!string.IsNullOrWhiteSpace(table.StyleName))
+            element.SetAttributeValue("name", table.StyleName);
 
         foreach (var (name, value) in table.NativeStyleInfoAttributes ?? new Dictionary<string, string>())
         {
@@ -237,6 +238,15 @@ internal static class XlsxStructuredTableWriter
 
         return element;
     }
+
+    private static bool ShouldWriteStyleInfo(StructuredTableModel table) =>
+        !string.IsNullOrWhiteSpace(table.StyleName) ||
+        table.ShowFirstColumn ||
+        table.ShowLastColumn ||
+        table.ShowRowStripes ||
+        table.ShowColumnStripes ||
+        (table.NativeStyleInfoAttributes?.Count > 0) ||
+        (table.NativeStyleInfoChildXmls?.Count > 0);
 
     private static XElement ToAutoFilterXml(StructuredTableModel table, XNamespace workbookNs) =>
         AddAutoFilterNativeMetadata(new XElement(
