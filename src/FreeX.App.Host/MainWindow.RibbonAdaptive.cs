@@ -356,11 +356,8 @@ public partial class MainWindow
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);
         }
 
-        var relaxedProtectedGroupIndexes = availableWidth > 820
-            ? protectedGroupIndexes
-            : runtimeVisibilityProtectedGroupIndexes;
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates) &&
-               RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false, relaxedProtectedGroupIndexes))
+               RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false, runtimeVisibilityProtectedGroupIndexes))
         {
             ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates: null, availableWidth);
             SetCollapsedRibbonButtonFootprint(collapsedButtons, availableWidth);

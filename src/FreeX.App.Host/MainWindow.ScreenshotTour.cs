@@ -123,41 +123,13 @@ public partial class MainWindow
     }
 
     private static IReadOnlyList<(string Header, string FileName)> GetScreenshotTourTabs()
-    {
-        var requestedTabs = Environment.GetEnvironmentVariable("FREEX_SS_TOUR_TABS");
-        if (string.IsNullOrWhiteSpace(requestedTabs))
-            return TourTabs;
-
-        var requested = requestedTabs
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return TourTabs
-            .Where(tab => requested.Contains(tab.Header) || requested.Contains(tab.FileName))
-            .ToList();
-    }
+        => RibbonScreenshotTourPlanner.FilterTabs(
+            TourTabs,
+            Environment.GetEnvironmentVariable("FREEX_SS_TOUR_TABS"));
 
     private static IReadOnlyList<double> GetScreenshotTourRequestedWidths()
-    {
-        var requestedWidths = Environment.GetEnvironmentVariable("FREEX_SS_TOUR_WIDTHS");
-        if (string.IsNullOrWhiteSpace(requestedWidths))
-            return [];
-
-        var widths = new List<double>();
-        foreach (var value in requestedWidths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (double.TryParse(
-                    value,
-                    System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out var width) &&
-                width > 0)
-            {
-                widths.Add(width);
-            }
-        }
-
-        return widths;
-    }
+        => RibbonScreenshotTourPlanner.ParseWidths(
+            Environment.GetEnvironmentVariable("FREEX_SS_TOUR_WIDTHS"));
 
     private async Task CaptureCurrentWindowAsync(string outputDir, string fileName, double logicalHeight)
     {
