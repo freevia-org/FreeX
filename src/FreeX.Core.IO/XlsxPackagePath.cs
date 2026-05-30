@@ -100,24 +100,33 @@ public static class XlsxPackagePath
 
     public static string GetImageContentType(string path)
     {
-        var extension = Path.GetExtension(path).ToLowerInvariant();
-        return extension switch
-        {
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".bmp" => "image/bmp",
-            ".gif" => "image/gif",
-            _ => "image/png"
-        };
+        var extension = Path.GetExtension(path.AsSpan());
+        if (extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase))
+            return "image/jpeg";
+
+        if (extension.Equals(".bmp", StringComparison.OrdinalIgnoreCase))
+            return "image/bmp";
+
+        if (extension.Equals(".gif", StringComparison.OrdinalIgnoreCase))
+            return "image/gif";
+
+        return "image/png";
     }
 
-    public static string GetImageExtension(string contentType) =>
-        contentType.ToLowerInvariant() switch
-        {
-            "image/jpeg" => ".jpg",
-            "image/bmp" => ".bmp",
-            "image/gif" => ".gif",
-            _ => ".png"
-        };
+    public static string GetImageExtension(string contentType)
+    {
+        if (string.Equals(contentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
+            return ".jpg";
+
+        if (string.Equals(contentType, "image/bmp", StringComparison.OrdinalIgnoreCase))
+            return ".bmp";
+
+        if (string.Equals(contentType, "image/gif", StringComparison.OrdinalIgnoreCase))
+            return ".gif";
+
+        return ".png";
+    }
 
     public static string GetWorksheetBackgroundMediaFileName(string? fileName, int backgroundIndex, string extension)
     {

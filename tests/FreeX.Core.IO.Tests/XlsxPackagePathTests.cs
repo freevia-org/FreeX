@@ -80,8 +80,11 @@ public sealed class XlsxPackagePathTests
 
     [Theory]
     [InlineData("xl/media/image1.jpeg", "image/jpeg")]
+    [InlineData("xl/media/image1.JPEG", "image/jpeg")]
     [InlineData("xl/media/image1.bmp", "image/bmp")]
+    [InlineData("xl/media/image1.BMP", "image/bmp")]
     [InlineData("xl/media/image1.gif", "image/gif")]
+    [InlineData("xl/media/image1.GIF", "image/gif")]
     [InlineData("xl/media/image1.png", "image/png")]
     [InlineData("xl/media/image1.unknown", "image/png")]
     public void GetImageContentType_MapsSupportedImageExtensions(string path, string expected)
@@ -91,13 +94,32 @@ public sealed class XlsxPackagePathTests
 
     [Theory]
     [InlineData("image/jpeg", ".jpg")]
+    [InlineData("IMAGE/JPEG", ".jpg")]
     [InlineData("image/bmp", ".bmp")]
+    [InlineData("IMAGE/BMP", ".bmp")]
     [InlineData("image/gif", ".gif")]
+    [InlineData("IMAGE/GIF", ".gif")]
     [InlineData("image/png", ".png")]
     [InlineData("application/octet-stream", ".png")]
     public void GetImageExtension_MapsSupportedImageContentTypes(string contentType, string expected)
     {
         XlsxPackagePath.GetImageExtension(contentType).Should().Be(expected);
+    }
+
+    [Fact]
+    public void ImageMediaMapping_AvoidsLowercaseStringAllocations()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "XlsxPackagePath.cs"));
+        var mediaMapping = source[
+            source.IndexOf("public static string GetImageContentType", StringComparison.Ordinal)..
+            source.IndexOf("public static string GetWorksheetBackgroundMediaFileName", StringComparison.Ordinal)];
+
+        mediaMapping.Should().Contain("Path.GetExtension(path.AsSpan())");
+        mediaMapping.Should().Contain("StringComparison.OrdinalIgnoreCase");
+        mediaMapping.Should().NotContain(
+            "ToLowerInvariant()",
+            "picture and background media save/load paths should not allocate lowercase copies for MIME or extension checks");
     }
 
     [Theory]
