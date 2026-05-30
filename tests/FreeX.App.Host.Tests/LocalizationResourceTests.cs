@@ -55,6 +55,20 @@ public sealed class LocalizationResourceTests
     }
 
     [Fact]
+    public void AppLocalization_ApplyAppLanguage_UpdatesUiCultureWithoutChangingRegionalCulture()
+    {
+        using var cultureScope = new CultureScope(currentCulture: "fr-FR", currentUICulture: "fr-FR");
+        var expectedDefaultCulture = CultureInfo.DefaultThreadCurrentCulture;
+
+        AppLocalization.ApplyAppLanguage("uk-UA");
+
+        CultureInfo.CurrentUICulture.Name.Should().Be("uk-UA");
+        CultureInfo.DefaultThreadCurrentUICulture?.Name.Should().Be("uk-UA");
+        CultureInfo.CurrentCulture.Name.Should().Be("fr-FR");
+        CultureInfo.DefaultThreadCurrentCulture.Should().BeSameAs(expectedDefaultCulture);
+    }
+
+    [Fact]
     public void UiText_GetNeutralResourceKeys_ContainsInitialCommonAndStartupKeys()
     {
         var keys = UiText.GetNeutralResourceKeys();
@@ -80,6 +94,8 @@ public sealed class LocalizationResourceTests
     {
         private readonly CultureInfo _previousCulture = CultureInfo.CurrentCulture;
         private readonly CultureInfo _previousUICulture = CultureInfo.CurrentUICulture;
+        private readonly CultureInfo? _previousDefaultCulture = CultureInfo.DefaultThreadCurrentCulture;
+        private readonly CultureInfo? _previousDefaultUICulture = CultureInfo.DefaultThreadCurrentUICulture;
 
         public CultureScope(string currentCulture, string currentUICulture)
         {
@@ -91,6 +107,8 @@ public sealed class LocalizationResourceTests
         {
             CultureInfo.CurrentCulture = _previousCulture;
             CultureInfo.CurrentUICulture = _previousUICulture;
+            CultureInfo.DefaultThreadCurrentCulture = _previousDefaultCulture;
+            CultureInfo.DefaultThreadCurrentUICulture = _previousDefaultUICulture;
         }
     }
 }

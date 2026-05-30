@@ -62,6 +62,7 @@ public sealed class OptionsDialogSourceTests
         AssertLabelTargets(document, presentation, "User _name:", "OptUserName");
         AssertLabelTargets(document, presentation, "Save files in this _format:", "OptDefaultFormat");
         AssertLabelTargets(document, presentation, "Recent files _location:", "OptRecentFilesPath");
+        AssertLabelTargets(document, presentation, "App _language:", "OptAppLanguage");
 
         document.Descendants(presentation + "CheckBox")
             .Select(element => element.Attribute("Content")?.Value)
@@ -119,6 +120,35 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_ExposesPersistedAppLanguageSwitcher()
+    {
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var appSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "App.xaml.cs"));
+
+        xaml.Should().Contain("x:Name=\"PanelLanguage\"");
+        xaml.Should().Contain("Choose display language");
+        xaml.Should().Contain("x:Name=\"OptAppLanguage\"");
+        xaml.Should().Contain("DisplayMemberPath=\"DisplayName\"");
+        xaml.Should().Contain("SelectedValuePath=\"CultureName\"");
+        xaml.Should().Contain("AutomationProperties.HelpText=\"Select the display language FreeX uses for menus, dialogs, and messages.\"");
+        xaml.Should().Contain("Some open windows may keep their current language until you restart FreeX.");
+
+        source.Should().Contain("OptAppLanguage.ItemsSource = AppLanguageCatalog.GetAvailableLanguages()");
+        source.Should().Contain("OptAppLanguage.SelectedValue = AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage)");
+        source.Should().Contain("AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string)");
+
+        backstageSource.Should().Contain("AppLocalization.ApplyAppLanguage(_options.AppLanguage)");
+        backstageSource.Should().Contain("UiText.Get(\"Options_AppLanguageRestartMessage\")");
+        appSource.Should().Contain("AppLocalization.ApplyAppLanguage(options.AppLanguage);");
+        appSource.Should().Contain("_startupOptions = options;");
+        appSource.Should().Contain("ConfigureServices(serviceCollection);");
+        appSource.Should().Contain("var options = _startupOptions ?? FreeXOptions.Load();");
+        appSource.Should().NotContain("var options = Services.GetRequiredService<FreeXOptions>();");
+    }
+
+    [Fact]
     public void OptionsDialogInvalidGeneralInputs_ShowOwnedWarningsAndRefocusEditors()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
@@ -157,7 +187,6 @@ public sealed class OptionsDialogSourceTests
         foreach (var clickHandler in new[]
         {
             "AutoCorrectOptionsButton_Click",
-            "AddLanguageButton_Click",
             "RibbonImportExportButton_Click",
             "QuickAccessResetButton_Click",
             "AddInsGoButton_Click",
@@ -174,7 +203,6 @@ public sealed class OptionsDialogSourceTests
         source.Should().Contain("OptObjectsDisplay.ItemsSource");
         source.Should().Contain("ShowDeferredOptionsMessage");
         source.Should().Contain("DeferredCommandMessages.AutoCorrectOptions()");
-        source.Should().Contain("DeferredCommandMessages.EditingLanguages()");
         source.Should().Contain("DeferredCommandMessages.RibbonCustomizationImportExport()");
         source.Should().Contain("DeferredCommandMessages.QuickAccessToolbarReset()");
         source.Should().Contain("DeferredCommandMessages.OfficeAddIns()");
