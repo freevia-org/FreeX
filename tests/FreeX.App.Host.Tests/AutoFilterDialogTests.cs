@@ -1,4 +1,8 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -392,6 +396,42 @@ public sealed class AutoFilterDialogTests
     }
 
     [Fact]
+    public void DialogControls_ColorChoiceButtonsExposeUiaMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var menuPlan = new AutoFilterMenuPlan(
+                "Status",
+                AutoFilterMenuFilterKind.Text,
+                [new AutoFilterMenuEntry(new AutoFilterChecklistItem("Open", "Open"))],
+                [
+                    new AutoFilterColorOption("#00B050", AutoFilterColorFilterKind.CellFillColor, new CellColor(0, 176, 80)),
+                    new AutoFilterColorOption("No Fill", AutoFilterColorFilterKind.NoFill, null),
+                    new AutoFilterColorOption("#C00000", AutoFilterColorFilterKind.FontColor, new CellColor(192, 0, 0))
+                ]);
+            var dialog = new AutoFilterDialog(menuPlan);
+            dialog.Show();
+            try
+            {
+                var colorButtons = FindVisualChildren<Button>(dialog)
+                    .Where(button => AutomationProperties.GetName(button).StartsWith("Filter by ", StringComparison.Ordinal))
+                    .ToDictionary(AutomationProperties.GetName);
+
+                colorButtons.Keys.Should().BeEquivalentTo(
+                    "Filter by cell color #00B050",
+                    "Filter by no fill",
+                    "Filter by font color #C00000");
+                colorButtons.Values.Should().OnlyContain(button =>
+                    AutomationProperties.GetHelpText(button) == "Apply this color filter.");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void DialogControls_ChecklistSupportsKeyboardToggleAndBoundaryNavigation()
     {
         var source = ReadAutoFilterDialogSources();
@@ -665,6 +705,20 @@ public sealed class AutoFilterDialogTests
             File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialogCriteriaPlanner.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialog.State.cs")),
             File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AutoFilterDialogModel.cs")));
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in FindVisualChildren<T>(child))
+                yield return descendant;
+        }
     }
 
     private sealed class SimpleCtx(Workbook workbook) : ICommandContext
