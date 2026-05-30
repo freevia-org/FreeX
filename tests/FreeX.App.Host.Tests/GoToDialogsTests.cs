@@ -297,7 +297,10 @@ public sealed class GoToDialogsTests
         source.Should().Contain("Content = \"_Logicals\"");
         source.Should().Contain("Content = \"_Errors\"");
         source.Should().Contain("RefreshValueTypeOptions");
-        source.Should().Contain("SelectedOptions = new GoToSpecialOptions(GetSelectedValueTypes())");
+        source.Should().Contain("UsesValueTypeOptions(SelectedKind)");
+        source.Should().Contain("new GoToSpecialOptions(GetSelectedValueTypes())");
+        source.Should().Contain("new GoToSpecialOptions()");
+        source.Should().NotContain("valueTypes == GoToSpecialValueTypes.None ? GoToSpecialValueTypes.All : valueTypes");
     }
 
     [Fact]
@@ -309,6 +312,55 @@ public sealed class GoToDialogsTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_buttons.FirstOrDefault()?.Focus();");
         source.Should().Contain("Keyboard.Focus(firstButton);");
+    }
+
+    [Fact]
+    public void GoToSpecialDialog_ConstantsWithNoValueTypesReturnsNone()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new GoToSpecialDialog();
+            dialog.Show();
+            try
+            {
+                SelectGoToSpecialChoice(dialog, GoToSpecialKind.Constants);
+                SetAllValueTypeBoxes(dialog, isChecked: false);
+
+                InvokePrivateAllowingNonModalDialogResult(dialog, "Accept");
+
+                dialog.SelectedKind.Should().Be(GoToSpecialKind.Constants);
+                dialog.SelectedOptions.ValueTypes.Should().Be(GoToSpecialValueTypes.None);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void GoToSpecialDialog_DisabledValueTypeStateDoesNotLeakToOtherChoices()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new GoToSpecialDialog();
+            dialog.Show();
+            try
+            {
+                SelectGoToSpecialChoice(dialog, GoToSpecialKind.Constants);
+                SetAllValueTypeBoxes(dialog, isChecked: false);
+                SelectGoToSpecialChoice(dialog, GoToSpecialKind.Blanks);
+
+                InvokePrivateAllowingNonModalDialogResult(dialog, "Accept");
+
+                dialog.SelectedKind.Should().Be(GoToSpecialKind.Blanks);
+                dialog.SelectedOptions.ValueTypes.Should().Be(GoToSpecialValueTypes.All);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -360,5 +412,39 @@ public sealed class GoToDialogsTests
         var field = typeof(GoToDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static T GetPrivateGoToSpecialField<T>(GoToSpecialDialog dialog, string fieldName)
+        where T : class
+    {
+        var field = typeof(GoToSpecialDialog).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
+    }
+
+    private static void SelectGoToSpecialChoice(GoToSpecialDialog dialog, GoToSpecialKind kind)
+    {
+        var buttons = GetPrivateGoToSpecialField<List<RadioButton>>(dialog, "_buttons");
+        buttons.Single(button => button.Tag is GoToSpecialKind buttonKind && buttonKind == kind).IsChecked = true;
+    }
+
+    private static void SetAllValueTypeBoxes(GoToSpecialDialog dialog, bool isChecked)
+    {
+        foreach (var fieldName in new[] { "_numbersBox", "_textBox", "_logicalsBox", "_errorsBox" })
+            GetPrivateGoToSpecialField<CheckBox>(dialog, fieldName).IsChecked = isChecked;
+    }
+
+    private static void InvokePrivateAllowingNonModalDialogResult(GoToSpecialDialog dialog, string methodName)
+    {
+        var method = typeof(GoToSpecialDialog).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        try
+        {
+            method!.Invoke(dialog, []);
+        }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException invalidOperation &&
+                                                   invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
+        {
+        }
     }
 }
