@@ -202,6 +202,36 @@ public sealed class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public void Fill_DateNormalization_FormatsMixedSeparatorsWithPadding()
+    {
+        var result = FlashFillService.Fill(
+            [("1/5/2024", "2024-01-05"), ("2.9.2023", "2023-02-09")],
+            ["11/3/2022", "2026.12.31"]);
+
+        result.Should().BeEquivalentTo(["2022-11-03", "2026-12-31"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateNormalization_FormatsIsoSourcesToSlashDates()
+    {
+        var result = FlashFillService.Fill(
+            [("2024-1-5", "01/05/2024"), ("2023.2.9", "02/09/2023")],
+            ["2022-11-3", "2026.12.31"]);
+
+        result.Should().BeEquivalentTo(["11/03/2022", "12/31/2026"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_DateNormalization_ReturnsNullWhenRemainingIsInvalidDate()
+    {
+        var result = FlashFillService.Fill(
+            [("1/5/2024", "2024-01-05"), ("2/9/2023", "2023-02-09")],
+            ["2/30/2022"]);
+
+        result.Should().BeNull();
+    }
+
     [Theory]
     [InlineData("North (Retail)", "Retail", "South (Wholesale)", "Wholesale", "East (Online)", "Online")]
     [InlineData("INV [Open]", "Open", "INV [Closed]", "Closed", "INV [Pending]", "Pending")]
@@ -1282,6 +1312,36 @@ public sealed class FlashFillServiceTests
             ["3605550142"]);
 
         result.Should().BeEquivalentTo(["(360) 555-0142"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_PhoneNumberNormalization_FormatsMixedPunctuationByExample()
+    {
+        var result = FlashFillService.Fill(
+            [("425.555.0101", "(425) 555-0101"), ("206-555-0199", "(206) 555-0199")],
+            ["360 555 0142", "2125550198"]);
+
+        result.Should().BeEquivalentTo(["(360) 555-0142", "(212) 555-0198"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_PhoneNumberNormalization_DropsLeadingCountryCodeWhenExamplesDo()
+    {
+        var result = FlashFillService.Fill(
+            [("+1 (425) 555-0101", "425-555-0101"), ("1-206-555-0199", "206-555-0199")],
+            ["+1 360 555 0142", "1.212.555.0198"]);
+
+        result.Should().BeEquivalentTo(["360-555-0142", "212-555-0198"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_PhoneNumberNormalization_ReturnsNullWhenRemainingHasTooFewDigits()
+    {
+        var result = FlashFillService.Fill(
+            [("425.555.0101", "(425) 555-0101"), ("206-555-0199", "(206) 555-0199")],
+            ["555-0142"]);
+
+        result.Should().BeNull();
     }
 
     [Fact]
