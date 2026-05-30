@@ -24,6 +24,11 @@ public sealed class XlsxFileAdapterFormatTests
         var tableReferencePreserverSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxStructuredTableReferencePreserver.cs"));
         var styleOnlyStripperSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxClosedXmlStyleOnlyCellStripper.cs"));
         var sheetXmlLayoutSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
+        var sourcePackageSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackage.cs"))
+            .ReplaceLineEndings("\n");
+        var preserveSourcePackageParts = sourcePackageSource[
+            sourcePackageSource.IndexOf("private static void PreserveSourcePackageParts", StringComparison.Ordinal)..
+            sourcePackageSource.IndexOf("private struct SourcePackagePartSummary", StringComparison.Ordinal)];
 
         adapterSource.Should().NotContain("packageStream.ToArray()");
         saveSource.Should().NotContain("GetUsedCells()");
@@ -49,6 +54,21 @@ public sealed class XlsxFileAdapterFormatTests
         adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream)");
         styleOnlyStripperSource.Should().Contain("seenStyleIndexes.Add(styleIndex.Value)");
         sheetXmlLayoutSource.Should().Contain("XlsxWorksheetDrawingPartReader.ReadParts");
+        preserveSourcePackageParts.Should().Contain("var sourceParts = InspectSourcePackageParts(sourceArchive)");
+        preserveSourcePackageParts.Should().Contain("sourceParts.HasPivotPackageParts");
+        preserveSourcePackageParts.Should().Contain("sourceParts.HasStructuredTables");
+        preserveSourcePackageParts.Should().Contain("sourceParts.HasExternalLinks");
+        preserveSourcePackageParts.Should().Contain("sourceParts.HasDrawings");
+        preserveSourcePackageParts.Should().NotContain(
+            "HasSourcePackagePart(sourceArchive",
+            "loaded-workbook save replay should avoid rescanning all ZIP entries for each optional source package part");
+        preserveSourcePackageParts.Should().NotContain(
+            "HasAnySourcePackagePart(sourceArchive",
+            "loaded-workbook save replay should classify source package parts in a single entry pass");
+        preserveSourcePackageParts.Should().NotContain(
+            "HasUnsupportedSheetPackagePart(sourceArchive",
+            "unsupported sheet package part detection should reuse the single source package summary");
+        sourcePackageSource.Should().Contain("foreach (var entry in archive.Entries)");
     }
 
     [Fact]

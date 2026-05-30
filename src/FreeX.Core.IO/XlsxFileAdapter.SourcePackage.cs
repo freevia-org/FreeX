@@ -17,6 +17,7 @@ public sealed partial class XlsxFileAdapter
         using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: false);
         using var generatedArchive = new ZipArchive(generatedPackage, ZipArchiveMode.Update, leaveOpen: true);
         var context = XlsxSourcePackagePreservationContext.TryCreate(sourceArchive, generatedArchive);
+        var sourceParts = InspectSourcePackageParts(sourceArchive);
         var removedWorksheetPackageParts = GetExcludedWorksheetPackagePartPaths(sourceArchive, context, workbook);
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(
             sourceArchive,
@@ -33,31 +34,73 @@ public sealed partial class XlsxFileAdapter
         XlsxDocumentPropertiesPreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorkbookMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         XlsxStylesheetMetadataPreserver.Preserve(sourceArchive, generatedArchive);
-        if (HasAnySourcePackagePart(sourceArchive, "xl/pivotCache/", "xl/pivotTables/"))
+        if (sourceParts.HasPivotPackageParts)
             XlsxPivotXmlReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
-        if (HasSourcePackagePart(sourceArchive, "xl/tables/"))
+        if (sourceParts.HasStructuredTables)
             XlsxStructuredTableReferencePreserver.Preserve(sourceArchive, generatedArchive, context);
-        if (HasSourcePackagePart(sourceArchive, "xl/externalLinks/"))
+        if (sourceParts.HasExternalLinks)
             XlsxExternalLinkReferencePreserver.Preserve(sourceArchive, generatedArchive);
-        if (HasUnsupportedSheetPackagePart(sourceArchive))
+        if (sourceParts.HasUnsupportedSheetParts)
             XlsxUnsupportedSheetReferencePreserver.Preserve(sourceArchive, generatedArchive);
-        if (HasSourcePackagePart(sourceArchive, "xl/drawings/"))
+        if (sourceParts.HasDrawings)
         {
             var drawingPaths = XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths(sourceArchive, generatedArchive, context);
             XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, generatedArchive, context, drawingPaths);
         }
-        if (HasSourcePackagePart(sourceArchive, "xl/printerSettings/"))
+        if (sourceParts.HasPrinterSettings)
             XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorksheetMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook, context);
         XlsxLegacyCommentPreserver.Preserve(sourceArchive, generatedArchive, workbook);
-        if (HasSourcePackagePart(sourceArchive, "xl/sharedStrings.xml"))
+        if (sourceParts.HasSharedStrings)
             XlsxSharedStringMetadataPreserver.PreserveRichTextAndPhonetics(sourceArchive, generatedArchive);
         if (HasUnsupportedConditionalFormatting(sourceArchive))
             XlsxUnsupportedConditionalFormattingPreserver.Preserve(sourceArchive, generatedArchive);
     }
 
-    private static bool HasSourcePackagePart(ZipArchive archive, string prefix) =>
-        archive.Entries.Any(entry => entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    private struct SourcePackagePartSummary
+    {
+        public bool HasPivotPackageParts;
+        public bool HasStructuredTables;
+        public bool HasExternalLinks;
+        public bool HasUnsupportedSheetParts;
+        public bool HasDrawings;
+        public bool HasPrinterSettings;
+        public bool HasSharedStrings;
+    }
+
+    private static SourcePackagePartSummary InspectSourcePackageParts(ZipArchive archive)
+    {
+        var summary = new SourcePackagePartSummary();
+        foreach (var entry in archive.Entries)
+        {
+            var fullName = entry.FullName;
+            summary.HasPivotPackageParts |=
+                fullName.StartsWith("xl/pivotCache/", StringComparison.OrdinalIgnoreCase) ||
+                fullName.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase);
+            summary.HasStructuredTables |= fullName.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase);
+            summary.HasExternalLinks |= fullName.StartsWith("xl/externalLinks/", StringComparison.OrdinalIgnoreCase);
+            summary.HasUnsupportedSheetParts |=
+                fullName.StartsWith("xl/dialogSheets/", StringComparison.OrdinalIgnoreCase) ||
+                fullName.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) ||
+                fullName.StartsWith("xl/macrosheets/", StringComparison.OrdinalIgnoreCase);
+            summary.HasDrawings |= fullName.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase);
+            summary.HasPrinterSettings |= fullName.StartsWith("xl/printerSettings/", StringComparison.OrdinalIgnoreCase);
+            summary.HasSharedStrings |= fullName.Equals("xl/sharedStrings.xml", StringComparison.OrdinalIgnoreCase);
+
+            if (summary.HasPivotPackageParts &&
+                summary.HasStructuredTables &&
+                summary.HasExternalLinks &&
+                summary.HasUnsupportedSheetParts &&
+                summary.HasDrawings &&
+                summary.HasPrinterSettings &&
+                summary.HasSharedStrings)
+            {
+                break;
+            }
+        }
+
+        return summary;
+    }
 
     private static IReadOnlySet<string> GetExcludedWorksheetPackagePartPaths(
         ZipArchive sourceArchive,
@@ -397,15 +440,6 @@ public sealed partial class XlsxFileAdapter
                 yield return chartEntry.FullName;
         }
     }
-
-    private static bool HasAnySourcePackagePart(ZipArchive archive, params string[] prefixes) =>
-        archive.Entries.Any(entry => prefixes.Any(prefix => entry.FullName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
-
-    private static bool HasUnsupportedSheetPackagePart(ZipArchive archive) =>
-        archive.Entries.Any(entry =>
-            entry.FullName.StartsWith("xl/dialogSheets/", StringComparison.OrdinalIgnoreCase) ||
-            entry.FullName.StartsWith("xl/chartsheets/", StringComparison.OrdinalIgnoreCase) ||
-            entry.FullName.StartsWith("xl/macrosheets/", StringComparison.OrdinalIgnoreCase));
 
     private static bool HasUnsupportedConditionalFormatting(ZipArchive archive) =>
         XlsxConditionalFormatRuleSupport.HasUnsupportedRuleInWorksheets(archive, allowBlankType: true);
