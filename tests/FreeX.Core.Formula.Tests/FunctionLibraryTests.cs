@@ -3014,11 +3014,12 @@ public class FunctionLibraryTests
     }
 
     [Fact]
-    public void Randarray_MinGreaterThanMax_ReturnsValueError()
+    public void Randarray_MinGreaterThanOrEqualToMax_ReturnsValueError()
     {
         var sheet = MakeSheet();
 
         _eval.Evaluate("=RANDARRAY(1,1,10,1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=RANDARRAY(1,1,5,5)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
