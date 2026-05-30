@@ -6,6 +6,8 @@
 - Use one isolated Git worktree per active chat session.
 - Use one branch per session, preferably with the `codex/` prefix unless the user asks for another name.
 - Do not run two chat sessions in the same working directory.
+- Do not do implementation work directly in the primary `main` worktree. Treat `main` as an integration target only; if a session starts there, create or switch to an isolated linked worktree before editing files.
+- Do not leave dirty working changes in `main`. If a session accidentally modifies `main`, stop and move that work onto an owned branch/worktree before continuing, or clearly report that `main` is dirty and blocked.
 - Before starting code changes, run `git status --short --branch` and `git worktree list --porcelain`.
 - If the current checkout is already a linked worktree, continue there and do not create a nested worktree.
 - Prefer project-local worktrees under `.worktrees/`; this directory must remain ignored by Git.
@@ -18,6 +20,7 @@
 - Merge completed, verified work back to `main` as often as practical. Prefer small, coherent integrations over letting many session branches drift.
 - Merge as often as possible once work is verified. Do not let finished slices sit on session branches while other agents continue building on `main`.
 - Integrate through `main` or a named integration branch only after build/tests pass, then sync other active session branches from the updated `main`.
+- Before merging into `main`, verify the `main` worktree is clean or that dirty files are unrelated to the incoming changes. If dirty `main` files overlap with the merge, do not stash, overwrite, or work around them without explicit ownership; report the block and coordinate first.
 
 ## Execution
 
