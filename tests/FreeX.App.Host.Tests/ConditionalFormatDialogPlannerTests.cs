@@ -119,4 +119,20 @@ public sealed class ConditionalFormatDialogPlannerTests
         clone.NativeContainerAttributes.Should().BeEquivalentTo(source.NativeContainerAttributes);
         clone.NativeContainerChildXmls.Should().BeEquivalentTo(source.NativeContainerChildXmls);
     }
+
+    [Fact]
+    public void CloneRule_PreservesIconOverrides()
+    {
+        var source = new ConditionalFormat
+        {
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "5Arrows"
+        };
+        source.IconOverrides.Add(new CfIconOverride("3TrafficLights1", 0));
+        source.IconOverrides.Add(new CfIconOverride("NoIcons", -1));
+
+        var clone = ConditionalFormatDialogPlanner.CloneRule(source);
+
+        clone.IconOverrides.Should().Equal(source.IconOverrides);
+    }
 }
