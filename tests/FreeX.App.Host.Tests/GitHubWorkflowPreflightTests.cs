@@ -14,6 +14,7 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain(".github\\workflows");
         script.Should().Contain("(?:-\\s*)?uses:");
         script.Should().Contain("pull_request_target");
+        script.Should().Contain("self-hosted");
         script.Should().Contain("workflow must declare top-level permissions explicitly");
         script.Should().Contain("workflow must not request write-all permissions");
         script.Should().Contain("must be pinned to an explicit major version");
@@ -33,6 +34,47 @@ public sealed class GitHubWorkflowPreflightTests
         result.ExitCode.Should().Be(0, result.Error);
         result.Output.Should().Contain("Validated ");
         result.Output.Should().Contain("GitHub workflow file(s).");
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenWorkflowUsesSelfHostedRunner()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-workflow-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(tempDirectory, "broken.yml"),
+                """
+                name: Broken
+
+                on:
+                  workflow_dispatch:
+
+                permissions:
+                  contents: read
+
+                jobs:
+                  build:
+                    runs-on: [self-hosted, windows]
+                    steps:
+                      - name: Safe shell
+                        shell: pwsh
+                        run: dotnet restore FreeX.slnx
+                """);
+            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{tempDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("workflow must not use self-hosted runners");
+            (result.Output + result.Error).Should().Contain("broken.yml");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]
