@@ -177,6 +177,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         private string? _focusedMenuHeader;
         private string? _contextMenuPlacementTargetName;
         private IReadOnlyList<string> _openMenuHeaders = [];
+        private GridRange? _selectedRange;
 
         private MainWindowHarness(MainWindow window, Workbook workbook)
         {
@@ -227,14 +228,16 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         public void SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
         {
             var sheet = _workbook.Sheets[0];
-            SheetGrid.SelectedRange = new GridRange(
+            _selectedRange = new GridRange(
                 new CellAddress(sheet.Id, startRow, startCol),
                 new CellAddress(sheet.Id, endRow, endCol));
+            SheetGrid.SelectedRange = _selectedRange;
             PumpDispatcher();
         }
 
         public void ClearSelection()
         {
+            _selectedRange = null;
             SheetGrid.SelectedRange = null;
             _focusedMenuHeader = null;
             _contextMenuPlacementTargetName = null;
@@ -247,9 +250,10 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             _focusedMenuHeader = null;
             _contextMenuPlacementTargetName = null;
             _openMenuHeaders = [];
+            SheetGrid.SelectedRange = _selectedRange;
             _showQuickAnalysisMenu.Invoke(_window, null);
             PumpDispatcher();
-            if (SheetGrid.SelectedRange is not { } range)
+            if (_selectedRange is not { } range)
                 return;
 
             var options = QuickAnalysisPlanner.BuildOptions(range);
@@ -282,6 +286,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
 
         private void PreviewOption(QuickAnalysisOption option)
         {
+            SheetGrid.SelectedRange = _selectedRange;
             _focusedMenuHeader = option.Label;
             var item = new MenuItem
             {
@@ -294,7 +299,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         }
 
         private IReadOnlyList<QuickAnalysisOption> CurrentOptions() =>
-            SheetGrid.SelectedRange is { } range
+            _selectedRange is { } range
                 ? QuickAnalysisPlanner.BuildOptions(range)
                 : [];
 
