@@ -48,6 +48,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     {
         using var packageStream = CreateLoadPackageStream(stream);
 
+        // Reject zip-bomb / oversized packages before any decompression-heavy reads.
+        WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(packageStream);
+        packageStream.Position = 0;
+
         var workbookTheme = XlsxWorkbookThemeReader.Load(packageStream);
         packageStream.Position = 0;
         var uses1904DateSystem = XlsxWorkbookMetadataReader.LoadUses1904DateSystem(packageStream);

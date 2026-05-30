@@ -30,13 +30,16 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     }
 
     [Fact]
-    public void RuntimeVisibilityOverrides_KeepDataToolsIconOnlyAtMediumWidths()
+    public void RuntimeVisibilityOverrides_KeepMediumDataPriorityGroupsIconOnly()
     {
         var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Data Types", "Sort & Filter", "Data Tools", "Forecast" };
 
         var decisions = RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityOverrides(1120, groupNames);
 
-        decisions.Should().ContainSingle(decision =>
+        decisions.Should().Contain(decision =>
+            decision.Index == Array.IndexOf(groupNames, "Sort & Filter") &&
+            decision.State == RibbonAdaptiveGroupState.IconOnly);
+        decisions.Should().Contain(decision =>
             decision.Index == Array.IndexOf(groupNames, "Data Tools") &&
             decision.State == RibbonAdaptiveGroupState.IconOnly);
     }
@@ -55,7 +58,10 @@ public sealed class RibbonAdaptivePriorityPlannerTests
             groupNames,
             selectedTabHeader: "Data");
 
-        decisions.Should().ContainSingle(decision =>
+        decisions.Should().Contain(decision =>
+            decision.Index == Array.IndexOf(groupNames, "Sort & Filter") &&
+            decision.State == RibbonAdaptiveGroupState.IconOnly);
+        decisions.Should().Contain(decision =>
             decision.Index == Array.IndexOf(groupNames, "Data Tools") &&
             decision.State == RibbonAdaptiveGroupState.IconOnly);
     }

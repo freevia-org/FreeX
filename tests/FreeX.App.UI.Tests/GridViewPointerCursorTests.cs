@@ -190,6 +190,20 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void ObjectMoveMouseUpSnapsAnchorFromPreviewTopLeft()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Input.cs"));
+        var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
+        var objectMoveBlock = source[
+            source.IndexOf("if (dragKind == ObjectDragKind.Move)", mouseUpStart, StringComparison.Ordinal)..
+            source.IndexOf("else", source.IndexOf("if (dragKind == ObjectDragKind.Move)", mouseUpStart, StringComparison.Ordinal), StringComparison.Ordinal)];
+
+        objectMoveBlock.Should().Contain("HitTestAnchorCell(new Point(currentRect.Left, currentRect.Top))");
+        objectMoveBlock.Should().NotContain("HitTestAnchorCell(pos)");
+    }
+
+    [Fact]
     public void SplitPaneDividerMouseDownCapturesDragBeforeAutofillAndResize()
     {
         var source = File.ReadAllText(FindWorkspaceFile(

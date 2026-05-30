@@ -22,6 +22,14 @@ public sealed class AppInfoTests
         AppInfo.AboutText.Should().Contain("A free spreadsheet app for .xlsx files.");
         AppInfo.AboutText.Should().Contain("Built with .NET 10, WPF, ClosedXML, OxyPlot.");
         AppInfo.AboutText.Should().Contain(AppInfo.TrademarkNotice);
+        AppInfo.AboutText.Should().Contain(AppInfo.CompatibilityNotice);
+        AppInfo.AboutText.Should().Contain(AppInfo.ProjectLicenseNotice);
+        AppInfo.AboutText.Should().Contain(AppInfo.PrivacyNotice);
+        AppInfo.AboutText.Should().Contain(AppInfo.ThirdPartyRuntimeNotice);
+        AppInfo.AboutText.Should().Contain(AppInfo.SourceNotice);
+        AppInfo.AboutText.Should().Contain("ClosedXML");
+        AppInfo.AboutText.Should().Contain("SharpVectors.Wpf");
+        AppInfo.AboutText.Should().Contain("%LOCALAPPDATA%\\FreeX\\Diagnostics");
         AppInfo.AboutText.Should().NotContain("Claude Code");
     }
 }

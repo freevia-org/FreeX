@@ -480,21 +480,17 @@ public partial class MainWindow
 
     private void OpenExternalHelpLink(string url, string title)
     {
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true
-            });
-        }
-        catch (Exception ex)
-        {
-            ShowOwnedMessage(
-                $"Could not open the external link:\n{url}\n\n{ex.Message}",
-                title,
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-        }
+        var result = ExternalUrlLauncher.Open(url);
+        if (result == ExternalUrlLaunchResult.Launched)
+            return;
+
+        var reason = result == ExternalUrlLaunchResult.BlockedScheme
+            ? "This link type is not supported for security reasons."
+            : "The link could not be opened.";
+        ShowOwnedMessage(
+            $"Could not open the external link:\n{url}\n\n{reason}",
+            title,
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
     }
 }

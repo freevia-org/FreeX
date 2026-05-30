@@ -51,7 +51,7 @@ internal static class XmlNativeBagSerializer
                 {
                     wrapper.Add(XElement.Parse(childXml, LoadOptions.PreserveWhitespace));
                 }
-                catch { }
+                catch (XmlException) { }
             }
         }
 
@@ -86,7 +86,7 @@ internal static class XmlNativeBagSerializer
             foreach (var child in element.Elements())
                 children.Add(child.ToString(SaveOptions.DisableFormatting));
         }
-        catch { }
+        catch (XmlException) { }
 
         return (attrs, children);
     }
@@ -129,7 +129,7 @@ internal static class XmlNativeBagSerializer
                 {
                     target.Add(XElement.Parse(childXml, LoadOptions.PreserveWhitespace));
                 }
-                catch { }
+                catch (XmlException) { }
             }
         }
 

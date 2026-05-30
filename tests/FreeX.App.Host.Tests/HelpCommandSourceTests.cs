@@ -49,7 +49,7 @@ public sealed class HelpCommandSourceTests
         source.Should().Contain("AppInfo.AboutText");
         source.Should().Contain("AppIssueReporter.CreateDiagnosticsText(context)");
         source.Should().Contain("Clipboard.SetText(diagnosticsText);");
-        source.Should().Contain("UseShellExecute = true");
+        source.Should().Contain("ExternalUrlLauncher.Open(");
         source.Should().Contain("ShowOwnedMessage(");
     }
 

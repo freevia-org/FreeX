@@ -174,6 +174,9 @@ public sealed class MainWindowAdaptiveRibbonTests
                 HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left
             };
             RibbonMetadata.SetCompactWidths(button, 150, 24);
+            var label = content.Children
+                .OfType<TextBlock>()
+                .First(RibbonMetadata.IsCommandLabel);
 
             var compactLevel = typeof(MainWindow).GetNestedType("RibbonCompactLevel", BindingFlags.NonPublic)
                 ?? throw new MissingMemberException(nameof(MainWindow), "RibbonCompactLevel");
@@ -188,12 +191,14 @@ public sealed class MainWindowAdaptiveRibbonTests
             button.HorizontalContentAlignment.Should().Be(System.Windows.HorizontalAlignment.Center);
             content.HorizontalAlignment.Should().Be(System.Windows.HorizontalAlignment.Center);
             content.ColumnDefinitions[1].Width.Value.Should().Be(0);
+            label.Visibility.Should().Be(Visibility.Collapsed);
 
             setCompact.Invoke(null, [button, full]);
 
             button.HorizontalContentAlignment.Should().Be(System.Windows.HorizontalAlignment.Left);
             content.HorizontalAlignment.Should().Be(System.Windows.HorizontalAlignment.Left);
             content.ColumnDefinitions[1].Width.Value.Should().Be(5);
+            label.Visibility.Should().Be(Visibility.Visible);
         });
     }
 

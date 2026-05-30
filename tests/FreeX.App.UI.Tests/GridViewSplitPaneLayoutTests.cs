@@ -219,6 +219,22 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void RenderSplitPaneCells_DrawsCommentIndicatorsForCommentOnlyPaneCells()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderSplitPaneCells = source[
+            source.IndexOf("private void RenderSplitPaneCells", StringComparison.Ordinal)..
+            source.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+
+        renderSplitPaneCells.Should().Contain("if (cell.HasComment)");
+        renderSplitPaneCells.Should().Contain("DrawCommentIndicator(dc, rect);");
+        renderSplitPaneCells.IndexOf("DrawCommentIndicator(dc, rect);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSplitPaneCells.IndexOf("ShouldDrawCellContent(cell, EditingCell)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void HitTestViewportCell_UsesPinnedSplitPaneQuadrantsBeforeMainViewport()
     {
         var sheetId = SheetId.New();

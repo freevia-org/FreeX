@@ -66,6 +66,35 @@ public sealed class RibbonIconFactorySvgTests
         });
     }
 
+    [Theory]
+    [InlineData("Recommended PivotTables")]
+    [InlineData("Recommended Charts")]
+    [InlineData("What-If Analysis")]
+    [InlineData("Reapply")]
+    [InlineData("Add Watch")]
+    [InlineData("Delete Watch")]
+    [InlineData("Copy Diagnostics")]
+    [InlineData("Quick Analysis")]
+    [InlineData("Insert Copied Cells")]
+    [InlineData("Pick From Drop-down List...")]
+    [InlineData("Resolve Comment")]
+    [InlineData("Unresolve Comment")]
+    [InlineData("Shape Gradient")]
+    public void AcceptedIconReviewCommands_LoadDedicatedSvgArtworkAsVectorImages(string commandName)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var icon = RibbonIconFactory.CreateCommandIcon(
+                commandName,
+                new RibbonCommandIcon(RibbonCommandIconKind.Generic),
+                size: 32,
+                Brushes.Black);
+
+            var image = icon.Should().BeOfType<Image>().Subject;
+            image.Source.Should().BeOfType<DrawingImage>();
+        });
+    }
+
     [Fact]
     public void CreateCommandIcon_PrefersNativeSvgVariantForRequestedRibbonSlot()
     {
@@ -87,6 +116,14 @@ public sealed class RibbonIconFactorySvgTests
     [Theory]
     [InlineData("Sort & Filter", "sort-and-filter", "sort")]
     [InlineData("Find & Select", "find-and-select", "find")]
+    [InlineData("Export PDF/XPS", "export-pdf-xps", "export")]
+    [InlineData("Collapse Group", "collapse-group", "hide-detail")]
+    [InlineData("Expand Group", "expand-group", "show-detail")]
+    [InlineData("Add Watch", "add-watch", "watch-add")]
+    [InlineData("Delete Watch", "delete-watch", "watch-delete")]
+    [InlineData("Reapply", "reapply", "reapply-filter")]
+    [InlineData("100%", "100", "zoom-to-100")]
+    [InlineData("Pick From Drop-down List...", "pick-from-drop-down-list", "pick-from-dropdown")]
     public void CommandIconSlugAliases_NormalizePlainAmpersands(
         string commandName,
         string expectedSlug,
@@ -306,6 +343,19 @@ public sealed class RibbonIconFactorySvgTests
     [InlineData("check-for-updates.svg")]
     [InlineData("selection-pane.svg")]
     [InlineData("clear-filter.svg")]
+    [InlineData("recommended-pivottables.svg")]
+    [InlineData("recommended-charts.svg")]
+    [InlineData("what-if-analysis.svg")]
+    [InlineData("reapply-filter.svg")]
+    [InlineData("watch-add.svg")]
+    [InlineData("watch-delete.svg")]
+    [InlineData("copy-diagnostics.svg")]
+    [InlineData("quick-analysis.svg")]
+    [InlineData("insert-copied-cells.svg")]
+    [InlineData("pick-from-dropdown.svg")]
+    [InlineData("resolve-comment.svg")]
+    [InlineData("unresolve-comment.svg")]
+    [InlineData("shape-gradient.svg")]
     public void AcceptedIconReviewCommands_HaveDedicatedNonblankSvgArtwork(string fileName)
     {
         var iconPath = WorkspaceFileLocator.Find(

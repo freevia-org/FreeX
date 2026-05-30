@@ -126,10 +126,16 @@ public sealed class RecalcEngine
             }
             catch (Exception)
             {
-                // Defensive: any unhandled exception from the evaluator (e.g. inverted range,
+#if DEBUG
+                // In debug/test builds, surface unexpected evaluator exceptions instead of
+                // masking them as #VALUE! — a swallowed exception here is a built-in-function bug.
+                throw;
+#else
+                // Release: any unhandled exception from the evaluator (e.g. inverted range,
                 // overflow) must not crash the app — surface it as #VALUE! instead.
                 cell.Value = ErrorValue.Value;
                 errors.Add((addr, "#VALUE!"));
+#endif
             }
         }
 

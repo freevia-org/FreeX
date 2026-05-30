@@ -9,13 +9,16 @@ public sealed class OpenWorkbookLoader
 {
     private readonly Action<Workbook> _recalculateAllFormulas;
     private readonly Func<Stream, XlsxFeatureReport> _inspectXlsx;
+    private readonly long _maxFileBytes;
 
     public OpenWorkbookLoader(
         Action<Workbook> recalculateAllFormulas,
-        Func<Stream, XlsxFeatureReport>? inspectXlsx = null)
+        Func<Stream, XlsxFeatureReport>? inspectXlsx = null,
+        long maxFileBytes = WorkbookOpenSizeGuard.DefaultMaxFileBytes)
     {
         _recalculateAllFormulas = recalculateAllFormulas;
         _inspectXlsx = inspectXlsx ?? XlsxFeatureInspector.Inspect;
+        _maxFileBytes = maxFileBytes;
     }
 
     public async Task<OpenWorkbookResult> LoadAsync(
@@ -25,6 +28,7 @@ public sealed class OpenWorkbookLoader
         FileFormatDescriptor format,
         IProgress<OpenProgressUpdate> progress)
     {
+        WorkbookOpenSizeGuard.EnsureFileWithinLimit(new FileInfo(path).Length, _maxFileBytes);
         ReportReadingProgress(progress);
 
         XlsxFeatureReport? featureReport = null;
