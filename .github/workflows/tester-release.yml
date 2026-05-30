@@ -138,6 +138,9 @@ jobs:
             $releasePatch = $releasePatchBase + $runNumber
             $versionLabel = "$major.$minor.$releasePatch"
           }
+          if ($versionLabel -match "[`r`n]") {
+            throw "Release version must be a single line."
+          }
 
           $versionSlug = $versionLabel.ToLowerInvariant()
           $versionSlug = $versionSlug -replace '^version\s+', ''

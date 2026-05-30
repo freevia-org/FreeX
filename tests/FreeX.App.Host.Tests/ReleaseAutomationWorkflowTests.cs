@@ -63,6 +63,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("elseif ($overallCompletion -ge 93) { $minor = 7 }");
         workflow.Should().Contain("elseif ($overallCompletion -ge 90) { $minor = 6 }");
         workflow.Should().Contain("$versionLabel = \"$major.$minor.$releasePatch\"");
+        workflow.Should().Contain("Release version must be a single line.");
         workflow.Should().Contain("$releaseStamp = Get-Date -AsUTC -Format \"yyyy-MM-dd-HH-mm-ss\"");
         workflow.Should().Contain("$releaseId = \"$versionSlug-$releaseStamp-run$runNumber-attempt$runAttempt\"");
         workflow.Should().Contain("$tag = \"v$releaseId+$shortSha\"");
