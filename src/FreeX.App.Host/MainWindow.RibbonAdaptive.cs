@@ -76,7 +76,7 @@ public partial class MainWindow
         var layoutStates = layout.States.ToArray();
         var plannedStates = layoutStates.ToArray();
 
-        var correctionCacheKey = CreateRibbonCorrectionCacheKey(cacheKey, availableWidth, plannedStates);
+        var correctionCacheKey = CreateRibbonCorrectionCacheKey(availableWidth, plannedStates);
         var hasCachedCorrection = _ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates);
         if (hasCachedCorrection)
             _ribbonCorrectedStateCacheHitCount++;
@@ -87,10 +87,10 @@ public partial class MainWindow
             cachedCorrectionNeedsExpansion = RibbonStatesAreMoreCollapsedThan(plannedStates, layoutStates);
         }
 
-        var appliedStateKey = CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates);
+        var appliedStateKey = CreateRibbonAppliedStateKey(availableWidth, plannedStates);
         if (!force &&
             !_ribbonAdaptiveStateDiffInvalidated &&
-            string.Equals(_lastRibbonAdaptiveAppliedStateKey, appliedStateKey, StringComparison.Ordinal))
+            _lastRibbonAdaptiveAppliedStateKey == appliedStateKey)
         {
             _ribbonAppliedStateSkipCount++;
             return;
@@ -113,7 +113,7 @@ public partial class MainWindow
         }
 
         SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
-        appliedStateKey = CreateRibbonAppliedStateKey(cacheKey, availableWidth, plannedStates);
+        appliedStateKey = CreateRibbonAppliedStateKey(availableWidth, plannedStates);
         if (!hasCachedCorrection || requiresMeasuredCorrection)
             _ribbonCorrectedStateCache[correctionCacheKey] = plannedStates.ToArray();
         _lastRibbonAdaptiveAppliedStateKey = appliedStateKey;
@@ -275,11 +275,7 @@ public partial class MainWindow
         if (!string.Equals(_ribbonAdaptiveLayoutPlanCacheKey, measurementCacheKey, StringComparison.Ordinal))
             ResetRibbonAdaptiveLayoutPlanCache(measurementCacheKey);
 
-        var planCacheKey = CreateRibbonAdaptiveLayoutPlanCacheEntryKey(
-            measurementCacheKey,
-            availableWidth,
-            fixedChromeWidth,
-            selectedTabHeader);
+        var planCacheKey = CreateRibbonAdaptiveLayoutPlanCacheEntryKey(availableWidth, fixedChromeWidth, selectedTabHeader);
         if (_ribbonAdaptiveLayoutPlanCache.TryGetValue(planCacheKey, out var cachedLayout))
         {
             _ribbonAdaptiveLayoutPlanCacheHitCount++;
@@ -302,17 +298,14 @@ public partial class MainWindow
         _ribbonAdaptiveLayoutPlanCache.Clear();
     }
 
-    private static string CreateRibbonAdaptiveLayoutPlanCacheEntryKey(
-        string measurementCacheKey,
+    private static RibbonAdaptiveLayoutPlanCacheEntryKey CreateRibbonAdaptiveLayoutPlanCacheEntryKey(
         double availableWidth,
         double fixedChromeWidth,
         string? selectedTabHeader) =>
-        string.Join(
-            "|",
-            measurementCacheKey,
+        new(
+            RoundRibbonWidthToTenths(availableWidth),
+            RoundRibbonWidthToTenths(fixedChromeWidth),
             selectedTabHeader ?? "",
-            Math.Round(Math.Max(0, availableWidth), 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
-            Math.Round(Math.Max(0, fixedChromeWidth), 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
             GetCollapsedRibbonFootprintMode(availableWidth));
 
     private double GetRibbonAvailableWidth(StackPanel activePanel)
@@ -406,7 +399,7 @@ public partial class MainWindow
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroupState> states)
     {
-        var overflowCacheKey = CreateRibbonMeasuredOverflowCacheKey(measurementCacheKey, availableWidth, states);
+        var overflowCacheKey = CreateRibbonMeasuredOverflowCacheKey(availableWidth, states);
         if (_ribbonMeasuredOverflowCache.TryGetValue(overflowCacheKey, out var overflows))
             return overflows;
 
@@ -422,42 +415,31 @@ public partial class MainWindow
         return activePanel.DesiredSize.Width > Math.Max(0, availableWidth - 4);
     }
 
-    private static string CreateRibbonAppliedStateKey(
-        string measurementCacheKey,
+    private static RibbonAppliedStateKey CreateRibbonAppliedStateKey(
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroupState> states)
     {
-        var footprintMode = GetCollapsedRibbonFootprintMode(availableWidth);
-        return string.Join(
-            "|",
-            measurementCacheKey,
-            Math.Round(availableWidth, 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
-            footprintMode,
-            string.Join(",", states.Select(state => ((int)state).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        return new RibbonAppliedStateKey(
+            RoundRibbonWidthToTenths(availableWidth),
+            GetCollapsedRibbonFootprintMode(availableWidth),
+            CreateRibbonStateSignature(states));
     }
 
-    private static string CreateRibbonCorrectionCacheKey(
-        string measurementCacheKey,
+    private static RibbonCorrectionCacheKey CreateRibbonCorrectionCacheKey(
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroupState> states) =>
-        string.Join(
-            "|",
-            measurementCacheKey,
-            Math.Round(availableWidth, 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
-            string.Join(",", states.Select(state => ((int)state).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        new(
+            RoundRibbonWidthToTenths(availableWidth),
+            CreateRibbonStateSignature(states));
 
-    private static string CreateRibbonMeasuredOverflowCacheKey(
-        string measurementCacheKey,
+    private static RibbonMeasuredOverflowCacheKey CreateRibbonMeasuredOverflowCacheKey(
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroupState> states)
     {
-        var footprintMode = GetCollapsedRibbonFootprintMode(availableWidth);
-        return string.Join(
-            "|",
-            measurementCacheKey,
-            Math.Round(availableWidth, 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
-            footprintMode,
-            string.Join(",", states.Select(state => ((int)state).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        return new RibbonMeasuredOverflowCacheKey(
+            RoundRibbonWidthToTenths(availableWidth),
+            GetCollapsedRibbonFootprintMode(availableWidth),
+            CreateRibbonStateSignature(states));
     }
 
     private static void ApplyRibbonAdaptiveStates(
@@ -476,15 +458,53 @@ public partial class MainWindow
     private void SetCollapsedRibbonButtonFootprintIfNeeded(IReadOnlyList<Button> collapsedButtons, double availableWidth)
     {
         var footprintMode = GetCollapsedRibbonFootprintMode(availableWidth);
-        if (string.Equals(_lastRibbonCollapsedFootprintMode, footprintMode, StringComparison.Ordinal))
+        if (_lastRibbonCollapsedFootprintMode == footprintMode)
             return;
 
         RibbonAdaptiveStateApplicator.SetCollapsedButtonFootprint(collapsedButtons, availableWidth);
         _lastRibbonCollapsedFootprintMode = footprintMode;
     }
 
-    private static string GetCollapsedRibbonFootprintMode(double availableWidth) =>
-        RibbonCollapsedGroupPresentationPlanner.GetCacheKey(availableWidth);
+    private static RibbonCollapsedGroupFootprintMode GetCollapsedRibbonFootprintMode(double availableWidth)
+    {
+        if (availableWidth <= 760)
+            return RibbonCollapsedGroupFootprintMode.Captionless;
+
+        return availableWidth <= 920
+            ? RibbonCollapsedGroupFootprintMode.Compact
+            : RibbonCollapsedGroupFootprintMode.Normal;
+    }
+
+    private static int RoundRibbonWidthToTenths(double width) =>
+        (int)Math.Round(Math.Max(0, width) * 10, MidpointRounding.ToEven);
+
+    private static RibbonStateSignature CreateRibbonStateSignature(IReadOnlyList<RibbonAdaptiveGroupState> states)
+    {
+        ulong low = 0;
+        ulong high = 0;
+        var count = states.Count;
+        var packedCount = Math.Min(count, 64);
+        for (var index = 0; index < packedCount; index++)
+        {
+            var value = ((ulong)states[index]) & 0x3UL;
+            if (index < 32)
+                low |= value << (index * 2);
+            else
+                high |= value << ((index - 32) * 2);
+        }
+
+        var overflow = count > 64 ? CreateRibbonStateOverflowSignature(states) : null;
+        return new RibbonStateSignature(count, low, high, overflow);
+    }
+
+    private static string CreateRibbonStateOverflowSignature(IReadOnlyList<RibbonAdaptiveGroupState> states)
+    {
+        var builder = new System.Text.StringBuilder(states.Count - 64);
+        for (var index = 64; index < states.Count; index++)
+            builder.Append((char)('0' + (int)states[index]));
+
+        return builder.ToString();
+    }
 
     private static RibbonAdaptiveGroup MeasureRibbonAdaptiveGroup(RibbonCompactGroupSnapshot snapshot, Button collapsedButton)
     {
@@ -948,6 +968,32 @@ public partial class MainWindow
         CompactOnly,
         NormalizeSurface
     }
+
+    private readonly record struct RibbonAdaptiveLayoutPlanCacheEntryKey(
+        int AvailableWidthTenths,
+        int FixedChromeWidthTenths,
+        string SelectedTabHeader,
+        RibbonCollapsedGroupFootprintMode FootprintMode);
+
+    private readonly record struct RibbonStateSignature(
+        int Count,
+        ulong Low,
+        ulong High,
+        string? Overflow);
+
+    private readonly record struct RibbonAppliedStateKey(
+        int AvailableWidthTenths,
+        RibbonCollapsedGroupFootprintMode FootprintMode,
+        RibbonStateSignature States);
+
+    private readonly record struct RibbonCorrectionCacheKey(
+        int AvailableWidthTenths,
+        RibbonStateSignature States);
+
+    private readonly record struct RibbonMeasuredOverflowCacheKey(
+        int AvailableWidthTenths,
+        RibbonCollapsedGroupFootprintMode FootprintMode,
+        RibbonStateSignature States);
 
     internal sealed class RibbonCompactGroupSnapshot(
         FrameworkElement group,

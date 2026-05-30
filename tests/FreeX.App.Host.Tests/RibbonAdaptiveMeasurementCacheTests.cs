@@ -232,6 +232,27 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         });
     }
 
+    [Fact]
+    public void AdaptiveResizeHotPath_UsesValueTypeKeysForWidthAndStateCaches()
+    {
+        var fieldsSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        fieldsSource.Should().Contain("Dictionary<RibbonAdaptiveLayoutPlanCacheEntryKey, RibbonAdaptiveLayoutResult>");
+        fieldsSource.Should().Contain("Dictionary<RibbonCorrectionCacheKey, IReadOnlyList<RibbonAdaptiveGroupState>>");
+        fieldsSource.Should().Contain("Dictionary<RibbonMeasuredOverflowCacheKey, bool>");
+        fieldsSource.Should().Contain("RibbonAppliedStateKey? _lastRibbonAdaptiveAppliedStateKey");
+
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.RibbonAdaptive.cs"));
+        var hotPathKeyHelpers = source.Substring(
+            source.IndexOf("private static RibbonAdaptiveLayoutPlanCacheEntryKey CreateRibbonAdaptiveLayoutPlanCacheEntryKey", StringComparison.Ordinal),
+            source.IndexOf("private static string CreateRibbonAdaptiveMeasurementCacheKey", StringComparison.Ordinal) -
+            source.IndexOf("private static RibbonAdaptiveLayoutPlanCacheEntryKey CreateRibbonAdaptiveLayoutPlanCacheEntryKey", StringComparison.Ordinal));
+
+        hotPathKeyHelpers.Should().Contain("CreateRibbonStateSignature(");
+        hotPathKeyHelpers.Should().Contain("RoundRibbonWidthToTenths(");
+        hotPathKeyHelpers.Should().NotContain("string.Join(");
+        hotPathKeyHelpers.Should().NotContain(".Select(state");
+    }
+
     private sealed class RibbonAdaptiveDiagnosticsHarness : IDisposable
     {
         private readonly MainWindow _window;
