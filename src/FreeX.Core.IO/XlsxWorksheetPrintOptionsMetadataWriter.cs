@@ -14,8 +14,12 @@ internal static class XlsxWorksheetPrintOptionsMetadataWriter
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.PrintOptionsMetadata is not null))
+        foreach (var sheet in workbook.Sheets)
         {
+            var metadata = sheet.PrintOptionsMetadata;
+            if (metadata is null)
+                continue;
+
             if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
@@ -35,7 +39,7 @@ internal static class XlsxWorksheetPrintOptionsMetadataWriter
                 InsertPrintOptions(root, worksheetNs, printOptions);
             }
 
-            var (poAttrs, poChildren) = XmlNativeBagSerializer.Deserialize(sheet.PrintOptionsMetadata!.Get("printOptions"));
+            var (poAttrs, poChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("printOptions"));
             foreach (var attribute in poAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPrintOptionsAttribute(attribute.Key))
