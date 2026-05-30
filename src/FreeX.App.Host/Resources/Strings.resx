@@ -3711,6 +3711,9 @@
   <data name="MainWindow_Content_ShowNotes" xml:space="preserve">
     <value>Show Notes</value>
   </data>
+  <data name="MainWindow_Content_ShowComments" xml:space="preserve">
+    <value>Show Comments</value>
+  </data>
   <data name="MainWindow_Content_Size" xml:space="preserve">
     <value>Size</value>
   </data>
@@ -5430,6 +5433,9 @@
   <data name="MainWindow_TooltipDescription_EditTheSimpleCellNoteOnTheSelectedCell" xml:space="preserve">
     <value>Edit the simple cell note on the selected cell.</value>
   </data>
+  <data name="MainWindow_TooltipDescription_DeleteTheThreadedCommentOnTheSelectedCell" xml:space="preserve">
+    <value>Delete the threaded comment on the selected cell.</value>
+  </data>
   <data name="MainWindow_TooltipDescription_EmbeddedObjectAuthoringIsDeferredInFreeX" xml:space="preserve">
     <value>Embedded object authoring is deferred in FreeX.</value>
   </data>
@@ -5655,8 +5661,14 @@
   <data name="MainWindow_TooltipDescription_NavigateToTheNextSimpleCellNoteInTheSheet" xml:space="preserve">
     <value>Navigate to the next simple cell note in the sheet.</value>
   </data>
+  <data name="MainWindow_TooltipDescription_NavigateToTheNextCommentInTheSheet" xml:space="preserve">
+    <value>Navigate to the next comment in the sheet.</value>
+  </data>
   <data name="MainWindow_TooltipDescription_NavigateToThePreviousSimpleCellNoteInTheSheet" xml:space="preserve">
     <value>Navigate to the previous simple cell note in the sheet.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_NavigateToThePreviousCommentInTheSheet" xml:space="preserve">
+    <value>Navigate to the previous comment in the sheet.</value>
   </data>
   <data name="MainWindow_TooltipDescription_OfficeAddInDiscoveryIsDeferredInFreeX" xml:space="preserve">
     <value>Office add-in discovery is deferred in FreeX.</value>
@@ -5669,6 +5681,9 @@
   </data>
   <data name="MainWindow_TooltipDescription_OpenAListOfSimpleCellNotesOnTheActiveSheet" xml:space="preserve">
     <value>Open a list of simple cell notes on the active sheet.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_OpenAListOfThreadedCommentsOnTheActiveSheet" xml:space="preserve">
+    <value>Open a list of threaded comments on the active sheet.</value>
   </data>
   <data name="MainWindow_TooltipDescription_OpenAPrefilledGitHubIssueWithSafeAppDiagnostics" xml:space="preserve">
     <value>Open a prefilled GitHub issue with safe app diagnostics.</value>
@@ -6279,6 +6294,9 @@
   <data name="MainWindow_TooltipTitle_DeleteNote" xml:space="preserve">
     <value>Delete Note</value>
   </data>
+  <data name="MainWindow_TooltipTitle_DeleteComment" xml:space="preserve">
+    <value>Delete Comment</value>
+  </data>
   <data name="MainWindow_TooltipTitle_DeleteWatch" xml:space="preserve">
     <value>Delete Watch</value>
   </data>
@@ -6576,6 +6594,9 @@
   <data name="MainWindow_TooltipTitle_NextNote" xml:space="preserve">
     <value>Next Note</value>
   </data>
+  <data name="MainWindow_TooltipTitle_NextComment" xml:space="preserve">
+    <value>Next Comment</value>
+  </data>
   <data name="MainWindow_TooltipTitle_Normal" xml:space="preserve">
     <value>Normal</value>
   </data>
@@ -6671,6 +6692,9 @@
   </data>
   <data name="MainWindow_TooltipTitle_PreviousNote" xml:space="preserve">
     <value>Previous Note</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_PreviousComment" xml:space="preserve">
+    <value>Previous Comment</value>
   </data>
   <data name="MainWindow_TooltipTitle_Print" xml:space="preserve">
     <value>Print</value>
@@ -6824,6 +6848,9 @@
   </data>
   <data name="MainWindow_TooltipTitle_ShowNotes" xml:space="preserve">
     <value>Show Notes</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_ShowComments" xml:space="preserve">
+    <value>Show Comments</value>
   </data>
   <data name="MainWindow_TooltipTitle_ShowTraining" xml:space="preserve">
     <value>Show Training</value>

@@ -216,7 +216,12 @@ public sealed class RibbonTabParityTests
 
         Command(proofingGroup, "Workbook Statistics").Content.Should().Be("Workbook Statistics");
         CommandTitles(proofingGroup).Should().NotContain("Workbook Stats");
-        CommandTitles(Group(reviewTab, "Comments")).Should().Contain("New Comment");
+        CommandTitles(Group(reviewTab, "Comments")).Should().Contain([
+            "New Comment",
+            "Delete Comment",
+            "Previous Comment",
+            "Next Comment",
+            "Show Comments"]);
         CommandTitles(Group(reviewTab, "Notes")).Should().Contain(["New Note", "Show Notes"]);
     }
 

@@ -792,7 +792,10 @@ public sealed class MainWindowXamlKeyTipTests
 
         var showCommentsButton = document
             .Descendants(presentation + "Button")
-            .Single(element => element.Attribute("Click")?.Value == "ReviewShowCommentsBtn_Click");
+            .Single(element => string.Equals(
+                element.Attribute(local + "RibbonMetadata.CommandName")?.Value,
+                "Show Comments",
+                StringComparison.Ordinal));
 
         LocalizedAttribute(showCommentsButton, local + "RibbonTooltip.Description").Should().Contain("list");
         LocalizedAttribute(showCommentsButton, local + "RibbonTooltip.Description").Should().NotContain("hide");
@@ -810,6 +813,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Where(element => element.Attribute("Click")?.Value is
                 "ReviewNewThreadedCommentBtn_Click" or
+                "ReviewDeleteThreadedCommentBtn_Click" or
                 "ReviewNewCommentBtn_Click" or
                 "ReviewDeleteCommentBtn_Click" or
                 "ReviewPrevCommentBtn_Click" or
@@ -825,10 +829,13 @@ public sealed class MainWindowXamlKeyTipTests
             })
             .ToList();
 
-        tooltipTexts.Should().HaveCount(7);
+        tooltipTexts.Should().HaveCount(11);
         tooltipTexts
             .Single(text => text.Title.Equals("New Comment", StringComparison.OrdinalIgnoreCase))
             .Description.Should().Contain("threaded comment");
+        tooltipTexts
+            .Where(text => text.Title.Contains("Comment", StringComparison.OrdinalIgnoreCase))
+            .Should().OnlyContain(text => text.Description.Contains("comment", StringComparison.OrdinalIgnoreCase));
         tooltipTexts
             .Where(text => text.Title.Contains("Note", StringComparison.OrdinalIgnoreCase))
             .Should().OnlyContain(text => text.Description.Contains("note", StringComparison.OrdinalIgnoreCase));

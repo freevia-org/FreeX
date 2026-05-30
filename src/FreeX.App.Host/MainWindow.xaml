@@ -2673,10 +2673,32 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ReviewCommentsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="{local:Loc Key=MainWindow_Content_NewComment}" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewThreadedCommentBtn_Click"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_NewComment}"
-                                        local:RibbonTooltip.KeyTip="CM"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAThreadedCommentOnTheSelectedCellCtrlShiftF2}" local:RibbonMetadata.CommandName="New Comment"/>
+                                <StackPanel VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="{local:Loc Key=MainWindow_Content_NewComment}" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNewThreadedCommentBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_NewComment}"
+                                                local:RibbonTooltip.KeyTip="CM"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddOrEditAThreadedCommentOnTheSelectedCellCtrlShiftF2}" local:RibbonMetadata.CommandName="New Comment"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Delete}" Width="58" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewDeleteThreadedCommentBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DeleteComment}"
+                                                local:RibbonTooltip.KeyTip="DC"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeleteTheThreadedCommentOnTheSelectedCell}" local:RibbonMetadata.CommandName="Delete Comment"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Prev}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewPrevCommentBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PreviousComment}"
+                                                local:RibbonTooltip.KeyTip="PC"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_NavigateToThePreviousCommentInTheSheet}" local:RibbonMetadata.CommandName="Previous Comment"/>
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Next}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNextCommentBtn_Click"
+                                                local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_NextComment}"
+                                                local:RibbonTooltip.KeyTip="NC"
+                                                local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_NavigateToTheNextCommentInTheSheet}" local:RibbonMetadata.CommandName="Next Comment"/>
+                                    </StackPanel>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_ShowComments}" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewShowCommentsBtn_Click"
+                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShowComments}"
+                                            local:RibbonTooltip.KeyTip="SC"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenAListOfThreadedCommentsOnTheActiveSheet}" local:RibbonMetadata.CommandName="Show Comments"/>
+                                </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Comments}" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>

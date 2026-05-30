@@ -26,6 +26,10 @@ public sealed class ReviewCommandSourceTests
 
     [Theory]
     [InlineData("New Comment", "New Comment", "CM", "ReviewNewThreadedCommentBtn_Click")]
+    [InlineData("Delete Comment", "Delete", "DC", "ReviewDeleteThreadedCommentBtn_Click")]
+    [InlineData("Previous Comment", "Prev", "PC", "ReviewPrevCommentBtn_Click")]
+    [InlineData("Next Comment", "Next", "NC", "ReviewNextCommentBtn_Click")]
+    [InlineData("Show Comments", "Show Comments", "SC", "ReviewShowCommentsBtn_Click")]
     [InlineData("New Note", "New", "O", "ReviewNewCommentBtn_Click")]
     [InlineData("Edit Note", "Edit", "E", "ReviewNewCommentBtn_Click")]
     [InlineData("Delete Note", "Delete", "D", "ReviewDeleteCommentBtn_Click")]
