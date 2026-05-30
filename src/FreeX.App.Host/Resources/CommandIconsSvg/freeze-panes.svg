@@ -1,6 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Freeze Panes">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><rect stroke="#202124" stroke-width="1.8" x="9.72" y="9.72" width="34.56" height="34.56" fill="#ffffff"/><path d="M21.24 9.72v34.56M32.76 9.72v34.56M9.72 21.24h34.56M9.72 32.76h34.56" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><rect x="9.72" y="9.72" width="34.56" height="9.72" fill="#E6F6FA"/><rect x="9.72" y="9.72" width="9.72" height="34.56" fill="#E6F6FA"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Freeze Panes">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="5.5" y="6.5" width="21" height="19" rx="1.5" fill="#ffffff" stroke="#242424" stroke-width="1.5"/>
+  <rect x="5.5" y="6.5" width="21" height="5.5" fill="#E6F6FA"/>
+  <rect x="5.5" y="6.5" width="5.5" height="19" fill="#E6F6FA"/>
+  <path d="M5.5 12h21M11 6.5v19M18 6.5v19M5.5 18.5h21" fill="none" stroke="#8a8a8a" stroke-width="1"/>
+  <path d="M5.5 12h21M11 6.5v19" fill="none" stroke="#0F6D8C" stroke-width="1.5"/>
 </svg>
-

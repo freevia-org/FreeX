@@ -46,7 +46,7 @@ public sealed class DataCommandSourceTests
     }
 
     [Fact]
-    public void DataQueriesAndConnectionsCommand_RemainsDisabledWithExcelTitle()
+    public void DataQueriesAndConnectionsUnsupportedCommand_IsNotSurfacedAsDisabledRibbonButton()
     {
         var xaml = ReadMainWindowXaml();
 

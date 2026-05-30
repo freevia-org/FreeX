@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Crop Picture">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="8.5" y="8.5" width="15" height="15" fill="#ffffff" stroke="#8a8a8a" stroke-width="1.2"/>
+  <path d="M6 4.5v8H3.5M6 4.5h8M26 27.5v-8h2.5M26 27.5h-8" fill="none" stroke="#242424" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="round"/>
+  <path d="M23.5 8.5v15M8.5 23.5h15" fill="none" stroke="#0F6D8C" stroke-width="1.5"/>
+</svg>

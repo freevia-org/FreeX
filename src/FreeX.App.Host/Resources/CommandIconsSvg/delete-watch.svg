@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Delete Watch">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="5" y="7" width="17" height="16" rx="1.5" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
+  <path d="M5 12h17M11 7v16M16.5 7v16" stroke="#8a8a8a" stroke-width="1"/>
+  <path d="M8 16h3M14 16h5M8 20h3M14 20h3" stroke="#0F6D8C" stroke-width="1.2" stroke-linecap="round"/>
+  <circle cx="24" cy="22" r="5" fill="#FCEAEA" stroke="#D32F2F" stroke-width="1.2"/>
+  <path d="M21.7 22h4.6" stroke="#D32F2F" stroke-width="1.7" stroke-linecap="round"/>
+</svg>

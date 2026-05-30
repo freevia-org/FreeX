@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="PivotTable">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><rect stroke="#202124" stroke-width="1.8" x="7.56" y="9.72" width="33.48" height="31.32" fill="#ffffff"/><rect x="7.56" y="9.72" width="33.48" height="8.77" fill="#E6F6FA"/><path d="M18.72 9.72v31.32M29.88 9.72v31.32M7.56 20.16h33.48M7.56 30.6h33.48" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/><path stroke="#0F6D8C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" d="M31.32 32.4h11.88v-11.88M43.2 20.52l-5.4 5.4l5.4 5.4"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="PivotTable">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="4.5" y="5.5" width="20" height="21" rx="1" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
+  <rect x="5.5" y="6.5" width="18" height="5" fill="#E6F6FA"/>
+  <path d="M4.5 12.5H24.5M4.5 19.5H24.5M11.5 5.5V26.5M18.5 5.5V26.5" fill="none" stroke="#5c5c5c" stroke-width="1"/>
+  <path d="M19.5 22.5h7v-7M26.5 15.5l-3.2 3.2 3.2 3.2" fill="none" stroke="#0F6D8C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-

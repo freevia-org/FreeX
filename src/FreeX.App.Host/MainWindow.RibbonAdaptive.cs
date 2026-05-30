@@ -988,17 +988,7 @@ public partial class MainWindow
     private sealed class RibbonCollapsedGroupChevronAdorner : Adorner
     {
         private readonly VisualCollection _children;
-        private readonly TextBlock _chevron = new()
-        {
-            Text = "\uE70D",
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = 8,
-            Width = 8,
-            Height = 8,
-            LineHeight = 8,
-            TextAlignment = TextAlignment.Center,
-            IsHitTestVisible = false
-        };
+        private readonly FrameworkElement _chevron = CreateRibbonChevronGlyph(8, 8, Brushes.Black, pointsUp: false);
 
         public RibbonCollapsedGroupChevronAdorner(UIElement adornedElement)
             : base(adornedElement)

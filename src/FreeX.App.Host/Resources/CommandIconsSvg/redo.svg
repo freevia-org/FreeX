@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="Redo">
-  
-  <rect width="54" height="54" fill="none"/>
-  <g><path d="M34.56 13.5H44.28V3.78M43.74 13.5A18.36 18.36 0 1 0 37.8 41.04" fill="none" stroke="#242424" stroke-width="1.0" stroke-linecap="round" stroke-linejoin="round"/>  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Redo">
+  <rect width="32" height="32" fill="none"/>
+  <g fill="none" stroke="#242424" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">
+    <path d="M20 9l5 5-5 5"/>
+    <path d="M24.5 14H14.5c-4 0-7 2.7-7.5 6.5"/>
+  </g>
 </svg>
-

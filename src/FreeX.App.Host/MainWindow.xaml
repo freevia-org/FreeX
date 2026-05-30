@@ -2733,11 +2733,12 @@
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ProtectWorkbook}"
                                         local:RibbonTooltip.KeyTip="PW"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PreventStructuralChangesToTheWorkbookSuchAsAddingDeletingOrRenamingSheet_47267D4F}" local:RibbonMetadata.CommandName="Protect Workbook"/>
-                                <Button x:Name="AllowEditRangesButton" Content="{local:Loc Key=MainWindow_Content_AllowUsersToEditRanges}" Width="158" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AllowEditRangesBtn_Click"
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PreventStructuralChangesToTheWorkbookSuchAsAddingDeletingOrRenamingSheet_47267D4F}" local:RibbonMetadata.CommandName="Protect Workbook"/>
+                                <Button x:Name="AllowEditRangesButton" Content="{local:Loc Key=MainWindow_Content_AllowUsersToEditRanges}" Width="188" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AllowEditRangesBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AllowUsersToEditRanges}"
                                         local:RibbonTooltip.KeyTip="AR"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddDeleteOrClearRangesThatRemainEditableWhenTheSheetIsProtected}" local:RibbonMetadata.CommandName="Allow Users to Edit Ranges"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_ShareWorkbook}" Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShareWorkbookBtn_Click"
+                                <Button Content="{local:Loc Key=MainWindow_Content_ShareWorkbook}" Width="128" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShareWorkbookBtn_Click"
                                         AutomationProperties.AutomationId="ReviewShareWorkbookButton"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShareWorkbook}"
                                         local:RibbonTooltip.KeyTip="SH"
@@ -3273,9 +3274,9 @@
 
                 <!-- Expand/collapse chevron -->
                 <Button x:Name="FormulaBarExpandBtn" Grid.Column="3"
-                        Content="▼" Width="18" Height="18"
+                        Width="18" Height="18"
                         Background="Transparent" BorderThickness="0"
-                        FontSize="9" Padding="0" Margin="2,0,0,0"
+                        Padding="0" Margin="2,0,0,0"
                         VerticalAlignment="Top" Cursor="Hand"
                         Click="FormulaBarExpandBtn_Click"
                         AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_ExpandFormulaBar}"
@@ -3283,7 +3284,17 @@
                         AutomationProperties.AutomationId="FormulaBarExpandBtn"
                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ExpandFormulaBar}"
                         local:RibbonTooltip.KeyTip="BX"
-                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ExpandOrCollapseTheFormulaBar}" local:RibbonMetadata.CommandName="Expand Formula Bar"/>
+                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ExpandOrCollapseTheFormulaBar}" local:RibbonMetadata.CommandName="Expand Formula Bar">
+                    <Path Data="M2,2 L6,6 L10,2"
+                          Width="12" Height="8"
+                          Stroke="#1F1F1F"
+                          StrokeThickness="1.45"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round"
+                          StrokeLineJoin="Round"
+                          Fill="Transparent"
+                          Stretch="Uniform"/>
+                </Button>
             </Grid>
         </Border>
 
@@ -4568,7 +4579,7 @@
                                                     AutomationProperties.Name="{Binding PinAutomationName}"
                                                     AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="{local:Loc Key=MainWindow_ToolTip_PinToList}" local:RibbonMetadata.CommandName="Pin File">
-                                                <local:RibbonIcon Kind="Pin" IconSize="12" HorizontalAlignment="Center"/>
+                                                <local:RibbonIcon Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
                                             </Button>
                                         </Grid>
                                     </Button>
@@ -4652,7 +4663,7 @@
                                                     AutomationProperties.Name="{Binding PinAutomationName}"
                                                     AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="{local:Loc Key=MainWindow_ToolTip_UnpinFromList}" local:RibbonMetadata.CommandName="Unpin File">
-                                                <local:RibbonIcon Kind="Pin" IconSize="12" HorizontalAlignment="Center"/>
+                                                <local:RibbonIcon Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
                                             </Button>
                                         </Grid>
                                     </Button>

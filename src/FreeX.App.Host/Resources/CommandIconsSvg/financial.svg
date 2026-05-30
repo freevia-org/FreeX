@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Financial" shape-rendering="crispEdges">
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Financial">
   <rect width="32" height="32" fill="none"/>
-  <rect x="5" y="8" width="22" height="17" fill="#ffffff" stroke="#242424" stroke-width="1"/>
-  <path d="M7 12H25M7 21H25" fill="none" stroke="#8a8a8a" stroke-width="1"/>
-  <text x="16" y="21" font-size="19" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">$</text>
-  <circle cx="24" cy="24" r="4" fill="#7DD3E8" stroke="#0F6D8C" stroke-width="1"/>
+  <rect x="6" y="8" width="20" height="16" rx="1.5" fill="#ffffff" stroke="#242424" stroke-width="1.6"/>
+  <path d="M8.5 13h15M8.5 19h7" fill="none" stroke="#8a8a8a" stroke-width="1.2" stroke-linecap="round"/>
+  <text x="15" y="22" font-size="16" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">$</text>
+  <circle cx="24" cy="23" r="4.3" fill="#E6F6FA" stroke="#0F6D8C" stroke-width="1.5"/>
 </svg>
