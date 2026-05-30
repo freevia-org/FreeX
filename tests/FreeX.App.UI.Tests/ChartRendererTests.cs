@@ -643,6 +643,22 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void ChartDataTableAnnotations_BuildRowsWithoutListJoinPipelines()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "ChartRenderer.Annotations.cs"));
+        var dataTableAnnotations = source[
+            source.IndexOf("private static void AddChartDataTableAnnotations", StringComparison.Ordinal)..
+            source.IndexOf("private static int AppendChartDataTablePart", StringComparison.Ordinal)];
+
+        dataTableAnnotations.Should().Contain("var textBuilder = new StringBuilder();");
+        dataTableAnnotations.Should().Contain("AppendChartDataTablePart(");
+        dataTableAnnotations.Should().Contain("AddChartDataTableAnnotation(");
+        dataTableAnnotations.Should().NotContain("new List<string>");
+        dataTableAnnotations.Should().NotContain("string.Join(");
+    }
+
+    [Fact]
     public void ColumnRenderer_AppliesChartDataTableDirectStyle()
     {
         var sheetId = SheetId.New();
