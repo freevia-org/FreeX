@@ -97,7 +97,7 @@ public partial class MainWindow : Window
     private IReadOnlyList<double> _ribbonResizeThresholds = [];
     private double _lastRibbonResizeWidth = double.NaN;
     private bool _ribbonResizeNormalizationRequired = true;
-    private string? _lastRibbonAdaptiveAppliedStateKey;
+    private RibbonAppliedStateKey? _lastRibbonAdaptiveAppliedStateKey;
     private string? _ribbonAdaptiveControlCacheKey;
     private readonly Dictionary<TabItem, StackPanel> _ribbonAdaptiveActivePanelCacheByTab = [];
     private StackPanel? _ribbonAdaptiveControlCachePanel;
@@ -107,11 +107,11 @@ public partial class MainWindow : Window
     private string? _ribbonCompactSnapshotCacheKey;
     private IReadOnlyList<RibbonCompactGroupSnapshot>? _ribbonCompactGroupSnapshotCache;
     private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;
-    private string? _lastRibbonCollapsedFootprintMode;
+    private RibbonCollapsedGroupFootprintMode? _lastRibbonCollapsedFootprintMode;
     private string? _ribbonAdaptiveLayoutPlanCacheKey;
-    private readonly Dictionary<string, RibbonAdaptiveLayoutResult> _ribbonAdaptiveLayoutPlanCache = [];
-    private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
-    private readonly Dictionary<string, bool> _ribbonMeasuredOverflowCache = [];
+    private readonly Dictionary<RibbonAdaptiveLayoutPlanCacheEntryKey, RibbonAdaptiveLayoutResult> _ribbonAdaptiveLayoutPlanCache = [];
+    private readonly Dictionary<RibbonCorrectionCacheKey, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
+    private readonly Dictionary<RibbonMeasuredOverflowCacheKey, bool> _ribbonMeasuredOverflowCache = [];
     private bool _ribbonAdaptiveStateDiffInvalidated;
     private int _ribbonAdaptiveMeasurementInvalidationCount;
     private int _ribbonAdaptiveGroupMeasurementCount;
