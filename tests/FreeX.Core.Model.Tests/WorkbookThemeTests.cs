@@ -28,6 +28,22 @@ public sealed class WorkbookThemeTests
         theme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(WorkbookTheme.Office.GetColor(WorkbookThemeColorSlot.Accent1));
     }
 
+    [Fact]
+    public void WorkbookTheme_WithNativeThemeSupplementXml_TrimsAndClearsBlankXml()
+    {
+        WorkbookTheme.Office
+            .WithNativeThemeSupplementXml("  <a:objectDefaults/>  ")
+            .NativeThemeSupplementXml
+            .Should()
+            .Be("<a:objectDefaults/>");
+
+        WorkbookTheme.Office
+            .WithNativeThemeSupplementXml("  ")
+            .NativeThemeSupplementXml
+            .Should()
+            .BeNull();
+    }
+
     [Theory]
     [InlineData(100, 150, 200, 0.0, 100, 150, 200)]
     [InlineData(100, 150, 200, 0.5, 178, 202, 228)]

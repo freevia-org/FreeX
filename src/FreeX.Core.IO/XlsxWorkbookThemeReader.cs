@@ -50,6 +50,8 @@ public static class XlsxWorkbookThemeReader
         var theme = WorkbookTheme.Office
             .WithName(themeXml.Root?.Attribute("name")?.Value ?? WorkbookTheme.Office.Name);
 
+        theme = theme.WithNativeThemeSupplementXml(ReadThemeSupplementXml(themeXml.Root, drawingNs));
+
         var themeElements = themeXml.Root?.Element(drawingNs + "themeElements");
         if (themeElements is null)
             return theme;
@@ -99,5 +101,21 @@ public static class XlsxWorkbookThemeReader
         return XlsxColorReader.TryParseHexColor(systemFallback, out color)
             ? color
             : null;
+    }
+
+    private static string? ReadThemeSupplementXml(XElement? themeElement, XNamespace drawingNs)
+    {
+        if (themeElement is null)
+            return null;
+
+        var supplementElements = themeElement
+            .Elements()
+            .Where(element => element.Name != drawingNs + "themeElements")
+            .Select(element => element.ToString(SaveOptions.DisableFormatting))
+            .ToArray();
+
+        return supplementElements.Length == 0
+            ? null
+            : string.Concat(supplementElements);
     }
 }
