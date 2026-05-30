@@ -680,7 +680,11 @@ public partial class MainWindow
             case PivotFieldDropZone.Values:
                 if (dataFields.All(dataField => dataField.SourceFieldIndex != sourceIndex.Value))
                 {
-                    dataFields.Add(PivotUiPlanner.CreateDefaultDataField(sheet, pivotTable, headers, sourceIndex.Value));
+                    dataFields.Add(PivotUiPlanner.CreateDefaultDataField(
+                        GetPivotSourceSheet(sheet, pivotTable),
+                        pivotTable,
+                        headers,
+                        sourceIndex.Value));
                 }
                 break;
         }
@@ -731,7 +735,11 @@ public partial class MainWindow
                 PivotUiPlanner.InsertOrAppend(pageFields, PivotUiPlanner.FindExistingPivotField(pivotTable, sourceIndex.Value), insertIndex);
                 break;
             case PivotFieldDropZone.Values:
-                var valueField = draggedDataField ?? PivotUiPlanner.CreateDefaultDataField(sheet, pivotTable, headers, sourceIndex.Value);
+                var valueField = draggedDataField ?? PivotUiPlanner.CreateDefaultDataField(
+                    GetPivotSourceSheet(sheet, pivotTable),
+                    pivotTable,
+                    headers,
+                    sourceIndex.Value);
                 PivotUiPlanner.InsertOrAppend(dataFields, valueField, insertIndex);
                 break;
         }
@@ -843,7 +851,7 @@ public partial class MainWindow
     }
 
     private Sheet GetPivotSourceSheet(Sheet fallbackSheet, PivotTableModel pivotTable) =>
-        _workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? fallbackSheet;
+        PivotUiPlanner.ResolvePivotSourceSheet(_workbook, fallbackSheet, pivotTable);
 
     private List<string> ReadPivotSourceHeaders(Sheet sheet, PivotTableModel pivotTable)
     {

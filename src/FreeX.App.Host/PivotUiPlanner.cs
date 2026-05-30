@@ -86,6 +86,9 @@ public static class PivotUiPlanner
             : new PivotShowDetailsTarget(pivotTable.Name, range.Start);
     }
 
+    public static Sheet ResolvePivotSourceSheet(Workbook workbook, Sheet fallbackSheet, PivotTableModel pivotTable) =>
+        workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? fallbackSheet;
+
     public static int ChooseDefaultDataField(Sheet sheet, GridRange sourceRange)
     {
         for (var col = sourceRange.Start.Col; col <= sourceRange.End.Col; col++)
