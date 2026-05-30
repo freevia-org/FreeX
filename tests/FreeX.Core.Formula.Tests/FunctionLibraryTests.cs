@@ -8740,6 +8740,10 @@ public class FunctionLibraryTests
         _eval.Evaluate("=UNICHAR(65)", MakeSheet()).Should().Be(new TextValue("A"));
 
     [Fact]
+    public void Unichar_SupplementaryPlaneCodePoint_ReturnsSurrogatePairText() =>
+        _eval.Evaluate("=UNICHAR(128512)", MakeSheet()).Should().Be(new TextValue(char.ConvertFromUtf32(128512)));
+
+    [Fact]
     public void Unichar_TruncatesFractionalCodePoint()
     {
         _eval.Evaluate("=UNICHAR(65.9)", MakeSheet()).Should().Be(new TextValue("A"));
@@ -8760,6 +8764,10 @@ public class FunctionLibraryTests
     [Fact]
     public void Unicode_BasicAscii_ReturnsCodePoint() =>
         _eval.Evaluate("=UNICODE(\"A\")", MakeSheet()).Should().Be(new NumberValue(65));
+
+    [Fact]
+    public void Unicode_SupplementaryPlaneText_ReturnsFullCodePoint() =>
+        _eval.Evaluate("=UNICODE(UNICHAR(128512))", MakeSheet()).Should().Be(new NumberValue(128512));
 
     [Theory]
     [InlineData("=UNICODE(65)", 54)]
