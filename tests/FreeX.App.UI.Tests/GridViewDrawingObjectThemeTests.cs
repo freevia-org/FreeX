@@ -198,6 +198,36 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void DrawingObjectRendering_ReusesThemeEffectWithinRenderPass()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var renderTextBoxes = source[
+            source.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
+        var renderDrawingShapes = source[
+            source.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)];
+        var drawTextBoxEffect = source[
+            source.IndexOf("private static void DrawTextBoxThemeEffect", StringComparison.Ordinal)..
+            source.IndexOf("private static void DrawShapeThemeEffect", StringComparison.Ordinal)];
+        var drawShapeEffect = source[
+            source.IndexOf("private static void DrawShapeThemeEffect", StringComparison.Ordinal)..
+            source.IndexOf("public static DrawingObjectColors ResolveDrawingShapeColors", StringComparison.Ordinal)];
+
+        renderTextBoxes.Should().Contain("var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);");
+        renderTextBoxes.Should().Contain("DrawTextBoxThemeEffect(dc, rect, themeEffect);");
+        renderTextBoxes.Should().NotContain("DrawTextBoxThemeEffect(dc, rect, WorkbookTheme);");
+        renderDrawingShapes.Should().Contain("var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);");
+        renderDrawingShapes.Should().Contain("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect);");
+        renderDrawingShapes.Should().NotContain("DrawShapeThemeEffect(dc, shape.Kind, rect, WorkbookTheme);");
+        drawTextBoxEffect.Should().Contain("WorkbookThemeEffectStyle effect");
+        drawTextBoxEffect.Should().NotContain("WorkbookThemeEffectStyle.FromTheme");
+        drawShapeEffect.Should().Contain("WorkbookThemeEffectStyle effect");
+        drawShapeEffect.Should().NotContain("WorkbookThemeEffectStyle.FromTheme");
+    }
+
+    [Fact]
     public void NativeSlicerRendering_DrawsSelectedTilesWithoutMaterializingArray()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
