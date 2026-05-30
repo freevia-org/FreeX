@@ -49,21 +49,36 @@ public partial class MainWindow
     {
         if (ribbonTour)
         {
-            await Task.Delay(1200);
-            await CaptureAllTabsAsync(outputDir, "max");
+            var requestedWidths = GetScreenshotTourRequestedWidths();
+            if (requestedWidths.Count > 0)
+            {
+                WindowState = WindowState.Normal;
+                Height = 768;
+                foreach (var width in requestedWidths)
+                {
+                    Width = width;
+                    await Task.Delay(600);
+                    await CaptureAllTabsAsync(outputDir, width.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+            }
+            else
+            {
+                await Task.Delay(1200);
+                await CaptureAllTabsAsync(outputDir, "max");
 
-            WindowState = WindowState.Normal;
-            Width = 1100; Height = 768;
-            await Task.Delay(600);
-            await CaptureAllTabsAsync(outputDir, "1100");
+                WindowState = WindowState.Normal;
+                Width = 1100; Height = 768;
+                await Task.Delay(600);
+                await CaptureAllTabsAsync(outputDir, "1100");
 
-            Width = 900;
-            await Task.Delay(600);
-            await CaptureAllTabsAsync(outputDir, "900");
+                Width = 900;
+                await Task.Delay(600);
+                await CaptureAllTabsAsync(outputDir, "900");
 
-            Width = 750;
-            await Task.Delay(600);
-            await CaptureAllTabsAsync(outputDir, "750");
+                Width = 750;
+                await Task.Delay(600);
+                await CaptureAllTabsAsync(outputDir, "750");
+            }
         }
 
         if (backstageTour)
@@ -89,7 +104,7 @@ public partial class MainWindow
 
     private async Task CaptureAllTabsAsync(string outputDir, string label)
     {
-        foreach (var (header, fileName) in TourTabs)
+        foreach (var (header, fileName) in GetScreenshotTourTabs())
         {
             var tab = RibbonTabs.Items
                 .OfType<System.Windows.Controls.TabItem>()
@@ -105,6 +120,43 @@ public partial class MainWindow
 
             await CaptureCurrentWindowAsync(outputDir, $"{label}_{fileName}", ScreenshotTourCaptureHeight);
         }
+    }
+
+    private static IReadOnlyList<(string Header, string FileName)> GetScreenshotTourTabs()
+    {
+        var requestedTabs = Environment.GetEnvironmentVariable("FREEX_SS_TOUR_TABS");
+        if (string.IsNullOrWhiteSpace(requestedTabs))
+            return TourTabs;
+
+        var requested = requestedTabs
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return TourTabs
+            .Where(tab => requested.Contains(tab.Header) || requested.Contains(tab.FileName))
+            .ToList();
+    }
+
+    private static IReadOnlyList<double> GetScreenshotTourRequestedWidths()
+    {
+        var requestedWidths = Environment.GetEnvironmentVariable("FREEX_SS_TOUR_WIDTHS");
+        if (string.IsNullOrWhiteSpace(requestedWidths))
+            return [];
+
+        var widths = new List<double>();
+        foreach (var value in requestedWidths.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (double.TryParse(
+                    value,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var width) &&
+                width > 0)
+            {
+                widths.Add(width);
+            }
+        }
+
+        return widths;
     }
 
     private async Task CaptureCurrentWindowAsync(string outputDir, string fileName, double logicalHeight)

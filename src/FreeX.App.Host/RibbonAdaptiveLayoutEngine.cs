@@ -163,6 +163,11 @@ internal static class RibbonAdaptiveLayoutEngine
         var expandableIndexes = RibbonAdaptivePriorityPlanner
             .GetExpandableGroupIndexes(groupNames, availableWidth, selectedTabHeader)
             .ToHashSet();
+        var protectedIndexes = RibbonAdaptivePriorityPlanner
+            .GetFallbackProtectedGroupIndexes(groupNames, availableWidth, selectedTabHeader)
+            .ToHashSet();
+        protectedIndexes.UnionWith(
+            RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityProtectedGroupIndexes(groupNames, availableWidth, selectedTabHeader));
         var madeProgress = true;
         while (madeProgress)
         {
@@ -176,6 +181,7 @@ internal static class RibbonAdaptiveLayoutEngine
                 if (!TryGetNextExpandedState(currentState, out var expandedState))
                     continue;
 
+                var previousStates = states.ToArray();
                 states[i] = expandedState;
                 if (StatesFit(groups, states, fixedChromeWidth, availableWidth))
                 {
@@ -183,9 +189,31 @@ internal static class RibbonAdaptiveLayoutEngine
                     continue;
                 }
 
-                states[i] = currentState;
+                protectedIndexes.Add(i);
+                if (TryCollapseUnprotectedGroupsToFit(states, groups, fixedChromeWidth, availableWidth, protectedIndexes))
+                {
+                    madeProgress = true;
+                    continue;
+                }
+
+                Array.Copy(previousStates, states, previousStates.Length);
             }
         }
+    }
+
+    private static bool TryCollapseUnprotectedGroupsToFit(
+        RibbonAdaptiveGroupState[] states,
+        IReadOnlyList<RibbonAdaptiveGroup> groups,
+        double fixedChromeWidth,
+        double availableWidth,
+        IReadOnlySet<int> protectedGroupIndexes)
+    {
+        while (!StatesFit(groups, states, fixedChromeWidth, availableWidth) &&
+               TryCollapseOneMoreGroup(states, preserveFirstGroup: false, protectedGroupIndexes))
+        {
+        }
+
+        return StatesFit(groups, states, fixedChromeWidth, availableWidth);
     }
 
     private static bool StatesFit(
