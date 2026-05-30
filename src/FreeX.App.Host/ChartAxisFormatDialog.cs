@@ -83,16 +83,16 @@ public sealed class ChartAxisFormatDialog : Window
     private readonly TextBox _maximumBox = new();
     private readonly TextBox _majorUnitBox = new();
     private readonly TextBox _minorUnitBox = new();
-    private readonly CheckBox _logBox = new() { Content = "_Logarithmic scale" };
+    private readonly CheckBox _logBox = new() { Content = UiText.Get("ChartAxisFormat_LogScale") };
     private readonly ComboBox _numberFormatBox = new();
-    private readonly CheckBox _majorGridBox = new() { Content = "_Major gridlines" };
-    private readonly CheckBox _minorGridBox = new() { Content = "M_inor gridlines" };
+    private readonly CheckBox _majorGridBox = new() { Content = UiText.Get("ChartAxisFormat_MajorGridlines") };
+    private readonly CheckBox _minorGridBox = new() { Content = UiText.Get("ChartAxisFormat_MinorGridlines") };
     private readonly TextBox _majorGridColorBox = new();
     private readonly TextBox _minorGridColorBox = new();
     private readonly TextBox _gridlineThicknessBox = new();
     private readonly ComboBox _majorTickBox = new();
     private readonly ComboBox _minorTickBox = new();
-    private readonly CheckBox _labelsBox = new() { Content = "Show _labels" };
+    private readonly CheckBox _labelsBox = new() { Content = UiText.Get("ChartAxisFormat_ShowLabels") };
     private readonly TextBox _labelColorBox = new();
     private readonly TextBox _labelFontSizeBox = new();
     private readonly TextBox _labelAngleBox = new();
@@ -105,7 +105,7 @@ public sealed class ChartAxisFormatDialog : Window
     {
         _useXAxis = useXAxis;
         Result = FromChart(chart, useXAxis);
-        Title = useXAxis ? "Format X Axis" : "Format Y Axis";
+        Title = useXAxis ? UiText.Get("ChartAxisFormat_XAxisTitle") : UiText.Get("ChartAxisFormat_YAxisTitle");
         Width = 430;
         Height = 660;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -158,35 +158,35 @@ public sealed class ChartAxisFormatDialog : Window
         var root = ChartDialogHelpers.DialogStack();
         {
             var stack = new StackPanel();
-            stack.Children.Add(CreateInlineHelp("Leave bounds blank for Auto."));
-            ChartDialogHelpers.AddNumericText(stack, "_Minimum (blank for Auto)", _minimumBox, "Blank or Auto keeps the automatic minimum.");
-            ChartDialogHelpers.AddNumericText(stack, "Ma_ximum (blank for Auto)", _maximumBox, "Blank or Auto keeps the automatic maximum.");
-            ChartDialogHelpers.AddNumericText(stack, "Major _unit", _majorUnitBox, "Blank keeps the automatic major unit.");
-            ChartDialogHelpers.AddNumericText(stack, "Minor u_nit", _minorUnitBox, "Blank keeps the automatic minor unit.");
+            stack.Children.Add(CreateInlineHelp(UiText.Get("ChartAxisFormat_BoundsHelpText")));
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartAxisFormat_MinimumLabel"), _minimumBox, UiText.Get("ChartAxisFormat_MinimumHelpText"));
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartAxisFormat_MaximumLabel"), _maximumBox, UiText.Get("ChartAxisFormat_MaximumHelpText"));
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartAxisFormat_MajorUnitLabel"), _majorUnitBox, UiText.Get("ChartAxisFormat_MajorUnitHelpText"));
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartAxisFormat_MinorUnitLabel"), _minorUnitBox, UiText.Get("ChartAxisFormat_MinorUnitHelpText"));
             ChartDialogHelpers.AddCheck(stack, _logBox);
-            ChartDialogHelpers.AddCombo(stack, "Number _format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
-            root.Children.Add(CreateGroupBox("Axis Options", stack));
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartAxisFormat_NumberFormatLabel"), _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
+            root.Children.Add(CreateGroupBox(UiText.Get("ChartAxisFormat_AxisOptionsGroup"), stack));
         }
         {
             var stack = new StackPanel();
             ChartDialogHelpers.AddCheck(stack, _majorGridBox);
             ChartDialogHelpers.AddCheck(stack, _minorGridBox);
-            ChartDialogHelpers.AddColorText(stack, "_Major gridline color", _majorGridColorBox);
-            ChartDialogHelpers.AddColorText(stack, "M_inor gridline color", _minorGridColorBox);
-            ChartDialogHelpers.AddNumericText(stack, "Gridline _width", _gridlineThicknessBox, "Enter a gridline width in points.");
-            root.Children.Add(CreateGroupBox("Gridlines", stack));
+            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartAxisFormat_MajorGridlineColorLabel"), _majorGridColorBox);
+            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartAxisFormat_MinorGridlineColorLabel"), _minorGridColorBox);
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartAxisFormat_GridlineWidthLabel"), _gridlineThicknessBox, UiText.Get("ChartAxisFormat_GridlineWidthHelpText"));
+            root.Children.Add(CreateGroupBox(UiText.Get("ChartAxisFormat_GridlinesGroup"), stack));
         }
         {
             var stack = new StackPanel();
-            ChartDialogHelpers.AddCombo(stack, "_Major tick marks", _majorTickBox, Enum.GetValues<ChartAxisTickStyle>());
-            ChartDialogHelpers.AddCombo(stack, "M_inor tick marks", _minorTickBox, Enum.GetValues<ChartAxisTickStyle>());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartAxisFormat_MajorTickMarksLabel"), _majorTickBox, Enum.GetValues<ChartAxisTickStyle>());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartAxisFormat_MinorTickMarksLabel"), _minorTickBox, Enum.GetValues<ChartAxisTickStyle>());
             ChartDialogHelpers.AddCheck(stack, _labelsBox);
-            ChartDialogHelpers.AddColorText(stack, "Label _color", _labelColorBox);
-            ChartDialogHelpers.AddNumericText(stack, "Label _font size", _labelFontSizeBox, "Enter a font size in points.");
-            ChartDialogHelpers.AddNumericText(stack, "Label _angle", _labelAngleBox, "Enter label rotation in degrees.");
-            ChartDialogHelpers.AddColorText(stack, "Axis _line color", _lineColorBox);
-            ChartDialogHelpers.AddNumericText(stack, "Axis line _width", _lineThicknessBox, "Enter an axis line width in points.");
-            root.Children.Add(CreateGroupBox("Tick Marks", stack));
+            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartAxisFormat_LabelColorLabel"), _labelColorBox);
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartAxisFormat_LabelFontSizeLabel"), _labelFontSizeBox, UiText.Get("ChartAxisFormat_LabelFontSizeHelpText"));
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartAxisFormat_LabelAngleLabel"), _labelAngleBox, UiText.Get("ChartAxisFormat_LabelAngleHelpText"));
+            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartAxisFormat_AxisLineColorLabel"), _lineColorBox);
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartAxisFormat_AxisLineWidthLabel"), _lineThicknessBox, UiText.Get("ChartAxisFormat_AxisLineWidthHelpText"));
+            root.Children.Add(CreateGroupBox(UiText.Get("ChartAxisFormat_TickMarksGroup"), stack));
         }
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
@@ -226,73 +226,73 @@ public sealed class ChartAxisFormatDialog : Window
     {
         if (!TryReadNullableDouble(_minimumBox, out var minimum))
         {
-            ShowInvalidInputWarning("Enter a numeric minimum value or leave it blank.", _minimumBox);
+            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMinimumMessage"), _minimumBox);
             return;
         }
 
         if (!TryReadNullableDouble(_maximumBox, out var maximum))
         {
-            ShowInvalidInputWarning("Enter a numeric maximum value or leave it blank.", _maximumBox);
+            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMaximumMessage"), _maximumBox);
             return;
         }
 
         if (!TryReadNullablePositiveDouble(_majorUnitBox, out var majorUnit))
         {
-            ShowInvalidInputWarning("Enter a positive major unit or leave it blank.", _majorUnitBox);
+            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMajorUnitMessage"), _majorUnitBox);
             return;
         }
 
         if (!TryReadNullablePositiveDouble(_minorUnitBox, out var minorUnit))
         {
-            ShowInvalidInputWarning("Enter a positive minor unit or leave it blank.", _minorUnitBox);
+            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidMinorUnitMessage"), _minorUnitBox);
             return;
         }
 
         if (!TryReadOptionalColor(_majorGridColorBox, out var majorGridColor))
         {
-            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _majorGridColorBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _majorGridColorBox);
             return;
         }
 
         if (!TryReadOptionalColor(_minorGridColorBox, out var minorGridColor))
         {
-            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _minorGridColorBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _minorGridColorBox);
             return;
         }
 
         if (!TryReadPositiveDouble(_gridlineThicknessBox, out var gridlineThickness))
         {
-            ShowInvalidInputWarning("Enter a positive gridline width.", _gridlineThicknessBox);
+            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidGridlineWidthMessage"), _gridlineThicknessBox);
             return;
         }
 
         if (!TryReadOptionalColor(_labelColorBox, out var labelColor))
         {
-            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _labelColorBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _labelColorBox);
             return;
         }
 
         if (!TryReadClampedDouble(_labelFontSizeBox, min: 6, max: 72, out var labelFontSize))
         {
-            ShowInvalidInputWarning("Enter a label font size from 6 to 72 points.", _labelFontSizeBox);
+            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidLabelFontSizeMessage"), _labelFontSizeBox);
             return;
         }
 
         if (!TryReadClampedDouble(_labelAngleBox, min: -90, max: 90, out var labelAngle))
         {
-            ShowInvalidInputWarning("Enter a label angle from -90 to 90 degrees.", _labelAngleBox);
+            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidLabelAngleMessage"), _labelAngleBox);
             return;
         }
 
         if (!TryReadOptionalColor(_lineColorBox, out var lineColor))
         {
-            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _lineColorBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _lineColorBox);
             return;
         }
 
         if (!TryReadClampedDouble(_lineThicknessBox, min: 0.5, max: 10, out var lineThickness))
         {
-            ShowInvalidInputWarning("Enter an axis line width from 0.5 to 10 points.", _lineThicknessBox);
+            ShowInvalidInputWarning(UiText.Get("ChartAxisFormat_InvalidAxisLineWidthMessage"), _lineThicknessBox);
             return;
         }
 

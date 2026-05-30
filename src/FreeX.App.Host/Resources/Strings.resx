@@ -30,6 +30,1101 @@
   <data name="Common_WarningTitle" xml:space="preserve">
     <value>Warning</value>
   </data>
+  <data name="Common_NoneParenthetical" xml:space="preserve">
+    <value>(none)</value>
+  </data>
+  <data name="ChartDialog_FillLineGroup" xml:space="preserve">
+    <value>Fill &amp; Line</value>
+  </data>
+  <data name="ChartDialog_InvalidOptionalColorMessage" xml:space="preserve">
+    <value>Enter a color as #RRGGBB or none.</value>
+  </data>
+  <data name="ChartDialog_LineWidthHelpText" xml:space="preserve">
+    <value>Enter a line width from 0 to 10 points.</value>
+  </data>
+  <data name="ChartDialog_PickColorAutomationName" xml:space="preserve">
+    <value>Pick {0}</value>
+  </data>
+  <data name="ChartTitles_Title" xml:space="preserve">
+    <value>Chart Titles</value>
+  </data>
+  <data name="ChartTitles_ChartTitleAutomationName" xml:space="preserve">
+    <value>Chart title</value>
+  </data>
+  <data name="ChartTitles_XAxisTitleAutomationName" xml:space="preserve">
+    <value>Primary horizontal axis title</value>
+  </data>
+  <data name="ChartTitles_YAxisTitleAutomationName" xml:space="preserve">
+    <value>Primary vertical axis title</value>
+  </data>
+  <data name="ChartTitles_ChartTitleLabel" xml:space="preserve">
+    <value>_Chart title:</value>
+  </data>
+  <data name="ChartTitles_XAxisTitleLabel" xml:space="preserve">
+    <value>_Primary horizontal axis title:</value>
+  </data>
+  <data name="ChartTitles_YAxisTitleLabel" xml:space="preserve">
+    <value>Primary _vertical axis title:</value>
+  </data>
+  <data name="ChartStyle_Title" xml:space="preserve">
+    <value>Chart Styles</value>
+  </data>
+  <data name="ChartStyle_GalleryAutomationName" xml:space="preserve">
+    <value>Chart style gallery</value>
+  </data>
+  <data name="ChartStyle_StyleLabel" xml:space="preserve">
+    <value>_Style</value>
+  </data>
+  <data name="ChartStyle_AutomaticOption" xml:space="preserve">
+    <value>Automatic</value>
+  </data>
+  <data name="ChartStyle_AutomaticPreview" xml:space="preserve">
+    <value>Use current chart formatting</value>
+  </data>
+  <data name="ChartStyle_NumberedOption" xml:space="preserve">
+    <value>Style {0}</value>
+  </data>
+  <data name="ChartStyle_NumberedPreview" xml:space="preserve">
+    <value>Preview style {0}</value>
+  </data>
+  <data name="MoveChart_Title" xml:space="preserve">
+    <value>Move Chart</value>
+  </data>
+  <data name="MoveChart_ObjectInSheet" xml:space="preserve">
+    <value>_Object in:</value>
+  </data>
+  <data name="MoveChart_NewChartSheet" xml:space="preserve">
+    <value>_New chart sheet</value>
+  </data>
+  <data name="MoveChart_TargetNameLabel" xml:space="preserve">
+    <value>_Target name:</value>
+  </data>
+  <data name="MoveChart_TargetNameAutomationName" xml:space="preserve">
+    <value>Target chart sheet or object sheet name</value>
+  </data>
+  <data name="MoveChart_TargetNameHelpText" xml:space="preserve">
+    <value>Enter the worksheet or chart sheet name that will contain the chart.</value>
+  </data>
+  <data name="MoveChart_TargetNameRequiredMessage" xml:space="preserve">
+    <value>Target name is required.</value>
+  </data>
+  <data name="SelectDataSource_Title" xml:space="preserve">
+    <value>Select Data Source</value>
+  </data>
+  <data name="SelectDataSource_FirstColumnCategories" xml:space="preserve">
+    <value>First column contains _category labels</value>
+  </data>
+  <data name="SelectDataSource_SwitchRowColumn" xml:space="preserve">
+    <value>_Switch Row/Column</value>
+  </data>
+  <data name="SelectDataSource_ChartDataRangeLabel" xml:space="preserve">
+    <value>_Chart data range:</value>
+  </data>
+  <data name="SelectDataSource_ChartDataRangeAutomationName" xml:space="preserve">
+    <value>Chart data range</value>
+  </data>
+  <data name="SelectDataSource_SelectChartDataRangeAutomationName" xml:space="preserve">
+    <value>Select chart data range</value>
+  </data>
+  <data name="SelectDataSource_SeriesPanelTitle" xml:space="preserve">
+    <value>Legend Entries (Series)</value>
+  </data>
+  <data name="SelectDataSource_SeriesListAutomationName" xml:space="preserve">
+    <value>Series list</value>
+  </data>
+  <data name="SelectDataSource_SeriesListHelpText" xml:space="preserve">
+    <value>Name and values are inferred from the selected chart range.</value>
+  </data>
+  <data name="SelectDataSource_AxisLabelsPanelTitle" xml:space="preserve">
+    <value>Horizontal (Category) Axis Labels</value>
+  </data>
+  <data name="SelectDataSource_AxisLabelsListAutomationName" xml:space="preserve">
+    <value>Axis label list</value>
+  </data>
+  <data name="SelectDataSource_AxisLabelsListHelpText" xml:space="preserve">
+    <value>Axis labels are inferred from the first category column.</value>
+  </data>
+  <data name="SelectDataSource_AddSeriesButton" xml:space="preserve">
+    <value>_Add series</value>
+  </data>
+  <data name="SelectDataSource_EditSeriesButton" xml:space="preserve">
+    <value>_Edit series</value>
+  </data>
+  <data name="SelectDataSource_RemoveSeriesButton" xml:space="preserve">
+    <value>_Remove series</value>
+  </data>
+  <data name="SelectDataSource_EditAxisLabelsButton" xml:space="preserve">
+    <value>_Edit Axis Labels</value>
+  </data>
+  <data name="SelectDataSource_HiddenEmptyCellsButton" xml:space="preserve">
+    <value>_Hidden and Empty Cells</value>
+  </data>
+  <data name="SelectDataSource_InvalidRangeMessage" xml:space="preserve">
+    <value>Enter a valid chart data range.</value>
+  </data>
+  <data name="SelectDataSource_SeriesListItemFormat" xml:space="preserve">
+    <value>{0}    {1}</value>
+  </data>
+  <data name="SelectDataSource_NewSeriesListItem" xml:space="preserve">
+    <value>Series {0}    &lt;select range&gt;</value>
+  </data>
+  <data name="SelectDataSource_HiddenEmptyCellsMessage" xml:space="preserve">
+    <value>Hidden rows and columns are not plotted. Empty cells are shown as gaps.</value>
+  </data>
+  <data name="SelectDataSource_HiddenEmptyCellsTitle" xml:space="preserve">
+    <value>Hidden and Empty Cell Settings</value>
+  </data>
+  <data name="SelectDataSource_SeriesNameFormat" xml:space="preserve">
+    <value>Series {0}</value>
+  </data>
+  <data name="SelectDataSource_CategoryNameFormat" xml:space="preserve">
+    <value>Category {0}</value>
+  </data>
+  <data name="SelectDataSource_CategoryLabelsFallback" xml:space="preserve">
+    <value>Category labels</value>
+  </data>
+  <data name="InsertChart_Title" xml:space="preserve">
+    <value>Insert Chart</value>
+  </data>
+  <data name="InsertChart_UseRecommendedLayout" xml:space="preserve">
+    <value>Use _recommended layout</value>
+  </data>
+  <data name="InsertChart_RecommendedChartsTab" xml:space="preserve">
+    <value>_Recommended Charts</value>
+  </data>
+  <data name="InsertChart_AllChartsTab" xml:space="preserve">
+    <value>_All Charts</value>
+  </data>
+  <data name="ChangeChartType_Title" xml:space="preserve">
+    <value>Change Chart Type</value>
+  </data>
+  <data name="ChartTypePicker_ChooseChartTypeHeading" xml:space="preserve">
+    <value>Choose a chart type</value>
+  </data>
+  <data name="ChartTypePicker_RecommendedHelpText" xml:space="preserve">
+    <value>Recently used and suggested for your data</value>
+  </data>
+  <data name="ChartTypePicker_SubtypeGalleryAutomationName" xml:space="preserve">
+    <value>Chart subtype gallery</value>
+  </data>
+  <data name="ChartTypePicker_PreviewTitle" xml:space="preserve">
+    <value>Preview</value>
+  </data>
+  <data name="ChartTypePicker_RecommendedPreviewBody" xml:space="preserve">
+    <value>Recommended chart preview</value>
+  </data>
+  <data name="ChartTypePicker_CategoriesAutomationName" xml:space="preserve">
+    <value>Chart categories</value>
+  </data>
+  <data name="ChartTypePicker_AllChartsHeading" xml:space="preserve">
+    <value>All Charts</value>
+  </data>
+  <data name="ChartTypePicker_AllChartsHelpText" xml:space="preserve">
+    <value>Choose a subtype to see how the chart will represent categories and values.</value>
+  </data>
+  <data name="ChartTypePicker_ChartPreviewBody" xml:space="preserve">
+    <value>Chart preview</value>
+  </data>
+  <data name="ChartTypePicker_PreviewSampleLabel" xml:space="preserve">
+    <value>Chart preview sample</value>
+  </data>
+  <data name="ChartTypePicker_PreviewTextFormat" xml:space="preserve">
+    <value>Preview: {0}</value>
+  </data>
+  <data name="ChartTypePicker_RecommendedCategory" xml:space="preserve">
+    <value>Recommended Charts</value>
+  </data>
+  <data name="ChartType_ClusteredColumn" xml:space="preserve">
+    <value>Clustered Column</value>
+  </data>
+  <data name="ChartType_StackedColumn" xml:space="preserve">
+    <value>Stacked Column</value>
+  </data>
+  <data name="ChartType_PercentStackedColumn" xml:space="preserve">
+    <value>100% Stacked Column</value>
+  </data>
+  <data name="ChartType_ThreeDColumn" xml:space="preserve">
+    <value>3D Column</value>
+  </data>
+  <data name="ChartType_Line" xml:space="preserve">
+    <value>Line</value>
+  </data>
+  <data name="ChartType_ThreeDLine" xml:space="preserve">
+    <value>3D Line</value>
+  </data>
+  <data name="ChartType_Pie" xml:space="preserve">
+    <value>Pie</value>
+  </data>
+  <data name="ChartType_ThreeDPie" xml:space="preserve">
+    <value>3D Pie</value>
+  </data>
+  <data name="ChartType_Doughnut" xml:space="preserve">
+    <value>Doughnut</value>
+  </data>
+  <data name="ChartType_ClusteredBar" xml:space="preserve">
+    <value>Clustered Bar</value>
+  </data>
+  <data name="ChartType_StackedBar" xml:space="preserve">
+    <value>Stacked Bar</value>
+  </data>
+  <data name="ChartType_PercentStackedBar" xml:space="preserve">
+    <value>100% Stacked Bar</value>
+  </data>
+  <data name="ChartType_ThreeDBar" xml:space="preserve">
+    <value>3D Bar</value>
+  </data>
+  <data name="ChartType_Scatter" xml:space="preserve">
+    <value>Scatter</value>
+  </data>
+  <data name="ChartType_Bubble" xml:space="preserve">
+    <value>Bubble</value>
+  </data>
+  <data name="ChartType_Area" xml:space="preserve">
+    <value>Area</value>
+  </data>
+  <data name="ChartType_ThreeDArea" xml:space="preserve">
+    <value>3D Area</value>
+  </data>
+  <data name="ChartType_Radar" xml:space="preserve">
+    <value>Radar</value>
+  </data>
+  <data name="ChartType_Stock" xml:space="preserve">
+    <value>Stock</value>
+  </data>
+  <data name="ChartType_Surface" xml:space="preserve">
+    <value>Surface</value>
+  </data>
+  <data name="ChartType_ThreeDSurface" xml:space="preserve">
+    <value>3D Surface</value>
+  </data>
+  <data name="ChartTypeCategory_Column" xml:space="preserve">
+    <value>Column</value>
+  </data>
+  <data name="ChartTypeCategory_Line" xml:space="preserve">
+    <value>Line</value>
+  </data>
+  <data name="ChartTypeCategory_Pie" xml:space="preserve">
+    <value>Pie</value>
+  </data>
+  <data name="ChartTypeCategory_Bar" xml:space="preserve">
+    <value>Bar</value>
+  </data>
+  <data name="ChartTypeCategory_Area" xml:space="preserve">
+    <value>Area</value>
+  </data>
+  <data name="ChartTypeCategory_Scatter" xml:space="preserve">
+    <value>X Y (Scatter)</value>
+  </data>
+  <data name="ChartTypeCategory_Stock" xml:space="preserve">
+    <value>Stock</value>
+  </data>
+  <data name="ChartTypeCategory_Radar" xml:space="preserve">
+    <value>Radar</value>
+  </data>
+  <data name="ChartTypeCategory_Surface" xml:space="preserve">
+    <value>Surface</value>
+  </data>
+  <data name="ChartAreaLegend_Title" xml:space="preserve">
+    <value>Format Chart Area</value>
+  </data>
+  <data name="ChartAreaLegend_ShowLegend" xml:space="preserve">
+    <value>_Show legend</value>
+  </data>
+  <data name="ChartAreaLegend_OverlayLegend" xml:space="preserve">
+    <value>O_verlay legend on chart</value>
+  </data>
+  <data name="ChartAreaLegend_FillLineHelpText" xml:space="preserve">
+    <value>Set the chart and plot area fills, borders, and line weights.</value>
+  </data>
+  <data name="ChartAreaLegend_ChartAreaFillColorLabel" xml:space="preserve">
+    <value>_Chart area fill color</value>
+  </data>
+  <data name="ChartAreaLegend_PlotAreaFillColorLabel" xml:space="preserve">
+    <value>_Plot area fill color</value>
+  </data>
+  <data name="ChartAreaLegend_PlotAreaBorderColorLabel" xml:space="preserve">
+    <value>Plot area _border color</value>
+  </data>
+  <data name="ChartAreaLegend_PlotAreaBorderWidthLabel" xml:space="preserve">
+    <value>Plot area border _width</value>
+  </data>
+  <data name="ChartAreaLegend_LegendPositionLabel" xml:space="preserve">
+    <value>Legend _position</value>
+  </data>
+  <data name="ChartAreaLegend_LegendTextColorLabel" xml:space="preserve">
+    <value>Legend _text color</value>
+  </data>
+  <data name="ChartAreaLegend_LegendFillColorLabel" xml:space="preserve">
+    <value>Legend _fill color</value>
+  </data>
+  <data name="ChartAreaLegend_LegendBorderColorLabel" xml:space="preserve">
+    <value>Legend _border color</value>
+  </data>
+  <data name="ChartAreaLegend_LegendBorderWidthLabel" xml:space="preserve">
+    <value>Legend border _width</value>
+  </data>
+  <data name="ChartAreaLegend_LegendFontSizeLabel" xml:space="preserve">
+    <value>Legend _font size</value>
+  </data>
+  <data name="ChartAreaLegend_LegendFontSizeHelpText" xml:space="preserve">
+    <value>Enter a font size from 6 to 72 points.</value>
+  </data>
+  <data name="ChartAreaLegend_LegendGroup" xml:space="preserve">
+    <value>Legend</value>
+  </data>
+  <data name="ChartAreaLegend_InvalidPlotAreaBorderWidthMessage" xml:space="preserve">
+    <value>Enter a plot area border width from 0 to 10 points.</value>
+  </data>
+  <data name="ChartAreaLegend_InvalidLegendBorderWidthMessage" xml:space="preserve">
+    <value>Enter a legend border width from 0 to 10 points.</value>
+  </data>
+  <data name="ChartAreaLegend_InvalidLegendFontSizeMessage" xml:space="preserve">
+    <value>Enter a legend font size from 6 to 72 points.</value>
+  </data>
+  <data name="ChartDataLabels_Title" xml:space="preserve">
+    <value>Format Data Labels</value>
+  </data>
+  <data name="ChartDataLabels_ShowDataLabels" xml:space="preserve">
+    <value>_Show data labels</value>
+  </data>
+  <data name="ChartDataLabels_CategoryName" xml:space="preserve">
+    <value>_Category name</value>
+  </data>
+  <data name="ChartDataLabels_SeriesName" xml:space="preserve">
+    <value>S_eries name</value>
+  </data>
+  <data name="ChartDataLabels_Percentage" xml:space="preserve">
+    <value>_Percentage</value>
+  </data>
+  <data name="ChartDataLabels_Callouts" xml:space="preserve">
+    <value>Data label callo_uts</value>
+  </data>
+  <data name="ChartDataLabels_PositionLabel" xml:space="preserve">
+    <value>P_osition</value>
+  </data>
+  <data name="ChartDataLabels_SeparatorLabel" xml:space="preserve">
+    <value>Separato_r</value>
+  </data>
+  <data name="ChartDataLabels_NumberFormatLabel" xml:space="preserve">
+    <value>_Number format</value>
+  </data>
+  <data name="ChartDataLabels_LabelOptionsGroup" xml:space="preserve">
+    <value>Label Options</value>
+  </data>
+  <data name="ChartDataLabels_FillColorLabel" xml:space="preserve">
+    <value>F_ill color</value>
+  </data>
+  <data name="ChartDataLabels_BorderColorLabel" xml:space="preserve">
+    <value>_Border color</value>
+  </data>
+  <data name="ChartDataLabels_TextColorLabel" xml:space="preserve">
+    <value>_Text color</value>
+  </data>
+  <data name="ChartDataLabels_BorderThicknessLabel" xml:space="preserve">
+    <value>Border t_hickness</value>
+  </data>
+  <data name="ChartDataLabels_BorderThicknessHelpText" xml:space="preserve">
+    <value>Enter a border width in points.</value>
+  </data>
+  <data name="ChartDataLabels_FontSizeLabel" xml:space="preserve">
+    <value>Font si_ze</value>
+  </data>
+  <data name="ChartDataLabels_FontSizeHelpText" xml:space="preserve">
+    <value>Enter a font size in points.</value>
+  </data>
+  <data name="ChartDataLabels_TextAngleLabel" xml:space="preserve">
+    <value>Text _angle</value>
+  </data>
+  <data name="ChartDataLabels_TextAngleHelpText" xml:space="preserve">
+    <value>Enter degrees from -90 to 90.</value>
+  </data>
+  <data name="ChartDataLabels_InvalidBorderThicknessMessage" xml:space="preserve">
+    <value>Enter a data label border width from 0 to 10 points.</value>
+  </data>
+  <data name="ChartDataLabels_InvalidFontSizeMessage" xml:space="preserve">
+    <value>Enter a data label font size from 6 to 72 points.</value>
+  </data>
+  <data name="ChartDataLabels_InvalidAngleMessage" xml:space="preserve">
+    <value>Enter a data label angle from -90 to 90 degrees.</value>
+  </data>
+  <data name="ChartErrorBars_Title" xml:space="preserve">
+    <value>Format Error Bars</value>
+  </data>
+  <data name="ChartErrorBars_ShowErrorBars" xml:space="preserve">
+    <value>_Show error bars</value>
+  </data>
+  <data name="ChartErrorBars_EndCaps" xml:space="preserve">
+    <value>_End caps</value>
+  </data>
+  <data name="ChartErrorBars_TypeLabel" xml:space="preserve">
+    <value>_Type</value>
+  </data>
+  <data name="ChartErrorBars_DirectionLabel" xml:space="preserve">
+    <value>_Direction</value>
+  </data>
+  <data name="ChartErrorBars_ValueLabel" xml:space="preserve">
+    <value>_Value</value>
+  </data>
+  <data name="ChartErrorBars_ValueHelpText" xml:space="preserve">
+    <value>Enter the error amount or percentage.</value>
+  </data>
+  <data name="ChartErrorBars_ValueAutomationName" xml:space="preserve">
+    <value>Error bar value</value>
+  </data>
+  <data name="ChartErrorBars_ErrorAmountGroup" xml:space="preserve">
+    <value>Error Amount</value>
+  </data>
+  <data name="ChartErrorBars_InvalidValueMessage" xml:space="preserve">
+    <value>Enter an error amount from 0 to 1000.</value>
+  </data>
+  <data name="ChartTrendline_Title" xml:space="preserve">
+    <value>Format Trendline</value>
+  </data>
+  <data name="ChartTrendline_ShowTrendline" xml:space="preserve">
+    <value>_Show trendline</value>
+  </data>
+  <data name="ChartTrendline_DisplayEquation" xml:space="preserve">
+    <value>Display _equation</value>
+  </data>
+  <data name="ChartTrendline_DisplayRSquared" xml:space="preserve">
+    <value>Display _R-squared value</value>
+  </data>
+  <data name="ChartTrendline_TypeLabel" xml:space="preserve">
+    <value>_Type</value>
+  </data>
+  <data name="ChartTrendline_PeriodLabel" xml:space="preserve">
+    <value>Moving average _period</value>
+  </data>
+  <data name="ChartTrendline_PeriodHelpText" xml:space="preserve">
+    <value>Enter a period from 2 to 255.</value>
+  </data>
+  <data name="ChartTrendline_OrderLabel" xml:space="preserve">
+    <value>Polynomial _order</value>
+  </data>
+  <data name="ChartTrendline_OrderHelpText" xml:space="preserve">
+    <value>Enter an order from 2 to 6.</value>
+  </data>
+  <data name="ChartTrendline_OptionsGroup" xml:space="preserve">
+    <value>Trendline Options</value>
+  </data>
+  <data name="ChartTrendline_LineColorLabel" xml:space="preserve">
+    <value>_Line color</value>
+  </data>
+  <data name="ChartTrendline_LineWidthLabel" xml:space="preserve">
+    <value>Line _width</value>
+  </data>
+  <data name="ChartTrendline_LineWidthHelpText" xml:space="preserve">
+    <value>Enter a line width in points.</value>
+  </data>
+  <data name="ChartTrendline_DashStyleLabel" xml:space="preserve">
+    <value>_Dash style</value>
+  </data>
+  <data name="ChartTrendline_InvalidPeriodMessage" xml:space="preserve">
+    <value>Enter a moving average period from 2 to 255.</value>
+  </data>
+  <data name="ChartTrendline_InvalidOrderMessage" xml:space="preserve">
+    <value>Enter a polynomial order from 2 to 6.</value>
+  </data>
+  <data name="ChartTrendline_InvalidWidthMessage" xml:space="preserve">
+    <value>Enter a trendline width from 0.5 to 10 points.</value>
+  </data>
+  <data name="ChartSeriesFormat_Title" xml:space="preserve">
+    <value>Format Data Series</value>
+  </data>
+  <data name="ChartSeriesFormat_SeriesLabel" xml:space="preserve">
+    <value>_Series</value>
+  </data>
+  <data name="ChartSeriesFormat_SeriesHelpText" xml:space="preserve">
+    <value>Choose the series to format without changing the chart data.</value>
+  </data>
+  <data name="ChartSeriesFormat_SeriesOptionsGroup" xml:space="preserve">
+    <value>Series Options</value>
+  </data>
+  <data name="ChartSeriesFormat_FillColorLabel" xml:space="preserve">
+    <value>_Fill color</value>
+  </data>
+  <data name="ChartSeriesFormat_LineColorLabel" xml:space="preserve">
+    <value>_Line color</value>
+  </data>
+  <data name="ChartSeriesFormat_LineWidthLabel" xml:space="preserve">
+    <value>Line _width</value>
+  </data>
+  <data name="ChartSeriesFormat_LineWidthHelpText" xml:space="preserve">
+    <value>Blank keeps the automatic line width.</value>
+  </data>
+  <data name="ChartSeriesFormat_DashStyleLabel" xml:space="preserve">
+    <value>_Dash style</value>
+  </data>
+  <data name="ChartSeriesFormat_MarkerLabel" xml:space="preserve">
+    <value>_Marker</value>
+  </data>
+  <data name="ChartSeriesFormat_MarkerSizeLabel" xml:space="preserve">
+    <value>Marker _size</value>
+  </data>
+  <data name="ChartSeriesFormat_MarkerSizeHelpText" xml:space="preserve">
+    <value>Blank keeps the automatic marker size.</value>
+  </data>
+  <data name="ChartSeriesFormat_InvalidLineWidthMessage" xml:space="preserve">
+    <value>Enter a positive line width or leave it blank.</value>
+  </data>
+  <data name="ChartSeriesFormat_InvalidMarkerSizeMessage" xml:space="preserve">
+    <value>Enter a positive marker size or leave it blank.</value>
+  </data>
+  <data name="ChartAxisFormat_XAxisTitle" xml:space="preserve">
+    <value>Format X Axis</value>
+  </data>
+  <data name="ChartAxisFormat_YAxisTitle" xml:space="preserve">
+    <value>Format Y Axis</value>
+  </data>
+  <data name="ChartAxisFormat_LogScale" xml:space="preserve">
+    <value>_Logarithmic scale</value>
+  </data>
+  <data name="ChartAxisFormat_MajorGridlines" xml:space="preserve">
+    <value>_Major gridlines</value>
+  </data>
+  <data name="ChartAxisFormat_MinorGridlines" xml:space="preserve">
+    <value>M_inor gridlines</value>
+  </data>
+  <data name="ChartAxisFormat_ShowLabels" xml:space="preserve">
+    <value>Show _labels</value>
+  </data>
+  <data name="ChartAxisFormat_BoundsHelpText" xml:space="preserve">
+    <value>Leave bounds blank for Auto.</value>
+  </data>
+  <data name="ChartAxisFormat_MinimumLabel" xml:space="preserve">
+    <value>_Minimum (blank for Auto)</value>
+  </data>
+  <data name="ChartAxisFormat_MinimumHelpText" xml:space="preserve">
+    <value>Blank or Auto keeps the automatic minimum.</value>
+  </data>
+  <data name="ChartAxisFormat_MaximumLabel" xml:space="preserve">
+    <value>Ma_ximum (blank for Auto)</value>
+  </data>
+  <data name="ChartAxisFormat_MaximumHelpText" xml:space="preserve">
+    <value>Blank or Auto keeps the automatic maximum.</value>
+  </data>
+  <data name="ChartAxisFormat_MajorUnitLabel" xml:space="preserve">
+    <value>Major _unit</value>
+  </data>
+  <data name="ChartAxisFormat_MajorUnitHelpText" xml:space="preserve">
+    <value>Blank keeps the automatic major unit.</value>
+  </data>
+  <data name="ChartAxisFormat_MinorUnitLabel" xml:space="preserve">
+    <value>Minor u_nit</value>
+  </data>
+  <data name="ChartAxisFormat_MinorUnitHelpText" xml:space="preserve">
+    <value>Blank keeps the automatic minor unit.</value>
+  </data>
+  <data name="ChartAxisFormat_NumberFormatLabel" xml:space="preserve">
+    <value>Number _format</value>
+  </data>
+  <data name="ChartAxisFormat_AxisOptionsGroup" xml:space="preserve">
+    <value>Axis Options</value>
+  </data>
+  <data name="ChartAxisFormat_MajorGridlineColorLabel" xml:space="preserve">
+    <value>_Major gridline color</value>
+  </data>
+  <data name="ChartAxisFormat_MinorGridlineColorLabel" xml:space="preserve">
+    <value>M_inor gridline color</value>
+  </data>
+  <data name="ChartAxisFormat_GridlineWidthLabel" xml:space="preserve">
+    <value>Gridline _width</value>
+  </data>
+  <data name="ChartAxisFormat_GridlineWidthHelpText" xml:space="preserve">
+    <value>Enter a gridline width in points.</value>
+  </data>
+  <data name="ChartAxisFormat_GridlinesGroup" xml:space="preserve">
+    <value>Gridlines</value>
+  </data>
+  <data name="ChartAxisFormat_MajorTickMarksLabel" xml:space="preserve">
+    <value>_Major tick marks</value>
+  </data>
+  <data name="ChartAxisFormat_MinorTickMarksLabel" xml:space="preserve">
+    <value>M_inor tick marks</value>
+  </data>
+  <data name="ChartAxisFormat_LabelColorLabel" xml:space="preserve">
+    <value>Label _color</value>
+  </data>
+  <data name="ChartAxisFormat_LabelFontSizeLabel" xml:space="preserve">
+    <value>Label _font size</value>
+  </data>
+  <data name="ChartAxisFormat_LabelFontSizeHelpText" xml:space="preserve">
+    <value>Enter a font size in points.</value>
+  </data>
+  <data name="ChartAxisFormat_LabelAngleLabel" xml:space="preserve">
+    <value>Label _angle</value>
+  </data>
+  <data name="ChartAxisFormat_LabelAngleHelpText" xml:space="preserve">
+    <value>Enter label rotation in degrees.</value>
+  </data>
+  <data name="ChartAxisFormat_AxisLineColorLabel" xml:space="preserve">
+    <value>Axis _line color</value>
+  </data>
+  <data name="ChartAxisFormat_AxisLineWidthLabel" xml:space="preserve">
+    <value>Axis line _width</value>
+  </data>
+  <data name="ChartAxisFormat_AxisLineWidthHelpText" xml:space="preserve">
+    <value>Enter an axis line width in points.</value>
+  </data>
+  <data name="ChartAxisFormat_TickMarksGroup" xml:space="preserve">
+    <value>Tick Marks</value>
+  </data>
+  <data name="ChartAxisFormat_InvalidMinimumMessage" xml:space="preserve">
+    <value>Enter a numeric minimum value or leave it blank.</value>
+  </data>
+  <data name="ChartAxisFormat_InvalidMaximumMessage" xml:space="preserve">
+    <value>Enter a numeric maximum value or leave it blank.</value>
+  </data>
+  <data name="ChartAxisFormat_InvalidMajorUnitMessage" xml:space="preserve">
+    <value>Enter a positive major unit or leave it blank.</value>
+  </data>
+  <data name="ChartAxisFormat_InvalidMinorUnitMessage" xml:space="preserve">
+    <value>Enter a positive minor unit or leave it blank.</value>
+  </data>
+  <data name="ChartAxisFormat_InvalidGridlineWidthMessage" xml:space="preserve">
+    <value>Enter a positive gridline width.</value>
+  </data>
+  <data name="ChartAxisFormat_InvalidLabelFontSizeMessage" xml:space="preserve">
+    <value>Enter a label font size from 6 to 72 points.</value>
+  </data>
+  <data name="ChartAxisFormat_InvalidLabelAngleMessage" xml:space="preserve">
+    <value>Enter a label angle from -90 to 90 degrees.</value>
+  </data>
+  <data name="ChartAxisFormat_InvalidAxisLineWidthMessage" xml:space="preserve">
+    <value>Enter an axis line width from 0.5 to 10 points.</value>
+  </data>
+  <data name="ChartBarFormat_Title" xml:space="preserve">
+    <value>Format Bar/Column</value>
+  </data>
+  <data name="ChartBarFormat_HelpText" xml:space="preserve">
+    <value>Gap Width: space between bar clusters as a percentage of bar width (0-500). Overlap: how much adjacent bars overlap (-100 to 100).</value>
+  </data>
+  <data name="ChartBarFormat_GapWidthLabel" xml:space="preserve">
+    <value>_Gap width %</value>
+  </data>
+  <data name="ChartBarFormat_GapWidthHelpText" xml:space="preserve">
+    <value>Enter a gap width from 0 to 500.</value>
+  </data>
+  <data name="ChartBarFormat_OverlapLabel" xml:space="preserve">
+    <value>Series _overlap %</value>
+  </data>
+  <data name="ChartBarFormat_OverlapHelpText" xml:space="preserve">
+    <value>Enter a bar overlap from -100 to 100.</value>
+  </data>
+  <data name="ChartBarFormat_OptionsGroup" xml:space="preserve">
+    <value>Bar Options</value>
+  </data>
+  <data name="ChartBarFormat_InvalidGapWidthMessage" xml:space="preserve">
+    <value>Enter a gap width from 0 to 500.</value>
+  </data>
+  <data name="ChartBarFormat_InvalidOverlapMessage" xml:space="preserve">
+    <value>Enter a bar overlap from -100 to 100.</value>
+  </data>
+  <data name="ChartPieFormat_Title" xml:space="preserve">
+    <value>Format Pie/Doughnut</value>
+  </data>
+  <data name="ChartPieFormat_HelpText" xml:space="preserve">
+    <value>First slice angle: rotation of the first slice in degrees (0-359). Explode: index of a single exploded slice (-1 = none) and its distance (0-50%).</value>
+  </data>
+  <data name="ChartPieFormat_FirstSliceAngleLabel" xml:space="preserve">
+    <value>_First slice angle deg</value>
+  </data>
+  <data name="ChartPieFormat_FirstSliceAngleHelpText" xml:space="preserve">
+    <value>Enter an angle from 0 to 359.</value>
+  </data>
+  <data name="ChartPieFormat_ExplodedSliceIndexLabel" xml:space="preserve">
+    <value>E_xploded slice index (-1 = none)</value>
+  </data>
+  <data name="ChartPieFormat_ExplodedSliceIndexHelpText" xml:space="preserve">
+    <value>Enter a slice index or -1 for none.</value>
+  </data>
+  <data name="ChartPieFormat_ExplodedDistanceLabel" xml:space="preserve">
+    <value>_Exploded distance %</value>
+  </data>
+  <data name="ChartPieFormat_ExplodedDistanceHelpText" xml:space="preserve">
+    <value>Enter a distance from 0 to 50.</value>
+  </data>
+  <data name="ChartPieFormat_HoleSizeLabel" xml:space="preserve">
+    <value>_Hole size %</value>
+  </data>
+  <data name="ChartPieFormat_HoleSizeHelpText" xml:space="preserve">
+    <value>Enter a hole size from 10 to 90.</value>
+  </data>
+  <data name="ChartPieFormat_OptionsGroup" xml:space="preserve">
+    <value>Pie / Doughnut Options</value>
+  </data>
+  <data name="ChartPieFormat_InvalidFirstSliceAngleMessage" xml:space="preserve">
+    <value>Enter a first slice angle from 0 to 359.</value>
+  </data>
+  <data name="ChartPieFormat_InvalidExplodedSliceIndexMessage" xml:space="preserve">
+    <value>Enter a slice index or -1 for none.</value>
+  </data>
+  <data name="ChartPieFormat_InvalidExplodedDistanceMessage" xml:space="preserve">
+    <value>Enter an exploded distance from 0 to 50.</value>
+  </data>
+  <data name="ChartPieFormat_InvalidHoleSizeMessage" xml:space="preserve">
+    <value>Enter a hole size from 10 to 90.</value>
+  </data>
+  <data name="ChartBubbleFormat_Title" xml:space="preserve">
+    <value>Format Bubble Chart</value>
+  </data>
+  <data name="ChartBubbleFormat_ShowNegativeBubbles" xml:space="preserve">
+    <value>Show _negative bubbles</value>
+  </data>
+  <data name="ChartBubbleFormat_HelpText" xml:space="preserve">
+    <value>Scale all bubbles relative to their default size (1-300). Choose whether bubble area or width represents the data value.</value>
+  </data>
+  <data name="ChartBubbleFormat_BubbleScaleLabel" xml:space="preserve">
+    <value>_Bubble scale %</value>
+  </data>
+  <data name="ChartBubbleFormat_BubbleScaleHelpText" xml:space="preserve">
+    <value>Enter a scale from 1 to 300.</value>
+  </data>
+  <data name="ChartBubbleFormat_SizeRepresentsLabel" xml:space="preserve">
+    <value>Size _represents</value>
+  </data>
+  <data name="ChartBubbleFormat_OptionsGroup" xml:space="preserve">
+    <value>Bubble Options</value>
+  </data>
+  <data name="ChartBubbleFormat_InvalidBubbleScaleMessage" xml:space="preserve">
+    <value>Enter a bubble scale from 1 to 300.</value>
+  </data>
+  <data name="ChartStockFormat_Title" xml:space="preserve">
+    <value>Format Stock Chart</value>
+  </data>
+  <data name="ChartStockFormat_HelpText" xml:space="preserve">
+    <value>Up/down bar gap width (0-500%). Colors accept #RRGGBB hex or "none". High-low line thickness (0.5-10 pt).</value>
+  </data>
+  <data name="ChartStockFormat_GapWidthLabel" xml:space="preserve">
+    <value>_Gap width %</value>
+  </data>
+  <data name="ChartStockFormat_GapWidthHelpText" xml:space="preserve">
+    <value>Enter a gap width from 0 to 500.</value>
+  </data>
+  <data name="ChartStockFormat_UpBarFillLabel" xml:space="preserve">
+    <value>_Up bar fill</value>
+  </data>
+  <data name="ChartStockFormat_UpBarBorderLabel" xml:space="preserve">
+    <value>U_p bar border</value>
+  </data>
+  <data name="ChartStockFormat_DownBarFillLabel" xml:space="preserve">
+    <value>_Down bar fill</value>
+  </data>
+  <data name="ChartStockFormat_DownBarBorderLabel" xml:space="preserve">
+    <value>D_own bar border</value>
+  </data>
+  <data name="ChartStockFormat_HighLowLineColorLabel" xml:space="preserve">
+    <value>_High-low line color</value>
+  </data>
+  <data name="ChartStockFormat_LineThicknessLabel" xml:space="preserve">
+    <value>_Line thickness pt</value>
+  </data>
+  <data name="ChartStockFormat_LineThicknessHelpText" xml:space="preserve">
+    <value>Enter a thickness from 0.5 to 10.</value>
+  </data>
+  <data name="ChartStockFormat_OptionsGroup" xml:space="preserve">
+    <value>Stock Options</value>
+  </data>
+  <data name="ChartStockFormat_InvalidGapWidthMessage" xml:space="preserve">
+    <value>Enter a gap width from 0 to 500.</value>
+  </data>
+  <data name="ChartStockFormat_InvalidLineThicknessMessage" xml:space="preserve">
+    <value>Enter a line thickness from 0.5 to 10.</value>
+  </data>
+  <data name="FormatPicture_Title" xml:space="preserve">
+    <value>Format Picture</value>
+  </data>
+  <data name="FormatPicture_SizeTab" xml:space="preserve">
+    <value>_Size</value>
+  </data>
+  <data name="FormatPicture_CropTab" xml:space="preserve">
+    <value>_Crop</value>
+  </data>
+  <data name="FormatPicture_AltTextTab" xml:space="preserve">
+    <value>_Alt Text</value>
+  </data>
+  <data name="FormatPicture_LockAspectRatio" xml:space="preserve">
+    <value>_Lock aspect ratio</value>
+  </data>
+  <data name="FormatPicture_ResetCropButton" xml:space="preserve">
+    <value>Reset _Crop</value>
+  </data>
+  <data name="FormatPicture_ResetSizeButton" xml:space="preserve">
+    <value>Reset _Size</value>
+  </data>
+  <data name="FormatPicture_InvalidSizeMessage" xml:space="preserve">
+    <value>Enter positive width and height values.</value>
+  </data>
+  <data name="FormatPicture_InvalidRotationMessage" xml:space="preserve">
+    <value>Enter a numeric rotation in degrees.</value>
+  </data>
+  <data name="FormatPicture_InvalidCropPercentagesMessage" xml:space="preserve">
+    <value>Enter four crop percentages.</value>
+  </data>
+  <data name="FormatPicture_HeightLabel" xml:space="preserve">
+    <value>_Height:</value>
+  </data>
+  <data name="FormatPicture_WidthLabel" xml:space="preserve">
+    <value>_Width:</value>
+  </data>
+  <data name="FormatPicture_RotationLabel" xml:space="preserve">
+    <value>_Rotation:</value>
+  </data>
+  <data name="FormatPicture_LeftLabel" xml:space="preserve">
+    <value>_Left:</value>
+  </data>
+  <data name="FormatPicture_TopLabel" xml:space="preserve">
+    <value>_Top:</value>
+  </data>
+  <data name="FormatPicture_RightLabel" xml:space="preserve">
+    <value>_Right:</value>
+  </data>
+  <data name="FormatPicture_BottomLabel" xml:space="preserve">
+    <value>_Bottom:</value>
+  </data>
+  <data name="FormatPicture_CropUnavailableMessage" xml:space="preserve">
+    <value>Crop is available for inserted image pictures.</value>
+  </data>
+  <data name="FormatPicture_DescriptionLabel" xml:space="preserve">
+    <value>_Description:</value>
+  </data>
+  <data name="HeaderFooterPicture_InsertPictureTitle" xml:space="preserve">
+    <value>Insert Picture</value>
+  </data>
+  <data name="HeaderFooterPicture_OpenFileFilter" xml:space="preserve">
+    <value>Pictures (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*</value>
+  </data>
+  <data name="HeaderFooterPicture_InsertBeforeFormattingMessage" xml:space="preserve">
+    <value>Insert a header or footer picture before formatting it.</value>
+  </data>
+  <data name="HeaderFooterPicture_FormatPictureToolTip" xml:space="preserve">
+    <value>Format picture in {0}</value>
+  </data>
+  <data name="HeaderFooterPicture_InsertBeforeFormattingToolTip" xml:space="preserve">
+    <value>Insert a picture in {0} before formatting it.</value>
+  </data>
+  <data name="HeaderFooterPicture_TargetHasPictureStatus" xml:space="preserve">
+    <value>Target: {0} has a picture.</value>
+  </data>
+  <data name="HeaderFooterPicture_TargetHasNoPictureStatus" xml:space="preserve">
+    <value>Target: {0} has no picture.</value>
+  </data>
+  <data name="HeaderFooterPicture_LeftSection" xml:space="preserve">
+    <value>left section</value>
+  </data>
+  <data name="HeaderFooterPicture_CenterSection" xml:space="preserve">
+    <value>center section</value>
+  </data>
+  <data name="HeaderFooterPicture_RightSection" xml:space="preserve">
+    <value>right section</value>
+  </data>
+  <data name="HeaderFooterPicture_CurrentSection" xml:space="preserve">
+    <value>current section</value>
+  </data>
+  <data name="HeaderFooterPicture_DefaultFileName" xml:space="preserve">
+    <value>Header/footer picture</value>
+  </data>
+  <data name="HeaderFooterPicture_ResetButton" xml:space="preserve">
+    <value>_Reset</value>
+  </data>
+  <data name="ShapeGradient_Title" xml:space="preserve">
+    <value>Shape Gradient</value>
+  </data>
+  <data name="ShapeGradient_StartColorButton" xml:space="preserve">
+    <value>_Start Color...</value>
+  </data>
+  <data name="ShapeGradient_EndColorButton" xml:space="preserve">
+    <value>_End Color...</value>
+  </data>
+  <data name="ShapeGradient_InvalidGradientMessage" xml:space="preserve">
+    <value>Enter two RGB colors separated by a semicolon.</value>
+  </data>
+  <data name="ShapeGradient_InvalidRgbColorMessage" xml:space="preserve">
+    <value>Enter an RGB color as R,G,B.</value>
+  </data>
+  <data name="ShapeGradient_Stop1ColorLabel" xml:space="preserve">
+    <value>Stop 1 _color (RGB):</value>
+  </data>
+  <data name="ShapeGradient_Stop2ColorLabel" xml:space="preserve">
+    <value>Stop 2 c_olor (RGB):</value>
+  </data>
+  <data name="ShapeGradient_GradientStopsGroup" xml:space="preserve">
+    <value>Gradient stops</value>
+  </data>
+  <data name="ShapeGradient_StartColorSummary" xml:space="preserve">
+    <value>Start: {0}</value>
+  </data>
+  <data name="ShapeGradient_EndColorSummary" xml:space="preserve">
+    <value>End: {0}</value>
+  </data>
+  <data name="SelectionPane_Title" xml:space="preserve">
+    <value>Selection Pane</value>
+  </data>
+  <data name="SelectionPane_ObjectKindChart" xml:space="preserve">
+    <value>Chart</value>
+  </data>
+  <data name="SelectionPane_ObjectKindPicture" xml:space="preserve">
+    <value>Picture</value>
+  </data>
+  <data name="SelectionPane_ObjectKindShape" xml:space="preserve">
+    <value>Shape</value>
+  </data>
+  <data name="SelectionPane_ObjectKindTextBox" xml:space="preserve">
+    <value>Text Box</value>
+  </data>
+  <data name="SelectionPane_RenameButton" xml:space="preserve">
+    <value>_Rename</value>
+  </data>
+  <data name="SelectionPane_ToggleVisibilityToolTip" xml:space="preserve">
+    <value>Toggle visibility</value>
+  </data>
+  <data name="SelectionPane_BringForwardButton" xml:space="preserve">
+    <value>_Bring Forward</value>
+  </data>
+  <data name="SelectionPane_SendBackwardButton" xml:space="preserve">
+    <value>Send _Backward</value>
+  </data>
+  <data name="SelectionPane_ShowAllButton" xml:space="preserve">
+    <value>Show _All</value>
+  </data>
+  <data name="SelectionPane_HideAllButton" xml:space="preserve">
+    <value>_Hide All</value>
+  </data>
+  <data name="SelectionPane_ObjectListAutomationName" xml:space="preserve">
+    <value>Objects</value>
+  </data>
+  <data name="SelectionPane_ObjectListHelpText" xml:space="preserve">
+    <value>Workbook objects available for selection, rename, visibility, and stacking order changes.</value>
+  </data>
+  <data name="SelectionPane_SearchAutomationName" xml:space="preserve">
+    <value>Search objects</value>
+  </data>
+  <data name="SelectionPane_SearchHelpText" xml:space="preserve">
+    <value>Filter selection pane objects by name or object type.</value>
+  </data>
+  <data name="SelectionPane_FilterAutomationName" xml:space="preserve">
+    <value>Object filter</value>
+  </data>
+  <data name="SelectionPane_FilterHelpText" xml:space="preserve">
+    <value>Show all objects or limit the list to visible, hidden, or a specific object type.</value>
+  </data>
+  <data name="SelectionPane_ObjectNameAutomationName" xml:space="preserve">
+    <value>Object name</value>
+  </data>
+  <data name="SelectionPane_ObjectNameHelpText" xml:space="preserve">
+    <value>Edit this object's display name.</value>
+  </data>
+  <data name="SelectionPane_RenameButtonAutomationName" xml:space="preserve">
+    <value>Rename selected object</value>
+  </data>
+  <data name="SelectionPane_RenameButtonHelpText" xml:space="preserve">
+    <value>Apply the typed name to the selected object.</value>
+  </data>
+  <data name="SelectionPane_ToggleVisibilityAutomationName" xml:space="preserve">
+    <value>Toggle selected object visibility</value>
+  </data>
+  <data name="SelectionPane_ToggleVisibilityHelpText" xml:space="preserve">
+    <value>Show or hide the selected object.</value>
+  </data>
+  <data name="SelectionPane_BringForwardAutomationName" xml:space="preserve">
+    <value>Bring selected object forward</value>
+  </data>
+  <data name="SelectionPane_BringForwardHelpText" xml:space="preserve">
+    <value>Move the selected object forward within its object type stack.</value>
+  </data>
+  <data name="SelectionPane_SendBackwardAutomationName" xml:space="preserve">
+    <value>Send selected object backward</value>
+  </data>
+  <data name="SelectionPane_SendBackwardHelpText" xml:space="preserve">
+    <value>Move the selected object backward within its object type stack.</value>
+  </data>
+  <data name="SelectionPane_ShowAllAutomationName" xml:space="preserve">
+    <value>Show all objects</value>
+  </data>
+  <data name="SelectionPane_ShowAllHelpText" xml:space="preserve">
+    <value>Mark every listed object visible.</value>
+  </data>
+  <data name="SelectionPane_HideAllAutomationName" xml:space="preserve">
+    <value>Hide all objects</value>
+  </data>
+  <data name="SelectionPane_HideAllHelpText" xml:space="preserve">
+    <value>Mark every listed object hidden.</value>
+  </data>
+  <data name="SelectionPane_OkAutomationName" xml:space="preserve">
+    <value>Apply selection pane changes</value>
+  </data>
+  <data name="SelectionPane_OkHelpText" xml:space="preserve">
+    <value>Apply visibility, rename, and stacking order changes.</value>
+  </data>
+  <data name="SelectionPane_CancelAutomationName" xml:space="preserve">
+    <value>Cancel selection pane changes</value>
+  </data>
+  <data name="SelectionPane_CancelHelpText" xml:space="preserve">
+    <value>Close the selection pane without applying pending changes.</value>
+  </data>
+  <data name="SelectionPane_SearchLabel" xml:space="preserve">
+    <value>_Search:</value>
+  </data>
+  <data name="SelectionPane_FilterLabel" xml:space="preserve">
+    <value>_Filter:</value>
+  </data>
+  <data name="SelectionPane_NameLabel" xml:space="preserve">
+    <value>_Name:</value>
+  </data>
+  <data name="SelectionPane_ItemVisibilityToolTip" xml:space="preserve">
+    <value>Show or hide object</value>
+  </data>
+  <data name="SelectionPane_ItemVisibilityAutomationName" xml:space="preserve">
+    <value>Object visibility</value>
+  </data>
+  <data name="SelectionPane_ItemVisibilityHelpText" xml:space="preserve">
+    <value>Toggle whether this object is visible.</value>
+  </data>
+  <data name="SelectionPane_ItemRenameToolTip" xml:space="preserve">
+    <value>Rename object</value>
+  </data>
+  <data name="SelectionPane_FilterAll" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="SelectionPane_FilterVisible" xml:space="preserve">
+    <value>Visible</value>
+  </data>
+  <data name="SelectionPane_FilterHidden" xml:space="preserve">
+    <value>Hidden</value>
+  </data>
+  <data name="SelectionPane_FilterCharts" xml:space="preserve">
+    <value>Charts</value>
+  </data>
+  <data name="SelectionPane_FilterPictures" xml:space="preserve">
+    <value>Pictures</value>
+  </data>
+  <data name="SelectionPane_FilterShapes" xml:space="preserve">
+    <value>Shapes</value>
+  </data>
+  <data name="SelectionPane_FilterTextBoxes" xml:space="preserve">
+    <value>Text Boxes</value>
+  </data>
+  <data name="SelectionPane_DefaultChartName" xml:space="preserve">
+    <value>Chart {0}</value>
+  </data>
+  <data name="SelectionPane_DefaultPictureName" xml:space="preserve">
+    <value>Picture {0}</value>
+  </data>
+  <data name="SelectionPane_DefaultTextBoxName" xml:space="preserve">
+    <value>Text Box {0}</value>
+  </data>
+  <data name="SelectionPane_DefaultShapeNameFormat" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="SelectionPane_DefaultEllipseName" xml:space="preserve">
+    <value>Ellipse</value>
+  </data>
+  <data name="SelectionPane_DefaultLineName" xml:space="preserve">
+    <value>Line</value>
+  </data>
+  <data name="SelectionPane_DefaultRectangleName" xml:space="preserve">
+    <value>Rectangle</value>
+  </data>
   <data name="AccessibilityChecker_CloseAutomationName" xml:space="preserve">
     <value>Close Accessibility Checker</value>
   </data>

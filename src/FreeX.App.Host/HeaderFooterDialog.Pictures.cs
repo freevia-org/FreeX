@@ -16,8 +16,8 @@ public partial class HeaderFooterDialog
     {
         var dialog = new OpenFileDialog
         {
-            Title = UiText.Get("HeaderFooter_InsertPictureTitle"),
-            Filter = UiText.Get("HeaderFooter_PictureFileFilter")
+            Title = UiText.Get("HeaderFooterPicture_InsertPictureTitle"),
+            Filter = UiText.Get("HeaderFooterPicture_OpenFileFilter")
         };
         if (dialog.ShowDialog(this) != true)
             return;
@@ -41,7 +41,7 @@ public partial class HeaderFooterDialog
         var picture = GetPictureForActiveBox();
         if (picture is null)
         {
-            DialogMessageHelper.ShowInfo(this, UiText.Get("HeaderFooter_InsertPictureBeforeFormattingMessage"), Title);
+            DialogMessageHelper.ShowInfo(this, UiText.Get("HeaderFooterPicture_InsertBeforeFormattingMessage"), Title);
             FocusActiveTextBox();
             return;
         }
@@ -97,11 +97,11 @@ public partial class HeaderFooterDialog
         var hasPicture = GetPictureForActiveBox() is not null;
         FormatPictureButton.IsEnabled = hasPicture;
         FormatPictureButton.ToolTip = hasPicture
-            ? UiText.Format("HeaderFooter_FormatPictureToolTip", ActiveBoxLabel(target))
-            : UiText.Format("HeaderFooter_InsertPictureBeforeFormattingToolTip", ActiveBoxLabel(target));
+            ? UiText.Format("HeaderFooterPicture_FormatPictureToolTip", ActiveBoxLabel(target))
+            : UiText.Format("HeaderFooterPicture_InsertBeforeFormattingToolTip", ActiveBoxLabel(target));
         PictureTargetStatusText.Text = hasPicture
-            ? UiText.Format("HeaderFooter_TargetHasPictureStatus", ActiveBoxLabel(target))
-            : UiText.Format("HeaderFooter_TargetHasNoPictureStatus", ActiveBoxLabel(target));
+            ? UiText.Format("HeaderFooterPicture_TargetHasPictureStatus", ActiveBoxLabel(target))
+            : UiText.Format("HeaderFooterPicture_TargetHasNoPictureStatus", ActiveBoxLabel(target));
     }
 
     private void FocusActiveTextBox()
@@ -113,10 +113,10 @@ public partial class HeaderFooterDialog
 
     private static string ActiveBoxLabel(TextBox target)
     {
-        if (target.Name.EndsWith("LeftBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooter_LeftSection");
-        if (target.Name.EndsWith("CenterBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooter_CenterSection");
-        if (target.Name.EndsWith("RightBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooter_RightSection");
-        return UiText.Get("HeaderFooter_CurrentSection");
+        if (target.Name.EndsWith("LeftBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooterPicture_LeftSection");
+        if (target.Name.EndsWith("CenterBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooterPicture_CenterSection");
+        if (target.Name.EndsWith("RightBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooterPicture_RightSection");
+        return UiText.Get("HeaderFooterPicture_CurrentSection");
     }
 
     private void SetPictureForActiveBox(WorksheetHeaderFooterPicture picture)

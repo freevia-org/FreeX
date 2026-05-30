@@ -53,7 +53,7 @@ public sealed class ChartSeriesFormatDialog : Window
     public ChartSeriesFormatDialog(ChartModel chart, int seriesCount)
     {
         Result = FromChart(chart, seriesCount);
-        Title = "Format Data Series";
+        Title = UiText.Get("ChartSeriesFormat_Title");
         Width = 380;
         Height = 390;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -86,19 +86,19 @@ public sealed class ChartSeriesFormatDialog : Window
         var root = ChartDialogHelpers.DialogStack();
         {
             var stack = new StackPanel();
-            ChartDialogHelpers.AddCombo(stack, "_Series", _seriesBox, Enumerable.Range(0, Math.Max(1, seriesCount)).Select(index => $"Series {index + 1}").ToArray());
-            stack.Children.Add(CreateInlineHelp("Choose the series to format without changing the chart data."));
-            root.Children.Add(CreateGroupBox("Series Options", stack));
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_SeriesLabel"), _seriesBox, Enumerable.Range(0, Math.Max(1, seriesCount)).Select(index => UiText.Format("SelectDataSource_SeriesNameFormat", index + 1)).ToArray());
+            stack.Children.Add(CreateInlineHelp(UiText.Get("ChartSeriesFormat_SeriesHelpText")));
+            root.Children.Add(CreateGroupBox(UiText.Get("ChartSeriesFormat_SeriesOptionsGroup"), stack));
         }
         {
             var stack = new StackPanel();
-            ChartDialogHelpers.AddColorText(stack, "_Fill color", _fillBox);
-            ChartDialogHelpers.AddColorText(stack, "_Line color", _strokeBox);
-            ChartDialogHelpers.AddNumericText(stack, "Line _width", _strokeThicknessBox, "Blank keeps the automatic line width.");
-            ChartDialogHelpers.AddCombo(stack, "_Dash style", _dashBox, Enum.GetValues<ChartLineDashStyle>().Cast<object>().Prepend("(none)").ToArray());
-            ChartDialogHelpers.AddCombo(stack, "_Marker", _markerBox, Enum.GetValues<ChartMarkerStyle>().Cast<object>().Prepend("(none)").ToArray());
-            ChartDialogHelpers.AddNumericText(stack, "Marker _size", _markerSizeBox, "Blank keeps the automatic marker size.");
-            root.Children.Add(CreateGroupBox("Fill & Line", stack));
+            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartSeriesFormat_FillColorLabel"), _fillBox);
+            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartSeriesFormat_LineColorLabel"), _strokeBox);
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartSeriesFormat_LineWidthLabel"), _strokeThicknessBox, UiText.Get("ChartSeriesFormat_LineWidthHelpText"));
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_DashStyleLabel"), _dashBox, Enum.GetValues<ChartLineDashStyle>().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartSeriesFormat_MarkerLabel"), _markerBox, Enum.GetValues<ChartMarkerStyle>().Cast<object>().Prepend(UiText.Get("Common_NoneParenthetical")).ToArray());
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartSeriesFormat_MarkerSizeLabel"), _markerSizeBox, UiText.Get("ChartSeriesFormat_MarkerSizeHelpText"));
+            root.Children.Add(CreateGroupBox(UiText.Get("ChartDialog_FillLineGroup"), stack));
         }
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
@@ -110,8 +110,8 @@ public sealed class ChartSeriesFormatDialog : Window
         _fillBox.Text = ChartDialogHelpers.FormatColor(result.FillColor);
         _strokeBox.Text = ChartDialogHelpers.FormatColor(result.StrokeColor);
         _strokeThicknessBox.Text = ChartDialogHelpers.FormatNullable(result.StrokeThickness);
-        _dashBox.SelectedItem = result.DashStyle is null ? "(none)" : result.DashStyle.Value;
-        _markerBox.SelectedItem = result.MarkerStyle is null ? "(none)" : result.MarkerStyle.Value;
+        _dashBox.SelectedItem = result.DashStyle is null ? UiText.Get("Common_NoneParenthetical") : result.DashStyle.Value;
+        _markerBox.SelectedItem = result.MarkerStyle is null ? UiText.Get("Common_NoneParenthetical") : result.MarkerStyle.Value;
         _markerSizeBox.Text = ChartDialogHelpers.FormatNullable(result.MarkerSize);
     }
 
@@ -125,25 +125,25 @@ public sealed class ChartSeriesFormatDialog : Window
     {
         if (!TryReadOptionalColor(_fillBox, out var fillColor))
         {
-            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _fillBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox);
             return;
         }
 
         if (!TryReadOptionalColor(_strokeBox, out var strokeColor))
         {
-            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _strokeBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _strokeBox);
             return;
         }
 
         if (!TryReadNullablePositiveDouble(_strokeThicknessBox, out var strokeThickness))
         {
-            ShowInvalidInputWarning("Enter a positive line width or leave it blank.", _strokeThicknessBox);
+            ShowInvalidInputWarning(UiText.Get("ChartSeriesFormat_InvalidLineWidthMessage"), _strokeThicknessBox);
             return;
         }
 
         if (!TryReadNullablePositiveDouble(_markerSizeBox, out var markerSize))
         {
-            ShowInvalidInputWarning("Enter a positive marker size or leave it blank.", _markerSizeBox);
+            ShowInvalidInputWarning(UiText.Get("ChartSeriesFormat_InvalidMarkerSizeMessage"), _markerSizeBox);
             return;
         }
 

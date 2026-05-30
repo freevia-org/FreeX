@@ -29,7 +29,7 @@ public sealed class ChartBarFormatDialog : Window
     public ChartBarFormatDialog(ChartModel chart)
     {
         Result = ChartBarFormatDialogResult.FromChart(chart);
-        Title = "Format Bar/Column";
+        Title = UiText.Get("ChartBarFormat_Title");
         Width = 340;
         Height = 230;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -44,10 +44,10 @@ public sealed class ChartBarFormatDialog : Window
     {
         var root = ChartDialogHelpers.DialogStack();
         var stack = new StackPanel();
-        stack.Children.Add(CreateInlineHelp("Gap Width: space between bar clusters as a percentage of bar width (0–500). Overlap: how much adjacent bars overlap (–100 to 100)."));
-        ChartDialogHelpers.AddNumericText(stack, "_Gap width %", _gapWidthBox, "Enter a gap width from 0 to 500.");
-        ChartDialogHelpers.AddNumericText(stack, "Series _overlap %", _overlapBox, "Enter a bar overlap from −100 to 100.");
-        root.Children.Add(CreateGroupBox("Bar Options", stack));
+        stack.Children.Add(CreateInlineHelp(UiText.Get("ChartBarFormat_HelpText")));
+        ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartBarFormat_GapWidthLabel"), _gapWidthBox, UiText.Get("ChartBarFormat_GapWidthHelpText"));
+        ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartBarFormat_OverlapLabel"), _overlapBox, UiText.Get("ChartBarFormat_OverlapHelpText"));
+        root.Children.Add(CreateGroupBox(UiText.Get("ChartBarFormat_OptionsGroup"), stack));
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
     }
@@ -69,13 +69,13 @@ public sealed class ChartBarFormatDialog : Window
     {
         if (!TryReadClampedInt(_gapWidthBox, 0, 500, out var gapWidth))
         {
-            ShowInvalidInputWarning("Enter a gap width from 0 to 500.", _gapWidthBox);
+            ShowInvalidInputWarning(UiText.Get("ChartBarFormat_InvalidGapWidthMessage"), _gapWidthBox);
             return;
         }
 
         if (!TryReadClampedInt(_overlapBox, -100, 100, out var overlap))
         {
-            ShowInvalidInputWarning("Enter a bar overlap from −100 to 100.", _overlapBox);
+            ShowInvalidInputWarning(UiText.Get("ChartBarFormat_InvalidOverlapMessage"), _overlapBox);
             return;
         }
 
@@ -136,7 +136,7 @@ public sealed class ChartPieFormatDialog : Window
     {
         _isDoughnut = ChartTypeSupport.SupportsDoughnutHoleSize(chart.Type);
         Result = ChartPieFormatDialogResult.FromChart(chart);
-        Title = "Format Pie/Doughnut";
+        Title = UiText.Get("ChartPieFormat_Title");
         Width = 360;
         Height = _isDoughnut ? 310 : 270;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -151,13 +151,13 @@ public sealed class ChartPieFormatDialog : Window
     {
         var root = ChartDialogHelpers.DialogStack();
         var stack = new StackPanel();
-        stack.Children.Add(CreateInlineHelp("First slice angle: rotation of the first slice in degrees (0–359). Explode: index of a single exploded slice (−1 = none) and its distance (0–50%)."));
-        ChartDialogHelpers.AddNumericText(stack, "_First slice angle °", _sliceAngleBox, "Enter an angle from 0 to 359.");
-        ChartDialogHelpers.AddNumericText(stack, "E_xploded slice index (−1 = none)", _explodedIndexBox, "Enter a slice index or −1 for none.");
-        ChartDialogHelpers.AddNumericText(stack, "_Exploded distance %", _explodedDistBox, "Enter a distance from 0 to 50.");
+        stack.Children.Add(CreateInlineHelp(UiText.Get("ChartPieFormat_HelpText")));
+        ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartPieFormat_FirstSliceAngleLabel"), _sliceAngleBox, UiText.Get("ChartPieFormat_FirstSliceAngleHelpText"));
+        ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartPieFormat_ExplodedSliceIndexLabel"), _explodedIndexBox, UiText.Get("ChartPieFormat_ExplodedSliceIndexHelpText"));
+        ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartPieFormat_ExplodedDistanceLabel"), _explodedDistBox, UiText.Get("ChartPieFormat_ExplodedDistanceHelpText"));
         if (_isDoughnut)
-            ChartDialogHelpers.AddNumericText(stack, "_Hole size %", _holeBox, "Enter a hole size from 10 to 90.");
-        root.Children.Add(CreateGroupBox("Pie / Doughnut Options", stack));
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartPieFormat_HoleSizeLabel"), _holeBox, UiText.Get("ChartPieFormat_HoleSizeHelpText"));
+        root.Children.Add(CreateGroupBox(UiText.Get("ChartPieFormat_OptionsGroup"), stack));
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
     }
@@ -182,20 +182,20 @@ public sealed class ChartPieFormatDialog : Window
         if (!int.TryParse(_sliceAngleBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var angle)
             || angle < 0 || angle > 359)
         {
-            ShowInvalidInputWarning("Enter a first slice angle from 0 to 359.", _sliceAngleBox);
+            ShowInvalidInputWarning(UiText.Get("ChartPieFormat_InvalidFirstSliceAngleMessage"), _sliceAngleBox);
             return;
         }
 
         if (!int.TryParse(_explodedIndexBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var explodedIndex))
         {
-            ShowInvalidInputWarning("Enter a slice index or −1 for none.", _explodedIndexBox);
+            ShowInvalidInputWarning(UiText.Get("ChartPieFormat_InvalidExplodedSliceIndexMessage"), _explodedIndexBox);
             return;
         }
 
         if (!int.TryParse(_explodedDistBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var explodedDistPct)
             || explodedDistPct < 0 || explodedDistPct > 50)
         {
-            ShowInvalidInputWarning("Enter an exploded distance from 0 to 50.", _explodedDistBox);
+            ShowInvalidInputWarning(UiText.Get("ChartPieFormat_InvalidExplodedDistanceMessage"), _explodedDistBox);
             return;
         }
 
@@ -205,7 +205,7 @@ public sealed class ChartPieFormatDialog : Window
             if (!int.TryParse(_holeBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out holePct)
                 || holePct < 10 || holePct > 90)
             {
-                ShowInvalidInputWarning("Enter a hole size from 10 to 90.", _holeBox);
+                ShowInvalidInputWarning(UiText.Get("ChartPieFormat_InvalidHoleSizeMessage"), _holeBox);
                 return;
             }
         }
@@ -242,7 +242,7 @@ public sealed record ChartBubbleFormatDialogResult(int BubbleScale, bool ShowNeg
 public sealed class ChartBubbleFormatDialog : Window
 {
     private readonly TextBox _bubbleScaleBox = new();
-    private readonly CheckBox _negBubblesBox = new() { Content = "Show _negative bubbles" };
+    private readonly CheckBox _negBubblesBox = new() { Content = UiText.Get("ChartBubbleFormat_ShowNegativeBubbles") };
     private readonly ComboBox _sizeRepresentsBox = new();
 
     public ChartBubbleFormatDialogResult Result { get; private set; }
@@ -250,7 +250,7 @@ public sealed class ChartBubbleFormatDialog : Window
     public ChartBubbleFormatDialog(ChartModel chart)
     {
         Result = ChartBubbleFormatDialogResult.FromChart(chart);
-        Title = "Format Bubble Chart";
+        Title = UiText.Get("ChartBubbleFormat_Title");
         Width = 360;
         Height = 270;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -265,11 +265,11 @@ public sealed class ChartBubbleFormatDialog : Window
     {
         var root = ChartDialogHelpers.DialogStack();
         var stack = new StackPanel();
-        stack.Children.Add(CreateInlineHelp("Scale all bubbles relative to their default size (1–300). Choose whether bubble area or width represents the data value."));
-        ChartDialogHelpers.AddNumericText(stack, "_Bubble scale %", _bubbleScaleBox, "Enter a scale from 1 to 300.");
+        stack.Children.Add(CreateInlineHelp(UiText.Get("ChartBubbleFormat_HelpText")));
+        ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartBubbleFormat_BubbleScaleLabel"), _bubbleScaleBox, UiText.Get("ChartBubbleFormat_BubbleScaleHelpText"));
         ChartDialogHelpers.AddCheck(stack, _negBubblesBox);
-        ChartDialogHelpers.AddCombo(stack, "Size _represents", _sizeRepresentsBox, Enum.GetValues<ChartBubbleSizeRepresents>());
-        root.Children.Add(CreateGroupBox("Bubble Options", stack));
+        ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartBubbleFormat_SizeRepresentsLabel"), _sizeRepresentsBox, Enum.GetValues<ChartBubbleSizeRepresents>());
+        root.Children.Add(CreateGroupBox(UiText.Get("ChartBubbleFormat_OptionsGroup"), stack));
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
     }
@@ -293,7 +293,7 @@ public sealed class ChartBubbleFormatDialog : Window
         if (!int.TryParse(_bubbleScaleBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var scale)
             || scale < 1 || scale > 300)
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a bubble scale from 1 to 300.", Title);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("ChartBubbleFormat_InvalidBubbleScaleMessage"), Title);
             _bubbleScaleBox.Focus();
             _bubbleScaleBox.SelectAll();
             Keyboard.Focus(_bubbleScaleBox);
@@ -368,7 +368,7 @@ public sealed class ChartStockFormatDialog : Window
     public ChartStockFormatDialog(ChartModel chart)
     {
         Result = ChartStockFormatDialogResult.FromChart(chart);
-        Title = "Format Stock Chart";
+        Title = UiText.Get("ChartStockFormat_Title");
         Width = 380;
         Height = 490;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -383,15 +383,15 @@ public sealed class ChartStockFormatDialog : Window
     {
         var root = ChartDialogHelpers.DialogStack();
         var stack = new StackPanel();
-        stack.Children.Add(CreateInlineHelp("Up/down bar gap width (0–500%). Colors accept #RRGGBB hex or \"none\". High-low line thickness (0.5–10 pt)."));
-        ChartDialogHelpers.AddNumericText(stack, "_Gap width %", _gapWidthBox, "Enter a gap width from 0 to 500.");
-        ChartDialogHelpers.AddColorText(stack, "_Up bar fill", _upFillBox);
-        ChartDialogHelpers.AddColorText(stack, "U_p bar border", _upBorderBox);
-        ChartDialogHelpers.AddColorText(stack, "_Down bar fill", _downFillBox);
-        ChartDialogHelpers.AddColorText(stack, "D_own bar border", _downBorderBox);
-        ChartDialogHelpers.AddColorText(stack, "_High-low line color", _highLowColorBox);
-        ChartDialogHelpers.AddNumericText(stack, "_Line thickness pt", _thicknessBox, "Enter a thickness from 0.5 to 10.");
-        root.Children.Add(CreateGroupBox("Stock Options", stack));
+        stack.Children.Add(CreateInlineHelp(UiText.Get("ChartStockFormat_HelpText")));
+        ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartStockFormat_GapWidthLabel"), _gapWidthBox, UiText.Get("ChartStockFormat_GapWidthHelpText"));
+        ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartStockFormat_UpBarFillLabel"), _upFillBox);
+        ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartStockFormat_UpBarBorderLabel"), _upBorderBox);
+        ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartStockFormat_DownBarFillLabel"), _downFillBox);
+        ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartStockFormat_DownBarBorderLabel"), _downBorderBox);
+        ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartStockFormat_HighLowLineColorLabel"), _highLowColorBox);
+        ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartStockFormat_LineThicknessLabel"), _thicknessBox, UiText.Get("ChartStockFormat_LineThicknessHelpText"));
+        root.Children.Add(CreateGroupBox(UiText.Get("ChartStockFormat_OptionsGroup"), stack));
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
     }
@@ -419,14 +419,14 @@ public sealed class ChartStockFormatDialog : Window
         if (!int.TryParse(_gapWidthBox.Text.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var gapWidth)
             || gapWidth < 0 || gapWidth > 500)
         {
-            ShowInvalidInputWarning("Enter a gap width from 0 to 500.", _gapWidthBox);
+            ShowInvalidInputWarning(UiText.Get("ChartStockFormat_InvalidGapWidthMessage"), _gapWidthBox);
             return;
         }
 
         if (!double.TryParse(_thicknessBox.Text.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var thickness)
             || thickness < 0.5 || thickness > 10.0)
         {
-            ShowInvalidInputWarning("Enter a line thickness from 0.5 to 10.", _thicknessBox);
+            ShowInvalidInputWarning(UiText.Get("ChartStockFormat_InvalidLineThicknessMessage"), _thicknessBox);
             return;
         }
 

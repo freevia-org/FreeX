@@ -295,9 +295,9 @@ public sealed class ObjectDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ShapeGradientDialog.cs"));
 
-        source.Should().Contain("Gradient stops");
-        source.Should().Contain("AddStopRow(grid, 0, \"Stop 1 _color (RGB):\", _startColorBox");
-        source.Should().Contain("AddStopRow(grid, 1, \"Stop 2 c_olor (RGB):\", _endColorBox");
+        source.Should().Contain("UiText.Get(\"ShapeGradient_GradientStopsGroup\")");
+        source.Should().Contain("AddStopRow(grid, 0, UiText.Get(\"ShapeGradient_Stop1ColorLabel\"), _startColorBox");
+        source.Should().Contain("AddStopRow(grid, 1, UiText.Get(\"ShapeGradient_Stop2ColorLabel\"), _endColorBox");
         source.Should().Contain("Target = box");
         source.Should().NotContain("RGB _override:");
         source.Should().NotContain("_gradientBox");
@@ -319,7 +319,7 @@ public sealed class ObjectDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ShapeGradientDialog.cs"));
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        source.Should().Contain("Enter an RGB color as R,G,B.");
+        source.Should().Contain("UiText.Get(\"ShapeGradient_InvalidRgbColorMessage\")");
         source.Should().Contain("FocusInvalidColorInput(_startColorBox);");
         source.Should().Contain("FocusInvalidColorInput(_endColorBox);");
         source.Should().Contain("private static void FocusInvalidColorInput(TextBox colorBox)");
@@ -501,15 +501,15 @@ public sealed class ObjectDialogTests
         var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
 
         source.Should().Contain("public sealed class FormatPictureDialog");
-        source.Should().Contain("Header = \"_Size\"");
-        source.Should().Contain("Header = \"_Crop\"");
-        source.Should().Contain("Header = \"_Alt Text\"");
-        source.Should().Contain("Content = \"_Lock aspect ratio\"");
+        source.Should().Contain("Header = UiText.Get(\"FormatPicture_SizeTab\")");
+        source.Should().Contain("Header = UiText.Get(\"FormatPicture_CropTab\")");
+        source.Should().Contain("Header = UiText.Get(\"FormatPicture_AltTextTab\")");
+        source.Should().Contain("Content = UiText.Get(\"FormatPicture_LockAspectRatio\")");
         source.Should().Contain("LockAspectRatio");
         source.Should().Contain("_lockAspectRatioBox.IsChecked = picture.LockAspectRatio");
         source.Should().Contain("SyncAspectFromWidth");
         source.Should().Contain("SyncAspectFromHeight");
-        source.Should().Contain("Crop is available for inserted image pictures.");
+        source.Should().Contain("UiText.Get(\"FormatPicture_CropUnavailableMessage\")");
         drawingSource.Should().Contain("new FormatPictureDialog(picture)");
         drawingSource.Should().Contain("CreateFormatPictureCommand");
         drawingSource.Should().Contain("new SetPictureLockAspectRatioCommand");
@@ -522,8 +522,8 @@ public sealed class ObjectDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatPictureDialog.cs"));
 
-        source.Should().Contain("Content = \"Reset _Size\"");
-        source.Should().Contain("Content = \"Reset _Crop\"");
+        source.Should().Contain("Content = UiText.Get(\"FormatPicture_ResetSizeButton\")");
+        source.Should().Contain("Content = UiText.Get(\"FormatPicture_ResetCropButton\")");
         source.Should().Contain("ResetSizeToInitial");
         source.Should().Contain("ResetCropToInitial");
         source.Should().Contain("_resetCropButton.IsEnabled = false");
@@ -547,8 +547,8 @@ public sealed class ObjectDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatPictureDialog.cs"));
 
         source.Should().Contain("private readonly TabControl _tabs = new();");
-        source.Should().Contain("private readonly TabItem _sizeTab = new() { Header = \"_Size\" };");
-        source.Should().Contain("private readonly TabItem _cropTab = new() { Header = \"_Crop\" };");
+        source.Should().Contain("private readonly TabItem _sizeTab = new() { Header = UiText.Get(\"FormatPicture_SizeTab\") };");
+        source.Should().Contain("private readonly TabItem _cropTab = new() { Header = UiText.Get(\"FormatPicture_CropTab\") };");
         source.Should().Contain("FocusInvalidInput(error);");
         source.Should().Contain("private void FocusInvalidInput(string? error)");
         source.Should().Contain("_tabs.SelectedItem = _sizeTab;");
@@ -599,8 +599,8 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("_startColorButton");
         source.Should().Contain("_endColorButton");
-        source.Should().Contain("Content = \"_Start Color...\"");
-        source.Should().Contain("Content = \"_End Color...\"");
+        source.Should().Contain("Content = UiText.Get(\"ShapeGradient_StartColorButton\")");
+        source.Should().Contain("Content = UiText.Get(\"ShapeGradient_EndColorButton\")");
         source.Should().Contain("new ColorPickerDialog(_startColor)");
         source.Should().Contain("new ColorPickerDialog(_endColor)");
         source.Should().Contain("_startColorBox.TextChanged += (_, _) => SyncGradientTextFromInputs()");
