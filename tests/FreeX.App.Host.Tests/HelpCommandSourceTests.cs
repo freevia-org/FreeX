@@ -56,6 +56,14 @@ public sealed class HelpCommandSourceTests
         source.Should().Contain("ShowOwnedMessage(");
     }
 
+    [Fact]
+    public void HelpKeyboardShortcut_RoutesF1ToHelpOnlineCommand()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
+
+        source.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHelp, HelpOnlineBtn_Click);");
+    }
+
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
