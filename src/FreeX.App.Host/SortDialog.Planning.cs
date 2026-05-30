@@ -69,14 +69,14 @@ internal static class SortDialogPlanner
 {
     private static readonly IReadOnlyList<SortDirectionChoice> DirectionChoices =
     [
-        new("A to Z", true),
-        new("Z to A", false)
+        new(UiText.Get("Sort_OrderAToZ"), true),
+        new(UiText.Get("Sort_OrderZToA"), false)
     ];
 
     private static readonly IReadOnlyList<SortDirectionChoice> ColorDirectionChoices =
     [
-        new("On Top", true),
-        new("On Bottom", false)
+        new(UiText.Get("Sort_OrderOnTop"), true),
+        new(UiText.Get("Sort_OrderOnBottom"), false)
     ];
 
     public static IReadOnlyList<SortKey> BuildSortKeys(IEnumerable<SortDialogLevel> levels)
@@ -171,20 +171,20 @@ internal static class SortDialogPlanner
             var columnName = CellAddress.NumberToColumnName(range.Start.Col + offset);
             var label = hasHeaders && sheet is not null
                 ? GetHeaderLabel(sheet, range, offset, columnName)
-                : $"Column {columnName}";
+                : UiText.Format("Sort_ColumnLabel", columnName);
             choices.Add(new SortColumnChoice(label, offset));
         }
 
-        return choices.Count == 0 ? [new SortColumnChoice("Column A", 0)] : choices;
+        return choices.Count == 0 ? [new SortColumnChoice(UiText.Format("Sort_ColumnLabel", "A"), 0)] : choices;
     }
 
     public static IReadOnlyList<SortColumnChoice> BuildRowChoices(GridRange range)
     {
         var choices = new List<SortColumnChoice>();
         for (uint offset = 0; offset < range.RowCount; offset++)
-            choices.Add(new SortColumnChoice($"Row {range.Start.Row + offset}", offset));
+            choices.Add(new SortColumnChoice(UiText.Format("Sort_RowLabel", range.Start.Row + offset), offset));
 
-        return choices.Count == 0 ? [new SortColumnChoice("Row 1", 0)] : choices;
+        return choices.Count == 0 ? [new SortColumnChoice(UiText.Format("Sort_RowLabel", 1), 0)] : choices;
     }
 
     public static IReadOnlyList<SortColumnChoice> BuildActiveColumnChoices(
@@ -268,8 +268,10 @@ internal static class SortDialogPlanner
     public static FreeX.Core.Commands.SortOn SortOnFromLabel(string? label) =>
         label switch
         {
-            "Cell Color" => FreeX.Core.Commands.SortOn.CellColor,
-            "Font Color" => FreeX.Core.Commands.SortOn.FontColor,
+            var value when string.Equals(value, UiText.Get("Sort_SortOnCellColor"), StringComparison.Ordinal) ||
+                string.Equals(value, "Cell Color", StringComparison.Ordinal) => FreeX.Core.Commands.SortOn.CellColor,
+            var value when string.Equals(value, UiText.Get("Sort_SortOnFontColor"), StringComparison.Ordinal) ||
+                string.Equals(value, "Font Color", StringComparison.Ordinal) => FreeX.Core.Commands.SortOn.FontColor,
             _ => FreeX.Core.Commands.SortOn.CellValues
         };
 
@@ -288,7 +290,7 @@ internal static class SortDialogPlanner
             return existingChoices;
 
         var normalized = choices?.ToList() ?? [];
-        return normalized.Count == 0 ? [new SortColumnChoice("Column A", 0)] : normalized;
+        return normalized.Count == 0 ? [new SortColumnChoice(UiText.Format("Sort_ColumnLabel", "A"), 0)] : normalized;
     }
 
     public static IReadOnlyList<SortColorChoice> NormalizeColorChoices(IEnumerable<SortColorChoice>? choices)
@@ -337,7 +339,7 @@ internal static class SortDialogPlanner
             _ => string.Empty
         };
 
-        return string.IsNullOrWhiteSpace(text) ? $"Column {fallbackColumnName}" : text;
+        return string.IsNullOrWhiteSpace(text) ? UiText.Format("Sort_ColumnLabel", fallbackColumnName) : text;
     }
 
     private static CellColor? TargetColorFromText(string? text, FreeX.Core.Commands.SortOn sortOn)

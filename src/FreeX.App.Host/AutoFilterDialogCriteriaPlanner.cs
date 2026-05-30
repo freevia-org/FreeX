@@ -71,9 +71,9 @@ internal static class AutoFilterDialogCriteriaPlanner
     public static string GetFilterFamilyHeader(AutoFilterMenuFilterKind filterKind) =>
         filterKind switch
         {
-            AutoFilterMenuFilterKind.Number => "Number Filters",
-            AutoFilterMenuFilterKind.Date => "Date Filters",
-            _ => "Text Filters"
+            AutoFilterMenuFilterKind.Number => UiText.Get("AutoFilter_FilterFamily_Number"),
+            AutoFilterMenuFilterKind.Date => UiText.Get("AutoFilter_FilterFamily_Date"),
+            _ => UiText.Get("AutoFilter_FilterFamily_Text")
         };
 
     public static AutoFilterDialogResult BuildResult(
@@ -148,44 +148,44 @@ internal static class AutoFilterDialogCriteriaPlanner
         {
             AutoFilterMenuFilterKind.Number =>
             [
-                new("Equals", "="),
-                new("Does Not Equal", "<>"),
-                new("Greater Than", ">"),
-                new("Greater Than Or Equal To", ">="),
-                new("Less Than", "<"),
-                new("Less Than Or Equal To", "<="),
-                new("Between", "between:"),
-                new("Top 10", "top:"),
-                new("Bottom 10", "bottom:"),
-                new("Top 10 Percent", "toppercent:"),
-                new("Bottom 10 Percent", "bottompercent:"),
-                new("Above Average", "above average", RequiresValue: false),
-                new("Below Average", "below average", RequiresValue: false),
-                new("Blanks", "blank", RequiresValue: false),
-                new("Non-Blanks", "nonblank", RequiresValue: false)
+                new(UiText.Get("AutoFilter_Criteria_Equals"), "="),
+                new(UiText.Get("AutoFilter_Criteria_DoesNotEqual"), "<>"),
+                new(UiText.Get("AutoFilter_Criteria_GreaterThan"), ">"),
+                new(UiText.Get("AutoFilter_Criteria_GreaterThanOrEqualTo"), ">="),
+                new(UiText.Get("AutoFilter_Criteria_LessThan"), "<"),
+                new(UiText.Get("AutoFilter_Criteria_LessThanOrEqualTo"), "<="),
+                new(UiText.Get("AutoFilter_Criteria_Between"), "between:"),
+                new(UiText.Get("AutoFilter_Criteria_Top10"), "top:"),
+                new(UiText.Get("AutoFilter_Criteria_Bottom10"), "bottom:"),
+                new(UiText.Get("AutoFilter_Criteria_Top10Percent"), "toppercent:"),
+                new(UiText.Get("AutoFilter_Criteria_Bottom10Percent"), "bottompercent:"),
+                new(UiText.Get("AutoFilter_Criteria_AboveAverage"), "above average", RequiresValue: false),
+                new(UiText.Get("AutoFilter_Criteria_BelowAverage"), "below average", RequiresValue: false),
+                new(UiText.Get("AutoFilter_Criteria_Blanks"), "blank", RequiresValue: false),
+                new(UiText.Get("AutoFilter_Criteria_NonBlanks"), "nonblank", RequiresValue: false)
             ],
             AutoFilterMenuFilterKind.Date =>
             [
-                new("Equals", "date="),
-                new("Does Not Equal", "date<>"),
-                new("After", "date>"),
-                new("On Or After", "date>="),
-                new("Before", "date<"),
-                new("On Or Before", "date<="),
-                new("Between", "datebetween:"),
-                new("Blanks", "blank", RequiresValue: false),
-                new("Non-Blanks", "nonblank", RequiresValue: false)
+                new(UiText.Get("AutoFilter_Criteria_Equals"), "date="),
+                new(UiText.Get("AutoFilter_Criteria_DoesNotEqual"), "date<>"),
+                new(UiText.Get("AutoFilter_Criteria_After"), "date>"),
+                new(UiText.Get("AutoFilter_Criteria_OnOrAfter"), "date>="),
+                new(UiText.Get("AutoFilter_Criteria_Before"), "date<"),
+                new(UiText.Get("AutoFilter_Criteria_OnOrBefore"), "date<="),
+                new(UiText.Get("AutoFilter_Criteria_Between"), "datebetween:"),
+                new(UiText.Get("AutoFilter_Criteria_Blanks"), "blank", RequiresValue: false),
+                new(UiText.Get("AutoFilter_Criteria_NonBlanks"), "nonblank", RequiresValue: false)
             ],
             _ =>
             [
-                new("Equals", "text="),
-                new("Does Not Equal", "text<>"),
-                new("Contains", "contains:"),
-                new("Does Not Contain", "notcontains:"),
-                new("Begins With", "begins:"),
-                new("Ends With", "ends:"),
-                new("Blanks", "blank", RequiresValue: false),
-                new("Non-Blanks", "nonblank", RequiresValue: false)
+                new(UiText.Get("AutoFilter_Criteria_Equals"), "text="),
+                new(UiText.Get("AutoFilter_Criteria_DoesNotEqual"), "text<>"),
+                new(UiText.Get("AutoFilter_Criteria_Contains"), "contains:"),
+                new(UiText.Get("AutoFilter_Criteria_DoesNotContain"), "notcontains:"),
+                new(UiText.Get("AutoFilter_Criteria_BeginsWith"), "begins:"),
+                new(UiText.Get("AutoFilter_Criteria_EndsWith"), "ends:"),
+                new(UiText.Get("AutoFilter_Criteria_Blanks"), "blank", RequiresValue: false),
+                new(UiText.Get("AutoFilter_Criteria_NonBlanks"), "nonblank", RequiresValue: false)
             ]
         };
 

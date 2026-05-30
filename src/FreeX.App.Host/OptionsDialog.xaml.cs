@@ -58,7 +58,13 @@ public partial class OptionsDialog : Window
 
         // Advanced
         OptMoveAfterEnter.IsChecked = _opts.MoveSelectionAfterEnter;
-        OptAfterEnterDirection.ItemsSource = new[] { "Down", "Right", "Up", "Left" };
+        OptAfterEnterDirection.ItemsSource = new[]
+        {
+            UiText.Get("Options_AfterEnterDirectionDown"),
+            UiText.Get("Options_AfterEnterDirectionRight"),
+            UiText.Get("Options_AfterEnterDirectionUp"),
+            UiText.Get("Options_AfterEnterDirectionLeft")
+        };
         OptAfterEnterDirection.SelectedIndex = _opts.AfterEnterDirection switch
         {
             FreeXEnterDirection.Right => 1,
@@ -69,7 +75,12 @@ public partial class OptionsDialog : Window
         UpdateAfterEnterDirectionState();
         OptShowGridlines.IsChecked = _opts.ShowGridlines;
         OptShowHeadings.IsChecked = _opts.ShowHeadings;
-        OptObjectsDisplay.ItemsSource = new[] { "All", "Placeholders", "Nothing (hide objects)" };
+        OptObjectsDisplay.ItemsSource = new[]
+        {
+            UiText.Get("Options_ObjectsDisplayAll"),
+            UiText.Get("Options_ObjectsDisplayPlaceholders"),
+            UiText.Get("Options_ObjectsDisplayNothing")
+        };
         OptObjectsDisplay.SelectedIndex = _opts.ObjectsDisplay switch
         {
             FreeXObjectDisplay.Placeholders => 1,
@@ -83,7 +94,11 @@ public partial class OptionsDialog : Window
         UpdateFormulaBarExpandedState();
 
         // Save
-        OptDefaultFormat.ItemsSource = new[] { "XLSX Workbook (.xlsx)", "FreeX JSON (.json)" };
+        OptDefaultFormat.ItemsSource = new[]
+        {
+            UiText.Get("Options_DefaultFormatXlsx"),
+            UiText.Get("Options_DefaultFormatJson")
+        };
         OptDefaultFormat.SelectedIndex = _opts.DefaultFormat == ".json" ? 1 : 0;
         OptCrashAnalytics.IsChecked = _opts.CrashAnalyticsEnabled;
 
@@ -95,19 +110,19 @@ public partial class OptionsDialog : Window
     private void TabList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (TabList.SelectedIndex < 0) return;
-        var selected = (TabList.SelectedItem as ListBoxItem)?.Content?.ToString() ?? "";
-        PanelGeneral.Visibility = selected == "_General" ? Visibility.Visible : Visibility.Collapsed;
-        PanelFormulas.Visibility = selected == "_Formulas" ? Visibility.Visible : Visibility.Collapsed;
-        PanelProofing.Visibility = selected == "_Proofing" ? Visibility.Visible : Visibility.Collapsed;
-        PanelSave.Visibility = selected == "_Save" ? Visibility.Visible : Visibility.Collapsed;
-        PanelLanguage.Visibility = selected == "_Language" ? Visibility.Visible : Visibility.Collapsed;
-        PanelEaseOfAccess.Visibility = selected == "_Ease of Access" ? Visibility.Visible : Visibility.Collapsed;
-        PanelAdvanced.Visibility = selected == "_Advanced" ? Visibility.Visible : Visibility.Collapsed;
-        PanelCustomizeRibbon.Visibility = selected == "_Customize Ribbon" ? Visibility.Visible : Visibility.Collapsed;
-        PanelQuickAccessToolbar.Visibility = selected == "_Quick Access Toolbar" ? Visibility.Visible : Visibility.Collapsed;
-        PanelAddIns.Visibility = selected == "_Add-ins" ? Visibility.Visible : Visibility.Collapsed;
-        PanelTrustCenter.Visibility = selected == "_Trust Center" ? Visibility.Visible : Visibility.Collapsed;
-        PanelView.Visibility = selected == "_View" ? Visibility.Visible : Visibility.Collapsed;
+        var selectedIndex = TabList.SelectedIndex;
+        PanelGeneral.Visibility = selectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
+        PanelFormulas.Visibility = selectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+        PanelProofing.Visibility = selectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
+        PanelSave.Visibility = selectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
+        PanelLanguage.Visibility = selectedIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
+        PanelEaseOfAccess.Visibility = selectedIndex == 5 ? Visibility.Visible : Visibility.Collapsed;
+        PanelAdvanced.Visibility = selectedIndex == 6 ? Visibility.Visible : Visibility.Collapsed;
+        PanelCustomizeRibbon.Visibility = selectedIndex == 7 ? Visibility.Visible : Visibility.Collapsed;
+        PanelQuickAccessToolbar.Visibility = selectedIndex == 8 ? Visibility.Visible : Visibility.Collapsed;
+        PanelAddIns.Visibility = selectedIndex == 9 ? Visibility.Visible : Visibility.Collapsed;
+        PanelTrustCenter.Visibility = selectedIndex == 10 ? Visibility.Visible : Visibility.Collapsed;
+        PanelView.Visibility = selectedIndex == 11 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void FocusInitialKeyboardTarget()
@@ -142,13 +157,13 @@ public partial class OptionsDialog : Window
     {
         if (!OptionsInputParser.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize))
         {
-            ShowInvalidInputWarning("Enter a positive default font size.", OptDefaultFontSize);
+            ShowInvalidInputWarning(UiText.Get("Options_InvalidDefaultFontSizeMessage"), OptDefaultFontSize);
             return;
         }
 
         if (!OptionsInputParser.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount))
         {
-            ShowInvalidInputWarning("Enter the number of sheets to include from 1 to 255.", OptSheetCount);
+            ShowInvalidInputWarning(UiText.Get("Options_InvalidSheetCountMessage"), OptSheetCount);
             return;
         }
 

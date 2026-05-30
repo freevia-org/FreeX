@@ -29,10 +29,12 @@ public sealed class PasswordProtectionDialog : Window
 
     public PasswordProtectionDialog(string title, string prompt)
     {
-        _requiresConfirmation = title.StartsWith("Protect ", StringComparison.OrdinalIgnoreCase);
+        var isProtectSheet = IsProtectSheetTitle(title);
+        _requiresConfirmation = title.StartsWith("Protect ", StringComparison.OrdinalIgnoreCase) ||
+            title.StartsWith(UiText.Get("Protection_ProtectTitlePrefix"), StringComparison.OrdinalIgnoreCase);
         Title = title;
-        Width = title.Equals("Protect Sheet", StringComparison.OrdinalIgnoreCase) ? 430 : 360;
-        Height = title.Equals("Protect Sheet", StringComparison.OrdinalIgnoreCase) ? 540 : 250;
+        Width = isProtectSheet ? 430 : 360;
+        Height = isProtectSheet ? 540 : 250;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
@@ -43,20 +45,20 @@ public sealed class PasswordProtectionDialog : Window
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new TextBlock
         {
-            Text = title.Equals("Protect Sheet", StringComparison.OrdinalIgnoreCase)
-                ? "Protect worksheet and contents of locked cells"
+            Text = isProtectSheet
+                ? UiText.Get("Protection_ProtectWorksheetContents")
                 : prompt,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         });
 
-        var passwordGroup = new GroupBox { Header = "Password", Margin = new Thickness(0, 0, 0, 10) };
+        var passwordGroup = new GroupBox { Header = UiText.Get("Protection_Password"), Margin = new Thickness(0, 0, 0, 10) };
         var passwordPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 8) };
         passwordPanel.Children.Add(new Label { Content = prompt, Target = _passwordBox, Margin = new Thickness(0, 0, 0, 4) });
         passwordPanel.Children.Add(_passwordBox);
         passwordPanel.Children.Add(new TextBlock
         {
-            Text = "Caution: lost or forgotten passwords cannot be recovered.",
+            Text = UiText.Get("Protection_CautionLostOrForgottenPasswordsCannotBeRecovered"),
             TextWrapping = TextWrapping.Wrap,
             Foreground = SystemColors.GrayTextBrush,
             Margin = new Thickness(0, 8, 0, 0)
@@ -64,7 +66,7 @@ public sealed class PasswordProtectionDialog : Window
         passwordGroup.Content = passwordPanel;
         root.Children.Add(passwordGroup);
 
-        if (title.Equals("Protect Sheet", StringComparison.OrdinalIgnoreCase))
+        if (isProtectSheet)
             AddSheetPermissionChecklist(root);
 
         root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
@@ -84,19 +86,20 @@ public sealed class PasswordProtectionDialog : Window
         };
         var group = new GroupBox
         {
-            Header = "Allow all users of this worksheet to:",
+            Header = UiText.Get("Protection_AllowAllUsersOfThisWorksheetTo"),
             Content = scroll,
-            ToolTip = "Choose which protected-sheet actions remain available.",
+            ToolTip = UiText.Get("Protection_ChooseWhichProtectedSheetActionsRemainAvailable"),
             Margin = new Thickness(0, 0, 0, 0)
         };
         root.Children.Add(group);
 
+        var defaultSelectedPermissions = ProtectionDialogPlanner.GetDefaultSelectedSheetPermissions().ToHashSet(StringComparer.Ordinal);
         foreach (var permission in ProtectionDialogPlanner.GetDefaultSheetPermissions())
         {
             var box = new CheckBox
             {
                 Content = permission,
-                IsChecked = permission is "Select locked cells" or "Select unlocked cells",
+                IsChecked = defaultSelectedPermissions.Contains(permission),
                 Margin = new Thickness(0, 0, 0, 4)
             };
             _sheetPermissionBoxes.Add(box);
@@ -127,6 +130,10 @@ public sealed class PasswordProtectionDialog : Window
         _passwordBox.Focus();
         Keyboard.Focus(_passwordBox);
     }
+
+    private static bool IsProtectSheetTitle(string title) =>
+        title.Equals("Protect Sheet", StringComparison.OrdinalIgnoreCase) ||
+        title.Equals(UiText.Get("Protection_ProtectSheetTitle"), StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class ConfirmPasswordDialog : Window
@@ -137,7 +144,7 @@ public sealed class ConfirmPasswordDialog : Window
     public ConfirmPasswordDialog(string password)
     {
         _password = password;
-        Title = "Confirm Password";
+        Title = UiText.Get("Protection_ConfirmPassword");
         Width = 360;
         Height = 170;
         ResizeMode = ResizeMode.NoResize;
@@ -150,11 +157,11 @@ public sealed class ConfirmPasswordDialog : Window
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new TextBlock
         {
-            Text = "Reenter password to proceed.",
+            Text = UiText.Get("Protection_ReenterPasswordToProceed"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         });
-        root.Children.Add(new Label { Content = "_Password:", Target = _confirmationBox, Margin = new Thickness(0, 0, 0, 4) });
+        root.Children.Add(new Label { Content = UiText.Get("Protection_Password2"), Target = _confirmationBox, Margin = new Thickness(0, 0, 0, 4) });
         root.Children.Add(_confirmationBox);
         root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0)));
         Content = root;
@@ -165,7 +172,7 @@ public sealed class ConfirmPasswordDialog : Window
     {
         if (!ProtectionDialogPlanner.PasswordsMatch(_password, _confirmationBox.Password))
         {
-            DialogMessageHelper.ShowWarning(this, "The confirmation password does not match.", Title);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("Protection_TheConfirmationPasswordDoesNotMatch"), Title);
             FocusConfirmationInput();
             return;
         }

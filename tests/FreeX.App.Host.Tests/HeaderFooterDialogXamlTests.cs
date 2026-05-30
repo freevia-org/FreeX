@@ -14,7 +14,7 @@ public sealed class HeaderFooterDialogXamlTests
     [Fact]
     public void Dialog_ExposesAccessKeysForOptionsAndButtons()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HeaderFooterDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("HeaderFooterDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         AssertLabelTargets(document, presentation, "_Header preset:", "HeaderPresetBox");
@@ -76,7 +76,7 @@ public sealed class HeaderFooterDialogXamlTests
     [InlineData("For_mat picture", "&[Picture]")]
     public void Dialog_ExposesExcelHeaderFooterTokenButtons(string label, string token)
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HeaderFooterDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("HeaderFooterDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var buttons = document.Descendants(presentation + "Button").ToList();
@@ -88,7 +88,7 @@ public sealed class HeaderFooterDialogXamlTests
     [Fact]
     public void Dialog_ExposesHeaderFooterPresets()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HeaderFooterDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("HeaderFooterDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -107,7 +107,7 @@ public sealed class HeaderFooterDialogXamlTests
     [Fact]
     public void PictureButtons_UseDedicatedPictureHandlers()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HeaderFooterDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("HeaderFooterDialog.xaml");
         var source = ReadHeaderFooterDialogSource();
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -134,7 +134,8 @@ public sealed class HeaderFooterDialogXamlTests
         source.Should().Contain("HeaderFooterPictureFormatDialog");
         source.Should().Contain("SetPictureForActiveBox");
         source.Should().Contain("UpdatePictureButtonState");
-        source.Should().Contain("Insert a picture in");
+        source.Should().Contain("UiText.Format(\"HeaderFooterPicture_FormatPictureToolTip\", ActiveBoxLabel(target))");
+        source.Should().Contain("UiText.Format(\"HeaderFooterPicture_InsertBeforeFormattingToolTip\"");
     }
 
     [Fact]
@@ -176,8 +177,8 @@ public sealed class HeaderFooterDialogXamlTests
         var source = ReadHeaderFooterDialogSource();
 
         source.Should().Contain("private readonly CheckBox _lockAspectRatioBox");
-        source.Should().Contain("Content = \"_Lock aspect ratio\"");
-        source.Should().Contain("Content = \"_Reset\"");
+        source.Should().Contain("Content = UiText.Get(\"FormatPicture_LockAspectRatio\")");
+        source.Should().Contain("Content = UiText.Get(\"HeaderFooterPicture_ResetButton\")");
         source.Should().Contain("CalculateLockedAspectHeight");
         source.Should().Contain("CalculateLockedAspectWidth");
         source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72)");
@@ -293,7 +294,7 @@ public sealed class HeaderFooterDialogXamlTests
     [Fact]
     public void FirstAndEvenHeadersAndFooters_UseSectionBoxesWithoutPipeParsing()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HeaderFooterDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("HeaderFooterDialog.xaml");
         var source = ReadHeaderFooterDialogSource();
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 

@@ -4,18 +4,18 @@ internal static class CellShiftDialogPlanner
 {
     private static readonly IReadOnlyList<CellShiftDialogOption> InsertChoices =
     [
-        new(CellShiftDialogChoice.ShiftCellsRight, "Shift cells _right"),
-        new(CellShiftDialogChoice.ShiftCellsDown, "Shift cells _down"),
-        new(CellShiftDialogChoice.EntireRow, "Entire _row"),
-        new(CellShiftDialogChoice.EntireColumn, "Entire _column")
+        new(CellShiftDialogChoice.ShiftCellsRight, UiText.Get("CellShift_Insert_ShiftCellsRight")),
+        new(CellShiftDialogChoice.ShiftCellsDown, UiText.Get("CellShift_Insert_ShiftCellsDown")),
+        new(CellShiftDialogChoice.EntireRow, UiText.Get("CellShift_Insert_EntireRow")),
+        new(CellShiftDialogChoice.EntireColumn, UiText.Get("CellShift_Insert_EntireColumn"))
     ];
 
     private static readonly IReadOnlyList<CellShiftDialogOption> DeleteChoices =
     [
-        new(CellShiftDialogChoice.ShiftCellsLeft, "Shift cells _left"),
-        new(CellShiftDialogChoice.ShiftCellsUp, "Shift cells _up"),
-        new(CellShiftDialogChoice.EntireRow, "Entire _row"),
-        new(CellShiftDialogChoice.EntireColumn, "Entire _column")
+        new(CellShiftDialogChoice.ShiftCellsLeft, UiText.Get("CellShift_Delete_ShiftCellsLeft")),
+        new(CellShiftDialogChoice.ShiftCellsUp, UiText.Get("CellShift_Delete_ShiftCellsUp")),
+        new(CellShiftDialogChoice.EntireRow, UiText.Get("CellShift_Delete_EntireRow")),
+        new(CellShiftDialogChoice.EntireColumn, UiText.Get("CellShift_Delete_EntireColumn"))
     ];
 
     public static IReadOnlyList<CellShiftDialogOption> GetAvailableChoices(CellShiftDialogMode mode) =>

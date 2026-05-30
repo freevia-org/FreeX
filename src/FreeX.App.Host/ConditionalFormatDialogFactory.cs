@@ -7,7 +7,7 @@ public sealed class HighlightCellsRuleDialog : ConditionalFormatDialog
     public HighlightCellsRuleDialog(string ruleType, GridRange range)
         : base(ruleType, range)
     {
-        Title = $"Highlight Cells Rule - {ruleType}";
+        Title = UiText.Format("ConditionalFormatDialog_HighlightCellsRuleTitleFormat", RuleTypeDisplayName(ruleType));
     }
 }
 
@@ -16,7 +16,7 @@ public sealed class TopBottomRuleDialog : ConditionalFormatDialog
     public TopBottomRuleDialog(string ruleType, GridRange range)
         : base(ruleType, range)
     {
-        Title = $"Top/Bottom Rule - {ruleType}";
+        Title = UiText.Format("ConditionalFormatDialog_TopBottomRuleTitleFormat", RuleTypeDisplayName(ruleType));
     }
 }
 
@@ -25,7 +25,7 @@ public sealed class DataBarRuleDialog : ConditionalFormatDialog
     public DataBarRuleDialog(GridRange range)
         : base("Data Bar", range)
     {
-        Title = "Data Bar Rule";
+        Title = UiText.Get("ConditionalFormatDialog_DataBarRuleTitle");
     }
 }
 
@@ -34,7 +34,7 @@ public sealed class ColorScaleRuleDialog : ConditionalFormatDialog
     public ColorScaleRuleDialog(GridRange range)
         : base("Color Scale", range)
     {
-        Title = "Color Scale Rule";
+        Title = UiText.Get("ConditionalFormatDialog_ColorScaleRuleTitle");
     }
 }
 
@@ -43,7 +43,7 @@ public sealed class IconSetRuleDialog : ConditionalFormatDialog
     public IconSetRuleDialog(GridRange range)
         : base("Icon Set", range)
     {
-        Title = "Icon Set Rule";
+        Title = UiText.Get("ConditionalFormatDialog_IconSetRuleTitle");
     }
 }
 
@@ -52,7 +52,7 @@ public sealed class NewConditionalFormatRuleDialog : ConditionalFormatDialog
     public NewConditionalFormatRuleDialog(string ruleType, GridRange range)
         : base(ruleType, range)
     {
-        Title = "New Formatting Rule";
+        Title = UiText.Get("ConditionalFormatDialog_NewTitle");
     }
 }
 

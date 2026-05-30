@@ -1,7 +1,8 @@
 <Window x:Class="FreeX.App.Host.ColorPickerDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Select Color"
+        xmlns:local="clr-namespace:FreeX.App.Host"
+        Title="{local:Loc Key=ColorPicker_SelectColor}"
         Width="500"
         Height="560"
         WindowStartupLocation="CenterOwner"
@@ -11,15 +12,15 @@
             <Button x:Name="NoColorButton"
                     MinWidth="76"
                     Margin="0,0,8,0"
-                    Content="_No Color"
+                    Content="{local:Loc Key=ColorPicker_NoColor}"
                     Click="NoColorButton_Click"/>
             <Button MinWidth="76"
                     Margin="0,0,8,0"
-                    Content="_OK"
+                    Content="{local:Loc Key=Common_Ok}"
                     IsDefault="True"
                     Click="OkButton_Click"/>
             <Button MinWidth="76"
-                    Content="_Cancel"
+                    Content="{local:Loc Key=Common_Cancel}"
                     IsCancel="True"/>
         </StackPanel>
 
@@ -30,15 +31,15 @@
             </Grid.RowDefinitions>
 
             <TabControl x:Name="ColorTabs" Grid.Row="0">
-                <TabItem Header="_Standard">
+                <TabItem Header="{local:Loc Key=ColorPicker_Standard}">
                     <StackPanel Margin="8">
-                        <TextBlock Text="Theme Colors" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <TextBlock Text="{local:Loc Key=ColorPicker_ThemeColors}" FontWeight="SemiBold" Margin="0,0,0,6"/>
                         <UniformGrid x:Name="ThemeColorsPanel"
                                      Columns="10"
                                      Rows="6"
                                      Margin="0,0,0,12"/>
 
-                        <TextBlock Text="Standard Colors" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <TextBlock Text="{local:Loc Key=ColorPicker_StandardColors}" FontWeight="SemiBold" Margin="0,0,0,6"/>
                         <UniformGrid x:Name="StandardColorsPanel"
                                      Columns="10"
                                      Rows="1"
@@ -46,7 +47,7 @@
                     </StackPanel>
                 </TabItem>
 
-                <TabItem x:Name="CustomTab" Header="_Custom">
+                <TabItem x:Name="CustomTab" Header="{local:Loc Key=ColorPicker_Custom}">
                     <Grid Margin="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="220"/>
@@ -65,7 +66,7 @@
                         </Grid.RowDefinitions>
 
                         <Label Grid.Row="0" Grid.Column="0"
-                               Content="Custom _color"
+                               Content="{local:Loc Key=ColorPicker_CustomColor}"
                                Target="{Binding ElementName=CustomColorTextBox}"
                                FontWeight="SemiBold"
                                Padding="0"
@@ -84,7 +85,7 @@
                         </Border>
 
                         <TextBlock Grid.Row="5" Grid.Column="0"
-                                   Text="Luminosity"
+                                   Text="{local:Loc Key=ColorPicker_Luminosity}"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,4"/>
                         <Slider x:Name="CustomLuminositySlider"
@@ -95,20 +96,20 @@
                                 Value="100"
                                 TickFrequency="10"
                                 IsSnapToTickEnabled="False"
-                                AutomationProperties.Name="Custom color luminosity"
-                                AutomationProperties.HelpText="Adjust the brightness of the selected custom color."
+                                AutomationProperties.Name="{local:Loc Key=ColorPicker_CustomColorLuminosity}"
+                                AutomationProperties.HelpText="{local:Loc Key=ColorPicker_AdjustTheBrightnessOfTheSelectedCustomColor}"
                                 ValueChanged="CustomLuminositySlider_ValueChanged"
                                 Margin="0,0,0,6"/>
 
-                        <Label Grid.Row="0" Grid.Column="2" Content="_Hex:" Target="{Binding ElementName=CustomColorTextBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <Label Grid.Row="0" Grid.Column="2" Content="{local:Loc Key=ColorPicker_Hex}" Target="{Binding ElementName=CustomColorTextBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <TextBox x:Name="CustomColorTextBox" Grid.Row="0" Grid.Column="3" TextChanged="CustomColorTextBox_TextChanged" Margin="0,0,0,6"/>
-                        <Label Grid.Row="1" Grid.Column="2" Content="_Red:" Target="{Binding ElementName=CustomRedTextBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <Label Grid.Row="1" Grid.Column="2" Content="{local:Loc Key=ColorPicker_Red}" Target="{Binding ElementName=CustomRedTextBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <TextBox x:Name="CustomRedTextBox" Grid.Row="1" Grid.Column="3" TextChanged="CustomRgbTextBox_TextChanged" Margin="0,0,0,6"/>
-                        <Label Grid.Row="2" Grid.Column="2" Content="_Green:" Target="{Binding ElementName=CustomGreenTextBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <Label Grid.Row="2" Grid.Column="2" Content="{local:Loc Key=ColorPicker_Green}" Target="{Binding ElementName=CustomGreenTextBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <TextBox x:Name="CustomGreenTextBox" Grid.Row="2" Grid.Column="3" TextChanged="CustomRgbTextBox_TextChanged" Margin="0,0,0,6"/>
-                        <Label Grid.Row="3" Grid.Column="2" Content="_Blue:" Target="{Binding ElementName=CustomBlueTextBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <Label Grid.Row="3" Grid.Column="2" Content="{local:Loc Key=ColorPicker_Blue}" Target="{Binding ElementName=CustomBlueTextBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,6"/>
                         <TextBox x:Name="CustomBlueTextBox" Grid.Row="3" Grid.Column="3" TextChanged="CustomRgbTextBox_TextChanged" Margin="0,0,0,6"/>
-                        <TextBlock Grid.Row="4" Grid.Column="3" Text="#RRGGBB or RGB values from 0 to 255"
+                        <TextBlock Grid.Row="4" Grid.Column="3" Text="{local:Loc Key=ColorPicker_RRGGBBOrRGBValuesFrom0To255}"
                                    Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
                                    FontSize="11"/>
                     </Grid>
@@ -121,7 +122,7 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                    <TextBlock Text="Current" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <TextBlock Text="{local:Loc Key=ColorPicker_Current}" FontWeight="SemiBold" Margin="0,0,0,4"/>
                     <Border Height="54"
                             BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
                             BorderThickness="1">
@@ -132,7 +133,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="CurrentForegroundPreview"
                                        Grid.Column="0"
-                                       Text="Text"
+                                       Text="{local:Loc Key=ColorPicker_Text}"
                                        Background="White"
                                        FontWeight="SemiBold"
                                        TextAlignment="Center"
@@ -141,7 +142,7 @@
                             <Border x:Name="CurrentBackgroundPreview"
                                     Grid.Column="1">
                                 <TextBlock x:Name="CurrentBackgroundText"
-                                           Text="Fill"
+                                           Text="{local:Loc Key=ColorPicker_Fill}"
                                            FontWeight="SemiBold"
                                            TextAlignment="Center"
                                            VerticalAlignment="Stretch"
@@ -151,7 +152,7 @@
                     </Border>
                 </StackPanel>
                 <StackPanel Grid.Column="1">
-                    <TextBlock Text="New" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <TextBlock Text="{local:Loc Key=ColorPicker_New}" FontWeight="SemiBold" Margin="0,0,0,4"/>
                     <Border Height="54"
                             BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"
                             BorderThickness="1">
@@ -162,7 +163,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock x:Name="NewForegroundPreview"
                                        Grid.Column="0"
-                                       Text="Text"
+                                       Text="{local:Loc Key=ColorPicker_Text}"
                                        Background="White"
                                        FontWeight="SemiBold"
                                        TextAlignment="Center"
@@ -171,7 +172,7 @@
                             <Border x:Name="NewBackgroundPreview"
                                     Grid.Column="1">
                                 <TextBlock x:Name="NewBackgroundText"
-                                           Text="Fill"
+                                           Text="{local:Loc Key=ColorPicker_Fill}"
                                            FontWeight="SemiBold"
                                            TextAlignment="Center"
                                            VerticalAlignment="Stretch"

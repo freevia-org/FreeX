@@ -32,10 +32,10 @@ public sealed class CellShiftDialogTests
         var choices = CellShiftDialog.GetAvailableChoices(CellShiftDialogMode.Insert);
 
         choices.Select(choice => choice.Label).Should().Equal(
-            "Shift cells _right",
-            "Shift cells _down",
-            "Entire _row",
-            "Entire _column");
+            UiText.Get("CellShift_Insert_ShiftCellsRight"),
+            UiText.Get("CellShift_Insert_ShiftCellsDown"),
+            UiText.Get("CellShift_Insert_EntireRow"),
+            UiText.Get("CellShift_Insert_EntireColumn"));
     }
 
     [Fact]
@@ -44,10 +44,10 @@ public sealed class CellShiftDialogTests
         var choices = CellShiftDialog.GetAvailableChoices(CellShiftDialogMode.Delete);
 
         choices.Select(choice => choice.Label).Should().Equal(
-            "Shift cells _left",
-            "Shift cells _up",
-            "Entire _row",
-            "Entire _column");
+            UiText.Get("CellShift_Delete_ShiftCellsLeft"),
+            UiText.Get("CellShift_Delete_ShiftCellsUp"),
+            UiText.Get("CellShift_Delete_EntireRow"),
+            UiText.Get("CellShift_Delete_EntireColumn"));
     }
 
     [Fact]

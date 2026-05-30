@@ -28,9 +28,11 @@ public static class OpenWorkbookProgressPlanner
         return messages[CalculateDetailIndex(elapsed, messages.Length)];
     }
 
+    public static string ProgressTitle() => UiText.Get("Progress_OpeningWorkbook");
+
     private static string NormalizePhase(string phase) =>
         string.IsNullOrWhiteSpace(phase)
-            ? "working"
+            ? string.Empty
             : phase.Trim();
 
     private static string[] GetPhaseMessages(string normalizedPhase) =>
@@ -38,36 +40,38 @@ public static class OpenWorkbookProgressPlanner
         {
             "reading" =>
             [
-                "Loading file (reading)",
-                "Loading file (reading bytes)",
-                "Loading file (checking package)"
+                UiText.Get("Progress_LoadingFileReading"),
+                UiText.Get("Progress_LoadingFileReadingBytes"),
+                UiText.Get("Progress_LoadingFileCheckingPackage")
             ],
             "inspecting" =>
             [
-                "Loading file (inspecting)",
-                "Loading file (checking workbook parts)",
-                "Loading file (detecting features)"
+                UiText.Get("Progress_LoadingFileInspecting"),
+                UiText.Get("Progress_LoadingFileCheckingWorkbookParts"),
+                UiText.Get("Progress_LoadingFileDetectingFeatures")
             ],
             "parsing" =>
             [
-                "Loading file (parsing)",
-                "Loading file (reading worksheets)",
-                "Loading file (building workbook)",
-                "Loading file (loading styles)"
+                UiText.Get("Progress_LoadingFileParsing"),
+                UiText.Get("Progress_LoadingFileReadingWorksheets"),
+                UiText.Get("Progress_LoadingFileBuildingWorkbook"),
+                UiText.Get("Progress_LoadingFileLoadingStyles")
             ],
             "calculating" =>
             [
-                "Loading file (calculating)",
-                "Loading file (evaluating formulas)",
-                "Loading file (refreshing values)"
+                UiText.Get("Progress_LoadingFileCalculating"),
+                UiText.Get("Progress_LoadingFileEvaluatingFormulas"),
+                UiText.Get("Progress_LoadingFileRefreshingValues")
             ],
             "preparing view" =>
             [
-                "Loading file (preparing view)",
-                "Loading file (laying out worksheet)",
-                "Loading file (restoring selection)"
+                UiText.Get("Progress_LoadingFilePreparingView"),
+                UiText.Get("Progress_LoadingFileLayingOutWorksheet"),
+                UiText.Get("Progress_LoadingFileRestoringSelection")
             ],
-            _ => [$"Loading file ({normalizedPhase})"]
+            "preparing" => [UiText.Get("Progress_LoadingFilePreparing")],
+            "done" => [UiText.Get("Progress_LoadingFileDone")],
+            _ => [UiText.Get("Progress_LoadingFileWorking")]
         };
 
     private static int CalculateDetailIndex(TimeSpan elapsed, int messageCount) =>

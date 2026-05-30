@@ -109,15 +109,15 @@ public sealed class GoToDialogsTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoToDialog.cs"));
 
-        source.Should().Contain("Content = \"_Go to:\"");
-        source.Should().Contain("Recent references and defined names");
-        source.Should().Contain("Content = \"_Reference:\"");
+        source.Should().Contain("Content = UiText.Get(\"GoTo_GoTo2\")");
+        source.Should().Contain("UiText.Get(\"GoTo_RecentReferencesAndDefinedNames\")");
+        source.Should().Contain("Content = UiText.Get(\"GoTo_Reference\")");
         source.Should().Contain("Target = _addressBox");
-        source.Should().Contain("Content = \"S_pecial...\"");
+        source.Should().Contain("Content = UiText.Get(\"GoTo_Special\")");
         source.Should().Contain("new GoToSpecialDialog");
         source.Should().Contain("SelectedSpecialKind");
-        source.Should().Contain("Content = \"_OK\"");
-        source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("Content = UiText.Ok");
+        source.Should().Contain("Content = UiText.Cancel");
         source.Should().Contain("root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });");
         source.Should().NotContain("Select a named or recently used reference");
     }
@@ -127,10 +127,10 @@ public sealed class GoToDialogsTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoToDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_historyList, \"Go to\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_historyList, \"Lists recent references and defined names available for navigation.\");");
-        source.Should().Contain("AutomationProperties.SetName(_addressBox, \"Reference\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_addressBox, \"Enter a cell reference, range, or defined name to navigate to.\");");
+        source.Should().Contain("AutomationProperties.SetName(_historyList, UiText.Get(\"GoTo_GoTo\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_historyList, UiText.Get(\"GoTo_ListsRecentReferencesAndDefinedNamesAvailableForNavigation\"));");
+        source.Should().Contain("AutomationProperties.SetName(_addressBox, UiText.Get(\"GoTo_Reference2\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_addressBox, UiText.Get(\"GoTo_EnterACellReferenceRangeOrDefinedNameToNavigateTo\"));");
     }
 
     [Fact]
@@ -249,24 +249,24 @@ public sealed class GoToDialogsTests
 
         foreach (var expected in new[]
         {
-            "new(GoToSpecialKind.Blanks, \"_Blanks\")",
-            "new(GoToSpecialKind.Constants, \"_Constants\")",
-            "new(GoToSpecialKind.Formulas, \"_Formulas\")",
-            "new(GoToSpecialKind.Comments, \"Co_mments\")",
-            "new(GoToSpecialKind.CurrentRegion, \"Current _region\")",
-            "new(GoToSpecialKind.RowDifferences, \"Row _differences\")",
-            "new(GoToSpecialKind.ColumnDifferences, \"Column diff_erences\")",
-            "new(GoToSpecialKind.LastCell, \"_Last cell\")",
-            "new(GoToSpecialKind.ConditionalFormats, \"Conditional forma_ts\")",
-            "new(GoToSpecialKind.Objects, \"_Objects\")",
-            "new(GoToSpecialKind.Precedents, \"_Precedents\")",
-            "new(GoToSpecialKind.Dependents, \"Depe_ndents\")",
-            "new(GoToSpecialKind.DataValidation, \"Data valid_ation\")",
-            "new(GoToSpecialKind.VisibleCellsOnly, \"_Visible cells only\")"
+            "new(GoToSpecialKind.Blanks, UiText.Get(\"GoToSpecial_Blanks\"))",
+            "new(GoToSpecialKind.Constants, UiText.Get(\"GoToSpecial_Constants\"))",
+            "new(GoToSpecialKind.Formulas, UiText.Get(\"GoToSpecial_Formulas\"))",
+            "new(GoToSpecialKind.Comments, UiText.Get(\"GoToSpecial_Comments\"))",
+            "new(GoToSpecialKind.CurrentRegion, UiText.Get(\"GoToSpecial_CurrentRegion\"))",
+            "new(GoToSpecialKind.RowDifferences, UiText.Get(\"GoToSpecial_RowDifferences\"))",
+            "new(GoToSpecialKind.ColumnDifferences, UiText.Get(\"GoToSpecial_ColumnDifferences\"))",
+            "new(GoToSpecialKind.LastCell, UiText.Get(\"GoToSpecial_LastCell\"))",
+            "new(GoToSpecialKind.ConditionalFormats, UiText.Get(\"GoToSpecial_ConditionalFormats\"))",
+            "new(GoToSpecialKind.Objects, UiText.Get(\"GoToSpecial_Objects\"))",
+            "new(GoToSpecialKind.Precedents, UiText.Get(\"GoToSpecial_Precedents\"))",
+            "new(GoToSpecialKind.Dependents, UiText.Get(\"GoToSpecial_Dependents\"))",
+            "new(GoToSpecialKind.DataValidation, UiText.Get(\"GoToSpecial_DataValidation\"))",
+            "new(GoToSpecialKind.VisibleCellsOnly, UiText.Get(\"GoToSpecial_VisibleCellsOnly\"))"
         })
             source.Should().Contain(expected);
 
-        source.Should().Contain("Header = \"Go to special\"");
+        source.Should().Contain("Header = UiText.Get(\"GoToSpecial_GoToSpecial\")");
         source.Should().NotContain("Header = \"Additional Excel options\"");
         source.Should().NotContain("IsEnabled = false");
         source.Should().NotContain("shown for parity");
@@ -292,10 +292,10 @@ public sealed class GoToDialogsTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoToSpecialDialog.cs"));
 
-        source.Should().Contain("Content = \"_Numbers\"");
-        source.Should().Contain("Content = \"_Text\"");
-        source.Should().Contain("Content = \"_Logicals\"");
-        source.Should().Contain("Content = \"_Errors\"");
+        source.Should().Contain("Content = UiText.Get(\"GoToSpecial_Numbers\")");
+        source.Should().Contain("Content = UiText.Get(\"GoToSpecial_Text\")");
+        source.Should().Contain("Content = UiText.Get(\"GoToSpecial_Logicals\")");
+        source.Should().Contain("Content = UiText.Get(\"GoToSpecial_Errors\")");
         source.Should().Contain("RefreshValueTypeOptions");
         source.Should().Contain("UsesValueTypeOptions(SelectedKind)");
         source.Should().Contain("new GoToSpecialOptions(GetSelectedValueTypes())");

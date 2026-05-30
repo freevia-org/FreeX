@@ -16,7 +16,7 @@ public static class SparklineDialogPlanner
         new(target, currentText.Trim(), CollapseDialog: true);
 
     public static string GetKindLabel(SparklineKindChoice kind) =>
-        kind == SparklineKindChoice.WinLoss ? "Win/Loss" : kind.ToString();
+        kind == SparklineKindChoice.WinLoss ? UiText.Get("Sparkline_KindWinLoss") : kind.ToString();
 
     public static SparklineDialogValidationResult ValidateInputs(
         string dataRangeText,

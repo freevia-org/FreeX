@@ -151,7 +151,7 @@ public sealed partial class NamedRangeDialog : Window
     {
         if (NamesList.SelectedItem is not NamedRangeViewModel vm)
         {
-            DialogMessageHelper.ShowWarning(this, "Select a named range to edit.", "Named Range");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("NamedRange_SelectEditMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
             FocusNamesListOrNewButton();
             return;
         }
@@ -190,14 +190,14 @@ public sealed partial class NamedRangeDialog : Window
 
         if (string.IsNullOrWhiteSpace(name))
         {
-            DialogMessageHelper.ShowWarning(this, "Please enter a name.", "Named Range");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("NamedRange_NameRequiredMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
             FocusNamesListOrNewButton();
             return;
         }
 
         if (!NamedRangeInputParser.TryParseRange(_workbook, rangeText, out var range))
         {
-            DialogMessageHelper.ShowWarning(this, "Invalid range format. Use: SheetName!A1:B10 or A1:B10", "Named Range");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("NamedRange_InvalidRangeFormatMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
             FocusRefersToSummary();
             return;
         }
@@ -209,7 +209,7 @@ public sealed partial class NamedRangeDialog : Window
         var outcome = _commandBus.Execute(_workbook.Id, cmd);
         if (!outcome.Success)
         {
-            DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? "Could not define named range.", "Named Range");
+            DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("NamedRange_DefineFailedMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
             FocusNamesListOrNewButton();
             return;
         }
@@ -227,12 +227,12 @@ public sealed partial class NamedRangeDialog : Window
     {
         if (NamesList.SelectedItem is not NamedRangeViewModel vm)
         {
-            DialogMessageHelper.ShowWarning(this, "Select a named range to delete.", "Named Range");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("NamedRange_SelectDeleteMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
             FocusNamesListOrNewButton();
             return;
         }
 
-        if (!DialogMessageHelper.AskYesNo(this, $"Delete the name '{vm.Name}'?", "Name Manager"))
+        if (!DialogMessageHelper.AskYesNo(this, UiText.Format("NamedRange_DeleteConfirmation", vm.Name), UiText.Get("NamedRange_NameManager")))
         {
             return;
         }
@@ -241,7 +241,7 @@ public sealed partial class NamedRangeDialog : Window
         var outcome = _commandBus.Execute(_workbook.Id, cmd);
         if (!outcome.Success)
         {
-            DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? "Could not delete.", "Named Range");
+            DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get("NamedRange_DeleteFailedMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
             FocusNamesListOrNewButton();
         }
         else

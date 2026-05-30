@@ -16,8 +16,8 @@ public sealed class ViewCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
 
-        button.Should().Contain($"Content=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", title);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -35,7 +35,7 @@ public sealed class ViewCommandSourceTests
     {
         var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header, "ZoomPresetMenuItem_Click");
 
-        item.Should().Contain($"Header=\"{header}\"");
+        item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"Tag=\"{tag}\"");
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         item.Should().Contain("Click=\"ZoomPresetMenuItem_Click\"");
@@ -83,8 +83,8 @@ public sealed class ViewCommandSourceTests
     {
         var button = ExtractCommandElementByTitle(ReadMainWindowXaml(), title);
 
-        button.Should().Contain($"Content=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", title);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -101,7 +101,7 @@ public sealed class ViewCommandSourceTests
     {
         var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header, "ArrangeAllMenuItem_Click");
 
-        item.Should().Contain($"Header=\"{header}\"");
+        item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"Tag=\"{tag}\"");
         item.Should().Contain("IsCheckable=\"True\"");
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
@@ -120,7 +120,7 @@ public sealed class ViewCommandSourceTests
     {
         var item = ExtractMenuItemElementByHeader(ReadMainWindowXaml(), header);
 
-        item.Should().Contain($"Header=\"{header}\"");
+        item.ShouldContainLocalizedAttribute("Header", header);
         item.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         item.Should().Contain($"Click=\"{handler}\"");
     }
@@ -145,60 +145,23 @@ public sealed class ViewCommandSourceTests
 
     private static string ExtractButtonElementByTitle(string xaml, string title)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
-        titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} View zoom command should be present");
+        if (title == "Split")
+            return xaml.ExtractElementByInvariantCommandName("ToggleButton", title);
 
-        var start = FindCommandElementStart(xaml, titleIndex);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {title} View command should be a Button or ToggleButton");
+        var button = xaml.ExtractElementByInvariantCommandName("Button", title);
+        if (button.Contains($"local:RibbonMetadata.CommandName=\"{LocalizedXamlTestSupport.EscapeAttribute(title)}\"", StringComparison.Ordinal))
+            return button;
 
-        var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-        var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
-        var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
-            ? closingEnd + "</Button>".Length
-            : selfClosingEnd + 2;
-
-        end.Should().BeGreaterThan(titleIndex, $"the {title} View command should have a closing marker");
-        return xaml[start..end];
+        return xaml.ExtractElementByInvariantCommandName("ToggleButton", title);
     }
 
     private static string ExtractCommandElementByTitle(string xaml, string title) =>
         ExtractButtonElementByTitle(xaml, title);
 
-    private static int FindCommandElementStart(string xaml, int titleIndex)
-    {
-        var start = xaml.LastIndexOf('<', titleIndex);
-        while (start >= 0 &&
-               !xaml[start..].StartsWith("<Button", StringComparison.Ordinal) &&
-               !xaml[start..].StartsWith("<ToggleButton", StringComparison.Ordinal))
-        {
-            start = xaml.LastIndexOf('<', start - 1);
-        }
-
-        return start;
-    }
-
     private static string ExtractMenuItemElementByHeader(string xaml, string header, string? clickHandler = null)
-    {
-        var matches = new List<string>();
-        var searchIndex = 0;
-        while (true)
-        {
-            var headerIndex = xaml.IndexOf($"Header=\"{header}\"", searchIndex, StringComparison.Ordinal);
-            if (headerIndex < 0)
-                break;
-
-            var start = xaml.LastIndexOf("<MenuItem", headerIndex, StringComparison.Ordinal);
-            start.Should().BeGreaterThanOrEqualTo(0, $"the {header} zoom preset should be a MenuItem");
-
-            var end = xaml.IndexOf("/>", headerIndex, StringComparison.Ordinal);
-            end.Should().BeGreaterThan(headerIndex, $"the {header} zoom preset should be self-closing");
-            matches.Add(xaml[start..(end + 2)]);
-            searchIndex = end + 2;
-        }
-
-        matches.Should().NotBeEmpty($"the {header} menu item should be present");
-        return clickHandler is null
-            ? matches[0]
-            : matches.LastOrDefault(item => item.Contains($"Click=\"{clickHandler}\"", StringComparison.Ordinal)) ?? matches[0];
-    }
+        => xaml.ExtractElementByLocalizedAttributeValue(
+            "MenuItem",
+            "Header",
+            header,
+            clickHandler is null ? null : $"Click=\"{clickHandler}\"");
 }

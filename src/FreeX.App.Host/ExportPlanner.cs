@@ -55,8 +55,8 @@ internal sealed record ExportPageRange(int FromPage, int ToPage)
 {
     public override string ToString() =>
         FromPage == ToPage
-            ? $"page {FromPage}"
-            : $"pages {FromPage}-{ToPage}";
+            ? UiText.Format("Export_PageRangeSingle", FromPage)
+            : UiText.Format("Export_PageRangeMultiple", FromPage, ToPage);
 }
 
 internal sealed record ExportOptions(
@@ -100,8 +100,7 @@ internal static partial class ExportPlanner
 {
     public const string DefaultPdfLanguage = "en-US";
 
-    public const string PdfFallbackMessage =
-        "PDF export uses FreeX's print renderer. XPS export remains available for Windows print-pipeline workflows.";
+    public static string PdfFallbackMessage => UiText.Get("Export_PdfFallbackMessage");
 
     public static ExportFormat InferExportFormat(string path) =>
         string.Equals(Path.GetExtension(path), ".xps", StringComparison.OrdinalIgnoreCase)
@@ -161,7 +160,7 @@ internal static partial class ExportPlanner
         }
         catch (CultureNotFoundException)
         {
-            error = "Enter a valid PDF language tag, for example en-US.";
+            error = UiText.Format("Export_InvalidPdfLanguage", DefaultPdfLanguage);
             return false;
         }
     }
@@ -179,19 +178,19 @@ internal static partial class ExportPlanner
         if (!int.TryParse(fromText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var fromPage) ||
             !int.TryParse(toText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var toPage))
         {
-            error = "Page range must include whole-number From and To values.";
+            error = UiText.Get("Export_PageRangeWholeNumbersError");
             return false;
         }
 
         if (fromPage < 1 || toPage < 1)
         {
-            error = "Page numbers must be 1 or greater.";
+            error = UiText.Get("Export_PageRangePositiveError");
             return false;
         }
 
         if (fromPage > toPage)
         {
-            error = "From page must be less than or equal to To page.";
+            error = UiText.Get("Export_PageRangeFromLessThanToError");
             return false;
         }
 
@@ -205,7 +204,7 @@ internal static partial class ExportPlanner
 
         if (pageCount <= 0)
         {
-            error = "There are no exportable pages.";
+            error = UiText.Get("Export_NoExportablePagesError");
             return false;
         }
 
@@ -214,13 +213,13 @@ internal static partial class ExportPlanner
 
         if (range.FromPage > pageCount)
         {
-            error = $"Page range starts after the last exportable page ({pageCount}).";
+            error = UiText.Format("Export_PageRangeStartsAfterLastPage", pageCount);
             return false;
         }
 
         if (range.ToPage > pageCount)
         {
-            error = $"Page range ends after the last exportable page ({pageCount}).";
+            error = UiText.Format("Export_PageRangeEndsAfterLastPage", pageCount);
             return false;
         }
 
@@ -236,13 +235,13 @@ internal static partial class ExportPlanner
 
         if (options.PdfConformance != PdfConformance.Standard)
         {
-            error = "PDF/A compliance is not supported by the current PDF exporter.";
+            error = UiText.Get("Export_PdfAUnsupportedError");
             return false;
         }
 
         if (options.IncludeDocumentStructureTags)
         {
-            error = "Tagged PDF structure is not supported by the current PDF exporter.";
+            error = UiText.Get("Export_TaggedPdfUnsupportedError");
             return false;
         }
 

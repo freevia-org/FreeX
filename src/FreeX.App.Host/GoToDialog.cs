@@ -30,7 +30,7 @@ public sealed partial class GoToDialog : Window
             ? new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase)
             : new Dictionary<string, GridRange>(definedNames, StringComparer.OrdinalIgnoreCase);
 
-        Title = "Go To";
+        Title = UiText.Get("GoTo_GoTo");
         Width = 420;
         Height = 320;
         ResizeMode = ResizeMode.NoResize;
@@ -47,7 +47,7 @@ public sealed partial class GoToDialog : Window
 
         var historyLabel = new Label
         {
-            Content = "_Go to:",
+            Content = UiText.Get("GoTo_GoTo2"),
             Target = _historyList,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Padding = new Thickness(0),
@@ -60,9 +60,9 @@ public sealed partial class GoToDialog : Window
         foreach (var reference in BuildReferenceChoices(defaultAddress, recentReferences, _definedNames.Keys))
             _historyList.Items.Add(reference);
 
-        _historyList.ToolTip = "Recent references and defined names";
-        AutomationProperties.SetName(_historyList, "Go to");
-        AutomationProperties.SetHelpText(_historyList, "Lists recent references and defined names available for navigation.");
+        _historyList.ToolTip = UiText.Get("GoTo_RecentReferencesAndDefinedNames");
+        AutomationProperties.SetName(_historyList, UiText.Get("GoTo_GoTo"));
+        AutomationProperties.SetHelpText(_historyList, UiText.Get("GoTo_ListsRecentReferencesAndDefinedNamesAvailableForNavigation"));
         _historyList.MinHeight = 130;
         _historyList.Margin = new Thickness(0, 24, 0, 0);
         _historyList.SelectionChanged += (_, _) =>
@@ -78,7 +78,7 @@ public sealed partial class GoToDialog : Window
 
         var referenceLabel = new Label
         {
-            Content = "_Reference:",
+            Content = UiText.Get("GoTo_Reference"),
             Target = _addressBox,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Padding = new Thickness(0),
@@ -88,8 +88,8 @@ public sealed partial class GoToDialog : Window
         root.Children.Add(referenceLabel);
 
         _addressBox.Text = defaultAddress;
-        AutomationProperties.SetName(_addressBox, "Reference");
-        AutomationProperties.SetHelpText(_addressBox, "Enter a cell reference, range, or defined name to navigate to.");
+        AutomationProperties.SetName(_addressBox, UiText.Get("GoTo_Reference2"));
+        AutomationProperties.SetHelpText(_addressBox, UiText.Get("GoTo_EnterACellReferenceRangeOrDefinedNameToNavigateTo"));
         _addressBox.Margin = new Thickness(0, 8, 0, 12);
         Grid.SetRow(_addressBox, 2);
         Grid.SetColumn(_addressBox, 1);
@@ -104,13 +104,13 @@ public sealed partial class GoToDialog : Window
         Grid.SetColumnSpan(buttons, 2);
         root.Children.Add(buttons);
 
-        var special = new Button { Content = "S_pecial...", Width = 86, Margin = new Thickness(0, 0, 8, 0) };
+        var special = new Button { Content = UiText.Get("GoTo_Special"), Width = 86, Margin = new Thickness(0, 0, 8, 0) };
         special.Click += (_, _) => OpenSpecialDialog();
         buttons.Children.Add(special);
-        var ok = new Button { Content = "_OK", Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var ok = new Button { Content = UiText.Ok, Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
         ok.Click += (_, _) => Accept();
         buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = "_Cancel", Width = 72, IsCancel = true });
+        buttons.Children.Add(new Button { Content = UiText.Cancel, Width = 72, IsCancel = true });
 
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
@@ -141,7 +141,7 @@ public sealed partial class GoToDialog : Window
     {
         if (!TryParseReferenceRange(_addressBox.Text, _sheetId, _definedNames, out var range))
         {
-            DialogMessageHelper.ShowWarning(this, "Reference is not valid.", "Go To");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("GoTo_ReferenceIsNotValid"), UiText.Get("GoTo_GoTo"));
             FocusReferenceInput();
             return;
         }

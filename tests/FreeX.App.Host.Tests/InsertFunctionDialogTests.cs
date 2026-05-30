@@ -153,11 +153,12 @@ public sealed class InsertFunctionDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FunctionArgumentsDialog.cs"));
 
-        source.Should().Contain("Content = \"_Help on this function\"");
+        source.Should().Contain("Content = UiText.Get(\"FunctionArguments_HelpButton\")");
         source.Should().Contain("ShowFunctionHelp");
         source.Should().Contain("btnRow.Children.Add(help)");
         source.Should().Contain("btnRow.Children.Add(ok)");
         source.Should().Contain("btnRow.Children.Add(cancel)");
+        UiText.Get("FunctionArguments_HelpButton").Should().Be("_Help on this function");
     }
 
     [Fact]
@@ -165,9 +166,10 @@ public sealed class InsertFunctionDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FunctionArgumentsDialog.cs"));
 
-        source.Should().Contain("Text = \"Formula result =\"");
-        source.Should().Contain("AutomationProperties.SetName(_formulaPreview, \"Formula result\");");
+        source.Should().Contain("Text = UiText.Get(\"FunctionArguments_FormulaResultLabel\")");
+        source.Should().Contain("AutomationProperties.SetName(_formulaPreview, UiText.Get(\"FunctionArguments_FormulaResultAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetHelpText(_formulaPreview");
+        UiText.Get("FunctionArguments_FormulaResultLabel").Should().Be("Formula result =");
     }
 
     [Fact]
@@ -187,17 +189,17 @@ public sealed class InsertFunctionDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "InsertFunctionDialog.cs"));
 
-        source.Should().Contain("Content = \"Or select a _category:\"");
+        source.Should().Contain("Content = UiText.Get(\"InsertFunction_OrSelectACategory\")");
         source.Should().Contain("Target = _categoryBox");
-        source.Should().Contain("Content = \"Search for a _function:\"");
+        source.Should().Contain("Content = UiText.Get(\"InsertFunction_SearchForAFunction\")");
         source.Should().Contain("Target = _searchBox");
-        source.Should().Contain("Content = \"Select a _function:\"");
+        source.Should().Contain("Content = UiText.Get(\"InsertFunction_SelectAFunction\")");
         source.Should().Contain("Target = _listBox");
-        source.Should().Contain("Content = \"_Help on this function\"");
+        source.Should().Contain("Content = UiText.Get(\"InsertFunction_HelpOnThisFunction\")");
         source.Should().Contain("ShowFunctionHelp");
         source.Should().NotContain("SystemSounds.Asterisk.Play");
-        source.Should().Contain("Content = \"_OK\"");
-        source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("Content = UiText.Ok");
+        source.Should().Contain("Content = UiText.Cancel");
     }
 
     [Fact]
@@ -206,7 +208,7 @@ public sealed class InsertFunctionDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "InsertFunctionDialog.cs"));
 
         source.Should().Contain("using System.Windows.Automation;");
-        source.Should().Contain("AutomationProperties.SetName(_listBox, \"Functions\");");
+        source.Should().Contain("AutomationProperties.SetName(_listBox, UiText.Get(\"InsertFunction_Functions\"));");
     }
 
     [Fact]
@@ -214,8 +216,8 @@ public sealed class InsertFunctionDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "InsertFunctionDialog.cs"));
 
-        source.Should().Contain("var ok = new Button { Content = \"_OK\", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };");
-        source.Should().Contain("var go = new Button { Content = \"_Go\", Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6) };");
+        source.Should().Contain("var ok = new Button { Content = UiText.Ok, Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };");
+        source.Should().Contain("var go = new Button { Content = UiText.Get(\"InsertFunction_Go\"), Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6) };");
         source.Should().NotContain("Content = \"_Go\", Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6), IsDefault = true");
     }
 
@@ -224,14 +226,14 @@ public sealed class InsertFunctionDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "InsertFunctionDialog.cs"));
 
-        source.Should().Contain("Search for a _function:");
-        source.Should().Contain("Or select a _category:");
+        source.Should().Contain("UiText.Get(\"InsertFunction_SearchForAFunction\")");
+        source.Should().Contain("UiText.Get(\"InsertFunction_OrSelectACategory\")");
         source.Should().Contain("MostRecentlyUsedCategory");
         source.Should().Contain("_categoryBox.SelectedItem = MostRecentlyUsedCategory");
-        source.Should().Contain("_Go");
-        source.Should().Contain("Select a _function:");
-        source.Should().Contain("Formula syntax and help");
-        source.Should().Contain("_Help on this function");
+        source.Should().Contain("UiText.Get(\"InsertFunction_Go\")");
+        source.Should().Contain("UiText.Get(\"InsertFunction_SelectAFunction\")");
+        source.Should().Contain("UiText.Get(\"InsertFunction_FormulaSyntaxAndHelp\")");
+        source.Should().Contain("UiText.Get(\"InsertFunction_HelpOnThisFunction\")");
         source.Should().Contain("FunctionArgumentsDialog");
         source.Should().Contain("argumentsDialog.ResultFormula");
     }

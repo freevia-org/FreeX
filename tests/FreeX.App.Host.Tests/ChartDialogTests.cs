@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -116,15 +115,15 @@ public sealed class ChartDialogTests
     {
         var source = ReadChartTypeDialogSource();
 
-        source.Should().Contain("Header = \"_Recommended Charts\"");
-        source.Should().Contain("Header = \"_All Charts\"");
-        source.Should().Contain("Chart categories");
-        source.Should().Contain("Chart subtype gallery");
-        source.Should().Contain("Preview");
-        source.Should().Contain("Choose a chart type");
-        source.Should().Contain("Recently used and suggested for your data");
-        source.Should().Contain("Chart preview sample");
-        source.Should().Contain("Choose a subtype to see how the chart will represent categories and values.");
+        source.Should().Contain("UiText.Get(\"InsertChart_RecommendedChartsTab\")");
+        source.Should().Contain("UiText.Get(\"InsertChart_AllChartsTab\")");
+        source.Should().Contain("UiText.Get(\"ChartTypePicker_CategoriesAutomationName\")");
+        source.Should().Contain("UiText.Get(\"ChartTypePicker_SubtypeGalleryAutomationName\")");
+        source.Should().Contain("UiText.Get(\"ChartTypePicker_PreviewTitle\")");
+        source.Should().Contain("UiText.Get(\"ChartTypePicker_ChooseChartTypeHeading\")");
+        source.Should().Contain("UiText.Get(\"ChartTypePicker_RecommendedHelpText\")");
+        source.Should().Contain("UiText.Get(\"ChartTypePicker_PreviewSampleLabel\")");
+        source.Should().Contain("UiText.Get(\"ChartTypePicker_AllChartsHelpText\")");
     }
 
     [Fact]
@@ -212,9 +211,9 @@ public sealed class ChartDialogTests
     {
         var source = ReadChartDialogSource();
 
-        source.Should().Contain("AddInput(stack, \"_Chart title:\", _chartTitleBox)");
-        source.Should().Contain("AddInput(stack, \"_Primary horizontal axis title:\", _xAxisTitleBox)");
-        source.Should().Contain("AddInput(stack, \"Primary _vertical axis title:\", _yAxisTitleBox)");
+        source.Should().Contain("AddInput(stack, UiText.Get(\"ChartTitles_ChartTitleLabel\"), _chartTitleBox)");
+        source.Should().Contain("AddInput(stack, UiText.Get(\"ChartTitles_XAxisTitleLabel\"), _xAxisTitleBox)");
+        source.Should().Contain("AddInput(stack, UiText.Get(\"ChartTitles_YAxisTitleLabel\"), _yAxisTitleBox)");
         source.Should().Contain("new Label { Content = label, Target = box");
     }
 
@@ -226,9 +225,9 @@ public sealed class ChartDialogTests
             source.IndexOf("public sealed class ChartTitlesDialog", StringComparison.Ordinal)..
             source.IndexOf("public sealed record ChartStyleDialogResult", StringComparison.Ordinal)];
 
-        dialogSource.Should().Contain("AutomationProperties.SetName(_chartTitleBox, \"Chart title\");");
-        dialogSource.Should().Contain("AutomationProperties.SetName(_xAxisTitleBox, \"Primary horizontal axis title\");");
-        dialogSource.Should().Contain("AutomationProperties.SetName(_yAxisTitleBox, \"Primary vertical axis title\");");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_chartTitleBox, UiText.Get(\"ChartTitles_ChartTitleAutomationName\"));");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_xAxisTitleBox, UiText.Get(\"ChartTitles_XAxisTitleAutomationName\"));");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_yAxisTitleBox, UiText.Get(\"ChartTitles_YAxisTitleAutomationName\"));");
     }
 
     [Fact]
@@ -262,7 +261,7 @@ public sealed class ChartDialogTests
     {
         var source = ReadChartDialogSource();
 
-        source.Should().Contain("Chart style gallery");
+        source.Should().Contain("UiText.Get(\"ChartStyle_GalleryAutomationName\")");
         source.Should().Contain("CreateStyleGalleryTemplate");
         source.Should().Contain("CreateStylePreviewSwatch");
         source.Should().Contain("UniformGrid");
@@ -351,9 +350,9 @@ public sealed class ChartDialogTests
             source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
             source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
 
-        dialogSource.Should().Contain("new Label { Content = \"_Target name:\", Target = _targetBox");
-        dialogSource.Should().Contain("AutomationProperties.SetName(_targetBox, \"Target chart sheet or object sheet name\");");
-        dialogSource.Should().Contain("AutomationProperties.SetHelpText(_targetBox, \"Enter the worksheet or chart sheet name that will contain the chart.\");");
+        dialogSource.Should().Contain("new Label { Content = UiText.Get(\"MoveChart_TargetNameLabel\"), Target = _targetBox");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_targetBox, UiText.Get(\"MoveChart_TargetNameAutomationName\"));");
+        dialogSource.Should().Contain("AutomationProperties.SetHelpText(_targetBox, UiText.Get(\"MoveChart_TargetNameHelpText\"));");
     }
 
     [Fact]
@@ -361,16 +360,22 @@ public sealed class ChartDialogTests
     {
         var source = ReadChartDialogSource();
 
-        source.Should().Contain("Content = \"_Object in:\"");
-        source.Should().Contain("Content = \"_New chart sheet\"");
-        source.Should().Contain("Content = \"_Target name:\"");
-        source.Should().Contain("Content = \"_Chart data range:\"");
-        source.Should().Contain("Content = \"_Switch Row/Column\"");
-        source.Should().Contain("Content = \"First column contains _category labels\"");
-        source.Should().Contain("\"_Add series\"");
-        source.Should().Contain("\"_Edit series\"");
-        source.Should().Contain("\"_Remove series\"");
-        source.Should().Contain("\"_Edit Axis Labels\"");
+        foreach (var key in new[]
+        {
+            "MoveChart_ObjectInSheet",
+            "MoveChart_NewChartSheet",
+            "MoveChart_TargetNameLabel",
+            "SelectDataSource_ChartDataRangeLabel",
+            "SelectDataSource_SwitchRowColumn",
+            "SelectDataSource_FirstColumnCategories",
+            "SelectDataSource_AddSeriesButton",
+            "SelectDataSource_EditSeriesButton",
+            "SelectDataSource_RemoveSeriesButton",
+            "SelectDataSource_EditAxisLabelsButton"
+        })
+        {
+            source.Should().Contain($"UiText.Get(\"{key}\")");
+        }
     }
 
     [Fact]
@@ -400,7 +405,7 @@ public sealed class ChartDialogTests
         var source = ReadChartDialogSource();
         var dialogSource = source[source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)..];
 
-        dialogSource.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Chart data range\");");
+        dialogSource.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(\"SelectDataSource_ChartDataRangeAutomationName\"));");
     }
 
     [Fact]
@@ -409,23 +414,23 @@ public sealed class ChartDialogTests
         var source = ReadChartDialogSource();
 
         source.Should().Contain("CreateReferenceEditor(_rangeBox");
-        source.Should().Contain("Select chart data range");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_SelectChartDataRangeAutomationName\")");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
         source.Should().Contain("SelectDataSourceRangeSelectionRequest");
         source.Should().Contain("_switchRowColumnBox");
         source.Should().Contain("_seriesList");
         source.Should().Contain("_axisLabelsList");
-        source.Should().Contain("Legend Entries (Series)");
-        source.Should().Contain("Horizontal (Category) Axis Labels");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_SeriesPanelTitle\")");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_AxisLabelsPanelTitle\")");
         source.Should().Contain("AddEditRemoveButtons");
-        source.Should().Contain("Series list");
-        source.Should().Contain("Axis label list");
-        source.Should().Contain("_Add series");
-        source.Should().Contain("_Edit series");
-        source.Should().Contain("_Edit Axis Labels");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_SeriesListAutomationName\")");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_AxisLabelsListAutomationName\")");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_AddSeriesButton\")");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_EditSeriesButton\")");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_EditAxisLabelsButton\")");
         source.Should().Contain("_seriesList.MouseDoubleClick += EditSeriesButton_Click;");
         source.Should().Contain("_axisLabelsList.MouseDoubleClick += EditAxisLabelsButton_Click;");
-        source.Should().Contain("Name and values are inferred from the selected chart range.");
+        source.Should().Contain("UiText.Get(\"SelectDataSource_SeriesListHelpText\")");
     }
 
     [Fact]
@@ -486,7 +491,7 @@ public sealed class ChartDialogTests
 
         dialogSource.Should().Contain("Window.GetWindow(dependencyObject)");
         dialogSource.Should().Contain("MessageBox.Show(owner,"); // static handler with dynamic owner — kept as raw call
-        dialogSource.Should().Contain("\"Hidden and Empty Cell Settings\"");
+        dialogSource.Should().Contain("UiText.Get(\"SelectDataSource_HiddenEmptyCellsTitle\")");
     }
 
     [Fact]
@@ -557,7 +562,7 @@ public sealed class ChartDialogTests
 
         dialogSource.Should().Contain("if (!ValidateInputs())");
         dialogSource.Should().Contain("ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, out _)");
-        dialogSource.Should().Contain("ShowInvalidInputWarning(\"Enter a valid chart data range.\", _rangeBox);");
+        dialogSource.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"SelectDataSource_InvalidRangeMessage\"), _rangeBox);");
         dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         dialogSource.Should().Contain("FocusRangeSelectionInput(target);");
         chartCommandSource.Should().Contain("sheetId: _currentSheetId");
@@ -588,18 +593,18 @@ public sealed class ChartDialogTests
 
         source.Should().Contain("AddColorText");
         helperSource.Should().Contain("new ColorPickerDialog(initialColor, allowNoColor: true)");
-        foreach (var colorLabel in new[]
+        foreach (var key in new[]
         {
-            "_Chart area fill color",
-            "_Plot area fill color",
-            "Legend _text color",
-            "_Fill color",
-            "_Line color",
-            "_Major gridline color",
-            "Axis _line color"
+            "ChartAreaLegend_ChartAreaFillColorLabel",
+            "ChartAreaLegend_PlotAreaFillColorLabel",
+            "ChartAreaLegend_LegendTextColorLabel",
+            "ChartSeriesFormat_FillColorLabel",
+            "ChartTrendline_LineColorLabel",
+            "ChartAxisFormat_MajorGridlineColorLabel",
+            "ChartAxisFormat_AxisLineColorLabel"
         })
         {
-            source.Should().Contain($"AddColorText(stack, \"{colorLabel}\"");
+            source.Should().Contain($"AddColorText(stack, UiText.Get(\"{key}\")");
         }
     }
 
@@ -609,12 +614,12 @@ public sealed class ChartDialogTests
         var source = ReadChartFormatDialogSource();
         var helperSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartDialogHelpers.cs"));
 
-        source.Should().Contain("CreateGroupBox(\"Fill & Line\"");
-        source.Should().Contain("CreateGroupBox(\"Legend\"");
-        source.Should().Contain("CreateGroupBox(\"Label Options\"");
-        source.Should().Contain("CreateGroupBox(\"Axis Options\"");
-        source.Should().Contain("CreateGroupBox(\"Tick Marks\"");
-        source.Should().Contain("CreateGroupBox(\"Series Options\"");
+        source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartDialog_FillLineGroup\")");
+        source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartAreaLegend_LegendGroup\")");
+        source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartDataLabels_LabelOptionsGroup\")");
+        source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartAxisFormat_AxisOptionsGroup\")");
+        source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartAxisFormat_TickMarksGroup\")");
+        source.Should().Contain("CreateGroupBox(UiText.Get(\"ChartSeriesFormat_SeriesOptionsGroup\")");
         source.Should().Contain("CreateInlineHelp(");
         source.Should().Contain("AddNumericText");
         helperSource.Should().Contain("AutomationProperties.SetHelpText");
@@ -627,59 +632,59 @@ public sealed class ChartDialogTests
             ReadChartTypeDialogSource(),
             ReadChartFormatDialogSource());
 
-        foreach (var content in new[]
+        foreach (var key in new[]
         {
-            "Content = \"Use _recommended layout\"",
-            "Content = \"_Show legend\"",
-            "Content = \"O_verlay legend on chart\"",
-            "Content = \"_Show data labels\"",
-            "Content = \"_Category name\"",
-            "Content = \"S_eries name\"",
-            "Content = \"_Percentage\"",
-            "Content = \"Data label callo_uts\"",
-            "Content = \"_Show trendline\"",
-            "Content = \"Display _equation\"",
-            "Content = \"Display _R-squared value\"",
-            "Content = \"_Show error bars\"",
-            "Content = \"_End caps\"",
-            "Content = \"_Logarithmic scale\"",
-            "Content = \"_Major gridlines\"",
-            "Content = \"M_inor gridlines\"",
-            "Content = \"Show _labels\""
+            "InsertChart_UseRecommendedLayout",
+            "ChartAreaLegend_ShowLegend",
+            "ChartAreaLegend_OverlayLegend",
+            "ChartDataLabels_ShowDataLabels",
+            "ChartDataLabels_CategoryName",
+            "ChartDataLabels_SeriesName",
+            "ChartDataLabels_Percentage",
+            "ChartDataLabels_Callouts",
+            "ChartTrendline_ShowTrendline",
+            "ChartTrendline_DisplayEquation",
+            "ChartTrendline_DisplayRSquared",
+            "ChartErrorBars_ShowErrorBars",
+            "ChartErrorBars_EndCaps",
+            "ChartAxisFormat_LogScale",
+            "ChartAxisFormat_MajorGridlines",
+            "ChartAxisFormat_MinorGridlines",
+            "ChartAxisFormat_ShowLabels"
         })
         {
-            source.Should().Contain(content);
+            source.Should().Contain($"UiText.Get(\"{key}\")");
         }
 
-        foreach (var helperCall in new[]
+        foreach (var key in new[]
         {
-            "AddColorText(stack, \"_Chart area fill color\"",
-            "AddColorText(stack, \"_Plot area fill color\"",
-            "AddNumericText(stack, \"Plot area border _width\"",
-            "AddCombo(stack, \"Legend _position\"",
-            "AddColorText(stack, \"Legend _text color\"",
-            "AddNumericText(stack, \"Legend _font size\"",
-            "AddCombo(stack, \"P_osition\"",
-            "AddCombo(stack, \"Separato_r\"",
-            "AddCombo(stack, \"_Number format\"",
-            "AddNumericText(stack, \"Border t_hickness\"",
-            "AddNumericText(stack, \"_Minimum (blank for Auto)\"",
-            "AddNumericText(stack, \"Ma_ximum (blank for Auto)\"",
-            "AddCombo(stack, \"_Major tick marks\"",
-            "AddCombo(stack, \"M_inor tick marks\"",
-            "AddCombo(stack, \"_Series\"",
-            "AddCombo(stack, \"_Dash style\"",
-            "AddCombo(stack, \"_Marker\"",
-            "AddCombo(stack, \"_Type\"",
-            "AddCombo(stack, \"_Direction\"",
-            "AddNumericText(stack, \"_Gap width %\"",
-            "AddNumericText(stack, \"Series _overlap %\"",
-            "AddNumericText(stack, \"_First slice angle",
-            "AddNumericText(stack, \"_Bubble scale %\"",
-            "AddCombo(stack, \"Size _represents\""
+            "ChartAreaLegend_ChartAreaFillColorLabel",
+            "ChartAreaLegend_PlotAreaFillColorLabel",
+            "ChartAreaLegend_PlotAreaBorderWidthLabel",
+            "ChartAreaLegend_LegendPositionLabel",
+            "ChartAreaLegend_LegendTextColorLabel",
+            "ChartAreaLegend_LegendFontSizeLabel",
+            "ChartDataLabels_PositionLabel",
+            "ChartDataLabels_SeparatorLabel",
+            "ChartDataLabels_NumberFormatLabel",
+            "ChartDataLabels_BorderThicknessLabel",
+            "ChartAxisFormat_MinimumLabel",
+            "ChartAxisFormat_MaximumLabel",
+            "ChartAxisFormat_MajorTickMarksLabel",
+            "ChartAxisFormat_MinorTickMarksLabel",
+            "ChartSeriesFormat_SeriesLabel",
+            "ChartSeriesFormat_DashStyleLabel",
+            "ChartSeriesFormat_MarkerLabel",
+            "ChartTrendline_TypeLabel",
+            "ChartErrorBars_DirectionLabel",
+            "ChartBarFormat_GapWidthLabel",
+            "ChartBarFormat_OverlapLabel",
+            "ChartPieFormat_FirstSliceAngleLabel",
+            "ChartBubbleFormat_BubbleScaleLabel",
+            "ChartBubbleFormat_SizeRepresentsLabel"
         })
         {
-            source.Should().Contain(helperCall);
+            source.Should().Contain($"UiText.Get(\"{key}\")");
         }
     }
 
@@ -687,8 +692,23 @@ public sealed class ChartDialogTests
     public void ChartDataLabelsDialog_UsesUniqueAccessKeys()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartDataLabelsDialog.cs"));
-        var labels = Regex.Matches(source, "Content = \"(?<label>[^\"]*_[^\"]*)\"|Add(?:Combo|ColorText|NumericText)\\(stack, \"(?<label>[^\"]*_[^\"]*)\"")
-            .Select(match => match.Groups["label"].Value);
+        var labels = new[]
+        {
+            "ChartDataLabels_ShowDataLabels",
+            "ChartDataLabels_CategoryName",
+            "ChartDataLabels_SeriesName",
+            "ChartDataLabels_Percentage",
+            "ChartDataLabels_Callouts",
+            "ChartDataLabels_PositionLabel",
+            "ChartDataLabels_SeparatorLabel",
+            "ChartDataLabels_NumberFormatLabel",
+            "ChartDataLabels_FillColorLabel",
+            "ChartDataLabels_BorderColorLabel",
+            "ChartDataLabels_TextColorLabel",
+            "ChartDataLabels_BorderThicknessLabel",
+            "ChartDataLabels_FontSizeLabel",
+            "ChartDataLabels_TextAngleLabel"
+        }.Select(UiText.Get);
         var duplicateAccessKeys = labels
             .Select(label => new { Label = label, AccessKey = GetAccessKey(label) })
             .GroupBy(item => item.AccessKey)
@@ -799,15 +819,15 @@ public sealed class ChartDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartFormatDialogs.cs"));
 
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _chartAreaFillBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _plotAreaFillBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _plotAreaBorderBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a plot area border width from 0 to 10 points.\", _plotAreaBorderThicknessBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _legendTextBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _legendFillBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _legendBorderBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a legend border width from 0 to 10 points.\", _legendBorderThicknessBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a legend font size from 6 to 72 points.\", _legendFontSizeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _chartAreaFillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _plotAreaFillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _plotAreaBorderBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAreaLegend_InvalidPlotAreaBorderWidthMessage\"), _plotAreaBorderThicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendTextBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendFillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _legendBorderBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAreaLegend_InvalidLegendBorderWidthMessage\"), _legendBorderThicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAreaLegend_InvalidLegendFontSizeMessage\"), _legendFontSizeBox);");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
@@ -866,12 +886,12 @@ public sealed class ChartDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartDataLabelsDialog.cs"));
 
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _fillBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _borderBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _textBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a data label border width from 0 to 10 points.\", _borderThicknessBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a data label font size from 6 to 72 points.\", _fontSizeBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a data label angle from -90 to 90 degrees.\", _angleBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _fillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _borderBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _textBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDataLabels_InvalidBorderThicknessMessage\"), _borderThicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDataLabels_InvalidFontSizeMessage\"), _fontSizeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDataLabels_InvalidAngleMessage\"), _angleBox);");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
@@ -920,10 +940,10 @@ public sealed class ChartDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartTrendlineOptionsDialog.cs"));
 
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a moving average period from 2 to 255.\", _periodBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a polynomial order from 2 to 6.\", _orderBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _colorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a trendline width from 0.5 to 10 points.\", _thicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartTrendline_InvalidPeriodMessage\"), _periodBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartTrendline_InvalidOrderMessage\"), _orderBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _colorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartTrendline_InvalidWidthMessage\"), _thicknessBox);");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
@@ -986,7 +1006,7 @@ public sealed class ChartDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartErrorBarsDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_valueBox, \"Error bar value\");");
+        source.Should().Contain("AutomationProperties.SetName(_valueBox, UiText.Get(\"ChartErrorBars_ValueAutomationName\"));");
     }
 
     [Fact]
@@ -994,7 +1014,7 @@ public sealed class ChartDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartErrorBarsDialog.cs"));
 
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter an error amount from 0 to 1000.\", _valueBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartErrorBars_InvalidValueMessage\"), _valueBox);");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
@@ -1065,18 +1085,18 @@ public sealed class ChartDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartAxisFormatDialog.cs"));
 
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a numeric minimum value or leave it blank.\", _minimumBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a numeric maximum value or leave it blank.\", _maximumBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive major unit or leave it blank.\", _majorUnitBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive minor unit or leave it blank.\", _minorUnitBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _majorGridColorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _minorGridColorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive gridline width.\", _gridlineThicknessBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _labelColorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a label font size from 6 to 72 points.\", _labelFontSizeBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a label angle from -90 to 90 degrees.\", _labelAngleBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _lineColorBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter an axis line width from 0.5 to 10 points.\", _lineThicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAxisFormat_InvalidMinimumMessage\"), _minimumBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAxisFormat_InvalidMaximumMessage\"), _maximumBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAxisFormat_InvalidMajorUnitMessage\"), _majorUnitBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAxisFormat_InvalidMinorUnitMessage\"), _minorUnitBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _majorGridColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _minorGridColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAxisFormat_InvalidGridlineWidthMessage\"), _gridlineThicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _labelColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAxisFormat_InvalidLabelFontSizeMessage\"), _labelFontSizeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAxisFormat_InvalidLabelAngleMessage\"), _labelAngleBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _lineColorBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartAxisFormat_InvalidAxisLineWidthMessage\"), _lineThicknessBox);");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
@@ -1129,10 +1149,10 @@ public sealed class ChartDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ChartSeriesFormatDialog.cs"));
 
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _fillBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a color as #RRGGBB or none.\", _strokeBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive line width or leave it blank.\", _strokeThicknessBox);");
-        source.Should().Contain("ShowInvalidInputWarning(\"Enter a positive marker size or leave it blank.\", _markerSizeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _fillBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _strokeBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartSeriesFormat_InvalidLineWidthMessage\"), _strokeThicknessBox);");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"ChartSeriesFormat_InvalidMarkerSizeMessage\"), _markerSizeBox);");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");
         source.Should().Contain("target.SelectAll();");
@@ -1148,7 +1168,7 @@ public sealed class ChartDialogTests
         foreach (var expected in new[]
         {
             "new Label { Content = label, Target = box",
-            "new Label { Content = \"_Style\", Target = _styleGallery"
+            "new Label { Content = UiText.Get(\"ChartStyle_StyleLabel\"), Target = _styleGallery"
         })
             source.Should().Contain(expected);
 

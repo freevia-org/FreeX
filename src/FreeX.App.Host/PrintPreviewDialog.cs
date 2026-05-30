@@ -8,7 +8,7 @@ namespace FreeX.App.Host;
 public sealed partial class PrintPreviewDialog : Window
 {
     public PrintPreviewDialog(string workbookName, FixedDocument document)
-        : this(workbookName, document, new PrintSettingsPlan(["Print active sheet"]))
+        : this(workbookName, document, new PrintSettingsPlan([UiText.Get("PrintPreview_DefaultScopeActiveSheet")]))
     {
     }
 

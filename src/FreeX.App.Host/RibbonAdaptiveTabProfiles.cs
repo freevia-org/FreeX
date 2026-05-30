@@ -60,6 +60,7 @@ internal static class RibbonAdaptiveTabProfiles
             Breakpoints:
             [
                 Rule(760, collapseAll: true),
+                Rule(1120, collapseFromIndex: 1),
                 Rule(1320, collapseFromIndex: 2)
             ],
             RequiresMeasuredCorrection: true),
@@ -81,7 +82,7 @@ internal static class RibbonAdaptiveTabProfiles
                     states: [State("Sort & Filter", RibbonAdaptiveGroupState.IconOnly)],
                     collapseGroups: ["Queries & Connections", "Outline"]),
                 Rule(
-                    1320,
+                    1465,
                     collapseGroups: ["Outline"])
             ],
             RuntimeVisibility:
@@ -148,7 +149,7 @@ internal static class RibbonAdaptiveTabProfiles
             Breakpoints:
             [
                 Rule(760, collapseFromIndex: 0),
-                Rule(1120, collapseFromIndex: 3),
+                Rule(1120, collapseFromIndex: 2),
                 Rule(1320, collapseFromIndex: 3)
             ],
             RequiresMeasuredCorrection: true),

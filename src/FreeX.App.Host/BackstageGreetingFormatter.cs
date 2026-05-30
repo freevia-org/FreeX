@@ -9,8 +9,8 @@ public static class BackstageGreetingFormatter
 
     public static string FormatGreeting(int hour) => hour switch
     {
-        >= 0 and < AfternoonStartHour => "Good morning",
-        >= AfternoonStartHour and < EveningStartHour => "Good afternoon",
-        _ => "Good evening"
+        >= 0 and < AfternoonStartHour => UiText.Get("Backstage_GreetingMorning"),
+        >= AfternoonStartHour and < EveningStartHour => UiText.Get("Backstage_GreetingAfternoon"),
+        _ => UiText.Get("Backstage_GreetingEvening")
     };
 }

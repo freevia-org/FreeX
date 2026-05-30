@@ -7,33 +7,36 @@ namespace FreeX.App.Host;
 
 public partial class FormatCellsDialog
 {
-    private sealed record FillPatternOption(CellFillPatternStyle Style, string Label);
+    private sealed record FillPatternOption(CellFillPatternStyle Style, string ResourceKey)
+    {
+        public string Label => UiText.Get(ResourceKey);
+    }
 
     private static readonly FillPatternOption[] FillPatternOptions =
     [
-        new(CellFillPatternStyle.None, "None"),
-        new(CellFillPatternStyle.Solid, "Solid"),
-        new(CellFillPatternStyle.Gray0625, "6.25% Gray"),
-        new(CellFillPatternStyle.Gray125, "12.5% Gray"),
-        new(CellFillPatternStyle.LightGray, "25% Gray"),
-        new(CellFillPatternStyle.MediumGray, "50% Gray"),
-        new(CellFillPatternStyle.DarkGray, "75% Gray"),
-        new(CellFillPatternStyle.LightHorizontal, "Thin Horizontal Stripe"),
-        new(CellFillPatternStyle.LightVertical, "Thin Vertical Stripe"),
-        new(CellFillPatternStyle.LightDown, "Thin Reverse Diagonal Stripe"),
-        new(CellFillPatternStyle.LightUp, "Thin Diagonal Stripe"),
-        new(CellFillPatternStyle.LightGrid, "Thin Horizontal Crosshatch"),
-        new(CellFillPatternStyle.LightTrellis, "Thin Diagonal Crosshatch"),
-        new(CellFillPatternStyle.DarkHorizontal, "Horizontal Stripe"),
-        new(CellFillPatternStyle.DarkVertical, "Vertical Stripe"),
-        new(CellFillPatternStyle.DarkDown, "Reverse Diagonal Stripe"),
-        new(CellFillPatternStyle.DarkUp, "Diagonal Stripe"),
-        new(CellFillPatternStyle.DarkGrid, "Diagonal Crosshatch"),
-        new(CellFillPatternStyle.DarkTrellis, "Thick Diagonal Crosshatch")
+        new(CellFillPatternStyle.None, "FormatCells_FillPatternNone"),
+        new(CellFillPatternStyle.Solid, "FormatCells_FillPatternSolid"),
+        new(CellFillPatternStyle.Gray0625, "FormatCells_FillPatternGray0625"),
+        new(CellFillPatternStyle.Gray125, "FormatCells_FillPatternGray125"),
+        new(CellFillPatternStyle.LightGray, "FormatCells_FillPatternLightGray"),
+        new(CellFillPatternStyle.MediumGray, "FormatCells_FillPatternMediumGray"),
+        new(CellFillPatternStyle.DarkGray, "FormatCells_FillPatternDarkGray"),
+        new(CellFillPatternStyle.LightHorizontal, "FormatCells_FillPatternLightHorizontal"),
+        new(CellFillPatternStyle.LightVertical, "FormatCells_FillPatternLightVertical"),
+        new(CellFillPatternStyle.LightDown, "FormatCells_FillPatternLightDown"),
+        new(CellFillPatternStyle.LightUp, "FormatCells_FillPatternLightUp"),
+        new(CellFillPatternStyle.LightGrid, "FormatCells_FillPatternLightGrid"),
+        new(CellFillPatternStyle.LightTrellis, "FormatCells_FillPatternLightTrellis"),
+        new(CellFillPatternStyle.DarkHorizontal, "FormatCells_FillPatternDarkHorizontal"),
+        new(CellFillPatternStyle.DarkVertical, "FormatCells_FillPatternDarkVertical"),
+        new(CellFillPatternStyle.DarkDown, "FormatCells_FillPatternDarkDown"),
+        new(CellFillPatternStyle.DarkUp, "FormatCells_FillPatternDarkUp"),
+        new(CellFillPatternStyle.DarkGrid, "FormatCells_FillPatternDarkGrid"),
+        new(CellFillPatternStyle.DarkTrellis, "FormatCells_FillPatternDarkTrellis")
     ];
 
     private void DlgFontColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgFontColorBox, allowNoColor: false, "Font Color");
+        PickColorInto(DlgFontColorBox, allowNoColor: false, UiText.Get("FormatCells_FontColorTitle"));
 
     private void DlgFontColorSwatchButton_Click(object sender, RoutedEventArgs e)
     {
@@ -42,10 +45,10 @@ public partial class FormatCellsDialog
     }
 
     private void DlgFillColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgFillColorBox, allowNoColor: true, "Fill Color");
+        PickColorInto(DlgFillColorBox, allowNoColor: true, UiText.Get("FormatCells_FillColorTitle"));
 
     private void DlgFillPatternColorPickerButton_Click(object sender, RoutedEventArgs e) =>
-        PickColorInto(DlgFillPatternColorBox, allowNoColor: true, "Pattern Color");
+        PickColorInto(DlgFillPatternColorBox, allowNoColor: true, UiText.Get("FormatCells_PatternColorTitle"));
 
     private void DlgFillSwatchButton_Click(object sender, RoutedEventArgs e)
     {
@@ -93,11 +96,11 @@ public partial class FormatCellsDialog
             ? SystemColors.ControlDarkBrush
             : BrushForColor(patternColor, Brushes.Black);
         DlgFillPatternSamplePreview.ToolTip = patternStyle == CellFillPatternStyle.None
-            ? "No fill pattern"
-            : $"{FillPatternLabel(patternStyle)} pattern";
+            ? UiText.Get("FormatCells_NoFillPattern")
+            : UiText.Format("FormatCells_FillPatternToolTip", FillPatternLabel(patternStyle));
         DlgFillSamplePreview.ToolTip = patternStyle == CellFillPatternStyle.None
-            ? "No fill pattern"
-            : $"{FillPatternLabel(patternStyle)} pattern";
+            ? UiText.Get("FormatCells_NoFillPattern")
+            : UiText.Format("FormatCells_FillPatternToolTip", FillPatternLabel(patternStyle));
     }
 
     private static CellColor? TryParseColor(string text)
@@ -141,5 +144,6 @@ public partial class FormatCellsDialog
     }
 
     private static string FillPatternLabel(CellFillPatternStyle style) =>
-        FillPatternOptions.FirstOrDefault(option => option.Style == style)?.Label ?? "None";
+        FillPatternOptions.FirstOrDefault(option => option.Style == style)?.Label
+            ?? UiText.Get("FormatCells_FillPatternNone");
 }

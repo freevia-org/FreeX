@@ -12,7 +12,7 @@ public sealed class CreateTableDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _rangeBox = new();
-    private readonly CheckBox _headersBox = new() { Content = "_My table has headers", IsChecked = true };
+    private readonly CheckBox _headersBox = new() { Content = UiText.Get("CreateTable_HeadersCheckBox"), IsChecked = true };
     private readonly string _tableStyleName;
     private readonly Action<CreateTableRangeSelectionRequest>? _requestRangeSelection;
 
@@ -28,7 +28,7 @@ public sealed class CreateTableDialog : Window
         _sheetId = sheetId;
         _tableStyleName = tableStyleName;
         _requestRangeSelection = requestRangeSelection;
-        Title = "Create Table";
+        Title = UiText.Get("CreateTable_Title");
         Width = 360;
         Height = 190;
         ResizeMode = ResizeMode.NoResize;
@@ -36,15 +36,15 @@ public sealed class CreateTableDialog : Window
         ShowInTaskbar = false;
 
         _rangeBox.Text = defaultRangeText;
-        AutomationProperties.SetName(_rangeBox, "Table range");
+        AutomationProperties.SetName(_rangeBox, UiText.Get("CreateTable_RangeAutomationName"));
         AutomationProperties.SetAutomationId(_rangeBox, "CreateTableRangeBox");
-        AutomationProperties.SetHelpText(_rangeBox, "Enter the range of worksheet cells to convert into a table.");
-        AutomationProperties.SetName(_headersBox, "My table has headers");
+        AutomationProperties.SetHelpText(_rangeBox, UiText.Get("CreateTable_RangeAutomationHelpText"));
+        AutomationProperties.SetName(_headersBox, UiText.Get("CreateTable_HeadersAutomationName"));
         AutomationProperties.SetAutomationId(_headersBox, "CreateTableHeadersBox");
-        AutomationProperties.SetHelpText(_headersBox, "Select when the first row of the table range contains column headers.");
+        AutomationProperties.SetHelpText(_headersBox, UiText.Get("CreateTable_HeadersAutomationHelpText"));
         var root = new StackPanel { Margin = new Thickness(16) };
-        root.Children.Add(new Label { Content = "_Where is the data for your table?", Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
-        root.Children.Add(CreateReferenceEditor(_rangeBox, "Select table range", RequestRangeSelection));
+        root.Children.Add(new Label { Content = UiText.Get("CreateTable_RangeLabel"), Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        root.Children.Add(CreateReferenceEditor(_rangeBox, UiText.Get("CreateTable_RangePickerAutomationName"), RequestRangeSelection));
         _headersBox.Margin = new Thickness(0, 0, 0, 16);
         root.Children.Add(_headersBox);
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
@@ -58,8 +58,21 @@ public sealed class CreateTableDialog : Window
         bool firstRowHasHeaders,
         string tableStyleName,
         out CreateTableDialogResult result,
-        out string? error) =>
-        CreateTableInputParser.TryParse(sheetId, rangeText, firstRowHasHeaders, tableStyleName, out result, out error);
+        out string? error)
+    {
+        var parsed = CreateTableInputParser.TryParse(sheetId, rangeText, firstRowHasHeaders, tableStyleName, out result, out error);
+        error = LocalizeParseError(error);
+        return parsed;
+    }
+
+    private static string? LocalizeParseError(string? error) =>
+        error switch
+        {
+            "Enter a table range." => UiText.Get("CreateTable_MissingRangeMessage"),
+            "Table range must include at least two rows." => UiText.Get("CreateTable_MinimumRowsMessage"),
+            "Enter a valid table range." => UiText.Get("CreateTable_InvalidRangeMessage"),
+            _ => error
+        };
 
     public static CreateTableRangeSelectionRequest CreateRangeSelectionRequest(string currentText) =>
         new(currentText.Trim(), CollapseDialog: true);
@@ -101,7 +114,7 @@ public sealed class CreateTableDialog : Window
     {
         if (!TryParse(_sheetId, _rangeBox.Text, _headersBox.IsChecked == true, _tableStyleName, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? "Enter a valid table range.", Title);
+            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("CreateTable_InvalidRangeMessage"), Title);
             FocusRangeBox();
             return;
         }

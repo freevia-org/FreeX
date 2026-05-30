@@ -1,7 +1,8 @@
 <Window x:Class="FreeX.App.Host.PivotValueFieldSettingsDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Value Field Settings"
+        xmlns:local="clr-namespace:FreeX.App.Host"
+        Title="{local:Loc Key=PivotValueFieldSettings_ValueFieldSettings}"
         Width="430"
         Height="430"
         WindowStartupLocation="CenterOwner"
@@ -12,17 +13,17 @@
                     HorizontalAlignment="Right"
                     Margin="0,12,0,0">
             <Button x:Name="OkButton"
-                    Content="_OK"
+                    Content="{local:Loc Key=Common_Ok}"
                     Width="78"
                     Margin="0,0,8,0"
                     AutomationProperties.AutomationId="PivotValueFieldSettingsOkButton"
-                    AutomationProperties.HelpText="Apply the value field settings."
+                    AutomationProperties.HelpText="{local:Loc Key=PivotValueFieldSettings_ApplyTheValueFieldSettings}"
                     IsDefault="True"
                     Click="OkButton_Click"/>
-            <Button Content="_Cancel"
+            <Button Content="{local:Loc Key=Common_Cancel}"
                     Width="78"
                     AutomationProperties.AutomationId="PivotValueFieldSettingsCancelButton"
-                    AutomationProperties.HelpText="Close the Value Field Settings dialog without applying changes."
+                    AutomationProperties.HelpText="{local:Loc Key=PivotValueFieldSettings_CloseTheValueFieldSettingsDialogWithoutApplyingChanges}"
                     IsCancel="True"/>
         </StackPanel>
 
@@ -38,104 +39,104 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Label Grid.Column="0"
-                       Content="Custom _Name:"
+                       Content="{local:Loc Key=PivotValueFieldSettings_CustomName}"
                        Target="{Binding ElementName=CustomNameBox}"
                        VerticalAlignment="Center"
                        Padding="0"
                        Margin="0,0,8,0"/>
                 <TextBox x:Name="CustomNameBox"
                          Grid.Column="1"
-                         AutomationProperties.Name="Custom name"
+                         AutomationProperties.Name="{local:Loc Key=PivotValueFieldSettings_CustomName2}"
                          AutomationProperties.AutomationId="PivotValueCustomNameBox"
-                         AutomationProperties.HelpText="Enter the display name for the value field."/>
+                         AutomationProperties.HelpText="{local:Loc Key=PivotValueFieldSettings_EnterTheDisplayNameForTheValueField}"/>
             </Grid>
 
             <TabControl x:Name="ValueFieldTabs" Grid.Row="1">
-                <TabItem Header="_Summarize Values By">
+                <TabItem Header="{local:Loc Key=PivotValueFieldSettings_SummarizeValuesBy}">
                     <StackPanel Margin="10">
-                        <Label Content="_Summarize value field by:"
+                        <Label Content="{local:Loc Key=PivotValueFieldSettings_SummarizeValueFieldBy}"
                                Target="{Binding ElementName=SummaryFunctionBox}"
                                Padding="0"
                                Margin="0,0,0,6"/>
                         <ComboBox x:Name="SummaryFunctionBox"
                                   Height="24"
-                                  AutomationProperties.Name="Summarize value field by"
+                                  AutomationProperties.Name="{local:Loc Key=PivotValueFieldSettings_SummarizeValueFieldBy2}"
                                   AutomationProperties.AutomationId="PivotValueSummaryFunctionBox"
-                                  AutomationProperties.HelpText="Choose the summary calculation for the value field."/>
+                                  AutomationProperties.HelpText="{local:Loc Key=PivotValueFieldSettings_ChooseTheSummaryCalculationForTheValueField}"/>
                     </StackPanel>
                 </TabItem>
-                <TabItem x:Name="ShowValuesAsTab" Header="Show Values _As">
+                <TabItem x:Name="ShowValuesAsTab" Header="{local:Loc Key=PivotValueFieldSettings_ShowValuesAs}">
                     <StackPanel Margin="10">
-                        <Label Content="Show values _as:"
+                        <Label Content="{local:Loc Key=PivotValueFieldSettings_ShowValuesAs2}"
                                Target="{Binding ElementName=ShowValuesAsBox}"
                                Padding="0"
                                Margin="0,0,0,6"/>
                         <ComboBox x:Name="ShowValuesAsBox"
                                   Height="24"
-                                  AutomationProperties.Name="Show values as"
+                                  AutomationProperties.Name="{local:Loc Key=PivotValueFieldSettings_ShowValuesAs3}"
                                   AutomationProperties.AutomationId="PivotValueShowValuesAsBox"
-                                  AutomationProperties.HelpText="Choose how the value field is displayed in the PivotTable."
+                                  AutomationProperties.HelpText="{local:Loc Key=PivotValueFieldSettings_ChooseHowTheValueFieldIsDisplayedInThePivotTable}"
                                   SelectionChanged="ShowValuesAsBox_SelectionChanged"/>
                         <StackPanel x:Name="BaseFieldPanel"
                                     Visibility="Collapsed"
                                     IsEnabled="False">
-                            <Label Content="_Base field:"
+                            <Label Content="{local:Loc Key=PivotValueFieldSettings_BaseField}"
                                    Target="{Binding ElementName=BaseFieldBox}"
                                    Padding="0"
                                    Margin="0,10,0,6"/>
                             <ComboBox x:Name="BaseFieldBox"
                                       Height="24"
-                                      AutomationProperties.Name="Base field"
+                                      AutomationProperties.Name="{local:Loc Key=PivotValueFieldSettings_BaseField2}"
                                       AutomationProperties.AutomationId="PivotValueBaseFieldBox"
-                                      AutomationProperties.HelpText="Choose the base field for the selected show-values-as calculation."/>
+                                      AutomationProperties.HelpText="{local:Loc Key=PivotValueFieldSettings_ChooseTheBaseFieldForTheSelectedShowValuesAsCalculation}"/>
                         </StackPanel>
                         <StackPanel x:Name="BaseItemPanel"
                                     Visibility="Collapsed"
                                     IsEnabled="False">
-                            <Label Content="Base _item:"
+                            <Label Content="{local:Loc Key=PivotValueFieldSettings_BaseItem}"
                                    Target="{Binding ElementName=BaseItemBox}"
                                    Padding="0"
                                    Margin="0,10,0,6"/>
                             <TextBox x:Name="BaseItemBox"
                                      Height="24"
-                                     AutomationProperties.Name="Base item"
+                                     AutomationProperties.Name="{local:Loc Key=PivotValueFieldSettings_BaseItem2}"
                                      AutomationProperties.AutomationId="PivotValueBaseItemBox"
-                                     AutomationProperties.HelpText="Enter the base item for the selected show-values-as calculation."/>
+                                     AutomationProperties.HelpText="{local:Loc Key=PivotValueFieldSettings_EnterTheBaseItemForTheSelectedShowValuesAsCalculation}"/>
                         </StackPanel>
                     </StackPanel>
                 </TabItem>
-                <TabItem x:Name="NumberFormatTab" Header="_Number Format">
+                <TabItem x:Name="NumberFormatTab" Header="{local:Loc Key=PivotValueFieldSettings_NumberFormat}">
                     <StackPanel Margin="10">
-                        <Label Content="_Number format:"
+                        <Label Content="{local:Loc Key=PivotValueFieldSettings_NumberFormat2}"
                                Target="{Binding ElementName=NumberFormatPresetBox}"
                                Padding="0"
                                Margin="0,0,0,6"/>
                         <ComboBox x:Name="NumberFormatPresetBox"
                                   Height="24"
-                                  AutomationProperties.Name="Number format preset"
+                                  AutomationProperties.Name="{local:Loc Key=PivotValueFieldSettings_NumberFormatPreset}"
                                   AutomationProperties.AutomationId="PivotValueNumberFormatPresetBox"
-                                  AutomationProperties.HelpText="Choose the number format applied to the value field."
+                                  AutomationProperties.HelpText="{local:Loc Key=PivotValueFieldSettings_ChooseTheNumberFormatAppliedToTheValueField}"
                                   SelectionChanged="NumberFormatPresetBox_SelectionChanged"/>
                         <Button x:Name="NumberFormatButton"
-                                Content="_Number Format..."
+                                Content="{local:Loc Key=PivotValueFieldSettings_NumberFormat3}"
                                 Width="128"
                                 HorizontalAlignment="Left"
                                 Margin="0,12,0,0"
                                 AutomationProperties.AutomationId="PivotValueNumberFormatButton"
-                                AutomationProperties.HelpText="Open Format Cells to choose a detailed number format."
+                                AutomationProperties.HelpText="{local:Loc Key=PivotValueFieldSettings_OpenFormatCellsToChooseADetailedNumberFormat}"
                                 Click="NumberFormatButton_Click"/>
                         <TextBox x:Name="NumberFormatBox"
                                  Height="24"
                                  Visibility="Collapsed"
-                                 AutomationProperties.Name="Number format ID"
+                                 AutomationProperties.Name="{local:Loc Key=PivotValueFieldSettings_NumberFormatID}"
                                  AutomationProperties.AutomationId="PivotValueNumberFormatIdBox"
-                                 AutomationProperties.HelpText="Stores the built-in number format ID for the value field."/>
+                                 AutomationProperties.HelpText="{local:Loc Key=PivotValueFieldSettings_StoresTheBuiltInNumberFormatIDForTheValueField}"/>
                         <TextBox x:Name="NumberFormatCodeBox"
                                  Height="24"
                                  Visibility="Collapsed"
-                                 AutomationProperties.Name="Custom format code"
+                                 AutomationProperties.Name="{local:Loc Key=PivotValueFieldSettings_CustomFormatCode}"
                                  AutomationProperties.AutomationId="PivotValueCustomFormatCodeBox"
-                                 AutomationProperties.HelpText="Stores the custom number format code for the value field."/>
+                                 AutomationProperties.HelpText="{local:Loc Key=PivotValueFieldSettings_StoresTheCustomNumberFormatCodeForTheValueField}"/>
                     </StackPanel>
                 </TabItem>
             </TabControl>

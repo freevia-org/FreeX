@@ -21,7 +21,9 @@ internal static class CustomViewsDialogPlanner
                 GetIncludedIndicator(view.IncludeHiddenRowsColumnsAndFilterSettings)))
             .ToArray();
 
-    public static string CreateDefaultViewName(int customViewCount) => $"Custom View {customViewCount + 1}";
+    public static string CreateDefaultViewName(int customViewCount) =>
+        UiText.Format("CustomViews_DefaultName", customViewCount + 1);
 
-    private static string GetIncludedIndicator(bool isIncluded) => isIncluded ? "Included" : "Not included";
+    private static string GetIncludedIndicator(bool isIncluded) =>
+        isIncluded ? UiText.Get("CustomViews_Included") : UiText.Get("CustomViews_NotIncluded");
 }

@@ -16,7 +16,7 @@ public partial class ConditionalFormatDialog
         var left = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
         left.Children.Add(new TextBlock
         {
-            Text = "Select a Rule Type:",
+            Text = UiText.Get("ConditionalFormatDialog_SelectRuleTypeHeader"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 6)
         });
@@ -27,7 +27,7 @@ public partial class ConditionalFormatDialog
             ItemsSource = ExcelRuleShellTypes,
             SelectedItem = RuleTypeShellLabel(ruleType)
         };
-        AutomationProperties.SetName(ruleTypeList, "Rule type");
+        AutomationProperties.SetName(ruleTypeList, UiText.Get("ConditionalFormatDialog_RuleTypeAutomationName"));
         ruleTypeList.SelectionChanged += RuleTypeList_SelectionChanged;
         left.Children.Add(ruleTypeList);
         Grid.SetColumn(left, 0);
@@ -37,7 +37,7 @@ public partial class ConditionalFormatDialog
         _descriptionHost = right;
         right.Children.Add(new TextBlock
         {
-            Text = "Edit the Rule Description:",
+            Text = UiText.Get("ConditionalFormatDialog_EditRuleDescriptionHeader"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 6)
         });

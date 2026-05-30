@@ -166,6 +166,31 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
     }
 
     [Fact]
+    public void AdaptiveCompaction_ReusesMeasuredOverflowDecisionsForRepeatedCorrectionStates()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonAdaptiveDiagnosticsHarness.Create();
+
+            harness.SelectRibbonTab("Insert", 1280);
+            harness.UpdateCompact(force: true);
+            harness.SetWidth(900);
+            harness.UpdateCompact(force: true);
+
+            var firstPassAtWidth = harness.Diagnostics;
+            firstPassAtWidth.MeasuredOverflowMeasurementCount.Should()
+                .BeGreaterThan(0, "Insert relies on measured correction at compact Excel widths");
+
+            harness.ResetDiagnostics();
+            harness.UpdateCompact(force: true);
+
+            var repeatedPassAtWidth = harness.Diagnostics;
+            repeatedPassAtWidth.MeasuredOverflowMeasurementCount.Should()
+                .Be(0, "the same measured surface, width, footprint, and state signature should reuse the cached overflow decision");
+        });
+    }
+
+    [Fact]
     public void AdaptiveCompaction_ReusesMeasurementsAcrossResizeWidthsForEveryMainRibbonTab()
     {
         StaTestRunner.Run(() =>
@@ -213,7 +238,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             harness.ResetDiagnostics();
             harness.ResetFallbackDiagnostics();
 
-            harness.SetWidth(1275);
+            harness.SetWidth(1279);
 
             harness.FallbackDiagnostics.RequestCount.Should().Be(0);
             harness.Diagnostics.GroupMeasurementCount.Should().Be(0);
@@ -249,6 +274,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
 
         hotPathKeyHelpers.Should().Contain("CreateRibbonStateSignature(");
         hotPathKeyHelpers.Should().Contain("RoundRibbonWidthToTenths(");
+        hotPathKeyHelpers.Should().Contain("measurementCacheKey");
         hotPathKeyHelpers.Should().NotContain("string.Join(");
         hotPathKeyHelpers.Should().NotContain(".Select(state");
     }

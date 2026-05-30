@@ -287,7 +287,9 @@ public partial class MainWindow : Window
             MaxRestoreBtn.Content = MaxRestoreIcon;
         System.Windows.Automation.AutomationProperties.SetName(
             MaxRestoreBtn,
-            isMaximized ? "Restore Down" : "Maximize");
+            UiText.Get(isMaximized
+                ? "MainWindow_AutomationName_RestoreDown"
+                : "MainWindow_AutomationName_Maximize"));
     }
 
     // ── Header / select-all helpers ───────────────────────────────────────────

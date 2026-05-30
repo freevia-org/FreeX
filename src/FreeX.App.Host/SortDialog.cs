@@ -55,7 +55,7 @@ public sealed partial class SortDialog : Window
         ResultHasHeaders = hasHeaders;
         ResultOptions = _options;
 
-        Title = "Custom Sort";
+        Title = UiText.Get("Sort_CustomSort");
         Width = 640;
         Height = 420;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -65,7 +65,7 @@ public sealed partial class SortDialog : Window
         var headerRow = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
         _headerCheck = new CheckBox
         {
-            Content = "My data has _headers",
+            Content = UiText.Get("Sort_MyDataHasHeaders"),
             IsChecked = hasHeaders,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right
         };
@@ -73,7 +73,7 @@ public sealed partial class SortDialog : Window
         headerRow.Children.Add(_headerCheck);
         headerRow.Children.Add(new TextBlock
         {
-            Text = "Sort levels",
+            Text = UiText.Get("Sort_SortLevels"),
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = System.Windows.VerticalAlignment.Center
         });
@@ -106,7 +106,7 @@ public sealed partial class SortDialog : Window
         _levelsGrid.KeyDown += LevelsGrid_KeyDown;
         _sortByColumn = new DataGridComboBoxColumn
         {
-            Header = "Sort by",
+            Header = UiText.Get("Sort_SortBy"),
             DisplayMemberPath = nameof(SortColumnChoice.Label),
             SelectedValuePath = nameof(SortColumnChoice.ColumnOffset),
             SelectedValueBinding = new Binding(nameof(SortDialogLevel.ColumnOffset))
@@ -120,7 +120,7 @@ public sealed partial class SortDialog : Window
         _levelsGrid.Columns.Add(_sortByColumn);
         _levelsGrid.Columns.Add(new DataGridComboBoxColumn
         {
-            Header = "Sort On",
+            Header = UiText.Get("Sort_SortOn"),
             ItemsSource = SortOnChoices,
             DisplayMemberPath = nameof(SortOnChoice.Label),
             SelectedValuePath = nameof(SortOnChoice.Label),
@@ -142,14 +142,14 @@ public sealed partial class SortDialog : Window
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
         };
-        var add = new Button { Content = "_Add Level", Width = 98, Margin = new Thickness(0, 0, 8, 0) };
+        var add = new Button { Content = UiText.Get("Sort_AddLevel"), Width = 98, Margin = new Thickness(0, 0, 8, 0) };
         add.Click += (_, _) =>
         {
             ReplaceLevels(AddLevel(_levels));
             _levelsGrid.SelectedIndex = _levels.Count - 1;
             UpdateToolbarButtonStates();
         };
-        _deleteLevelButton = new Button { Content = "_Delete Level", Width = 104, Margin = new Thickness(0, 0, 8, 0) };
+        _deleteLevelButton = new Button { Content = UiText.Get("Sort_DeleteLevel"), Width = 104, Margin = new Thickness(0, 0, 8, 0) };
         _deleteLevelButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
@@ -157,7 +157,7 @@ public sealed partial class SortDialog : Window
             _levelsGrid.SelectedIndex = Math.Min(selectedIndex, _levels.Count - 1);
             UpdateToolbarButtonStates();
         };
-        _copyLevelButton = new Button { Content = "_Copy Level", Width = 98 };
+        _copyLevelButton = new Button { Content = UiText.Get("Sort_CopyLevel"), Width = 98 };
         _copyLevelButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
@@ -165,7 +165,7 @@ public sealed partial class SortDialog : Window
             _levelsGrid.SelectedIndex = Math.Min(selectedIndex + 1, _levels.Count - 1);
             UpdateToolbarButtonStates();
         };
-        _moveUpButton = new Button { Content = "Move _Up", Width = 86, Margin = new Thickness(8, 0, 8, 0) };
+        _moveUpButton = new Button { Content = UiText.Get("Sort_MoveUp"), Width = 86, Margin = new Thickness(8, 0, 8, 0) };
         _moveUpButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? 0 : _levelsGrid.SelectedIndex;
@@ -173,7 +173,7 @@ public sealed partial class SortDialog : Window
             _levelsGrid.SelectedIndex = Math.Max(0, selectedIndex - 1);
             UpdateToolbarButtonStates();
         };
-        _moveDownButton = new Button { Content = "Move Do_wn", Width = 92 };
+        _moveDownButton = new Button { Content = UiText.Get("Sort_MoveDown"), Width = 92 };
         _moveDownButton.Click += (_, _) =>
         {
             var selectedIndex = _levelsGrid.SelectedIndex < 0 ? _levels.Count - 1 : _levelsGrid.SelectedIndex;
@@ -189,7 +189,7 @@ public sealed partial class SortDialog : Window
         commandDock.Children.Add(helperRow);
         var options = new Button
         {
-            Content = "_Options...",
+            Content = UiText.Get("Sort_Options"),
             Width = 92,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right
         };
@@ -212,7 +212,7 @@ public sealed partial class SortDialog : Window
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right
         };
-        var ok = new Button { Content = "_OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = UiText.Ok, IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
         {
             ResultSortKeys = BuildSortKeys(_levels);
@@ -220,7 +220,7 @@ public sealed partial class SortDialog : Window
             ResultOptions = _options;
             DialogResult = true;
         };
-        var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 76 };
+        var cancel = new Button { Content = UiText.Cancel, IsCancel = true, Width = 76 };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
         DockPanel.SetDock(buttons, Dock.Bottom);
@@ -260,7 +260,7 @@ public sealed partial class SortDialog : Window
 
     private void UpdateColumnChoices()
     {
-        _sortByColumn.Header = _options.LeftToRight ? "Sort by row" : "Sort by";
+        _sortByColumn.Header = _options.LeftToRight ? UiText.Get("Sort_SortByRowHeader") : UiText.Get("Sort_SortByHeader");
         _headerCheck.IsEnabled = !_options.LeftToRight;
         _sortByColumn.ItemsSource = SortDialogPlanner.BuildActiveColumnChoices(
             _options,
@@ -296,7 +296,7 @@ public sealed partial class SortDialog : Window
     {
         var column = new DataGridTemplateColumn
         {
-            Header = "Order",
+            Header = UiText.Get("Sort_Order"),
             Width = new DataGridLength(150)
         };
         column.CellTemplate = CreateOrderTemplate(isReadOnly: true);
@@ -308,7 +308,7 @@ public sealed partial class SortDialog : Window
     {
         var column = new DataGridTemplateColumn
         {
-            Header = "Color",
+            Header = UiText.Get("Sort_Color"),
             Width = new DataGridLength(115)
         };
         column.CellTemplate = CreateColorTemplate(isReadOnly: true);

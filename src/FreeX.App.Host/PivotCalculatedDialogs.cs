@@ -25,7 +25,7 @@ public sealed class PivotCalculatedFieldDialog : Window
     {
         _fields = CreateFieldNames(fieldNames ?? []);
         Result = CreateResult(name, formula);
-        Title = "Calculated Field";
+        Title = UiText.Get("PivotCalculated_CalculatedField");
         Width = 480;
         Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -50,23 +50,23 @@ public sealed class PivotCalculatedFieldDialog : Window
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
         var formulaPanel = PivotDialogLayout.CreateGroupPanel();
-        AddTextBox(formulaPanel, "_Name:", _nameBox);
-        AddTextBox(formulaPanel, "_Formula:", _formulaBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Name and formula", formulaPanel));
+        AddTextBox(formulaPanel, UiText.Get("PivotCalculated_NameLabel"), _nameBox);
+        AddTextBox(formulaPanel, UiText.Get("PivotCalculated_FormulaLabel"), _formulaBox);
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotCalculated_NameAndFormulaGroup"), formulaPanel));
 
         var fieldsPanel = PivotDialogLayout.CreateGroupPanel();
-        AutomationProperties.SetName(_fieldList, "Available fields");
-        PivotDialogLayout.AddLabeledControl(fieldsPanel, "Available _fields", _fieldList);
+        AutomationProperties.SetName(_fieldList, UiText.Get("PivotCalculated_AvailableFields"));
+        PivotDialogLayout.AddLabeledControl(fieldsPanel, UiText.Get("PivotCalculated_AvailableFieldsLabel"), _fieldList);
         var insertFieldButton = new Button
         {
-            Content = "Insert _Field",
+            Content = UiText.Get("PivotCalculated_InsertField"),
             Width = 110,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left
         };
         insertFieldButton.Click += (_, _) => InsertSelectedField();
         _fieldList.MouseDoubleClick += (_, _) => InsertSelectedField();
         fieldsPanel.Children.Add(insertFieldButton);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Fields", fieldsPanel));
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotCalculated_FieldsGroup"), fieldsPanel));
 
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
         return stack;
@@ -85,13 +85,13 @@ public sealed class PivotCalculatedFieldDialog : Window
     {
         if (string.IsNullOrWhiteSpace(_nameBox.Text))
         {
-            ShowInvalidInputWarning("Enter a calculated field name.", _nameBox);
+            ShowInvalidInputWarning(UiText.Get("PivotCalculated_EnterCalculatedFieldName"), _nameBox);
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(_formulaBox.Text))
         {
-            ShowInvalidInputWarning("Enter a calculated field formula.", _formulaBox);
+            ShowInvalidInputWarning(UiText.Get("PivotCalculated_EnterCalculatedFieldFormula"), _formulaBox);
             return false;
         }
 
@@ -183,7 +183,7 @@ public sealed class PivotCalculatedItemDialog : Window
             ?? _fields.FirstOrDefault();
         Result = CreateResult(selectedField?.Name ?? "", selectedField?.Index ?? 0, name, formula);
 
-        Title = "Calculated Item";
+        Title = UiText.Get("PivotCalculated_CalculatedItem");
         Width = 500;
         Height = 560;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -211,23 +211,23 @@ public sealed class PivotCalculatedItemDialog : Window
         _fieldBox.ItemsSource = _fields;
         _fieldBox.DisplayMemberPath = nameof(PivotCalculatedItemSourceFieldOption.Name);
         _fieldBox.SelectionChanged += (_, _) => RefreshItemList();
-        PivotDialogLayout.AddLabeledControl(itemPanel, "Source _field:", _fieldBox);
-        AddTextBox(itemPanel, "_Name:", _nameBox);
-        AddTextBox(itemPanel, "Item _formula:", _formulaBox);
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Field and item", itemPanel));
+        PivotDialogLayout.AddLabeledControl(itemPanel, UiText.Get("PivotCalculated_SourceFieldLabel"), _fieldBox);
+        AddTextBox(itemPanel, UiText.Get("PivotCalculated_NameLabel"), _nameBox);
+        AddTextBox(itemPanel, UiText.Get("PivotCalculated_ItemFormulaLabel"), _formulaBox);
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotCalculated_FieldAndItemGroup"), itemPanel));
 
         var insertPanel = PivotDialogLayout.CreateGroupPanel();
         _fieldList.ItemsSource = _fields;
         _fieldList.DisplayMemberPath = nameof(PivotCalculatedItemSourceFieldOption.Name);
         _fieldList.MouseDoubleClick += (_, _) => InsertSelectedField();
-        AutomationProperties.SetName(_fieldList, "Available fields");
-        PivotDialogLayout.AddLabeledControl(insertPanel, "Available _fields", _fieldList);
-        insertPanel.Children.Add(CreateInsertButton("Insert _Field", InsertSelectedField));
-        AutomationProperties.SetName(_itemList, "Available items");
-        PivotDialogLayout.AddLabeledControl(insertPanel, "Available _items", _itemList);
+        AutomationProperties.SetName(_fieldList, UiText.Get("PivotCalculated_AvailableFields"));
+        PivotDialogLayout.AddLabeledControl(insertPanel, UiText.Get("PivotCalculated_AvailableFieldsLabel"), _fieldList);
+        insertPanel.Children.Add(CreateInsertButton(UiText.Get("PivotCalculated_InsertField"), InsertSelectedField));
+        AutomationProperties.SetName(_itemList, UiText.Get("PivotCalculated_AvailableItems"));
+        PivotDialogLayout.AddLabeledControl(insertPanel, UiText.Get("PivotCalculated_AvailableItemsLabel"), _itemList);
         _itemList.MouseDoubleClick += (_, _) => InsertSelectedItem();
-        insertPanel.Children.Add(CreateInsertButton("Insert _Item", InsertSelectedItem));
-        stack.Children.Add(PivotDialogLayout.CreateGroupBox("Insert into formula", insertPanel));
+        insertPanel.Children.Add(CreateInsertButton(UiText.Get("PivotCalculated_InsertItem"), InsertSelectedItem));
+        stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotCalculated_InsertIntoFormulaGroup"), insertPanel));
 
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
         return stack;
@@ -263,13 +263,13 @@ public sealed class PivotCalculatedItemDialog : Window
     {
         if (string.IsNullOrWhiteSpace(_nameBox.Text))
         {
-            ShowInvalidInputWarning("Enter a calculated item name.", _nameBox);
+            ShowInvalidInputWarning(UiText.Get("PivotCalculated_EnterCalculatedItemName"), _nameBox);
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(_formulaBox.Text))
         {
-            ShowInvalidInputWarning("Enter a calculated item formula.", _formulaBox);
+            ShowInvalidInputWarning(UiText.Get("PivotCalculated_EnterCalculatedItemFormula"), _formulaBox);
             return false;
         }
 

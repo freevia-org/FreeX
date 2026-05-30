@@ -146,7 +146,7 @@ public partial class PageSetupDialog : Window
             BottomMarginBox.Text);
         if (!PageMarginInputParser.TryParse(marginsText, out var margins, out var marginError))
         {
-            DialogMessageHelper.ShowWarning(this, marginError, "Page Setup");
+            DialogMessageHelper.ShowWarning(this, marginError, UiText.Get("PageSetup_PageSetup"));
             FocusInvalidMarginInput();
             return;
         }
@@ -154,7 +154,7 @@ public partial class PageSetupDialog : Window
         if (!PageLayoutInputParser.TryParseMarginDistance(HeaderMarginBox.Text, out var headerMargin) ||
             !PageLayoutInputParser.TryParseMarginDistance(FooterMarginBox.Text, out var footerMargin))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter non-negative header and footer margins in inches.", "Page Setup");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("PageSetup_InvalidHeaderFooterMarginsMessage"), UiText.Get("PageSetup_PageSetup"));
             FocusInvalidHeaderFooterMargin();
             return;
         }
@@ -164,28 +164,28 @@ public partial class PageSetupDialog : Window
             : ScalePercentBox.Text;
         if (!PageLayoutInputParser.TryParseScaleToFit(scaleText, out var scaleToFit))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter scaling as percent 10-400 or pages wide x tall, for example 1x1.", "Page Setup");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("PageSetup_InvalidScalingMessage"), UiText.Get("PageSetup_PageSetup"));
             FocusInvalidScalingInput();
             return;
         }
 
         if (!PageLayoutInputParser.TryParseOptionalFirstPageNumber(FirstPageNumberBox.Text, out var firstPageNumber))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a non-zero first page number, or leave it blank for Automatic.", "Page Setup");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("PageSetup_InvalidFirstPageNumberMessage"), UiText.Get("PageSetup_PageSetup"));
             FocusInvalidPageTabNumber(FirstPageNumberBox);
             return;
         }
 
         if (!PageLayoutInputParser.TryParseOptionalPrintQuality(PrintQualityBox.Text, out var printQualityDpi))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter a positive print quality DPI value, or leave it blank for printer default.", "Page Setup");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("PageSetup_InvalidPrintQualityMessage"), UiText.Get("PageSetup_PageSetup"));
             FocusInvalidPageTabNumber(PrintQualityBox);
             return;
         }
 
         if (!PageLayoutInputParser.TryParseOptionalPrintArea(PrintAreaBox.Text, _sheetId, out var printArea))
         {
-            DialogMessageHelper.ShowWarning(this, "Enter print area as a cell range like A1:C10, or leave it blank.", "Page Setup");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("PageSetup_InvalidPrintAreaMessage"), UiText.Get("PageSetup_PageSetup"));
             FocusInvalidPrintArea();
             return;
         }
@@ -194,7 +194,7 @@ public partial class PageSetupDialog : Window
         var validRepeatColumns = PageLayoutInputParser.TryParseRepeatColumns(ColumnsRepeatBox.Text, out var repeatColumns);
         if (!validRepeatRows || !validRepeatColumns)
         {
-            DialogMessageHelper.ShowWarning(this, "Enter print titles as rows like 1:2 and columns like A:C, or leave blank.", "Page Setup");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("PageSetup_InvalidPrintTitlesMessage"), UiText.Get("PageSetup_PageSetup"));
             FocusInvalidPrintTitles();
             return;
         }

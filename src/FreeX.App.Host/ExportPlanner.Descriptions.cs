@@ -6,32 +6,32 @@ internal static partial class ExportPlanner
     {
         var scope = options.Scope switch
         {
-            ExportContentScope.ActiveSheet => "Active sheet only",
-            ExportContentScope.Selection => "Selection",
-            ExportContentScope.EntireWorkbook => "Entire workbook",
-            _ => "Active sheet only"
+            ExportContentScope.ActiveSheet => UiText.Get("Export_ScopeActiveSheet"),
+            ExportContentScope.Selection => UiText.Get("Export_ScopeSelection"),
+            ExportContentScope.EntireWorkbook => UiText.Get("Export_ScopeEntireWorkbook"),
+            _ => UiText.Get("Export_ScopeActiveSheet")
         };
         var pageRange = options.PageRange is null
             ? null
             : options.PageRange.ToString();
         var quality = DescribeQuality(options.Quality);
         var printAreas = options.IgnorePrintAreas
-            ? "print areas are ignored"
+            ? UiText.Get("Export_PrintAreasIgnored")
             : null;
         var initialView = DescribeInitialView(options.InitialView);
         var openMode = DescribeOpenMode(options.OpenMode);
         var properties = options.IncludeDocumentProperties
-            ? "document properties are included"
-            : "document properties are not included";
+            ? UiText.Get("Export_DocumentPropertiesIncluded")
+            : UiText.Get("Export_DocumentPropertiesNotIncluded");
         var bookmarks = DescribeBookmarkMode(options.EffectiveBookmarkMode, ExportFormat.Pdf);
         var bitmapText = options.BitmapTextWhenFontsMayNotBeEmbedded
-            ? "bitmap text when fonts may not be embedded"
+            ? UiText.Get("Export_BitmapTextWhenFontsMayNotBeEmbedded")
             : null;
         var language = DescribePdfLanguage(options.PdfLanguage, ExportFormat.Pdf);
         var conformance = DescribePdfConformance(options.PdfConformance, ExportFormat.Pdf);
         var tags = DescribeDocumentStructureTags(options.IncludeDocumentStructureTags, ExportFormat.Pdf);
         var open = options.OpenAfterPublish
-            ? "open after publishing"
+            ? UiText.Get("Export_OpenAfterPublishing")
             : null;
 
         return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, language, conformance, tags, open);
@@ -44,33 +44,33 @@ internal static partial class ExportPlanner
     {
         var options = DescribeOptionsForFormat(request.Options, request.Format);
         return request.UsesXpsFallback
-            ? $"{PdfFallbackMessage}\n\nOptions: {options}"
-            : $"Options: {options}";
+            ? UiText.Format("Export_RequestDescriptionWithFallback", PdfFallbackMessage, options)
+            : UiText.Format("Export_RequestDescription", options);
     }
 
     private static string DescribeOptionsForFormat(ExportOptions options, ExportFormat format)
     {
         var scope = options.Scope switch
         {
-            ExportContentScope.ActiveSheet => "Active sheet only",
-            ExportContentScope.Selection => "Selection",
-            ExportContentScope.EntireWorkbook => "Entire workbook",
-            _ => "Active sheet only"
+            ExportContentScope.ActiveSheet => UiText.Get("Export_ScopeActiveSheet"),
+            ExportContentScope.Selection => UiText.Get("Export_ScopeSelection"),
+            ExportContentScope.EntireWorkbook => UiText.Get("Export_ScopeEntireWorkbook"),
+            _ => UiText.Get("Export_ScopeActiveSheet")
         };
         var pageRange = options.PageRange is null
             ? null
             : options.PageRange.ToString();
         var quality = DescribeQualityForFormat(options.Quality, format);
         var printAreas = options.IgnorePrintAreas
-            ? "print areas are ignored"
+            ? UiText.Get("Export_PrintAreasIgnored")
             : null;
         var initialView = DescribeInitialViewForFormat(options.InitialView, format);
         var openMode = DescribeOpenModeForFormat(options.OpenMode, format);
         var properties = (options.IncludeDocumentProperties, format) switch
         {
-            (true, ExportFormat.Pdf) => "document properties are included",
-            (true, ExportFormat.Xps) => "document properties are included",
-            _ => "document properties are not included"
+            (true, ExportFormat.Pdf) => UiText.Get("Export_DocumentPropertiesIncluded"),
+            (true, ExportFormat.Xps) => UiText.Get("Export_DocumentPropertiesIncluded"),
+            _ => UiText.Get("Export_DocumentPropertiesNotIncluded")
         };
         var bookmarks = DescribeBookmarkMode(options.EffectiveBookmarkMode, format);
         var bitmapText = DescribeBitmapTextOption(options.BitmapTextWhenFontsMayNotBeEmbedded, format);
@@ -78,7 +78,7 @@ internal static partial class ExportPlanner
         var conformance = DescribePdfConformance(options.PdfConformance, format);
         var tags = DescribeDocumentStructureTags(options.IncludeDocumentStructureTags, format);
         var open = options.OpenAfterPublish
-            ? "open after publishing"
+            ? UiText.Get("Export_OpenAfterPublishing")
             : null;
 
         return JoinOptionParts(scope, pageRange, quality, printAreas, initialView, openMode, properties, bookmarks, bitmapText, language, conformance, tags, open);
@@ -86,16 +86,18 @@ internal static partial class ExportPlanner
 
 
     private static string JoinOptionParts(params string?[] parts) =>
-        string.Join("; ", parts.Where(part => !string.IsNullOrWhiteSpace(part))) + ".";
+        UiText.Format(
+            "Export_OptionsSentence",
+            string.Join(UiText.Get("Export_OptionsSeparator"), parts.Where(part => !string.IsNullOrWhiteSpace(part))));
 
     private static string DescribeQuality(ExportQuality quality) =>
         quality == ExportQuality.MinimumSize
-            ? "minimum size"
-            : "standard quality";
+            ? UiText.Get("Export_QualityMinimumSize")
+            : UiText.Get("Export_QualityStandard");
 
     private static string DescribeQualityForFormat(ExportQuality quality, ExportFormat format) =>
         quality == ExportQuality.MinimumSize && format == ExportFormat.Xps
-            ? "minimum size is PDF-only"
+            ? UiText.Get("Export_QualityMinimumSizePdfOnly")
             : DescribeQuality(quality);
 
     private static string? DescribeBookmarkMode(PdfBookmarkMode bookmarkMode, ExportFormat format)
@@ -104,13 +106,13 @@ internal static partial class ExportPlanner
             return null;
 
         if (format == ExportFormat.Xps)
-            return "bookmarks are PDF-only";
+            return UiText.Get("Export_BookmarksPdfOnly");
 
         return bookmarkMode switch
         {
-            PdfBookmarkMode.PrintTitles => "bookmarks use print titles",
-            PdfBookmarkMode.PageNumbers => "bookmarks use page numbers",
-            _ => "bookmarks use sheet names"
+            PdfBookmarkMode.PrintTitles => UiText.Get("Export_BookmarksPrintTitles"),
+            PdfBookmarkMode.PageNumbers => UiText.Get("Export_BookmarksPageNumbers"),
+            _ => UiText.Get("Export_BookmarksSheetNames")
         };
     }
 
@@ -120,8 +122,8 @@ internal static partial class ExportPlanner
             return null;
 
         return format == ExportFormat.Xps
-            ? "bitmap text is PDF-only"
-            : "bitmap text when fonts may not be embedded";
+            ? UiText.Get("Export_BitmapTextPdfOnly")
+            : UiText.Get("Export_BitmapTextWhenFontsMayNotBeEmbedded");
     }
 
     private static string? DescribePdfLanguage(string? pdfLanguage, ExportFormat format)
@@ -131,8 +133,8 @@ internal static partial class ExportPlanner
             return null;
 
         return format == ExportFormat.Xps
-            ? "PDF language is PDF-only"
-            : $"PDF language {normalized}";
+            ? UiText.Get("Export_PdfLanguagePdfOnly")
+            : UiText.Format("Export_PdfLanguage", normalized);
     }
 
     private static string? DescribePdfConformance(PdfConformance conformance, ExportFormat format)
@@ -141,8 +143,8 @@ internal static partial class ExportPlanner
             return null;
 
         return format == ExportFormat.Xps
-            ? "PDF/A compliance is PDF-only and not supported"
-            : "PDF/A compliance is not supported";
+            ? UiText.Get("Export_PdfAPdfOnlyUnsupported")
+            : UiText.Get("Export_PdfANotSupported");
     }
 
     private static string? DescribeDocumentStructureTags(bool includeDocumentStructureTags, ExportFormat format)
@@ -151,16 +153,16 @@ internal static partial class ExportPlanner
             return null;
 
         return format == ExportFormat.Xps
-            ? "tagged PDF structure is PDF-only and not supported"
-            : "tagged PDF structure is not supported";
+            ? UiText.Get("Export_TaggedPdfPdfOnlyUnsupported")
+            : UiText.Get("Export_TaggedPdfNotSupported");
     }
 
     private static string? DescribeInitialView(PdfInitialView initialView) =>
         initialView switch
         {
-            PdfInitialView.OneColumn => "opens as one continuous column",
-            PdfInitialView.TwoColumnLeft => "opens as two columns with odd pages left",
-            PdfInitialView.TwoColumnRight => "opens as two columns with odd pages right",
+            PdfInitialView.OneColumn => UiText.Get("Export_InitialViewOneColumn"),
+            PdfInitialView.TwoColumnLeft => UiText.Get("Export_InitialViewTwoColumnLeft"),
+            PdfInitialView.TwoColumnRight => UiText.Get("Export_InitialViewTwoColumnRight"),
             _ => null
         };
 
@@ -170,15 +172,15 @@ internal static partial class ExportPlanner
             return null;
 
         return format == ExportFormat.Xps
-            ? "PDF initial view is PDF-only"
+            ? UiText.Get("Export_InitialViewPdfOnly")
             : DescribeInitialView(initialView);
     }
 
     private static string? DescribeOpenMode(PdfOpenMode openMode) =>
         openMode switch
         {
-            PdfOpenMode.Outlines => "opens with bookmarks visible",
-            PdfOpenMode.FullScreen => "opens full screen",
+            PdfOpenMode.Outlines => UiText.Get("Export_OpenModeOutlines"),
+            PdfOpenMode.FullScreen => UiText.Get("Export_OpenModeFullScreen"),
             _ => null
         };
 
@@ -188,7 +190,7 @@ internal static partial class ExportPlanner
             return null;
 
         return format == ExportFormat.Xps
-            ? "PDF open mode is PDF-only"
+            ? UiText.Get("Export_OpenModePdfOnly")
             : DescribeOpenMode(openMode);
     }
 }

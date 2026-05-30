@@ -25,12 +25,12 @@ public static class TextToColumnsWizardPlanner
     {
         var normalizedStep = Math.Clamp(step, 1, 3);
         return new TextToColumnsWizardStepPlan(
-            Header: $"Text Wizard - Step {normalizedStep} of 3",
+            Header: UiText.Format("TextToColumns_TextWizardStepOf3", normalizedStep),
             Instruction: normalizedStep switch
             {
-                1 => "Choose the file type that best describes your data.",
-                2 => "Choose the delimiters that separate your selected text.",
-                _ => "Select each column and set the data format and destination."
+                1 => UiText.Get("TextToColumns_ChooseFileTypeInstruction"),
+                2 => UiText.Get("TextToColumns_ChooseDelimitersInstruction"),
+                _ => UiText.Get("TextToColumns_SelectColumnFormatAndDestinationInstruction")
             },
             ShowOriginalDataTypePanel: normalizedStep == 1,
             ShowDelimiterPanel: normalizedStep == 2 && !fixedWidth,

@@ -16,8 +16,8 @@ public partial class HeaderFooterDialog
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Insert Picture",
-            Filter = "Pictures (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*"
+            Title = UiText.Get("HeaderFooterPicture_InsertPictureTitle"),
+            Filter = UiText.Get("HeaderFooterPicture_OpenFileFilter")
         };
         if (dialog.ShowDialog(this) != true)
             return;
@@ -41,7 +41,7 @@ public partial class HeaderFooterDialog
         var picture = GetPictureForActiveBox();
         if (picture is null)
         {
-            DialogMessageHelper.ShowInfo(this, "Insert a header or footer picture before formatting it.", Title);
+            DialogMessageHelper.ShowInfo(this, UiText.Get("HeaderFooterPicture_InsertBeforeFormattingMessage"), Title);
             FocusActiveTextBox();
             return;
         }
@@ -97,11 +97,11 @@ public partial class HeaderFooterDialog
         var hasPicture = GetPictureForActiveBox() is not null;
         FormatPictureButton.IsEnabled = hasPicture;
         FormatPictureButton.ToolTip = hasPicture
-            ? $"Format picture in {ActiveBoxLabel(target)}"
-            : $"Insert a picture in {ActiveBoxLabel(target)} before formatting it.";
+            ? UiText.Format("HeaderFooterPicture_FormatPictureToolTip", ActiveBoxLabel(target))
+            : UiText.Format("HeaderFooterPicture_InsertBeforeFormattingToolTip", ActiveBoxLabel(target));
         PictureTargetStatusText.Text = hasPicture
-            ? $"Target: {ActiveBoxLabel(target)} has a picture."
-            : $"Target: {ActiveBoxLabel(target)} has no picture.";
+            ? UiText.Format("HeaderFooterPicture_TargetHasPictureStatus", ActiveBoxLabel(target))
+            : UiText.Format("HeaderFooterPicture_TargetHasNoPictureStatus", ActiveBoxLabel(target));
     }
 
     private void FocusActiveTextBox()
@@ -113,10 +113,10 @@ public partial class HeaderFooterDialog
 
     private static string ActiveBoxLabel(TextBox target)
     {
-        if (target.Name.EndsWith("LeftBox", StringComparison.Ordinal)) return "left section";
-        if (target.Name.EndsWith("CenterBox", StringComparison.Ordinal)) return "center section";
-        if (target.Name.EndsWith("RightBox", StringComparison.Ordinal)) return "right section";
-        return "current section";
+        if (target.Name.EndsWith("LeftBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooterPicture_LeftSection");
+        if (target.Name.EndsWith("CenterBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooterPicture_CenterSection");
+        if (target.Name.EndsWith("RightBox", StringComparison.Ordinal)) return UiText.Get("HeaderFooterPicture_RightSection");
+        return UiText.Get("HeaderFooterPicture_CurrentSection");
     }
 
     private void SetPictureForActiveBox(WorksheetHeaderFooterPicture picture)

@@ -14,17 +14,17 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void DialogList_ExposesAccessibleName()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("CustomViewsDialog.xaml");
 
-        xaml.Should().Contain("AutomationProperties.Name=\"Custom views\"");
+        xaml.Should().Contain($"AutomationProperties.Name=\"{UiText.Get("CustomViews_CustomViews")}\"");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"CustomViewsList\"");
-        xaml.Should().Contain("AutomationProperties.HelpText=\"Shows saved workbook views");
+        xaml.Should().Contain($"AutomationProperties.HelpText=\"{UiText.Get("CustomViews_ShowsSavedWorkbookViewsThatCanBeShownOrDeleted")}");
     }
 
     [Fact]
     public void ShowButton_IsDefaultDialogAction()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("CustomViewsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var showButton = document
@@ -73,7 +73,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void Dialog_ExposesKeyboardAccessKeys()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("CustomViewsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         document.Descendants(presentation + "GroupBox")
@@ -89,33 +89,33 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void DialogActionButtons_ExposeAutomationMetadata()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("CustomViewsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         AssertButtonAutomation(
             document,
             presentation,
-            "_Show",
+            UiText.Get("CustomViews_Show"),
             "CustomViewsShowButton",
-            "Apply the selected custom view.");
+            UiText.Get("CustomViews_ApplySelectedCustomView"));
         AssertButtonAutomation(
             document,
             presentation,
-            "_Add...",
+            UiText.Get("CustomViews_Add"),
             "CustomViewsAddButton",
-            "Create a new custom view from the current workbook state.");
+            UiText.Get("CustomViews_CreateNewCustomViewFromCurrentWorkbookState"));
         AssertButtonAutomation(
             document,
             presentation,
-            "_Delete",
+            UiText.Get("CustomViews_Delete"),
             "CustomViewsDeleteButton",
-            "Delete the selected custom view.");
+            UiText.Get("CustomViews_DeleteSelectedCustomView"));
         AssertButtonAutomation(
             document,
             presentation,
-            "_Close",
+            UiText.Get("CustomViews_Close"),
             "CustomViewsCloseButton",
-            "Close the Custom Views dialog.");
+            UiText.Get("CustomViews_CloseCustomViewsDialog"));
 
         static void AssertButtonAutomation(
             XDocument document,
@@ -136,7 +136,7 @@ public sealed class CustomViewsDialogXamlTests
     [Fact]
     public void DialogList_ShowsPrintAndFilterSettingIndicators()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("CustomViewsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         document.Descendants(presentation + "GridViewColumn")
@@ -173,9 +173,9 @@ public sealed class CustomViewsDialogXamlTests
     {
         var dialogSource = ReadCustomViewsDialogSource();
 
-        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not apply custom view.\",");
-        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not save custom view.\",");
-        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? \"Could not delete custom view.\",");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get(\"CustomViews_ApplyFailedMessage\"),");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get(\"CustomViews_SaveFailedMessage\"),");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get(\"CustomViews_DeleteFailedMessage\"),");
     }
 
     [Fact]
@@ -191,12 +191,13 @@ public sealed class CustomViewsDialogXamlTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewNameDialog.cs"));
 
-        source.Should().Contain("new Label { Content = \"_Name:\"");
+        source.Should().Contain("new Label { Content = UiText.Get(\"CustomViewName_NameLabel\")");
         source.Should().Contain("Target = _nameBox");
-        source.Should().Contain("Content = \"_Print settings\"");
-        source.Should().Contain("Content = \"_Hidden rows, columns and filter settings\"");
-        source.Should().Contain("Content = \"_OK\"");
-        source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("Content = UiText.Get(\"CustomViewName_PrintSettingsCheckBox\")");
+        source.Should().Contain("Content = UiText.Get(\"CustomViewName_HiddenFilterSettingsCheckBox\")");
+        source.Should().Contain("Content = UiText.Ok");
+        source.Should().Contain("Content = UiText.Cancel");
+        UiText.Get("CustomViewName_NameLabel").Should().Be("_Name:");
     }
 
     [Fact]
@@ -204,15 +205,16 @@ public sealed class CustomViewsDialogXamlTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewNameDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_nameBox, \"Custom view name\");");
+        source.Should().Contain("AutomationProperties.SetName(_nameBox, UiText.Get(\"CustomViewName_NameAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_nameBox, \"CustomViewNameBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_nameBox, \"Enter the name for the custom workbook view.\");");
-        source.Should().Contain("AutomationProperties.SetName(_printSettingsBox, \"Print settings\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_nameBox, UiText.Get(\"CustomViewName_NameHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_printSettingsBox, UiText.Get(\"CustomViewName_PrintSettingsAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_printSettingsBox, \"CustomViewPrintSettingsCheckBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_printSettingsBox, \"Include print settings in the custom view.\");");
-        source.Should().Contain("AutomationProperties.SetName(_hiddenFilterSettingsBox, \"Hidden rows, columns and filter settings\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_printSettingsBox, UiText.Get(\"CustomViewName_PrintSettingsHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_hiddenFilterSettingsBox, UiText.Get(\"CustomViewName_HiddenFilterSettingsAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_hiddenFilterSettingsBox, \"CustomViewHiddenFilterSettingsCheckBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_hiddenFilterSettingsBox, \"Include hidden rows, hidden columns, and filter settings in the custom view.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_hiddenFilterSettingsBox, UiText.Get(\"CustomViewName_HiddenFilterSettingsHelpText\"));");
+        UiText.Get("CustomViewName_NameAutomationName").Should().Be("Custom view name");
     }
 
     [Fact]
@@ -240,7 +242,7 @@ public sealed class CustomViewsDialogXamlTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewNameDialog.cs"));
         var dialogSource = source[source.IndexOf("public sealed class CustomViewNameDialog", StringComparison.Ordinal)..];
 
-        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Enter a view name.\", Title);");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"CustomViewName_BlankNameMessage\"), Title);");
         dialogSource.Should().Contain("FocusNameInput();");
         dialogSource.Should().Contain("private void FocusNameInput()");
         dialogSource.Should().Contain("DialogFocus.FocusAndSelect(_nameBox);");
