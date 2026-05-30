@@ -25,7 +25,7 @@ public partial class MainWindow
 
         var result = ShowOwnedMessage(
             message,
-            "FreeX",
+            UiText.Get("MainWindowMessage_SaveChangesTitle"),
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Warning);
 
@@ -50,7 +50,7 @@ public partial class MainWindow
             return;
 
         _closeAfterSaveInProgress = true;
-        var canClose = await ConfirmSaveBeforeDestructiveActionAsync("Save changes before closing this workbook?");
+        var canClose = await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeClosingWorkbook"));
         _closeAfterSaveInProgress = false;
 
         if (!canClose)

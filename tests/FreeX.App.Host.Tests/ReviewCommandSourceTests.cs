@@ -18,14 +18,18 @@ public sealed class ReviewCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
-        button.Should().Contain($"Content=\"{content}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
 
     [Theory]
     [InlineData("New Comment", "New Comment", "CM", "ReviewNewThreadedCommentBtn_Click")]
+    [InlineData("Delete Comment", "Delete", "XC", "ReviewDeleteThreadedCommentBtn_Click")]
+    [InlineData("Previous Comment", "Prev", "PC", "ReviewPrevCommentBtn_Click")]
+    [InlineData("Next Comment", "Next", "JC", "ReviewNextCommentBtn_Click")]
+    [InlineData("Show Comments", "Show Comments", "SC", "ReviewShowCommentsBtn_Click")]
     [InlineData("New Note", "New", "O", "ReviewNewCommentBtn_Click")]
     [InlineData("Edit Note", "Edit", "E", "ReviewNewCommentBtn_Click")]
     [InlineData("Delete Note", "Delete", "D", "ReviewDeleteCommentBtn_Click")]
@@ -40,8 +44,8 @@ public sealed class ReviewCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
-        button.Should().Contain($"Content=\"{content}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -58,8 +62,8 @@ public sealed class ReviewCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
-        button.Should().Contain($"Content=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", title);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -83,7 +87,7 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("WorkbookProtectionWorkflow.CreateCommand(_workbook, pwd)");
         source.Should().Contain("new AllowEditRangeDialog(");
         source.Should().Contain("TryExecuteCommand(command, \"Allow Users to Edit Ranges\")");
-        source.Should().Contain("_messageService.ShowInfo(successMessage, \"Allow Users to Edit Ranges\")");
+        source.Should().Contain("_messageService.ShowInfo(successMessage, UiText.Get(\"MainWindowMessage_AllowEditRangesTitle\"))");
         source.Should().Contain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
         source.Should().Contain("_shareService.ShareFileAsync(this, _currentFilePath, _workbook.Name)");
     }
@@ -97,7 +101,7 @@ public sealed class ReviewCommandSourceTests
         var searchIndex = 0;
         while (true)
         {
-            var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", searchIndex, StringComparison.Ordinal);
+            var titleIndex = xaml.IndexOf($"local:RibbonMetadata.CommandName=\"{title}\"", searchIndex, StringComparison.Ordinal);
             if (titleIndex < 0)
                 break;
 

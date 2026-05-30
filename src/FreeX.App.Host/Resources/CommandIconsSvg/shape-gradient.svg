@@ -1,8 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Shape Gradient">
+  <defs>
+    <linearGradient id="shapeGradientFill" x1="7" y1="8" x2="25" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".45" stop-color="#E6F6FA"/>
+      <stop offset="1" stop-color="#0F6D8C"/>
+    </linearGradient>
+  </defs>
   <rect width="32" height="32" fill="none"/>
-  <rect x="6.5" y="7.5" width="19" height="17" rx="2.5" fill="#ffffff" stroke="#242424" stroke-width="1.4"/>
-  <path d="M8.5 22.5L22.5 8.5" fill="none" stroke="#0F6D8C" stroke-width="2.2" stroke-linecap="round"/>
-  <path d="M12 24l13-13" fill="none" stroke="#5EB6C8" stroke-width="1.6" stroke-linecap="round"/>
-  <path d="M7.8 18L18 7.8" fill="none" stroke="#CDEFF4" stroke-width="2" stroke-linecap="round"/>
-  <path d="M10 12h5M10 16h8" fill="none" stroke="#242424" stroke-width="1" stroke-linecap="round" opacity=".6"/>
+  <rect x="6.5" y="7.5" width="19" height="17" rx="2.5" fill="url(#shapeGradientFill)" stroke="#242424" stroke-width="1.5"/>
+  <path d="M9.5 10.5h13" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" opacity=".8"/>
 </svg>

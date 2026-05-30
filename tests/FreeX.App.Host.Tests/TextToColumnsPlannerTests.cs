@@ -26,7 +26,7 @@ public sealed class TextToColumnsPlannerTests
     {
         var plan = TextToColumnsWizardPlanner.CreateStepPlan(step, fixedWidth);
 
-        plan.Header.Should().Be($"Text Wizard - Step {Math.Clamp(step, 1, 3)} of 3");
+        plan.Header.Should().Be(UiText.Format("TextToColumns_TextWizardStepOf3", Math.Clamp(step, 1, 3)));
         plan.ShowOriginalDataTypePanel.Should().Be(showOriginal);
         plan.ShowDelimiterPanel.Should().Be(showDelimited);
         plan.ShowFixedWidthPanel.Should().Be(showFixedWidth);

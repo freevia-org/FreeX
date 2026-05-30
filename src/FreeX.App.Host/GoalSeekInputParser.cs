@@ -21,13 +21,13 @@ public static class GoalSeekInputParser
         var setCellInput = setCellText.Trim();
         if (string.IsNullOrWhiteSpace(setCellInput))
         {
-            error = "Please enter the Set cell address.";
+            error = UiText.Get("GoalSeek_SetCellRequiredMessage");
             return false;
         }
 
         if (!CellAddress.TryParse(setCellInput, sheetId, out var setCell))
         {
-            error = $"'{setCellInput}' is not a valid cell address.";
+            error = UiText.Format("GoalSeek_InvalidCellAddressMessage", setCellInput);
             return false;
         }
 
@@ -36,26 +36,26 @@ public static class GoalSeekInputParser
              !double.TryParse(targetInput, NumberStyles.Any, CultureInfo.InvariantCulture, out targetValue)) ||
             !double.IsFinite(targetValue))
         {
-            error = $"'{targetInput}' is not a valid number.";
+            error = UiText.Format("GoalSeek_InvalidNumberMessage", targetInput);
             return false;
         }
 
         var changingCellInput = changingCellText.Trim();
         if (string.IsNullOrWhiteSpace(changingCellInput))
         {
-            error = "Please enter the By changing cell address.";
+            error = UiText.Get("GoalSeek_ByChangingCellRequiredMessage");
             return false;
         }
 
         if (!CellAddress.TryParse(changingCellInput, sheetId, out var changingCell))
         {
-            error = $"'{changingCellInput}' is not a valid cell address.";
+            error = UiText.Format("GoalSeek_InvalidCellAddressMessage", changingCellInput);
             return false;
         }
 
         if (setCell == changingCell)
         {
-            error = "The Set cell and the By changing cell must be different.";
+            error = UiText.Get("GoalSeek_CellsMustDifferMessage");
             return false;
         }
 

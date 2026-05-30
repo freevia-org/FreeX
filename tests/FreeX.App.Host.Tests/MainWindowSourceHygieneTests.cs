@@ -196,7 +196,7 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
 
-        xaml.Should().Contain("Text=\"Save _As\"");
+        xaml.ShouldContainLocalizedAttribute("Text", "Save _As");
         xaml.Should().Contain("CommandName=\"Save As\"");
         xaml.Should().Contain("Click=\"SaveAsButton_Click\"");
         backstageSource.Should().Contain("private async void SaveAsButton_Click(object sender, RoutedEventArgs e)");
@@ -244,7 +244,7 @@ public sealed class MainWindowSourceHygieneTests
         var keyboardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyboardCommands.cs"));
 
         var newMethod = ExtractMethodSource(backstageSource, "private async Task RequestNewWorkbookAsync()");
-        newMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(\"Save changes before creating a new workbook?\")");
+        newMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeCreatingWorkbook\"))");
         newMethod.Should().Contain("CreateNewWorkbook();");
         newMethod.Should().Contain("HideStartScreen();");
 
@@ -258,9 +258,11 @@ public sealed class MainWindowSourceHygieneTests
         saveAsMethod.Should().Contain("HideStartScreen();");
 
         var saveTargetMethod = ExtractMethodSource(backstageSource, "private async Task<bool> SaveWorkbookToTargetAsync(");
-        saveTargetMethod.Should().Contain("ShowSaveProgress(\"Saving workbook\", \"Saving file (preparing)\", 1);");
+        saveTargetMethod.Should().Contain("UiText.Get(\"Progress_SavingWorkbook\")");
+        saveTargetMethod.Should().Contain("UiText.Get(\"Progress_SavingFilePreparing\")");
         saveTargetMethod.Should().Contain("MarkWorkbookSaved();");
-        saveTargetMethod.Should().Contain("ShowOwnedMessage($\"Failed to save file:");
+        saveTargetMethod.Should().Contain("UiText.Format(\"MainWindowMessage_SaveFileFailed\", ex.Message)");
+        saveTargetMethod.Should().Contain("UiText.Get(\"MainWindowMessage_SaveErrorTitle\")");
         saveTargetMethod.Should().Contain("finally");
         saveTargetMethod.Should().Contain("HideSaveProgress();");
         saveTargetMethod.Should().NotContain("MessageBox.Show(");
@@ -271,7 +273,7 @@ public sealed class MainWindowSourceHygieneTests
         confirmMethod.Should().Contain("return await SaveWorkbookWithDialogAsync();");
 
         var closingMethod = ExtractMethodSource(lifecycleSource, "private async void MainWindow_Closing(");
-        closingMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(\"Save changes before closing this workbook?\")");
+        closingMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeClosingWorkbook\"))");
         closingMethod.Should().Contain("_suppressClosePrompt = true;");
         closingMethod.Should().Contain("Close();");
 
@@ -403,7 +405,7 @@ public sealed class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("SetActiveCell(destination);");
         dataCommandsSource.Should().Contain("EnsureCellVisible(destination);");
         dataCommandsSource.Should().Contain("RefreshStatusBar();");
-        dataCommandsSource.Should().Contain("ShowOwnedMessage(\"No import adapters are available.\"");
+        dataCommandsSource.Should().Contain("UiText.Get(\"MainWindowMessage_NoImportAdapters\")");
         dataCommandsSource.Should().Contain("ImportFailureDiagnosticFactory.FromException(ext, ex)");
         dataCommandsSource.Should().Contain("ShowOwnedMessage(diagnostic.UserMessage");
         dataCommandsSource.Should().Contain("errorDetail: diagnostic.Detail");
@@ -524,15 +526,15 @@ public sealed class MainWindowSourceHygieneTests
     {
         var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
 
-        drawingSource.Should().Contain("Title = \"Insert Picture\"");
-        drawingSource.Should().Contain("Filter = \"Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)");
+        drawingSource.Should().Contain("Title = UiText.Get(\"MainWindowDialog_InsertPictureTitle\")");
+        drawingSource.Should().Contain("Filter = UiText.Get(\"MainWindowDialog_ImageFilesFilter\")");
         drawingSource.Should().Contain("CheckFileExists = true");
         drawingSource.Should().Contain("Multiselect = false");
         drawingSource.Should().Contain("if (dialog.ShowDialog(this) != true) return;");
         drawingSource.Should().Contain("System.IO.File.ReadAllBytes(dialog.FileName)");
         drawingSource.Should().Contain("DrawingInputParser.GetImageContentType(dialog.FileName)");
         drawingSource.Should().Contain("new InsertPictureCommand(");
-        drawingSource.Should().Contain("ShowOwnedMessage($\"Could not read picture file:");
+        drawingSource.Should().Contain("UiText.Format(\"MainWindowMessage_InsertPictureReadFailed\", ex.Message)");
         drawingSource.Should().Contain("SetActiveCell(range.Start);");
         drawingSource.Should().Contain("UpdateViewport();");
     }
@@ -542,19 +544,30 @@ public sealed class MainWindowSourceHygieneTests
     {
         var drawingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
 
-        drawingSource.Should().Contain("ShowOwnedMessage(\"No picture found on this sheet.\", \"Picture Size\"");
-        drawingSource.Should().Contain("ShowOwnedMessage(\"No picture found on this sheet.\", \"Rotate Picture\"");
-        drawingSource.Should().Contain("ShowOwnedMessage(\"No picture found on this sheet.\", \"Crop Picture\"");
-        drawingSource.Should().Contain("ShowOwnedMessage(\"Only inserted image pictures can be cropped.\", \"Crop Picture\"");
-        drawingSource.Should().Contain("ShowOwnedMessage(\"No picture found on this sheet.\", \"Reset Crop\"");
-        drawingSource.Should().Contain("ShowOwnedMessage(\"Only inserted image pictures can be cropped.\", \"Reset Crop\"");
-        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing shapes are available on this sheet.\",");
-        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing object found on this sheet.\", \"Object Size\"");
-        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing object found on this sheet.\", \"Rotate Object\"");
-        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing object found on this sheet.\",");
-        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing shape found on this sheet.\", \"Shape Gradient\"");
-        drawingSource.Should().Contain("ShowOwnedMessage(\"No drawing shape found on this sheet.\", \"Shape Effects\"");
-        drawingSource.Should().Contain("ShowOwnedMessage(\"No objects are available on this sheet.\", \"Selection Pane\"");
+        foreach (var key in new[]
+        {
+            "MainWindowMessage_NoPictureFoundOnSheet",
+            "MainWindowMessage_CropRequiresInsertedImage",
+            "MainWindowMessage_NoDrawingShapesOnSheet",
+            "MainWindowMessage_NoDrawingObjectOnSheet",
+            "MainWindowMessage_NoDrawingShapeOnSheet",
+            "MainWindowMessage_NoObjectsOnSheet",
+            "MainWindowMessage_PictureSizeTitle",
+            "MainWindowMessage_RotatePictureTitle",
+            "MainWindowMessage_CropPictureTitle",
+            "MainWindowMessage_ResetCropTitle",
+            "MainWindowMessage_DrawTitle",
+            "MainWindowMessage_ObjectSizeTitle",
+            "MainWindowMessage_RotateObjectTitle",
+            "MainWindowMessage_ObjectFillTitle",
+            "MainWindowMessage_ObjectOutlineTitle",
+            "MainWindowMessage_ShapeGradientTitle",
+            "MainWindowMessage_ShapeEffectsTitle",
+            "MainWindowMessage_SelectionPaneTitle"
+        })
+        {
+            drawingSource.Should().Contain($"\"{key}\"");
+        }
         drawingSource.Should().NotContain("MessageBox.Show(");
     }
 
@@ -635,15 +648,16 @@ public sealed class MainWindowSourceHygieneTests
         var pageLayoutSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
 
         pageLayoutSource.Should().Contain("private void BackgroundChooseMenuItem_Click(");
-        pageLayoutSource.Should().Contain("Title = \"Sheet Background\"");
-        pageLayoutSource.Should().Contain("Filter = \"Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*\"");
+        pageLayoutSource.Should().Contain("Title = UiText.Get(\"MainWindowDialog_SheetBackgroundTitle\")");
+        pageLayoutSource.Should().Contain("Filter = UiText.Get(\"MainWindowDialog_ImageFilesFilter\")");
         pageLayoutSource.Should().Contain("CheckFileExists = true");
         pageLayoutSource.Should().Contain("Multiselect = false");
         pageLayoutSource.Should().Contain("if (dialog.ShowDialog(this) != true)");
         pageLayoutSource.Should().Contain("IsSupportedSheetBackgroundFile(dialog.FileName)");
-        pageLayoutSource.Should().Contain("\"Choose a PNG, JPG, JPEG, BMP, or GIF image file.\"");
+        pageLayoutSource.Should().Contain("UiText.Get(\"MainWindowMessage_SheetBackgroundUnsupportedImageType\")");
         pageLayoutSource.Should().Contain("File.ReadAllBytes(dialog.FileName)");
-        pageLayoutSource.Should().Contain("ShowOwnedMessage($\"Could not read the selected image:");
+        pageLayoutSource.Should().Contain("UiText.Format(\"MainWindowMessage_SheetBackgroundReadFailed\", ex.Message)");
+        pageLayoutSource.Should().Contain("UiText.Get(\"MainWindowMessage_SheetBackgroundTitle\")");
         pageLayoutSource.Should().Contain("new WorksheetBackgroundImage(");
         pageLayoutSource.Should().Contain("DrawingInputParser.GetImageContentType(dialog.FileName)");
         pageLayoutSource.Should().Contain("TryExecuteGroupedSheetCommand(\"Sheet Background\"");
@@ -760,9 +774,9 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ExternalUrlLauncher.Open(url)");
         source.Should().NotContain("UseShellExecute");
         source.Should().Contain("ShowOwnedMessage(");
-        source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, \"Help Online\")");
-        source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, \"Check for Updates\")");
-        source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), \"Feedback\")");
+        source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, UiText.Get(\"MainWindowMessage_HelpOnlineTitle\"))");
+        source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, UiText.Get(\"MainWindowMessage_CheckForUpdatesTitle\"))");
+        source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), UiText.Get(\"MainWindowMessage_FeedbackTitle\"))");
     }
 
     [Fact]
@@ -792,11 +806,13 @@ public sealed class MainWindowSourceHygieneTests
         var saveWarningMethod = ExtractMethodSource(backstageSource, "private bool ConfirmUnsupportedXlsxFeatureSave()");
         var openWarningMethod = ExtractMethodSource(backstageSource, "private void ShowUnsupportedXlsxFeatureOpenWarningIfNeeded()");
 
-        openMethod.Should().Contain("ShowOpenProgress(\"Opening workbook\", \"Loading file (preparing)\", 1);");
+        openMethod.Should().Contain("OpenWorkbookProgressPlanner.ProgressTitle()");
+        openMethod.Should().Contain("OpenWorkbookProgressPlanner.FormatLoadingFileDetail(\"preparing\", TimeSpan.Zero)");
         openMethod.Should().Contain("ShowOpenProgress(update.Title, update.Detail, update.Percent)");
-        openMethod.Should().Contain("ShowOpenProgress(\"Opening workbook\", \"Loading file (done)\", 100);");
+        openMethod.Should().Contain("OpenWorkbookProgressPlanner.FormatLoadingFileDetail(\"done\", TimeSpan.Zero)");
         openMethod.Should().Contain("ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();");
-        openMethod.Should().Contain("ShowOwnedMessage($\"Failed to open file:");
+        openMethod.Should().Contain("UiText.Format(\"MainWindowMessage_OpenFileFailed\", ex.Message)");
+        openMethod.Should().Contain("UiText.Get(\"MainWindowMessage_OpenErrorTitle\")");
         openMethod.Should().Contain("finally");
         openMethod.Should().Contain("HideOpenProgress();");
         openMethod.Should().Contain("_isOpeningFile = false;");
@@ -1328,8 +1344,9 @@ public sealed class MainWindowSourceHygieneTests
         method.Should().Contain("new SparklineDialog(");
         method.Should().Contain("SparklineInputParser.TryParseDataRange(dialog.Result.DataRangeText, _currentSheetId, out var dataRange)");
         method.Should().Contain("SparklineInputParser.TryParseLocation(dialog.Result.LocationText, _currentSheetId, out var location)");
-        method.Should().Contain("ShowOwnedMessage(\"Invalid data range.\", \"Insert Sparkline\", MessageBoxButton.OK, MessageBoxImage.Warning)");
-        method.Should().Contain("ShowOwnedMessage(\"Invalid location cell.\", \"Insert Sparkline\", MessageBoxButton.OK, MessageBoxImage.Warning)");
+        method.Should().Contain("UiText.Get(\"MainWindowMessage_InsertSparklineInvalidDataRange\")");
+        method.Should().Contain("UiText.Get(\"MainWindowMessage_InsertSparklineInvalidLocation\")");
+        method.Should().Contain("UiText.Get(\"MainWindowMessage_InsertSparklineTitle\")");
         method.Should().Contain("var useDialogLocationForInitialInsert = true;");
         method.Should().Contain("useDialogLocationForInitialInsert");
         method.Should().Contain("? fallbackLocationRange");
@@ -1786,7 +1803,7 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
         source.Should().Contain("ShowDeferredChartFamilyMessage");
-        source.Should().Contain("retained when opening XLSX files");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferred\")");
         source.Should().Contain("ChartTreemapMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Treemap)");
         source.Should().Contain("ChartSunburstMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Sunburst)");
         source.Should().Contain("ChartHistogramMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Histogram)");
@@ -1817,21 +1834,27 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("Click=\"Chart3DBarMenuItem_Click\"");
         xaml.Should().Contain("Click=\"ChartSurfaceMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DSurfaceMenuItem_Click\"");
-        xaml.Should().Contain("Surface");
-        xaml.Should().Contain("Treemap");
-        xaml.Should().Contain("Sunburst");
-        xaml.Should().Contain("Histogram");
-        xaml.Should().Contain("Pareto");
-        xaml.Should().Contain("Box Plot");
-        xaml.Should().Contain("Waterfall");
-        xaml.Should().Contain("Funnel");
-        xaml.Should().Contain("Map");
-        xaml.Should().Contain("3D Pie");
-        xaml.Should().Contain("3D Line");
-        xaml.Should().Contain("3D Area");
-        xaml.Should().Contain("3D Column");
-        xaml.Should().Contain("3D Bar");
-        xaml.Should().Contain("3D Surface");
+        foreach (var chartLabel in new[]
+        {
+            "Surface",
+            "Treemap",
+            "Sunburst",
+            "Histogram",
+            "Pareto",
+            "Box Plot",
+            "Waterfall",
+            "Funnel",
+            "Map",
+            "3D Pie",
+            "3D Line",
+            "3D Area",
+            "3D Column",
+            "3D Bar",
+            "3D Surface"
+        })
+        {
+            xaml.ShouldContainLocalizedAttribute("Content", chartLabel);
+        }
     }
 
     [Fact]
@@ -1873,8 +1896,10 @@ public sealed class MainWindowSourceHygieneTests
         insertSource.Should().Contain("new SetHyperlinkCommand(");
         insertSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan");
         insertSource.Should().Contain("TryNavigateToWorkbookReference(plan.Target)");
-        insertSource.Should().Contain("ShowOwnedMessage(\"The hyperlink target could not be found.\"");
-        insertSource.Should().Contain("ShowOwnedMessage(\"The hyperlink target could not be opened.\"");
+        insertSource.Should().Contain("UiText.Get(\"MainWindowMessage_OpenHyperlinkTargetNotFound\")");
+        insertSource.Should().Contain("UiText.Get(\"MainWindowMessage_OpenHyperlinkBlockedScheme\")");
+        insertSource.Should().Contain("UiText.Get(\"MainWindowMessage_OpenHyperlinkOpenFailed\")");
+        insertSource.Should().Contain("UiText.Get(\"MainWindowMessage_OpenHyperlinkTitle\")");
         ExtractMethodSource(insertSource, "private bool TryOpenHyperlink(").Should().NotContain("MessageBox.Show(");
         selectionSource.Should().Contain("else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)");
         selectionSource.Should().Contain("if (TryOpenHyperlink(newAddr))");
@@ -2432,7 +2457,7 @@ public sealed class MainWindowSourceHygieneTests
             "Dotted",
             "More Borders..."
         })
-            xaml.Should().Contain($"Header=\"{label}\"");
+            xaml.ShouldContainLocalizedAttribute("Header", label);
 
         foreach (var handler in new[]
         {
@@ -2550,23 +2575,34 @@ public sealed class MainWindowSourceHygieneTests
         var exportXpsMethod = ExtractMethodSource(source, "private bool ExportAsXps(");
 
         exportMethod.Should().Contain("new Microsoft.Win32.SaveFileDialog");
-        exportMethod.Should().Contain("Title      = \"Export as PDF / XPS\"");
-        exportMethod.Should().Contain("Filter     = \"PDF files (*.pdf)|*.pdf|XPS files (*.xps)|*.xps\"");
+        exportMethod.Should().Contain("Title      = UiText.Get(\"MainWindowDialog_ExportPdfXpsTitle\")");
+        exportMethod.Should().Contain("Filter     = UiText.Get(\"MainWindowDialog_ExportPdfXpsFilter\")");
         exportMethod.Should().Contain("DefaultExt = \".pdf\"");
         exportMethod.Should().Contain("AddExtension = true");
         exportMethod.Should().Contain("OverwritePrompt = true");
         exportMethod.Should().Contain("var selectedFormat = saveDlg.FilterIndex == 2");
         exportMethod.Should().Contain("ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result)");
         exportMethod.Should().Contain("ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError)");
+        exportMethod.Should().Contain("publishOptionsError ?? UiText.Get(\"MainWindowMessage_ExportUnsupportedOptions\")");
+        exportMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportOptionsTitle\")");
         exportMethod.Should().Contain("ShowOwnedMessage(");
         exportMethod.Should().Contain("OpenExportedFile(request.ActualPath)");
         exportMethod.Should().NotContain("MessageBox.Show(");
 
         exportPdfMethod.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, options)");
+        exportPdfMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportPdfSavedFormat\", optionSummary, pdfPath)");
+        exportPdfMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportPdfTitle\")");
+        exportPdfMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportPdfFailed\", ex.Message)");
+        exportPdfMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportErrorTitle\")");
         exportPdfMethod.Should().Contain("ShowOwnedMessage(");
         exportPdfMethod.Should().NotContain("MessageBox.Show(");
 
         exportXpsMethod.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, options))");
+        exportXpsMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportXpsSavedFormat\", xpsPath)");
+        exportXpsMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportXpsSavedWithOptionsFormat\", optionSummary, xpsPath)");
+        exportXpsMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportXpsTitle\")");
+        exportXpsMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportXpsFailed\", ex.Message)");
+        exportXpsMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportErrorTitle\")");
         exportXpsMethod.Should().Contain("ShowOwnedMessage(");
         exportXpsMethod.Should().NotContain("MessageBox.Show(");
     }
@@ -2584,7 +2620,7 @@ public sealed class MainWindowSourceHygieneTests
         keyboardSource.Should().Contain("KeyboardCommandShortcut.OpenPrintPreview, (_, _) => OpenPrintBackstage()");
         keyboardSource.Should().NotContain("KeyboardCommandShortcut.OpenPrintPreview, PrintButton_Click");
         xaml.Should().Contain("x:Name=\"SsPrintNavBtn\"");
-        xaml.Should().Contain("local:RibbonTooltip.Description=\"Open the print preview and native print dialog for the rendered worksheet.\"");
+        xaml.ShouldContainLocalizedAttribute("local:RibbonTooltip.Description", "Open the print preview and native print dialog for the rendered worksheet.");
     }
 
     [Fact]
@@ -2600,7 +2636,7 @@ public sealed class MainWindowSourceHygieneTests
         printSource.Should().Contain("PrintSettingsPlanner.Build(sheet)");
         printSource.Should().Contain("new PrintPreviewDialog(");
         printSource.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
-        previewSource.Should().Contain("Content = \"_Print...\"");
+        previewSource.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");
         previewSource.Should().Contain("ShowNativePrintDialog");
         previewSource.Should().Contain("PrintDocument(paginator");
     }
@@ -2737,7 +2773,7 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var source = ReadPivotCommandSource();
 
-        xaml.Should().Contain("local:RibbonTooltip.Description=\"Open PivotTable layout and style options.");
+        xaml.ShouldContainLocalizedAttribute("local:RibbonTooltip.Description", "Open PivotTable layout and style options.");
         xaml.Should().NotContain("Cycle grand totals");
         xaml.Should().NotContain("Cycle subtotals");
         xaml.Should().NotContain("Cycle PivotTable style gallery choices.");
@@ -2759,7 +2795,9 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("new ChartSeriesFormatDialog(chart, ChartOptionCycler.GetSeriesCount(chart))");
         source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Data Labels\"");
         source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Trendline\"");
-        source.Should().Contain("ApplyChartLayoutDialogResult(useXAxis ? \"Format X Axis\" : \"Format Y Axis\"");
+        source.Should().Contain("ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions())");
+        source.Should().Contain("UiText.Get(\"ChartAxisFormat_XAxisTitle\")");
+        source.Should().Contain("UiText.Get(\"ChartAxisFormat_YAxisTitle\")");
         source.Should().Contain("ApplyChartLayoutDialogResult(\"Format Data Series\"");
     }
 
@@ -2770,10 +2808,10 @@ public sealed class MainWindowSourceHygieneTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
 
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureButton\"");
-        xaml.Should().Contain("AutomationProperties.HelpText=\"Open crop controls for the selected or most recent inserted picture.\"");
-        xaml.Should().Contain("Header=\"Crop...\"");
+        xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Open crop controls for the selected or most recent inserted picture.");
+        xaml.ShouldContainLocalizedAttribute("Header", "Crop...");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureMenuItem\"");
-        xaml.Should().Contain("Header=\"Reset Crop\"");
+        xaml.ShouldContainLocalizedAttribute("Header", "Reset Crop");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawResetPictureCropMenuItem\"");
         xaml.Should().Contain("Click=\"PictureCropDialogMenuItem_Click\"");
         xaml.Should().Contain("Click=\"PictureResetCropMenuItem_Click\"");
@@ -2788,9 +2826,9 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeGradientButton\"");
-        xaml.Should().Contain("AutomationProperties.HelpText=\"Open gradient fill controls for the selected shape.\"");
+        xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Open gradient fill controls for the selected shape.");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeEffectsButton\"");
-        xaml.Should().Contain("AutomationProperties.HelpText=\"Toggle the selected shape shadow effect.\"");
+        xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Toggle the selected shape shadow effect.");
         xaml.Should().Contain("Click=\"ObjectGradientBtn_Click\"");
         xaml.Should().Contain("Click=\"ObjectEffectsBtn_Click\"");
     }
@@ -2874,7 +2912,9 @@ public sealed class MainWindowSourceHygieneTests
 
         if (isDeferred)
         {
-            button.Should().Contain("local:RibbonTooltip.Description=\"Deferred:");
+            button.ShouldContainLocalizedAttribute(
+                "local:RibbonTooltip.Description",
+                "Deferred: retained from XLSX files; authoring and rendering need a dedicated data model.");
         }
         else
         {
@@ -2884,8 +2924,7 @@ public sealed class MainWindowSourceHygieneTests
 
     private static string ExtractButtonElementByContent(string xaml, string content)
     {
-        var contentIndex = xaml.IndexOf($"Content=\"{content}\"", StringComparison.Ordinal);
-        contentIndex.Should().BeGreaterThanOrEqualTo(0, $"the {content} chart button should be present");
+        var contentIndex = FindElementByLocalizedAttributeValue(xaml, "Button", "Content", content);
 
         var start = xaml.LastIndexOf("<Button", contentIndex, StringComparison.Ordinal);
         start.Should().BeGreaterThanOrEqualTo(0, $"the {content} chart button should have a Button start tag");
@@ -2894,6 +2933,33 @@ public sealed class MainWindowSourceHygieneTests
         end.Should().BeGreaterThanOrEqualTo(contentIndex, $"the {content} chart button should be self-closing");
 
         return xaml.Substring(start, end - start + 2);
+    }
+
+    private static int FindElementByLocalizedAttributeValue(string xaml, string elementName, string attributeName, string expectedValue)
+    {
+        var searchFrom = 0;
+        while (searchFrom < xaml.Length)
+        {
+            var start = xaml.IndexOf($"<{elementName}", searchFrom, StringComparison.Ordinal);
+            if (start < 0)
+                break;
+
+            var end = xaml.IndexOf(">", start, StringComparison.Ordinal);
+            end.Should().BeGreaterThan(start, $"the {elementName} element should have a closing bracket");
+            var element = xaml[start..(end + 1)];
+            var match = System.Text.RegularExpressions.Regex.Match(
+                element,
+                $@"(?<![\w\.:]){System.Text.RegularExpressions.Regex.Escape(attributeName)}=""(?<value>[^""]*)""",
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+            if (match.Success && LocalizedXamlTestSupport.ResolveLocalizedValue(match.Groups["value"].Value) == expectedValue)
+                return start + match.Index;
+
+            searchFrom = end + 1;
+        }
+
+        searchFrom.Should().BeLessThan(0, $"the {expectedValue} {elementName} should be present");
+        return -1;
     }
 
     private static string ReadPivotCommandSource()

@@ -24,7 +24,9 @@ public partial class MainWindow
                 ignoredIssues);
             if (issues.Count == 0)
             {
-                _messageService.ShowInfo("Spelling check is complete.", "Spell Check");
+                _messageService.ShowInfo(
+                    UiText.Get("MainWindowMessage_SpellCheckComplete"),
+                    UiText.Get("MainWindowMessage_SpellCheckTitle"));
                 return;
             }
 
@@ -93,11 +95,16 @@ public partial class MainWindow
         var target = GetTargetAltTextObject(_currentSheetId);
         if (target is null)
         {
-            _messageService.ShowInfo("No picture, shape, or text box is anchored at the selected cell.", "Alt Text");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_AltTextNoObjectAtSelection"),
+                UiText.Get("MainWindowMessage_AltTextTitle"));
             return;
         }
 
-        var dialog = new TextEntryDialog("Alt Text", "Alt text:", target.AltText ?? "") { Owner = this };
+        var dialog = new TextEntryDialog(
+            UiText.Get("MainWindowMessage_AltTextTitle"),
+            UiText.Get("MainWindowMessage_AltTextLabel"),
+            target.AltText ?? "") { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -140,7 +147,10 @@ public partial class MainWindow
         var defaultText = sheet is null
             ? string.Empty
             : CommentNavigationPlanner.GetDefaultCommentText(sheet.Comments, addr);
-        var dialog = new TextEntryDialog("Comment", $"Comment for {addr.ToA1()}:", defaultText) { Owner = this };
+        var dialog = new TextEntryDialog(
+            UiText.Get("MainWindowMessage_CommentTitle"),
+            UiText.Format("MainWindowMessage_CommentForCellLabel", addr.ToA1()),
+            defaultText) { Owner = this };
         if (dialog.ShowDialog() != true) return;
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Comment",
@@ -149,7 +159,9 @@ public partial class MainWindow
             return;
 
         UpdateViewport();
-        _messageService.ShowInfo($"Comment added to {addr.ToA1()}.", "Comment");
+        _messageService.ShowInfo(
+            UiText.Format("MainWindowMessage_CommentAdded", addr.ToA1()),
+            UiText.Get("MainWindowMessage_CommentTitle"));
     }
 
     private void ReviewNewThreadedCommentBtn_Click(object sender, RoutedEventArgs e)
@@ -244,12 +256,14 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null || sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0)
         {
-            _messageService.ShowInfo("No comments on this sheet.", "Comments");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_NoCommentsOnSheet"),
+                UiText.Get("MainWindowMessage_CommentsTitle"));
             return;
         }
 
         var text = CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments);
-        _messageService.ShowInfo(text, "Comments");
+        _messageService.ShowInfo(text, UiText.Get("MainWindowMessage_CommentsTitle"));
     }
 
     private void NavigateComment(bool previous)
@@ -257,7 +271,9 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null || sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0)
         {
-            _messageService.ShowInfo("No comments on this sheet.", "Comments");
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_NoCommentsOnSheet"),
+                UiText.Get("MainWindowMessage_CommentsTitle"));
             return;
         }
 
@@ -278,7 +294,9 @@ public partial class MainWindow
         var result = ProtectionDialogPlanner.CreateSheetResult(sheet, password: null);
         if (!sheet.IsProtected)
         {
-            var dialog = new PasswordProtectionDialog("Protect Sheet", "_Password (optional):") { Owner = this };
+            var dialog = new PasswordProtectionDialog(
+                UiText.Get("MainWindowMessage_ProtectSheetTitle"),
+                UiText.Get("MainWindowMessage_OptionalPasswordLabel")) { Owner = this };
             if (dialog.ShowDialog() != true) return;
             result = ProtectionDialogPlanner.CreateSheetResult(
                 sheet,
@@ -303,7 +321,9 @@ public partial class MainWindow
         string? pwd = null;
         if (!_workbook.IsStructureProtected)
         {
-            var dialog = new PasswordProtectionDialog("Protect Workbook", "_Password (optional):") { Owner = this };
+            var dialog = new PasswordProtectionDialog(
+                UiText.Get("MainWindowMessage_ProtectWorkbookTitle"),
+                UiText.Get("MainWindowMessage_OptionalPasswordLabel")) { Owner = this };
             if (dialog.ShowDialog() != true) return;
             pwd = dialog.Password;
         }
@@ -337,15 +357,15 @@ public partial class MainWindow
         {
             case { Action: AllowEditRangeDialogAction.Add, Range: { } range }:
                 command = new AllowEditRangeCommand(_currentSheetId, range);
-                successMessage = $"{range} can now be edited while this sheet is protected.";
+                successMessage = UiText.Format("MainWindowMessage_AllowEditRangeAdded", range);
                 break;
             case { Action: AllowEditRangeDialogAction.Remove, Range: { } range }:
                 command = new RemoveAllowEditRangeCommand(_currentSheetId, range);
-                successMessage = $"{range} is no longer unlocked while this sheet is protected.";
+                successMessage = UiText.Format("MainWindowMessage_AllowEditRangeRemoved", range);
                 break;
             case { Action: AllowEditRangeDialogAction.Clear }:
                 command = new ClearAllowEditRangesCommand(_currentSheetId);
-                successMessage = "All allow-edit ranges were removed from this sheet.";
+                successMessage = UiText.Get("MainWindowMessage_AllowEditRangesCleared");
                 break;
         }
 
@@ -355,7 +375,7 @@ public partial class MainWindow
         if (!TryExecuteCommand(command, "Allow Users to Edit Ranges"))
             return;
 
-        _messageService.ShowInfo(successMessage, "Allow Users to Edit Ranges");
+        _messageService.ShowInfo(successMessage, UiText.Get("MainWindowMessage_AllowEditRangesTitle"));
     }
 
     private void ApplyAllowEditRangeSelection(AllowEditRangeDialog? dialog, AllowEditRangeSelectionRequest request)
@@ -405,13 +425,15 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            _messageService.ShowError($"Failed to open Windows Share:\n{ex.Message}", "Share Workbook");
+            _messageService.ShowError(
+                UiText.Format("MainWindowMessage_ShareWorkbookFailed", ex.Message),
+                UiText.Get("MainWindowMessage_ShareWorkbookTitle"));
         }
     }
 
     private void HelpOnlineBtn_Click(object sender, RoutedEventArgs e)
     {
-        OpenExternalHelpLink(AppInfo.HelpUrl, "Help Online");
+        OpenExternalHelpLink(AppInfo.HelpUrl, UiText.Get("MainWindowMessage_HelpOnlineTitle"));
     }
 
     private void CheckForUpdatesBtn_Click(object sender, RoutedEventArgs e)
@@ -421,14 +443,14 @@ public partial class MainWindow
             ["source"] = "help"
         });
 
-        OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, "Check for Updates");
+        OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, UiText.Get("MainWindowMessage_CheckForUpdatesTitle"));
     }
 
     private void AboutBtn_Click(object sender, RoutedEventArgs e)
     {
         ShowOwnedMessage(
             AppInfo.AboutText,
-            "About FreeX", MessageBoxButton.OK, MessageBoxImage.Information);
+            UiText.Get("MainWindowMessage_AboutFreeXTitle"), MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void LegalNoticesBtn_Click(object sender, RoutedEventArgs e)
@@ -445,7 +467,7 @@ public partial class MainWindow
             ["source"] = "help"
         });
 
-        OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), "Feedback");
+        OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), UiText.Get("MainWindowMessage_FeedbackTitle"));
     }
 
     private void CopyDiagnosticsBtn_Click(object sender, RoutedEventArgs e)
@@ -461,16 +483,16 @@ public partial class MainWindow
                 ["source"] = "help"
             });
             ShowOwnedMessage(
-                "Diagnostics copied to the clipboard.",
-                "Copy Diagnostics",
+                UiText.Get("MainWindowMessage_DiagnosticsCopied"),
+                UiText.Get("MainWindowMessage_CopyDiagnosticsTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
             ShowOwnedMessage(
-                $"Could not copy diagnostics to the clipboard:\n{ex.Message}",
-                "Copy Diagnostics",
+                UiText.Format("MainWindowMessage_DiagnosticsCopyFailed", ex.Message),
+                UiText.Get("MainWindowMessage_CopyDiagnosticsTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
@@ -491,10 +513,10 @@ public partial class MainWindow
             return;
 
         var reason = result == ExternalUrlLaunchResult.BlockedScheme
-            ? "This link type is not supported for security reasons."
-            : "The link could not be opened.";
+            ? UiText.Get("MainWindowMessage_ExternalLinkBlockedScheme")
+            : UiText.Get("MainWindowMessage_ExternalLinkCouldNotBeOpened");
         ShowOwnedMessage(
-            $"Could not open the external link:\n{url}\n\n{reason}",
+            UiText.Format("MainWindowMessage_ExternalLinkOpenFailed", url, reason),
             title,
             MessageBoxButton.OK,
             MessageBoxImage.Warning);

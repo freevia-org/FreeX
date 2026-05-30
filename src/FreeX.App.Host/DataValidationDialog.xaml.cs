@@ -144,13 +144,15 @@ public partial class DataValidationDialog : Window
 
         // Formula1 label changes by type
         if (isList)
-            Formula1Label.Content = "_Source:";
+            Formula1Label.Content = UiText.Get("DataValidation_Source");
         else if (isCustom)
-            Formula1Label.Content = "_Formula:";
+            Formula1Label.Content = UiText.Get("DataValidation_Formula");
         else
         {
             var opTag = (OperatorCombo?.SelectedItem as ComboBoxItem)?.Tag as string ?? "Between";
-            Formula1Label.Content = (opTag == "Between" || opTag == "NotBetween") ? "_Minimum:" : "_Value:";
+            Formula1Label.Content = (opTag == "Between" || opTag == "NotBetween")
+                ? UiText.Get("DataValidation_Minimum")
+                : UiText.Get("DataValidation_Value");
         }
 
         Formula1Label.Visibility = isAny ? Visibility.Collapsed : Visibility.Visible;

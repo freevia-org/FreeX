@@ -26,13 +26,20 @@ public sealed record SubtotalDialogResult(
 
 public sealed class SubtotalDialog : Window
 {
-    private static readonly IReadOnlyList<string> SubtotalFunctionChoices =
-        ["Sum", "Count", "Average", "Max", "Min", "Product", "Count Numbers", "StdDev", "StdDevp", "Var", "Varp"];
+    private const string DefaultSubtotalFunction = "Sum";
+
+    private sealed record SubtotalFunctionChoice(string Label, string FunctionText);
 
     private readonly ComboBox _groupColumnBox = new() { DisplayMemberPath = nameof(SubtotalColumnChoice.Header), SelectedValuePath = nameof(SubtotalColumnChoice.Offset) };
     private readonly List<CheckBox> _subtotalColumnBoxes = [];
     private readonly StackPanel _subtotalColumnPanel = new();
-    private readonly ComboBox _functionBox = new ComboBox { ItemsSource = SubtotalFunctionChoices, SelectedItem = "Sum" };
+    private readonly ComboBox _functionBox = new()
+    {
+        ItemsSource = CreateSubtotalFunctionChoices(),
+        DisplayMemberPath = nameof(SubtotalFunctionChoice.Label),
+        SelectedValuePath = nameof(SubtotalFunctionChoice.FunctionText),
+        SelectedValue = DefaultSubtotalFunction
+    };
     private readonly CheckBox _replaceBox = new() { IsChecked = true };
     private readonly CheckBox _pageBreakBox = new();
     private readonly CheckBox _summaryBelowBox = new() { IsChecked = true };
@@ -43,7 +50,7 @@ public sealed class SubtotalDialog : Window
     {
         var columnChoices = NormalizeColumnChoices(columns);
 
-        Title = "Subtotal";
+        Title = UiText.Get("Subtotal_Subtotal");
         Width = 380;
         Height = 390;
         ResizeMode = ResizeMode.NoResize;
@@ -52,13 +59,13 @@ public sealed class SubtotalDialog : Window
         ApplyAutomationMetadata();
 
         var root = new StackPanel { Margin = new Thickness(12) };
-        root.Children.Add(new Label { Content = "_At each change in:", Target = _groupColumnBox, Padding = new Thickness(0) });
+        root.Children.Add(new Label { Content = UiText.Get("Subtotal_AtEachChangeIn"), Target = _groupColumnBox, Padding = new Thickness(0) });
         _groupColumnBox.ItemsSource = columnChoices;
         _groupColumnBox.SelectedValue = columnChoices[0].Offset;
         root.Children.Add(_groupColumnBox);
-        root.Children.Add(new Label { Content = "_Use function:", Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
+        root.Children.Add(new Label { Content = UiText.Get("Subtotal_UseFunction"), Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
         root.Children.Add(_functionBox);
-        root.Children.Add(new Label { Content = "_Add subtotal to:", Target = _subtotalColumnPanel, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
+        root.Children.Add(new Label { Content = UiText.Get("Subtotal_AddSubtotalTo"), Target = _subtotalColumnPanel, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 0) });
         _subtotalColumnPanel.Focusable = true;
         _subtotalColumnPanel.GotKeyboardFocus += (_, _) => FocusSubtotalColumnChoices();
         foreach (var column in columnChoices)
@@ -77,9 +84,9 @@ public sealed class SubtotalDialog : Window
             _subtotalColumnPanel.Children.Add(box);
         }
         root.Children.Add(new GroupBox { Content = _subtotalColumnPanel });
-        _replaceBox.Content = "_Replace current subtotals";
-        _pageBreakBox.Content = "_Page break between groups";
-        _summaryBelowBox.Content = "_Summary below data";
+        _replaceBox.Content = UiText.Get("Subtotal_ReplaceCurrentSubtotals");
+        _pageBreakBox.Content = UiText.Get("Subtotal_PageBreakBetweenGroups");
+        _summaryBelowBox.Content = UiText.Get("Subtotal_SummaryBelowData");
         root.Children.Add(_replaceBox);
         root.Children.Add(_pageBreakBox);
         root.Children.Add(_summaryBelowBox);
@@ -124,11 +131,11 @@ public sealed class SubtotalDialog : Window
         bool summaryBelowData)
     {
         if (!SubtotalFunctionService.TryParse(functionText, out var functionNumber))
-            throw new ArgumentException("Unsupported SUBTOTAL function.", nameof(functionText));
+            throw new ArgumentException(UiText.Get("Subtotal_UnsupportedSubtotalFunction"), nameof(functionText));
 
         var offsets = subtotalColumnOffsets.Distinct().ToList();
         if (offsets.Count == 0)
-            throw new ArgumentException("At least one subtotal column is required.", nameof(subtotalColumnOffsets));
+            throw new ArgumentException(UiText.Get("Subtotal_AtLeastOneSubtotalColumnIsRequired"), nameof(subtotalColumnOffsets));
 
         return new SubtotalDialogResult(
             groupColumnOffset,
@@ -157,12 +164,12 @@ public sealed class SubtotalDialog : Window
             var absoluteColumn = range.Start.Col + offset;
             var header = SpreadsheetDisplayFormatter.FormatCellValue(sheet.GetCell(range.Start.Row, absoluteColumn)?.Value);
             if (string.IsNullOrWhiteSpace(header))
-                header = $"Column {CellAddress.NumberToColumnName(absoluteColumn)}";
+                header = UiText.Format("Subtotal_ColumnLabel", CellAddress.NumberToColumnName(absoluteColumn));
 
             choices.Add(new SubtotalColumnChoice(offset, header, offset != 0));
         }
 
-        return choices.Count == 0 ? [new SubtotalColumnChoice(0, "Column A", false)] : choices;
+        return choices.Count == 0 ? [new SubtotalColumnChoice(0, UiText.Format("Subtotal_ColumnLabel", "A"), false)] : choices;
     }
 
     private void Accept()
@@ -178,7 +185,7 @@ public sealed class SubtotalDialog : Window
             Result = CreateResult(
                 groupColumnOffset,
                 subtotalColumnOffsets,
-                _functionBox.SelectedItem?.ToString() ?? "",
+                _functionBox.SelectedValue?.ToString() ?? DefaultSubtotalFunction,
                 _replaceBox.IsChecked == true,
                 _pageBreakBox.IsChecked == true,
                 _summaryBelowBox.IsChecked == true);
@@ -195,7 +202,7 @@ public sealed class SubtotalDialog : Window
 
     private void FocusInvalidInput(string message)
     {
-        if (string.Equals(message, "Unsupported SUBTOTAL function.", StringComparison.Ordinal))
+        if (string.Equals(message, UiText.Get("Subtotal_UnsupportedSubtotalFunction"), StringComparison.Ordinal))
         {
             FocusFunctionChoice();
             return;
@@ -240,7 +247,7 @@ public sealed class SubtotalDialog : Window
 
         var removeButton = new Button
         {
-            Content = "_Remove All",
+            Content = UiText.Get("Subtotal_RemoveAll"),
             Width = 92,
             Margin = new Thickness(0, 0, 8, 0)
         };
@@ -262,7 +269,22 @@ public sealed class SubtotalDialog : Window
     {
         var normalized = columns?.ToList() ?? [];
         return normalized.Count == 0
-            ? [new SubtotalColumnChoice(0, "Column 1", false), new SubtotalColumnChoice(1, "Column 2", true)]
+            ? [new SubtotalColumnChoice(0, UiText.Format("Subtotal_ColumnLabel", 1), false), new SubtotalColumnChoice(1, UiText.Format("Subtotal_ColumnLabel", 2), true)]
             : normalized;
     }
+
+    private static IReadOnlyList<SubtotalFunctionChoice> CreateSubtotalFunctionChoices() =>
+        [
+            new(UiText.Get("Subtotal_FunctionSum"), "Sum"),
+            new(UiText.Get("Subtotal_FunctionCount"), "Count"),
+            new(UiText.Get("Subtotal_FunctionAverage"), "Average"),
+            new(UiText.Get("Subtotal_FunctionMax"), "Max"),
+            new(UiText.Get("Subtotal_FunctionMin"), "Min"),
+            new(UiText.Get("Subtotal_FunctionProduct"), "Product"),
+            new(UiText.Get("Subtotal_FunctionCountNumbers"), "Count Numbers"),
+            new(UiText.Get("Subtotal_FunctionStdDev"), "StdDev"),
+            new(UiText.Get("Subtotal_FunctionStdDevp"), "StdDevp"),
+            new(UiText.Get("Subtotal_FunctionVar"), "Var"),
+            new(UiText.Get("Subtotal_FunctionVarp"), "Varp")
+        ];
 }

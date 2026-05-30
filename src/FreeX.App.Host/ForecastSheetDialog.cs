@@ -16,17 +16,21 @@ public sealed class ForecastSheetDialog : Window
     public ForecastSheetDialog(uint periods = 3)
     {
         Result = new ForecastSheetDialogResult(periods);
-        Title = "Forecast Sheet";
+        Title = UiText.Get("ForecastSheet_Title");
         Width = 320;
         Height = 150;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _periodsBox.Text = periods.ToString(CultureInfo.InvariantCulture);
-        AutomationProperties.SetName(_periodsBox, "Forecast periods");
+        AutomationProperties.SetName(_periodsBox, UiText.Get("ForecastSheet_PeriodsAutomationName"));
         AutomationProperties.SetAutomationId(_periodsBox, "ForecastPeriodsBox");
-        AutomationProperties.SetHelpText(_periodsBox, "Enter the positive whole number of periods to forecast.");
-        Content = ObjectSizeDialog.CreateSingleInputContent("Forecast _periods:", _periodsBox, Accept, acceptContent: "_Create");
+        AutomationProperties.SetHelpText(_periodsBox, UiText.Get("ForecastSheet_PeriodsHelpText"));
+        Content = ObjectSizeDialog.CreateSingleInputContent(
+            UiText.Get("ForecastSheet_PeriodsLabel"),
+            _periodsBox,
+            Accept,
+            acceptContent: UiText.Get("ForecastSheet_CreateButton"));
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -46,7 +50,7 @@ public sealed class ForecastSheetDialog : Window
         error = null;
         if (!ForecastSheetInputParser.TryParsePeriods(input, out var periods))
         {
-            error = "Enter a positive whole number of forecast periods.";
+            error = UiText.Get("ForecastSheet_InvalidPeriodsMessage");
             return false;
         }
 
@@ -58,7 +62,7 @@ public sealed class ForecastSheetDialog : Window
     {
         if (!TryCreateResult(_periodsBox.Text, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? "Enter a positive whole number of forecast periods.", Title);
+            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("ForecastSheet_InvalidPeriodsMessage"), Title);
             FocusInvalidPeriodsInput();
             return;
         }

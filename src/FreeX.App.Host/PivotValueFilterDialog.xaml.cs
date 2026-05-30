@@ -9,18 +9,18 @@ public partial class PivotValueFilterDialog : Window
 {
     private static readonly (string Label, PivotValueFilterKind Kind, bool UsesCount)[] Options =
     [
-        ("Top", PivotValueFilterKind.Top, true),
-        ("Bottom", PivotValueFilterKind.Bottom, true),
-        ("Greater Than", PivotValueFilterKind.GreaterThan, false),
-        ("Greater Than Or Equal", PivotValueFilterKind.GreaterThanOrEqual, false),
-        ("Less Than", PivotValueFilterKind.LessThan, false),
-        ("Less Than Or Equal", PivotValueFilterKind.LessThanOrEqual, false),
-        ("Equals", PivotValueFilterKind.Equals, false),
-        ("Does Not Equal", PivotValueFilterKind.DoesNotEqual, false),
-        ("Between", PivotValueFilterKind.Between, false),
-        ("Not Between", PivotValueFilterKind.NotBetween, false),
-        ("Above Average", PivotValueFilterKind.AboveAverage, false),
-        ("Below Average", PivotValueFilterKind.BelowAverage, false)
+        (UiText.Get("PivotValueFilter_Top"), PivotValueFilterKind.Top, true),
+        (UiText.Get("PivotValueFilter_Bottom"), PivotValueFilterKind.Bottom, true),
+        (UiText.Get("PivotValueFilter_GreaterThan"), PivotValueFilterKind.GreaterThan, false),
+        (UiText.Get("PivotValueFilter_GreaterThanOrEqual"), PivotValueFilterKind.GreaterThanOrEqual, false),
+        (UiText.Get("PivotValueFilter_LessThan"), PivotValueFilterKind.LessThan, false),
+        (UiText.Get("PivotValueFilter_LessThanOrEqual"), PivotValueFilterKind.LessThanOrEqual, false),
+        (UiText.Get("PivotValueFilter_Equals"), PivotValueFilterKind.Equals, false),
+        (UiText.Get("PivotValueFilter_DoesNotEqual"), PivotValueFilterKind.DoesNotEqual, false),
+        (UiText.Get("PivotValueFilter_Between"), PivotValueFilterKind.Between, false),
+        (UiText.Get("PivotValueFilter_NotBetween"), PivotValueFilterKind.NotBetween, false),
+        (UiText.Get("PivotValueFilter_AboveAverage"), PivotValueFilterKind.AboveAverage, false),
+        (UiText.Get("PivotValueFilter_BelowAverage"), PivotValueFilterKind.BelowAverage, false)
     ];
 
     private readonly int _sourceFieldIndex;
@@ -50,7 +50,7 @@ public partial class PivotValueFilterDialog : Window
                 out var filter,
                 out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? "Enter a valid value filter.", "Value Filter");
+            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("PivotValueFilter_InvalidValueMessage"), UiText.Get("PivotValueFilter_ValueFilter"));
             FocusInvalidValueFilterInput(error);
             return;
         }
@@ -92,7 +92,7 @@ public partial class PivotValueFilterDialog : Window
 
     private void FocusInvalidValueFilterInput(string? error)
     {
-        var target = string.Equals(error, "Enter a numeric ending comparison value.", StringComparison.Ordinal)
+        var target = string.Equals(error, UiText.Get("PivotValueFilter_NumericEndingComparisonMessage"), StringComparison.Ordinal)
             ? ValueFilterValue2Box
             : ValueFilterValueBox;
         target.Focus();

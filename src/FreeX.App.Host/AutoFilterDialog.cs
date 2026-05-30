@@ -8,12 +8,14 @@ namespace FreeX.App.Host;
 
 public sealed partial class AutoFilterDialog : Window
 {
+    private sealed record FilterChoice(string Label, string Value);
+
     private readonly List<AutoFilterDialogItem> _allItems;
     private readonly ObservableCollection<AutoFilterDialogItem> _items;
     private readonly TextBox _searchBox = new();
     private readonly CheckBox _addCurrentSelectionToFilterBox = new()
     {
-        Content = "_Add current selection to filter",
+        Content = UiText.Get("AutoFilter_AddCurrentSelectionToFilter"),
         Margin = new Thickness(0, 0, 0, 8)
     };
     private readonly TextBox _criteriaBox = new() { IsReadOnly = true };
@@ -39,28 +41,15 @@ public sealed partial class AutoFilterDialog : Window
     {
         Visibility = Visibility.Collapsed,
         Width = 150,
-        ItemsSource = new[]
-        {
-            "Custom",
-            "Today",
-            "Yesterday",
-            "Tomorrow",
-            "This Week",
-            "Last Week",
-            "Next Week",
-            "This Month",
-            "Last Month",
-            "Next Month",
-            "This Year",
-            "Last Year",
-            "Next Year"
-        },
+        DisplayMemberPath = nameof(FilterChoice.Label),
+        SelectedValuePath = nameof(FilterChoice.Value),
         SelectedIndex = 0
     };
     private readonly ComboBox _criteriaConnectorBox = new()
     {
         Visibility = Visibility.Collapsed,
-        ItemsSource = new[] { "And", "Or" },
+        DisplayMemberPath = nameof(FilterChoice.Label),
+        SelectedValuePath = nameof(FilterChoice.Value),
         SelectedIndex = 0
     };
     private readonly ComboBox _criteriaOperatorBox2 = new()
@@ -70,21 +59,21 @@ public sealed partial class AutoFilterDialog : Window
         DisplayMemberPath = nameof(AutoFilterCriteriaOption.Label)
     };
     private readonly TextBox _criteriaValueBox2 = new() { Visibility = Visibility.Collapsed };
-    private readonly RadioButton _sortNone = new() { Content = "_No sort", IsChecked = true };
-    private readonly RadioButton _sortAscending = new() { Content = "Sort _A to Z" };
-    private readonly RadioButton _sortDescending = new() { Content = "Sort _Z to A" };
-    private readonly Button _clearFilterButton = new() { Content = "_Clear Filter From", Margin = new Thickness(0, 8, 0, 0) };
-    private readonly GroupBox _filterByColorGroup = new() { Header = "Filter by Color", Visibility = Visibility.Collapsed };
+    private readonly RadioButton _sortNone = new() { Content = UiText.Get("AutoFilter_NoSort"), IsChecked = true };
+    private readonly RadioButton _sortAscending = new() { Content = UiText.Get("AutoFilter_SortAToZ") };
+    private readonly RadioButton _sortDescending = new() { Content = UiText.Get("AutoFilter_SortZToA") };
+    private readonly Button _clearFilterButton = new() { Content = UiText.Get("AutoFilter_ClearFilterFrom2"), Margin = new Thickness(0, 8, 0, 0) };
+    private readonly GroupBox _filterByColorGroup = new() { Header = UiText.Get("AutoFilter_FilterByColor2"), Visibility = Visibility.Collapsed };
     private readonly StackPanel _filterByColorPanel = new();
     private readonly List<Button> _colorChoiceButtons = [];
-    private readonly Button _textFiltersButton = new() { Content = "_Text Filters", Visibility = Visibility.Collapsed };
-    private readonly Button _numberFiltersButton = new() { Content = "_Number Filters", Visibility = Visibility.Collapsed };
-    private readonly Button _dateFiltersButton = new() { Content = "_Date Filters", Visibility = Visibility.Collapsed };
+    private readonly Button _textFiltersButton = new() { Content = UiText.Get("AutoFilter_TextFilters"), Visibility = Visibility.Collapsed };
+    private readonly Button _numberFiltersButton = new() { Content = UiText.Get("AutoFilter_NumberFilters"), Visibility = Visibility.Collapsed };
+    private readonly Button _dateFiltersButton = new() { Content = UiText.Get("AutoFilter_DateFilters"), Visibility = Visibility.Collapsed };
     private readonly ListBox _checklistBox = new();
-    private readonly GroupBox _customFilterGroup = new() { Header = "Custom filter", Visibility = Visibility.Collapsed };
+    private readonly GroupBox _customFilterGroup = new() { Header = UiText.Get("AutoFilter_CustomFilter"), Visibility = Visibility.Collapsed };
     private readonly Label _criteriaSuggestionLabel = new()
     {
-        Content = "Criteria _template",
+        Content = UiText.Get("AutoFilter_CriteriaTemplate"),
         Padding = new Thickness(0),
         Visibility = Visibility.Collapsed
     };
@@ -100,8 +89,8 @@ public sealed partial class AutoFilterDialog : Window
     public AutoFilterDialog(AutoFilterMenuPlan menuPlan)
         : this(CreateDialogItems(menuPlan))
     {
-        Title = $"AutoFilter - {menuPlan.HeaderText}";
-        _clearFilterButton.Content = $"_Clear Filter From \"{menuPlan.HeaderText}\"";
+        Title = UiText.Format("AutoFilter_TitleWithHeader", menuPlan.HeaderText);
+        _clearFilterButton.Content = UiText.Format("AutoFilter_ClearFilterFromHeader", menuPlan.HeaderText);
         SetSortLabels(menuPlan.FilterKind);
         ShowFilterFamilyButton(menuPlan.FilterKind);
         var criteriaSuggestions = GetCriteriaSuggestions(menuPlan);
@@ -109,7 +98,7 @@ public sealed partial class AutoFilterDialog : Window
         {
             _criteriaSuggestionBox.ItemsSource = criteriaSuggestions;
             _criteriaSuggestionBox.Visibility = Visibility.Visible;
-            _criteriaSuggestionBox.ToolTip = "Excel filter criteria templates";
+            _criteriaSuggestionBox.ToolTip = UiText.Get("AutoFilter_ExcelFilterCriteriaTemplates");
             _criteriaSuggestionLabel.Visibility = Visibility.Visible;
         }
 
@@ -119,17 +108,17 @@ public sealed partial class AutoFilterDialog : Window
             _criteriaOperatorBox.ItemsSource = criteriaOptions;
             _criteriaOperatorBox.Visibility = Visibility.Visible;
             _criteriaOperatorBox.SelectedIndex = 0;
-            _criteriaOperatorBox.ToolTip = $"{GetFilterFamilyHeader(menuPlan.FilterKind)} operator";
+            _criteriaOperatorBox.ToolTip = UiText.Format("AutoFilter_FilterFamilyOperatorToolTip", GetFilterFamilyHeader(menuPlan.FilterKind));
             _criteriaValueBox.Visibility = Visibility.Visible;
-            _criteriaValueBox.ToolTip = "Value for the selected typed filter";
+            _criteriaValueBox.ToolTip = UiText.Get("AutoFilter_ValueForTheSelectedTypedFilter");
             _criteriaConnectorBox.Visibility = Visibility.Visible;
             _criteriaOperatorBox2.ItemsSource = criteriaOptions;
             _criteriaOperatorBox2.Visibility = Visibility.Visible;
             _criteriaOperatorBox2.SelectedIndex = 0;
-            _criteriaOperatorBox2.ToolTip = $"Second {GetFilterFamilyHeader(menuPlan.FilterKind)} operator";
+            _criteriaOperatorBox2.ToolTip = UiText.Format("AutoFilter_SecondFilterFamilyOperatorToolTip", GetFilterFamilyHeader(menuPlan.FilterKind));
             _criteriaValueBox2.Visibility = Visibility.Visible;
-            _criteriaValueBox2.ToolTip = "Value for the second typed filter";
-            _criteriaBox.ToolTip = "Generated criterion that will be applied.";
+            _criteriaValueBox2.ToolTip = UiText.Get("AutoFilter_ValueForTheSecondTypedFilter");
+            _criteriaBox.ToolTip = UiText.Get("AutoFilter_GeneratedCriterionThatWillBeApplied");
             _customFilterGroup.Visibility = Visibility.Visible;
         }
         ConfigureFilterFamilySubmenu(menuPlan);
@@ -148,13 +137,15 @@ public sealed partial class AutoFilterDialog : Window
         _items = new ObservableCollection<AutoFilterDialogItem>(_allItems);
         Result = BuildResult(AutoFilterSortDirection.None, _allItems, string.Empty, string.Empty);
 
-        Title = "AutoFilter";
+        Title = UiText.Get("AutoFilter_AutoFilter");
         Width = 360;
         Height = 540;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
         var root = new DockPanel { Margin = new Thickness(16) };
+        _datePresetBox.ItemsSource = CreateDatePresetChoices();
+        _criteriaConnectorBox.ItemsSource = CreateConnectorChoices();
         var stack = new StackPanel();
         var scrollViewer = new ScrollViewer
         {
@@ -190,9 +181,9 @@ public sealed partial class AutoFilterDialog : Window
         }
 
         AddFilterMenuSeparator(stack);
-        stack.Children.Add(new Label { Content = "_Search", Target = _searchBox, Padding = new Thickness(0), Margin = new Thickness(0, 12, 0, 2) });
+        stack.Children.Add(new Label { Content = UiText.Get("AutoFilter_Search2"), Target = _searchBox, Padding = new Thickness(0), Margin = new Thickness(0, 12, 0, 2) });
         _searchBox.Margin = new Thickness(0, 0, 0, 8);
-        _searchBox.ToolTip = "Search";
+        _searchBox.ToolTip = UiText.Get("AutoFilter_Search3");
         _searchBox.TextChanged += (_, _) => ReplaceItems(FilterItems(_allItems, _searchBox.Text));
         stack.Children.Add(_searchBox);
         stack.Children.Add(_addCurrentSelectionToFilterBox);
@@ -202,7 +193,7 @@ public sealed partial class AutoFilterDialog : Window
         _checklistBox.Margin = new Thickness(0, 0, 0, 8);
         _checklistBox.ItemTemplate = CreateItemTemplate();
         _checklistBox.PreviewKeyDown += ChecklistBox_PreviewKeyDown;
-        AutomationProperties.SetName(_checklistBox, "Filter values");
+        AutomationProperties.SetName(_checklistBox, UiText.Get("AutoFilter_FilterValues"));
         stack.Children.Add(_checklistBox);
 
         var selectionRow = new StackPanel
@@ -210,9 +201,9 @@ public sealed partial class AutoFilterDialog : Window
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, 0, 0, 12)
         };
-        var selectAll = new Button { Content = "_Select All", Width = 88, Margin = new Thickness(0, 0, 8, 0) };
+        var selectAll = new Button { Content = UiText.Get("AutoFilter_SelectAll2"), Width = 88, Margin = new Thickness(0, 0, 8, 0) };
         selectAll.Click += (_, _) => ReplaceAllItems(SetSelectionForSearch(_allItems, _searchBox.Text, isSelected: true));
-        var clearAll = new Button { Content = "_Clear All", Width = 88 };
+        var clearAll = new Button { Content = UiText.Get("AutoFilter_ClearAll"), Width = 88 };
         clearAll.Click += (_, _) => ReplaceAllItems(SetSelectionForSearch(_allItems, _searchBox.Text, isSelected: false));
         selectionRow.Children.Add(selectAll);
         selectionRow.Children.Add(clearAll);
@@ -223,39 +214,39 @@ public sealed partial class AutoFilterDialog : Window
         _customFilterGroup.Content = customFilterPanel;
         stack.Children.Add(_customFilterGroup);
 
-        customFilterPanel.Children.Add(new Label { Content = "Show rows where:", Padding = new Thickness(0) });
-        customFilterPanel.Children.Add(new Label { Content = "Date _preset", Target = _datePresetBox, Padding = new Thickness(0) });
+        customFilterPanel.Children.Add(new Label { Content = UiText.Get("AutoFilter_ShowRowsWhere"), Padding = new Thickness(0) });
+        customFilterPanel.Children.Add(new Label { Content = UiText.Get("AutoFilter_DatePreset"), Target = _datePresetBox, Padding = new Thickness(0) });
         _datePresetBox.Margin = new Thickness(0, 4, 0, 4);
         _datePresetBox.SelectionChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
         customFilterPanel.Children.Add(_datePresetBox);
-        customFilterPanel.Children.Add(new Label { Content = "Filter _operator", Target = _criteriaOperatorBox, Padding = new Thickness(0) });
+        customFilterPanel.Children.Add(new Label { Content = UiText.Get("AutoFilter_FilterOperator"), Target = _criteriaOperatorBox, Padding = new Thickness(0) });
         _criteriaOperatorBox.Margin = new Thickness(0, 4, 0, 4);
         _criteriaOperatorBox.SelectionChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
         customFilterPanel.Children.Add(_criteriaOperatorBox);
 
-        customFilterPanel.Children.Add(new Label { Content = "Filter _value", Target = _criteriaValueBox, Padding = new Thickness(0) });
+        customFilterPanel.Children.Add(new Label { Content = UiText.Get("AutoFilter_FilterValue"), Target = _criteriaValueBox, Padding = new Thickness(0) });
         _criteriaValueBox.Margin = new Thickness(0, 4, 0, 4);
         _criteriaValueBox.TextChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
         customFilterPanel.Children.Add(_criteriaValueBox);
         customFilterPanel.Children.Add(CreateBetweenCriteriaPanel());
         customFilterPanel.Children.Add(CreateTopBottomCriteriaPanel());
 
-        customFilterPanel.Children.Add(new Label { Content = "_And / Or", Target = _criteriaConnectorBox, Padding = new Thickness(0) });
+        customFilterPanel.Children.Add(new Label { Content = UiText.Get("AutoFilter_AndOr"), Target = _criteriaConnectorBox, Padding = new Thickness(0) });
         _criteriaConnectorBox.Margin = new Thickness(0, 4, 0, 4);
         _criteriaConnectorBox.SelectionChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
         customFilterPanel.Children.Add(_criteriaConnectorBox);
 
-        customFilterPanel.Children.Add(new Label { Content = "Second o_perator", Target = _criteriaOperatorBox2, Padding = new Thickness(0) });
+        customFilterPanel.Children.Add(new Label { Content = UiText.Get("AutoFilter_SecondOperator"), Target = _criteriaOperatorBox2, Padding = new Thickness(0) });
         _criteriaOperatorBox2.Margin = new Thickness(0, 4, 0, 4);
         _criteriaOperatorBox2.SelectionChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
         customFilterPanel.Children.Add(_criteriaOperatorBox2);
 
-        customFilterPanel.Children.Add(new Label { Content = "Second va_lue", Target = _criteriaValueBox2, Padding = new Thickness(0) });
+        customFilterPanel.Children.Add(new Label { Content = UiText.Get("AutoFilter_SecondValue"), Target = _criteriaValueBox2, Padding = new Thickness(0) });
         _criteriaValueBox2.Margin = new Thickness(0, 4, 0, 4);
         _criteriaValueBox2.TextChanged += (_, _) => UpdateCriteriaTextFromTypedControls();
         customFilterPanel.Children.Add(_criteriaValueBox2);
 
-        customFilterPanel.Children.Add(new Label { Content = "_Criteria text", Target = _criteriaBox, Padding = new Thickness(0) });
+        customFilterPanel.Children.Add(new Label { Content = UiText.Get("AutoFilter_CriteriaText"), Target = _criteriaBox, Padding = new Thickness(0) });
 
         _criteriaBox.Margin = new Thickness(0, 4, 0, 12);
         customFilterPanel.Children.Add(_criteriaBox);
@@ -277,7 +268,7 @@ public sealed partial class AutoFilterDialog : Window
             Margin = new Thickness(0, 10, 0, 0)
         };
         DockPanel.SetDock(buttons, Dock.Bottom);
-        var ok = new Button { Content = "_OK", IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = UiText.Ok, IsDefault = true, Width = 76, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) =>
         {
             if (!ValidateTypedCriteriaInputs())
@@ -292,7 +283,7 @@ public sealed partial class AutoFilterDialog : Window
                 _addCurrentSelectionToFilterBox.IsChecked == true);
             DialogResult = true;
         };
-        var cancel = new Button { Content = "_Cancel", IsCancel = true, Width = 76 };
+        var cancel = new Button { Content = UiText.Cancel, IsCancel = true, Width = 76 };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
         root.Children.Add(buttons);
@@ -301,4 +292,27 @@ public sealed partial class AutoFilterDialog : Window
         PreviewKeyDown += AutoFilterDialog_PreviewKeyDown;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
+
+    private static IReadOnlyList<FilterChoice> CreateDatePresetChoices() =>
+        [
+            new(UiText.Get("AutoFilter_DatePresetCustom"), "Custom"),
+            new(UiText.Get("AutoFilter_DatePresetToday"), "Today"),
+            new(UiText.Get("AutoFilter_DatePresetYesterday"), "Yesterday"),
+            new(UiText.Get("AutoFilter_DatePresetTomorrow"), "Tomorrow"),
+            new(UiText.Get("AutoFilter_DatePresetThisWeek"), "This Week"),
+            new(UiText.Get("AutoFilter_DatePresetLastWeek"), "Last Week"),
+            new(UiText.Get("AutoFilter_DatePresetNextWeek"), "Next Week"),
+            new(UiText.Get("AutoFilter_DatePresetThisMonth"), "This Month"),
+            new(UiText.Get("AutoFilter_DatePresetLastMonth"), "Last Month"),
+            new(UiText.Get("AutoFilter_DatePresetNextMonth"), "Next Month"),
+            new(UiText.Get("AutoFilter_DatePresetThisYear"), "This Year"),
+            new(UiText.Get("AutoFilter_DatePresetLastYear"), "Last Year"),
+            new(UiText.Get("AutoFilter_DatePresetNextYear"), "Next Year")
+        ];
+
+    private static IReadOnlyList<FilterChoice> CreateConnectorChoices() =>
+        [
+            new(UiText.Get("AutoFilter_ConnectorAnd"), "And"),
+            new(UiText.Get("AutoFilter_ConnectorOr"), "Or")
+        ];
 }

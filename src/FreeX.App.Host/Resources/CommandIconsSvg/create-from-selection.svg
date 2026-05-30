@@ -1,8 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Create from Selection">
   <rect width="32" height="32" fill="none"/>
-  <rect x="5.5" y="7.5" width="21" height="18" rx="1.5" fill="#ffffff" stroke="#242424" stroke-width="1.6"/>
-  <path d="M5.5 13.5h21M12.5 7.5v18" fill="none" stroke="#8a8a8a" stroke-width="1.2"/>
-  <rect x="6.5" y="8.5" width="5" height="16" fill="#E6F6FA"/>
-  <text x="19.5" y="21.2" font-size="9" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">A1</text>
-  <path d="M10.5 29h11" fill="none" stroke="#0F6D8C" stroke-width="1.8" stroke-linecap="round"/>
+  <rect x="5.5" y="6.5" width="18" height="18" rx="1.5" fill="#ffffff" stroke="#242424" stroke-width="1.5"/>
+  <rect x="6.5" y="7.5" width="16" height="5" fill="#E6F6FA"/>
+  <path d="M5.5 12.5h18M11.5 6.5v18M17.5 6.5v18" fill="none" stroke="#8a8a8a" stroke-width="1.1"/>
+  <path d="M18.5 20.5h5l3.5 3l-3.5 3h-5z" fill="#ffffff" stroke="#242424" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M10.5 10h8M14.5 24.5h4" fill="none" stroke="#0F6D8C" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M22.5 24.5h.1" fill="none" stroke="#0F6D8C" stroke-width="2" stroke-linecap="round"/>
 </svg>

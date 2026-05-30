@@ -12,8 +12,19 @@ public partial class MainWindow
     {
         if (outcome.Success) return;
 
-        _messageService.ShowWarning(outcome.ErrorMessage ?? "The command could not be completed.", title);
+        _messageService.ShowWarning(
+            LocalizeCommandErrorMessage(outcome.ErrorMessage),
+            UiText.Get("MainWindowMessage_CommandErrorTitle"));
     }
+
+    private static string LocalizeCommandErrorMessage(string? message) =>
+        message switch
+        {
+            null => UiText.Get("MainWindowMessage_CommandCouldNotBeCompleted"),
+            "Picture was not found." => UiText.Get("MainWindowMessage_PictureWasNotFound"),
+            "Sheet not found." => UiText.Get("MainWindowMessage_SheetNotFound"),
+            _ => message
+        };
 
     private bool TryExecuteCommand(IWorkbookCommand command, string title, out CommandOutcome outcome)
     {
@@ -177,7 +188,7 @@ public partial class MainWindow
             if (chart is null)
                 return new FailedWorkbookCommand(missingMessage);
             if (canApply is not null && !canApply(chart))
-                return new FailedWorkbookCommand(unsupportedMessage ?? "This chart command is not supported for the selected chart.");
+                return new FailedWorkbookCommand(unsupportedMessage ?? UiText.Get("MainWindowMessage_UnsupportedChartCommand"));
             return new SetChartLayoutCommand(_currentSheetId, chart.Id, optionsFactory(chart));
         }
 

@@ -38,7 +38,7 @@ public sealed partial class ManageConditionalFormatsDialog
 
         return new GridViewColumn
         {
-            Header = "Rule (Type)",
+            Header = UiText.Get("ManageConditionalFormats_RuleTypeColumn"),
             Width = 200,
             CellTemplate = descTemplate
         };
@@ -56,7 +56,7 @@ public sealed partial class ManageConditionalFormatsDialog
         previewBorderFactory.SetBinding(Border.BackgroundProperty, new Binding(".") { Converter = new PreviewBrushConverter() });
 
         var previewTextFactory = new FrameworkElementFactory(typeof(TextBlock));
-        previewTextFactory.SetValue(TextBlock.TextProperty, "AaBbCcYyZz");
+        previewTextFactory.SetValue(TextBlock.TextProperty, UiText.Get("ManageConditionalFormats_FormatPreviewSample"));
         previewTextFactory.SetValue(TextBlock.HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
         previewTextFactory.SetValue(TextBlock.VerticalAlignmentProperty, System.Windows.VerticalAlignment.Center);
         previewTextFactory.SetValue(TextBlock.FontSizeProperty, 10.0);
@@ -69,7 +69,7 @@ public sealed partial class ManageConditionalFormatsDialog
         fmtTemplate.VisualTree = previewBorderFactory;
         return new GridViewColumn
         {
-            Header = "Format",
+            Header = UiText.Get("ManageConditionalFormats_FormatColumn"),
             Width = 95,
             CellTemplate = fmtTemplate
         };
@@ -85,9 +85,9 @@ public sealed partial class ManageConditionalFormatsDialog
         rangePickerFactory.SetValue(ContentControl.ContentProperty, "...");
         rangePickerFactory.SetValue(FrameworkElement.WidthProperty, 24.0);
         rangePickerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
-        rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, "Collapse dialog and select Applies To range");
-        rangePickerFactory.SetValue(AutomationProperties.NameProperty, "Select Applies To range");
-        rangePickerFactory.SetValue(AutomationProperties.HelpTextProperty, "Collapse dialog and select a worksheet range for this conditional format rule.");
+        rangePickerFactory.SetValue(FrameworkElement.ToolTipProperty, UiText.Get("ManageConditionalFormats_CollapseDialogAndSelectAppliesToRange"));
+        rangePickerFactory.SetValue(AutomationProperties.NameProperty, UiText.Get("ManageConditionalFormats_SelectAppliesToRange"));
+        rangePickerFactory.SetValue(AutomationProperties.HelpTextProperty, UiText.Get("ManageConditionalFormats_SelectAppliesToRangeHelpText"));
         rangePickerFactory.SetValue(DockPanel.DockProperty, Dock.Right);
         rangePickerFactory.SetBinding(UIElement.IsEnabledProperty, new Binding("IsSelected")
         {
@@ -115,7 +115,7 @@ public sealed partial class ManageConditionalFormatsDialog
 
         return new GridViewColumn
         {
-            Header = "Applies To",
+            Header = UiText.Get("ManageConditionalFormats_AppliesToColumn"),
             Width = 170,
             CellTemplate = appliesToTemplate
         };
@@ -138,7 +138,7 @@ public sealed partial class ManageConditionalFormatsDialog
 
         return new GridViewColumn
         {
-            Header = "Stop If True",
+            Header = UiText.Get("ManageConditionalFormats_StopIfTrueColumn"),
             Width = 85,
             CellTemplate = stopIfTrueTemplate
         };

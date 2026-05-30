@@ -36,6 +36,9 @@ public sealed class RibbonResizeCoordinatorTests
             queued.IsPending.Should().BeTrue();
             queued.LastRequestedWork.Should().Be("CompactOnly");
             queued.LastMergedWork.Should().Be("NormalizeSurface");
+            queued.FirstFrameLayoutUpdateCount.Should().BeGreaterThan(
+                0,
+                "layout-change normalization should settle the selected ribbon before the queued render fallback runs");
 
             harness.PumpDispatcher();
 
@@ -44,6 +47,7 @@ public sealed class RibbonResizeCoordinatorTests
             executed.ForcedNormalizeCount.Should().Be(1);
             executed.ForcedCompactCount.Should().Be(0);
             executed.LastExecutedWork.Should().Be("NormalizeSurface");
+            executed.FirstFrameLayoutUpdateCount.Should().BeGreaterThan(queued.FirstFrameLayoutUpdateCount);
             executed.IsPending.Should().BeFalse();
         });
     }
@@ -59,6 +63,9 @@ public sealed class RibbonResizeCoordinatorTests
         method.Should().Contain("DispatcherPriority.Render");
         method.Should().NotContain("DispatcherPriority.Send");
         method.Should().Contain("UpdateRibbonCompactMode(force: false)");
+        method.Should().Contain("UpdateActiveRibbonLayoutBeforeFirstFrame()");
+        method.Should().Contain("RibbonCompactUpdateRequiresLayout(result)");
+        method.Should().Contain("_ribbonFallbackSkippedCompactLayoutCount");
     }
 
     [Fact]
@@ -151,6 +158,9 @@ public sealed class RibbonResizeCoordinatorTests
             queued.RequestCount.Should().Be(1);
             queued.PostedCount.Should().Be(1);
             queued.LastMergedWork.Should().Be("CompactOnly");
+            queued.FirstFrameLayoutUpdateCount.Should().BeGreaterThan(
+                0,
+                "native resize exit should settle the compacted ribbon before the queued render fallback is visible");
 
             harness.PumpDispatcher();
 
@@ -225,6 +235,9 @@ public sealed class RibbonResizeCoordinatorTests
             queued.RequestCount.Should().Be(1);
             queued.PostedCount.Should().Be(1);
             queued.LastMergedWork.Should().Be("CompactOnly");
+            queued.FirstFrameLayoutUpdateCount.Should().Be(
+                0,
+                "explicit resize completion should not force a layout pass when the compact state is already current");
 
             harness.PumpDispatcher();
 
@@ -232,6 +245,7 @@ public sealed class RibbonResizeCoordinatorTests
             executed.ExecutedCount.Should().Be(1);
             executed.ForcedNormalizeCount.Should().Be(0);
             executed.ForcedCompactCount.Should().Be(1);
+            executed.SkippedCompactLayoutCount.Should().Be(1);
             executed.LastExecutedWork.Should().Be("CompactOnly");
         });
     }

@@ -19,6 +19,21 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     }
 
     [Fact]
+    public void ApplyRuntimePriorityStates_UsesCatalogIdsAsStableInsertGroupKeys()
+    {
+        var groupKeys = new[] { "InsertTablesGroup", "InsertIllustrationsGroup", "InsertChartsGroup" };
+
+        var states = RibbonAdaptivePriorityPlanner.ApplyRuntimePriorityStates(
+            900,
+            groupKeys,
+            Enumerable.Repeat(RibbonAdaptiveGroupState.Full, groupKeys.Length).ToArray(),
+            selectedTabHeader: "InsertTab");
+
+        states[Array.IndexOf(groupKeys, "InsertChartsGroup")].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        states[Array.IndexOf(groupKeys, "InsertTablesGroup")].Should().Be(RibbonAdaptiveGroupState.Full);
+    }
+
+    [Fact]
     public void ApplyRuntimePriorityStates_IgnoresOverridesOutsidePlannedStateRange()
     {
         var states = RibbonAdaptivePriorityPlanner.ApplyRuntimePriorityStates(
@@ -64,6 +79,27 @@ public sealed class RibbonAdaptivePriorityPlannerTests
         decisions.Should().Contain(decision =>
             decision.Index == Array.IndexOf(groupNames, "Data Tools") &&
             decision.State == RibbonAdaptiveGroupState.IconOnly);
+    }
+
+    [Fact]
+    public void RuntimeVisibilityOverrides_UseDataCatalogIdsAsStableGroupKeys()
+    {
+        var groupKeys = new[] { "DataGetTransformGroup", "DataSortFilterGroup", "DataToolsGroup" };
+
+        var decisions = RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityOverrides(
+            1120,
+            groupKeys,
+            selectedTabHeader: "DataTab");
+
+        decisions.Should().Contain(decision =>
+            decision.Index == Array.IndexOf(groupKeys, "DataSortFilterGroup") &&
+            decision.State == RibbonAdaptiveGroupState.IconOnly);
+        decisions.Should().Contain(decision =>
+            decision.Index == Array.IndexOf(groupKeys, "DataToolsGroup") &&
+            decision.State == RibbonAdaptiveGroupState.IconOnly);
+        RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(groupKeys, selectedTabHeader: "DataTab")
+            .Should()
+            .BeTrue();
     }
 
     [Fact]

@@ -44,11 +44,11 @@ public sealed record ChartDataLabelsDialogResult(
 
 public sealed class ChartDataLabelsDialog : Window
 {
-    private readonly CheckBox _showBox = new() { Content = "_Show data labels" };
-    private readonly CheckBox _categoryBox = new() { Content = "_Category name" };
-    private readonly CheckBox _seriesBox = new() { Content = "S_eries name" };
-    private readonly CheckBox _percentageBox = new() { Content = "_Percentage" };
-    private readonly CheckBox _calloutsBox = new() { Content = "Data label callo_uts" };
+    private readonly CheckBox _showBox = new() { Content = UiText.Get("ChartDataLabels_ShowDataLabels") };
+    private readonly CheckBox _categoryBox = new() { Content = UiText.Get("ChartDataLabels_CategoryName") };
+    private readonly CheckBox _seriesBox = new() { Content = UiText.Get("ChartDataLabels_SeriesName") };
+    private readonly CheckBox _percentageBox = new() { Content = UiText.Get("ChartDataLabels_Percentage") };
+    private readonly CheckBox _calloutsBox = new() { Content = UiText.Get("ChartDataLabels_Callouts") };
     private readonly ComboBox _positionBox = new();
     private readonly ComboBox _separatorBox = new();
     private readonly ComboBox _numberFormatBox = new();
@@ -64,7 +64,7 @@ public sealed class ChartDataLabelsDialog : Window
     public ChartDataLabelsDialog(ChartModel chart)
     {
         Result = FromChart(chart);
-        Title = "Format Data Labels";
+        Title = UiText.Get("ChartDataLabels_Title");
         Width = 420;
         Height = 560;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -115,24 +115,24 @@ public sealed class ChartDataLabelsDialog : Window
         {
             var stack = new StackPanel();
             ChartDialogHelpers.AddCheck(stack, _showBox);
-            ChartDialogHelpers.AddCombo(stack, "P_osition", _positionBox, Enum.GetValues<ChartDataLabelPosition>());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartDataLabels_PositionLabel"), _positionBox, Enum.GetValues<ChartDataLabelPosition>());
             ChartDialogHelpers.AddCheck(stack, _categoryBox);
             ChartDialogHelpers.AddCheck(stack, _seriesBox);
             ChartDialogHelpers.AddCheck(stack, _percentageBox);
-            ChartDialogHelpers.AddCombo(stack, "Separato_r", _separatorBox, Enum.GetValues<ChartDataLabelSeparator>());
-            ChartDialogHelpers.AddCombo(stack, "_Number format", _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartDataLabels_SeparatorLabel"), _separatorBox, Enum.GetValues<ChartDataLabelSeparator>());
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartDataLabels_NumberFormatLabel"), _numberFormatBox, Enum.GetValues<ChartDataLabelNumberFormat>());
             ChartDialogHelpers.AddCheck(stack, _calloutsBox);
-            root.Children.Add(CreateGroupBox("Label Options", stack));
+            root.Children.Add(CreateGroupBox(UiText.Get("ChartDataLabels_LabelOptionsGroup"), stack));
         }
         {
             var stack = new StackPanel();
-            ChartDialogHelpers.AddColorText(stack, "F_ill color", _fillBox);
-            ChartDialogHelpers.AddColorText(stack, "_Border color", _borderBox);
-            ChartDialogHelpers.AddColorText(stack, "_Text color", _textBox);
-            ChartDialogHelpers.AddNumericText(stack, "Border t_hickness", _borderThicknessBox, "Enter a border width in points.");
-            ChartDialogHelpers.AddNumericText(stack, "Font si_ze", _fontSizeBox, "Enter a font size in points.");
-            ChartDialogHelpers.AddNumericText(stack, "Text _angle", _angleBox, "Enter degrees from -90 to 90.");
-            root.Children.Add(CreateGroupBox("Fill & Line", stack));
+            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartDataLabels_FillColorLabel"), _fillBox);
+            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartDataLabels_BorderColorLabel"), _borderBox);
+            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartDataLabels_TextColorLabel"), _textBox);
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartDataLabels_BorderThicknessLabel"), _borderThicknessBox, UiText.Get("ChartDataLabels_BorderThicknessHelpText"));
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartDataLabels_FontSizeLabel"), _fontSizeBox, UiText.Get("ChartDataLabels_FontSizeHelpText"));
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartDataLabels_TextAngleLabel"), _angleBox, UiText.Get("ChartDataLabels_TextAngleHelpText"));
+            root.Children.Add(CreateGroupBox(UiText.Get("ChartDialog_FillLineGroup"), stack));
         }
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
@@ -160,37 +160,37 @@ public sealed class ChartDataLabelsDialog : Window
     {
         if (!TryReadOptionalColor(_fillBox, out var fillColor))
         {
-            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _fillBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _fillBox);
             return;
         }
 
         if (!TryReadOptionalColor(_borderBox, out var borderColor))
         {
-            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _borderBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _borderBox);
             return;
         }
 
         if (!TryReadOptionalColor(_textBox, out var textColor))
         {
-            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _textBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _textBox);
             return;
         }
 
         if (!TryReadClampedDouble(_borderThicknessBox, min: 0, max: 10, out var borderThickness))
         {
-            ShowInvalidInputWarning("Enter a data label border width from 0 to 10 points.", _borderThicknessBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDataLabels_InvalidBorderThicknessMessage"), _borderThicknessBox);
             return;
         }
 
         if (!TryReadClampedDouble(_fontSizeBox, min: 6, max: 72, out var fontSize))
         {
-            ShowInvalidInputWarning("Enter a data label font size from 6 to 72 points.", _fontSizeBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDataLabels_InvalidFontSizeMessage"), _fontSizeBox);
             return;
         }
 
         if (!TryReadClampedDouble(_angleBox, min: -90, max: 90, out var angle))
         {
-            ShowInvalidInputWarning("Enter a data label angle from -90 to 90 degrees.", _angleBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDataLabels_InvalidAngleMessage"), _angleBox);
             return;
         }
 

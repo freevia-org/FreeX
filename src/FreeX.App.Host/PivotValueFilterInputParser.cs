@@ -21,7 +21,7 @@ public static class PivotValueFilterInputParser
         {
             if (!int.TryParse(valueText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) || count <= 0)
             {
-                error = "Enter a positive item count.";
+                error = UiText.Get("PivotValueFilter_PositiveItemCountMessage");
                 return false;
             }
 
@@ -37,7 +37,7 @@ public static class PivotValueFilterInputParser
 
         if (!TryParseFiniteDouble(valueText, out var value))
         {
-            error = "Enter a numeric comparison value.";
+            error = UiText.Get("PivotValueFilter_NumericComparisonMessage");
             return false;
         }
 
@@ -46,7 +46,7 @@ public static class PivotValueFilterInputParser
         {
             if (!TryParseFiniteDouble(value2Text, out var parsedValue2))
             {
-                error = "Enter a numeric ending comparison value.";
+                error = UiText.Get("PivotValueFilter_NumericEndingComparisonMessage");
                 return false;
             }
 

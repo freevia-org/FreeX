@@ -176,7 +176,7 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(sheetId);
         if (sheet is null)
-            return new FailedWorkbookCommand("Sheet not found.");
+            return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_SheetNotFound"));
 
         var plans = AutoFitPlanner.PlanRowHeights(
             range,
@@ -191,7 +191,7 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(sheetId);
         if (sheet is null)
-            return new FailedWorkbookCommand("Sheet not found.");
+            return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_SheetNotFound"));
 
         var plans = AutoFitPlanner.PlanColumnWidths(
             range,

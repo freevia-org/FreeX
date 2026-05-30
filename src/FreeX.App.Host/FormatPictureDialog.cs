@@ -20,18 +20,18 @@ public sealed record FormatPictureDialogResult(
 public sealed class FormatPictureDialog : Window
 {
     private readonly TabControl _tabs = new();
-    private readonly TabItem _sizeTab = new() { Header = "_Size" };
-    private readonly TabItem _cropTab = new() { Header = "_Crop" };
-    private readonly TabItem _altTextTab = new() { Header = "_Alt Text" };
+    private readonly TabItem _sizeTab = new() { Header = UiText.Get("FormatPicture_SizeTab") };
+    private readonly TabItem _cropTab = new() { Header = UiText.Get("FormatPicture_CropTab") };
+    private readonly TabItem _altTextTab = new() { Header = UiText.Get("FormatPicture_AltTextTab") };
     private readonly TextBox _widthBox = new();
     private readonly TextBox _heightBox = new();
-    private readonly CheckBox _lockAspectRatioBox = new() { Content = "_Lock aspect ratio", IsChecked = true, Margin = new Thickness(0, 0, 0, 8) };
+    private readonly CheckBox _lockAspectRatioBox = new() { Content = UiText.Get("FormatPicture_LockAspectRatio"), IsChecked = true, Margin = new Thickness(0, 0, 0, 8) };
     private readonly TextBox _rotationBox = new();
     private readonly TextBox _cropLeftBox = new();
     private readonly TextBox _cropTopBox = new();
     private readonly TextBox _cropRightBox = new();
     private readonly TextBox _cropBottomBox = new();
-    private readonly Button _resetCropButton = new() { Content = "Reset _Crop", MinWidth = 96, Margin = new Thickness(0, 0, 0, 8) };
+    private readonly Button _resetCropButton = new() { Content = UiText.Get("FormatPicture_ResetCropButton"), MinWidth = 96, Margin = new Thickness(0, 0, 0, 8) };
     private readonly TextBox _altTextBox = new() { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 86 };
     private readonly FormatPictureDialogResult _initialResult;
     private readonly double _aspectRatio;
@@ -53,7 +53,7 @@ public sealed class FormatPictureDialog : Window
             picture.AltText);
         Result = _initialResult;
         _aspectRatio = picture.Height > 0 ? picture.Width / picture.Height : 1;
-        Title = "Format Picture";
+        Title = UiText.Get("FormatPicture_Title");
         Width = 480;
         Height = 440;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -94,13 +94,13 @@ public sealed class FormatPictureDialog : Window
         error = null;
         if (!ObjectSizeDialog.TryParseSize(sizeInput, out var size))
         {
-            error = "Enter positive width and height values.";
+            error = UiText.Get("FormatPicture_InvalidSizeMessage");
             return false;
         }
 
         if (!RotationDialog.TryParseRotation(rotationInput, out var rotation))
         {
-            error = "Enter a numeric rotation in degrees.";
+            error = UiText.Get("FormatPicture_InvalidRotationMessage");
             return false;
         }
 
@@ -143,14 +143,14 @@ public sealed class FormatPictureDialog : Window
 
     private void FocusInvalidInput(string? error)
     {
-        if (string.Equals(error, "Enter a numeric rotation in degrees.", StringComparison.Ordinal))
+        if (string.Equals(error, UiText.Get("FormatPicture_InvalidRotationMessage"), StringComparison.Ordinal))
         {
             _tabs.SelectedItem = _sizeTab;
             DialogFocus.FocusAndSelect(_rotationBox);
             return;
         }
 
-        if (string.Equals(error, "Enter positive width and height values.", StringComparison.Ordinal))
+        if (string.Equals(error, UiText.Get("FormatPicture_InvalidSizeMessage"), StringComparison.Ordinal))
         {
             _tabs.SelectedItem = _sizeTab;
             DialogFocus.FocusAndSelect(ResolveInvalidSizeInput());
@@ -178,7 +178,7 @@ public sealed class FormatPictureDialog : Window
 
     private TextBox ResolveInvalidCropInput(string? error)
     {
-        if (string.Equals(error, "Enter four crop percentages.", StringComparison.Ordinal))
+        if (string.Equals(error, UiText.Get("FormatPicture_InvalidCropPercentagesMessage"), StringComparison.Ordinal))
         {
             if (!DrawingInputParser.TryParseCropPercent(_cropLeftBox.Text, out _))
                 return _cropLeftBox;
@@ -223,13 +223,13 @@ public sealed class FormatPictureDialog : Window
     private Grid CreateSizeTab()
     {
         var grid = CreateTwoColumnGrid();
-        AddRow(grid, 0, "_Height:", _heightBox);
-        AddRow(grid, 1, "_Width:", _widthBox);
-        AddRow(grid, 2, "_Rotation:", _rotationBox);
+        AddRow(grid, 0, UiText.Get("FormatPicture_HeightLabel"), _heightBox);
+        AddRow(grid, 1, UiText.Get("FormatPicture_WidthLabel"), _widthBox);
+        AddRow(grid, 2, UiText.Get("FormatPicture_RotationLabel"), _rotationBox);
         Grid.SetColumn(_lockAspectRatioBox, 1);
         Grid.SetRow(_lockAspectRatioBox, 3);
         grid.Children.Add(_lockAspectRatioBox);
-        var resetSizeButton = new Button { Content = "Reset _Size", MinWidth = 96, Margin = new Thickness(0, 0, 0, 8) };
+        var resetSizeButton = new Button { Content = UiText.Get("FormatPicture_ResetSizeButton"), MinWidth = 96, Margin = new Thickness(0, 0, 0, 8) };
         resetSizeButton.Click += (_, _) => ResetSizeToInitial();
         AddButtonRow(grid, 4, resetSizeButton);
         return grid;
@@ -238,10 +238,10 @@ public sealed class FormatPictureDialog : Window
     private Grid CreateCropTab(bool cropEnabled)
     {
         var grid = CreateTwoColumnGrid();
-        AddRow(grid, 0, "_Left:", _cropLeftBox);
-        AddRow(grid, 1, "_Top:", _cropTopBox);
-        AddRow(grid, 2, "_Right:", _cropRightBox);
-        AddRow(grid, 3, "_Bottom:", _cropBottomBox);
+        AddRow(grid, 0, UiText.Get("FormatPicture_LeftLabel"), _cropLeftBox);
+        AddRow(grid, 1, UiText.Get("FormatPicture_TopLabel"), _cropTopBox);
+        AddRow(grid, 2, UiText.Get("FormatPicture_RightLabel"), _cropRightBox);
+        AddRow(grid, 3, UiText.Get("FormatPicture_BottomLabel"), _cropBottomBox);
         _resetCropButton.Click += (_, _) => ResetCropToInitial();
         AddButtonRow(grid, 4, _resetCropButton);
         if (!cropEnabled)
@@ -249,7 +249,7 @@ public sealed class FormatPictureDialog : Window
             _resetCropButton.IsEnabled = false;
             var note = new TextBlock
             {
-                Text = "Crop is available for inserted image pictures.",
+                Text = UiText.Get("FormatPicture_CropUnavailableMessage"),
                 Margin = new Thickness(0, 8, 0, 0)
             };
             Grid.SetRow(note, 5);
@@ -262,7 +262,7 @@ public sealed class FormatPictureDialog : Window
     private Grid CreateAltTextTab()
     {
         var grid = CreateTwoColumnGrid();
-        var label = new Label { Content = "_Description:", Target = _altTextBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 8, 8) };
+        var label = new Label { Content = UiText.Get("FormatPicture_DescriptionLabel"), Target = _altTextBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 8, 8) };
         Grid.SetRow(label, 0);
         Grid.SetColumn(label, 0);
         grid.Children.Add(label);

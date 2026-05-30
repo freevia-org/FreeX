@@ -9,8 +9,8 @@ public sealed partial class SelectDataSourceDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _rangeBox = new();
-    private readonly CheckBox _firstColumnCategoriesBox = new() { Content = "First column contains _category labels" };
-    private readonly CheckBox _switchRowColumnBox = new() { Content = "_Switch Row/Column" };
+    private readonly CheckBox _firstColumnCategoriesBox = new() { Content = UiText.Get("SelectDataSource_FirstColumnCategories") };
+    private readonly CheckBox _switchRowColumnBox = new() { Content = UiText.Get("SelectDataSource_SwitchRowColumn") };
     private readonly ListBox _seriesList = new() { Height = 72 };
     private readonly ListBox _axisLabelsList = new() { Height = 72 };
     private readonly Action<SelectDataSourceRangeSelectionRequest>? _requestRangeSelection;
@@ -30,7 +30,7 @@ public sealed partial class SelectDataSourceDialog : Window
         _sheetId = sheetId;
         _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(sourceRangeText, firstColumnIsCategories);
-        Title = "Select Data Source";
+        Title = UiText.Get("SelectDataSource_Title");
         Width = 620;
         Height = 500;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -38,10 +38,10 @@ public sealed partial class SelectDataSourceDialog : Window
         ShowInTaskbar = false;
 
         var stack = new StackPanel { Margin = new Thickness(16) };
-        stack.Children.Add(new Label { Content = "_Chart data range:", Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        stack.Children.Add(new Label { Content = UiText.Get("SelectDataSource_ChartDataRangeLabel"), Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         _rangeBox.Text = Result.SourceRangeText;
-        AutomationProperties.SetName(_rangeBox, "Chart data range");
-        stack.Children.Add(CreateReferenceEditor(_rangeBox, "Select chart data range"));
+        AutomationProperties.SetName(_rangeBox, UiText.Get("SelectDataSource_ChartDataRangeAutomationName"));
+        stack.Children.Add(CreateReferenceEditor(_rangeBox, UiText.Get("SelectDataSource_SelectChartDataRangeAutomationName")));
         _switchRowColumnBox.Margin = new Thickness(0, 10, 0, 8);
         stack.Children.Add(_switchRowColumnBox);
         _seriesList.MouseDoubleClick += EditSeriesButton_Click;
@@ -49,17 +49,17 @@ public sealed partial class SelectDataSourceDialog : Window
         _axisLabelsList.MouseDoubleClick += EditAxisLabelsButton_Click;
         _axisLabelsList.SelectionChanged += (_, _) => UpdateActionButtonState();
         stack.Children.Add(CreateSourceListPanel(
-            "Legend Entries (Series)",
-            "Series list",
-            "Name and values are inferred from the selected chart range.",
+            UiText.Get("SelectDataSource_SeriesPanelTitle"),
+            UiText.Get("SelectDataSource_SeriesListAutomationName"),
+            UiText.Get("SelectDataSource_SeriesListHelpText"),
             _seriesList,
-            (("_Add series", AddSeriesButton_Click), ("_Edit series", EditSeriesButton_Click), ("_Remove series", RemoveSeriesButton_Click))));
+            ((UiText.Get("SelectDataSource_AddSeriesButton"), AddSeriesButton_Click), (UiText.Get("SelectDataSource_EditSeriesButton"), EditSeriesButton_Click), (UiText.Get("SelectDataSource_RemoveSeriesButton"), RemoveSeriesButton_Click))));
         stack.Children.Add(CreateSourceListPanel(
-            "Horizontal (Category) Axis Labels",
-            "Axis label list",
-            "Axis labels are inferred from the first category column.",
+            UiText.Get("SelectDataSource_AxisLabelsPanelTitle"),
+            UiText.Get("SelectDataSource_AxisLabelsListAutomationName"),
+            UiText.Get("SelectDataSource_AxisLabelsListHelpText"),
             _axisLabelsList,
-            (("_Edit Axis Labels", EditAxisLabelsButton_Click), null, null)));
+            ((UiText.Get("SelectDataSource_EditAxisLabelsButton"), EditAxisLabelsButton_Click), null, null)));
         _firstColumnCategoriesBox.IsChecked = firstColumnIsCategories;
         _firstColumnCategoriesBox.Margin = new Thickness(0, 10, 0, 8);
         stack.Children.Add(_firstColumnCategoriesBox);
@@ -68,7 +68,7 @@ public sealed partial class SelectDataSourceDialog : Window
         _rangeBox.TextChanged += (_, _) => RefreshPreviewLists();
         var hiddenEmptyButton = new Button
         {
-            Content = "_Hidden and Empty Cells",
+            Content = UiText.Get("SelectDataSource_HiddenEmptyCellsButton"),
             Width = 150,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             Margin = new Thickness(0, 0, 0, 16)
@@ -122,7 +122,7 @@ public sealed partial class SelectDataSourceDialog : Window
     {
         if (!ChartInputParser.TryParseDataRange(_rangeBox.Text, _sheetId, out _))
         {
-            ShowInvalidInputWarning("Enter a valid chart data range.", _rangeBox);
+            ShowInvalidInputWarning(UiText.Get("SelectDataSource_InvalidRangeMessage"), _rangeBox);
             return false;
         }
 

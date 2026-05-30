@@ -14,7 +14,7 @@ public sealed partial class TextToColumnsDialog
 
         return new GroupBox
         {
-            Header = "Original data type",
+            Header = UiText.Get("TextToColumns_OriginalDataTypeGroup"),
             Content = panel,
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 8)
@@ -37,14 +37,14 @@ public sealed partial class TextToColumnsDialog
         var qualifierPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
         qualifierPanel.Children.Add(new Label
         {
-            Content = "Text _qualifier:",
+            Content = UiText.Get("TextToColumns_TextQualifierLabel"),
             Target = _textQualifierBox,
             Padding = new Thickness(0),
             VerticalAlignment = System.Windows.VerticalAlignment.Center
         });
         _textQualifierBox.Items.Add("\"");
         _textQualifierBox.Items.Add("'");
-        _textQualifierBox.Items.Add("{none}");
+        _textQualifierBox.Items.Add(UiText.Get("TextToColumns_TextQualifierNone"));
         _textQualifierBox.SelectedIndex = 0;
         qualifierPanel.Children.Add(_textQualifierBox);
 
@@ -55,7 +55,7 @@ public sealed partial class TextToColumnsDialog
 
         return new GroupBox
         {
-            Header = "Delimiters",
+            Header = UiText.Get("TextToColumns_DelimitersGroup"),
             Content = layout,
             Padding = new Thickness(8),
             Margin = new Thickness(0, 0, 0, 8)
@@ -67,12 +67,12 @@ public sealed partial class TextToColumnsDialog
         var panel = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
         panel.Children.Add(new Label
         {
-            Content = "_Destination:",
+            Content = UiText.Get("TextToColumns_DestinationLabel"),
             Target = _destinationBox,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 4, 8, 0)
         });
-        panel.Children.Add(CreateReferenceEditor(_destinationBox, "Select destination cell"));
+        panel.Children.Add(CreateReferenceEditor(_destinationBox, UiText.Get("TextToColumns_SelectDestinationCell")));
         return panel;
     }
 

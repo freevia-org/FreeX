@@ -11,7 +11,7 @@ public partial class ConditionalFormatDialog
     {
         panel.Children.Add(new TextBlock
         {
-            Text = "Preview:",
+            Text = UiText.Get("ConditionalFormatDialog_PreviewHeader"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 4, 0, 6)
         });

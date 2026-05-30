@@ -244,9 +244,32 @@ public partial class MainWindow
     private void NumberFormatBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        if (NumberFormatBox.SelectedIndex < 0) return;
-        if (NumberFormatBox.SelectedIndex < NumberFormatOptions.Length)
-            ApplyStyleDiff(new StyleDiff(NumberFormat: NumberFormatOptions[NumberFormatBox.SelectedIndex].Code));
+        var selectedIndex = NumberFormatBox.SelectedIndex;
+        if (selectedIndex < 0 || selectedIndex >= HomeNumberFormatDropdownPlanner.Options.Count) return;
+
+        var option = HomeNumberFormatDropdownPlanner.Options[selectedIndex];
+        if (option.OpensFormatCellsDialog)
+        {
+            ResetNumberFormatBoxSelection();
+            OpenFormatCellsDialog(FormatCellsDialogTab.Number);
+            return;
+        }
+
+        if (option.Code is { } code)
+            ApplyStyleDiff(new StyleDiff(NumberFormat: code));
+    }
+
+    private void ResetNumberFormatBoxSelection()
+    {
+        _suppressToolbarSync = true;
+        try
+        {
+            NumberFormatBox.SelectedIndex = HomeNumberFormatDropdownPlanner.DefaultSelectionIndex;
+        }
+        finally
+        {
+            _suppressToolbarSync = false;
+        }
     }
 
     // ── Font group additions ─────────────────────────────────────────────────
@@ -528,8 +551,36 @@ public partial class MainWindow
     private void CfBottom10PercentMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Bottom 10%");
     private void CfAboveAvgMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Above Average");
     private void CfBelowAvgMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Below Average");
+    private void CfDataBarsMenuItem_SubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem menuItem)
+            PopulateConditionalFormatDataBarGallery(menuItem);
+    }
+
+    private void CfColorScalesMenuItem_SubmenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem menuItem)
+            PopulateConditionalFormatColorScaleGallery(menuItem);
+    }
+
     private void CfDataBarMenuItem_Click(object sender, RoutedEventArgs e)  => ShowCfDialog("Data Bar");
     private void CfColorScaleMenuItem_Click(object sender, RoutedEventArgs e) => ShowCfDialog("Color Scale");
+    private void CfDataBarPresetMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string style })
+            return;
+
+        ApplyDataBarPreset(style);
+    }
+
+    private void CfColorScalePresetMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string style })
+            return;
+
+        ApplyColorScalePreset(style);
+    }
+
     private void CfIconSetMenuItem_Click(object sender, RoutedEventArgs e)  => ShowCfDialog("Icon Set");
     private void CfIconSetPresetMenuItem_Click(object sender, RoutedEventArgs e)
     {
@@ -615,6 +666,30 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void ApplyDataBarPreset(string style)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var rule = ConditionalFormatPresetGalleryPlanner.CreateDataBarRule(style, range);
+        if (rule is null)
+            return;
+
+        ApplyConditionalFormatPreset(rule);
+    }
+
+    private void ApplyColorScalePreset(string style)
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return;
+
+        var rule = ConditionalFormatPresetGalleryPlanner.CreateColorScaleRule(style, range);
+        if (rule is null)
+            return;
+
+        ApplyConditionalFormatPreset(rule);
+    }
+
     private void ApplyIconSetPreset(string style)
     {
         if (SheetGrid.SelectedRange is not { } range)
@@ -624,12 +699,172 @@ public partial class MainWindow
         if (rule is null)
             return;
 
+        ApplyConditionalFormatPreset(rule);
+    }
+
+    private void ApplyConditionalFormatPreset(ConditionalFormat rule)
+    {
         if (!TryExecuteGroupedSheetCommand(
                 "Conditional Formatting",
                 sheetId => new ApplyConditionalFormatCommand(sheetId, GroupedSheetRangePlanner.CloneConditionalFormatForSheet(rule, sheetId))))
             return;
 
         UpdateViewport();
+    }
+
+    private void PopulateConditionalFormatDataBarGallery(MenuItem menuItem)
+    {
+        if (menuItem.Items.Count > 0)
+            return;
+
+        foreach (var group in ConditionalFormatPresetGalleryPlanner.DataBarGroups)
+        {
+            AddConditionalFormatGalleryHeader(menuItem, group.Name);
+            foreach (var option in group.Options)
+            {
+                var item = CreateConditionalFormatPresetMenuItem(
+                    option.Label,
+                    option.Style,
+                    option.KeyTip,
+                    CreateDataBarPresetSwatch(option.Color, option.Gradient));
+                item.Click += CfDataBarPresetMenuItem_Click;
+                menuItem.Items.Add(item);
+            }
+        }
+
+        AddConditionalFormatMoreRulesItem(menuItem, "DM", CfDataBarMenuItem_Click);
+    }
+
+    private void PopulateConditionalFormatColorScaleGallery(MenuItem menuItem)
+    {
+        if (menuItem.Items.Count > 0)
+            return;
+
+        foreach (var group in ConditionalFormatPresetGalleryPlanner.ColorScaleGroups)
+        {
+            AddConditionalFormatGalleryHeader(menuItem, group.Name);
+            foreach (var option in group.Options)
+            {
+                var item = CreateConditionalFormatPresetMenuItem(
+                    option.Label,
+                    option.Style,
+                    option.KeyTip,
+                    CreateColorScalePresetSwatch(option.MinColor, option.MidColor, option.MaxColor));
+                item.Click += CfColorScalePresetMenuItem_Click;
+                menuItem.Items.Add(item);
+            }
+        }
+
+        AddConditionalFormatMoreRulesItem(menuItem, "CM", CfColorScaleMenuItem_Click);
+    }
+
+    private static void AddConditionalFormatMoreRulesItem(MenuItem menuItem, string keyTip, RoutedEventHandler clickHandler)
+    {
+        menuItem.Items.Add(new Separator());
+        var moreRules = new MenuItem
+        {
+            Header = UiText.Get("MainWindow_Header_MoreRules"),
+            MinWidth = 224
+        };
+        RibbonTooltip.SetKeyTip(moreRules, keyTip);
+        RibbonMetadata.SetCommandName(moreRules, "More Rules");
+        moreRules.Click += clickHandler;
+        menuItem.Items.Add(moreRules);
+    }
+
+    private static void AddConditionalFormatGalleryHeader(MenuItem menuItem, string header)
+    {
+        if (menuItem.Items.Count > 0)
+            menuItem.Items.Add(new Separator());
+
+        menuItem.Items.Add(new MenuItem
+        {
+            Header = new TextBlock
+            {
+                Text = header,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 11,
+                Foreground = Brushes.DimGray,
+                Margin = new Thickness(2, 4, 2, 2)
+            },
+            IsEnabled = false
+        });
+    }
+
+    private static MenuItem CreateConditionalFormatPresetMenuItem(
+        string label,
+        string style,
+        string keyTip,
+        UIElement swatch)
+    {
+        var header = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 1) };
+        header.Children.Add(swatch);
+        header.Children.Add(new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0)
+        });
+
+        var item = new MenuItem
+        {
+            Header = header,
+            Tag = style,
+            MinWidth = 224
+        };
+        RibbonTooltip.SetKeyTip(item, keyTip);
+        RibbonMetadata.SetCommandName(item, label);
+        return item;
+    }
+
+    private static Border CreateDataBarPresetSwatch(RgbColor color, bool gradient)
+    {
+        Brush fill = gradient
+            ? new LinearGradientBrush(
+                Colors.White,
+                Color.FromRgb(color.R, color.G, color.B),
+                0)
+            : new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+
+        return new Border
+        {
+            Width = 46,
+            Height = 14,
+            BorderBrush = Brushes.Gray,
+            BorderThickness = new Thickness(1),
+            Background = fill,
+            Margin = new Thickness(0, 1, 0, 1)
+        };
+    }
+
+    private static Grid CreateColorScalePresetSwatch(RgbColor minColor, RgbColor? midColor, RgbColor maxColor)
+    {
+        var grid = new Grid
+        {
+            Width = 46,
+            Height = 14,
+            Margin = new Thickness(0, 1, 0, 1)
+        };
+        var colors = midColor is { } middle
+            ? new[] { minColor, middle, maxColor }
+            : new[] { minColor, maxColor };
+        foreach (var _ in colors)
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        for (var index = 0; index < colors.Length; index++)
+        {
+            var color = colors[index];
+            var border = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B)),
+                BorderBrush = Brushes.Gray,
+                BorderThickness = new Thickness(index == 0 ? 1 : 0, 1, 1, 1)
+            };
+            Grid.SetColumn(border, index);
+            grid.Children.Add(border);
+        }
+
+        return grid;
     }
 
     private void FormatTableBtn_Click(object sender, RoutedEventArgs e)

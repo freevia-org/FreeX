@@ -13,13 +13,13 @@ public sealed partial class InsertChartDialog : Window
     private readonly ListBox _recommendedGallery = new();
     private readonly ListBox _categoryList = new();
     private readonly ListBox _subtypeGallery = new();
-    private readonly CheckBox _recommendedBox = new() { Content = "Use _recommended layout" };
+    private readonly CheckBox _recommendedBox = new() { Content = UiText.Get("InsertChart_UseRecommendedLayout") };
 
     public InsertChartDialogResult Result { get; private set; } = CreateRecommendedResult();
 
     public InsertChartDialog()
     {
-        Title = "Insert Chart";
+        Title = UiText.Get("InsertChart_Title");
         Width = 660;
         Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -35,12 +35,12 @@ public sealed partial class InsertChartDialog : Window
         _subtypeGallery.MouseDoubleClick += (_, _) => Accept();
         tabs.Items.Add(new TabItem
         {
-            Header = "_Recommended Charts",
+            Header = UiText.Get("InsertChart_RecommendedChartsTab"),
             Content = CreateRecommendedChartsPanel(_recommendedGallery)
         });
         tabs.Items.Add(new TabItem
         {
-            Header = "_All Charts",
+            Header = UiText.Get("InsertChart_AllChartsTab"),
             Content = CreateAllChartsPanel(_categoryList, _subtypeGallery)
         });
         DockPanel.SetDock(tabs, Dock.Top);

@@ -12,7 +12,7 @@ public sealed class WorkbookThemeDialogXamlTests
     [Fact]
     public void Dialog_ExposesExcelStyleThemeMetadataFields()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("WorkbookThemeDialog.xaml");
 
         xaml.Should().Contain("AutomationProperties.Name=\"Theme name\"");
         xaml.Should().Contain("AutomationProperties.Name=\"Heading font\"");
@@ -23,7 +23,7 @@ public sealed class WorkbookThemeDialogXamlTests
     [Fact]
     public void Dialog_ExposesAllThemeColorSlots()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("WorkbookThemeDialog.xaml");
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -58,7 +58,7 @@ public sealed class WorkbookThemeDialogXamlTests
     [Fact]
     public void Dialog_SaveButton_IsDefaultAction()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("WorkbookThemeDialog.xaml");
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
@@ -99,7 +99,7 @@ public sealed class WorkbookThemeDialogXamlTests
     [Fact]
     public void Dialog_ExposesKeyboardAccessKeysForThemeFieldsColorsAndButtons()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml"));
+        var document = XamlLocalizationTestHelper.LoadLocalizedXaml("WorkbookThemeDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         document.Descendants(presentation + "Button")
@@ -138,7 +138,7 @@ public sealed class WorkbookThemeDialogXamlTests
     [Fact]
     public void Dialog_ExposesThemePresetButtonsBackedByWorkflow()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("WorkbookThemeDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml.cs"));
 
         xaml.Should().Contain("x:Name=\"OfficePresetButton\"");
@@ -159,7 +159,7 @@ public sealed class WorkbookThemeDialogXamlTests
     [Fact]
     public void Dialog_ExposesColorPickerButtonsForEveryThemeColorSlot()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("WorkbookThemeDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml.cs"));
 
         var expectedPickerNames = new[]
@@ -235,7 +235,7 @@ public sealed class WorkbookThemeDialogXamlTests
     [Fact]
     public void ColorPickerButtons_ExposeSwatchAffordance()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("WorkbookThemeDialog.xaml");
 
         xaml.Should().Contain("ToolTip=\"Pick color\"");
         xaml.Should().NotContain("Content=\"...\"");
@@ -255,7 +255,7 @@ public sealed class WorkbookThemeDialogXamlTests
     [Fact]
     public void Dialog_ExposesExcelLikeThemePreviewPane()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("WorkbookThemeDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookThemeDialog.xaml.cs"));
 
         xaml.Should().Contain("x:Name=\"ThemePreviewPane\"");

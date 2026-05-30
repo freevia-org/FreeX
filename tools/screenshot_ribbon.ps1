@@ -1,3 +1,7 @@
+param(
+    [string]$Widths = $env:FREEX_SS_TOUR_WIDTHS
+)
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName UIAutomationClient
@@ -23,6 +27,7 @@ public class Win32c {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, ref RECT lpRect);
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
     [DllImport("gdi32.dll")]  public static extern int GetDeviceCaps(IntPtr hDC, int nIndex);
@@ -62,6 +67,89 @@ $captureLimitations = @(
     "Transient popups, dropdowns, native dialogs, and context menus require separate guarded captures.",
     "Global input is blocked unless the expected process and window title own the foreground window."
 )
+$windowLogicalHeight = 768
+
+function Get-RibbonWidthEvidencePurpose($windowLogicalWidth) {
+    if ($null -eq $windowLogicalWidth) {
+        return "Maximized baseline before resize pressure."
+    }
+
+    if ($windowLogicalWidth -ge 1100) {
+        return "Wide ribbon breakpoint before most command groups collapse."
+    }
+
+    if ($windowLogicalWidth -ge 900) {
+        return "Medium ribbon breakpoint where grouped commands begin to compress."
+    }
+
+    return "Narrow ribbon breakpoint for overflow and compact command layouts."
+}
+
+$defaultCaptureWidths = @(
+    [pscustomobject]@{ Label = "max"; WindowLogicalWidth = $null; EvidencePurpose = (Get-RibbonWidthEvidencePurpose $null) },
+    [pscustomobject]@{ Label = "1100"; WindowLogicalWidth = 1100.0; EvidencePurpose = (Get-RibbonWidthEvidencePurpose 1100.0) },
+    [pscustomobject]@{ Label = "900"; WindowLogicalWidth = 900.0; EvidencePurpose = (Get-RibbonWidthEvidencePurpose 900.0) },
+    [pscustomobject]@{ Label = "750"; WindowLogicalWidth = 750.0; EvidencePurpose = (Get-RibbonWidthEvidencePurpose 750.0) }
+)
+
+function Resolve-CaptureWidths($requestedWidths) {
+    if ([string]::IsNullOrWhiteSpace($requestedWidths)) {
+        return $defaultCaptureWidths
+    }
+
+    $entries = $requestedWidths.Split(',')
+    $widths = @()
+    $invalid = @()
+    $emptyPositions = @()
+    for ($index = 0; $index -lt $entries.Length; $index++) {
+        $value = $entries[$index].Trim()
+        if ($value.Length -eq 0) {
+            $emptyPositions += ($index + 1)
+            continue
+        }
+
+        if ($value -ieq "max") {
+            $widths += $defaultCaptureWidths[0]
+            continue
+        }
+
+        $parsed = 0.0
+        $canParse = [double]::TryParse(
+            $value,
+            [System.Globalization.NumberStyles]::Float,
+            [System.Globalization.CultureInfo]::InvariantCulture,
+            [ref]$parsed)
+        if (-not $canParse -or [double]::IsNaN($parsed) -or [double]::IsInfinity($parsed) -or $parsed -le 0) {
+            $invalid += $value
+            continue
+        }
+
+        $label = $parsed.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+        $knownWidth = $defaultCaptureWidths | Where-Object { $_.Label -eq $label } | Select-Object -First 1
+        if ($null -ne $knownWidth) {
+            $widths += $knownWidth
+            continue
+        }
+
+        $widths += [pscustomobject]@{
+            Label = $label
+            WindowLogicalWidth = $parsed
+            EvidencePurpose = (Get-RibbonWidthEvidencePurpose $parsed)
+        }
+    }
+
+    if ($emptyPositions.Count -gt 0) {
+        throw "Ribbon screenshot width list contains empty entry at position(s): $($emptyPositions -join ', ')."
+    }
+
+    if ($invalid.Count -gt 0) {
+        throw "Ribbon screenshot width list contains invalid width(s): $($invalid -join ', '). Use positive finite numbers or max."
+    }
+
+    return $widths
+}
+
+$captureWidths = @(Resolve-CaptureWidths $Widths)
 
 # Get screen DPI to calculate physical pixels for a 300px logical capture
 $dpi   = [Win32c]::GetScreenDpi()
@@ -110,10 +198,30 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle) {
 
 Write-Host "HWND: $hwnd"
 $expectedTitle = Get-WindowTitle $hwnd
-[Win32c]::ShowWindow($hwnd, 3) | Out-Null
+[Win32c]::ShowWindow($hwnd, 1) | Out-Null
+[Win32c]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, 0, 0, 0x0001) | Out-Null
 [Win32c]::SetForegroundWindow($hwnd) | Out-Null
-Start-Sleep -Seconds 3
+Start-Sleep -Seconds 2
 Assert-ForegroundWindowOwnership $proc.Id $expectedTitle
+
+function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
+    if ($null -eq $widthSpec.WindowLogicalWidth) {
+        [Win32c]::ShowWindow($windowHandle, 3) | Out-Null
+        [Win32c]::SetForegroundWindow($windowHandle) | Out-Null
+        Start-Sleep -Milliseconds 1200
+        Assert-ForegroundWindowOwnership $proc.Id $expectedTitle
+        return
+    }
+
+    $physicalWidth = [int]([Math]::Ceiling([double]$widthSpec.WindowLogicalWidth * $scale))
+    $physicalHeight = [int]([Math]::Ceiling($windowLogicalHeight * $scale))
+    [Win32c]::ShowWindow($windowHandle, 1) | Out-Null
+    Start-Sleep -Milliseconds 200
+    [Win32c]::SetWindowPos($windowHandle, [IntPtr]::Zero, 0, 0, $physicalWidth, $physicalHeight, 0) | Out-Null
+    [Win32c]::SetForegroundWindow($windowHandle) | Out-Null
+    Start-Sleep -Milliseconds 700
+    Assert-ForegroundWindowOwnership $proc.Id $expectedTitle
+}
 
 $desktop = [System.Windows.Automation.AutomationElement]::RootElement
 $cond    = New-Object System.Windows.Automation.PropertyCondition(
@@ -125,13 +233,24 @@ if ($appEl -eq $null) { Write-Error "UIA element not found"; $proc.Kill(); exit 
 $captureH = [int]([Math]::Ceiling(300 * $scale))
 Write-Host "Capture height: $captureH physical px (300 logical)"
 
-function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect, $captureLogicalHeight, $capturePhysicalHeight, $files) {
+function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect, $captureLogicalHeight, $capturePhysicalHeight, $widths, $files) {
     $manifestPath = Join-Path $scriptOutDir "screenshot_manifest.json"
     [pscustomobject]@{
         Tool = $toolName
+        EvidenceFamily = "ribbon"
+        EvidenceSubject = "freex"
+        EvidenceApp = "FreeX"
         OutputDirectory = $scriptOutDir
-        OutputNaming = "ribbon_<RibbonTab>.png"
+        OutputNaming = "ribbon_<WidthLabel>_<RibbonTab>.png"
         CatalogEvidenceTarget = "docs/UI_TEST_CATALOG.md"
+        WidthSource = "RibbonScreenshotTourPlanner.DefaultWidths"
+        PlannedCaptureCount = $tabNames.Count * $widths.Count
+        Pairing = [pscustomobject]@{
+            PairKeyPattern = "ribbon:<WidthLabel>:<TabFileName>"
+            CounterpartSubject = "excel"
+            CounterpartTool = "screenshot_excel.ps1"
+            CounterpartOutputNaming = "excel_<WidthLabel>_<RibbonTab>.png"
+        }
         WindowBounds = [pscustomobject]@{
             Left = $windowRect.Left
             Top = $windowRect.Top
@@ -142,6 +261,7 @@ function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect,
         }
         CaptureLogicalHeight = $captureLogicalHeight
         CapturePhysicalHeight = $capturePhysicalHeight
+        Widths = $widths
         Tabs = $tabNames
         Limitations = $captureLimitations
         Captures = $files
@@ -149,7 +269,7 @@ function Write-ScreenshotEvidenceManifest($toolName, $scriptOutDir, $windowRect,
     Write-Host "Saved $manifestPath"
 }
 
-function Screenshot-Tab($tabName) {
+function Screenshot-Tab($tabName, $widthSpec) {
     $nameCond = New-Object System.Windows.Automation.PropertyCondition(
                     [System.Windows.Automation.AutomationElement]::NameProperty, $tabName)
     $tabItemCond = New-Object System.Windows.Automation.PropertyCondition(
@@ -157,7 +277,10 @@ function Screenshot-Tab($tabName) {
                        [System.Windows.Automation.ControlType]::TabItem)
     $tabCond = New-Object System.Windows.Automation.AndCondition($nameCond, $tabItemCond)
     $tabEl   = $appEl.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $tabCond)
-    if ($tabEl -eq $null) { Write-Warning "Tab '$tabName' not found"; return }
+    if ($tabEl -eq $null) {
+        Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        throw "Ribbon screenshot tab '$tabName' was not found; aborting instead of writing an incomplete evidence matrix."
+    }
 
     $selPat = $tabEl.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
     if ($selPat -ne $null) { $selPat.Select() }
@@ -173,26 +296,48 @@ function Screenshot-Tab($tabName) {
     $g.Dispose()
 
     $safe = $tabName -replace '[^a-zA-Z0-9_]','_'
-    $path = "$outDir\ribbon_$safe.png"
+    $fileName = "ribbon_$($widthSpec.Label)_$safe.png"
+    $path = Join-Path $outDir $fileName
     $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
     $script:capturedFiles += [pscustomobject]@{
+        PairKey = "ribbon:$($widthSpec.Label):$safe"
+        EvidenceSubject = "freex"
+        CounterpartSubject = "excel"
+        CounterpartFileName = "excel_$($widthSpec.Label)_$safe.png"
         Tab = $tabName
-        FileName = Split-Path -Leaf $path
+        TabFileName = $safe
+        WidthLabel = $widthSpec.Label
+        WindowLogicalWidth = $widthSpec.WindowLogicalWidth
+        EvidencePurpose = $widthSpec.EvidencePurpose
+        FileName = $fileName
         Path = $path
         Width = $w
         Height = $captureH
+        WindowBounds = [pscustomobject]@{
+            Left = $wrect.Left
+            Top = $wrect.Top
+            Right = $wrect.Right
+            Bottom = $wrect.Bottom
+            Width = $w
+            Height = $wrect.Bottom - $wrect.Top
+        }
     }
     Write-Host "Saved $path ($w x $captureH)"
 }
 
-foreach ($tabName in $tabNames) {
-    Screenshot-Tab $tabName
+foreach ($widthSpec in $captureWidths) {
+    Write-Host "Capturing FreeX ribbon width '$($widthSpec.Label)' ($($widthSpec.EvidencePurpose))"
+    Set-CaptureWindowWidth $hwnd $widthSpec
+
+    foreach ($tabName in $tabNames) {
+        Screenshot-Tab $tabName $widthSpec
+    }
 }
 
 $finalRect = New-Object Win32c+RECT
 [Win32c]::GetWindowRect($hwnd, [ref]$finalRect) | Out-Null
-Write-ScreenshotEvidenceManifest "screenshot_ribbon.ps1" $outDir $finalRect 300 $captureH $script:capturedFiles
+Write-ScreenshotEvidenceManifest "screenshot_ribbon.ps1" $outDir $finalRect 300 $captureH $captureWidths $script:capturedFiles
 
 $proc.Kill()
 Write-Host "Done."

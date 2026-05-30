@@ -124,7 +124,7 @@ public sealed partial class SelectionPaneDialog
     private void ApplySearchAndFilter(Guid? preferredSelection)
     {
         var search = _searchBox.Text.Trim();
-        var filter = _filterBox.SelectedItem as string ?? "All";
+        var filter = (_filterBox.SelectedItem as SelectionPaneFilterChoice)?.Value ?? SelectionPaneFilterValues.All;
         var filteredIds = SelectionPaneDialogStatePlanner
             .FilterItems(CurrentItemStates(), search, filter)
             .Select(item => item.Id)

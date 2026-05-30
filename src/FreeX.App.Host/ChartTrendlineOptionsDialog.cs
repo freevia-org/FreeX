@@ -34,9 +34,9 @@ public sealed record ChartTrendlineOptionsDialogResult(
 
 public sealed class ChartTrendlineOptionsDialog : Window
 {
-    private readonly CheckBox _showBox = new() { Content = "_Show trendline" };
-    private readonly CheckBox _equationBox = new() { Content = "Display _equation" };
-    private readonly CheckBox _rSquaredBox = new() { Content = "Display _R-squared value" };
+    private readonly CheckBox _showBox = new() { Content = UiText.Get("ChartTrendline_ShowTrendline") };
+    private readonly CheckBox _equationBox = new() { Content = UiText.Get("ChartTrendline_DisplayEquation") };
+    private readonly CheckBox _rSquaredBox = new() { Content = UiText.Get("ChartTrendline_DisplayRSquared") };
     private readonly ComboBox _typeBox = new();
     private readonly ComboBox _dashBox = new();
     private readonly TextBox _periodBox = new();
@@ -49,7 +49,7 @@ public sealed class ChartTrendlineOptionsDialog : Window
     public ChartTrendlineOptionsDialog(ChartModel chart)
     {
         Result = FromChart(chart);
-        Title = "Format Trendline";
+        Title = UiText.Get("ChartTrendline_Title");
         Width = 380;
         Height = 430;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -89,19 +89,19 @@ public sealed class ChartTrendlineOptionsDialog : Window
         {
             var stack = new StackPanel();
             ChartDialogHelpers.AddCheck(stack, _showBox);
-            ChartDialogHelpers.AddCombo(stack, "_Type", _typeBox, Enum.GetValues<ChartTrendlineType>());
-            ChartDialogHelpers.AddNumericText(stack, "Moving average _period", _periodBox, "Enter a period from 2 to 255.");
-            ChartDialogHelpers.AddNumericText(stack, "Polynomial _order", _orderBox, "Enter an order from 2 to 6.");
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartTrendline_TypeLabel"), _typeBox, Enum.GetValues<ChartTrendlineType>());
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartTrendline_PeriodLabel"), _periodBox, UiText.Get("ChartTrendline_PeriodHelpText"));
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartTrendline_OrderLabel"), _orderBox, UiText.Get("ChartTrendline_OrderHelpText"));
             ChartDialogHelpers.AddCheck(stack, _equationBox);
             ChartDialogHelpers.AddCheck(stack, _rSquaredBox);
-            root.Children.Add(CreateGroupBox("Trendline Options", stack));
+            root.Children.Add(CreateGroupBox(UiText.Get("ChartTrendline_OptionsGroup"), stack));
         }
         {
             var stack = new StackPanel();
-            ChartDialogHelpers.AddColorText(stack, "_Line color", _colorBox);
-            ChartDialogHelpers.AddNumericText(stack, "Line _width", _thicknessBox, "Enter a line width in points.");
-            ChartDialogHelpers.AddCombo(stack, "_Dash style", _dashBox, Enum.GetValues<ChartLineDashStyle>());
-            root.Children.Add(CreateGroupBox("Fill & Line", stack));
+            ChartDialogHelpers.AddColorText(stack, UiText.Get("ChartTrendline_LineColorLabel"), _colorBox);
+            ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartTrendline_LineWidthLabel"), _thicknessBox, UiText.Get("ChartTrendline_LineWidthHelpText"));
+            ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartTrendline_DashStyleLabel"), _dashBox, Enum.GetValues<ChartLineDashStyle>());
+            root.Children.Add(CreateGroupBox(UiText.Get("ChartDialog_FillLineGroup"), stack));
         }
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
@@ -130,25 +130,25 @@ public sealed class ChartTrendlineOptionsDialog : Window
     {
         if (!TryReadIntInRange(_periodBox, min: 2, max: 255, out var period))
         {
-            ShowInvalidInputWarning("Enter a moving average period from 2 to 255.", _periodBox);
+            ShowInvalidInputWarning(UiText.Get("ChartTrendline_InvalidPeriodMessage"), _periodBox);
             return;
         }
 
         if (!TryReadIntInRange(_orderBox, min: 2, max: 6, out var order))
         {
-            ShowInvalidInputWarning("Enter a polynomial order from 2 to 6.", _orderBox);
+            ShowInvalidInputWarning(UiText.Get("ChartTrendline_InvalidOrderMessage"), _orderBox);
             return;
         }
 
         if (!TryReadOptionalColor(_colorBox, out var color))
         {
-            ShowInvalidInputWarning("Enter a color as #RRGGBB or none.", _colorBox);
+            ShowInvalidInputWarning(UiText.Get("ChartDialog_InvalidOptionalColorMessage"), _colorBox);
             return;
         }
 
         if (!TryReadClampedDouble(_thicknessBox, min: 0.5, max: 10, out var thickness))
         {
-            ShowInvalidInputWarning("Enter a trendline width from 0.5 to 10 points.", _thicknessBox);
+            ShowInvalidInputWarning(UiText.Get("ChartTrendline_InvalidWidthMessage"), _thicknessBox);
             return;
         }
 

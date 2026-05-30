@@ -26,8 +26,8 @@ public sealed record ChartErrorBarsDialogResult(
 
 public sealed class ChartErrorBarsDialog : Window
 {
-    private readonly CheckBox _showBox = new() { Content = "_Show error bars" };
-    private readonly CheckBox _endCapsBox = new() { Content = "_End caps" };
+    private readonly CheckBox _showBox = new() { Content = UiText.Get("ChartErrorBars_ShowErrorBars") };
+    private readonly CheckBox _endCapsBox = new() { Content = UiText.Get("ChartErrorBars_EndCaps") };
     private readonly ComboBox _kindBox = new();
     private readonly ComboBox _directionBox = new();
     private readonly TextBox _valueBox = new();
@@ -37,7 +37,7 @@ public sealed class ChartErrorBarsDialog : Window
     public ChartErrorBarsDialog(ChartModel chart)
     {
         Result = FromChart(chart);
-        Title = "Format Error Bars";
+        Title = UiText.Get("ChartErrorBars_Title");
         Width = 360;
         Height = 290;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -73,12 +73,12 @@ public sealed class ChartErrorBarsDialog : Window
         var root = ChartDialogHelpers.DialogStack();
         var stack = new StackPanel();
         ChartDialogHelpers.AddCheck(stack, _showBox);
-        ChartDialogHelpers.AddCombo(stack, "_Type", _kindBox, Enum.GetValues<ChartErrorBarKind>());
-        ChartDialogHelpers.AddCombo(stack, "_Direction", _directionBox, Enum.GetValues<ChartErrorBarDirection>());
-        ChartDialogHelpers.AddNumericText(stack, "_Value", _valueBox, "Enter the error amount or percentage.");
-        System.Windows.Automation.AutomationProperties.SetName(_valueBox, "Error bar value");
+        ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartErrorBars_TypeLabel"), _kindBox, Enum.GetValues<ChartErrorBarKind>());
+        ChartDialogHelpers.AddCombo(stack, UiText.Get("ChartErrorBars_DirectionLabel"), _directionBox, Enum.GetValues<ChartErrorBarDirection>());
+        ChartDialogHelpers.AddNumericText(stack, UiText.Get("ChartErrorBars_ValueLabel"), _valueBox, UiText.Get("ChartErrorBars_ValueHelpText"));
+        System.Windows.Automation.AutomationProperties.SetName(_valueBox, UiText.Get("ChartErrorBars_ValueAutomationName"));
         ChartDialogHelpers.AddCheck(stack, _endCapsBox);
-        root.Children.Add(CreateGroupBox("Error Amount", stack));
+        root.Children.Add(CreateGroupBox(UiText.Get("ChartErrorBars_ErrorAmountGroup"), stack));
         root.Children.Add(InsertChartDialog.CreateButtonRow(Accept));
         return root;
     }
@@ -102,7 +102,7 @@ public sealed class ChartErrorBarsDialog : Window
     {
         if (!TryReadClampedDouble(_valueBox, min: 0, max: 1000, out var value))
         {
-            ShowInvalidInputWarning("Enter an error amount from 0 to 1000.", _valueBox);
+            ShowInvalidInputWarning(UiText.Get("ChartErrorBars_InvalidValueMessage"), _valueBox);
             return;
         }
 

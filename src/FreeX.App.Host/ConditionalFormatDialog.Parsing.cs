@@ -47,21 +47,21 @@ public partial class ConditionalFormatDialog
     private static string? AxisPositionToXmlValue(string? label) =>
         label switch
         {
-            "Middle" => "middle",
-            "None"   => "none",
+            var value when value == UiText.Get("ConditionalFormatDialog_AxisPosition_Middle") => "middle",
+            var value when value == UiText.Get("ConditionalFormatDialog_AxisPosition_None") => "none",
             _        => null
         };
 
     private static string AxisPositionToLabel(string? xmlValue) =>
         xmlValue switch
         {
-            "middle" => "Middle",
-            "none"   => "None",
-            _        => "Automatic"
+            "middle" => UiText.Get("ConditionalFormatDialog_AxisPosition_Middle"),
+            "none"   => UiText.Get("ConditionalFormatDialog_AxisPosition_None"),
+            _        => UiText.Get("ConditionalFormatDialog_AxisPosition_Automatic")
         };
 
     private static CfRuleType DuplicateValuesRuleType(string? label) =>
-        string.Equals(label, "Unique", StringComparison.OrdinalIgnoreCase)
+        string.Equals(label, UiText.Get("ConditionalFormatDialog_DuplicateKind_Unique"), StringComparison.OrdinalIgnoreCase)
             ? CfRuleType.UniqueValues
             : CfRuleType.DuplicateValues;
 
@@ -75,5 +75,12 @@ public partial class ConditionalFormatDialog
         DateOccurringPeriods.FirstOrDefault(period => period.Value == value) is var period
             && period.Label is not null
                 ? period.Label
-                : "Today";
+                : UiText.Get("ConditionalFormatDialog_DatePeriod_Today");
+
+    private static string[] DataBarAxisPositionLabels() =>
+        [
+            UiText.Get("ConditionalFormatDialog_AxisPosition_Automatic"),
+            UiText.Get("ConditionalFormatDialog_AxisPosition_Middle"),
+            UiText.Get("ConditionalFormatDialog_AxisPosition_None")
+        ];
 }

@@ -24,7 +24,7 @@ public partial class ConditionalFormatDialog
             var raw = _formulaBox?.Text.Trim() ?? "";
             if (raw is "" or "=")
             {
-                ShowInvalidInputWarning("Enter a formula for this conditional formatting rule.", _formulaBox);
+                ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidFormulaMessage"), _formulaBox);
                 return;
             }
 
@@ -69,13 +69,13 @@ public partial class ConditionalFormatDialog
                 var value2 = _value2Box.Text.Trim();
                 if (string.IsNullOrWhiteSpace(value1))
                 {
-                    ShowInvalidInputWarning("Enter a value for this conditional formatting rule.", _value1Box);
+                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidValueMessage"), _value1Box);
                     return;
                 }
 
                 if (cf.Operator is CfOperator.Between or CfOperator.NotBetween && string.IsNullOrWhiteSpace(value2))
                 {
-                    ShowInvalidInputWarning("Enter a maximum value for this conditional formatting rule.", _value2Box);
+                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMaximumValueMessage"), _value2Box);
                     return;
                 }
 
@@ -123,13 +123,13 @@ public partial class ConditionalFormatDialog
                 cf.DataBarGradient = _dataBarGradientBox.IsChecked == true;
                 if (!TryParseOptionalPercent(_dataBarMinLengthBox.Text, out var minLength))
                 {
-                    ShowInvalidInputWarning("Enter a minimum bar length from 0 to 100 percent, or leave it blank.", _dataBarMinLengthBox);
+                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMinimumBarLengthMessage"), _dataBarMinLengthBox);
                     return;
                 }
 
                 if (!TryParseOptionalPercent(_dataBarMaxLengthBox.Text, out var maxLength))
                 {
-                    ShowInvalidInputWarning("Enter a maximum bar length from 0 to 100 percent, or leave it blank.", _dataBarMaxLengthBox);
+                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMaximumBarLengthMessage"), _dataBarMaxLengthBox);
                     return;
                 }
 
@@ -147,7 +147,7 @@ public partial class ConditionalFormatDialog
                 cf.MinThresholdValue = BlankToNull(_colorScaleMinValueBox.Text);
                 if (!TryParseRgbColor(_colorScaleMinColorBox.Text, out var minColor))
                 {
-                    ShowInvalidInputWarning("Enter a minimum color as R, G, B.", _colorScaleMinColorBox);
+                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMinimumColorMessage"), _colorScaleMinColorBox);
                     return;
                 }
 
@@ -159,7 +159,7 @@ public partial class ConditionalFormatDialog
                 {
                     if (!TryParseRgbColor(_colorScaleMidColorBox.Text, out var midColor))
                     {
-                        ShowInvalidInputWarning("Enter a midpoint color as R, G, B.", _colorScaleMidColorBox);
+                        ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMidpointColorMessage"), _colorScaleMidColorBox);
                         return;
                     }
 
@@ -169,7 +169,7 @@ public partial class ConditionalFormatDialog
                 cf.MaxThresholdValue = BlankToNull(_colorScaleMaxValueBox.Text);
                 if (!TryParseRgbColor(_colorScaleMaxColorBox.Text, out var maxColor))
                 {
-                    ShowInvalidInputWarning("Enter a maximum color as R, G, B.", _colorScaleMaxColorBox);
+                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidMaximumColorMessage"), _colorScaleMaxColorBox);
                     return;
                 }
 
@@ -180,7 +180,7 @@ public partial class ConditionalFormatDialog
                 var text = _value1Box.Text.Trim();
                 if (string.IsNullOrWhiteSpace(text))
                 {
-                    ShowInvalidInputWarning("Enter text for this conditional formatting rule.", _value1Box);
+                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidTextMessage"), _value1Box);
                     return;
                 }
 
@@ -197,7 +197,7 @@ public partial class ConditionalFormatDialog
             {
                 if (!TryParseTopBottomRank(_topBottomRankBox.Text, out var topBottomRank))
                 {
-                    ShowInvalidInputWarning("Enter a rank or percent from 1 to 1000.", _topBottomRankBox);
+                    ShowInvalidInputWarning(UiText.Get("ConditionalFormatDialog_InvalidRankOrPercentMessage"), _topBottomRankBox);
                     return;
                 }
 

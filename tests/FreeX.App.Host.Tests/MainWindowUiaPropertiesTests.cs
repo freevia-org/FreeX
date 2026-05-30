@@ -7,12 +7,12 @@ namespace FreeX.App.Host.Tests;
 
 /// <summary>
 /// Tests that the shell XAML tree has correct UI Automation properties for screen-reader
-/// and keyboard-only navigation compatibility — the accessibility gate defined in
+/// and keyboard-only navigation compatibility - the accessibility gate defined in
 /// docs/TEST_DISTRIBUTION_PLAN.md Phase 8.
 /// </summary>
 public sealed class MainWindowUiaPropertiesTests
 {
-    // ── Shell chrome ──────────────────────────────────────────────────────
+    // Shell chrome
 
     [Fact]
     public void FormulaBar_ExposesAutomationNameAndHelpText()
@@ -26,7 +26,7 @@ public sealed class MainWindowUiaPropertiesTests
             .Single(element => element.Attribute(x + "Name")?.Value == "FormulaBar");
 
         formulaBar.Attribute("AutomationProperties.Name")?.Value
-            .Should().Be("Formula Bar", "the formula bar needs a stable UIA name for screen readers");
+            .Should().Be(UiText.Get("MainWindow_AutomationName_FormulaBar"), "the formula bar needs a stable UIA name for screen readers");
 
         formulaBar.Attribute("AutomationProperties.HelpText")?.Value
             .Should().NotBeNullOrWhiteSpace("the formula bar needs help text for Narrator guidance");
@@ -46,7 +46,7 @@ public sealed class MainWindowUiaPropertiesTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute(x + "Name")?.Value == "FormulaBarExpandBtn");
 
-        expandButton.Attribute("AutomationProperties.Name")?.Value.Should().Be("Expand Formula Bar");
+        expandButton.Attribute("AutomationProperties.Name")?.Value.Should().Be(UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));
         expandButton.Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
         expandButton.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("FormulaBarExpandBtn");
     }
@@ -79,7 +79,7 @@ public sealed class MainWindowUiaPropertiesTests
             .Single(element => element.Attribute(x + "Name")?.Value == "CellAddressBox");
 
         nameBox.Attribute("AutomationProperties.Name")?.Value
-            .Should().Be("Name Box", "the name box needs a stable UIA name for screen readers");
+            .Should().Be(UiText.Get("MainWindow_AutomationName_NameBox"), "the name box needs a stable UIA name for screen readers");
 
         nameBox.Attribute("AutomationProperties.HelpText")?.Value
             .Should().NotBeNullOrWhiteSpace("the name box needs help text for Narrator guidance");
@@ -100,7 +100,7 @@ public sealed class MainWindowUiaPropertiesTests
             .Single(element => element.Attribute(x + "Name")?.Value == "VerticalScroll");
 
         scrollBar.Attribute("AutomationProperties.Name")?.Value
-            .Should().Be("Vertical Worksheet Scroll Bar");
+            .Should().Be(UiText.Get("MainWindow_AutomationName_VerticalWorksheetScrollBar"));
         scrollBar.Attribute("AutomationProperties.HelpText")?.Value
             .Should().NotBeNullOrWhiteSpace();
     }
@@ -117,7 +117,7 @@ public sealed class MainWindowUiaPropertiesTests
             .Single(element => element.Attribute(x + "Name")?.Value == "HorizontalScroll");
 
         scrollBar.Attribute("AutomationProperties.Name")?.Value
-            .Should().Be("Horizontal Worksheet Scroll Bar");
+            .Should().Be(UiText.Get("MainWindow_AutomationName_HorizontalWorksheetScrollBar"));
         scrollBar.Attribute("AutomationProperties.HelpText")?.Value
             .Should().NotBeNullOrWhiteSpace();
     }
@@ -134,14 +134,14 @@ public sealed class MainWindowUiaPropertiesTests
             .Single(element => element.Attribute(x + "Name")?.Value == "ZoomSlider");
 
         slider.Attribute("AutomationProperties.Name")?.Value
-            .Should().Be("Zoom Slider");
+            .Should().Be(UiText.Get("MainWindow_AutomationName_ZoomSlider"));
         slider.Attribute("AutomationProperties.HelpText")?.Value
             .Should().NotBeNullOrWhiteSpace();
         slider.Attribute("AutomationProperties.AutomationId")?.Value
             .Should().Be("ZoomSlider");
     }
 
-    // ── Worksheet grid ────────────────────────────────────────────────────
+    // Worksheet grid
 
     [Fact]
     public void StatusZoomButtons_ExposeAutomationNameHelpTextAndIds()
@@ -156,10 +156,10 @@ public sealed class MainWindowUiaPropertiesTests
             .ToDictionary(element => element.Attribute(x + "Name")!.Value);
 
         buttons.Should().ContainKeys("StatusZoomOutButton", "StatusZoomInButton");
-        buttons["StatusZoomOutButton"].Attribute("AutomationProperties.Name")?.Value.Should().Be("Zoom Out");
+        buttons["StatusZoomOutButton"].Attribute("AutomationProperties.Name")?.Value.Should().Be(UiText.Get("MainWindow_AutomationName_ZoomOut"));
         buttons["StatusZoomOutButton"].Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
         buttons["StatusZoomOutButton"].Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("StatusZoomOutButton");
-        buttons["StatusZoomInButton"].Attribute("AutomationProperties.Name")?.Value.Should().Be("Zoom In");
+        buttons["StatusZoomInButton"].Attribute("AutomationProperties.Name")?.Value.Should().Be(UiText.Get("MainWindow_AutomationName_ZoomIn"));
         buttons["StatusZoomInButton"].Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
         buttons["StatusZoomInButton"].Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("StatusZoomInButton");
     }
@@ -176,11 +176,11 @@ public sealed class MainWindowUiaPropertiesTests
             .Single(element => element.Attribute(x + "Name")?.Value == "SheetGrid");
 
         gridView.Attribute("AutomationProperties.Name")?.Value
-            .Should().Be("Worksheet", "the spreadsheet grid must have a stable UIA name so screen readers " +
+            .Should().Be(UiText.Get("MainWindow_AutomationName_Worksheet"), "the spreadsheet grid must have a stable UIA name so screen readers " +
                 "announce the region when focus enters the grid surface");
     }
 
-    // ── Sheet tabs ────────────────────────────────────────────────────────
+    // Sheet tabs
 
     [Fact]
     public void SheetTabTemplate_BindsAutomationNameToSheetName()
@@ -243,7 +243,7 @@ public sealed class MainWindowUiaPropertiesTests
                 "sheet tabs should have a stable automation ID so UIA clients can distinguish them");
     }
 
-    // ── Add sheet button ──────────────────────────────────────────────────
+    // Add sheet button
 
     [Fact]
     public void AddSheetButton_ExposesAutomationNameAndHelpText()
@@ -257,12 +257,12 @@ public sealed class MainWindowUiaPropertiesTests
             .Single(element => element.Attribute(x + "Name")?.Value == "AddSheetButton");
 
         addSheetButton.Attribute("AutomationProperties.Name")?.Value
-            .Should().Be("Insert Sheet");
+            .Should().Be(UiText.Get("MainWindow_AutomationName_InsertSheet"));
         addSheetButton.Attribute("AutomationProperties.HelpText")?.Value
             .Should().NotBeNullOrWhiteSpace();
     }
 
-    // ── GridView AutomationPeer ───────────────────────────────────────────
+    // GridView AutomationPeer
 
     [Fact]
     public void GridView_OverridesOnCreateAutomationPeerForScreenReaderSupport()
@@ -276,8 +276,8 @@ public sealed class MainWindowUiaPropertiesTests
             "grid type and name rather than the default FrameworkElement peer");
     }
 
-    // ── Helper ────────────────────────────────────────────────────────────
+    // Helper
 
     private static XDocument LoadMainWindowXaml() =>
-        XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        XamlLocalizationTestHelper.LoadLocalizedXaml("MainWindow.xaml");
 }

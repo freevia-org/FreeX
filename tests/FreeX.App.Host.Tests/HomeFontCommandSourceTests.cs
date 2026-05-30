@@ -20,7 +20,7 @@ public sealed class HomeFontCommandSourceTests
         var selector = ExtractElementByName(xaml, "ComboBox", name);
 
         selector.Should().Contain("IsEditable=\"True\"");
-        selector.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        selector.ShouldContainInvariantCommandName(title);
         selector.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         selector.Should().Contain($"SelectionChanged=\"{selectionHandler}\"");
         selector.Should().Contain($"KeyDown=\"{keyHandler}\"");
@@ -40,7 +40,7 @@ public sealed class HomeFontCommandSourceTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var button = ExtractButtonElementByClickHandler(xaml, handler);
 
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -59,7 +59,7 @@ public sealed class HomeFontCommandSourceTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var toggle = ExtractElementByName(xaml, "ToggleButton", name);
 
-        toggle.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        toggle.ShouldContainInvariantCommandName(title);
         toggle.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         toggle.Should().Contain($"Click=\"{handler}\"");
     }
@@ -88,13 +88,13 @@ public sealed class HomeFontCommandSourceTests
         var fillButton = ExtractButtonElementByClickHandler(xaml, "FillColorBtn_Click");
         var fontButton = ExtractButtonElementByClickHandler(xaml, "FontColorBtn_Click");
 
-        fillButton.Should().Contain("AutomationProperties.Name=\"Fill Color\"");
+        fillButton.ShouldContainLocalizedAttribute("AutomationProperties.Name", "Fill Color");
         fillButton.Should().Contain("AutomationProperties.AutomationId=\"HomeFillColorButton\"");
-        fillButton.Should().Contain("AutomationProperties.HelpText=\"Open the fill color picker for selected cells.\"");
+        fillButton.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Open the fill color picker for selected cells.");
 
-        fontButton.Should().Contain("AutomationProperties.Name=\"Font Color\"");
+        fontButton.ShouldContainLocalizedAttribute("AutomationProperties.Name", "Font Color");
         fontButton.Should().Contain("AutomationProperties.AutomationId=\"HomeFontColorButton\"");
-        fontButton.Should().Contain("AutomationProperties.HelpText=\"Open the font color picker for selected cells.\"");
+        fontButton.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Open the font color picker for selected cells.");
     }
 
     private static string ExtractElementByName(string xaml, string elementName, string name)

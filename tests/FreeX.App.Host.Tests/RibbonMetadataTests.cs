@@ -191,6 +191,45 @@ public sealed class RibbonMetadataTests
     }
 
     [Fact]
+    public void CommandName_TrimsAttachedMetadataForInvariantRibbonIdentity()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var button = new Button();
+            RibbonMetadata.SetCommandName(button, "  Paste Special  ");
+
+            RibbonMetadata.TryGetCommandName(button, out var commandName).Should().BeTrue();
+            commandName.Should().Be("Paste Special");
+        });
+    }
+
+    [Fact]
+    public void CommandName_ReturnsFalseWhenMissing()
+    {
+        StaTestRunner.Run(() =>
+        {
+            RibbonMetadata.TryGetCommandName(new Button(), out var commandName).Should().BeFalse();
+            commandName.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
+    public void CatalogId_TrimsAttachedMetadataForStableCatalogLookup()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var metadataElement = new Grid();
+            RibbonMetadata.SetCatalogId(metadataElement, "  DataToolsGroup  ");
+
+            RibbonMetadata.TryGetCatalogId(metadataElement, out var catalogId).Should().BeTrue();
+            catalogId.Should().Be("DataToolsGroup");
+
+            RibbonMetadata.TryGetCatalogId(new Grid(), out var missingCatalogId).Should().BeFalse();
+            missingCatalogId.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
     public void CollapsedChevron_UsesAttachedRoleOnly()
     {
         StaTestRunner.Run(() =>

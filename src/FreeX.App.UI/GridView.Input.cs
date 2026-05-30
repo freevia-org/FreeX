@@ -164,7 +164,10 @@ public partial class GridView
         {
             var selectedObjectDragKind = ObjectDragKind.None;
             if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
-                selectedObjectDragKind = HitTestObjectHandle(pos, GetSelectedObjectRect());
+            {
+                var selectedObjectRect = GetSelectedObjectRect();
+                selectedObjectDragKind = HitTestObjectHandle(pos, selectedObjectRect);
+            }
             if (selectedObjectDragKind != ObjectDragKind.None)
             {
                 Cursor = ObjectDragCursor(selectedObjectDragKind);

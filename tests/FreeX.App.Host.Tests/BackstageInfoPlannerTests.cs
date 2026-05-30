@@ -24,8 +24,8 @@ public sealed class BackstageInfoPlannerTests
         plan.Format.Should().Be(".xlsx");
         plan.StatisticsSummary.Should().Contain("Cells with data: 2");
         plan.StatisticsSummary.Should().Contain("Formulas: 1");
-        plan.AccessibilitySummary.Should().Be("1 issue found");
-        plan.FormulaErrorSummary.Should().Be("No formula errors found");
+        plan.AccessibilitySummary.Should().Be(UiText.Get("Backstage_Info_OneIssueFound"));
+        plan.FormulaErrorSummary.Should().Be(UiText.Get("Backstage_Info_NoFormulaErrors"));
     }
 
     [Fact]
@@ -36,10 +36,10 @@ public sealed class BackstageInfoPlannerTests
 
         var plan = BackstageInfoPlanner.Build(workbook, null);
 
-        plan.FilePath.Should().Be("Not saved yet");
+        plan.FilePath.Should().Be(UiText.Get("Backstage_Info_NotSavedYet"));
         plan.Format.Should().Be(".xlsx");
-        plan.AccessibilitySummary.Should().Be("No accessibility issues found");
-        plan.FormulaErrorSummary.Should().Be("No formula errors found");
+        plan.AccessibilitySummary.Should().Be(UiText.Get("Backstage_Info_NoAccessibilityIssues"));
+        plan.FormulaErrorSummary.Should().Be(UiText.Get("Backstage_Info_NoFormulaErrors"));
     }
 
     [Fact]
@@ -54,6 +54,6 @@ public sealed class BackstageInfoPlannerTests
 
         var plan = BackstageInfoPlanner.Build(workbook, null);
 
-        plan.FormulaErrorSummary.Should().Be("2 issues found");
+        plan.FormulaErrorSummary.Should().Be(UiText.Format("Backstage_Info_MultipleIssuesFound", 2));
     }
 }

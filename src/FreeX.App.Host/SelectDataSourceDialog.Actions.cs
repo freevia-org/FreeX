@@ -11,7 +11,9 @@ public sealed partial class SelectDataSourceDialog
             return;
 
         var preview = InferPreviewEntries(_rangeBox.Text, _firstColumnCategoriesBox.IsChecked == true);
-        _seriesList.ItemsSource = preview.Series.Select(series => $"{series.Name}    {series.ValuesRangeText}").ToList();
+        _seriesList.ItemsSource = preview.Series
+            .Select(series => UiText.Format("SelectDataSource_SeriesListItemFormat", series.Name, series.ValuesRangeText))
+            .ToList();
         _axisLabelsList.ItemsSource = preview.Categories.Select(category => category.Label).ToList();
         SelectFirstItemWhenAvailable(_seriesList);
         SelectFirstItemWhenAvailable(_axisLabelsList);
@@ -22,7 +24,7 @@ public sealed partial class SelectDataSourceDialog
     {
         var index = _seriesList.Items.Count + 1;
         _seriesList.ItemsSource = null;
-        _seriesList.Items.Add($"Series {index}    <select range>");
+        _seriesList.Items.Add(UiText.Format("SelectDataSource_NewSeriesListItem", index));
         _seriesList.SelectedIndex = _seriesList.Items.Count - 1;
         UpdateActionButtonState();
     }
@@ -73,8 +75,8 @@ public sealed partial class SelectDataSourceDialog
             ? Window.GetWindow(dependencyObject)
             : null;
         MessageBox.Show(owner,
-            "Hidden rows and columns are not plotted. Empty cells are shown as gaps.",
-            "Hidden and Empty Cell Settings",
+            UiText.Get("SelectDataSource_HiddenEmptyCellsMessage"),
+            UiText.Get("SelectDataSource_HiddenEmptyCellsTitle"),
             MessageBoxButton.OK,
             MessageBoxImage.Information); // owner is dynamic (static handler); DialogMessageHelper requires a non-null Window
     }

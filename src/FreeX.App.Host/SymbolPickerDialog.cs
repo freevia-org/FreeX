@@ -13,7 +13,7 @@ public sealed partial class SymbolPickerDialog : Window
 
     public SymbolPickerDialog()
     {
-        Title = "Symbol";
+        Title = UiText.Get("SymbolPicker_Symbol");
         Width = 620;
         Height = 500;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;

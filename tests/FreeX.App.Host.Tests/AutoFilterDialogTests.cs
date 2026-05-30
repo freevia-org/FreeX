@@ -71,12 +71,12 @@ public sealed class AutoFilterDialogTests
     }
 
     [Theory]
-    [InlineData(AutoFilterMenuFilterKind.Text, "Text Filters")]
-    [InlineData(AutoFilterMenuFilterKind.Number, "Number Filters")]
-    [InlineData(AutoFilterMenuFilterKind.Date, "Date Filters")]
-    public void GetFilterFamilyHeader_ReturnsExcelTypedFilterAffordance(AutoFilterMenuFilterKind filterKind, string expected)
+    [InlineData(AutoFilterMenuFilterKind.Text, "AutoFilter_FilterFamily_Text")]
+    [InlineData(AutoFilterMenuFilterKind.Number, "AutoFilter_FilterFamily_Number")]
+    [InlineData(AutoFilterMenuFilterKind.Date, "AutoFilter_FilterFamily_Date")]
+    public void GetFilterFamilyHeader_ReturnsExcelTypedFilterAffordance(AutoFilterMenuFilterKind filterKind, string expectedKey)
     {
-        AutoFilterDialog.GetFilterFamilyHeader(filterKind).Should().Be(expected);
+        AutoFilterDialog.GetFilterFamilyHeader(filterKind).Should().Be(UiText.Get(expectedKey));
     }
 
     [Theory]
@@ -217,16 +217,16 @@ public sealed class AutoFilterDialogTests
     }
 
     [Theory]
-    [InlineData(AutoFilterMenuFilterKind.Text, "Contains", "contains:Blue")]
-    [InlineData(AutoFilterMenuFilterKind.Number, "Greater Than", ">42")]
-    [InlineData(AutoFilterMenuFilterKind.Date, "After", "date>2026-05-21")]
+    [InlineData(AutoFilterMenuFilterKind.Text, "AutoFilter_Criteria_Contains", "contains:Blue")]
+    [InlineData(AutoFilterMenuFilterKind.Number, "AutoFilter_Criteria_GreaterThan", ">42")]
+    [InlineData(AutoFilterMenuFilterKind.Date, "AutoFilter_Criteria_After", "date>2026-05-21")]
     public void BuildCriteriaText_UsesTypedOperatorTemplates(
         AutoFilterMenuFilterKind filterKind,
-        string optionLabel,
+        string optionLabelKey,
         string expected)
     {
         var option = AutoFilterDialog.GetCriteriaOptions(filterKind)
-            .Single(item => item.Label == optionLabel);
+            .Single(item => item.Label == UiText.Get(optionLabelKey));
 
         var value = filterKind switch
         {
@@ -242,7 +242,7 @@ public sealed class AutoFilterDialogTests
     public void BuildBetweenCriteriaText_UsesSeparateMinimumAndMaximumValues()
     {
         var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
-            .Single(item => item.Label == "Between");
+            .Single(item => item.Label == UiText.Get("AutoFilter_Criteria_Between"));
 
         AutoFilterDialog.BuildBetweenCriteriaText(option, " 10 ", "20")
             .Should()
@@ -250,12 +250,12 @@ public sealed class AutoFilterDialogTests
     }
 
     [Theory]
-    [InlineData("Top 10", "top:5")]
-    [InlineData("Bottom 10 Percent", "bottompercent:25")]
-    public void BuildTopBottomCriteriaText_UsesExcelCountControl(string optionLabel, string expected)
+    [InlineData("AutoFilter_Criteria_Top10", "top:5")]
+    [InlineData("AutoFilter_Criteria_Bottom10Percent", "bottompercent:25")]
+    public void BuildTopBottomCriteriaText_UsesExcelCountControl(string optionLabelKey, string expected)
     {
         var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
-            .Single(item => item.Label == optionLabel);
+            .Single(item => item.Label == UiText.Get(optionLabelKey));
 
         AutoFilterDialog.BuildTopBottomCriteriaText(option, expected.Split(':')[1])
             .Should()
@@ -315,25 +315,25 @@ public sealed class AutoFilterDialogTests
     {
         var source = ReadAutoFilterDialogSources();
 
-        foreach (var content in new[]
+        foreach (var key in new[]
         {
-            "_No sort",
-            "Sort _A to Z",
-            "Sort _Z to A",
-            "_Clear Filter From",
-            "_Text Filters",
-            "_Number Filters",
-            "_Date Filters",
-            "_Select All",
-            "_Clear All",
-            "_Add current selection to filter",
-            "_OK",
-            "_Cancel"
+            "AutoFilter_NoSort",
+            "AutoFilter_SortAToZ",
+            "AutoFilter_SortZToA",
+            "AutoFilter_ClearFilterFrom2",
+            "AutoFilter_TextFilters",
+            "AutoFilter_NumberFilters",
+            "AutoFilter_DateFilters",
+            "AutoFilter_SelectAll2",
+            "AutoFilter_ClearAll",
+            "AutoFilter_AddCurrentSelectionToFilter"
         })
-            source.Should().Contain($"Content = \"{content}\"");
+            source.Should().Contain($"UiText.Get(\"{key}\")");
 
-        source.Should().Contain("Content = \"_Criteria text\"");
-        source.Should().Contain("Content = \"_Search\"");
+        source.Should().Contain("Content = UiText.Ok");
+        source.Should().Contain("Content = UiText.Cancel");
+        source.Should().Contain("UiText.Get(\"AutoFilter_CriteriaText\")");
+        source.Should().Contain("UiText.Get(\"AutoFilter_Search2\")");
     }
 
     [Fact]
@@ -341,7 +341,7 @@ public sealed class AutoFilterDialogTests
     {
         var source = ReadAutoFilterDialogSources();
 
-        source.Should().Contain("AutomationProperties.SetName(_checklistBox, \"Filter values\");");
+        source.Should().Contain("AutomationProperties.SetName(_checklistBox, UiText.Get(\"AutoFilter_FilterValues\"));");
     }
 
     [Fact]
@@ -361,10 +361,10 @@ public sealed class AutoFilterDialogTests
         var source = ReadAutoFilterDialogSources();
 
         source.Should().Contain("_filterByColorGroup");
-        source.Should().Contain("Header = \"Filter by Color\"");
+        source.Should().Contain("Header = UiText.Get(\"AutoFilter_FilterByColor2\")");
         source.Should().Contain("PopulateColorChoices");
-        source.Should().Contain("Cell Color");
-        source.Should().Contain("Font Color");
+        source.Should().Contain("UiText.Get(\"AutoFilter_CellColor\")");
+        source.Should().Contain("UiText.Get(\"AutoFilter_FontColor\")");
         source.Should().Contain("CreateColorSwatch");
         source.Should().NotContain("new ColorPickerDialog(_selectedColorFilter, allowNoColor: true)");
         source.Should().Contain("HasFilterByColorEntry");
@@ -437,7 +437,7 @@ public sealed class AutoFilterDialogTests
         var source = ReadAutoFilterDialogSources();
 
         source.Should().Contain("private readonly ListBox _checklistBox = new();");
-        source.Should().Contain("AutomationProperties.SetName(_checklistBox, \"Filter values\");");
+        source.Should().Contain("AutomationProperties.SetName(_checklistBox, UiText.Get(\"AutoFilter_FilterValues\"));");
         source.Should().Contain("_checklistBox.PreviewKeyDown += ChecklistBox_PreviewKeyDown;");
         source.Should().Contain("private void ChecklistBox_PreviewKeyDown(object sender, KeyEventArgs e)");
         source.Should().Contain("Key.Space => ToggleFocusedChecklistItem()");
@@ -496,18 +496,18 @@ public sealed class AutoFilterDialogTests
         source.Should().Contain("_topBottomCriteriaPanel");
         source.Should().Contain("_topBottomCountBox");
         source.Should().Contain("_datePresetBox");
-        source.Should().Contain("\"This Week\"");
-        source.Should().Contain("\"Last Week\"");
-        source.Should().Contain("\"Next Week\"");
-        source.Should().Contain("\"This Year\"");
-        source.Should().Contain("\"Last Year\"");
-        source.Should().Contain("\"Next Year\"");
-        source.Should().Contain("Date _preset");
+        source.Should().Contain("UiText.Get(\"AutoFilter_DatePresetThisWeek\")");
+        source.Should().Contain("UiText.Get(\"AutoFilter_DatePresetLastWeek\")");
+        source.Should().Contain("UiText.Get(\"AutoFilter_DatePresetNextWeek\")");
+        source.Should().Contain("UiText.Get(\"AutoFilter_DatePresetThisYear\")");
+        source.Should().Contain("UiText.Get(\"AutoFilter_DatePresetLastYear\")");
+        source.Should().Contain("UiText.Get(\"AutoFilter_DatePresetNextYear\")");
+        source.Should().Contain("UiText.Get(\"AutoFilter_DatePreset\")");
         source.Should().Contain("_criteriaConnectorBox");
         source.Should().Contain("_criteriaOperatorBox2");
         source.Should().Contain("_criteriaValueBox2");
         source.Should().Contain("_customFilterGroup");
-        source.Should().Contain("Header = \"Custom filter\"");
+        source.Should().Contain("Header = UiText.Get(\"AutoFilter_CustomFilter\")");
         source.Should().Contain("IsReadOnly = true");
         source.Should().Contain("_customFilterGroup.Visibility = Visibility.Visible");
         source.Should().Contain("_criteriaSuggestionLabel.Visibility = Visibility.Visible");
@@ -537,9 +537,9 @@ public sealed class AutoFilterDialogTests
     {
         var source = ReadAutoFilterDialogSources();
 
-        source.Should().Contain("new Label { Content = \"_Minimum:\", Target = _betweenMinBox");
-        source.Should().Contain("new Label { Content = \"And _maximum:\", Target = _betweenMaxBox");
-        source.Should().Contain("new Label { Content = \"_Show:\", Target = _topBottomCountBox");
+        source.Should().Contain("new Label { Content = UiText.Get(\"AutoFilter_MinimumLabel\"), Target = _betweenMinBox");
+        source.Should().Contain("new Label { Content = UiText.Get(\"AutoFilter_MaximumLabel\"), Target = _betweenMaxBox");
+        source.Should().Contain("new Label { Content = UiText.Get(\"AutoFilter_ShowLabel\"), Target = _topBottomCountBox");
         source.Should().NotContain("new TextBlock { Text = \"_Minimum:\"");
         source.Should().NotContain("new TextBlock { Text = \"And _maximum:\"");
         source.Should().NotContain("new TextBlock { Text = \"_Show:\"");
@@ -599,10 +599,10 @@ public sealed class AutoFilterDialogTests
         var source = ReadAutoFilterDialogSources();
 
         source.Should().Contain("if (!ValidateTypedCriteriaInputs())");
-        source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter a filter value.\", _criteriaValueBox);");
-        source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter the first value for the between filter.\", _betweenMinBox);");
-        source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter the second value for the between filter.\", _betweenMaxBox);");
-        source.Should().Contain("ShowInvalidCriteriaWarning(\"Enter a valid top or bottom count.\", _topBottomCountBox);");
+        source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterFilterValue\"), _criteriaValueBox);");
+        source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterFirstBetweenValue\"), _betweenMinBox);");
+        source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterSecondBetweenValue\"), _betweenMaxBox);");
+        source.Should().Contain("ShowInvalidCriteriaWarning(UiText.Get(\"AutoFilter_EnterValidTopOrBottomCount\"), _topBottomCountBox);");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("target.SelectAll();");
         source.Should().Contain("Keyboard.Focus(target);");
@@ -644,7 +644,7 @@ public sealed class AutoFilterDialogTests
         sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(10));
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
         var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
-            .Single(item => item.Label == "Greater Than");
+            .Single(item => item.Label == UiText.Get("AutoFilter_Criteria_GreaterThan"));
         var result = AutoFilterDialog.BuildResult(
             AutoFilterSortDirection.None,
             [

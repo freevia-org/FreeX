@@ -84,6 +84,8 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             resized.GroupMeasurementCount.Should().Be(0);
             resized.CompactSnapshotCaptureCount.Should().Be(0);
             resized.ResizeThresholdRebuildCount.Should().Be(0);
+            resized.StateApplyCount.Should().BeGreaterThan(0, "a new width band should evaluate the compact state without remeasuring groups");
+            resized.StateChangedGroupCount.Should().BeLessThanOrEqualTo(resized.StateApplyCount * 9);
             resized.MeasurementCacheKey.Should().Be(warm.MeasurementCacheKey);
             resized.ResizeThresholdCacheKey.Should().Be(warm.ResizeThresholdCacheKey);
             resized.CompactSnapshotCacheKey.Should().Be(warm.CompactSnapshotCacheKey);
@@ -97,6 +99,9 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             sameWidth.LayoutPlanComputeCount.Should().Be(0, "the pure layout plan should be reused when the tab metrics and width are unchanged");
             sameWidth.LayoutPlanCacheHitCount.Should().Be(1);
             sameWidth.AppliedStateSkipCount.Should().Be(1, "a second pass at the same width should hit the applied-state guard instead of reapplying the ribbon tree");
+            sameWidth.StateApplyCount.Should().Be(0, "the applied-state guard should skip the tree mutation path completely");
+            sameWidth.StateChangedGroupCount.Should().Be(0);
+            sameWidth.CollapsedFootprintApplyCount.Should().Be(0);
         });
     }
 
@@ -166,6 +171,36 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
     }
 
     [Fact]
+    public void AdaptiveCompaction_ReusesMeasuredOverflowDecisionsForRepeatedCorrectionStates()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonAdaptiveDiagnosticsHarness.Create();
+
+            harness.SelectRibbonTab("Insert", 1280);
+            harness.UpdateCompact(force: true);
+            harness.ResetDiagnostics();
+            harness.SetWidth(900);
+            harness.UpdateCompact(force: true);
+
+            var firstPassAtWidth = harness.Diagnostics;
+            firstPassAtWidth.MeasuredOverflowMeasurementCount.Should()
+                .BeGreaterThan(0, "Insert relies on measured correction at compact Excel widths");
+            firstPassAtWidth.StateApplyCount.Should()
+                .BeGreaterThan(0, "measured correction should apply only the candidate states it changes");
+            firstPassAtWidth.StateChangedGroupCount.Should()
+                .BeLessThan(firstPassAtWidth.StateApplyCount * 9, "measured correction should not reapply every ribbon group on every correction step");
+
+            harness.ResetDiagnostics();
+            harness.UpdateCompact(force: true);
+
+            var repeatedPassAtWidth = harness.Diagnostics;
+            repeatedPassAtWidth.MeasuredOverflowMeasurementCount.Should()
+                .Be(0, "the same measured surface, width, footprint, and state signature should reuse the cached overflow decision");
+        });
+    }
+
+    [Fact]
     public void AdaptiveCompaction_ReusesMeasurementsAcrossResizeWidthsForEveryMainRibbonTab()
     {
         StaTestRunner.Run(() =>
@@ -213,7 +248,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             harness.ResetDiagnostics();
             harness.ResetFallbackDiagnostics();
 
-            harness.SetWidth(1275);
+            harness.SetWidth(1279);
 
             harness.FallbackDiagnostics.RequestCount.Should().Be(0);
             harness.Diagnostics.GroupMeasurementCount.Should().Be(0);
@@ -230,6 +265,28 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             harness.Diagnostics.GroupMeasurementCount.Should().Be(0);
             harness.Diagnostics.ResizeThresholdRebuildCount.Should().Be(0);
         });
+    }
+
+    [Fact]
+    public void AdaptiveResizeHotPath_UsesValueTypeKeysForWidthAndStateCaches()
+    {
+        var fieldsSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        fieldsSource.Should().Contain("Dictionary<RibbonAdaptiveLayoutPlanCacheEntryKey, RibbonAdaptiveLayoutResult>");
+        fieldsSource.Should().Contain("Dictionary<RibbonCorrectionCacheKey, IReadOnlyList<RibbonAdaptiveGroupState>>");
+        fieldsSource.Should().Contain("Dictionary<RibbonMeasuredOverflowCacheKey, bool>");
+        fieldsSource.Should().Contain("RibbonAppliedStateKey? _lastRibbonAdaptiveAppliedStateKey");
+
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.RibbonAdaptive.cs"));
+        var hotPathKeyHelpers = source.Substring(
+            source.IndexOf("private static RibbonAdaptiveLayoutPlanCacheEntryKey CreateRibbonAdaptiveLayoutPlanCacheEntryKey", StringComparison.Ordinal),
+            source.IndexOf("private static string CreateRibbonAdaptiveMeasurementCacheKey", StringComparison.Ordinal) -
+            source.IndexOf("private static RibbonAdaptiveLayoutPlanCacheEntryKey CreateRibbonAdaptiveLayoutPlanCacheEntryKey", StringComparison.Ordinal));
+
+        hotPathKeyHelpers.Should().Contain("CreateRibbonStateSignature(");
+        hotPathKeyHelpers.Should().Contain("RoundRibbonWidthToTenths(");
+        hotPathKeyHelpers.Should().Contain("measurementCacheKey");
+        hotPathKeyHelpers.Should().NotContain("string.Join(");
+        hotPathKeyHelpers.Should().NotContain(".Select(state");
     }
 
     private sealed class RibbonAdaptiveDiagnosticsHarness : IDisposable

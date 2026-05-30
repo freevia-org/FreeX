@@ -48,7 +48,7 @@ public sealed partial class TextToColumnsDialog
         TextToColumnsAdvancedOptions? advancedOptions = null)
     {
         if (!TryParseFixedWidthBreakPositions(breakPositionsText, int.MaxValue, out var positions))
-            throw new ArgumentException("Enter at least one fixed-width break position.", nameof(breakPositionsText));
+            throw new ArgumentException(UiText.Get("TextToColumns_EnterAtLeastOneFixedWidthBreakPosition"), nameof(breakPositionsText));
 
         return new TextToColumnsDialogResult(
             TextToColumnsDelimiterKind.Comma,
@@ -105,7 +105,11 @@ public sealed partial class TextToColumnsDialog
             .ToList() ?? [];
 
         return rows.Count == 0
-            ? ["East,42,Open", "West,7,Closed", "North,18,Ready"]
+            ? [
+                UiText.Get("TextToColumns_PreviewSampleRow1"),
+                UiText.Get("TextToColumns_PreviewSampleRow2"),
+                UiText.Get("TextToColumns_PreviewSampleRow3")
+            ]
             : rows;
     }
 

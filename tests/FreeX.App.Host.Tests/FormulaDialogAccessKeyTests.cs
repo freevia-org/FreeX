@@ -12,16 +12,18 @@ public sealed class FormulaDialogAccessKeyTests
 
         foreach (var expected in new[]
         {
-            "Content = \"_Top row\"",
-            "Content = \"_Left column\"",
-            "Content = \"_Bottom row\"",
-            "Content = \"_Right column\"",
+            "Content = UiText.Get(\"CreateNamesFromSelection_TopRow\")",
+            "Content = UiText.Get(\"CreateNamesFromSelection_LeftColumn\")",
+            "Content = UiText.Get(\"CreateNamesFromSelection_BottomRow\")",
+            "Content = UiText.Get(\"CreateNamesFromSelection_RightColumn\")",
             "DialogButtonRowFactory.Create"
         })
             source.Should().Contain(expected);
 
-        source.Should().Contain("Header = \"Create names from\"");
-        source.Should().Contain("Excel creates named ranges");
+        source.Should().Contain("Header = UiText.Get(\"CreateNamesFromSelection_GroupHeader\")");
+        source.Should().Contain("UiText.Get(\"CreateNamesFromSelection_BodyText\")");
+        UiText.Get("CreateNamesFromSelection_TopRow").Should().Be("_Top row");
+        UiText.Get("CreateNamesFromSelection_GroupHeader").Should().Be("Create names from");
     }
 
     [Fact]
@@ -30,8 +32,9 @@ public sealed class FormulaDialogAccessKeyTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateNamesFromSelectionDialog.cs"));
 
         source.Should().Contain("using System.Windows.Automation;");
-        source.Should().Contain("AutomationProperties.SetName(group, \"Create names from selected labels\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(group, \"Choose which row or column labels Excel uses to create named ranges.\");");
+        source.Should().Contain("AutomationProperties.SetName(group, UiText.Get(\"CreateNamesFromSelection_GroupAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(group, UiText.Get(\"CreateNamesFromSelection_GroupHelpText\"));");
+        UiText.Get("CreateNamesFromSelection_GroupAutomationName").Should().Be("Create names from selected labels");
     }
 
     [Fact]
@@ -48,12 +51,14 @@ public sealed class FormulaDialogAccessKeyTests
             "CreateNamesLeftColumnCheckBox",
             "CreateNamesBottomRowCheckBox",
             "CreateNamesRightColumnCheckBox",
-            "Use the top row of the selection as names.",
-            "Use the left column of the selection as names.",
-            "Use the bottom row of the selection as names.",
-            "Use the right column of the selection as names."
+            "UiText.Get(\"CreateNamesFromSelection_TopRowHelpText\")",
+            "UiText.Get(\"CreateNamesFromSelection_LeftColumnHelpText\")",
+            "UiText.Get(\"CreateNamesFromSelection_BottomRowHelpText\")",
+            "UiText.Get(\"CreateNamesFromSelection_RightColumnHelpText\")"
         })
             source.Should().Contain(expected);
+
+        UiText.Get("CreateNamesFromSelection_TopRowHelpText").Should().Be("Use the top row of the selection as names.");
     }
 
     [Fact]
@@ -124,17 +129,18 @@ public sealed class FormulaDialogAccessKeyTests
 
         foreach (var expected in new[]
         {
-            "Content = \"Help on this _Function\"",
-            "Content = \"_Evaluate\"",
-            "Content = \"Step _In\"",
-            "Content = \"Step _Out\"",
-            "Content = \"_Restart\"",
-            "Content = \"_Close\""
+            "Content = UiText.Get(\"EvaluateFormula_HelpButton\")",
+            "Content = UiText.Get(\"EvaluateFormula_EvaluateButton\")",
+            "Content = UiText.Get(\"EvaluateFormula_StepInButton\")",
+            "Content = UiText.Get(\"EvaluateFormula_StepOutButton\")",
+            "Content = UiText.Get(\"EvaluateFormula_RestartButton\")",
+            "Content = UiText.Get(\"EvaluateFormula_CloseButton\")"
         })
             source.Should().Contain(expected);
 
         source.Should().NotContain("_Help on this formula");
         source.Should().NotContain("Content = \"_Previous\"");
+        UiText.Get("EvaluateFormula_StepInButton").Should().Be("Step _In");
     }
 
     [Fact]

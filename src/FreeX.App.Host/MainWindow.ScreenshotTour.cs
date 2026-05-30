@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -21,7 +24,8 @@ public partial class MainWindow
     // Activated by FREEX_SS_TOUR=1 env var.  Output lands in <repo-root>/screenshots/.
     private async void TryStartScreenshotTour()
     {
-        var ribbonTour = Environment.GetEnvironmentVariable("FREEX_SS_TOUR") == "1";
+        var ribbonBurstTour = Environment.GetEnvironmentVariable("FREEX_SS_TOUR_BURST") == "1";
+        var ribbonTour = ribbonBurstTour || Environment.GetEnvironmentVariable("FREEX_SS_TOUR") == "1";
         var backstageTour = Environment.GetEnvironmentVariable("FREEX_BACKSTAGE_TOUR") == "1";
         if (!ribbonTour && !backstageTour)
             return;
@@ -29,7 +33,8 @@ public partial class MainWindow
         var ribbonPlan = ribbonTour
             ? RibbonScreenshotTourPlanner.CreatePlan(
                 Environment.GetEnvironmentVariable("FREEX_SS_TOUR_TABS"),
-                Environment.GetEnvironmentVariable("FREEX_SS_TOUR_WIDTHS"))
+                Environment.GetEnvironmentVariable("FREEX_SS_TOUR_WIDTHS"),
+                ribbonBurstTour)
             : null;
 
         var outputDir = Path.GetFullPath(
@@ -66,6 +71,15 @@ public partial class MainWindow
 
     private async Task CaptureRibbonTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
     {
+        DeleteStaleRibbonScreenshotTourCaptures(outputDir, plan);
+
+        if (plan.IsBurst)
+        {
+            await CaptureRibbonBurstTourAsync(outputDir, plan);
+            await WriteRibbonScreenshotTourManifestAsync(outputDir, plan);
+            return;
+        }
+
         RibbonScreenshotTourWidth? activeWidth = null;
         foreach (var capture in plan.Captures)
         {
@@ -77,39 +91,112 @@ public partial class MainWindow
 
             await CaptureRibbonTabAsync(outputDir, capture);
         }
+
+        await WriteRibbonScreenshotTourManifestAsync(outputDir, plan);
+    }
+
+    private static void DeleteStaleRibbonScreenshotTourCaptures(string outputDir, RibbonScreenshotTourPlan plan)
+    {
+        foreach (var capture in plan.Captures)
+        {
+            var path = Path.Combine(outputDir, $"{capture.FileName}.png");
+            if (File.Exists(path))
+                File.Delete(path);
+        }
     }
 
     private async Task ApplyScreenshotTourWidthAsync(RibbonScreenshotTourWidth width)
+    {
+        ApplyScreenshotTourWidth(width);
+
+        if (width.WindowWidth is not null)
+        {
+            await Task.Delay(600);
+            return;
+        }
+
+        await Task.Delay(1200);
+    }
+
+    private async Task CaptureRibbonTabAsync(string outputDir, RibbonScreenshotTourCapture capture)
+    {
+        SelectRibbonTourTab(capture.Tab);
+        UpdateLayout();
+        await Task.Delay(350);
+        UpdateLayout();
+
+        await CaptureCurrentWindowAsync(outputDir, capture.FileName, ScreenshotTourCaptureHeight);
+    }
+
+    private async Task CaptureRibbonBurstTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
+    {
+        foreach (var width in plan.Widths)
+        {
+            ApplyScreenshotTourWidth(width);
+
+            foreach (var tab in plan.Tabs)
+            {
+                SelectRibbonTourTab(tab);
+
+                foreach (var phase in plan.Phases)
+                {
+                    await PrepareRibbonBurstCapturePhaseAsync(phase);
+                    var capture = new RibbonScreenshotTourCapture(tab, width, phase);
+                    await CaptureCurrentWindowAsync(outputDir, capture.FileName, ScreenshotTourCaptureHeight);
+                }
+            }
+        }
+    }
+
+    private void ApplyScreenshotTourWidth(RibbonScreenshotTourWidth width)
     {
         if (width.WindowWidth is { } windowWidth)
         {
             WindowState = WindowState.Normal;
             Width = windowWidth;
             Height = 768;
-            await Task.Delay(600);
             return;
         }
 
         WindowState = WindowState.Maximized;
-        await Task.Delay(1200);
     }
 
-    private async Task CaptureRibbonTabAsync(string outputDir, RibbonScreenshotTourCapture capture)
+    private void SelectRibbonTourTab(RibbonScreenshotTourTab tab)
     {
-        var tab = RibbonTabs.Items
+        var tabItem = RibbonTabs.Items
             .OfType<System.Windows.Controls.TabItem>()
-            .FirstOrDefault(item => string.Equals(item.Header?.ToString(), capture.Tab.Header, StringComparison.Ordinal));
+            .FirstOrDefault(item => string.Equals(item.Header?.ToString(), tab.Header, StringComparison.Ordinal));
 
-        if (tab is null)
+        if (tabItem is null)
             throw new InvalidOperationException(
-                $"Ribbon screenshot tour expected tab '{capture.Tab.Header}' but it was not found in the live ribbon.");
+                $"Ribbon screenshot tour expected tab '{tab.Header}' but it was not found in the live ribbon.");
 
-        RibbonTabs.SelectedItem = tab;
-        UpdateLayout();
-        await Task.Delay(350);
-        UpdateLayout();
+        RibbonTabs.SelectedItem = tabItem;
+    }
 
-        await CaptureCurrentWindowAsync(outputDir, capture.FileName, ScreenshotTourCaptureHeight);
+    private async Task PrepareRibbonBurstCapturePhaseAsync(RibbonScreenshotTourPhase phase)
+    {
+        switch (phase.Label)
+        {
+            case "immediate":
+                UpdateLayout();
+                return;
+            case "first-render":
+                await WaitForRibbonScreenshotRenderPassAsync();
+                return;
+            case "settled":
+                await Task.Delay(350);
+                UpdateLayout();
+                await WaitForRibbonScreenshotRenderPassAsync();
+                return;
+            default:
+                throw new InvalidOperationException($"Unknown ribbon screenshot tour burst phase '{phase.Label}'.");
+        }
+    }
+
+    private async Task WaitForRibbonScreenshotRenderPassAsync()
+    {
+        await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Render);
     }
 
     private async Task CaptureCurrentWindowAsync(string outputDir, string fileName, double logicalHeight)
@@ -130,6 +217,67 @@ public partial class MainWindow
         await using var stream = File.Create(path);
         encoder.Save(stream);
     }
+
+    private static async Task WriteRibbonScreenshotTourManifestAsync(string outputDir, RibbonScreenshotTourPlan plan)
+    {
+        var manifest = new RibbonScreenshotTourManifest(
+            Tool: "FREEX_SS_TOUR",
+            OutputDirectory: outputDir,
+            CatalogEvidenceTarget: "docs/UI_TEST_CATALOG.md",
+            BurstMode: plan.IsBurst,
+            CaptureLogicalHeight: ScreenshotTourCaptureHeight,
+            PlannedCaptureCount: plan.Captures.Count,
+            Tabs: plan.Tabs.Select(tab => tab.Header).ToArray(),
+            Widths: plan.Widths
+                .Select(width => new RibbonScreenshotTourManifestWidth(
+                    width.Label,
+                    width.WindowWidth,
+                    width.EvidencePurpose()))
+                .ToArray(),
+            Phases: plan.Phases
+                .Select(phase => new RibbonScreenshotTourManifestPhase(phase.Label, phase.FileNameSuffix))
+                .ToArray(),
+            Captures: plan.Captures
+                .Select(capture => new RibbonScreenshotTourManifestCapture(
+                    capture.Tab.Header,
+                    capture.Width.Label,
+                    capture.Phase.Label,
+                    $"{capture.FileName}.png"))
+                .ToArray(),
+            Limitations:
+            [
+                "Ribbon captures cover the top window band only.",
+                "Transient popups, dropdowns, native dialogs, and context menus require separate guarded captures.",
+                "This in-app tour deletes only the currently requested plan's expected PNG files before capture."
+            ]);
+
+        var path = Path.Combine(outputDir, "ribbon_screenshot_tour_manifest.json");
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.RibbonScreenshotTourManifest);
+    }
+
+    private sealed record RibbonScreenshotTourManifest(
+        string Tool,
+        string OutputDirectory,
+        string CatalogEvidenceTarget,
+        bool BurstMode,
+        double CaptureLogicalHeight,
+        int PlannedCaptureCount,
+        IReadOnlyList<string> Tabs,
+        IReadOnlyList<RibbonScreenshotTourManifestWidth> Widths,
+        IReadOnlyList<RibbonScreenshotTourManifestPhase> Phases,
+        IReadOnlyList<RibbonScreenshotTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record RibbonScreenshotTourManifestWidth(string Label, double? WindowWidth, string EvidencePurpose);
+
+    private sealed record RibbonScreenshotTourManifestPhase(string Label, string? FileNameSuffix);
+
+    private sealed record RibbonScreenshotTourManifestCapture(string Tab, string Width, string Phase, string FileName);
+
+    [JsonSourceGenerationOptions(WriteIndented = true)]
+    [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
+    private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.
     private void TryStartAccentBarVisualTour()

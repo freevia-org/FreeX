@@ -6,13 +6,14 @@ namespace FreeX.App.Host;
 
 internal static class RibbonAdaptiveStateApplicator
 {
-    public static void ApplyStates(
+    public static int ApplyStates(
         IReadOnlyList<MainWindow.RibbonCompactGroupSnapshot> groupSnapshots,
         IReadOnlyList<Button> collapsedButtons,
         IReadOnlyList<RibbonAdaptiveGroupState> plannedStates,
         IReadOnlyList<RibbonAdaptiveGroupState>? previousStates,
         double availableWidth = 0)
     {
+        var changedGroupCount = 0;
         for (var i = 0; i < groupSnapshots.Count; i++)
         {
             if (previousStates is not null &&
@@ -23,6 +24,7 @@ internal static class RibbonAdaptiveStateApplicator
                 continue;
             }
 
+            changedGroupCount++;
             collapsedButtons[i].Visibility = Visibility.Collapsed;
             groupSnapshots[i].Group.Visibility = Visibility.Visible;
 
@@ -47,6 +49,8 @@ internal static class RibbonAdaptiveStateApplicator
                     break;
             }
         }
+
+        return changedGroupCount;
     }
 
     public static void SetCollapsedButtonFootprint(IReadOnlyList<Button> collapsedButtons, double availableWidth)

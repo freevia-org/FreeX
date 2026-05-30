@@ -18,8 +18,8 @@ public partial class MainWindow
 
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Insert Picture",
-            Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*",
+            Title = UiText.Get("MainWindowDialog_InsertPictureTitle"),
+            Filter = UiText.Get("MainWindowDialog_ImageFilesFilter"),
             CheckFileExists = true,
             Multiselect = false
         };
@@ -32,8 +32,11 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            ShowOwnedMessage($"Could not read picture file:\n{ex.Message}",
-                "Insert Picture", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ShowOwnedMessage(
+                UiText.Format("MainWindowMessage_InsertPictureReadFailed", ex.Message),
+                UiText.Get("MainWindowMessage_InsertPictureTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
             return;
         }
 
@@ -56,7 +59,11 @@ public partial class MainWindow
         var picture = GetTargetPicture(_currentSheetId);
         if (picture is null)
         {
-            ShowOwnedMessage("No picture found on this sheet.", "Picture Size", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoPictureFoundOnSheet"),
+                UiText.Get("MainWindowMessage_PictureSizeTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
@@ -77,7 +84,7 @@ public partial class MainWindow
         FormatPictureDialogResult result)
     {
         if (picture is null)
-            return new FailedWorkbookCommand("Picture was not found.");
+            return new FailedWorkbookCommand(UiText.Get("MainWindowMessage_PictureWasNotFound"));
 
         var commands = new List<IWorkbookCommand>
         {
@@ -105,11 +112,15 @@ public partial class MainWindow
         var picture = GetTargetPicture(_currentSheetId);
         if (picture is null)
         {
-            ShowOwnedMessage("No picture found on this sheet.", "Rotate Picture", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoPictureFoundOnSheet"),
+                UiText.Get("MainWindowMessage_RotatePictureTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
-        var dialog = new RotationDialog(picture.RotationDegrees, "Rotate Picture") { Owner = this };
+        var dialog = new RotationDialog(picture.RotationDegrees, UiText.Get("MainWindowMessage_RotatePictureTitle")) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -128,13 +139,21 @@ public partial class MainWindow
         var picture = GetTargetPicture(_currentSheetId);
         if (picture is null)
         {
-            ShowOwnedMessage("No picture found on this sheet.", "Crop Picture", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoPictureFoundOnSheet"),
+                UiText.Get("MainWindowMessage_CropPictureTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
         if (picture.Kind != PictureKind.Image)
         {
-            ShowOwnedMessage("Only inserted image pictures can be cropped.", "Crop Picture", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_CropRequiresInsertedImage"),
+                UiText.Get("MainWindowMessage_CropPictureTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
@@ -163,13 +182,21 @@ public partial class MainWindow
         var picture = GetTargetPicture(_currentSheetId);
         if (picture is null)
         {
-            ShowOwnedMessage("No picture found on this sheet.", "Reset Crop", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoPictureFoundOnSheet"),
+                UiText.Get("MainWindowMessage_ResetCropTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
         if (picture.Kind != PictureKind.Image)
         {
-            ShowOwnedMessage("Only inserted image pictures can be cropped.", "Reset Crop", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_CropRequiresInsertedImage"),
+                UiText.Get("MainWindowMessage_ResetCropTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
@@ -209,7 +236,10 @@ public partial class MainWindow
     private void InsertTextBox()
     {
         var anchor = SheetGrid.SelectedRange?.Start ?? new CellAddress(_currentSheetId, 1, 1);
-        var dialog = new TextEntryDialog("Insert Text Box", "Text:", "") { Owner = this };
+        var dialog = new TextEntryDialog(
+            UiText.Get("MainWindowDialog_InsertTextBoxTitle"),
+            UiText.Get("MainWindowDialog_TextEntryLabel"),
+            "") { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -248,8 +278,11 @@ public partial class MainWindow
         var currentShape = GetTargetDrawingShape(_currentSheetId);
         if (currentShape is null)
         {
-            ShowOwnedMessage("No drawing shapes are available on this sheet.",
-                "Draw", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoDrawingShapesOnSheet"),
+                UiText.Get("MainWindowMessage_DrawTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
@@ -275,11 +308,15 @@ public partial class MainWindow
         var target = GetTargetDrawingObject(_currentSheetId);
         if (target is null)
         {
-            ShowOwnedMessage("No drawing object found on this sheet.", "Object Size", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoDrawingObjectOnSheet"),
+                UiText.Get("MainWindowMessage_ObjectSizeTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
-        var dialog = new ObjectSizeDialog(target.Width, target.Height, "Object Size") { Owner = this };
+        var dialog = new ObjectSizeDialog(target.Width, target.Height, UiText.Get("MainWindowMessage_ObjectSizeTitle")) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -303,11 +340,15 @@ public partial class MainWindow
         var target = GetTargetDrawingObject(_currentSheetId);
         if (target is null)
         {
-            ShowOwnedMessage("No drawing object found on this sheet.", "Rotate Object", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoDrawingObjectOnSheet"),
+                UiText.Get("MainWindowMessage_RotateObjectTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
-        var dialog = new RotationDialog(target.RotationDegrees, "Rotate Object") { Owner = this };
+        var dialog = new RotationDialog(target.RotationDegrees, UiText.Get("MainWindowMessage_RotateObjectTitle")) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -331,15 +372,17 @@ public partial class MainWindow
         var target = GetTargetDrawingObject(_currentSheetId);
         if (target is null)
         {
-            ShowOwnedMessage("No drawing object found on this sheet.",
-                isFill ? "Object Fill" : "Object Outline",
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoDrawingObjectOnSheet"),
+                UiText.Get(isFill ? "MainWindowMessage_ObjectFillTitle" : "MainWindowMessage_ObjectOutlineTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
         }
 
         var initial = isFill ? target.FillColor : target.OutlineColor;
-        if (!TryShowColorPicker(isFill ? "Object Fill" : "Object Outline", initial, allowNoColor: false, out var selectedColor)
+        var title = UiText.Get(isFill ? "MainWindowMessage_ObjectFillTitle" : "MainWindowMessage_ObjectOutlineTitle");
+        if (!TryShowColorPicker(title, initial, allowNoColor: false, out var selectedColor)
             || selectedColor is not { } color)
             return;
 
@@ -375,7 +418,11 @@ public partial class MainWindow
         var shape = GetTargetDrawingShape(_currentSheetId);
         if (shape is null)
         {
-            ShowOwnedMessage("No drawing shape found on this sheet.", "Shape Gradient", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoDrawingShapeOnSheet"),
+                UiText.Get("MainWindowMessage_ShapeGradientTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
@@ -401,7 +448,11 @@ public partial class MainWindow
         var shape = GetTargetDrawingShape(_currentSheetId);
         if (shape is null)
         {
-            ShowOwnedMessage("No drawing shape found on this sheet.", "Shape Effects", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoDrawingShapeOnSheet"),
+                UiText.Get("MainWindowMessage_ShapeEffectsTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 
@@ -425,7 +476,11 @@ public partial class MainWindow
         var items = SelectionPanePlanner.BuildItems(sheet);
         if (items.Count == 0)
         {
-            ShowOwnedMessage("No objects are available on this sheet.", "Selection Pane", MessageBoxButton.OK, MessageBoxImage.Information);
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_NoObjectsOnSheet"),
+                UiText.Get("MainWindowMessage_SelectionPaneTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
             return;
         }
 

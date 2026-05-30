@@ -1,15 +1,16 @@
 <Window x:Class="FreeX.App.Host.PivotLabelFilterDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Label Filter"
+        xmlns:local="clr-namespace:FreeX.App.Host"
+        Title="{local:Loc Key=PivotLabelFilter_LabelFilter}"
         Width="380"
         Height="260"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
     <DockPanel Margin="14">
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <Button Content="_OK" Width="74" Margin="0,0,8,0" IsDefault="True" Click="OkButton_Click"/>
-            <Button Content="_Cancel" Width="74" IsCancel="True"/>
+            <Button Content="{local:Loc Key=Common_Ok}" Width="74" Margin="0,0,8,0" IsDefault="True" Click="OkButton_Click"/>
+            <Button Content="{local:Loc Key=Common_Cancel}" Width="74" IsCancel="True"/>
         </StackPanel>
         <Grid>
             <Grid.ColumnDefinitions>
@@ -22,22 +23,22 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
-            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Show items for which the label" Margin="0,0,0,10"/>
-            <Label Grid.Row="1" Grid.Column="0" Content="_Operator:" Target="{Binding ElementName=LabelFilterKindBox}" VerticalAlignment="Center" Margin="0,0,8,8"/>
+            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="{local:Loc Key=PivotLabelFilter_ShowItemsForWhichTheLabel}" Margin="0,0,0,10"/>
+            <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=PivotLabelFilter_Operator}" Target="{Binding ElementName=LabelFilterKindBox}" VerticalAlignment="Center" Margin="0,0,8,8"/>
             <ComboBox x:Name="LabelFilterKindBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" SelectionChanged="LabelFilterKindBox_SelectionChanged"
-                      AutomationProperties.Name="Label filter operator"
+                      AutomationProperties.Name="{local:Loc Key=PivotLabelFilter_LabelFilterOperator}"
                       AutomationProperties.AutomationId="PivotLabelFilterOperatorBox"
-                      AutomationProperties.HelpText="Choose the label comparison operator."/>
-            <Label Grid.Row="2" Grid.Column="0" Content="_Value:" Target="{Binding ElementName=LabelFilterValueBox}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                      AutomationProperties.HelpText="{local:Loc Key=PivotLabelFilter_OperatorHelpText}"/>
+            <Label Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=PivotLabelFilter_Value}" Target="{Binding ElementName=LabelFilterValueBox}" VerticalAlignment="Center" Margin="0,0,8,0"/>
             <TextBox x:Name="LabelFilterValueBox" Grid.Row="2" Grid.Column="1"
-                     AutomationProperties.Name="Label filter value"
+                     AutomationProperties.Name="{local:Loc Key=PivotLabelFilter_LabelFilterValue}"
                      AutomationProperties.AutomationId="PivotLabelFilterValueBox"
-                     AutomationProperties.HelpText="Enter the label value to compare."/>
-            <Label x:Name="LabelFilterValue2Label" Grid.Row="3" Grid.Column="0" Content="_And:" Target="{Binding ElementName=LabelFilterValue2Box}" VerticalAlignment="Center" Margin="0,8,8,0"/>
+                     AutomationProperties.HelpText="{local:Loc Key=PivotLabelFilter_ValueHelpText}"/>
+            <Label x:Name="LabelFilterValue2Label" Grid.Row="3" Grid.Column="0" Content="{local:Loc Key=PivotLabelFilter_And}" Target="{Binding ElementName=LabelFilterValue2Box}" VerticalAlignment="Center" Margin="0,8,8,0"/>
             <TextBox x:Name="LabelFilterValue2Box" Grid.Row="3" Grid.Column="1" Margin="0,8,0,0"
-                     AutomationProperties.Name="Ending label filter value"
+                     AutomationProperties.Name="{local:Loc Key=PivotLabelFilter_EndingLabelFilterValue}"
                      AutomationProperties.AutomationId="PivotLabelFilterEndingValueBox"
-                     AutomationProperties.HelpText="Enter the ending label value for between filters."/>
+                     AutomationProperties.HelpText="{local:Loc Key=PivotLabelFilter_EndingValueHelpText}"/>
         </Grid>
     </DockPanel>
 </Window>

@@ -8,6 +8,7 @@ internal static class RibbonAdaptiveTabProfiles
     [
         new(
             Name: "Home",
+            CatalogId: "HomeTab",
             RequiredGroups: ["Clipboard", "Font", "Alignment", "Number"],
             Defaults: [],
             Breakpoints:
@@ -18,6 +19,7 @@ internal static class RibbonAdaptiveTabProfiles
             ]),
         new(
             Name: "Insert",
+            CatalogId: "InsertTab",
             RequiredGroups: ["Tables", "Illustrations"],
             Defaults:
             [
@@ -49,6 +51,7 @@ internal static class RibbonAdaptiveTabProfiles
             RequiresMeasuredCorrection: true),
         new(
             Name: "Formulas",
+            CatalogId: "FormulasTab",
             RequiredGroups: ["Function Library", "Formula Auditing"],
             Defaults:
             [
@@ -57,11 +60,13 @@ internal static class RibbonAdaptiveTabProfiles
             Breakpoints:
             [
                 Rule(760, collapseAll: true),
+                Rule(1120, collapseFromIndex: 1),
                 Rule(1320, collapseFromIndex: 2)
             ],
             RequiresMeasuredCorrection: true),
         new(
             Name: "Data",
+            CatalogId: "DataTab",
             RequiredGroups: ["Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools"],
             Defaults:
             [
@@ -77,7 +82,7 @@ internal static class RibbonAdaptiveTabProfiles
                     states: [State("Sort & Filter", RibbonAdaptiveGroupState.IconOnly)],
                     collapseGroups: ["Queries & Connections", "Outline"]),
                 Rule(
-                    1320,
+                    1465,
                     collapseGroups: ["Outline"])
             ],
             RuntimeVisibility:
@@ -94,6 +99,7 @@ internal static class RibbonAdaptiveTabProfiles
             RequiresMeasuredCorrection: true),
         new(
             Name: "Page Layout",
+            CatalogId: "PageLayoutTab",
             RequiredGroups: ["Themes", "Page Setup"],
             Defaults:
             [
@@ -110,6 +116,7 @@ internal static class RibbonAdaptiveTabProfiles
             ]),
         new(
             Name: "Review",
+            CatalogId: "ReviewTab",
             RequiredGroups: ["Proofing", "Accessibility", "Comments"],
             Defaults: [],
             Breakpoints:
@@ -120,6 +127,7 @@ internal static class RibbonAdaptiveTabProfiles
             DisablePriorityExpansion: true),
         new(
             Name: "View",
+            CatalogId: "ViewTab",
             RequiredGroups: ["Workbook Views", "Show", "Window"],
             Defaults:
             [
@@ -135,17 +143,19 @@ internal static class RibbonAdaptiveTabProfiles
             RequiresMeasuredCorrection: true),
         new(
             Name: "Draw",
+            CatalogId: "DrawTab",
             RequiredGroups: ["Tools", "Pens", "Convert"],
             Defaults: [],
             Breakpoints:
             [
                 Rule(760, collapseFromIndex: 0),
-                Rule(1120, collapseFromIndex: 3),
+                Rule(1120, collapseFromIndex: 2),
                 Rule(1320, collapseFromIndex: 3)
             ],
             RequiresMeasuredCorrection: true),
         new(
             Name: "Tiny",
+            CatalogId: "HelpTab",
             RequiredGroups: [],
             Defaults: [],
             Breakpoints: [],
@@ -159,20 +169,52 @@ internal static class RibbonAdaptiveTabProfiles
         string? selectedTabHeader = null)
     {
         var states = plannedStates.ToArray();
+        ApplyBreakpointOverridesInPlace(availableWidth, groupNames, states, selectedTabHeader);
+        return states;
+    }
+
+    public static void ApplyBreakpointOverridesInPlace(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states,
+        string? selectedTabHeader = null) =>
+        ApplyBreakpointOverridesInPlace(
+            availableWidth,
+            groupNames,
+            states,
+            FindProfile(groupNames, selectedTabHeader));
+
+    public static void ApplyPlanOverridesInPlace(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states,
+        string? selectedTabHeader = null)
+    {
+        var profile = FindProfile(groupNames, selectedTabHeader);
+        ApplyBreakpointOverridesInPlace(availableWidth, groupNames, states, profile);
+        profile?.ApplyRuntimeStateOverrides(availableWidth, groupNames, states);
+        profile?.ApplyRuntimeVisibilityOverrides(availableWidth, groupNames, states);
+    }
+
+    private static void ApplyBreakpointOverridesInPlace(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states,
+        RibbonAdaptiveTabProfile? profile)
+    {
         if (availableWidth <= VeryNarrowWidth)
         {
             CollapseAll(states);
-            return states;
+            return;
         }
 
-        if (FindProfile(groupNames, selectedTabHeader) is { } profile)
+        if (profile is not null)
         {
             profile.Apply(availableWidth, groupNames, states);
-            return states;
+            return;
         }
 
         ApplyGenericFallback(availableWidth, states);
-        return states;
     }
 
     public static IReadOnlyList<RibbonAdaptiveRuntimeStateOverride> GetRuntimeStateOverrides(
@@ -186,6 +228,26 @@ internal static class RibbonAdaptiveTabProfiles
         IReadOnlyList<string> groupNames,
         string? selectedTabHeader = null) =>
         FindProfile(groupNames, selectedTabHeader)?.RuntimeVisibilityFor(availableWidth, groupNames) ?? [];
+
+    public static void ApplyRuntimeStateOverridesInPlace(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states,
+        string? selectedTabHeader = null)
+    {
+        var profile = FindProfile(groupNames, selectedTabHeader);
+        profile?.ApplyRuntimeStateOverrides(availableWidth, groupNames, states);
+    }
+
+    public static void ApplyRuntimeVisibilityOverridesInPlace(
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states,
+        string? selectedTabHeader = null)
+    {
+        var profile = FindProfile(groupNames, selectedTabHeader);
+        profile?.ApplyRuntimeVisibilityOverrides(availableWidth, groupNames, states);
+    }
 
     public static IReadOnlySet<int> GetFallbackProtectedGroupIndexes(
         IReadOnlyList<string> groupNames,
@@ -268,10 +330,14 @@ internal static class RibbonAdaptiveTabProfiles
         foreach (var threshold in RibbonCollapsedGroupPresentationPlanner.BreakpointThresholds)
             thresholds.Add(threshold);
 
-        return thresholds
-            .Where(width => width > 0 && !double.IsInfinity(width))
-            .OrderBy(width => width)
-            .ToList();
+        var positiveThresholds = new List<double>(thresholds.Count);
+        foreach (var threshold in thresholds)
+        {
+            if (threshold > 0 && !double.IsInfinity(threshold))
+                positiveThresholds.Add(threshold);
+        }
+
+        return positiveThresholds;
     }
 
     internal static string? ResolveProfileName(
@@ -391,8 +457,59 @@ internal static class RibbonAdaptiveTabProfiles
             states[i] = RibbonAdaptiveGroupState.Collapsed;
     }
 
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> GroupCatalogIds =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+        {
+            ["Clipboard"] = ["HomeClipboardGroup"],
+            ["Font"] = ["HomeFontGroup"],
+            ["Alignment"] = ["HomeAlignmentGroup"],
+            ["Number"] = ["HomeNumberGroup"],
+            ["Styles"] = ["HomeStylesGroup"],
+            ["Cells"] = ["HomeCellsGroup"],
+            ["Editing"] = ["HomeEditingGroup"],
+            ["Tables"] = ["InsertTablesGroup"],
+            ["Illustrations"] = ["InsertIllustrationsGroup"],
+            ["Charts"] = ["InsertChartsGroup"],
+            ["Sparklines"] = ["InsertSparklinesGroup"],
+            ["Filters"] = ["InsertFiltersGroup"],
+            ["Links"] = ["InsertLinksGroup"],
+            ["Comments"] = ["InsertCommentsGroup", "ReviewCommentsGroup"],
+            ["Text"] = ["InsertTextGroup"],
+            ["Symbols"] = ["InsertSymbolsGroup"],
+            ["Tools"] = ["DrawToolsGroup", "PivotTableAnalyzeToolsGroup"],
+            ["Pens"] = ["DrawPensGroup"],
+            ["Convert"] = ["DrawConvertGroup"],
+            ["Arrange"] = ["DrawArrangeGroup", "PageLayoutArrangeGroup"],
+            ["Format"] = ["DrawFormatGroup"],
+            ["Themes"] = ["PageLayoutThemesGroup"],
+            ["Page Setup"] = ["PageLayoutPageSetupGroup"],
+            ["Scale to Fit"] = ["PageLayoutScaleToFitGroup"],
+            ["Sheet Options"] = ["PageLayoutSheetOptionsGroup"],
+            ["Function Library"] = ["FormulasFunctionLibraryGroup"],
+            ["Defined Names"] = ["FormulasDefinedNamesGroup"],
+            ["Formula Auditing"] = ["FormulasFormulaAuditingGroup"],
+            ["Calculation"] = ["FormulasCalculationGroup"],
+            ["Get & Transform Data"] = ["DataGetTransformGroup"],
+            ["Queries & Connections"] = ["DataQueriesConnectionsGroup"],
+            ["Sort & Filter"] = ["DataSortFilterGroup"],
+            ["Data Tools"] = ["DataToolsGroup"],
+            ["Forecast"] = ["DataForecastGroup"],
+            ["Outline"] = ["DataOutlineGroup"],
+            ["Proofing"] = ["ReviewProofingGroup"],
+            ["Accessibility"] = ["ReviewAccessibilityGroup"],
+            ["Notes"] = ["ReviewNotesGroup"],
+            ["Protect"] = ["ReviewProtectGroup"],
+            ["Workbook Views"] = ["ViewWorkbookViewsGroup"],
+            ["Show"] = ["ViewShowGroup", "PivotTableAnalyzeShowGroup"],
+            ["Zoom"] = ["ViewZoomGroup"],
+            ["Window"] = ["ViewWindowGroup"],
+            ["Help"] = ["HelpHelpGroup"],
+            ["PivotTable"] = ["PivotTableAnalyzePivotTableGroup"],
+            ["Layout"] = ["PivotTableDesignLayoutGroup"]
+        };
+
     private static bool ContainsGroup(IReadOnlyList<string> groupNames, string groupName) =>
-        groupNames.Contains(groupName, StringComparer.Ordinal);
+        TryFindGroupIndex(groupNames, groupName, out _);
 
     private static bool TryFindGroupIndex(
         IReadOnlyList<string> groupNames,
@@ -401,7 +518,7 @@ internal static class RibbonAdaptiveTabProfiles
     {
         for (var i = 0; i < groupNames.Count; i++)
         {
-            if (string.Equals(groupNames[i], groupName, StringComparison.Ordinal))
+            if (IsGroupKeyMatch(groupNames[i], groupName))
             {
                 index = i;
                 return true;
@@ -412,11 +529,17 @@ internal static class RibbonAdaptiveTabProfiles
         return false;
     }
 
+    private static bool IsGroupKeyMatch(string candidate, string profileGroupName) =>
+        string.Equals(candidate, profileGroupName, StringComparison.Ordinal) ||
+        (GroupCatalogIds.TryGetValue(profileGroupName, out var catalogIds) &&
+            catalogIds.Contains(candidate, StringComparer.Ordinal));
+
     private sealed record RibbonAdaptiveTabProfile(
         string Name,
         IReadOnlyList<string> RequiredGroups,
         IReadOnlyList<RibbonAdaptiveGroupStateAssignment> Defaults,
         IReadOnlyList<RibbonAdaptiveBreakpointRule> Breakpoints,
+        string? CatalogId = null,
         IReadOnlyList<RibbonAdaptiveRuntimeStateOverrideRule>? RuntimeStates = null,
         IReadOnlyList<RibbonAdaptiveRuntimeStateOverrideRule>? RuntimeVisibility = null,
         IReadOnlyList<RibbonAdaptiveProtectedGroupsRule>? ProtectedGroups = null,
@@ -425,7 +548,8 @@ internal static class RibbonAdaptiveTabProfiles
         IReadOnlyList<string>? TinyGroupNames = null)
     {
         public bool MatchesTabHeader(string selectedTabHeader) =>
-            string.Equals(Name, selectedTabHeader, StringComparison.Ordinal);
+            string.Equals(Name, selectedTabHeader, StringComparison.Ordinal) ||
+            string.Equals(CatalogId, selectedTabHeader, StringComparison.Ordinal);
 
         public bool MatchesGroups(IReadOnlyList<string> groupNames)
         {
@@ -461,6 +585,18 @@ internal static class RibbonAdaptiveTabProfiles
             IReadOnlyList<string> groupNames) =>
             RuntimeOverridesFor(RuntimeVisibility ?? [], availableWidth, groupNames);
 
+        public void ApplyRuntimeStateOverrides(
+            double availableWidth,
+            IReadOnlyList<string> groupNames,
+            RibbonAdaptiveGroupState[] states) =>
+            ApplyRuntimeOverrides(RuntimeStates ?? [], availableWidth, groupNames, states);
+
+        public void ApplyRuntimeVisibilityOverrides(
+            double availableWidth,
+            IReadOnlyList<string> groupNames,
+            RibbonAdaptiveGroupState[] states) =>
+            ApplyRuntimeOverrides(RuntimeVisibility ?? [], availableWidth, groupNames, states);
+
         public IReadOnlyList<string> ProtectedGroupsFor(double availableWidth) =>
             (ProtectedGroups ?? [])
                 .FirstOrDefault(rule => availableWidth <= rule.MaxWidth)
@@ -491,6 +627,26 @@ internal static class RibbonAdaptiveTabProfiles
         }
 
         return decisions;
+    }
+
+    private static void ApplyRuntimeOverrides(
+        IReadOnlyList<RibbonAdaptiveRuntimeStateOverrideRule> rules,
+        double availableWidth,
+        IReadOnlyList<string> groupNames,
+        RibbonAdaptiveGroupState[] states)
+    {
+        foreach (var rule in rules)
+        {
+            if (availableWidth > rule.MaxWidth)
+                continue;
+
+            if (TryFindGroupIndex(groupNames, rule.GroupName, out var index) &&
+                index >= 0 &&
+                index < states.Length)
+            {
+                states[index] = rule.State;
+            }
+        }
     }
 
     private sealed record RibbonAdaptiveBreakpointRule(

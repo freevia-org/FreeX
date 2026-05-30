@@ -15,7 +15,7 @@ public sealed class SaveWorkbookWriter
         Workbook workbook,
         IProgress<SaveProgressUpdate> progress)
     {
-        progress.Report(new SaveProgressUpdate("Saving workbook", FormatSavingFileDetail("serializing", TimeSpan.Zero), 1));
+        progress.Report(new SaveProgressUpdate(ProgressTitle(), FormatSavingFileDetail("serializing", TimeSpan.Zero), 1));
         var directory = Path.GetDirectoryName(path);
         var tempPath = Path.Combine(
             string.IsNullOrWhiteSpace(directory) ? Path.GetTempPath() : directory,
@@ -50,7 +50,7 @@ public sealed class SaveWorkbookWriter
                 File.Delete(tempPath);
         }
 
-        progress.Report(new SaveProgressUpdate("Saving workbook", FormatSavingFileDetail("done", TimeSpan.Zero), 100));
+        progress.Report(new SaveProgressUpdate(ProgressTitle(), FormatSavingFileDetail("done", TimeSpan.Zero), 100));
     }
 
     private static void ReplaceTargetFile(string tempPath, string path)
@@ -69,7 +69,7 @@ public sealed class SaveWorkbookWriter
         TimeSpan expectedDuration,
         Func<T> work)
     {
-        progress.Report(new SaveProgressUpdate("Saving workbook", FormatSavingFileDetail(detail, TimeSpan.Zero), startPercent));
+        progress.Report(new SaveProgressUpdate(ProgressTitle(), FormatSavingFileDetail(detail, TimeSpan.Zero), startPercent));
         using var cancellation = new CancellationTokenSource();
         var progressTask = ReportStageProgressAsync(
             progress,
@@ -88,7 +88,7 @@ public sealed class SaveWorkbookWriter
             cancellation.Cancel();
             try { await progressTask; }
             catch (OperationCanceledException) { }
-            progress.Report(new SaveProgressUpdate("Saving workbook", FormatSavingFileDetail(detail, TimeSpan.Zero), endPercent));
+            progress.Report(new SaveProgressUpdate(ProgressTitle(), FormatSavingFileDetail(detail, TimeSpan.Zero), endPercent));
         }
     }
 
@@ -105,31 +105,34 @@ public sealed class SaveWorkbookWriter
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
             var percent = OpenWorkbookProgressPlanner.CalculateStageProgress(startPercent, endPercent, stopwatch.Elapsed, expectedDuration);
-            progress.Report(new SaveProgressUpdate("Saving workbook", FormatSavingFileDetail(detail, stopwatch.Elapsed), percent));
+            progress.Report(new SaveProgressUpdate(ProgressTitle(), FormatSavingFileDetail(detail, stopwatch.Elapsed), percent));
         }
     }
+
+    private static string ProgressTitle() => UiText.Get("Progress_SavingWorkbook");
 
     private static string FormatSavingFileDetail(string phase, TimeSpan elapsed)
     {
         var normalizedPhase = string.IsNullOrWhiteSpace(phase)
-            ? "working"
+            ? string.Empty
             : phase.Trim();
         string[] messages = normalizedPhase.ToLowerInvariant() switch
         {
             "serializing" =>
             [
-                "Saving file (serializing)",
-                "Saving file (building workbook parts)",
-                "Saving file (packaging sheets)"
+                UiText.Get("Progress_SavingFileSerializing"),
+                UiText.Get("Progress_SavingFileBuildingWorkbookParts"),
+                UiText.Get("Progress_SavingFilePackagingSheets")
             ],
             "writing" =>
             [
-                "Saving file (writing)",
-                "Saving file (writing bytes)",
-                "Saving file (flushing package)"
+                UiText.Get("Progress_SavingFileWriting"),
+                UiText.Get("Progress_SavingFileWritingBytes"),
+                UiText.Get("Progress_SavingFileFlushingPackage")
             ],
-            "done" => ["Saving file (done)"],
-            _ => [$"Saving file ({normalizedPhase})"]
+            "preparing" => [UiText.Get("Progress_SavingFilePreparing")],
+            "done" => [UiText.Get("Progress_SavingFileDone")],
+            _ => [UiText.Get("Progress_SavingFileWorking")]
         };
 
         var index = (int)Math.Floor(Math.Max(0, elapsed.TotalSeconds) / 3.0) % messages.Length;

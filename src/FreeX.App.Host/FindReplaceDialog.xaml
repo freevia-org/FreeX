@@ -1,7 +1,8 @@
 <Window x:Class="FreeX.App.Host.FindReplaceDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Find &amp; Replace"
+        xmlns:local="clr-namespace:FreeX.App.Host"
+        Title="{local:Loc Key=FindReplace_FindAndReplace}"
         Width="720" Height="430"
         MinWidth="520" MinHeight="360"
         WindowStartupLocation="CenterOwner"
@@ -17,7 +18,7 @@
         </Grid.RowDefinitions>
 
         <TabControl x:Name="FindReplaceTabs" Grid.Row="0" Margin="0,0,0,10" SelectionChanged="FindReplaceTabs_SelectionChanged">
-            <TabItem x:Name="FindTab" Header="_Find">
+            <TabItem x:Name="FindTab" Header="{local:Loc Key=FindReplace_Find}">
                 <Grid Margin="10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="88"/>
@@ -26,15 +27,15 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Label Content="_Find what:" Target="{Binding ElementName=FindBox}" VerticalAlignment="Center"/>
+                    <Label Content="{local:Loc Key=FindReplace_FindWhat}" Target="{Binding ElementName=FindBox}" VerticalAlignment="Center"/>
                     <TextBox x:Name="FindBox" Grid.Column="1" MinWidth="260" KeyDown="FindBox_KeyDown" TextChanged="FindBox_TextChanged"/>
-                    <Button x:Name="FindFormatButton" Content="For_mat..." Grid.Column="2" Width="84" Margin="8,0,0,0" Click="FindFormatButton_Click"/>
-                    <Button x:Name="FindClearFormatButton" Content="_Clear" Grid.Column="3" Width="52" Margin="6,0,0,0" Visibility="Collapsed" Click="FindClearFormatButton_Click"/>
-                    <Button x:Name="FindChooseFormatFromCellButton" Content="Choose From _Cell..." Grid.Column="4" Width="136" Margin="6,0,0,0" Click="ChooseFindFormatFromCellButton_Click"/>
+                    <Button x:Name="FindFormatButton" Content="{local:Loc Key=FindReplace_Format}" Grid.Column="2" Width="84" Margin="8,0,0,0" Click="FindFormatButton_Click"/>
+                    <Button x:Name="FindClearFormatButton" Content="{local:Loc Key=FindReplace_Clear}" Grid.Column="3" Width="52" Margin="6,0,0,0" Visibility="Collapsed" Click="FindClearFormatButton_Click"/>
+                    <Button x:Name="FindChooseFormatFromCellButton" Content="{local:Loc Key=FindReplace_ChooseFromCell}" Grid.Column="4" Width="136" Margin="6,0,0,0" Click="ChooseFindFormatFromCellButton_Click"/>
                 </Grid>
             </TabItem>
 
-            <TabItem x:Name="ReplaceTab" Header="_Replace">
+            <TabItem x:Name="ReplaceTab" Header="{local:Loc Key=FindReplace_Replace}">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -49,11 +50,11 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Label Content="_Find what:" Target="{Binding ElementName=ReplaceFindBox}" VerticalAlignment="Center"/>
+                        <Label Content="{local:Loc Key=FindReplace_FindWhat}" Target="{Binding ElementName=ReplaceFindBox}" VerticalAlignment="Center"/>
                         <TextBox x:Name="ReplaceFindBox" Grid.Column="1" MinWidth="260" KeyDown="FindBox_KeyDown" TextChanged="FindBox_TextChanged"/>
-                        <Button x:Name="ReplaceFindFormatButton" Content="For_mat..." Grid.Column="2" Width="84" Margin="8,0,0,0" Click="FindFormatButton_Click"/>
-                        <Button x:Name="ReplaceFindClearFormatButton" Content="_Clear" Grid.Column="3" Width="52" Margin="6,0,0,0" Visibility="Collapsed" Click="FindClearFormatButton_Click"/>
-                        <Button x:Name="ReplaceFindChooseFormatFromCellButton" Content="Choose From _Cell..." Grid.Column="4" Width="136" Margin="6,0,0,0" Click="ChooseFindFormatFromCellButton_Click"/>
+                        <Button x:Name="ReplaceFindFormatButton" Content="{local:Loc Key=FindReplace_Format}" Grid.Column="2" Width="84" Margin="8,0,0,0" Click="FindFormatButton_Click"/>
+                        <Button x:Name="ReplaceFindClearFormatButton" Content="{local:Loc Key=FindReplace_Clear}" Grid.Column="3" Width="52" Margin="6,0,0,0" Visibility="Collapsed" Click="FindClearFormatButton_Click"/>
+                        <Button x:Name="ReplaceFindChooseFormatFromCellButton" Content="{local:Loc Key=FindReplace_ChooseFromCell}" Grid.Column="4" Width="136" Margin="6,0,0,0" Click="ChooseFindFormatFromCellButton_Click"/>
                     </Grid>
 
                     <Grid x:Name="ReplaceRow" Grid.Row="1" Margin="0,8,0,0">
@@ -64,11 +65,11 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Label Content="_Replace with:" Target="{Binding ElementName=ReplaceBox}" VerticalAlignment="Center"/>
+                        <Label Content="{local:Loc Key=FindReplace_ReplaceWith}" Target="{Binding ElementName=ReplaceBox}" VerticalAlignment="Center"/>
                         <TextBox x:Name="ReplaceBox" Grid.Column="1" MinWidth="260"/>
-                        <Button x:Name="ReplaceWithFormatButton" Grid.Column="2" Content="For_mat..." Width="84" Margin="8,0,0,0" Click="ReplaceWithFormatButton_Click"/>
-                        <Button x:Name="ReplaceWithClearFormatButton" Grid.Column="3" Content="_Clear" Width="52" Margin="6,0,0,0" Visibility="Collapsed" Click="ReplaceWithClearFormatButton_Click"/>
-                        <Button x:Name="ReplaceWithChooseFormatFromCellButton" Grid.Column="4" Content="Choose From _Cell..." Width="136" Margin="6,0,0,0" Click="ChooseReplaceWithFormatFromCellButton_Click"/>
+                        <Button x:Name="ReplaceWithFormatButton" Grid.Column="2" Content="{local:Loc Key=FindReplace_Format}" Width="84" Margin="8,0,0,0" Click="ReplaceWithFormatButton_Click"/>
+                        <Button x:Name="ReplaceWithClearFormatButton" Grid.Column="3" Content="{local:Loc Key=FindReplace_Clear}" Width="52" Margin="6,0,0,0" Visibility="Collapsed" Click="ReplaceWithClearFormatButton_Click"/>
+                        <Button x:Name="ReplaceWithChooseFormatFromCellButton" Grid.Column="4" Content="{local:Loc Key=FindReplace_ChooseFromCell}" Width="136" Margin="6,0,0,0" Click="ChooseReplaceWithFormatFromCellButton_Click"/>
                     </Grid>
                 </Grid>
             </TabItem>
@@ -76,7 +77,7 @@
 
         <Expander x:Name="OptionsExpander"
                   Grid.Row="1"
-                  Header="_Options &gt;&gt;"
+                  Header="{local:Loc Key=FindReplace_Options}"
                   IsExpanded="False"
                   Expanded="OptionsExpander_Expanded"
                   Collapsed="OptionsExpander_Collapsed"
@@ -94,28 +95,28 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <Label Content="_Within:" Target="{Binding ElementName=WithinCombo}" VerticalAlignment="Center"/>
+                <Label Content="{local:Loc Key=FindReplace_Within}" Target="{Binding ElementName=WithinCombo}" VerticalAlignment="Center"/>
                 <ComboBox x:Name="WithinCombo" Grid.Column="1" SelectedIndex="0" Margin="0,0,12,6">
-                    <ComboBoxItem Content="Sheet"/>
-                    <ComboBoxItem Content="Workbook"/>
+                    <ComboBoxItem Content="{local:Loc Key=FindReplace_Sheet}"/>
+                    <ComboBoxItem Content="{local:Loc Key=FindReplace_Workbook}"/>
                 </ComboBox>
 
-                <Label Content="_Search:" Target="{Binding ElementName=SearchCombo}" Grid.Column="2" VerticalAlignment="Center"/>
+                <Label Content="{local:Loc Key=FindReplace_Search}" Target="{Binding ElementName=SearchCombo}" Grid.Column="2" VerticalAlignment="Center"/>
                 <ComboBox x:Name="SearchCombo" Grid.Column="3" SelectedIndex="0" Margin="0,0,0,6">
-                    <ComboBoxItem Content="By Rows"/>
-                    <ComboBoxItem Content="By Columns"/>
+                    <ComboBoxItem Content="{local:Loc Key=FindReplace_ByRows}"/>
+                    <ComboBoxItem Content="{local:Loc Key=FindReplace_ByColumns}"/>
                 </ComboBox>
 
-                <Label Content="_Look in:" Target="{Binding ElementName=LookInCombo}" Grid.Row="1" VerticalAlignment="Center"/>
+                <Label Content="{local:Loc Key=FindReplace_LookIn}" Target="{Binding ElementName=LookInCombo}" Grid.Row="1" VerticalAlignment="Center"/>
                 <ComboBox x:Name="LookInCombo" Grid.Row="1" Grid.Column="1" SelectedIndex="0" Margin="0,0,12,6">
-                    <ComboBoxItem Content="Formulas"/>
-                    <ComboBoxItem Content="Values"/>
-                    <ComboBoxItem Content="Notes"/>
-                    <ComboBoxItem Content="Comments"/>
+                    <ComboBoxItem Content="{local:Loc Key=FindReplace_Formulas}"/>
+                    <ComboBoxItem Content="{local:Loc Key=FindReplace_Values}"/>
+                    <ComboBoxItem Content="{local:Loc Key=FindReplace_Notes}"/>
+                    <ComboBoxItem Content="{local:Loc Key=FindReplace_Comments}"/>
                 </ComboBox>
 
-                <CheckBox x:Name="MatchCaseBox" Grid.Row="2" Grid.ColumnSpan="2" Content="Match _case" Margin="0,2,12,0"/>
-                <CheckBox x:Name="MatchEntireBox" Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Content="Match entire cell _contents" Margin="0,2,0,0"/>
+                <CheckBox x:Name="MatchCaseBox" Grid.Row="2" Grid.ColumnSpan="2" Content="{local:Loc Key=FindReplace_MatchCase}" Margin="0,2,12,0"/>
+                <CheckBox x:Name="MatchEntireBox" Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Content="{local:Loc Key=FindReplace_MatchEntireCellContents}" Margin="0,2,0,0"/>
             </Grid>
         </Expander>
 
@@ -130,23 +131,23 @@
                   Margin="0,0,0,8"
                   SelectionChanged="FindResultsGrid_SelectionChanged">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Book" Binding="{Binding Book}" Width="110"/>
-                <DataGridTextColumn Header="Sheet" Binding="{Binding Sheet}" Width="100"/>
-                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="90"/>
-                <DataGridTextColumn Header="Cell" Binding="{Binding Cell}" Width="70"/>
-                <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
-                <DataGridTextColumn Header="Formula" Binding="{Binding Formula}" Width="*"/>
+                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Book}" Binding="{Binding Book}" Width="110"/>
+                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Sheet}" Binding="{Binding Sheet}" Width="100"/>
+                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Name}" Binding="{Binding Name}" Width="90"/>
+                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Cell}" Binding="{Binding Cell}" Width="70"/>
+                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Value}" Binding="{Binding Value}" Width="*"/>
+                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Formula}" Binding="{Binding Formula}" Width="*"/>
             </DataGrid.Columns>
         </DataGrid>
 
         <TextBlock x:Name="StatusLabel" Grid.Row="3" Foreground="#555" FontSize="11" MinHeight="18" Margin="0,0,0,8"/>
 
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="FindAllBtn" Content="Find _All" Width="76" Margin="0,0,8,0" Click="FindAll_Click"/>
-            <Button x:Name="FindNextBtn" Content="_Find Next" Width="80" Margin="0,0,8,0" IsDefault="True" Click="FindNext_Click"/>
-            <Button x:Name="ReplaceBtn" Content="_Replace" Width="76" Margin="0,0,8,0" Visibility="Collapsed" Click="Replace_Click"/>
-            <Button x:Name="ReplaceAllBtn" Content="_Replace All" Width="88" Margin="0,0,8,0" Visibility="Collapsed" Click="ReplaceAll_Click"/>
-            <Button Content="_Close" Width="60" IsCancel="True" Click="Close_Click"/>
+            <Button x:Name="FindAllBtn" Content="{local:Loc Key=FindReplace_FindAll}" Width="76" Margin="0,0,8,0" Click="FindAll_Click"/>
+            <Button x:Name="FindNextBtn" Content="{local:Loc Key=FindReplace_FindNext}" Width="80" Margin="0,0,8,0" IsDefault="True" Click="FindNext_Click"/>
+            <Button x:Name="ReplaceBtn" Content="{local:Loc Key=FindReplace_Replace}" Width="76" Margin="0,0,8,0" Visibility="Collapsed" Click="Replace_Click"/>
+            <Button x:Name="ReplaceAllBtn" Content="{local:Loc Key=FindReplace_ReplaceAll}" Width="88" Margin="0,0,8,0" Visibility="Collapsed" Click="ReplaceAll_Click"/>
+            <Button Content="{local:Loc Key=FindReplace_Close}" Width="60" IsCancel="True" Click="Close_Click"/>
         </StackPanel>
     </Grid>
 </Window>

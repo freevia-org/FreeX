@@ -97,7 +97,7 @@ public partial class MainWindow : Window
     private IReadOnlyList<double> _ribbonResizeThresholds = [];
     private double _lastRibbonResizeWidth = double.NaN;
     private bool _ribbonResizeNormalizationRequired = true;
-    private string? _lastRibbonAdaptiveAppliedStateKey;
+    private RibbonAppliedStateKey? _lastRibbonAdaptiveAppliedStateKey;
     private string? _ribbonAdaptiveControlCacheKey;
     private readonly Dictionary<TabItem, StackPanel> _ribbonAdaptiveActivePanelCacheByTab = [];
     private StackPanel? _ribbonAdaptiveControlCachePanel;
@@ -107,11 +107,11 @@ public partial class MainWindow : Window
     private string? _ribbonCompactSnapshotCacheKey;
     private IReadOnlyList<RibbonCompactGroupSnapshot>? _ribbonCompactGroupSnapshotCache;
     private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;
-    private string? _lastRibbonCollapsedFootprintMode;
+    private RibbonCollapsedGroupFootprintMode? _lastRibbonCollapsedFootprintMode;
     private string? _ribbonAdaptiveLayoutPlanCacheKey;
-    private readonly Dictionary<string, RibbonAdaptiveLayoutResult> _ribbonAdaptiveLayoutPlanCache = [];
-    private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
-    private readonly Dictionary<string, bool> _ribbonMeasuredOverflowCache = [];
+    private readonly Dictionary<RibbonAdaptiveLayoutPlanCacheEntryKey, RibbonAdaptiveLayoutResult> _ribbonAdaptiveLayoutPlanCache = [];
+    private readonly Dictionary<RibbonCorrectionCacheKey, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
+    private readonly Dictionary<RibbonMeasuredOverflowCacheKey, bool> _ribbonMeasuredOverflowCache = [];
     private bool _ribbonAdaptiveStateDiffInvalidated;
     private int _ribbonAdaptiveMeasurementInvalidationCount;
     private int _ribbonAdaptiveGroupMeasurementCount;
@@ -122,6 +122,9 @@ public partial class MainWindow : Window
     private int _ribbonMeasuredOverflowMeasurementCount;
     private int _ribbonCorrectedStateCacheHitCount;
     private int _ribbonAppliedStateSkipCount;
+    private int _ribbonAdaptiveStateApplyCount;
+    private int _ribbonAdaptiveStateChangedGroupCount;
+    private int _ribbonCollapsedFootprintApplyCount;
     private bool _ribbonFallbackPending;
     private RibbonFallbackWork _ribbonFallbackWork;
     private int _ribbonFallbackRequestCount;
@@ -129,6 +132,8 @@ public partial class MainWindow : Window
     private int _ribbonFallbackExecutedCount;
     private int _ribbonFallbackForcedNormalizeCount;
     private int _ribbonFallbackForcedCompactCount;
+    private int _ribbonFallbackSkippedCompactLayoutCount;
+    private int _ribbonFirstFrameLayoutUpdateCount;
     private RibbonFallbackWork _lastRibbonFallbackRequestedWork;
     private RibbonFallbackWork _lastRibbonFallbackMergedWork;
     private RibbonFallbackWork _lastRibbonFallbackExecutedWork;
@@ -288,7 +293,9 @@ public partial class MainWindow : Window
             MaxRestoreBtn.Content = MaxRestoreIcon;
         System.Windows.Automation.AutomationProperties.SetName(
             MaxRestoreBtn,
-            isMaximized ? "Restore Down" : "Maximize");
+            UiText.Get(isMaximized
+                ? "MainWindow_AutomationName_RestoreDown"
+                : "MainWindow_AutomationName_Maximize"));
     }
 
     // ── Header / select-all helpers ───────────────────────────────────────────

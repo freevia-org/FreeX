@@ -384,7 +384,9 @@ internal static class Native
     public const uint LEFTUP = 0x0004;
     public const uint WHEEL = 0x0800;
 
+    private const uint INPUT_KEYBOARD = 1;
     private const uint KEYEVENTF_KEYUP = 0x0002;
+    private const uint KEYEVENTF_UNICODE = 0x0004;
 
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
@@ -419,10 +421,10 @@ internal static class Native
     private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
     [DllImport("user32.dll")]
-    private static extern short VkKeyScan(char ch);
-
-    [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
     public static IntPtr FindVisibleWindowForProcess(int processId)
     {
@@ -454,19 +456,16 @@ internal static class Native
 
     public static void SendUnicode(char ch)
     {
-        var scan = VkKeyScan(ch);
-        scan.Should().NotBe(-1, $"the test driver must be able to type '{ch}'");
+        var inputs = new[]
+        {
+            CreateUnicodeInput(ch, keyUp: false),
+            CreateUnicodeInput(ch, keyUp: true)
+        };
 
-        var virtualKey = (byte)(scan & 0xff);
-        var shiftState = (scan >> 8) & 0xff;
-        if ((shiftState & 1) != 0)
-            keybd_event((byte)VirtualKey.Shift, 0, 0, UIntPtr.Zero);
-
-        keybd_event(virtualKey, 0, 0, UIntPtr.Zero);
-        keybd_event(virtualKey, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
-
-        if ((shiftState & 1) != 0)
-            keybd_event((byte)VirtualKey.Shift, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+        sent.Should().Be(
+            (uint)inputs.Length,
+            $"the test driver must be able to type '{ch}' independent of keyboard layout; last Win32 error {Marshal.GetLastWin32Error()}");
     }
 
     public static void SendKey(ushort key)
@@ -493,5 +492,68 @@ internal static class Native
         public int Right;
         public int Bottom;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct INPUT
+    {
+        public uint Type;
+        public INPUTUNION Data;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct INPUTUNION
+    {
+        [FieldOffset(0)]
+        public MOUSEINPUT Mouse;
+
+        [FieldOffset(0)]
+        public KEYBDINPUT Keyboard;
+
+        [FieldOffset(0)]
+        public HARDWAREINPUT Hardware;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KEYBDINPUT
+    {
+        public ushort VirtualKey;
+        public ushort ScanCode;
+        public uint Flags;
+        public uint Time;
+        public UIntPtr ExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MOUSEINPUT
+    {
+        public int X;
+        public int Y;
+        public uint MouseData;
+        public uint Flags;
+        public uint Time;
+        public UIntPtr ExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct HARDWAREINPUT
+    {
+        public uint Message;
+        public ushort ParamL;
+        public ushort ParamH;
+    }
+
+    private static INPUT CreateUnicodeInput(char ch, bool keyUp) =>
+        new()
+        {
+            Type = INPUT_KEYBOARD,
+            Data = new INPUTUNION
+            {
+                Keyboard = new KEYBDINPUT
+                {
+                    ScanCode = ch,
+                    Flags = KEYEVENTF_UNICODE | (keyUp ? KEYEVENTF_KEYUP : 0)
+                }
+            }
+        };
 
 }

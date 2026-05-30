@@ -97,6 +97,45 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
+    public void Plan_UsesCatalogIdsWhenDataGroupCaptionsChange()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Imported Data", 100, 80, 60, 40, CatalogId: "DataGetTransformGroup"),
+            new RibbonAdaptiveGroup("Filters", 100, 80, 60, 40, CatalogId: "DataSortFilterGroup"),
+            new RibbonAdaptiveGroup("Cleanup", 300, 200, 70, 40, CatalogId: "DataToolsGroup")
+        };
+
+        var layout = RibbonAdaptiveLayoutEngine.Plan(900, groups, fixedChromeWidth: 20, selectedTabHeader: "DataTab");
+
+        layout.States.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.IconOnly,
+            RibbonAdaptiveGroupState.IconOnly);
+        layout.PlannedWidth.Should().Be(250);
+        layout.RequiresMeasuredCorrection.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Plan_UsesCatalogIdsForDuplicateGroupCaptions()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Branding", 100, 80, 60, 40, CatalogId: "PageLayoutThemesGroup"),
+            new RibbonAdaptiveGroup("Print Geometry", 100, 80, 60, 40, CatalogId: "PageLayoutPageSetupGroup"),
+            new RibbonAdaptiveGroup("Object Placement", 100, 80, 60, 40, CatalogId: "PageLayoutArrangeGroup")
+        };
+
+        var layout = RibbonAdaptiveLayoutEngine.Plan(1120, groups, fixedChromeWidth: 0, selectedTabHeader: "PageLayoutTab");
+
+        layout.States.Should().Equal(
+            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Collapsed);
+        layout.PlannedWidth.Should().Be(180);
+    }
+
+    [Fact]
     public void Plan_AppliesInsertRuntimeVisibilityStateBeforeMeasuringPlannedWidth()
     {
         var groups = new[]
@@ -193,6 +232,38 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         method.Should().NotContain(".Distinct()");
         method.Should().NotContain(".OrderBy(");
         method.Should().NotContain(".ToList()");
+    }
+
+    [Fact]
+    public void BreakpointThresholds_SourceAvoidsRedundantSortedSetLinqPasses()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveTabProfiles.cs"));
+        var method = source.Substring(
+            source.IndexOf("public static IReadOnlyList<double> GetBreakpointThresholds", StringComparison.Ordinal),
+            source.IndexOf("internal static string? ResolveProfileName", StringComparison.Ordinal) -
+            source.IndexOf("public static IReadOnlyList<double> GetBreakpointThresholds", StringComparison.Ordinal));
+
+        method.Should().Contain("new List<double>(thresholds.Count)");
+        method.Should().NotContain(".Where(");
+        method.Should().NotContain(".OrderBy(");
+        method.Should().NotContain(".ToList()");
+    }
+
+    [Fact]
+    public void Plan_SourceAppliesProfileOverridesInPlace()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));
+        var method = source.Substring(
+            source.IndexOf("private static RibbonAdaptiveLayoutResult Plan(", StringComparison.Ordinal),
+            source.IndexOf("public static IReadOnlyList<double> BuildResizeThresholds", StringComparison.Ordinal) -
+            source.IndexOf("private static RibbonAdaptiveLayoutResult Plan(", StringComparison.Ordinal));
+
+        method.Should().Contain("ApplyPlanOverridesInPlace(");
+        method.Should().NotContain("ApplyBreakpointOverrides(");
+        method.Should().NotContain("ApplyRuntimePriorityStates(");
+        method.Should().NotContain("ApplyRuntimeVisibilityStates(");
+        method.Should().NotContain("states = RibbonAdaptiveTabProfiles");
+        method.Should().NotContain("states = RibbonAdaptivePriorityPlanner");
     }
 
     [Fact]

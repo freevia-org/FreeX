@@ -67,7 +67,9 @@ internal static class ChartDialogHelpers
             Margin = new Thickness(0, 0, 6, 0),
             Tag = textBox
         };
-        AutomationProperties.SetName(pickerButton, $"Pick {label}");
+        AutomationProperties.SetName(
+            pickerButton,
+            UiText.Format("ChartDialog_PickColorAutomationName", UiText.CreateAutomationName(label)));
         pickerButton.Click += ColorPickerButton_Click;
         panel.Children.Add(pickerButton);
         panel.Children.Add(textBox);

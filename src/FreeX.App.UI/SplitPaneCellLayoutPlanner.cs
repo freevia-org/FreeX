@@ -114,7 +114,7 @@ public static class SplitPaneCellLayoutPlanner
         var occupied = new HashSet<(uint Row, uint Col)>();
         foreach (var cell in cells)
         {
-            if (!string.IsNullOrEmpty(cell.DisplayText))
+            if (GridView.IsOverflowOccupied(cell, editingCell: null))
                 occupied.Add((cell.Row, cell.Col));
         }
 

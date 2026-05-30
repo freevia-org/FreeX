@@ -4,38 +4,38 @@ namespace FreeX.App.Host;
 
 public static class PivotValueFieldSettingsDialogPlanner
 {
-    public const string AutomaticBaseFieldLabel = "(Automatic)";
+    public static string AutomaticBaseFieldLabel => UiText.Get("PivotValueFieldSettings_AutomaticBaseField");
 
     public static readonly (string Label, string Value)[] SummaryFunctions =
     [
-        ("Sum", "sum"),
-        ("Count", "count"),
-        ("Average", "average"),
-        ("Max", "max"),
-        ("Min", "min"),
-        ("Product", "product"),
-        ("Count Numbers", "countNums"),
-        ("StdDev", "stdDev"),
-        ("StdDevp", "stdDevP"),
-        ("Var", "var"),
-        ("Varp", "varP")
+        (UiText.Get("PivotValueFieldSettings_SummarySum"), "sum"),
+        (UiText.Get("PivotValueFieldSettings_SummaryCount"), "count"),
+        (UiText.Get("PivotValueFieldSettings_SummaryAverage"), "average"),
+        (UiText.Get("PivotValueFieldSettings_SummaryMax"), "max"),
+        (UiText.Get("PivotValueFieldSettings_SummaryMin"), "min"),
+        (UiText.Get("PivotValueFieldSettings_SummaryProduct"), "product"),
+        (UiText.Get("PivotValueFieldSettings_SummaryCountNumbers"), "countNums"),
+        (UiText.Get("PivotValueFieldSettings_SummaryStdDev"), "stdDev"),
+        (UiText.Get("PivotValueFieldSettings_SummaryStdDevp"), "stdDevP"),
+        (UiText.Get("PivotValueFieldSettings_SummaryVar"), "var"),
+        (UiText.Get("PivotValueFieldSettings_SummaryVarp"), "varP")
     ];
 
     public static readonly (string Label, PivotShowValuesAs Value)[] ShowValuesAsOptions =
     [
-        ("No Calculation", PivotShowValuesAs.None),
-        ("% of Grand Total", PivotShowValuesAs.PercentOfGrandTotal),
-        ("% of Row Total", PivotShowValuesAs.PercentOfRowTotal),
-        ("% of Column Total", PivotShowValuesAs.PercentOfColumnTotal),
-        ("Running Total In", PivotShowValuesAs.RunningTotalIn),
-        ("Difference From", PivotShowValuesAs.DifferenceFrom),
-        ("% Difference From", PivotShowValuesAs.PercentDifferenceFrom),
-        ("Rank Smallest to Largest", PivotShowValuesAs.RankSmallest),
-        ("Rank Largest to Smallest", PivotShowValuesAs.RankLargest),
-        ("Index", PivotShowValuesAs.Index),
-        ("% of Parent Row Total", PivotShowValuesAs.PercentOfParentRowTotal),
-        ("% of Parent Column Total", PivotShowValuesAs.PercentOfParentColumnTotal),
-        ("% of Parent Total", PivotShowValuesAs.PercentOfParentTotal)
+        (UiText.Get("PivotValueFieldSettings_ShowNoCalculation"), PivotShowValuesAs.None),
+        (UiText.Get("PivotValueFieldSettings_ShowPercentOfGrandTotal"), PivotShowValuesAs.PercentOfGrandTotal),
+        (UiText.Get("PivotValueFieldSettings_ShowPercentOfRowTotal"), PivotShowValuesAs.PercentOfRowTotal),
+        (UiText.Get("PivotValueFieldSettings_ShowPercentOfColumnTotal"), PivotShowValuesAs.PercentOfColumnTotal),
+        (UiText.Get("PivotValueFieldSettings_ShowRunningTotalIn"), PivotShowValuesAs.RunningTotalIn),
+        (UiText.Get("PivotValueFieldSettings_ShowDifferenceFrom"), PivotShowValuesAs.DifferenceFrom),
+        (UiText.Get("PivotValueFieldSettings_ShowPercentDifferenceFrom"), PivotShowValuesAs.PercentDifferenceFrom),
+        (UiText.Get("PivotValueFieldSettings_ShowRankSmallest"), PivotShowValuesAs.RankSmallest),
+        (UiText.Get("PivotValueFieldSettings_ShowRankLargest"), PivotShowValuesAs.RankLargest),
+        (UiText.Get("PivotValueFieldSettings_ShowIndex"), PivotShowValuesAs.Index),
+        (UiText.Get("PivotValueFieldSettings_ShowPercentOfParentRowTotal"), PivotShowValuesAs.PercentOfParentRowTotal),
+        (UiText.Get("PivotValueFieldSettings_ShowPercentOfParentColumnTotal"), PivotShowValuesAs.PercentOfParentColumnTotal),
+        (UiText.Get("PivotValueFieldSettings_ShowPercentOfParentTotal"), PivotShowValuesAs.PercentOfParentTotal)
     ];
 
     public static int FindSummaryFunctionIndex(string? summaryFunction)
@@ -105,14 +105,14 @@ public static class PivotValueFieldSettingsDialogPlanner
 
         if (baseFieldIndex is null)
         {
-            error = "Select a base field for this Show Values As calculation.";
+            error = UiText.Get("PivotValueFieldSettings_SelectBaseFieldMessage");
             return false;
         }
 
         if (showValuesAs is PivotShowValuesAs.DifferenceFrom or PivotShowValuesAs.PercentDifferenceFrom &&
             string.IsNullOrWhiteSpace(baseItem))
         {
-            error = "Enter a base item for this Show Values As calculation.";
+            error = UiText.Get("PivotValueFieldSettings_EnterBaseItemMessage");
             return false;
         }
 

@@ -6,20 +6,6 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private static readonly (string Label, string Code)[] NumberFormatOptions =
-    [
-        ("General", "General"),
-        ("Number (0.00)", "0.00"),
-        ("Currency ($#,##0.00)", "$#,##0.00"),
-        ("Accounting ($#,##0.00)", "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)"),
-        ("Percentage (0%)", "0%"),
-        ("Fraction (# ?/?)", "# ?/?"),
-        ("Scientific (0.00E+00)", "0.00E+00"),
-        ("Date (yyyy-MM-dd)", "yyyy-MM-dd"),
-        ("Time (HH:mm:ss)", "HH:mm:ss"),
-        ("Text (@)", "@")
-    ];
-
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         UpdateMaximizedContentInset();
@@ -35,8 +21,8 @@ public partial class MainWindow
         FontSizeBox.ItemsSource = sizes;
         FontSizeBox.SelectedItem = "11";
 
-        NumberFormatBox.ItemsSource = NumberFormatOptions.Select(option => option.Label).ToArray();
-        NumberFormatBox.SelectedIndex = 0;
+        NumberFormatBox.ItemsSource = HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label).ToArray();
+        NumberFormatBox.SelectedIndex = HomeNumberFormatDropdownPlanner.DefaultSelectionIndex;
 
         PopulateFormatTableGalleryMenu();
         ApplyOptionsToView();

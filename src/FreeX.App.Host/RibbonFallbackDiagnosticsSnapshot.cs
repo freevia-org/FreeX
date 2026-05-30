@@ -6,6 +6,8 @@ internal readonly record struct RibbonFallbackDiagnosticsSnapshot(
     int ExecutedCount,
     int ForcedNormalizeCount,
     int ForcedCompactCount,
+    int SkippedCompactLayoutCount,
+    int FirstFrameLayoutUpdateCount,
     string LastRequestedWork,
     string LastMergedWork,
     string LastExecutedWork,

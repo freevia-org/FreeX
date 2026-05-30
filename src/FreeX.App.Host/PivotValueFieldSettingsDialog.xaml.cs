@@ -47,7 +47,7 @@ public partial class PivotValueFieldSettingsDialog : Window
     {
         if (!PivotValueFieldSettingsInputParser.TryParseOptionalNumberFormatId(NumberFormatBox.Text, out var numberFormatId))
         {
-            DialogMessageHelper.ShowWarning(this, "Number format ID must be a whole number.", "Value Field Settings");
+            DialogMessageHelper.ShowWarning(this, UiText.Get("PivotValueFieldSettings_NumberFormatIdWholeNumberMessage"), UiText.Get("PivotValueFieldSettings_ValueFieldSettings"));
             FocusInvalidNumberFormatInput();
             return;
         }
@@ -61,7 +61,7 @@ public partial class PivotValueFieldSettingsDialog : Window
         var baseItem = PivotValueFieldSettingsDialogPlanner.ResolveBaseItem(showValuesAs, BaseItemBox.Text);
         if (!TryValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem, out var showValuesAsError))
         {
-            DialogMessageHelper.ShowWarning(this, showValuesAsError, "Value Field Settings");
+            DialogMessageHelper.ShowWarning(this, showValuesAsError, UiText.Get("PivotValueFieldSettings_ValueFieldSettings"));
             FocusInvalidShowValuesAsInput(baseFieldIndex);
             return;
         }
@@ -117,7 +117,7 @@ public partial class PivotValueFieldSettingsDialog : Window
         var dialog = new FormatCellsDialog(style, FormatCellsDialogTab.Number)
         {
             Owner = this,
-            Title = "Format Cells"
+            Title = UiText.Get("PivotValueFieldSettings_FormatCellsTitle")
         };
 
         if (dialog.ShowDialog() != true || dialog.ResultDiff?.NumberFormat is not { } numberFormat)
@@ -152,7 +152,7 @@ public partial class PivotValueFieldSettingsDialog : Window
 
         return PivotValueFieldSettingsInputParser.ResolvePresetNumberFormatCode(NumberFormatPresetBox.Text)
             ?? NumberFormatPresetBox.Text
-            ?? "General";
+            ?? UiText.Get("PivotValueFieldSettings_GeneralFormat");
     }
 
     private void UpdateBaseFieldState()

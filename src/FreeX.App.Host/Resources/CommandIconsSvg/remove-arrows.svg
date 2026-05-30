@@ -1,6 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Remove Arrows">
   <rect width="32" height="32" fill="none"/>
-  <path d="M6 16h17m-5-5l5 5l-5 5" fill="none" stroke="#0F6D8C" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="23.5" cy="9" r="5" fill="#FCEAEA" stroke="#D32F2F" stroke-width="1.5"/>
-  <path d="M21.2 6.7l4.6 4.6M25.8 6.7l-4.6 4.6" fill="none" stroke="#D32F2F" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M6.5 16h18M19.5 11l5 5l-5 5" fill="none" stroke="#0F6D8C" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22 7l5 5M27 7l-5 5" fill="none" stroke="#D32F2F" stroke-width="1.8" stroke-linecap="round"/>
 </svg>

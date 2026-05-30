@@ -14,7 +14,8 @@ public sealed class GridViewPointerCursorTests
             source.IndexOf("var selectedObjectDragKind = ObjectDragKind.None;", StringComparison.Ordinal)..
             source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
 
-        hoverCursorBlock.Should().Contain("selectedObjectDragKind = HitTestObjectHandle(pos, GetSelectedObjectRect());");
+        hoverCursorBlock.Should().Contain("var selectedObjectRect = GetSelectedObjectRect();");
+        hoverCursorBlock.Should().Contain("selectedObjectDragKind = HitTestObjectHandle(pos, selectedObjectRect);");
         hoverCursorBlock.Should().Contain("if (selectedObjectDragKind != ObjectDragKind.None)");
         hoverCursorBlock.Should().Contain("Cursor = ObjectDragCursor(selectedObjectDragKind);");
         hoverCursorBlock.IndexOf("if (selectedObjectDragKind != ObjectDragKind.None)", StringComparison.Ordinal)

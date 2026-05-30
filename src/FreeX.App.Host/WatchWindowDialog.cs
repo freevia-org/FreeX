@@ -32,7 +32,7 @@ public sealed class WatchWindowDialog : Window
         _navigateTo = navigateTo;
         _removeWatch = removeWatch;
 
-        Title = "Watch Window";
+        Title = UiText.Get("WatchWindow_WatchWindow");
         Width = 620;
         Height = 320;
         MinWidth = 480;
@@ -53,16 +53,16 @@ public sealed class WatchWindowDialog : Window
 
         var add = new Button
         {
-            Content = "_Add Watch",
+            Content = UiText.Get("WatchWindow_AddWatch"),
             Width = 96,
             Height = 26,
             Margin = new Thickness(4, 0, 0, 0),
             IsEnabled = _addWatch is not null,
-            ToolTip = "Add the current worksheet selection to the Watch Window."
+            ToolTip = UiText.Get("WatchWindow_AddTheCurrentWorksheetSelectionToTheWatchWindow")
         };
-        AutomationProperties.SetName(add, "Add Watch");
+        AutomationProperties.SetName(add, UiText.Get("WatchWindow_AddWatch2"));
         AutomationProperties.SetAutomationId(add, "WatchWindowAddButton");
-        AutomationProperties.SetHelpText(add, "Add the current worksheet selection to the Watch Window.");
+        AutomationProperties.SetHelpText(add, UiText.Get("WatchWindow_AddTheCurrentWorksheetSelectionToTheWatchWindow"));
         add.Click += (_, _) =>
         {
             var dialog = new AddWatchDialog(_getSelectionText()) { Owner = this };
@@ -74,33 +74,33 @@ public sealed class WatchWindowDialog : Window
         };
         buttons.Children.Add(add);
 
-        var refresh = new Button { Content = "_Refresh", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
-        AutomationProperties.SetName(refresh, "Refresh watches");
+        var refresh = new Button { Content = UiText.Get("WatchWindow_Refresh"), Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        AutomationProperties.SetName(refresh, UiText.Get("WatchWindow_RefreshWatches"));
         AutomationProperties.SetAutomationId(refresh, "WatchWindowRefreshButton");
-        AutomationProperties.SetHelpText(refresh, "Refresh values and formulas for watched cells.");
+        AutomationProperties.SetHelpText(refresh, UiText.Get("WatchWindow_RefreshValuesAndFormulasForWatchedCells"));
         refresh.Click += (_, _) => Refresh();
         buttons.Children.Add(refresh);
 
-        _deleteButton = new Button { Content = "_Delete Watch", Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
-        AutomationProperties.SetName(_deleteButton, "Delete Watch");
+        _deleteButton = new Button { Content = UiText.Get("WatchWindow_DeleteWatch"), Width = 96, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        AutomationProperties.SetName(_deleteButton, UiText.Get("WatchWindow_DeleteWatch2"));
         AutomationProperties.SetAutomationId(_deleteButton, "WatchWindowDeleteButton");
-        AutomationProperties.SetHelpText(_deleteButton, "Delete the selected watched cells.");
+        AutomationProperties.SetHelpText(_deleteButton, UiText.Get("WatchWindow_DeleteTheSelectedWatchedCells"));
         _deleteButton.Click += (_, _) => DeleteSelectedWatch();
         buttons.Children.Add(_deleteButton);
 
-        var close = new Button { Content = "_Close", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true };
-        AutomationProperties.SetName(close, "Close Watch Window");
+        var close = new Button { Content = UiText.Get("WatchWindow_Close"), Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true };
+        AutomationProperties.SetName(close, UiText.Get("WatchWindow_CloseWatchWindow"));
         AutomationProperties.SetAutomationId(close, "WatchWindowCloseButton");
-        AutomationProperties.SetHelpText(close, "Close the Watch Window.");
+        AutomationProperties.SetHelpText(close, UiText.Get("WatchWindow_CloseTheWatchWindow"));
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
 
         var listPanel = new DockPanel();
         _listView = new ListView { ItemsSource = _rows, SelectionMode = SelectionMode.Extended };
-        AutomationProperties.SetName(_listView, "Watches");
+        AutomationProperties.SetName(_listView, UiText.Get("WatchWindow_Watches2"));
         AutomationProperties.SetAutomationId(_listView, "WatchWindowList");
-        AutomationProperties.SetHelpText(_listView, "Lists watched cells with their workbook, sheet, address, value, and formula.");
-        var listLabel = new Label { Content = "_Watches:", Target = _listView, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
+        AutomationProperties.SetHelpText(_listView, UiText.Get("WatchWindow_ListsWatchedCellsWithTheirWorkbookSheetAddressValueAndFormula"));
+        var listLabel = new Label { Content = UiText.Get("WatchWindow_Watches"), Target = _listView, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
         DockPanel.SetDock(listLabel, Dock.Top);
         listPanel.Children.Add(listLabel);
         _listView.MouseDoubleClick += ListView_MouseDoubleClick;
@@ -110,12 +110,12 @@ public sealed class WatchWindowDialog : Window
         {
             Columns =
             {
-                new GridViewColumn { Header = "Book", Width = 90, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Book)) },
-                new GridViewColumn { Header = "Sheet", Width = 110, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Sheet)) },
-                new GridViewColumn { Header = "Name", Width = 80, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Name)) },
-                new GridViewColumn { Header = "Cell", Width = 70, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Cell)) },
-                new GridViewColumn { Header = "Value", Width = 120, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Value)) },
-                new GridViewColumn { Header = "Formula", Width = 170, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Formula)) }
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Book"), Width = 90, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Book)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Sheet"), Width = 110, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Sheet)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Name"), Width = 80, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Name)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Cell"), Width = 70, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Cell)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Value"), Width = 120, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Value)) },
+                new GridViewColumn { Header = UiText.Get("WatchWindow_Formula"), Width = 170, DisplayMemberBinding = new System.Windows.Data.Binding(nameof(WatchWindowRow.Formula)) }
             }
         };
         listPanel.Children.Add(_listView);
@@ -135,7 +135,7 @@ public sealed class WatchWindowDialog : Window
         foreach (var entry in _getEntries())
         {
             _rows.Add(new WatchWindowRow(
-                "This Workbook",
+                UiText.Get("WatchWindow_ThisWorkbook"),
                 entry.SheetName,
                 "",
                 entry.Address.ToA1(),

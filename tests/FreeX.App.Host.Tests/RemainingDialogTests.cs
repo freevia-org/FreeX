@@ -46,7 +46,7 @@ public sealed class RemainingDialogTests
         var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed record RowHeightDialogResult");
 
         source.Should().Contain("if (!TryCreateResult(_thresholdBox.Text, out var result, out var error))");
-        source.Should().Contain("ShowInvalidInputWarning(error ?? \"Enter a threshold value.\");");
+        source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"Remaining_EnterThresholdValue\"));");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("_thresholdBox.Focus();");
         source.Should().Contain("_thresholdBox.SelectAll();");
@@ -68,9 +68,9 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ConditionalFormatThresholdDialog", "public sealed record RowHeightDialogResult");
 
-        source.Should().Contain("AutomationProperties.SetName(_thresholdBox, \"Conditional format threshold\");");
+        source.Should().Contain("AutomationProperties.SetName(_thresholdBox, UiText.Get(\"Remaining_ConditionalFormatThreshold\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_thresholdBox, \"ConditionalFormatThresholdBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_thresholdBox, \"Enter the value for the conditional formatting rule threshold.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_thresholdBox, UiText.Get(\"Remaining_EnterTheValueForTheConditionalFormattingRuleThreshold\"));");
     }
 
     [Fact]
@@ -115,9 +115,9 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("RemainingDialogs.cs", "public sealed class RowHeightDialog", "public sealed record ColumnWidthDialogResult");
 
-        source.Should().Contain("AutomationProperties.SetName(_heightBox, \"Row height\");");
+        source.Should().Contain("AutomationProperties.SetName(_heightBox, UiText.Get(\"Remaining_RowHeight\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_heightBox, \"RowHeightBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_heightBox, \"Enter a row height from 0 to 409.5.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_heightBox, UiText.Get(\"Remaining_EnterARowHeightFrom0To4095\"));");
     }
 
     [Theory]
@@ -179,9 +179,9 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record __NoNextRemainingDialog");
 
-        source.Should().Contain("AutomationProperties.SetName(_widthBox, \"Column width\");");
+        source.Should().Contain("AutomationProperties.SetName(_widthBox, UiText.Get(\"Remaining_ColumnWidth\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_widthBox, \"ColumnWidthBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_widthBox, \"Enter a column width from 0 to 255.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_widthBox, UiText.Get(\"Remaining_EnterAColumnWidthFrom0To255\"));");
     }
 
     [Theory]
@@ -219,27 +219,28 @@ public sealed class RemainingDialogTests
     [Fact]
     public void FillSeriesStepDialog_FieldLabelsUseUniqueAccessKeys()
     {
-        var labels = new[]
+        var labelKeys = new[]
         {
-            "_Rows",
-            "_Columns",
-            "_Linear",
-            "_Growth",
-            "_Date",
-            "_AutoFill",
-            "Da_y",
-            "_Weekday",
-            "_Month",
-            "Y_ear",
-            "Step _value:",
-            "S_top value:"
+            "FillSeriesStep_Rows",
+            "FillSeriesStep_Columns",
+            "FillSeriesStep_Linear",
+            "FillSeriesStep_Growth",
+            "FillSeriesStep_Date",
+            "FillSeriesStep_AutoFill",
+            "FillSeriesStep_Day",
+            "FillSeriesStep_Weekday",
+            "FillSeriesStep_Month",
+            "FillSeriesStep_Year",
+            "FillSeriesStep_StepValueLabel",
+            "FillSeriesStep_StopValueLabel"
         };
+        var labels = labelKeys.Select(UiText.Get).ToArray();
 
         labels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
 
         var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
-        foreach (var label in labels)
-            source.Should().Contain(label);
+        foreach (var key in labelKeys)
+            source.Should().Contain($"UiText.Get(\"{key}\")");
     }
 
     [Fact]
@@ -247,12 +248,12 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
 
-        source.Should().Contain("AutomationProperties.SetName(_stepBox, \"Step value\");");
+        source.Should().Contain("AutomationProperties.SetName(_stepBox, UiText.Get(\"FillSeriesStep_StepValueAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_stepBox, \"FillSeriesStepValueBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_stepBox, \"Enter the amount to increment each value in the series.\");");
-        source.Should().Contain("AutomationProperties.SetName(_stopBox, \"Stop value\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_stepBox, UiText.Get(\"FillSeriesStep_StepValueHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_stopBox, UiText.Get(\"FillSeriesStep_StopValueAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_stopBox, \"FillSeriesStopValueBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_stopBox, \"Enter the optional final value for the series.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_stopBox, UiText.Get(\"FillSeriesStep_StopValueHelpText\"));");
     }
 
     [Fact]
@@ -282,7 +283,7 @@ public sealed class RemainingDialogTests
         var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        source.Should().Contain("error ?? \"Enter a numeric step value.\"");
+        source.Should().Contain("error ?? UiText.Get(\"FillSeriesStep_InvalidStepMessage\")");
         source.Should().Contain("FocusInvalidStepInput();");
         source.Should().Contain("private void FocusInvalidStepInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_stepBox);");
@@ -313,7 +314,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("FocusInvalidStopInput();");
         source.Should().Contain("private void FocusInvalidStopInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_stopBox);");
-        source.Should().Contain("Enter a numeric stop value or leave it blank.");
+        source.Should().Contain("UiText.Get(\"FillSeriesStep_InvalidStopMessage\")");
     }
 
     [Fact]
@@ -359,7 +360,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("100");
         source.Should().Contain("75");
         source.Should().Contain("_fitSelectionButton");
-        source.Should().Contain("Fit _selection");
+        source.Should().Contain("UiText.Get(\"Zoom_FitSelection\")");
         source.Should().Contain("_customZoomButton");
         source.Should().Contain("_zoomBox");
     }
@@ -369,9 +370,9 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("ZoomDialog.cs", "public sealed class ZoomDialog", "public sealed record __NoNextZoomDialog");
 
-        source.Should().Contain("AutomationProperties.SetName(_zoomBox, \"Custom zoom percent\");");
+        source.Should().Contain("AutomationProperties.SetName(_zoomBox, UiText.Get(\"Zoom_CustomZoomPercent\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_zoomBox, \"ZoomCustomPercentBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_zoomBox, \"Enter a whole zoom percentage from 10 to 400.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_zoomBox, UiText.Get(\"Zoom_EnterAWholeZoomPercentageFrom10To400\"));");
     }
 
     [Fact]
@@ -452,7 +453,7 @@ public sealed class RemainingDialogTests
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("TryCreateResult(input, out var result, out var error)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, error ?? \"Enter a valid zoom percent.\"");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, error ?? UiText.Get(\"Zoom_EnterAValidZoomPercent\")");
         source.Should().Contain("_customZoomButton.IsChecked = true");
         source.Should().Contain("DialogFocus.FocusAndSelect(_zoomBox);");
     }
@@ -501,9 +502,9 @@ public sealed class RemainingDialogTests
         var source = ReadRemainingDialogSources();
         var pageBreakSource = source[source.IndexOf("public sealed class PageBreakDialog", StringComparison.Ordinal)..];
 
-        pageBreakSource.Should().Contain("Insert _row page break");
-        pageBreakSource.Should().Contain("Insert _column page break");
-        pageBreakSource.Should().Contain("_Reset all page breaks");
+        pageBreakSource.Should().Contain("UiText.Get(\"PageBreak_InsertRowPageBreak\")");
+        pageBreakSource.Should().Contain("UiText.Get(\"PageBreak_InsertColumnPageBreak\")");
+        pageBreakSource.Should().Contain("UiText.Get(\"PageBreak_ResetAllPageBreaks\")");
         pageBreakSource.Should().Contain("_rowBreakBox");
         pageBreakSource.Should().Contain("_columnBreakBox");
         pageBreakSource.Should().NotContain("ObjectSizeDialog.CreateSingleInputContent(\"Page break:\"");
@@ -526,12 +527,12 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
 
-        source.Should().Contain("AutomationProperties.SetName(_rowBreakBox, \"Row page break\");");
+        source.Should().Contain("AutomationProperties.SetName(_rowBreakBox, UiText.Get(\"PageBreak_RowPageBreak\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_rowBreakBox, \"PageBreakRowBreakBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_rowBreakBox, \"Enter the row number where the horizontal page break should be inserted.\");");
-        source.Should().Contain("AutomationProperties.SetName(_columnBreakBox, \"Column page break\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_rowBreakBox, UiText.Get(\"PageBreak_EnterTheRowNumberWhereTheHorizontalPageBreakShouldBeInserted\"));");
+        source.Should().Contain("AutomationProperties.SetName(_columnBreakBox, UiText.Get(\"PageBreak_ColumnPageBreak\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_columnBreakBox, \"PageBreakColumnBreakBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_columnBreakBox, \"Enter the column number or letter where the vertical page break should be inserted.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_columnBreakBox, UiText.Get(\"PageBreak_EnterTheColumnNumberOrLetterWhereTheVerticalPageBreakShouldBeInserted\"));");
     }
 
     [Fact]
@@ -540,8 +541,8 @@ public sealed class RemainingDialogTests
         var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        source.Should().Contain("Enter a row number within the worksheet for the page break.");
-        source.Should().Contain("Enter a column number or letter within the worksheet for the page break.");
+        source.Should().Contain("UiText.Get(\"PageBreak_EnterARowNumberWithinTheWorksheetForThePageBreak\")");
+        source.Should().Contain("UiText.Get(\"PageBreak_EnterAColumnNumberOrLetterWithinTheWorksheetForThePageBreak\")");
         source.Should().Contain("PageLayoutInputParser.IsValidRowBreak(rowBreak)");
         source.Should().Contain("FocusInvalidBreakInput(_rowBreakBox);");
         source.Should().Contain("FocusInvalidBreakInput(_columnBreakBox);");
@@ -612,9 +613,9 @@ public sealed class RemainingDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekStatusDialog.cs"));
 
-        source.Should().Contain("Content = \"_Keep Result\"");
-        source.Should().Contain("Content = \"_Restore Original Values\"");
-        source.Should().Contain("Content = \"_OK\"");
+        source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_KeepResult\")");
+        source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_RestoreOriginalValues\")");
+        source.Should().Contain("Content = UiText.Ok");
         source.Should().Contain("IsCancel = true");
     }
 
@@ -627,7 +628,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("AutomationProperties.SetAutomationId(keepButton, \"GoalSeekKeepResultButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(restoreButton, \"GoalSeekRestoreOriginalValuesButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"GoalSeekStatusOkButton\");");
-        source.Should().Contain("Reports whether Goal Seek reached the target value.");
+        source.Should().Contain("UiText.Get(\"GoalSeekStatus_ReportsWhetherGoalSeekReachedTheTargetValue\")");
     }
 
     [Fact]
@@ -653,11 +654,10 @@ public sealed class RemainingDialogTests
     {
         var source = ReadStatusDialogSources();
 
-        source.Should().Contain("Target value:");
-        source.Should().Contain("Current value:");
-        source.Should().Contain("Changing cell value:");
-        source.Should().Contain("Content = \"_Keep Result\"");
-        source.Should().Contain("Content = \"_Restore Original Values\"");
+        source.Should().Contain("UiText.Format(\"GoalSeekStatus_SuccessSummary\"");
+        source.Should().Contain("UiText.Format(\"GoalSeekStatus_FailureSummary\"");
+        source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_KeepResult\")");
+        source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_RestoreOriginalValues\")");
         source.Should().Contain("DialogButtonRowFactory.Create");
     }
 
@@ -707,9 +707,9 @@ public sealed class RemainingDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorkbookStatisticsDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(statisticsBlock, \"Workbook statistics\");");
+        source.Should().Contain("AutomationProperties.SetName(statisticsBlock, UiText.Get(\"WorkbookStatistics_WorkbookStatistics\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(statisticsBlock, \"WorkbookStatisticsSummary\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(statisticsBlock, \"Summarizes sheet, cell, formula, comment, and object counts for the workbook.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(statisticsBlock, UiText.Get(\"WorkbookStatistics_SummarizesSheetCellFormulaCommentAndObjectCountsForTheWorkbook\"));");
     }
 
     [Fact]
@@ -717,7 +717,7 @@ public sealed class RemainingDialogTests
     {
         AccessibilityCheckerDialog.CreateMessage([])
             .Should()
-            .Be("No accessibility issues found.");
+            .Be(UiText.Get("AccessibilityChecker_NoIssuesMessage"));
 
         AccessibilityCheckerDialog.CreateMessage([
             new(
@@ -749,7 +749,7 @@ public sealed class RemainingDialogTests
         source.Should().Contain("public sealed record AccessibilityCheckerDialogResult");
         source.Should().Contain("private readonly ListBox _issueList");
         source.Should().Contain("private readonly Button _goToButton");
-        source.Should().Contain("Content = \"_Go To\"");
+        source.Should().Contain("Content = UiText.Get(\"AccessibilityChecker_GoToButton\")");
         source.Should().Contain("_issueList.MouseDoubleClick +=");
         source.Should().Contain("private void GoToSelectedIssue()");
         reviewSource.Should().Contain("if (dialog.ShowDialog() == true)");
@@ -770,15 +770,16 @@ public sealed class RemainingDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_messageBox, \"Accessibility checker result\");");
+        source.Should().Contain("AutomationProperties.SetName(_messageBox, UiText.Get(\"AccessibilityChecker_ResultAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_messageBox, \"AccessibilityCheckerResultText\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_messageBox, \"Summarizes the workbook accessibility check when no issues are found.\");");
-        source.Should().Contain("AutomationProperties.SetName(_issueList, \"Accessibility issues\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_messageBox, UiText.Get(\"AccessibilityChecker_ResultHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_issueList, UiText.Get(\"AccessibilityChecker_IssueListAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_issueList, \"AccessibilityCheckerIssueList\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_issueList, \"Select an accessibility issue and choose Go To to navigate to its workbook location.\");");
-        source.Should().Contain("AutomationProperties.SetName(_goToButton, \"Go to selected accessibility issue\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_issueList, UiText.Get(\"AccessibilityChecker_IssueListHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_goToButton, UiText.Get(\"AccessibilityChecker_GoToAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_goToButton, \"AccessibilityCheckerGoToButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_goToButton, \"Navigate to the selected accessibility issue.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_goToButton, UiText.Get(\"AccessibilityChecker_GoToHelpText\"));");
+        UiText.Get("AccessibilityChecker_ResultAutomationName").Should().Be("Accessibility checker result");
     }
 
     [Fact]
@@ -829,16 +830,16 @@ public sealed class RemainingDialogTests
         var remainingSource = ReadRemainingDialogSources();
         var objectSource = ReadObjectDialogSources();
 
-        remainingSource.Should().Contain("Format cells greater _than:");
-        remainingSource.Should().Contain("Row _height:");
-        remainingSource.Should().Contain("Column _width:");
-        remainingSource.Should().Contain("Forecast _periods:");
-        remainingSource.Should().Contain("Sheet _name:");
-        remainingSource.Should().Contain("AutomationProperties.SetName(_thresholdBox, \"Conditional format threshold\");");
-        remainingSource.Should().Contain("AutomationProperties.SetName(_heightBox, \"Row height\");");
-        remainingSource.Should().Contain("AutomationProperties.SetName(_widthBox, \"Column width\");");
-        remainingSource.Should().Contain("AutomationProperties.SetName(_periodsBox, \"Forecast periods\");");
-        remainingSource.Should().Contain("AutomationProperties.SetName(_nameBox, \"Sheet name\");");
+        remainingSource.Should().Contain("UiText.Get(\"Remaining_FormatCellsGreaterThan\")");
+        remainingSource.Should().Contain("UiText.Get(\"Remaining_RowHeight2\")");
+        remainingSource.Should().Contain("UiText.Get(\"Remaining_ColumnWidth2\")");
+        remainingSource.Should().Contain("UiText.Get(\"ForecastSheet_PeriodsLabel\")");
+        remainingSource.Should().Contain("UiText.Get(\"SheetName_SheetName\")");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_thresholdBox, UiText.Get(\"Remaining_ConditionalFormatThreshold\"));");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_heightBox, UiText.Get(\"Remaining_RowHeight\"));");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_widthBox, UiText.Get(\"Remaining_ColumnWidth\"));");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_periodsBox, UiText.Get(\"ForecastSheet_PeriodsAutomationName\"));");
+        remainingSource.Should().Contain("AutomationProperties.SetName(_nameBox, UiText.Get(\"SheetName_SheetName\"));");
         objectSource.Should().Contain("Target = box");
         objectSource.Should().Contain("DialogButtonRowFactory.Create(accept, 72)");
     }
@@ -874,9 +875,9 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
 
-        source.Should().Contain("AutomationProperties.SetName(_periodsBox, \"Forecast periods\");");
+        source.Should().Contain("AutomationProperties.SetName(_periodsBox, UiText.Get(\"ForecastSheet_PeriodsAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_periodsBox, \"ForecastPeriodsBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_periodsBox, \"Enter the positive whole number of periods to forecast.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_periodsBox, UiText.Get(\"ForecastSheet_PeriodsHelpText\"));");
     }
 
     [Fact]
@@ -885,9 +886,11 @@ public sealed class RemainingDialogTests
         var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
         var helperSource = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed class ObjectRotationDialog");
 
-        source.Should().Contain("ObjectSizeDialog.CreateSingleInputContent(\"Forecast _periods:\", _periodsBox, Accept, acceptContent: \"_Create\")");
-        helperSource.Should().Contain("string acceptContent = \"_OK\"");
-        helperSource.Should().Contain("DialogButtonRowFactory.Create(accept, 72, acceptContent: acceptContent)");
+        source.Should().Contain("ObjectSizeDialog.CreateSingleInputContent(");
+        source.Should().Contain("UiText.Get(\"ForecastSheet_PeriodsLabel\")");
+        source.Should().Contain("acceptContent: UiText.Get(\"ForecastSheet_CreateButton\")");
+        helperSource.Should().Contain("string? acceptContent = null");
+        helperSource.Should().Contain("DialogButtonRowFactory.Create(accept, 72, acceptContent: acceptContent ?? UiText.Ok)");
     }
 
     [Fact]
@@ -896,7 +899,7 @@ public sealed class RemainingDialogTests
         var source = ReadClassSource("ForecastSheetDialog.cs", "public sealed class ForecastSheetDialog", "public sealed record __NoNextForecastSheetDialog");
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        source.Should().Contain("error ?? \"Enter a positive whole number of forecast periods.\"");
+        source.Should().Contain("error ?? UiText.Get(\"ForecastSheet_InvalidPeriodsMessage\")");
         source.Should().Contain("FocusInvalidPeriodsInput();");
         source.Should().Contain("private void FocusInvalidPeriodsInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_periodsBox);");
@@ -909,13 +912,13 @@ public sealed class RemainingDialogTests
         var columnSource = ReadClassSource("RemainingDialogs.cs", "public sealed class ColumnWidthDialog", "public sealed record SheetNameDialogResult");
 
         rowSource.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        rowSource.Should().Contain("error ?? \"Enter a row height from 0 to 409.\"");
+        rowSource.Should().Contain("error ?? UiText.Get(\"Remaining_EnterARowHeightFrom0To409\")");
         rowSource.Should().Contain("FocusInvalidHeightInput();");
         rowSource.Should().Contain("private void FocusInvalidHeightInput()");
         rowSource.Should().Contain("DialogFocus.FocusAndSelect(_heightBox);");
 
         columnSource.Should().Contain("DialogMessageHelper.ShowWarning(this,");
-        columnSource.Should().Contain("error ?? \"Enter a column width from 0 to 255.\"");
+        columnSource.Should().Contain("error ?? UiText.Get(\"Remaining_EnterAColumnWidthFrom0To255\")");
         columnSource.Should().Contain("FocusInvalidWidthInput();");
         columnSource.Should().Contain("private void FocusInvalidWidthInput()");
         columnSource.Should().Contain("DialogFocus.FocusAndSelect(_widthBox);");
@@ -998,14 +1001,14 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("_dataRangePickerButton");
         source.Should().Contain("_locationPickerButton");
-        source.Should().Contain("Select Data Range");
-        source.Should().Contain("Select Location Range");
-        source.Should().Contain("AutomationProperties.SetName(_dataRangePickerButton, \"Select sparkline data range\");");
+        source.Should().Contain("UiText.Get(\"Sparkline_SelectDataRange\")");
+        source.Should().Contain("UiText.Get(\"Sparkline_SelectLocationRange\")");
+        source.Should().Contain("AutomationProperties.SetName(_dataRangePickerButton, UiText.Get(\"Sparkline_SelectSparklineDataRange\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_dataRangePickerButton, \"SparklineDataRangePickerButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_dataRangePickerButton, \"Select the worksheet data range for the sparkline.\");");
-        source.Should().Contain("AutomationProperties.SetName(_locationPickerButton, \"Select sparkline location range\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_dataRangePickerButton, UiText.Get(\"Sparkline_SelectTheWorksheetDataRangeForTheSparkline\"));");
+        source.Should().Contain("AutomationProperties.SetName(_locationPickerButton, UiText.Get(\"Sparkline_SelectSparklineLocationRange\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_locationPickerButton, \"SparklineLocationRangePickerButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_locationPickerButton, \"Select the destination cell for the sparkline.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_locationPickerButton, UiText.Get(\"Sparkline_SelectTheDestinationCellForTheSparkline\"));");
         source.Should().Contain("RequestRangeSelection");
     }
 
@@ -1014,12 +1017,12 @@ public sealed class RemainingDialogTests
     {
         var source = ReadRemainingDialogSources();
 
-        source.Should().Contain("new Label { Content = \"_Data range:\", Target = _dataRangeBox");
-        source.Should().Contain("new Label { Content = \"_Location range:\", Target = _locationBox");
-        source.Should().Contain("new Label { Content = \"Sparkline _type:\", Target = _kindBox");
-        source.Should().Contain("AutomationProperties.SetName(_kindBox, \"Sparkline type\");");
+        source.Should().Contain("new Label { Content = UiText.Get(\"Sparkline_DataRange\"), Target = _dataRangeBox");
+        source.Should().Contain("new Label { Content = UiText.Get(\"Sparkline_LocationRange\"), Target = _locationBox");
+        source.Should().Contain("new Label { Content = UiText.Get(\"Sparkline_SparklineType\"), Target = _kindBox");
+        source.Should().Contain("AutomationProperties.SetName(_kindBox, UiText.Get(\"Sparkline_SparklineTypeAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_kindBox, \"SparklineTypeBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_kindBox, \"Choose whether the sparkline is line, column, or win/loss.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_kindBox, UiText.Get(\"Sparkline_ChooseWhetherTheSparklineIsLineColumnOrWinLoss\"));");
     }
 
     [Fact]
@@ -1027,12 +1030,12 @@ public sealed class RemainingDialogTests
     {
         var source = ReadRemainingDialogSources();
 
-        source.Should().Contain("AutomationProperties.SetName(_dataRangeBox, \"Sparkline data range\");");
+        source.Should().Contain("AutomationProperties.SetName(_dataRangeBox, UiText.Get(\"Sparkline_SparklineDataRange\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_dataRangeBox, \"SparklineDataRangeBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_dataRangeBox, \"Enter the worksheet data range for the sparkline.\");");
-        source.Should().Contain("AutomationProperties.SetName(_locationBox, \"Sparkline location range\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_dataRangeBox, UiText.Get(\"Sparkline_EnterTheWorksheetDataRangeForTheSparkline\"));");
+        source.Should().Contain("AutomationProperties.SetName(_locationBox, UiText.Get(\"Sparkline_SparklineLocationRange\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_locationBox, \"SparklineLocationRangeBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_locationBox, \"Enter the destination cell for the sparkline.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_locationBox, UiText.Get(\"Sparkline_EnterTheDestinationCellForTheSparkline\"));");
     }
 
     [Fact]
@@ -1080,8 +1083,8 @@ public sealed class RemainingDialogTests
         source.Should().Contain("SparklineDialogPlanner.ValidateInputs(_dataRangeBox.Text, _locationBox.Text, _sheetId)");
         plannerSource.Should().Contain("SparklineInputParser.TryParseDataRange(dataRangeText, sheetId, out _)");
         plannerSource.Should().Contain("SparklineInputParser.TryParseLocation(locationText, sheetId, out _)");
-        source.Should().Contain("ShowInvalidInputWarning(\"Invalid data range.\", _dataRangeBox)");
-        source.Should().Contain("ShowInvalidInputWarning(\"Invalid location cell.\", _locationBox)");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Sparkline_InvalidDataRange\"), _dataRangeBox)");
+        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Sparkline_InvalidLocationCell\"), _locationBox)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title)");
         source.Should().Contain("FocusRangeSelectionInput(textBox);");
         insertSource.Should().Contain("_currentSheetId,");
@@ -1137,7 +1140,7 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("SheetNameDialog.cs", "public sealed class SheetNameDialog", "public sealed record __NoNextSheetNameDialog");
 
-        source.Should().Contain("Content = ObjectSizeDialog.CreateSingleInputContent(\"Sheet _name:\", _nameBox, Accept);");
+        source.Should().Contain("Content = ObjectSizeDialog.CreateSingleInputContent(UiText.Get(\"SheetName_SheetName2\"), _nameBox, Accept);");
         source.Should().Contain("if (!TryCreateResult(_nameBox.Text, out var result, out var error))");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("_nameBox.Focus();");
@@ -1166,7 +1169,7 @@ public sealed class RemainingDialogTests
     {
         var source = ReadRemainingDialogSources();
 
-        source.Should().Contain("new Label { Content = \"_Unhide sheet:\", Target = _sheetBox");
+        source.Should().Contain("new Label { Content = UiText.Get(\"UnhideSheet_UnhideSheet2\"), Target = _sheetBox");
     }
 
     [Fact]
@@ -1174,9 +1177,9 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("UnhideSheetDialog.cs", "public sealed class UnhideSheetDialog", "public sealed record __NoNextUnhideSheetDialog");
 
-        source.Should().Contain("AutomationProperties.SetName(_sheetBox, \"Unhide sheet\");");
+        source.Should().Contain("AutomationProperties.SetName(_sheetBox, UiText.Get(\"UnhideSheet_UnhideSheet\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_sheetBox, \"UnhideSheetList\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_sheetBox, \"Select the hidden worksheet to make visible.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_sheetBox, UiText.Get(\"UnhideSheet_SelectTheHiddenWorksheetToMakeVisible\"));");
     }
 
     [Fact]
@@ -1229,9 +1232,9 @@ public sealed class RemainingDialogTests
         source.Should().Contain("private readonly Button _okButton");
         source.Should().Contain("private readonly Button _cancelButton");
         source.Should().Contain("AutomationProperties.SetAutomationId(_okButton, \"UnhideSheetOkButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_okButton, \"Unhide the selected worksheet.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_okButton, UiText.Get(\"UnhideSheet_UnhideTheSelectedWorksheet\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_cancelButton, \"UnhideSheetCancelButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_cancelButton, \"Close the Unhide Sheet dialog without changing worksheet visibility.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_cancelButton, UiText.Get(\"UnhideSheet_CloseTheUnhideSheetDialogWithoutChangingWorksheetVisibility\"));");
     }
 
     [Fact]
@@ -1292,11 +1295,11 @@ public sealed class RemainingDialogTests
 
         source.Should().Contain("private readonly TextBox _notInDictionaryBox");
         source.Should().Contain("private readonly ListBox _suggestionsBox");
-        source.Should().Contain("Not in _Dictionary:");
-        source.Should().Contain("_Suggestions:");
+        source.Should().Contain("UiText.Get(\"SpellCheck_NotInDictionary\")");
+        source.Should().Contain("UiText.Get(\"SpellCheck_Suggestions\")");
         source.Should().Contain("_suggestionsBox.Items.Add(suggestion)");
         source.Should().Contain("_suggestionsBox.SelectionChanged");
-        source.Should().Contain("new Label { Content = \"_Change to:\", Target = _replacementBox");
+        source.Should().Contain("new Label { Content = UiText.Get(\"SpellCheck_ChangeTo\"), Target = _replacementBox");
         source.Should().Contain("Grid.SetColumn(actionButtons");
     }
 
@@ -1305,15 +1308,15 @@ public sealed class RemainingDialogTests
     {
         var source = ReadClassSource("SpellCheckDialog.cs", "public sealed class SpellCheckDialog", "public sealed class __NoNextSpellCheckDialog");
 
-        source.Should().Contain("AutomationProperties.SetName(_notInDictionaryBox, \"Not in Dictionary\");");
+        source.Should().Contain("AutomationProperties.SetName(_notInDictionaryBox, UiText.Get(\"SpellCheck_NotInDictionary2\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_notInDictionaryBox, \"SpellCheckNotInDictionaryBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_notInDictionaryBox, \"Shows the word that was not found in the dictionary.\");");
-        source.Should().Contain("AutomationProperties.SetName(_suggestionsBox, \"Suggestions\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_notInDictionaryBox, UiText.Get(\"SpellCheck_ShowsTheWordThatWasNotFoundInTheDictionary\"));");
+        source.Should().Contain("AutomationProperties.SetName(_suggestionsBox, UiText.Get(\"SpellCheck_Suggestions2\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_suggestionsBox, \"SpellCheckSuggestionsList\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_suggestionsBox, \"Choose a suggested spelling replacement.\");");
-        source.Should().Contain("AutomationProperties.SetName(_replacementBox, \"Change to\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_suggestionsBox, UiText.Get(\"SpellCheck_ChooseASuggestedSpellingReplacement\"));");
+        source.Should().Contain("AutomationProperties.SetName(_replacementBox, UiText.Get(\"SpellCheck_ChangeTo2\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_replacementBox, \"SpellCheckReplacementBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_replacementBox, \"Enter the replacement text for the misspelled word.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_replacementBox, UiText.Get(\"SpellCheck_EnterTheReplacementTextForTheMisspelledWord\"));");
     }
 
     [Fact]
@@ -1322,10 +1325,10 @@ public sealed class RemainingDialogTests
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("SpellCheckDialogAction.Add");
-        source.Should().Contain("Content = \"Ignore _Once\"");
-        source.Should().Contain("Content = \"_Change\"");
-        source.Should().Contain("Content = \"_Change\", Width = 90, IsDefault = true");
-        source.Should().Contain("Content = \"Add to _Dictionary\"");
+        source.Should().Contain("Content = UiText.Get(\"SpellCheck_IgnoreOnce\")");
+        source.Should().Contain("Content = UiText.Get(\"SpellCheck_Change\")");
+        source.Should().Contain("Content = UiText.Get(\"SpellCheck_Change\"), Width = 90, IsDefault = true");
+        source.Should().Contain("Content = UiText.Get(\"SpellCheck_AddToDictionary\")");
         source.Should().Contain("CreateIgnoreAllResult");
         source.Should().Contain("CreateReplaceAllResult(word, _replacementBox.Text)");
         source.Should().Contain("CreateAddResult");
@@ -1370,20 +1373,28 @@ public sealed class RemainingDialogTests
     {
         var labels = new[]
         {
-            "Ignore _Once",
-            "Ignore _All",
-            "_Change",
-            "Change A_ll",
-            "Add to _Dictionary",
-            "Ca_ncel"
+            UiText.Get("SpellCheck_IgnoreOnce"),
+            UiText.Get("SpellCheck_IgnoreAll"),
+            UiText.Get("SpellCheck_Change"),
+            UiText.Get("SpellCheck_ChangeAll"),
+            UiText.Get("SpellCheck_AddToDictionary"),
+            UiText.Get("SpellCheck_Cancel")
         };
 
         labels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
 
         var source = ReadClassSource("SpellCheckDialog.cs", "public sealed class SpellCheckDialog", "public sealed class __NoNextSpellCheckDialog");
-        foreach (var label in labels)
+        foreach (var key in new[]
         {
-            source.Should().Contain($"Content = \"{label}\"");
+            "SpellCheck_IgnoreOnce",
+            "SpellCheck_IgnoreAll",
+            "SpellCheck_Change",
+            "SpellCheck_ChangeAll",
+            "SpellCheck_AddToDictionary",
+            "SpellCheck_Cancel"
+        })
+        {
+            source.Should().Contain($"Content = UiText.Get(\"{key}\")");
         }
 
         source.Should().Contain("AutomationProperties.SetAutomationId(button, automationId);");
@@ -1442,13 +1453,13 @@ public sealed class RemainingDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
 
-        source.Should().Contain("Content = \"_Workbook\"");
-        source.Should().Contain("Content = \"Active _sheet(s)\"");
-        source.Should().Contain("Content = \"Selected _range\"");
-        source.Should().Contain("PDF/XPS options");
-        source.Should().Contain("Content = \"_Include document properties\"");
-        source.Should().Contain("Content = \"_Open after publishing\"");
-        source.Should().Contain("Content = \"_Ignore print areas\"");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_Workbook\")");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_ActiveSheetS\")");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_SelectedRange\")");
+        source.Should().Contain("UiText.Get(\"ExportOptions_PdfXpsOptions\")");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_IncludeDocumentProperties\")");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_OpenAfterPublishing\")");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_IgnorePrintAreas\")");
         source.Should().NotContain("CSV options");
         source.Should().NotContain("Content = \"CSV _delimiter:\"");
     }
@@ -1458,17 +1469,17 @@ public sealed class RemainingDialogTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = \"_Previous Page\"");
-        source.Should().Contain("Content = \"_Next Page\"");
-        source.Should().Contain("Content = \"_First Page\"");
-        source.Should().Contain("Content = \"_Last Page\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PreviousPageButton\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_NextPageButton\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_FirstPageButton\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_LastPageButton\")");
         source.Should().Contain("NavigationCommands.FirstPage");
         source.Should().Contain("NavigationCommands.LastPage");
-        source.Should().Contain("Content = \"_Zoom:\"");
-        source.Should().Contain("Content = \"_Margins\"");
-        source.Should().Contain("Content = \"Page _Setup...\"");
-        source.Should().Contain("Content = \"_Print...\"");
-        source.Should().Contain("Content = \"_Close Preview\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_ZoomLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_MarginsButton\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PageSetupButton\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_CloseButton\")");
         source.Should().Contain("IsCancel = true");
         source.Should().Contain("closeButton.Click += (_, _) => Close();");
     }

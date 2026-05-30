@@ -4,5 +4,5 @@
     <path d="M10 10V6h12v4M10 24H8a2 2 0 0 1-2-2v-8h20v8a2 2 0 0 1-2 2h-2"/>
     <rect x="10" y="17" width="12" height="9" rx="1"/>
   </g>
-  <text x="16" y="23" font-family="Segoe UI, Arial, sans-serif" font-size="6" font-weight="700" text-anchor="middle" fill="#242424">A1</text>
+  <text x="16" y="23.8" font-family="Segoe UI, Arial, sans-serif" font-size="8" font-weight="700" text-anchor="middle" fill="#242424">A1</text>
 </svg>

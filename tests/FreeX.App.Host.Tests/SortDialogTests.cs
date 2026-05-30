@@ -150,16 +150,16 @@ public sealed class SortDialogTests
 
         foreach (var content in new[]
         {
-            "_Add Level",
-            "_Delete Level",
-            "_Copy Level",
-            "Move _Up",
-            "Move Do_wn",
-            "_Options...",
-            "_OK",
-            "_Cancel"
+            "Content = UiText.Get(\"Sort_AddLevel\")",
+            "Content = UiText.Get(\"Sort_DeleteLevel\")",
+            "Content = UiText.Get(\"Sort_CopyLevel\")",
+            "Content = UiText.Get(\"Sort_MoveUp\")",
+            "Content = UiText.Get(\"Sort_MoveDown\")",
+            "Content = UiText.Get(\"Sort_Options\")",
+            "Content = UiText.Ok",
+            "Content = UiText.Cancel"
         })
-            source.Should().Contain($"Content = \"{content}\"");
+            source.Should().Contain(content);
     }
 
     [Fact]
@@ -168,19 +168,19 @@ public sealed class SortDialogTests
         var source = ReadSortDialogSource();
         var planningSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SortDialog.Planning.cs"));
 
-        source.Should().Contain("My data has _headers");
+        source.Should().Contain("UiText.Get(\"Sort_MyDataHasHeaders\")");
         source.Should().Contain("IsChecked = hasHeaders");
         source.Should().Contain("ResultHasHeaders");
-        source.Should().Contain("Sort levels");
-        source.Should().Contain("Header = \"Sort by\"");
-        source.Should().Contain("Header = \"Sort On\"");
-        source.Should().Contain("Header = \"Order\"");
-        source.Should().Contain("Header = \"Color\"");
-        source.Should().Contain("Cell Values");
-        source.Should().Contain("Cell Color");
-        source.Should().Contain("Font Color");
-        source.Should().Contain("On Top");
-        source.Should().Contain("On Bottom");
+        source.Should().Contain("UiText.Get(\"Sort_SortLevels\")");
+        source.Should().Contain("Header = UiText.Get(\"Sort_SortBy\")");
+        source.Should().Contain("Header = UiText.Get(\"Sort_SortOn\")");
+        source.Should().Contain("Header = UiText.Get(\"Sort_Order\")");
+        source.Should().Contain("Header = UiText.Get(\"Sort_Color\")");
+        source.Should().Contain("UiText.Get(\"Sort_SortOnCellValues\")");
+        source.Should().Contain("UiText.Get(\"Sort_SortOnCellColor\")");
+        source.Should().Contain("UiText.Get(\"Sort_SortOnFontColor\")");
+        source.Should().Contain("UiText.Get(\"Sort_OrderOnTop\")");
+        source.Should().Contain("UiText.Get(\"Sort_OrderOnBottom\")");
         source.Should().Contain("CreateOrderColumn");
         planningSource.Should().Contain("BuildColorChoices");
         source.Should().Contain("UpdateColumnChoices");
@@ -483,13 +483,13 @@ public sealed class SortDialogTests
         var source = ReadSortDialogSource();
         var optionsSource = source[source.IndexOf("public sealed class SortOptionsDialog", StringComparison.Ordinal)..];
 
-        optionsSource.Should().Contain("Title = \"Sort Options\"");
-        optionsSource.Should().Contain("_Case sensitive");
-        optionsSource.Should().Contain("First key sort order");
-        optionsSource.Should().Contain("Sun, Mon, Tue, Wed, Thu, Fri, Sat");
-        optionsSource.Should().Contain("January, February, March, April, May, June, July, August, September, October, November, December");
-        optionsSource.Should().Contain("Sort top to _bottom");
-        optionsSource.Should().Contain("Sort left to _right");
+        optionsSource.Should().Contain("Title = UiText.Get(\"SortOptions_SortOptions\")");
+        optionsSource.Should().Contain("UiText.Get(\"SortOptions_CaseSensitive\")");
+        optionsSource.Should().Contain("UiText.Get(\"SortOptions_FirstKeySortOrderLabel\")");
+        optionsSource.Should().Contain("UiText.Get(\"SortOptions_FirstKeySunToSatShort\")");
+        optionsSource.Should().Contain("UiText.Get(\"SortOptions_FirstKeyJanuaryToDecember\")");
+        optionsSource.Should().Contain("UiText.Get(\"SortOptions_SortTopToBottom\")");
+        optionsSource.Should().Contain("UiText.Get(\"SortOptions_SortLeftToRight\")");
         optionsSource.Should().Contain("Result = new SortDialogOptions");
         optionsSource.Should().Contain("FirstKeySortOrder:");
         optionsSource.Should().NotContain("IsEnabled = false");
@@ -509,8 +509,8 @@ public sealed class SortDialogTests
             dialog.Loaded += (_, _) =>
             {
                 var combo = GetControl<ComboBox>(dialog, "_firstKeySortOrderBox");
-                combo.SelectedItem.Should().Be(current.FirstKeySortOrder);
-                combo.SelectedItem = "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday";
+                combo.SelectedValue.Should().Be(current.FirstKeySortOrder);
+                combo.SelectedValue = "Sunday, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday";
                 dialog.Dispatcher.BeginInvoke(() => ClickDefaultButton(dialog));
             };
 

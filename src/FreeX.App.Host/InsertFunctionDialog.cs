@@ -23,7 +23,7 @@ public sealed class InsertFunctionDialog : Window
 
     public InsertFunctionDialog()
     {
-        Title = "Insert Function";
+        Title = UiText.Get("InsertFunction_InsertFunction");
         Width = 560; Height = 460;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResize;
@@ -40,18 +40,18 @@ public sealed class InsertFunctionDialog : Window
         DockPanel.SetDock(searchPanel, Dock.Top);
 
         _searchBox = new TextBox { VerticalContentAlignment = VerticalAlignment.Center, MinWidth = 260, Margin = new Thickness(4, 0, 8, 6) };
-        var searchLabel = new Label { Content = "Search for a _function:", Target = _searchBox, VerticalContentAlignment = VerticalAlignment.Center };
+        var searchLabel = new Label { Content = UiText.Get("InsertFunction_SearchForAFunction"), Target = _searchBox, VerticalContentAlignment = VerticalAlignment.Center };
         searchPanel.Children.Add(searchLabel);
         Grid.SetColumn(_searchBox, 1);
         searchPanel.Children.Add(_searchBox);
-        var go = new Button { Content = "_Go", Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6) };
+        var go = new Button { Content = UiText.Get("InsertFunction_Go"), Width = 64, Height = 24, Margin = new Thickness(0, 0, 0, 6) };
         go.Click += (_, _) => RefreshList();
         Grid.SetColumn(go, 2);
         searchPanel.Children.Add(go);
         _searchBox.TextChanged += (_, _) => RefreshList();
 
         _categoryBox = new ComboBox { Margin = new Thickness(4, 0, 0, 0), VerticalContentAlignment = VerticalAlignment.Center };
-        var categoryLabel = new Label { Content = "Or select a _category:", Target = _categoryBox, VerticalContentAlignment = VerticalAlignment.Center };
+        var categoryLabel = new Label { Content = UiText.Get("InsertFunction_OrSelectACategory"), Target = _categoryBox, VerticalContentAlignment = VerticalAlignment.Center };
         Grid.SetRow(categoryLabel, 1);
         searchPanel.Children.Add(categoryLabel);
         _categoryBox.ItemsSource = BuildCategoryChoices(_catalog);
@@ -62,13 +62,13 @@ public sealed class InsertFunctionDialog : Window
         searchPanel.Children.Add(_categoryBox);
 
         _listBox = new ListBox();
-        AutomationProperties.SetName(_listBox, "Functions");
-        var listLabel = new Label { Content = "Select a _function:", Target = _listBox, Padding = new Thickness(0, 0, 0, 4) };
+        AutomationProperties.SetName(_listBox, UiText.Get("InsertFunction_Functions"));
+        var listLabel = new Label { Content = UiText.Get("InsertFunction_SelectAFunction"), Target = _listBox, Padding = new Thickness(0, 0, 0, 4) };
         DockPanel.SetDock(listLabel, Dock.Top);
 
         var helpPanel = new GroupBox
         {
-            Header = "Formula syntax and help",
+            Header = UiText.Get("InsertFunction_FormulaSyntaxAndHelp"),
             Margin = new Thickness(0, 8, 0, 0),
             Padding = new Thickness(8)
         };
@@ -94,10 +94,10 @@ public sealed class InsertFunctionDialog : Window
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
         DockPanel.SetDock(btnRow, Dock.Bottom);
-        var ok = new Button { Content = "_OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-        var help = new Button { Content = "_Help on this function", Width = 146, Margin = new Thickness(0, 0, 8, 0) };
+        var ok = new Button { Content = UiText.Ok, Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var help = new Button { Content = UiText.Get("InsertFunction_HelpOnThisFunction"), Width = 146, Margin = new Thickness(0, 0, 8, 0) };
         help.Click += (_, _) => ShowFunctionHelp();
-        var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
+        var cancel = new Button { Content = UiText.Cancel, Width = 80, IsCancel = true };
         ok.Click += Ok_Click;
         btnRow.Children.Add(help);
         btnRow.Children.Add(ok);
@@ -177,10 +177,10 @@ public sealed class InsertFunctionDialog : Window
     {
         var entry = _listBox.SelectedItem as InsertFunctionCatalogEntry;
         var message = entry is null
-            ? "Select a function to see its syntax and description. Use search or category filtering to narrow the list."
-            : $"{entry.Name}()\n\n{entry.Description}";
+            ? UiText.Get("InsertFunction_SelectFunctionForHelpMessage")
+            : UiText.Format("InsertFunction_FunctionHelpMessage", entry.Name, entry.Description);
 
-        DialogMessageHelper.ShowInfo(this, message, "Function Help");
+        DialogMessageHelper.ShowInfo(this, message, UiText.Get("InsertFunction_FunctionHelpTitle"));
     }
 
 }

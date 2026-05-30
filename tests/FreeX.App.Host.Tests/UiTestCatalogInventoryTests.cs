@@ -135,6 +135,36 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().Contain("Continue expanding the source-based machine-readable inventory guard");
     }
 
+    [Fact]
+    public void ScreenshotHarnessCatalogRow_DocumentsInAppRibbonTourPath()
+    {
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var row = catalog
+            .Split(Environment.NewLine)
+            .Single(line => line.StartsWith("| UI-CMD-HARNESS-001 |", StringComparison.Ordinal));
+        var plannedCaptureCount = RibbonScreenshotTourPlanner.DefaultTabs.Count *
+                                  RibbonScreenshotTourPlanner.DefaultWidths.Count;
+
+        row.Should().Contain("FREEX_SS_TOUR=1");
+        row.Should().Contain("FREEX_SS_TOUR_BURST=1");
+        row.Should().Contain("FREEX_SS_TOUR_TABS");
+        row.Should().Contain("FREEX_SS_TOUR_WIDTHS");
+        row.Should().Contain($"{plannedCaptureCount} planned captures");
+        row.Should().Contain($"{plannedCaptureCount * RibbonScreenshotTourPlanner.BurstPhases.Count} burst-phase captures");
+        row.Should().Contain("ribbon_screenshot_tour_manifest.json");
+        row.Should().Contain("resize breakpoint");
+        row.Should().Contain("deletes only the currently requested plan");
+        row.Should().Contain("phase-grouped expected PNG names");
+        row.Should().Contain("missing planned tabs abort");
+        row.Should().Contain("max/1100/900/750 by tab matrix");
+        row.Should().Contain("36 captures each");
+        row.Should().Contain("excel_<WidthLabel>_<RibbonTab>.png");
+        row.Should().Contain("ribbon_<WidthLabel>_<RibbonTab>.png");
+        row.Should().Contain("PairKey");
+        row.Should().Contain("ribbon:<WidthLabel>:<TabFileName>");
+        row.Should().Contain("counterpart file names");
+    }
+
     [Theory]
     [InlineData("screenshot_excel.ps1")]
     [InlineData("screenshot_ribbon.ps1")]
@@ -256,6 +286,7 @@ public sealed partial class UiTestCatalogInventoryTests
             .Select(tab => tab.Attribute("Header")?.Value)
             .Where(header => !string.IsNullOrWhiteSpace(header))
             .Cast<string>()
+            .Select(header => LocalizedXamlTestSupport.ResolveLocalizedValue(header) ?? header)
             .ToArray();
     }
 
@@ -270,6 +301,7 @@ public sealed partial class UiTestCatalogInventoryTests
             .Select(tab => tab.Attribute("Header")?.Value)
             .Where(header => !string.IsNullOrWhiteSpace(header))
             .Cast<string>()
+            .Select(header => LocalizedXamlTestSupport.ResolveLocalizedValue(header) ?? header)
             .ToArray();
     }
 
@@ -301,22 +333,13 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     private static int ReadMainWindowXamlClickHandlerCount()
-    {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        return XamlClickHandler().Matches(xaml).Count;
-    }
+        => RibbonXamlCatalogSnapshotReader.ReadMainWindowSnapshot().ClickHandlerCount;
 
     private static int ReadMainWindowXamlAutomationIdCount()
-    {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        return XamlAutomationId().Matches(xaml).Count;
-    }
+        => RibbonXamlCatalogSnapshotReader.ReadMainWindowSnapshot().AutomationIdCount;
 
     private static int ReadMainWindowXamlRibbonKeyTipCount()
-    {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        return RibbonTooltipKeyTip().Matches(xaml).Count;
-    }
+        => RibbonXamlCatalogSnapshotReader.ReadMainWindowSnapshot().RibbonKeyTipCount;
 
     private static KeyboardShortcutUsageCounts ReadKeyboardShortcutUsageCounts()
     {
@@ -403,15 +426,6 @@ public sealed partial class UiTestCatalogInventoryTests
 
     private static IReadOnlyList<string> SplitMarkdownRow(string row) =>
         row.Trim().Trim('|').Split('|').Select(column => column.Trim()).ToArray();
-
-    [GeneratedRegex(@"Click=""[^""]+""")]
-    private static partial Regex XamlClickHandler();
-
-    [GeneratedRegex(@"AutomationProperties\.AutomationId=""[^""]+""")]
-    private static partial Regex XamlAutomationId();
-
-    [GeneratedRegex(@"RibbonTooltip\.KeyTip=""[^""]+""")]
-    private static partial Regex RibbonTooltipKeyTip();
 
     [GeneratedRegex(@"\bnew\(KeyboardCommandShortcut\.")]
     private static partial Regex CommandShortcutRuleDeclaration();

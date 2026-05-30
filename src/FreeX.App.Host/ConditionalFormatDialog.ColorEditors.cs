@@ -23,7 +23,7 @@ public partial class ConditionalFormatDialog
         if (_colorBox.SelectedIndex < 0 || ColorOptions[_colorBox.SelectedIndex].FillColor != wc)
         {
             _customFormatStyle = new CellStyle { FillColor = color };
-            _colorBox.SelectedItem = "Custom Format...";
+            _colorBox.SelectedItem = UiText.Get("ConditionalFormatDialog_FormatPreset_CustomFormat");
         }
     }
 
@@ -37,7 +37,7 @@ public partial class ConditionalFormatDialog
             return;
 
         _customFormatStyle = new CellStyle { FillColor = color };
-        _colorBox.SelectedItem = "Custom Format...";
+        _colorBox.SelectedItem = UiText.Get("ConditionalFormatDialog_FormatPreset_CustomFormat");
     }
 
     private (string Label, Color FillColor, Color? FontColor, bool Bold) SelectedColorPreset()
@@ -47,13 +47,13 @@ public partial class ConditionalFormatDialog
     }
 
     private CellColor SelectedDataBarColor(Color fallback) =>
-        _colorBox.SelectedItem as string == "Custom Format..." && _customFormatStyle?.FillColor is { } custom
+        _colorBox.SelectedItem as string == UiText.Get("ConditionalFormatDialog_FormatPreset_CustomFormat") && _customFormatStyle?.FillColor is { } custom
             ? custom
             : new CellColor(fallback.R, fallback.G, fallback.B);
 
     private CellStyle BuildSelectedCellStyle()
     {
-        if (_colorBox.SelectedItem as string == "Custom Format..." && _customFormatStyle is not null)
+        if (_colorBox.SelectedItem as string == UiText.Get("ConditionalFormatDialog_FormatPreset_CustomFormat") && _customFormatStyle is not null)
             return _customFormatStyle.Clone();
 
         var selected = SelectedColorPreset();
@@ -75,7 +75,7 @@ public partial class ConditionalFormatDialog
             Content = "...",
             Width = 28,
             Margin = new Thickness(6, 4, 0, 12),
-            ToolTip = "Choose data bar color"
+            ToolTip = UiText.Get("ConditionalFormatDialog_ChooseDataBarColorToolTip")
         };
         button.Click += FormatButton_Click;
         return button;
