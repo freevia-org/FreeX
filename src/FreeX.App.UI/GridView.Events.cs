@@ -55,4 +55,13 @@ public partial class GridView
 
     /// <summary>Fired when the user finishes drag-resizing a drawing object.</summary>
     public event Action<Guid, ObjectKind, double, double>? ObjectResized;
+
+    /// <summary>
+    /// Fired when the user finishes drag-resizing a drawing object from a handle that also
+    /// moves the top-left corner (N/W/NW/NE/SW), so both the new anchor cell and size are committed together.
+    /// </summary>
+    public event Action<Guid, ObjectKind, CellAddress, double, double>? ObjectResizedWithAnchor;
+
+    /// <summary>Fired when the user finishes rotating a drawing object via the rotation grip.</summary>
+    public event Action<Guid, ObjectKind, double>? ObjectRotated;
 }

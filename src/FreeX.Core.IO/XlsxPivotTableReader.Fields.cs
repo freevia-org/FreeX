@@ -90,7 +90,8 @@ internal static partial class XlsxPivotTableReader
                     ReadOptionalBoolAttribute(field, "dragToRow"),
                     ReadOptionalBoolAttribute(field, "dragToCol"),
                     ReadOptionalBoolAttribute(field, "dragToPage"),
-                    ReadOptionalBoolAttribute(field, "dragToData"))))
+                    ReadOptionalBoolAttribute(field, "dragToData"),
+                    ReadOptionalBoolAttribute(field, "showDropDowns"))))
             .ToDictionary(pair => pair.Key, pair => pair.Value);
     }
 
@@ -182,7 +183,8 @@ internal static partial class XlsxPivotTableReader
             metadata?.DragToRow,
             metadata?.DragToColumn,
             metadata?.DragToPage,
-            metadata?.DragToData);
+            metadata?.DragToData,
+            metadata?.ShowDropDowns);
 
     private static IReadOnlyList<string>? ReadNativePivotFieldSelection(
         IReadOnlyDictionary<int, IReadOnlyList<string>>? nativeFieldSelections,
@@ -220,5 +222,6 @@ internal static partial class XlsxPivotTableReader
         bool? DragToRow,
         bool? DragToColumn,
         bool? DragToPage,
-        bool? DragToData);
+        bool? DragToData,
+        bool? ShowDropDowns);
 }

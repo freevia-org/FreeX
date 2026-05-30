@@ -80,7 +80,7 @@ public partial class MainWindow : Window
     private readonly RecentFilesStore _recentFiles;
     private readonly IWorkbookShareService _shareService = new WindowsWorkbookShareService();
     private List<RecentFileViewModel> _allRecentItems = [];
-    private FreeXOptions _options = FreeXOptions.Load();
+    private FreeXOptions _options;
     private string? _currentFilePath;
     private XlsxFeatureReport? _currentXlsxFeatureReport;
     private double _zoomLevel = 1.0;
@@ -185,7 +185,8 @@ public partial class MainWindow : Window
         IUserMessageService messageService,
         IAppDiagnostics? diagnostics = null,
         AppDiagnosticsMetadata? diagnosticsMetadata = null,
-        AppDiagnosticsOptions? diagnosticsOptions = null)
+        AppDiagnosticsOptions? diagnosticsOptions = null,
+        FreeXOptions? options = null)
     {
         _logger = logger;
         _viewportService = viewportService;
@@ -198,6 +199,7 @@ public partial class MainWindow : Window
         _diagnosticsOptions = diagnosticsOptions ?? AppDiagnosticsOptions.CreateDefault();
         _workbookRef = workbookRef;
         _workbook = workbook;
+        _options = options ?? FreeXOptions.Load();
         _recentFiles = RecentFilesStore.Load();
 
         InitializeComponent();
@@ -234,6 +236,8 @@ public partial class MainWindow : Window
         SheetGrid.SplitPaneScrollbarScrolled += OnSplitPaneScrollbarScrolled;
         SheetGrid.ObjectMoved   += OnObjectMoved;
         SheetGrid.ObjectResized += OnObjectResized;
+        SheetGrid.ObjectResizedWithAnchor += OnObjectResizedWithAnchor;
+        SheetGrid.ObjectRotated += OnObjectRotated;
         SheetGrid.MouseMove  += SheetGrid_MouseMove;
         SheetGrid.MouseUp    += SheetGrid_MouseUp;
         SheetGrid.MouseWheel += SheetGrid_MouseWheel;

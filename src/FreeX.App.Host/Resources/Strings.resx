@@ -8736,6 +8736,34 @@
     <value>_Add a Language...</value>
   </data>
 
+<data name="Options_ChooseDisplayLanguage" xml:space="preserve">
+    <value>Choose display language</value>
+  </data>
+
+<data name="Options_AppLanguage" xml:space="preserve">
+    <value>App _language:</value>
+  </data>
+
+<data name="Options_AppLanguageHelpText" xml:space="preserve">
+    <value>Select the display language FreeX uses for menus, dialogs, and messages.</value>
+  </data>
+
+<data name="Options_AppLanguageSystemDefault" xml:space="preserve">
+    <value>Use system default</value>
+  </data>
+
+<data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve">
+    <value>English (United States)</value>
+  </data>
+
+<data name="Options_AppLanguageRestartNotice" xml:space="preserve">
+    <value>Some open windows may keep their current language until you restart FreeX.</value>
+  </data>
+
+<data name="Options_AppLanguageRestartMessage" xml:space="preserve">
+    <value>Your language choice was saved. Restart FreeX to refresh every open window.</value>
+  </data>
+
 <data name="Options_EaseOfAccessOptions" xml:space="preserve">
     <value>Ease of Access options</value>
   </data>
@@ -14246,5 +14274,110 @@ and {0} more.</value>
   </data>
   <data name="Progress_SavingWorkbook" xml:space="preserve">
     <value>Saving workbook</value>
+  </data>
+  <data name="MainWindow_Header_TableDesign" xml:space="preserve">
+    <value>Table Design</value>
+  </data>
+  <data name="MainWindow_Content_TableName" xml:space="preserve">
+    <value>Table Name</value>
+  </data>
+  <data name="MainWindow_Content_ResizeTable" xml:space="preserve">
+    <value>Resize Table</value>
+  </data>
+  <data name="MainWindow_Content_SummarizeWithPivotTable" xml:space="preserve">
+    <value>Summarize with PivotTable</value>
+  </data>
+  <data name="MainWindow_Content_ConvertToRange" xml:space="preserve">
+    <value>Convert to Range</value>
+  </data>
+  <data name="MainWindow_Content_HeaderRow" xml:space="preserve">
+    <value>Header Row</value>
+  </data>
+  <data name="MainWindow_Content_TotalRow" xml:space="preserve">
+    <value>Total Row</value>
+  </data>
+  <data name="MainWindow_Content_FirstColumn" xml:space="preserve">
+    <value>First Column</value>
+  </data>
+  <data name="MainWindow_Content_LastColumn" xml:space="preserve">
+    <value>Last Column</value>
+  </data>
+  <data name="MainWindow_Content_FilterButton" xml:space="preserve">
+    <value>Filter Button</value>
+  </data>
+  <data name="MainWindow_Text_TableStyleOptions" xml:space="preserve">
+    <value>Table Style Options</value>
+  </data>
+  <data name="MainWindow_Text_TableStyles" xml:space="preserve">
+    <value>Table Styles</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_TableName" xml:space="preserve">
+    <value>Table Name</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_ResizeTable" xml:space="preserve">
+    <value>Resize Table</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_SummarizeWithPivotTable" xml:space="preserve">
+    <value>Summarize with PivotTable</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_ConvertToRange" xml:space="preserve">
+    <value>Convert to Range</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_HeaderRow" xml:space="preserve">
+    <value>Header Row</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_TotalRow" xml:space="preserve">
+    <value>Total Row</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_FirstColumn" xml:space="preserve">
+    <value>First Column</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_LastColumn" xml:space="preserve">
+    <value>Last Column</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_FilterButton" xml:space="preserve">
+    <value>Filter Button</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_TableStyles" xml:space="preserve">
+    <value>Table Styles</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_RenamingTablesFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
+    <value>Renaming tables from the ribbon is deferred in FreeX.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ResizingStructuredTablesFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
+    <value>Resizing structured tables from the ribbon is deferred in FreeX.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_TablePivotSummaryShortcutIsDeferredInFreeX" xml:space="preserve">
+    <value>The table PivotTable summary shortcut is deferred in FreeX.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_DeleteDuplicateRowsFromTheActiveTable" xml:space="preserve">
+    <value>Delete duplicate rows from the active table.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ConvertingTablesToPlainRangesIsDeferredInFreeX" xml:space="preserve">
+    <value>Converting tables to plain ranges is deferred in FreeX.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_HeaderRowsRemainVisibleForStructuredTablesInFreeX" xml:space="preserve">
+    <value>Header rows remain visible for structured tables in FreeX.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ShowOrHideTheTotalsRowForTheActiveTable" xml:space="preserve">
+    <value>Show or hide the totals row for the active table.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_EmphasizeTheFirstColumnInTheActiveTable" xml:space="preserve">
+    <value>Emphasize the first column in the active table.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_EmphasizeTheLastColumnInTheActiveTable" xml:space="preserve">
+    <value>Emphasize the last column in the active table.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ToggleBandedRowFormattingForTheActiveTable" xml:space="preserve">
+    <value>Toggle banded row formatting for the active table.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ToggleBandedColumnFormattingForTheActiveTable" xml:space="preserve">
+    <value>Toggle banded column formatting for the active table.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ShowOrHideAutoFilterButtonsForTheActiveTable" xml:space="preserve">
+    <value>Show or hide AutoFilter buttons for the active table.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ChooseAStyleForTheActiveStructuredTable" xml:space="preserve">
+    <value>Choose a style for the active structured table.</value>
   </data>
 </root>

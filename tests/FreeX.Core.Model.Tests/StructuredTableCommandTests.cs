@@ -297,6 +297,41 @@ public sealed class StructuredTableCommandTests
     }
 
     [Fact]
+    public void ConfigureStructuredTableStyleOptionsCommand_CanUpdateStyleFilterAndTotalsMetadata()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var table = CreateSalesTable(sheet);
+        sheet.StructuredTables.Add(table);
+        var ctx = new SimpleCtx(wb);
+
+        var command = new ConfigureStructuredTableStyleOptionsCommand(
+            sheet.Id,
+            table.Id,
+            showFirstColumn: table.ShowFirstColumn,
+            showLastColumn: table.ShowLastColumn,
+            showRowStripes: table.ShowRowStripes,
+            showColumnStripes: table.ShowColumnStripes,
+            styleName: "TableStyleDark4",
+            updateStyleName: true,
+            hasAutoFilter: false,
+            totalsRowShown: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var configured = sheet.StructuredTables.Should().ContainSingle().Subject;
+        configured.StyleName.Should().Be("TableStyleDark4");
+        configured.HasAutoFilter.Should().BeFalse();
+        configured.TotalsRowShown.Should().BeTrue();
+        configured.Columns.Should().Equal(table.Columns);
+        configured.FilterColumns.Should().Equal(table.FilterColumns);
+
+        command.Revert(ctx);
+
+        sheet.StructuredTables.Should().ContainSingle().Which.Should().BeSameAs(table);
+    }
+
+    [Fact]
     public void ConfigureStructuredTableStyleOptionsCommand_RejectsMissingTableWithoutChangingTables()
     {
         var wb = new Workbook("test");

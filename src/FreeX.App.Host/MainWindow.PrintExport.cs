@@ -43,13 +43,6 @@ public partial class MainWindow
 
     private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
     {
-        var optionsDialog = new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage) { Owner = this };
-        if (optionsDialog.ShowDialog() != true)
-            return;
-
-        _options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;
-        _options.Save();
-
         var saveDlg = new Microsoft.Win32.SaveFileDialog
         {
             Title      = UiText.Get("MainWindowDialog_ExportPdfXpsTitle"),
@@ -64,6 +57,16 @@ public partial class MainWindow
         var selectedFormat = saveDlg.FilterIndex == 2
             ? ExportFormat.Xps
             : ExportFormat.Pdf;
+        var optionsDialog = new ExportOptionsDialog(SheetGrid.SelectedRange is not null, _options.PdfExportLanguage, selectedFormat) { Owner = this };
+        if (optionsDialog.ShowDialog() != true)
+            return;
+
+        if (selectedFormat == ExportFormat.Pdf)
+        {
+            _options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;
+            _options.Save();
+        }
+
         var request = ExportPlanner.PlanExport(saveDlg.FileName, selectedFormat, optionsDialog.Result);
         if (!ExportPlanner.TryValidatePublishOptions(request.Options, request.Format, out var publishOptionsError))
         {
@@ -86,25 +89,26 @@ public partial class MainWindow
     {
         try
         {
-            if (!ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Pdf, out var publishOptionsError))
+            var effectiveOptions = ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Pdf);
+            if (!ExportPlanner.TryValidatePublishOptions(effectiveOptions, ExportFormat.Pdf, out var publishOptionsError))
                 throw new InvalidOperationException(publishOptionsError);
 
-            var document = RenderExportDocument(options);
-            if (!ExportPlanner.TryValidatePageRange(options.PageRange, document.Pages.Count, out var pageRangeError))
+            var document = RenderExportDocument(effectiveOptions);
+            if (!ExportPlanner.TryValidatePageRange(effectiveOptions.PageRange, document.Pages.Count, out var pageRangeError))
                 throw new InvalidOperationException(pageRangeError);
 
-            var properties = PdfDocumentProperties.FromWorkbook(_workbook, options);
+            var properties = PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions);
             PdfDocumentExporter.Save(
                 document,
                 pdfPath,
                 properties,
-                options.PageRange,
-                options.Quality,
-                CreatePdfBookmarks(options),
-                options.InitialView,
-                options.OpenMode,
-                includeSelectableText: !options.BitmapTextWhenFontsMayNotBeEmbedded,
-                pdfLanguage: options.PdfLanguage);
+                effectiveOptions.PageRange,
+                effectiveOptions.Quality,
+                CreatePdfBookmarks(effectiveOptions),
+                effectiveOptions.InitialView,
+                effectiveOptions.OpenMode,
+                includeSelectableText: !effectiveOptions.BitmapTextWhenFontsMayNotBeEmbedded,
+                pdfLanguage: effectiveOptions.PdfLanguage);
 
             ShowOwnedMessage(
                 UiText.Format("MainWindowMessage_ExportPdfSavedFormat", optionSummary, pdfPath),
@@ -115,7 +119,7 @@ public partial class MainWindow
             {
                 ["fileType"] = "pdf",
                 ["format"] = "pdf",
-                ["scope"] = options.Scope.ToString()
+                ["scope"] = effectiveOptions.Scope.ToString()
             });
             return true;
         }
@@ -152,17 +156,18 @@ public partial class MainWindow
     {
         try
         {
-            if (!ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Xps, out var publishOptionsError))
+            var effectiveOptions = ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Xps);
+            if (!ExportPlanner.TryValidatePublishOptions(effectiveOptions, ExportFormat.Xps, out var publishOptionsError))
                 throw new InvalidOperationException(publishOptionsError);
 
-            var paginator = RenderExportPaginator(options);
+            var paginator = RenderExportPaginator(effectiveOptions);
 
             // Open the XPS package for write
             var pkg = System.IO.Packaging.Package.Open(
                 xpsPath,
                 System.IO.FileMode.Create,
                 System.IO.FileAccess.ReadWrite);
-            XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, options));
+            XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions));
 
             using var xpsDoc = new System.Windows.Xps.Packaging.XpsDocument(pkg);
 
@@ -197,7 +202,7 @@ public partial class MainWindow
             {
                 ["fileType"] = "xps",
                 ["format"] = "xps",
-                ["scope"] = options.Scope.ToString()
+                ["scope"] = effectiveOptions.Scope.ToString()
             });
             return true;
         }

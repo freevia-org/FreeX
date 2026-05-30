@@ -703,6 +703,46 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void ConfigurePivotTableLayoutCommand_PreservesFieldDropDownMetadataAndUndoRestores()
+    {
+        var workbook = new Workbook("PivotFieldDropDownMetadataCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "B3"),
+            TargetRange = Range(sheet, "D3", "F7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0, ShowDropDowns: true));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        var command = new ConfigurePivotTableLayoutCommand(
+            sheet.Id,
+            "PivotTable1",
+            rowFields: [],
+            columnFields: [],
+            pageFields: [new PivotFieldModel(0, SelectedItem: "A", MultipleItemSelectionAllowed: false, ShowDropDowns: false)],
+            dataFields: [new PivotDataFieldModel(1, "Sum of Amount", "sum")]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var pageField = pivot.PageFields.Should().ContainSingle().Subject;
+        pageField.SelectedItem.Should().Be("A");
+        pageField.MultipleItemSelectionAllowed.Should().BeFalse();
+        pageField.ShowDropDowns.Should().BeFalse();
+
+        command.Revert(ctx);
+
+        pivot.PageFields.Should().BeEmpty();
+        pivot.RowFields.Should().ContainSingle().Which.ShowDropDowns.Should().BeTrue();
+    }
+
+    [Fact]
     public void ConfigurePivotTableLayoutCommand_AllowsValuesOnlyLayout()
     {
         var workbook = new Workbook("PivotValuesOnlyLayoutCommandTest");

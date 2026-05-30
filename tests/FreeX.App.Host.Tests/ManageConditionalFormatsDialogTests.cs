@@ -34,6 +34,49 @@ public sealed class ManageConditionalFormatsDialogTests
     }
 
     [Fact]
+    public void BuildResultRules_ForCurrentSelectionReordersVisibleRulesWithoutMovingHiddenWorksheetRules()
+    {
+        var sheetId = SheetId.New();
+        var firstVisible = CreateRule(sheetId, 2, 2, 1);
+        var hiddenWorksheetRule = CreateRule(sheetId, 7, 7, 2);
+        var secondVisible = CreateRule(sheetId, 4, 2, 3);
+
+        var result = ManageConditionalFormatsDialog.BuildResultRules(
+            [firstVisible, hiddenWorksheetRule, secondVisible],
+            new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 4, 2)),
+            filterToSelection: true,
+            [secondVisible, firstVisible]);
+
+        result.Select(rule => rule.Id).Should().Equal(secondVisible.Id, hiddenWorksheetRule.Id, firstVisible.Id);
+        result.Select(rule => rule.Priority).Should().Equal(1, 2, 3);
+    }
+
+    [Fact]
+    public void BuildResultRules_ForCurrentSelectionAddsNewRulesAfterLastVisibleRuleSlot()
+    {
+        var sheetId = SheetId.New();
+        var firstVisible = CreateRule(sheetId, 2, 2, 1);
+        var hiddenBetween = CreateRule(sheetId, 7, 7, 2);
+        var secondVisible = CreateRule(sheetId, 4, 2, 3);
+        var hiddenAfter = CreateRule(sheetId, 9, 9, 4);
+        var addedVisible = CreateRule(sheetId, 3, 2, 99);
+
+        var result = ManageConditionalFormatsDialog.BuildResultRules(
+            [firstVisible, hiddenBetween, secondVisible, hiddenAfter],
+            new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 4, 2)),
+            filterToSelection: true,
+            [firstVisible, secondVisible, addedVisible]);
+
+        result.Select(rule => rule.Id).Should().Equal(
+            firstVisible.Id,
+            hiddenBetween.Id,
+            secondVisible.Id,
+            addedVisible.Id,
+            hiddenAfter.Id);
+        result.Select(rule => rule.Priority).Should().Equal(1, 2, 3, 4, 5);
+    }
+
+    [Fact]
     public void BuildResultRules_ForCurrentSelectionCanDeleteSelectedRulesOnly()
     {
         var sheetId = SheetId.New();
