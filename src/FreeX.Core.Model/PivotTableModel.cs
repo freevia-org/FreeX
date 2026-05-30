@@ -156,7 +156,8 @@ public sealed record PivotFieldModel(
     bool? DragToRow = null,
     bool? DragToColumn = null,
     bool? DragToPage = null,
-    bool? DragToData = null);
+    bool? DragToData = null,
+    bool? ShowDropDowns = null);
 
 public enum PivotFieldGrouping
 {
