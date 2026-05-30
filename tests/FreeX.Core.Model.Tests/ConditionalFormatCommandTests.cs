@@ -112,6 +112,45 @@ public sealed class ConditionalFormatCommandTests
     }
 
     [Fact]
+    public void ReplaceAllConditionalFormatsCommand_AppliesManagerEditDeleteReorderAsOneUndoStep()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var first = NewRule(sheet.Id);
+        var second = NewRule(sheet.Id);
+        var third = NewRule(sheet.Id);
+        first.Priority = 1;
+        second.Priority = 2;
+        third.Priority = 3;
+        sheet.ConditionalFormats.AddRange([first, second, third]);
+
+        var editedThird = new ConditionalFormat
+        {
+            Id = third.Id,
+            AppliesTo = third.AppliesTo,
+            Priority = 1,
+            RuleType = third.RuleType,
+            Operator = third.Operator,
+            Value1 = "25",
+            FormatIfTrue = new CellStyle { Italic = true },
+            StopIfTrue = true
+        };
+        var command = new ReplaceAllConditionalFormatsCommand(sheet.Id, [editedThird, first]);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ConditionalFormats.Select(rule => rule.Id).Should().Equal(third.Id, first.Id);
+        sheet.ConditionalFormats[0].Value1.Should().Be("25");
+        sheet.ConditionalFormats[0].StopIfTrue.Should().BeTrue();
+
+        command.Revert(ctx);
+
+        sheet.ConditionalFormats.Select(rule => rule.Id).Should().Equal(first.Id, second.Id, third.Id);
+    }
+
+    [Fact]
     public void ClearConditionalFormats_RuleStartsOutsideClearRange_ButOverlaps_IsRemoved()
     {
         // Rule applies to A1:Z100; clear B2:Y50 — start (A1) is outside but range overlaps

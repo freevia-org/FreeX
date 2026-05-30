@@ -249,10 +249,9 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         var dlg = new ConditionalFormatDialog(selected) { Owner = this };
         if (dlg.ShowDialog() == true && dlg.ResultRule is { } edited)
         {
-            var idx  = _rules.IndexOf(selected);
-            var copy = CloneWithPriority(edited, idx + 1);
-            _rules[idx] = copy;
-            _listView.SelectedItem = copy;
+            ReplaceWorkingRules(
+                ManageConditionalFormatsPlanner.ReplaceRule(_rules, edited),
+                edited.Id);
         }
     }
 
@@ -263,8 +262,11 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             FocusRulesList();
             return;
         }
-        _rules.Remove(selected);
-        ReassignPriorities();
+
+        var selectedIndex = _rules.IndexOf(selected);
+        ReplaceWorkingRules(ManageConditionalFormatsPlanner.DeleteRule(_rules, selected.Id));
+        if (_rules.Count > 0)
+            _listView.SelectedIndex = Math.Min(selectedIndex, _rules.Count - 1);
     }
 
     private void DuplicateRule_Click(object sender, RoutedEventArgs e)
@@ -275,31 +277,30 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             return;
         }
 
-        var idx = _rules.IndexOf(selected);
-        if (idx < 0) return;
-
-        var duplicate = CloneWithPriority(selected, idx + 2, Guid.NewGuid());
-        _rules.Insert(idx + 1, duplicate);
-        _listView.SelectedItem = duplicate;
-        ReassignPriorities();
+        var duplicateId = Guid.NewGuid();
+        ReplaceWorkingRules(
+            ManageConditionalFormatsPlanner.DuplicateRule(_rules, selected.Id, duplicateId),
+            duplicateId);
     }
 
     private void MoveUp_Click(object sender, RoutedEventArgs e)
     {
-        var idx = _rules.IndexOf(_listView.SelectedItem as ConditionalFormat ?? default!);
-        if (idx <= 0) return;
-        (_rules[idx - 1], _rules[idx]) = (_rules[idx], _rules[idx - 1]);
-        _listView.SelectedIndex = idx - 1;
-        ReassignPriorities();
+        if (_listView.SelectedItem is not ConditionalFormat selected)
+            return;
+
+        ReplaceWorkingRules(
+            ManageConditionalFormatsPlanner.MoveRule(_rules, selected.Id, ConditionalFormatRuleMoveDirection.Up),
+            selected.Id);
     }
 
     private void MoveDown_Click(object sender, RoutedEventArgs e)
     {
-        var idx = _rules.IndexOf(_listView.SelectedItem as ConditionalFormat ?? default!);
-        if (idx < 0 || idx >= _rules.Count - 1) return;
-        (_rules[idx + 1], _rules[idx]) = (_rules[idx], _rules[idx + 1]);
-        _listView.SelectedIndex = idx + 1;
-        ReassignPriorities();
+        if (_listView.SelectedItem is not ConditionalFormat selected)
+            return;
+
+        ReplaceWorkingRules(
+            ManageConditionalFormatsPlanner.MoveRule(_rules, selected.Id, ConditionalFormatRuleMoveDirection.Down),
+            selected.Id);
     }
 
     private void ListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -366,6 +367,16 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         }
     }
 
+    private void ReplaceWorkingRules(IReadOnlyList<ConditionalFormat> plannedRules, Guid? selectedRuleId = null)
+    {
+        _rules.Clear();
+        foreach (var rule in plannedRules)
+            _rules.Add(rule);
+
+        if (selectedRuleId is { } id)
+            _listView.SelectedItem = _rules.FirstOrDefault(rule => rule.Id == id);
+    }
+
     private bool IsFilteringToRange() => CurrentScopeRange() is not null;
 
     private GridRange? CurrentScopeRange() =>
@@ -422,17 +433,12 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
     public void ApplyAppliesToRangeSelection(Guid ruleId, GridRange range)
     {
-        var index = _rules
-            .Select((rule, ruleIndex) => new { rule, ruleIndex })
-            .FirstOrDefault(item => item.rule.Id == ruleId)
-            ?.ruleIndex;
-        if (index is null)
+        if (!_rules.Any(rule => rule.Id == ruleId))
             return;
 
-        var updated = CloneWithPriority(_rules[index.Value], index.Value + 1);
-        updated.AppliesTo = range;
-        _rules[index.Value] = updated;
-        _listView.SelectedItem = updated;
+        ReplaceWorkingRules(
+            ManageConditionalFormatsPlanner.ApplyRuleRange(_rules, ruleId, range),
+            ruleId);
         FocusRulesList();
     }
 }
