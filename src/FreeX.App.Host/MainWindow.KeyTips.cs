@@ -160,10 +160,14 @@ public partial class MainWindow
             var badge = CreateKeyTipBadge(keyTip.Trim().ToUpperInvariant());
             badge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             var badgeSize = badge.DesiredSize;
+            var badgeKind = element is TabItem
+                ? RibbonKeyTipBadgeKind.Tab
+                : RibbonKeyTipBadgeKind.Command;
             var point = RibbonKeyTipOverlayPlacement.PlaceBadge(
                 new Rect(origin, new Size(element.ActualWidth, element.ActualHeight)),
                 new Size(RootGrid.ActualWidth, RootGrid.ActualHeight),
-                badgeSize);
+                badgeSize,
+                badgeKind);
 
             Canvas.SetLeft(badge, point.X);
             Canvas.SetTop(badge, point.Y);

@@ -159,6 +159,18 @@ public sealed class GridObjectDragPlannerTests
     }
 
     [Fact]
+    public void CalculateDragRect_ResizeSE_ClampsBothAxesWithoutInverting()
+    {
+        var result = GridObjectDragPlanner.CalculateDragRect(
+            ObjectDragKind.ResizeSE, Start, new Point(300, 200), new Point(0, 0), minimumSize: 8);
+
+        result.Width.Should().Be(8);
+        result.Height.Should().Be(8);
+        result.Left.Should().Be(Start.Left);
+        result.Top.Should().Be(Start.Top);
+    }
+
+    [Fact]
     public void CalculateDragRect_NoneReturnsStartRect()
     {
         GridObjectDragPlanner.CalculateDragRect(
