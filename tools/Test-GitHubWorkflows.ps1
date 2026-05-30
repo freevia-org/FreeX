@@ -33,8 +33,14 @@ foreach ($workflow in $workflows) {
         $errors.Add("$($workflow.Name): workflow YAML must use spaces for indentation, not tabs.")
     }
 
-    if ($content -notmatch "(?m)^permissions:\s*$") {
+    $permissionsMatch = [regex]::Match($content, "(?m)^permissions:\s*(?<value>[^\r\n#]*)")
+    if (-not $permissionsMatch.Success) {
         $errors.Add("$($workflow.Name): workflow must declare top-level permissions explicitly.")
+    } else {
+        $permissionsValue = $permissionsMatch.Groups["value"].Value.Trim().Trim("`"", "'")
+        if ($permissionsValue -eq "write-all") {
+            $errors.Add("$($workflow.Name): workflow must not request write-all permissions.")
+        }
     }
 
     foreach ($match in [regex]::Matches($content, "(?ms)^(\s*)-\s+name:\s+(?<name>[^\r\n]+).*?^\1\s+run:\s+")) {
