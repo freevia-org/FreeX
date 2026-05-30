@@ -198,8 +198,7 @@ public partial class MainWindow
         SsRecentScroll.Visibility = plan.RecentListVisible ? Visibility.Visible : Visibility.Collapsed;
         SsPinnedScroll.Visibility = plan.PinnedListVisible ? Visibility.Visible : Visibility.Collapsed;
 
-        var activeBrush = new System.Windows.Media.SolidColorBrush(
-            System.Windows.Media.Color.FromRgb(0x21, 0x73, 0x46));
+        var activeBrush = (System.Windows.Media.Brush)FindResource("FreeXAccentBrush");
         var inactiveBrush = new System.Windows.Media.SolidColorBrush(
             System.Windows.Media.Color.FromRgb(0x88, 0x88, 0x88));
 
@@ -236,11 +235,7 @@ public partial class MainWindow
         _currentXlsxFeatureReport = null;
         UpdateTitleBar();
         RecalculateWorkbook();
-        SheetGrid.SelectedRange = null;
-        _selectionAnchor = null;
-        _selectionCursor = null;
-        CellAddressBox.Text = "A1";
-        FormulaBar.Text = "";
+        SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
         RefreshSheetTabs();
         RefreshToolbar();
         UpdateViewport();

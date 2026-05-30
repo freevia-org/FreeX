@@ -17,7 +17,8 @@ public static partial class KeyboardShortcutMatcher
         new(KeyboardCommandShortcut.Paste, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.V ||
             modifiers == ModifierKeys.Shift && key == Key.Insert),
         new(KeyboardCommandShortcut.SelectCurrentRegionOrAll, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.A),
-        new(KeyboardCommandShortcut.Undo, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Z),
+        new(KeyboardCommandShortcut.Undo, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Z ||
+            modifiers == ModifierKeys.Alt && key == Key.Back),
         new(KeyboardCommandShortcut.Redo, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Y),
         new(KeyboardCommandShortcut.CreateTable, (key, modifiers) => modifiers == ModifierKeys.Control && key is (Key.T or Key.L)),
         new(KeyboardCommandShortcut.InsertHyperlink, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.K),

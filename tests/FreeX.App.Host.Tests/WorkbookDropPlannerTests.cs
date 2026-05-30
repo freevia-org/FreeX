@@ -12,7 +12,7 @@ public sealed class WorkbookDropPlannerTests
     {
         var adapters = new IFileAdapter[]
         {
-            new FakeAdapter(".xlsx", "Excel Workbook"),
+            new FakeAdapter(".xlsx", "XLSX Workbook"),
             new FakeAdapter(".csv", "CSV")
         };
 
@@ -32,7 +32,7 @@ public sealed class WorkbookDropPlannerTests
     {
         var selected = WorkbookDropPlanner.SelectOpenableFile(
             [@"C:\Temp\README", @"C:\Temp\notes.pdf"],
-            [new FakeAdapter(".xlsx", "Excel Workbook")]);
+            [new FakeAdapter(".xlsx", "XLSX Workbook")]);
 
         selected.Should().BeNull();
     }
@@ -45,7 +45,7 @@ public sealed class WorkbookDropPlannerTests
                 @"C:\Temp\README",
                 @"C:\Temp\Book.xlsx"
             ],
-            [new FakeAdapter(".xlsx", "Excel Workbook")]);
+            [new FakeAdapter(".xlsx", "XLSX Workbook")]);
 
         selected.Should().Be(@"C:\Temp\Book.xlsx");
     }

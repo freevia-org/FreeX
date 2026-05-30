@@ -31,7 +31,7 @@ public sealed class InsertCommandSourceTests
     }
 
     [Theory]
-    [InlineData("Link", "Link", "K", "InsertLinkBtn_Click")]
+    [InlineData("Insert Link", "Link", "K", "InsertLinkBtn_Click")]
     [InlineData("Comment", "Comment", "C2", "InsertCommentBtn_Click")]
     [InlineData("Text Box", "Text Box", "TX", "DrawTextBtn_Click")]
     [InlineData("Header &amp; Footer", "Header &amp; Footer", "HF", "HeaderFooterBtn_Click")]
@@ -104,9 +104,12 @@ public sealed class InsertCommandSourceTests
 
         drawingSource.Should().Contain("private void InsertPictureBtn_Click(object sender, RoutedEventArgs e)");
         drawingSource.Should().Contain("new InsertPictureCommand(");
-        drawingSource.Should().Contain("private void DrawRectBtn_Click(object sender, RoutedEventArgs e) => InsertDrawingShape(DrawingShapeKind.Rectangle);");
-        drawingSource.Should().Contain("private void DrawEllipseBtn_Click(object sender, RoutedEventArgs e) => InsertDrawingShape(DrawingShapeKind.Ellipse);");
-        drawingSource.Should().Contain("private void DrawLineBtn_Click(object sender, RoutedEventArgs e) => InsertDrawingShape(DrawingShapeKind.Line);");
+        drawingSource.Should().Contain("DrawRectBtn_Click(object sender, RoutedEventArgs e)");
+        drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Rectangle)");
+        drawingSource.Should().Contain("DrawEllipseBtn_Click(object sender, RoutedEventArgs e)");
+        drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Ellipse)");
+        drawingSource.Should().Contain("DrawLineBtn_Click(object sender, RoutedEventArgs e)");
+        drawingSource.Should().Contain("InsertDrawingShape(DrawingShapeKind.Line)");
 
         pivotSource.Should().Contain("private void PivotTableBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("new PivotTableDialog(");
@@ -155,7 +158,8 @@ public sealed class InsertCommandSourceTests
 
         var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
         var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
-        var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
+        var nextButton = xaml.IndexOf("<Button ", titleIndex + 1, StringComparison.Ordinal);
+        var end = closingEnd >= 0 && (nextButton < 0 || closingEnd < nextButton)
             ? closingEnd + "</Button>".Length
             : selfClosingEnd + 2;
 

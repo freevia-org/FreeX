@@ -1052,10 +1052,10 @@
                                             <MenuItem Header="Hide Columns"           local:RibbonTooltip.KeyTip="D" Click="FormatHideColMenuItem_Click"/>
                                             <MenuItem Header="Unhide Columns"         local:RibbonTooltip.KeyTip="N" Click="FormatUnhideColMenuItem_Click"/>
                                             <Separator/>
-                                            <MenuItem Header="Rename Sheet"           local:RibbonTooltip.KeyTip="R" Click="FormatRenameSheetMenuItem_Click"/>
-                                            <MenuItem Header="Tab Color"              local:RibbonTooltip.KeyTip="T" Click="FormatTabColorMenuItem_Click"/>
+                                            <MenuItem Header="Rename Sheet"           local:RibbonTooltip.KeyTip="E" Click="FormatRenameSheetMenuItem_Click"/>
+                                            <MenuItem Header="Tab Color"              local:RibbonTooltip.KeyTip="TC" Click="FormatTabColorMenuItem_Click"/>
                                             <MenuItem Header="Hide Sheet"             local:RibbonTooltip.KeyTip="S" Click="FormatHideSheetMenuItem_Click"/>
-                                            <MenuItem Header="Unhide Sheet..."        local:RibbonTooltip.KeyTip="T" Click="FormatUnhideSheetMenuItem_Click"/>
+                                            <MenuItem Header="Unhide Sheet..."        local:RibbonTooltip.KeyTip="Y" Click="FormatUnhideSheetMenuItem_Click"/>
                                             <Separator/>
                                             <MenuItem Header="Protect Sheet..."       local:RibbonTooltip.KeyTip="P" Click="FormatProtectSheetMenuItem_Click"/>
                                             <MenuItem Header="Lock Cell"              local:RibbonTooltip.KeyTip="L" Click="FormatLockCellMenuItem_Click"/>
@@ -1762,7 +1762,7 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Link" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="InsertLinkBtn_Click"
-                                        local:RibbonTooltip.Title="Link"
+                                        local:RibbonTooltip.Title="Insert Link"
                                         local:RibbonTooltip.KeyTip="K"
                                         local:RibbonTooltip.Description="Insert a hyperlink to a web page, file, or location in the workbook."/>
                             </StackPanel>
@@ -2136,7 +2136,7 @@
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Orientation" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageOrientBtn_Click"
-                                        local:RibbonTooltip.Title="Orientation"
+                                        local:RibbonTooltip.Title="Page Orientation"
                                         local:RibbonTooltip.KeyTip="OR"
                                         local:RibbonTooltip.Description="Change the page orientation to Portrait or Landscape.">
                                     <Button.ContextMenu>
@@ -2147,7 +2147,7 @@
                                     </Button.ContextMenu>
                                 </Button>
                                 <Button Content="Size" Width="84" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PageSizeBtn_Click"
-                                        local:RibbonTooltip.Title="Size"
+                                        local:RibbonTooltip.Title="Paper Size"
                                         local:RibbonTooltip.KeyTip="SZ"
                                         local:RibbonTooltip.Description="Choose a paper size for the printed page.">
                                     <Button.ContextMenu>
@@ -2335,12 +2335,12 @@
                                                 local:RibbonTooltip.Description="Browse and insert financial functions like PMT, NPV, and IRR."/>
                                         <Button Content="Logical"  Width="56" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaLogicalBtn_Click"
                                                 local:RibbonMetadata.DropdownMenuButton="True"
-                                                local:RibbonTooltip.Title="Logical"
+                                                local:RibbonTooltip.Title="Logical Functions"
                                                 local:RibbonTooltip.KeyTip="L"
                                                 local:RibbonTooltip.Description="Browse and insert logical functions like IF, AND, OR, and NOT."/>
                                         <Button Content="Text"     Width="48" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaTextBtn_Click"
                                                 local:RibbonMetadata.DropdownMenuButton="True"
-                                                local:RibbonTooltip.Title="Text"
+                                                local:RibbonTooltip.Title="Text Functions"
                                                 local:RibbonTooltip.KeyTip="TF"
                                                 local:RibbonTooltip.Description="Browse and insert text manipulation functions like LEFT, MID, and TRIM."/>
                                         <Button Content="Date"     Width="48" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FormulaDateBtn_Click"
@@ -2512,7 +2512,7 @@
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <Button Content="Refresh All" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RefreshAllBtn_Click"
                                         local:RibbonTooltip.Title="Refresh All"
-                                        local:RibbonTooltip.KeyTip="R"
+                                        local:RibbonTooltip.KeyTip="FA"
                                         local:RibbonTooltip.Description="Recalculate formulas and refresh FreeX-managed workbook data. External data connections and Power Query are excluded."/>
                                 <Button Content="Queries &amp; Connections" Width="128" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="Queries &amp; Connections"
@@ -2566,7 +2566,7 @@
                                         <local:RibbonIcon Kind="Filter" IconSize="16" HorizontalAlignment="Center"/>
                                     </Button>
                                     <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="ClearFilterButton_Click"
-                                            local:RibbonTooltip.Title="Clear"
+                                            local:RibbonTooltip.Title="Clear Filter"
                                             local:RibbonTooltip.KeyTip="C"
                                             local:RibbonTooltip.Description="Remove all active filters and show all rows in the current range.">
                                         <local:RibbonIcon Kind="Clear" IconSize="16" HorizontalAlignment="Center"/>
@@ -2574,7 +2574,7 @@
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
                                     <Button Width="76" Height="22" Margin="1,1" local:RibbonMetadata.CompactFullWidth="76" local:RibbonMetadata.CompactWidth="24" Style="{StaticResource RibbonBtn}" Click="AdvancedFilterBtn_Click"
-                                            local:RibbonTooltip.Title="Advanced"
+                                            local:RibbonTooltip.Title="Advanced Filter"
                                             local:RibbonTooltip.KeyTip="A"
                                             local:RibbonTooltip.Description="Filter a list using an Excel-style criteria range, optionally copying matching rows elsewhere.">
                                         <local:RibbonIcon Kind="Filter" IconSize="16" HorizontalAlignment="Center"/>

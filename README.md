@@ -1,6 +1,6 @@
 # FreeX
 
-FreeX is a free Windows spreadsheet app for `.xlsx` files. It opens and saves Excel-compatible workbooks while keeping the project, branding, icons, and release artifacts independent from Microsoft.
+FreeX is a free Windows spreadsheet app for `.xlsx` files. It opens and saves standard XLSX workbooks while keeping the project, branding, icons, and release artifacts independent from Microsoft.
 
 ## Current Scope
 
@@ -18,6 +18,14 @@ Tester builds are published on the [FreeX releases page](https://github.com/tony
 ## Documentation
 
 Start with the [user guide](docs/USER_GUIDE.md) and the [documentation index](docs/README.md). Current build scope and known limitations are tracked in [OUTSTANDING_BUILD.md](docs/OUTSTANDING_BUILD.md) and [FIDELITY_CONTRACT.md](docs/FIDELITY_CONTRACT.md).
+
+## Legal And Privacy
+
+- [Legal notices](docs/LEGAL_NOTICES.md)
+- [Privacy notice](docs/PRIVACY.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
+- [Third-party license texts](THIRD_PARTY_LICENSES.md)
+- [Project license](LICENSE)
 
 ## Development
 

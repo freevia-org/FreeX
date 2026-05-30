@@ -115,6 +115,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("recent")) return new(RibbonCommandIconKind.Recent);
         if (name.Contains("financial")) return new(RibbonCommandIconKind.Financial);
         if (name.Contains("math")) return new(RibbonCommandIconKind.Math);
+        if (name == "text") return new(RibbonCommandIconKind.TextFunction);
         if (name.Contains("text function")) return new(RibbonCommandIconKind.TextFunction);
         if (name.Contains("date")) return new(RibbonCommandIconKind.Date);
         if (name.Contains("logical")) return new(RibbonCommandIconKind.Logical);
@@ -140,6 +141,8 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("sort ascending")) return new(RibbonCommandIconKind.SortAscending);
         if (name.Contains("sort descending")) return new(RibbonCommandIconKind.SortDescending);
         if (name.Contains("sort")) return new(RibbonCommandIconKind.Sort);
+        if (name == "advanced") return new(RibbonCommandIconKind.Filter);
+        if (name == "reapply") return new(RibbonCommandIconKind.Refresh, RibbonCommandIconAccent.Data);
         if (name.Contains("filter")) return new(RibbonCommandIconKind.Filter);
         if (name.Contains("text to columns")) return new(RibbonCommandIconKind.TextColumns);
         if (name.Contains("flash fill")) return new(RibbonCommandIconKind.Flash);
@@ -168,7 +171,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("alt text")) return new(RibbonCommandIconKind.TextBox);
         if (name.Contains("previous")) return new(RibbonCommandIconKind.Previous);
         if (name.Contains("next")) return new(RibbonCommandIconKind.Next);
-        if (name.Contains("allow edit") || name.Contains("protect")) return new(RibbonCommandIconKind.Protect, RibbonCommandIconAccent.Protect);
+        if (name.Contains("allow edit") || name.Contains("allow users") || name.Contains("edit range") || name.Contains("protect")) return new(RibbonCommandIconKind.Protect, RibbonCommandIconAccent.Protect);
         if (name.Contains("share")) return new(RibbonCommandIconKind.Share, RibbonCommandIconAccent.Data);
         if (name.Contains("hide ink")) return new(RibbonCommandIconKind.Previous);
 

@@ -120,6 +120,58 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsSpreadsheetMlRowHeightAndHiddenState()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Layout">
+                <ss:Table>
+                  <ss:Row ss:Height="27.5">
+                    <ss:Cell><ss:Data ss:Type="String">Tall</ss:Data></ss:Cell>
+                  </ss:Row>
+                  <ss:Row ss:Index="3" ss:Hidden="1">
+                    <ss:Cell><ss:Data ss:Type="String">Hidden</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.RowHeights[1].Should().Be(27.5);
+        sheet.HiddenRows.Should().Contain(3u);
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Tall"));
+        sheet.GetCell(3, 1)!.Value.Should().Be(new TextValue("Hidden"));
+    }
+
+    [Fact]
+    public void Load_ReadsSpreadsheetMlColumnWidthAndHiddenState()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Layout">
+                <ss:Table>
+                  <ss:Column ss:Width="18.5"/>
+                  <ss:Column ss:Index="3" ss:Hidden="1"/>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="String">A</ss:Data></ss:Cell>
+                    <ss:Cell ss:Index="3"><ss:Data ss:Type="String">Hidden column</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.ColumnWidths[1].Should().Be(18.5);
+        sheet.HiddenCols.Should().Contain(3u);
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("A"));
+        sheet.GetCell(1, 3)!.Value.Should().Be(new TextValue("Hidden column"));
+    }
+
+    [Fact]
     public void Load_ReadsSpreadsheetMlMergeAcrossAndMergeDown()
     {
         using var stream = StreamFromString("""
@@ -470,6 +522,65 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsSpreadsheetMlRowHeightAndHiddenState()
+    {
+        var workbook = new Workbook("XmlRowLayout");
+        var sheet = workbook.AddSheet("Layout");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Tall"));
+        sheet.RowHeights[2] = 31.25;
+        sheet.HiddenRows.Add(4);
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var rows = document.Descendants(ss + "Row").ToList();
+        var tallRow = rows.Single(row => row.Attribute(ss + "Index")?.Value == "2");
+        tallRow.Attribute(ss + "Height")!.Value.Should().Be("31.25");
+        var hiddenMetadataOnlyRow = rows.Single(row => row.Attribute(ss + "Index")?.Value == "4");
+        hiddenMetadataOnlyRow.Attribute(ss + "Hidden")!.Value.Should().Be("1");
+        hiddenMetadataOnlyRow.Elements(ss + "Cell").Should().BeEmpty();
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.RowHeights[2].Should().Be(31.25);
+        loaded.HiddenRows.Should().Contain(4u);
+        loaded.GetCell(2, 1)!.Value.Should().Be(new TextValue("Tall"));
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsSpreadsheetMlColumnWidthAndHiddenState()
+    {
+        var workbook = new Workbook("XmlColumnLayout");
+        var sheet = workbook.AddSheet("Layout");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Wide"));
+        sheet.ColumnWidths[2] = 19.75;
+        sheet.HiddenCols.Add(4);
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var columns = document.Descendants(ss + "Column").ToList();
+        var wideColumn = columns.Single(column => column.Attribute(ss + "Index")?.Value == "2");
+        wideColumn.Attribute(ss + "Width")!.Value.Should().Be("19.75");
+        var hiddenMetadataOnlyColumn = columns.Single(column => column.Attribute(ss + "Index")?.Value == "4");
+        hiddenMetadataOnlyColumn.Attribute(ss + "Hidden")!.Value.Should().Be("1");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.ColumnWidths[2].Should().Be(19.75);
+        loaded.HiddenCols.Should().Contain(4u);
+        loaded.GetCell(1, 2)!.Value.Should().Be(new TextValue("Wide"));
+    }
+
+    [Fact]
     public void Load_UsesCurrentStreamPositionAndLeavesInputStreamOpen()
     {
         using var stream = PositionedStreamFromString("ignored", """
@@ -582,6 +693,92 @@ public sealed class SpreadsheetXmlFileAdapterTests
         var sheet = workbook.GetSheetAt(0);
         sheet.Name.Should().Be("Offset");
         sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Gamma"));
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
+    public void LoadTransformed_OutputAboveLimit_ReportsTransformSafetyDiagnostic()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Large">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String">This output is intentionally over the tiny adapter limit.</ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet, maxOutputBytes: 32);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*XSLT transform output exceeded the 32 byte safety limit*");
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
+    public void LoadTransformed_SourceAboveInputLimit_ReportsTransformSourceDiagnostic()
+    {
+        using var source = StreamFromString($"<rows><row value=\"{new string('A', 1024)}\"/></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Limited"><ss:Table/></ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(
+            source,
+            stylesheet,
+            XsltWorkbookTransform.DefaultMaxOutputBytes,
+            maxInputCharacters: 512);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*source XML*");
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
+    public void LoadTransformed_StylesheetAboveInputLimit_ReportsTransformStylesheetDiagnostic()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Limited"><ss:Table/></ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(
+            source,
+            stylesheet,
+            XsltWorkbookTransform.DefaultMaxOutputBytes,
+            maxInputCharacters: 64);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*");
         source.CanRead.Should().BeTrue();
         stylesheet.CanRead.Should().BeTrue();
     }
