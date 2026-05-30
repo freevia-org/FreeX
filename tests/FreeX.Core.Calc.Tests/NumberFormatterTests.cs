@@ -198,6 +198,23 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("[$€-407][Red][>100]0.0;[$€-407]0.00", 150, "€150,0", "#FF0000")]
+    [InlineData("[$€-407][Red][>100]0.0;[$€-407]0.00", 50, "€50,00", null)]
+    [InlineData("[DBNum1][$-804][Blue][>100]0.0;[DBNum1][$-804]0.00", 150, "150.0", "#0070C0")]
+    [InlineData("[DBNum1][$-804][Blue][>100]0.0;[DBNum1][$-804]0.00", 50, "50.00", null)]
+    public void CustomNumberSubset_ParsesConditionsAndColorsAfterLocaleDirectives(
+        string format,
+        double value,
+        string expectedText,
+        string? expectedColor)
+    {
+        var result = NumberFormatter.FormatWithColor(new NumberValue(value), format);
+
+        Assert.Equal(expectedText, result.Text);
+        Assert.Equal(expectedColor, result.ColorHex);
+    }
+
+    [Theory]
     [InlineData("[Red][<0]0.00;[Blue]0.00", -2.5, "-2.50", "#FF0000")]
     [InlineData("[Red][<0]0.00;[Blue]0.00", 2.5, "2.50", "#0070C0")]
     [InlineData("[Color3][<0]0.00;[Color5]0.00", -2.5, "-2.50", "#FF0000")]
@@ -314,6 +331,25 @@ public class NumberFormatterTests
     [InlineData("0;0;0;[Red]@", 0, "hello", "#FF0000")]
     [InlineData("0;0;0;[Color 3]@", 0, "hello", "#FF0000")]
     public void CustomNumberSubset_ReturnsColorFromDateAndTextSections(
+        string format,
+        double numericValue,
+        string expectedText,
+        string expectedColor)
+    {
+        ScalarValue value = format.Contains('@', StringComparison.Ordinal)
+            ? new TextValue(expectedText)
+            : new DateTimeValue(numericValue);
+
+        var result = NumberFormatter.FormatWithColor(value, format);
+
+        Assert.Equal(expectedText, result.Text);
+        Assert.Equal(expectedColor, result.ColorHex);
+    }
+
+    [Theory]
+    [InlineData("[$-407][Blue]dd/mm/yyyy", 45292, "01.01.2024", "#0070C0")]
+    [InlineData("0;0;0;[$-409][Red]@", 0, "hello", "#FF0000")]
+    public void CustomNumberSubset_ParsesDateAndTextColorsAfterLocaleDirectives(
         string format,
         double numericValue,
         string expectedText,
