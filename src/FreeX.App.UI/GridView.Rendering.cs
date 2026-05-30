@@ -220,6 +220,9 @@ public partial class GridView
                 DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
             }
 
+            if (cell.HasComment)
+                DrawCommentIndicator(dc, rect);
+
             if (!ShouldDrawCellContent(cell, EditingCell))
             {
                 dc.Pop();
