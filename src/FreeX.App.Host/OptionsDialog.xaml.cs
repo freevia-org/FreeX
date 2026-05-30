@@ -82,7 +82,7 @@ public partial class OptionsDialog : Window
         OptFormulaBarExpanded.IsChecked = _opts.FormulaBarExpanded;
 
         // Save
-        OptDefaultFormat.ItemsSource = new[] { "Excel Workbook (.xlsx)", "FreeX JSON (.json)" };
+        OptDefaultFormat.ItemsSource = new[] { "XLSX Workbook (.xlsx)", "FreeX JSON (.json)" };
         OptDefaultFormat.SelectedIndex = _opts.DefaultFormat == ".json" ? 1 : 0;
         OptCrashAnalytics.IsChecked = _opts.CrashAnalyticsEnabled;
 

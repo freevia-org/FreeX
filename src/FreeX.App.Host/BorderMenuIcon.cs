@@ -65,7 +65,7 @@ public sealed class BorderMenuIcon : FrameworkElement
         var black = new SolidColorBrush(Color.FromRgb(32, 32, 32));
         black.Freeze();
 
-        var accent = new SolidColorBrush(Color.FromRgb(33, 115, 70));
+        var accent = new SolidColorBrush(Color.FromRgb(15, 109, 140));
         accent.Freeze();
 
         DrawGrid(dc, gray);

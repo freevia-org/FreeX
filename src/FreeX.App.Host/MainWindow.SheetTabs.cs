@@ -333,16 +333,16 @@ public partial class MainWindow
         SheetTabsChromeLayer.Children.Clear();
         SheetTabsOverlayLayer.Children.Clear();
         var chromeWidth = SheetTabsChromeLayer.ActualWidth;
-        var greenBrush = (Brush)FindResource("FreeXAccentBrush");
+        var accentBrush = (Brush)FindResource("FreeXAccentBrush");
         var inactiveStrokeBrush = (Brush)FindResource("FreeXBorderStrongBrush");
         var inactiveFillBrush = (Brush)FindResource("FreeXSheetSurfaceBrush");
-        var groupedFillBrush = new SolidColorBrush(Color.FromRgb(247, 252, 249));
+        var groupedFillBrush = (Brush)FindResource("FreeXAccentSoftBrush");
         var tentativeFillBrush = AddSheetButton.IsPressed
-            ? new SolidColorBrush(Color.FromRgb(217, 236, 226))
+            ? (Brush)FindResource("FreeXAccentPressedBrush")
             : AddSheetButton.IsMouseOver
-                ? new SolidColorBrush(Color.FromRgb(231, 244, 236))
-                : new SolidColorBrush(Color.FromRgb(242, 249, 245));
-        var tentativeStrokeBrush = new SolidColorBrush(Color.FromRgb(148, 198, 170));
+                ? (Brush)FindResource("FreeXAccentSoftBrush")
+                : (Brush)FindResource("FreeXChromeSurfaceBrush");
+        var tentativeStrokeBrush = accentBrush;
 
         Rect? addRect = null;
         if (AddSheetButton.ActualWidth > 0)
@@ -407,7 +407,7 @@ public partial class MainWindow
                 : isGrouped
                 ? groupedFillBrush
                 : inactiveFillBrush;
-            var tabStroke = isGrouped ? greenBrush : inactiveStrokeBrush;
+            var tabStroke = isGrouped ? accentBrush : inactiveStrokeBrush;
             var tabStrokeOpacity = isGrouped ? 0.78 : 0.92;
             var isRightOfActive = activeTabIndex >= 0 && tabIndex > activeTabIndex;
             var rightNeighborIsInactiveTab = tabIndex < visibleTabs.Count - 1 &&
@@ -449,14 +449,14 @@ public partial class MainWindow
             RenderSheetTabsOverlay(
                 addRect,
                 activeRect,
-                greenBrush);
+                accentBrush);
             return;
         }
 
         RenderSheetTabsOverlay(
             addRect,
             activeRect,
-            greenBrush);
+            accentBrush);
     }
 
     private void RenderSheetTabsOverlay(
@@ -1110,7 +1110,7 @@ public partial class MainWindow
     private void ColorSheetTab(SheetId sheetId)
     {
         var sheet = _workbook.GetSheet(sheetId);
-        if (!TryShowColorPicker("Tab Color", sheet?.TabColor ?? new CellColor(33, 115, 70), allowNoColor: true, out var tabColor))
+        if (!TryShowColorPicker("Tab Color", sheet?.TabColor ?? new CellColor(15, 109, 140), allowNoColor: true, out var tabColor))
             return;
 
         if (!TryExecuteCommand(new SetSheetTabColorCommand(sheetId, tabColor), "Tab Color"))

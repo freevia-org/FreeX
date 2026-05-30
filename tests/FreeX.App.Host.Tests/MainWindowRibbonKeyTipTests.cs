@@ -402,7 +402,7 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.KeyTipScope.Should().Be("None");
 
             harness.OpenRibbonMenu(Key.P, Key.S, Key.Z);
-            harness.ActiveMenuItemGestureText("Legal (8.5x14)").Should().Be("G");
+            harness.ActiveMenuItemGestureText("Legal").Should().Be("G");
             harness.HandleKeyTip(Key.G);
 
             harness.ActiveSheetPaperSize.Should().Be(WorksheetPaperSize.Legal);
@@ -1085,7 +1085,7 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.OpenRibbonMenu(Key.M, Key.U);
             harness.ActiveMenuItemGestureText("Average").Should().Be("A");
             harness.ActiveMenuItemGestureText("Count Numbers").Should().Be("C");
-            harness.ActiveMenuItemGestureText("More…").Should().Be("F");
+            harness.ActiveMenuItemGestureText("More Functions...").Should().Be("F");
             harness.HandleKeyTip(Key.A);
 
             harness.CellFormulaText(3, 2).Should().Be("AVERAGE(B1:B2)");
