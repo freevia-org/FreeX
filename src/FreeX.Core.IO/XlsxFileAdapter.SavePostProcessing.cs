@@ -255,9 +255,7 @@ public sealed partial class XlsxFileAdapter
 
         IReadOnlyDictionary<int, int> numberFormatIdMap = new Dictionary<int, int>();
         if (workbook.NumberFormatCatalog.Count > 0 ||
-            workbook.Sheets.SelectMany(sheet => sheet.PivotTables)
-                .SelectMany(pivot => pivot.DataFields)
-                .Any(field => field.NumberFormatId is >= 164 && !string.IsNullOrWhiteSpace(field.NumberFormatCode)))
+            HasPivotCustomNumberFormats(workbook))
         {
             packageStream.Position = 0;
             numberFormatIdMap = XlsxNumberFormatCatalogWriter.Save(packageStream, workbook);
@@ -431,5 +429,25 @@ public sealed partial class XlsxFileAdapter
                 XlsxWorksheetHeaderFooterMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
             }
         }
+    }
+
+    private static bool HasPivotCustomNumberFormats(Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var pivot in sheet.PivotTables)
+            {
+                foreach (var field in pivot.DataFields)
+                {
+                    if (field.NumberFormatId is >= 164 &&
+                        !string.IsNullOrWhiteSpace(field.NumberFormatCode))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 }
