@@ -48,6 +48,7 @@ public static partial class KeyboardShortcutMatcher
         new(KeyboardCommandShortcut.RebuildDependenciesAndCalculate, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift) && key == Key.F9),
         new(KeyboardCommandShortcut.ToggleFormulaBarExpansion, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.U),
         new(KeyboardCommandShortcut.ToggleFilter, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.L),
+        new(KeyboardCommandShortcut.ReapplyFilter, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && key == Key.L),
         new(KeyboardCommandShortcut.QuickAnalysis, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Q),
         new(KeyboardCommandShortcut.OpenPrintPreview, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.P),
         new(KeyboardCommandShortcut.PasteValues, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.V),
