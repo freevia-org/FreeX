@@ -102,6 +102,7 @@ public sealed partial class TextToColumnsDialog
     {
         _wizardStep = Math.Clamp(_wizardStep + direction, 1, 3);
         UpdateWizardStep();
+        UpdateLayout();
         FocusCurrentWizardStepTarget();
     }
 
