@@ -612,7 +612,7 @@ public sealed class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void ApplyToolbarDropdownWhiteBackgrounds(");
         mainSource.Should().NotContain("private static FrameworkElement CreateRibbonCommandContent(");
 
-        ribbonSource.Should().Contain("private void UpdateRibbonCompactMode(");
+        ribbonSource.Should().Contain("UpdateRibbonCompactMode(");
         ribbonSource.Should().Contain("private void NormalizeRibbonSurface(");
         ribbonSource.Should().Contain("private void NormalizeExistingRibbonIconText(");
         ribbonSource.Should().Contain("private void ApplyToolbarDropdownWhiteBackgrounds(");
@@ -1523,10 +1523,12 @@ public sealed class MainWindowSourceHygieneTests
     {
         var source =
             File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Startup.cs")) +
-            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HomeNumberFormatDropdownPlanner.cs")) +
+            File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsNumberFormatPlanner.cs"));
 
-        source.Should().Contain("NumberFormatOptions.Select(option => option.Label)");
-        source.Should().Contain("NumberFormatOptions[NumberFormatBox.SelectedIndex].Code");
+        source.Should().Contain("HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label)");
+        source.Should().Contain("HomeNumberFormatDropdownPlanner.Options[selectedIndex]");
         source.Should().Contain("Accounting ($#,##0.00)");
         source.Should().Contain("Fraction (# ?/?)");
         source.Should().Contain("Scientific (0.00E+00)");
@@ -2559,8 +2561,8 @@ public sealed class MainWindowSourceHygieneTests
 
         source.Should().Contain("ExportAsPdf(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
         source.Should().Contain("ExportAsXps(request.Path, ExportPlanner.DescribeRequest(request), request.Options)");
-        source.Should().Contain("var document = RenderExportDocument(options)");
-        source.Should().Contain("var paginator = RenderExportPaginator(options)");
+        source.Should().Contain("var document = RenderExportDocument(effectiveOptions)");
+        source.Should().Contain("var paginator = RenderExportPaginator(effectiveOptions)");
         source.Should().Contain("ExportPlanner.DescribeRequest(request)");
         source.Should().Contain("OpenExportedFile(request.ActualPath)");
         source.Should().NotContain("ExportPdfFallbackAsXps");
@@ -2589,7 +2591,7 @@ public sealed class MainWindowSourceHygieneTests
         exportMethod.Should().Contain("OpenExportedFile(request.ActualPath)");
         exportMethod.Should().NotContain("MessageBox.Show(");
 
-        exportPdfMethod.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, options)");
+        exportPdfMethod.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions)");
         exportPdfMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportPdfSavedFormat\", optionSummary, pdfPath)");
         exportPdfMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportPdfTitle\")");
         exportPdfMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportPdfFailed\", ex.Message)");
@@ -2597,7 +2599,7 @@ public sealed class MainWindowSourceHygieneTests
         exportPdfMethod.Should().Contain("ShowOwnedMessage(");
         exportPdfMethod.Should().NotContain("MessageBox.Show(");
 
-        exportXpsMethod.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, options))");
+        exportXpsMethod.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions))");
         exportXpsMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportXpsSavedFormat\", xpsPath)");
         exportXpsMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportXpsSavedWithOptionsFormat\", optionSummary, xpsPath)");
         exportXpsMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportXpsTitle\")");
@@ -2855,10 +2857,10 @@ public sealed class MainWindowSourceHygieneTests
         var startupSource = File.ReadAllText(startupSourcePath);
 
         mainSource.Should().NotContain("private void MainWindow_Loaded(");
-        mainSource.Should().NotContain("NumberFormatOptions");
+        mainSource.Should().NotContain("HomeNumberFormatDropdownPlanner");
 
         startupSource.Should().Contain("private void MainWindow_Loaded(");
-        startupSource.Should().Contain("NumberFormatOptions");
+        startupSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options");
         startupSource.Should().Contain("CreateNewWorkbook();");
         startupSource.Should().Contain("NormalizeRibbonSurface(forceCompact: true);");
     }
