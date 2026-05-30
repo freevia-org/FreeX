@@ -73,10 +73,81 @@ public sealed class ThreadedCommentDialogTests
     public void DialogSource_AccessKeysAreUniqueWithinReplyScope()
     {
         var source = ReadThreadedCommentDialogSource();
-        var labels = new[] { "Edit _comment:", "Repl_y:", "_Mark as Resolved", "_Reply", "Ca_ncel" };
+        var labels = new[]
+        {
+            "Edit _comment:",
+            "Select re_ply:",
+            "Selected reply te_xt:",
+            "Repl_y:",
+            "_Mark as Resolved",
+            "_Update Reply",
+            "_Delete Reply",
+            "_Reply",
+            "Ca_ncel"
+        };
 
         source.Should().ContainAll(labels.Select(label => $"\"{label}\""));
         labels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void ReplyEditResult_CapturesSelectedReplyIndexAndTrimmedText()
+    {
+        var existing = new ThreadedComment("Root note", "Quinn")
+        {
+            Replies =
+            [
+                new CommentReply("First", "Codex"),
+                new CommentReply("Second", "FreeX")
+            ]
+        };
+
+        ThreadedCommentDialog.TryCreateReplyEditResult(existing, 1, "  Updated second  ", out var result, out var error)
+            .Should()
+            .BeTrue(error);
+
+        result.Should().Be(new ThreadedCommentDialogResult(
+            null,
+            null,
+            false,
+            ThreadedCommentDialogAction.EditReply,
+            1,
+            "Updated second"));
+    }
+
+    [Fact]
+    public void ReplyDeleteResult_CapturesSelectedReplyIndex()
+    {
+        var existing = new ThreadedComment("Root note", "Quinn")
+        {
+            Replies = [new CommentReply("First", "Codex")]
+        };
+
+        ThreadedCommentDialog.TryCreateReplyDeleteResult(existing, 0, out var result, out var error)
+            .Should()
+            .BeTrue(error);
+
+        result.Should().Be(new ThreadedCommentDialogResult(
+            null,
+            null,
+            false,
+            ThreadedCommentDialogAction.DeleteReply,
+            0));
+    }
+
+    [Fact]
+    public void ReplyEditResult_RejectsBlankReplyText()
+    {
+        var existing = new ThreadedComment("Root note", "Quinn")
+        {
+            Replies = [new CommentReply("First", "Codex")]
+        };
+
+        ThreadedCommentDialog.TryCreateReplyEditResult(existing, 0, " ", out _, out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Be("Enter a reply.");
     }
 
     [Fact]
@@ -96,14 +167,26 @@ public sealed class ThreadedCommentDialogTests
                     .ToDictionary(AutomationProperties.GetAutomationId);
                 var buttons = FindLogicalDescendants<Button>(dialog)
                     .ToDictionary(AutomationProperties.GetAutomationId);
+                var replySelector = FindLogicalDescendants<ComboBox>(dialog)
+                    .Single(box => AutomationProperties.GetAutomationId(box) == "ThreadedCommentReplySelector");
                 var resolvedBox = FindLogicalDescendants<CheckBox>(dialog)
                     .Single(box => AutomationProperties.GetAutomationId(box) == "ThreadedCommentResolvedBox");
 
                 AutomationProperties.GetName(textBoxes["ThreadedCommentRootBox"]).Should().Be("Edit comment");
                 AutomationProperties.GetHelpText(textBoxes["ThreadedCommentRootBox"]).Should().Be("Edit the root comment text.");
+                AutomationProperties.GetName(replySelector).Should().Be("Reply to edit or delete");
+                AutomationProperties.GetHelpText(replySelector).Should().Be("Select a threaded comment reply to edit or delete.");
+                replySelector.SelectedIndex.Should().Be(0);
+                AutomationProperties.GetName(textBoxes["ThreadedCommentSelectedReplyBox"]).Should().Be("Selected reply text");
+                AutomationProperties.GetHelpText(textBoxes["ThreadedCommentSelectedReplyBox"]).Should().Be("Edit the selected reply text before choosing Update Reply.");
+                textBoxes["ThreadedCommentSelectedReplyBox"].Text.Should().Be("Existing reply");
                 AutomationProperties.GetName(textBoxes["ThreadedCommentReplyBox"]).Should().Be("Reply");
                 AutomationProperties.GetHelpText(textBoxes["ThreadedCommentReplyBox"]).Should().Be("Enter an optional reply to the threaded comment. Press Ctrl+Enter to reply.");
 
+                AutomationProperties.GetName(buttons["ThreadedCommentUpdateReplyButton"]).Should().Be("Update selected reply");
+                AutomationProperties.GetHelpText(buttons["ThreadedCommentUpdateReplyButton"]).Should().Be("Update the selected threaded comment reply.");
+                AutomationProperties.GetName(buttons["ThreadedCommentDeleteReplyButton"]).Should().Be("Delete selected reply");
+                AutomationProperties.GetHelpText(buttons["ThreadedCommentDeleteReplyButton"]).Should().Be("Delete the selected threaded comment reply.");
                 buttons["ThreadedCommentReplyButton"].IsDefault.Should().BeTrue();
                 AutomationProperties.GetName(buttons["ThreadedCommentReplyButton"]).Should().Be("Reply to comment");
                 AutomationProperties.GetHelpText(buttons["ThreadedCommentReplyButton"]).Should().Be("Add a reply to the threaded comment.");

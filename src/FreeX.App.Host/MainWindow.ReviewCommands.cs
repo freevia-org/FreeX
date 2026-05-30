@@ -187,21 +187,46 @@ public partial class MainWindow
         }
         else if (existing is not null)
         {
-            var hasThreadChange =
-                result.RootText is not null ||
-                result.ReplyText is not null ||
-                result.IsResolved != existing.IsResolved;
-            if (hasThreadChange)
+            switch (result.Action)
             {
-                changed = TryExecuteRepeatableCurrentRangeCommand(
-                    "Edit Comment",
-                    range,
-                    r => new ApplyThreadedCommentChangesCommand(
-                        _currentSheetId,
-                        r.Start,
-                        result.RootText,
-                        result.ReplyText,
-                        result.IsResolved));
+                case ThreadedCommentDialogAction.EditReply when result.ReplyIndex is { } replyIndex && result.ReplyEditText is not null:
+                    changed = TryExecuteRepeatableCurrentRangeCommand(
+                        "Edit Comment Reply",
+                        range,
+                        r => new UpdateThreadedCommentReplyCommand(
+                            _currentSheetId,
+                            r.Start,
+                            replyIndex,
+                            result.ReplyEditText));
+                    break;
+                case ThreadedCommentDialogAction.DeleteReply when result.ReplyIndex is { } replyIndex:
+                    changed = TryExecuteRepeatableCurrentRangeCommand(
+                        "Delete Comment Reply",
+                        range,
+                        r => new DeleteThreadedCommentReplyCommand(
+                            _currentSheetId,
+                            r.Start,
+                            replyIndex));
+                    break;
+                default:
+                    var hasThreadChange =
+                        result.RootText is not null ||
+                        result.ReplyText is not null ||
+                        result.IsResolved != existing.IsResolved;
+                    if (hasThreadChange)
+                    {
+                        changed = TryExecuteRepeatableCurrentRangeCommand(
+                            "Edit Comment",
+                            range,
+                            r => new ApplyThreadedCommentChangesCommand(
+                                _currentSheetId,
+                                r.Start,
+                                result.RootText,
+                                result.ReplyText,
+                                result.IsResolved));
+                    }
+
+                    break;
             }
         }
 
