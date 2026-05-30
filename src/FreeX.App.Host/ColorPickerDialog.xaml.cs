@@ -60,6 +60,24 @@ public partial class ColorPickerDialog : Window
         return ColorInputParser.TryParseColorText(text, out color);
     }
 
+    public static bool TryParseRgbComponents(
+        string redText,
+        string greenText,
+        string blueText,
+        out CellColor color)
+    {
+        color = default;
+        if (!TryParseRgbByte(redText, out var red)
+            || !TryParseRgbByte(greenText, out var green)
+            || !TryParseRgbByte(blueText, out var blue))
+        {
+            return false;
+        }
+
+        color = new CellColor(red, green, blue);
+        return true;
+    }
+
     private void CustomColorTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (_updatingText || !TryParseColorText(CustomColorTextBox.Text, out var color))
@@ -71,14 +89,16 @@ public partial class ColorPickerDialog : Window
     private void CustomRgbTextBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         if (_updatingText
-            || !byte.TryParse(CustomRedTextBox.Text, out var red)
-            || !byte.TryParse(CustomGreenTextBox.Text, out var green)
-            || !byte.TryParse(CustomBlueTextBox.Text, out var blue))
+            || !TryParseRgbComponents(
+                CustomRedTextBox.Text,
+                CustomGreenTextBox.Text,
+                CustomBlueTextBox.Text,
+                out var color))
         {
             return;
         }
 
-        SelectColor(new CellColor(red, green, blue));
+        SelectColor(color);
     }
 
     private void CustomLuminositySlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -99,15 +119,32 @@ public partial class ColorPickerDialog : Window
             return;
         }
 
+        if (!TryParseCustomRgbFields(out _, out var invalidRgbInput))
+        {
+            ShowInvalidCustomColorWarning("Enter RGB values from 0 to 255.", invalidRgbInput);
+            return;
+        }
+
         SelectedColor = color;
         SetPreview(NewForegroundPreview, NewBackgroundPreview, NewBackgroundText, color);
         DialogResult = true;
     }
 
+    private void ShowInvalidCustomColorWarning(string message, TextBox target)
+    {
+        DialogMessageHelper.ShowWarning(this, message, Title);
+        FocusInvalidCustomColorInput(target);
+    }
+
     private void FocusInvalidCustomColorInput()
     {
+        FocusInvalidCustomColorInput(CustomColorTextBox);
+    }
+
+    private void FocusInvalidCustomColorInput(TextBox target)
+    {
         ColorTabs.SelectedItem = CustomTab;
-        DialogFocus.FocusAndSelect(CustomColorTextBox);
+        DialogFocus.FocusAndSelect(target);
     }
 
     private void NoColorButton_Click(object sender, RoutedEventArgs e)
@@ -247,6 +284,37 @@ public partial class ColorPickerDialog : Window
         CustomBlueTextBox.Text = color.B.ToString();
         _updatingText = false;
     }
+
+    private bool TryParseCustomRgbFields(out CellColor color, out TextBox invalidInput)
+    {
+        if (!TryParseRgbByte(CustomRedTextBox.Text, out var red))
+        {
+            color = default;
+            invalidInput = CustomRedTextBox;
+            return false;
+        }
+
+        if (!TryParseRgbByte(CustomGreenTextBox.Text, out var green))
+        {
+            color = default;
+            invalidInput = CustomGreenTextBox;
+            return false;
+        }
+
+        if (!TryParseRgbByte(CustomBlueTextBox.Text, out var blue))
+        {
+            color = default;
+            invalidInput = CustomBlueTextBox;
+            return false;
+        }
+
+        color = new CellColor(red, green, blue);
+        invalidInput = CustomRedTextBox;
+        return true;
+    }
+
+    private static bool TryParseRgbByte(string text, out byte value) =>
+        byte.TryParse(text.Trim(), out value);
 
     private static void SetPreview(TextBlock foregroundPreview, Border backgroundPreview, TextBlock backgroundText, CellColor? color)
     {
