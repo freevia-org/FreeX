@@ -311,7 +311,7 @@ public sealed class MainWindowXamlKeyTipTests
         var topLevelKeyTips = document
             .Descendants(presentation + "TabItem")
             .Select(tab => new RibbonTopLevelKeyTipEntry(
-                tab.Attribute("Header")?.Value ?? "",
+                LocalizedAttribute(tab, "Header") ?? "",
                 tab.Attribute(local + "RibbonTooltip.KeyTip")?.Value))
             .ToArray();
         var fileRoute = RibbonTopLevelKeyTipRouter.Resolve("F", topLevelKeyTips);
@@ -1553,9 +1553,9 @@ public sealed class MainWindowXamlKeyTipTests
         helpText.Should().NotBeNull("the zoom slider should disclose the Excel-style zoom range");
         tooltip.Should().NotBeNull("the zoom slider should expose a standard pointer tooltip");
 
-        LocalizedAttribute(zoomSlider, "AutomationProperties.Name").Should().Be("Zoom Slider");
+        LocalizedAttribute(zoomSlider, "AutomationProperties.Name").Should().Be(UiText.Get("MainWindow_AutomationName_ZoomSlider"));
         LocalizedAttribute(zoomSlider, "AutomationProperties.HelpText").Should().Contain("10%").And.Contain("400%");
-        LocalizedAttribute(zoomSlider, "ToolTip").Should().Be("Zoom");
+        LocalizedAttribute(zoomSlider, "ToolTip").Should().Be(UiText.Get("MainWindow_ToolTip_Zoom"));
     }
 
     [Fact]
@@ -1603,12 +1603,12 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Theory]
-    [InlineData("CellAddressBox", "Name Box", "Go to a cell or named range")]
-    [InlineData("FormulaBar", "Formula Bar", "Edit the active cell value or formula")]
+    [InlineData("CellAddressBox", "MainWindow_AutomationName_NameBox", "MainWindow_AutomationHelpText_GoToACellOrNamedRange")]
+    [InlineData("FormulaBar", "MainWindow_AutomationName_FormulaBar", "MainWindow_AutomationHelpText_EditTheActiveCellValueOrFormula")]
     public void FormulaBarTextFields_HaveAccessibleNamesAndHelpText(
         string controlName,
-        string expectedName,
-        string expectedHelpText)
+        string expectedNameKey,
+        string expectedHelpTextKey)
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -1623,8 +1623,8 @@ public sealed class MainWindowXamlKeyTipTests
 
         name.Should().NotBeNull("formula bar text fields are keyboard-focusable Excel surface controls");
         helpText.Should().NotBeNull("formula bar text fields should announce their workflow role");
-        LocalizedAttribute(textBox, "AutomationProperties.Name").Should().Be(expectedName);
-        LocalizedAttribute(textBox, "AutomationProperties.HelpText").Should().Be(expectedHelpText);
+        LocalizedAttribute(textBox, "AutomationProperties.Name").Should().Be(UiText.Get(expectedNameKey));
+        LocalizedAttribute(textBox, "AutomationProperties.HelpText").Should().Be(UiText.Get(expectedHelpTextKey));
     }
 
     [Fact]
@@ -1856,12 +1856,12 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Theory]
-    [InlineData("VerticalScroll", "Vertical Worksheet Scroll Bar", "Scroll worksheet rows")]
-    [InlineData("HorizontalScroll", "Horizontal Worksheet Scroll Bar", "Scroll worksheet columns")]
+    [InlineData("VerticalScroll", "MainWindow_AutomationName_VerticalWorksheetScrollBar", "MainWindow_AutomationHelpText_ScrollWorksheetRows")]
+    [InlineData("HorizontalScroll", "MainWindow_AutomationName_HorizontalWorksheetScrollBar", "MainWindow_AutomationHelpText_ScrollWorksheetColumns")]
     public void WorksheetScrollBars_HaveAccessibleNamesAndHelpText(
         string controlName,
-        string expectedName,
-        string expectedHelpText)
+        string expectedNameKey,
+        string expectedHelpTextKey)
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -1876,8 +1876,8 @@ public sealed class MainWindowXamlKeyTipTests
 
         name.Should().NotBeNull("worksheet scrollbars are keyboard-focusable Excel surface controls");
         helpText.Should().NotBeNull("worksheet scrollbars should announce whether they move rows or columns");
-        LocalizedAttribute(scrollBar, "AutomationProperties.Name").Should().Be(expectedName);
-        LocalizedAttribute(scrollBar, "AutomationProperties.HelpText").Should().Be(expectedHelpText);
+        LocalizedAttribute(scrollBar, "AutomationProperties.Name").Should().Be(UiText.Get(expectedNameKey));
+        LocalizedAttribute(scrollBar, "AutomationProperties.HelpText").Should().Be(UiText.Get(expectedHelpTextKey));
     }
 
     [Fact]
@@ -2560,7 +2560,7 @@ public sealed class MainWindowXamlKeyTipTests
     public void PivotTableValueFieldSettings_UsesExcelStyleDialog()
     {
         var mainWindowSource = ReadPivotCommandSource();
-        var dialogXaml = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml"));
+        var dialogXaml = XamlLocalizationTestHelper.LoadLocalizedXaml("PivotValueFieldSettingsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
 
@@ -2568,12 +2568,21 @@ public sealed class MainWindowXamlKeyTipTests
         mainWindowSource.Should().NotContain("Value Field Settings: name,function,show-values-as");
         var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialogPlanner.cs"));
         var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml.cs"));
-        plannerSource.Should().Contain("% of Grand Total");
-        plannerSource.Should().Contain("% of Row Total");
-        plannerSource.Should().Contain("% of Column Total");
-        plannerSource.Should().Contain("Running Total In");
-        plannerSource.Should().Contain("Difference From");
-        plannerSource.Should().Contain("Rank Smallest to Largest");
+        var expectedShowValuesAsKeys = new[]
+        {
+            "PivotValueFieldSettings_ShowPercentOfGrandTotal",
+            "PivotValueFieldSettings_ShowPercentOfRowTotal",
+            "PivotValueFieldSettings_ShowPercentOfColumnTotal",
+            "PivotValueFieldSettings_ShowRunningTotalIn",
+            "PivotValueFieldSettings_ShowDifferenceFrom",
+            "PivotValueFieldSettings_ShowRankSmallest"
+        };
+        foreach (var key in expectedShowValuesAsKeys)
+            plannerSource.Should().Contain($"UiText.Get(\"{key}\")");
+        PivotValueFieldSettingsDialogPlanner.ShowValuesAsOptions
+            .Select(option => option.Label)
+            .Should()
+            .Contain(expectedShowValuesAsKeys.Select(UiText.Get));
         dialogSource.Should().Contain("BaseFieldBox");
         dialogSource.Should().Contain("BaseItemBox");
         dialogSource.Should().Contain("NumberFormatPresetBox");

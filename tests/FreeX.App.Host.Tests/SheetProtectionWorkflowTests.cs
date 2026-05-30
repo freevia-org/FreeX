@@ -15,7 +15,7 @@ public sealed class SheetProtectionWorkflowTests
 
         var action = SheetProtectionWorkflow.CreateCommand(sheet, "secret");
 
-        action.Title.Should().Be("Protect Sheet");
+        action.Title.Should().Be(UiText.Get("MainWindowMessage_ProtectSheetTitle"));
         action.SuccessMessage.Should().Contain("protected");
         action.Command.Should().BeOfType<ProtectSheetCommand>();
     }
@@ -32,7 +32,7 @@ public sealed class SheetProtectionWorkflowTests
 
         var action = SheetProtectionWorkflow.CreateCommand(sheet, result);
 
-        action.Title.Should().Be("Protect Sheet");
+        action.Title.Should().Be(UiText.Get("MainWindowMessage_ProtectSheetTitle"));
         action.SelectedSheetPermissions.Should().Equal(["Select unlocked cells", "Sort"]);
         action.Command.Apply(new SimpleCtx(workbook)).Success.Should().BeTrue();
         sheet.ProtectionPermissions.Should().Equal(
@@ -63,9 +63,9 @@ public sealed class SheetProtectionWorkflowTests
 
         var uiText = SheetProtectionWorkflow.GetUiText(sheet);
 
-        uiText.ButtonContent.Should().Be("Protect Sheet");
-        uiText.TooltipTitle.Should().Be("Protect Sheet");
-        uiText.TooltipDescription.Should().Contain("Set");
+        uiText.ButtonContent.Should().Be(UiText.Get("MainWindow_Content_ProtectSheet"));
+        uiText.TooltipTitle.Should().Be(UiText.Get("MainWindow_TooltipTitle_ProtectSheet"));
+        uiText.TooltipDescription.Should().Be(UiText.Get("MainWindow_TooltipDescription_SetSheetProtectionForLockedCellsWithAnOptionalPassword"));
     }
 
     [Fact]
@@ -87,7 +87,11 @@ public sealed class SheetProtectionWorkflowTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
 
-        source.Should().Contain("new PasswordProtectionDialog(\"Protect Sheet\", \"_Password (optional):\")");
+        UiText.Get("MainWindowMessage_OptionalPasswordLabel")
+            .Should().Contain("_", "the password prompt should expose an access key");
+        source.Should().Contain("new PasswordProtectionDialog(");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_ProtectSheetTitle\"),");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_OptionalPasswordLabel\"))");
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext

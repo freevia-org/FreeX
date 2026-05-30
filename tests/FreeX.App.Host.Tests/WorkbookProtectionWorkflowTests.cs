@@ -14,7 +14,7 @@ public sealed class WorkbookProtectionWorkflowTests
 
         var action = WorkbookProtectionWorkflow.CreateCommand(workbook, "secret");
 
-        action.Title.Should().Be("Protect Workbook");
+        action.Title.Should().Be(UiText.Get("MainWindowMessage_ProtectWorkbookTitle"));
         action.SuccessMessage.Should().Contain("protected");
         action.Command.Should().BeOfType<ProtectWorkbookCommand>();
     }
@@ -42,9 +42,9 @@ public sealed class WorkbookProtectionWorkflowTests
 
         var uiText = WorkbookProtectionWorkflow.GetUiText(workbook);
 
-        uiText.ButtonContent.Should().Be("Protect Workbook");
-        uiText.TooltipTitle.Should().Be("Protect Workbook");
-        uiText.TooltipDescription.Should().Contain("Prevent");
+        uiText.ButtonContent.Should().Be(UiText.Get("MainWindow_Content_ProtectWorkbook"));
+        uiText.TooltipTitle.Should().Be(UiText.Get("MainWindow_TooltipTitle_ProtectWorkbook"));
+        uiText.TooltipDescription.Should().Be(UiText.Get("MainWindow_TooltipDescription_PreventStructuralChangesToTheWorkbookSuchAsAddingDeletingOrRenamingSheet_47267D4F"));
     }
 
     [Fact]
@@ -67,6 +67,10 @@ public sealed class WorkbookProtectionWorkflowTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
 
-        source.Should().Contain("new PasswordProtectionDialog(\"Protect Workbook\", \"_Password (optional):\")");
+        UiText.Get("MainWindowMessage_OptionalPasswordLabel")
+            .Should().Contain("_", "the password prompt should expose an access key");
+        source.Should().Contain("new PasswordProtectionDialog(");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_ProtectWorkbookTitle\"),");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_OptionalPasswordLabel\"))");
     }
 }

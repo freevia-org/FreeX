@@ -17,7 +17,7 @@ public sealed record ConditionalFormatAppliesToRangeSelectionRequest(
     bool CollapseDialog = true);
 
 /// <summary>
-/// "Manage Conditional Formatting Rules" dialog â€” lists all rules on a sheet,
+/// "Manage Conditional Formatting Rules" dialog - lists all rules on a sheet,
 /// allows add / edit / delete / reorder, and returns the final ordered rule list.
 /// </summary>
 public sealed partial class ManageConditionalFormatsDialog : Window
@@ -29,7 +29,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         Table
     }
 
-    /// <summary>Set after OK or Apply is clicked. Priorities are re-assigned 1â€¦N in list order.</summary>
+    /// <summary>Set after OK or Apply is clicked. Priorities are re-assigned 1...N in list order.</summary>
     public IReadOnlyList<ConditionalFormat>? ResultRules { get; private set; }
 
     private readonly Sheet _sheet;
@@ -37,7 +37,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
     private readonly Action<ConditionalFormatAppliesToRangeSelectionRequest>? _requestAppliesToRangeSelection;
     private readonly Action<IReadOnlyList<ConditionalFormat>>? _applyRules;
 
-    // Working copy â€” bound to the ListView
+    // Working copy bound to the ListView.
     private readonly ObservableCollection<ConditionalFormat> _rules = [];
 
     private readonly ComboBox _scopeBox;
@@ -70,10 +70,10 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
-        // â”€â”€ Root layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Root layout
         var root = new DockPanel { Margin = new Thickness(12) };
 
-        // â”€â”€ Top bar: scope selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Top bar: scope selector
         var topBar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -104,7 +104,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
         root.Children.Add(topBar);
 
-        // â”€â”€ Bottom button row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Bottom button row
         var bottomRow = new StackPanel
         {
             Orientation         = Orientation.Horizontal,
@@ -123,7 +123,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         bottomRow.Children.Add(_applyBtn);
         root.Children.Add(bottomRow);
 
-        // â”€â”€ Middle toolbar: New / Edit / Duplicate / Delete / reorder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Middle toolbar: New / Edit / Duplicate / Delete / reorder
         var toolBar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -135,8 +135,8 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         _editBtn     = new Button { Content = UiText.Get("ManageConditionalFormats_EditRule"),   Width = 94, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
         _duplicateBtn = new Button { Content = UiText.Get("ManageConditionalFormats_DuplicateRule"), Width = 118, Margin = new Thickness(0, 0, 6, 0), IsEnabled = false };
         _deleteBtn   = new Button { Content = UiText.Get("ManageConditionalFormats_DeleteRule"), Width = 100, Margin = new Thickness(0, 0, 12, 0), IsEnabled = false };
-        _moveUpBtn   = new Button { Content = "â–²", Width = 32, Margin = new Thickness(0, 0, 4, 0), ToolTip = UiText.Get("ManageConditionalFormats_MoveSelectedRuleUp"), IsEnabled = false };
-        _moveDownBtn = new Button { Content = "â–¼", Width = 32, ToolTip = UiText.Get("ManageConditionalFormats_MoveSelectedRuleDown"), IsEnabled = false };
+        _moveUpBtn   = new Button { Content = "\u25B2", Width = 32, Margin = new Thickness(0, 0, 4, 0), ToolTip = UiText.Get("ManageConditionalFormats_MoveSelectedRuleUp"), IsEnabled = false };
+        _moveDownBtn = new Button { Content = "\u25BC", Width = 32, ToolTip = UiText.Get("ManageConditionalFormats_MoveSelectedRuleDown"), IsEnabled = false };
         System.Windows.Automation.AutomationProperties.SetName(_moveUpBtn, UiText.Get("ManageConditionalFormats_MoveUp"));
         System.Windows.Automation.AutomationProperties.SetName(_moveDownBtn, UiText.Get("ManageConditionalFormats_MoveDown"));
 
@@ -155,7 +155,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         toolBar.Children.Add(_moveDownBtn);
         root.Children.Add(toolBar);
 
-        // â”€â”€ ListView â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ListView
         _listView = new ListView
         {
             ItemsSource   = _rules,
@@ -176,12 +176,12 @@ public sealed partial class ManageConditionalFormatsDialog : Window
 
         Content = root;
 
-        // â”€â”€ Initial load â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Initial load
         PopulateRules();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    // â”€â”€ Scope selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Scope selector
 
     private void FocusInitialKeyboardTarget()
     {
@@ -218,7 +218,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         }
     }
 
-    // â”€â”€ Toolbar button handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Toolbar button handlers
 
     private void NewRule_Click(object sender, RoutedEventArgs e)
     {
@@ -328,7 +328,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
         }
     }
 
-    // â”€â”€ OK / Apply â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // OK / Apply
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -353,11 +353,11 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             _rules);
     }
 
-    // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Helpers
 
     private void ReassignPriorities()
     {
-        // ObservableCollection items are mutable objects â€” create new copies with updated priority
+        // ObservableCollection items are mutable objects; create new copies with updated priority.
         for (var i = 0; i < _rules.Count; i++)
         {
             var r = _rules[i];

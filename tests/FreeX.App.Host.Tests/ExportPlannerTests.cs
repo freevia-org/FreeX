@@ -546,28 +546,28 @@ public class ExportPlannerTests
 
         foreach (var expected in new[]
         {
-            "Content = \"Active _sheet(s)\"",
-            "Content = \"Selected _range\"",
-            "Content = \"_Workbook\"",
-            "Content = \"_Include document properties\"",
-            "Content = \"_Open after publishing\"",
-            "Content = \"_Ignore print areas\"",
-            "Content = \"Create _PDF bookmarks\"",
-            "Content = \"_Bitmap text when fonts may not be embedded\"",
-            "Content = \"PDF/_A compliant (not supported)\"",
-            "Content = \"Document structure _tags (not supported)\"",
-            "Content = \"PDF _language:\"",
+            "Content = UiText.Get(\"ExportOptions_ActiveSheetS\")",
+            "Content = UiText.Get(\"ExportOptions_SelectedRange\")",
+            "Content = UiText.Get(\"ExportOptions_Workbook\")",
+            "Content = UiText.Get(\"ExportOptions_IncludeDocumentProperties\")",
+            "Content = UiText.Get(\"ExportOptions_OpenAfterPublishing\")",
+            "Content = UiText.Get(\"ExportOptions_IgnorePrintAreas\")",
+            "Content = UiText.Get(\"ExportOptions_CreatePdfBookmarks\")",
+            "Content = UiText.Get(\"ExportOptions_BitmapTextWhenFontsMayNotBeEmbedded\")",
+            "Content = UiText.Get(\"ExportOptions_PdfACompliantNotSupported\")",
+            "Content = UiText.Get(\"ExportOptions_DocumentStructureTagsNotSupported\")",
+            "Content = UiText.Get(\"ExportOptions_PdfLanguage\")",
             "Target = _pdfLanguageBox",
-            "Content = \"_Standard\"",
-            "Content = \"_Minimum size\"",
-            "Content = \"_All\"",
-            "Content = \"_Pages\"",
+            "Content = UiText.Get(\"ExportOptions_Standard\")",
+            "Content = UiText.Get(\"ExportOptions_MinimumSize\")",
+            "Content = UiText.Get(\"ExportOptions_All\")",
+            "Content = UiText.Get(\"ExportOptions_Pages\")",
             "_fromPageBox.IsEnabled = false",
             "Target = _fromPageBox",
-            "Content = \"t_o\"",
+            "Content = UiText.Get(\"ExportOptions_To\")",
             "Target = _toPageBox",
-            "Content = \"_OK\"",
-            "Content = \"_Cancel\""
+            "Content = UiText.Ok",
+            "Content = UiText.Cancel"
         })
             source.Should().Contain(expected);
 
@@ -580,19 +580,19 @@ public class ExportPlannerTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
 
-        source.Should().Contain("Content = \"Active _sheet(s)\", IsChecked = true");
-        source.Should().Contain("Content = \"Selected _range\"");
-        source.Should().Contain("Content = \"_Workbook\"");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_ActiveSheetS\"), IsChecked = true");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_SelectedRange\")");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_Workbook\")");
         source.Should().Contain("_selectionButton.IsEnabled = hasSelection;");
-        source.Should().Contain("Content = \"_All\", GroupName = \"PageRange\", IsChecked = true");
-        source.Should().Contain("Content = \"_Pages\", GroupName = \"PageRange\"");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_All\"), GroupName = \"PageRange\", IsChecked = true");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_Pages\"), GroupName = \"PageRange\"");
         source.Should().Contain("_allPagesButton.Checked += (_, _) => SetPageRangeFieldsEnabled(false);");
         source.Should().Contain("_pagesRangeButton.Checked += (_, _) =>");
         source.Should().Contain("SetPageRangeFieldsEnabled(true);");
         source.Should().Contain("DialogFocus.FocusAndSelect(_fromPageBox);");
-        source.Should().Contain("Content = \"_Standard\", IsChecked = true");
-        source.Should().Contain("Content = \"_Minimum size\"");
-        source.Should().Contain("Content = \"_Open after publishing\"");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_Standard\"), IsChecked = true");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_MinimumSize\")");
+        source.Should().Contain("Content = UiText.Get(\"ExportOptions_OpenAfterPublishing\")");
         source.Should().Contain("ExportPlanner.TryCreatePageRange(_fromPageBox.Text, _toPageBox.Text, out pageRange, out var error)");
         source.Should().Contain("_minimumSizeButton.IsChecked == true");
         source.Should().Contain("_openAfterPublishBox.IsChecked == true");
@@ -603,8 +603,8 @@ public class ExportPlannerTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_fromPageBox, \"From page\");");
-        source.Should().Contain("AutomationProperties.SetName(_toPageBox, \"To page\");");
+        source.Should().Contain("AutomationProperties.SetName(_fromPageBox, UiText.Get(\"ExportOptions_FromPage\"));");
+        source.Should().Contain("AutomationProperties.SetName(_toPageBox, UiText.Get(\"ExportOptions_ToPage\"));");
     }
 
     [Fact]
@@ -612,9 +612,9 @@ public class ExportPlannerTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetHelpText(_selectionButton, \"Select a cell range before exporting the selection.\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_pdfABox, \"FreeX's current PDF exporter cannot write PDF/A conformance metadata.\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_structureTagsBox, \"FreeX's current PDF exporter cannot write tagged PDF structure trees.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_selectionButton, UiText.Get(\"ExportOptions_SelectACellRangeBeforeExportingTheSelection\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_pdfABox, UiText.Get(\"ExportOptions_FreeXSCurrentPdfExporterCannotWritePdfAConformanceMetadata\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_structureTagsBox, UiText.Get(\"ExportOptions_FreeXSCurrentPdfExporterCannotWriteTaggedPdfStructureTrees\"));");
     }
 
     [Fact]
@@ -654,7 +654,7 @@ public class ExportPlannerTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
 
         source.Should().Contain("ExportPlanner.TryNormalizePdfLanguage(_pdfLanguageBox.Text, out var pdfLanguage, out var pdfLanguageError)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, pdfLanguageError, \"Export Options\");");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, pdfLanguageError, UiText.Get(\"ExportOptions_ExportOptions\"));");
         source.Should().Contain("FocusInvalidPdfLanguageInput();");
         source.Should().Contain("private void FocusInvalidPdfLanguageInput()");
         source.Should().Contain("_pdfLanguageBox.Focus();");

@@ -3508,10 +3508,10 @@
     <value>Math</value>
   </data>
   <data name="MainWindow_Content_More" xml:space="preserve">
-    <value>Moreâ€¦</value>
+    <value>More...</value>
   </data>
   <data name="MainWindow_Content_MoreTemplatesExcluded" xml:space="preserve">
-    <value>More templates (Excluded) â†’</value>
+    <value>More templates (Excluded) -></value>
   </data>
   <data name="MainWindow_Content_MoveChart" xml:space="preserve">
     <value>Move Chart</value>
@@ -3619,7 +3619,7 @@
     <value>Queries &amp; Connections</value>
   </data>
   <data name="MainWindow_Content_R" xml:space="preserve">
-    <value>RÂ²</value>
+    <value>R^2</value>
   </data>
   <data name="MainWindow_Content_Radar" xml:space="preserve">
     <value>Radar</value>
@@ -4456,7 +4456,7 @@
     <value>Remove Page Break</value>
   </data>
   <data name="MainWindow_Header_Rename" xml:space="preserve">
-    <value>Renameâ€¦</value>
+    <value>Rename...</value>
   </data>
   <data name="MainWindow_Header_RenameSheet" xml:space="preserve">
     <value>Rename Sheet</value>
@@ -4522,7 +4522,7 @@
     <value>Tab Color</value>
   </data>
   <data name="MainWindow_Header_TabColor_EDBDA613" xml:space="preserve">
-    <value>Tab Colorâ€¦</value>
+    <value>Tab Color...</value>
   </data>
   <data name="MainWindow_Header_TextThatContains" xml:space="preserve">
     <value>Text that Contains...</value>
@@ -4579,7 +4579,7 @@
     <value>Ungroup Sheets</value>
   </data>
   <data name="MainWindow_Header_Unhide" xml:space="preserve">
-    <value>Unhideâ€¦</value>
+    <value>Unhide...</value>
   </data>
   <data name="MainWindow_Header_UnhideColumns" xml:space="preserve">
     <value>Unhide Columns</value>
@@ -5548,7 +5548,7 @@
     <value>Insert a line chart to show trends over time.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertALineSparklineATinyChartInASingleCellShowingATrend" xml:space="preserve">
-    <value>Insert a line sparkline â€” a tiny chart in a single cell showing a trend.</value>
+    <value>Insert a line sparkline - a tiny chart in a single cell showing a trend.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertAnAreaChartToShowTrendsWithFilledAreas" xml:space="preserve">
     <value>Insert an area chart to show trends with filled areas.</value>
