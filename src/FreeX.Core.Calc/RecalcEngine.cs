@@ -360,11 +360,22 @@ public sealed class RecalcEngine
         return node switch
         {
             FunctionCallNode f => BuiltInFunctions.IsVolatile(f.FunctionName)
-                                  || f.Arguments.Any(ContainsVolatileFunction),
+                                  || ContainsVolatileFunctionArgument(f.Arguments),
             BinaryOpNode b => ContainsVolatileFunction(b.Left) || ContainsVolatileFunction(b.Right),
             UnaryOpNode u => ContainsVolatileFunction(u.Operand),
             _ => false
         };
+    }
+
+    private static bool ContainsVolatileFunctionArgument(IReadOnlyList<FormulaNode> arguments)
+    {
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            if (ContainsVolatileFunction(arguments[i]))
+                return true;
+        }
+
+        return false;
     }
 
     private static void CollectReferences(

@@ -81,6 +81,24 @@ public class DependencyGraphTests
     }
 
     [Fact]
+    public void RecalcEngine_DetectsVolatileFunctionArgumentsWithoutLinqIterators()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
+        var volatileDetection = source[
+            source.IndexOf("private static bool ContainsVolatileFunction", StringComparison.Ordinal)..
+            source.IndexOf("private static void CollectReferences", StringComparison.Ordinal)];
+
+        volatileDetection.Should().Contain("BuiltInFunctions.IsVolatile(f.FunctionName)");
+        volatileDetection.Should().Contain("ContainsVolatileFunctionArgument(f.Arguments)");
+        volatileDetection.Should().Contain("for (var i = 0; i < arguments.Count; i++)");
+        volatileDetection.Should().Contain("ContainsVolatileFunction(arguments[i])");
+        volatileDetection.Should().NotContain(
+            ".Any(",
+            "volatile formula registration should avoid LINQ iterator/delegate work while walking function arguments");
+    }
+
+    [Fact]
     public void DependencyGraph_ReturnsSharedEmptyPlanWhenChangedCellsHaveNoDependents()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
