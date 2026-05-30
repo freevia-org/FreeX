@@ -1607,6 +1607,8 @@ public sealed class MainWindowXamlKeyTipTests
         zoomControls.Attribute("Height")?.Value.Should().Be("24");
         zoomControls.Attribute("Background")?.Value.Should().Be("{StaticResource FreeXStatusSurfaceBrush}");
         zoomControls.Attribute("Panel.ZIndex")?.Value.Should().Be("1");
+        zoomControls.Attribute("KeyboardNavigation.TabNavigation")?.Value.Should().Be("Cycle");
+        zoomControls.Attribute("KeyboardNavigation.ControlTabNavigation")?.Value.Should().Be("Cycle");
     }
 
     [Theory]
