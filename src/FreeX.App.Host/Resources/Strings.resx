@@ -1884,6 +1884,471 @@
   <data name="CellShift_Insert_ShiftCellsRight" xml:space="preserve">
     <value>Shift cells _right</value>
   </data>
+  <data name="ConditionalFormatDialog_TitleFormat" xml:space="preserve">
+    <value>Conditional Formatting - {0}</value>
+  </data>
+  <data name="ConditionalFormatDialog_EditTitle" xml:space="preserve">
+    <value>Edit Formatting Rule</value>
+  </data>
+  <data name="ConditionalFormatDialog_NewTitle" xml:space="preserve">
+    <value>New Formatting Rule</value>
+  </data>
+  <data name="ConditionalFormatDialog_HighlightCellsRuleTitleFormat" xml:space="preserve">
+    <value>Highlight Cells Rule - {0}</value>
+  </data>
+  <data name="ConditionalFormatDialog_TopBottomRuleTitleFormat" xml:space="preserve">
+    <value>Top/Bottom Rule - {0}</value>
+  </data>
+  <data name="ConditionalFormatDialog_DataBarRuleTitle" xml:space="preserve">
+    <value>Data Bar Rule</value>
+  </data>
+  <data name="ConditionalFormatDialog_ColorScaleRuleTitle" xml:space="preserve">
+    <value>Color Scale Rule</value>
+  </data>
+  <data name="ConditionalFormatDialog_IconSetRuleTitle" xml:space="preserve">
+    <value>Icon Set Rule</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_Formula" xml:space="preserve">
+    <value>Formula</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_DataBar" xml:space="preserve">
+    <value>Data Bar</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_ColorScale" xml:space="preserve">
+    <value>Color Scale</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_IconSet" xml:space="preserve">
+    <value>Icon Set</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_TextContains" xml:space="preserve">
+    <value>Text Contains</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_TextDoesNotContain" xml:space="preserve">
+    <value>Text Does Not Contain</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_TextBeginsWith" xml:space="preserve">
+    <value>Text Begins With</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_TextEndsWith" xml:space="preserve">
+    <value>Text Ends With</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_DateOccurring" xml:space="preserve">
+    <value>Date Occurring</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_DuplicateValues" xml:space="preserve">
+    <value>Duplicate Values</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_Blanks" xml:space="preserve">
+    <value>Blanks</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_NoBlanks" xml:space="preserve">
+    <value>No Blanks</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_Errors" xml:space="preserve">
+    <value>Errors</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_NoErrors" xml:space="preserve">
+    <value>No Errors</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_AboveAverage" xml:space="preserve">
+    <value>Above Average</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_BelowAverage" xml:space="preserve">
+    <value>Below Average</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_Top10Percent" xml:space="preserve">
+    <value>Top 10%</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_Bottom10Percent" xml:space="preserve">
+    <value>Bottom 10%</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_Top10Items" xml:space="preserve">
+    <value>Top 10 Items</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_Bottom10Items" xml:space="preserve">
+    <value>Bottom 10 Items</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_GreaterThan" xml:space="preserve">
+    <value>Greater Than</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_LessThan" xml:space="preserve">
+    <value>Less Than</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_EqualTo" xml:space="preserve">
+    <value>Equal To</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_Between" xml:space="preserve">
+    <value>Between</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_NotEqualTo" xml:space="preserve">
+    <value>Not Equal To</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_GreaterThanOrEqualTo" xml:space="preserve">
+    <value>Greater Than Or Equal To</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_LessThanOrEqualTo" xml:space="preserve">
+    <value>Less Than Or Equal To</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_NotBetween" xml:space="preserve">
+    <value>Not Between</value>
+  </data>
+  <data name="ConditionalFormatDialog_SelectRuleTypeHeader" xml:space="preserve">
+    <value>Select a Rule Type:</value>
+  </data>
+  <data name="ConditionalFormatDialog_EditRuleDescriptionHeader" xml:space="preserve">
+    <value>Edit the Rule Description:</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleTypeAutomationName" xml:space="preserve">
+    <value>Rule type</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleShell_FormatAllCells" xml:space="preserve">
+    <value>Format all cells based on their values</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleShell_FormatContainingCells" xml:space="preserve">
+    <value>Format only cells that contain</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleShell_FormatTopBottom" xml:space="preserve">
+    <value>Format only top or bottom ranked values</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleShell_FormatAboveBelowAverage" xml:space="preserve">
+    <value>Format only values that are above or below average</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleShell_FormatUniqueDuplicate" xml:space="preserve">
+    <value>Format only unique or duplicate values</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleShell_UseFormula" xml:space="preserve">
+    <value>Use a formula to determine which cells to format</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatStyle_DataBar" xml:space="preserve">
+    <value>Data Bar</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatStyle_2ColorScale" xml:space="preserve">
+    <value>2-Color Scale</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatStyle_3ColorScale" xml:space="preserve">
+    <value>3-Color Scale</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatStyle_IconSet" xml:space="preserve">
+    <value>Icon Set</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatPreset_LightRedDarkRedText" xml:space="preserve">
+    <value>Light Red Fill with Dark Red Text</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatPreset_YellowDarkYellowText" xml:space="preserve">
+    <value>Yellow Fill with Dark Yellow Text</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatPreset_GreenDarkGreenText" xml:space="preserve">
+    <value>Green Fill with Dark Green Text</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatPreset_LightRedFill" xml:space="preserve">
+    <value>Light Red Fill</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatPreset_YellowFill" xml:space="preserve">
+    <value>Yellow Fill</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatPreset_GreenFill" xml:space="preserve">
+    <value>Green Fill</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatPreset_LightBlueFill" xml:space="preserve">
+    <value>Light Blue Fill</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatPreset_BoldRedText" xml:space="preserve">
+    <value>Bold Red Text</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatPreset_BoldGreenText" xml:space="preserve">
+    <value>Bold Green Text</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatPreset_CustomFormat" xml:space="preserve">
+    <value>Custom Format...</value>
+  </data>
+  <data name="ConditionalFormatDialog_ConditionKind_CellValue" xml:space="preserve">
+    <value>Cell Value</value>
+  </data>
+  <data name="ConditionalFormatDialog_ConditionKind_SpecificText" xml:space="preserve">
+    <value>Specific Text</value>
+  </data>
+  <data name="ConditionalFormatDialog_ConditionKind_DatesOccurring" xml:space="preserve">
+    <value>Dates Occurring</value>
+  </data>
+  <data name="ConditionalFormatDialog_ConditionKind_Blanks" xml:space="preserve">
+    <value>Blanks</value>
+  </data>
+  <data name="ConditionalFormatDialog_ConditionKind_NoBlanks" xml:space="preserve">
+    <value>No Blanks</value>
+  </data>
+  <data name="ConditionalFormatDialog_ConditionKind_Errors" xml:space="preserve">
+    <value>Errors</value>
+  </data>
+  <data name="ConditionalFormatDialog_ConditionKind_NoErrors" xml:space="preserve">
+    <value>No Errors</value>
+  </data>
+  <data name="ConditionalFormatDialog_CellValueOperator_GreaterThan" xml:space="preserve">
+    <value>greater than</value>
+  </data>
+  <data name="ConditionalFormatDialog_CellValueOperator_LessThan" xml:space="preserve">
+    <value>less than</value>
+  </data>
+  <data name="ConditionalFormatDialog_CellValueOperator_EqualTo" xml:space="preserve">
+    <value>equal to</value>
+  </data>
+  <data name="ConditionalFormatDialog_CellValueOperator_Between" xml:space="preserve">
+    <value>between</value>
+  </data>
+  <data name="ConditionalFormatDialog_CellValueOperator_NotEqualTo" xml:space="preserve">
+    <value>not equal to</value>
+  </data>
+  <data name="ConditionalFormatDialog_CellValueOperator_GreaterThanOrEqualTo" xml:space="preserve">
+    <value>greater than or equal to</value>
+  </data>
+  <data name="ConditionalFormatDialog_CellValueOperator_LessThanOrEqualTo" xml:space="preserve">
+    <value>less than or equal to</value>
+  </data>
+  <data name="ConditionalFormatDialog_CellValueOperator_NotBetween" xml:space="preserve">
+    <value>not between</value>
+  </data>
+  <data name="ConditionalFormatDialog_TextOperator_Containing" xml:space="preserve">
+    <value>containing</value>
+  </data>
+  <data name="ConditionalFormatDialog_TextOperator_NotContaining" xml:space="preserve">
+    <value>not containing</value>
+  </data>
+  <data name="ConditionalFormatDialog_TextOperator_BeginningWith" xml:space="preserve">
+    <value>beginning with</value>
+  </data>
+  <data name="ConditionalFormatDialog_TextOperator_EndingWith" xml:space="preserve">
+    <value>ending with</value>
+  </data>
+  <data name="ConditionalFormatDialog_DatePeriod_Yesterday" xml:space="preserve">
+    <value>Yesterday</value>
+  </data>
+  <data name="ConditionalFormatDialog_DatePeriod_Today" xml:space="preserve">
+    <value>Today</value>
+  </data>
+  <data name="ConditionalFormatDialog_DatePeriod_Tomorrow" xml:space="preserve">
+    <value>Tomorrow</value>
+  </data>
+  <data name="ConditionalFormatDialog_DatePeriod_Last7Days" xml:space="preserve">
+    <value>Last 7 Days</value>
+  </data>
+  <data name="ConditionalFormatDialog_DatePeriod_LastWeek" xml:space="preserve">
+    <value>Last Week</value>
+  </data>
+  <data name="ConditionalFormatDialog_DatePeriod_ThisWeek" xml:space="preserve">
+    <value>This Week</value>
+  </data>
+  <data name="ConditionalFormatDialog_DatePeriod_NextWeek" xml:space="preserve">
+    <value>Next Week</value>
+  </data>
+  <data name="ConditionalFormatDialog_DatePeriod_LastMonth" xml:space="preserve">
+    <value>Last Month</value>
+  </data>
+  <data name="ConditionalFormatDialog_DatePeriod_ThisMonth" xml:space="preserve">
+    <value>This Month</value>
+  </data>
+  <data name="ConditionalFormatDialog_DatePeriod_NextMonth" xml:space="preserve">
+    <value>Next Month</value>
+  </data>
+  <data name="ConditionalFormatDialog_DuplicateKind_Duplicate" xml:space="preserve">
+    <value>Duplicate</value>
+  </data>
+  <data name="ConditionalFormatDialog_DuplicateKind_Unique" xml:space="preserve">
+    <value>Unique</value>
+  </data>
+  <data name="ConditionalFormatDialog_AxisPosition_Automatic" xml:space="preserve">
+    <value>Automatic</value>
+  </data>
+  <data name="ConditionalFormatDialog_AxisPosition_Middle" xml:space="preserve">
+    <value>Middle</value>
+  </data>
+  <data name="ConditionalFormatDialog_AxisPosition_None" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="ConditionalFormatDialog_ShowValue" xml:space="preserve">
+    <value>_Show value</value>
+  </data>
+  <data name="ConditionalFormatDialog_ReverseIconOrder" xml:space="preserve">
+    <value>_Reverse icon order</value>
+  </data>
+  <data name="ConditionalFormatDialog_ShowBarOnly" xml:space="preserve">
+    <value>_Show Bar Only</value>
+  </data>
+  <data name="ConditionalFormatDialog_GradientFill" xml:space="preserve">
+    <value>_Gradient fill</value>
+  </data>
+  <data name="ConditionalFormatDialog_ShowBorder" xml:space="preserve">
+    <value>Show _border:</value>
+  </data>
+  <data name="ConditionalFormatDialog_UseThreeColorScale" xml:space="preserve">
+    <value>Use _three-color scale</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormulaLabel" xml:space="preserve">
+    <value>_Formula:</value>
+  </data>
+  <data name="ConditionalFormatDialog_MinimumTypeLabel" xml:space="preserve">
+    <value>_Minimum type:</value>
+  </data>
+  <data name="ConditionalFormatDialog_MinimumValueLabel" xml:space="preserve">
+    <value>Minimum _value:</value>
+  </data>
+  <data name="ConditionalFormatDialog_MaximumTypeLabel" xml:space="preserve">
+    <value>Ma_ximum type:</value>
+  </data>
+  <data name="ConditionalFormatDialog_MaximumValueLabel" xml:space="preserve">
+    <value>Maximum _value:</value>
+  </data>
+  <data name="ConditionalFormatDialog_MinimumBarLengthLabel" xml:space="preserve">
+    <value>_Minimum bar length (%):</value>
+  </data>
+  <data name="ConditionalFormatDialog_MaximumBarLengthLabel" xml:space="preserve">
+    <value>Ma_ximum bar length (%):</value>
+  </data>
+  <data name="ConditionalFormatDialog_AxisPositionLabel" xml:space="preserve">
+    <value>_Axis position:</value>
+  </data>
+  <data name="ConditionalFormatDialog_AxisColorLabel" xml:space="preserve">
+    <value>_Axis color:</value>
+  </data>
+  <data name="ConditionalFormatDialog_NegativeBarColorLabel" xml:space="preserve">
+    <value>_Negative bar color:</value>
+  </data>
+  <data name="ConditionalFormatDialog_NegativeBorderColorLabel" xml:space="preserve">
+    <value>Negative _border color:</value>
+  </data>
+  <data name="ConditionalFormatDialog_MinimumColorLabel" xml:space="preserve">
+    <value>_Minimum color:</value>
+  </data>
+  <data name="ConditionalFormatDialog_MidpointTypeLabel" xml:space="preserve">
+    <value>_Midpoint type:</value>
+  </data>
+  <data name="ConditionalFormatDialog_MidpointValueLabel" xml:space="preserve">
+    <value>Midpoint _value:</value>
+  </data>
+  <data name="ConditionalFormatDialog_MidpointColorLabel" xml:space="preserve">
+    <value>Midpoint _color:</value>
+  </data>
+  <data name="ConditionalFormatDialog_MaximumColorLabel" xml:space="preserve">
+    <value>Ma_ximum color:</value>
+  </data>
+  <data name="ConditionalFormatDialog_IconSetLabel" xml:space="preserve">
+    <value>_Icon set:</value>
+  </data>
+  <data name="ConditionalFormatDialog_ThresholdsHeader" xml:space="preserve">
+    <value>Thresholds:</value>
+  </data>
+  <data name="ConditionalFormatDialog_DatePeriodLabel" xml:space="preserve">
+    <value>_Date period:</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatCellsThatContainLabel" xml:space="preserve">
+    <value>Format cells that _contain:</value>
+  </data>
+  <data name="ConditionalFormatDialog_PercentLabel" xml:space="preserve">
+    <value>_Percent:</value>
+  </data>
+  <data name="ConditionalFormatDialog_RankLabel" xml:space="preserve">
+    <value>_Rank:</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatLabel" xml:space="preserve">
+    <value>_Format:</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatWithLabel" xml:space="preserve">
+    <value>_Format with:</value>
+  </data>
+  <data name="ConditionalFormatDialog_BarColorLabel" xml:space="preserve">
+    <value>_Bar color:</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatStyleLabel" xml:space="preserve">
+    <value>_Format Style:</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatOnlyCellsWithLabel" xml:space="preserve">
+    <value>Format only cells _with:</value>
+  </data>
+  <data name="ConditionalFormatDialog_MaximumLabel" xml:space="preserve">
+    <value>Ma_ximum:</value>
+  </data>
+  <data name="ConditionalFormatDialog_MinimumLabel" xml:space="preserve">
+    <value>_Minimum:</value>
+  </data>
+  <data name="ConditionalFormatDialog_ValueLabel" xml:space="preserve">
+    <value>_Value:</value>
+  </data>
+  <data name="ConditionalFormatDialog_OperatorLabel" xml:space="preserve">
+    <value>_Operator:</value>
+  </data>
+  <data name="ConditionalFormatDialog_TextOperatorLabel" xml:space="preserve">
+    <value>_Text operator:</value>
+  </data>
+  <data name="ConditionalFormatDialog_TextLabel" xml:space="preserve">
+    <value>_Text:</value>
+  </data>
+  <data name="ConditionalFormatDialog_FormatButton" xml:space="preserve">
+    <value>_Format...</value>
+  </data>
+  <data name="ConditionalFormatDialog_CustomFillColorToolTip" xml:space="preserve">
+    <value>Choose a custom fill color for this conditional format</value>
+  </data>
+  <data name="ConditionalFormatDialog_ChooseDataBarColorToolTip" xml:space="preserve">
+    <value>Choose data bar color</value>
+  </data>
+  <data name="ConditionalFormatDialog_ChooseAxisColorToolTip" xml:space="preserve">
+    <value>Choose axis color</value>
+  </data>
+  <data name="ConditionalFormatDialog_ChooseNegativeBarColorToolTip" xml:space="preserve">
+    <value>Choose negative bar color</value>
+  </data>
+  <data name="ConditionalFormatDialog_ChooseNegativeBarBorderColorToolTip" xml:space="preserve">
+    <value>Choose negative bar border color</value>
+  </data>
+  <data name="ConditionalFormatDialog_ChooseMinimumColorToolTip" xml:space="preserve">
+    <value>Choose minimum color</value>
+  </data>
+  <data name="ConditionalFormatDialog_ChooseMidpointColorToolTip" xml:space="preserve">
+    <value>Choose midpoint color</value>
+  </data>
+  <data name="ConditionalFormatDialog_ChooseMaximumColorToolTip" xml:space="preserve">
+    <value>Choose maximum color</value>
+  </data>
+  <data name="ConditionalFormatDialog_PreviewHeader" xml:space="preserve">
+    <value>Preview:</value>
+  </data>
+  <data name="ConditionalFormatDialog_IconOverride_Default" xml:space="preserve">
+    <value>(Default)</value>
+  </data>
+  <data name="ConditionalFormatDialog_IconOverride_NoIcon" xml:space="preserve">
+    <value>No Icon</value>
+  </data>
+  <data name="ConditionalFormatDialog_IconThresholdTextFormat" xml:space="preserve">
+    <value>Icon {0}  when  &gt;=</value>
+  </data>
+  <data name="ConditionalFormatDialog_InvalidFormulaMessage" xml:space="preserve">
+    <value>Enter a formula for this conditional formatting rule.</value>
+  </data>
+  <data name="ConditionalFormatDialog_InvalidValueMessage" xml:space="preserve">
+    <value>Enter a value for this conditional formatting rule.</value>
+  </data>
+  <data name="ConditionalFormatDialog_InvalidMaximumValueMessage" xml:space="preserve">
+    <value>Enter a maximum value for this conditional formatting rule.</value>
+  </data>
+  <data name="ConditionalFormatDialog_InvalidTextMessage" xml:space="preserve">
+    <value>Enter text for this conditional formatting rule.</value>
+  </data>
+  <data name="ConditionalFormatDialog_InvalidMinimumBarLengthMessage" xml:space="preserve">
+    <value>Enter a minimum bar length from 0 to 100 percent, or leave it blank.</value>
+  </data>
+  <data name="ConditionalFormatDialog_InvalidMaximumBarLengthMessage" xml:space="preserve">
+    <value>Enter a maximum bar length from 0 to 100 percent, or leave it blank.</value>
+  </data>
+  <data name="ConditionalFormatDialog_InvalidRankOrPercentMessage" xml:space="preserve">
+    <value>Enter a rank or percent from 1 to 1000.</value>
+  </data>
+  <data name="ConditionalFormatDialog_InvalidMinimumColorMessage" xml:space="preserve">
+    <value>Enter a minimum color as R, G, B.</value>
+  </data>
+  <data name="ConditionalFormatDialog_InvalidMidpointColorMessage" xml:space="preserve">
+    <value>Enter a midpoint color as R, G, B.</value>
+  </data>
+  <data name="ConditionalFormatDialog_InvalidMaximumColorMessage" xml:space="preserve">
+    <value>Enter a maximum color as R, G, B.</value>
+  </data>
   <data name="ConditionalFormatIconSet_3Arrows_Label" xml:space="preserve">
     <value>3 Arrows</value>
   </data>
