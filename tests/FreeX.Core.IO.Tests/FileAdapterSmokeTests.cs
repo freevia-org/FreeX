@@ -2007,7 +2007,15 @@ public partial class FileAdapterSmokeTests
                         </a:clrScheme>
                         """)
                 ],
-                hasObjectDefaults: true);
+                hasObjectDefaults: true,
+                new WorkbookThemeObjectDefaults(
+                    Shape: new WorkbookThemeShapeObjectDefault(
+                        FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.4),
+                        OutlineColor: new CellColor(44, 55, 66),
+                        OutlineWidthPoints: 1.75),
+                    Text: new WorkbookThemeTextObjectDefault(
+                        TextThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
+                        Typeface: "Aptos")));
 
         var adapter = new NativeJsonAdapter();
         using var ms = new MemoryStream();
@@ -2024,6 +2032,17 @@ public partial class FileAdapterSmokeTests
         loaded.Theme.GetColor(WorkbookThemeColorSlot.Hyperlink).Should().Be(new CellColor(1, 99, 193));
         loaded.Theme.NativeThemeSupplementXml.Should().Contain("objectDefaults");
         loaded.Theme.HasObjectDefaults.Should().BeTrue();
+        loaded.Theme.ObjectDefaults.Should().NotBeNull();
+        loaded.Theme.ObjectDefaults!.Shape.Should().Be(new WorkbookThemeShapeObjectDefault(
+            new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.4),
+            null,
+            null,
+            new CellColor(44, 55, 66),
+            1.75));
+        loaded.Theme.ObjectDefaults.Text.Should().Be(new WorkbookThemeTextObjectDefault(
+            new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
+            null,
+            "Aptos"));
         loaded.Theme.AlternateColorSchemes.Should().ContainSingle()
             .Which.GetColor(WorkbookThemeColorSlot.Accent1)
             .Should().Be(new CellColor(17, 34, 51));

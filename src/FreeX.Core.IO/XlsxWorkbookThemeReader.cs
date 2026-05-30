@@ -50,11 +50,14 @@ public static class XlsxWorkbookThemeReader
         var theme = WorkbookTheme.Office
             .WithName(themeXml.Root?.Attribute("name")?.Value ?? WorkbookTheme.Office.Name);
 
+        var objectDefaults = ReadObjectDefaults(themeXml.Root?.Element(drawingNs + "objectDefaults"), drawingNs);
+
         theme = theme
             .WithNativeThemeSupplementXml(ReadThemeSupplementXml(themeXml.Root, drawingNs))
             .WithSupplementalMetadata(
                 ReadAlternateColorSchemes(themeXml.Root, drawingNs),
-                themeXml.Root?.Element(drawingNs + "objectDefaults") is not null);
+                themeXml.Root?.Element(drawingNs + "objectDefaults") is not null,
+                objectDefaults);
 
         var themeElements = themeXml.Root?.Element(drawingNs + "themeElements");
         if (themeElements is null)
@@ -160,5 +163,129 @@ public static class XlsxWorkbookThemeReader
             string.IsNullOrWhiteSpace(name) ? "Alternate Colors" : name.Trim(),
             colors,
             colorScheme.ToString(SaveOptions.DisableFormatting));
+    }
+
+    private static WorkbookThemeObjectDefaults? ReadObjectDefaults(
+        XElement? objectDefaults,
+        XNamespace drawingNs)
+    {
+        if (objectDefaults is null)
+            return null;
+
+        return new WorkbookThemeObjectDefaults(
+            ReadShapeObjectDefault(objectDefaults.Element(drawingNs + "spDef"), drawingNs),
+            ReadLineObjectDefault(objectDefaults.Element(drawingNs + "lnDef"), drawingNs),
+            ReadTextObjectDefault(objectDefaults.Element(drawingNs + "txDef"), drawingNs),
+            objectDefaults.ToString(SaveOptions.DisableFormatting));
+    }
+
+    private static WorkbookThemeShapeObjectDefault? ReadShapeObjectDefault(
+        XElement? shapeDefault,
+        XNamespace drawingNs)
+    {
+        var shapeProperties = shapeDefault?.Element(drawingNs + "spPr");
+        if (shapeProperties is null)
+            return null;
+
+        ReadSolidFill(
+            shapeProperties.Element(drawingNs + "solidFill"),
+            drawingNs,
+            out var fillThemeColor,
+            out var fillColor);
+
+        var line = shapeProperties.Element(drawingNs + "ln");
+        ReadSolidFill(
+            line?.Element(drawingNs + "solidFill"),
+            drawingNs,
+            out var outlineThemeColor,
+            out var outlineColor);
+        var width = ReadLineWidthPoints(line);
+
+        return fillThemeColor is null &&
+               fillColor is null &&
+               outlineThemeColor is null &&
+               outlineColor is null &&
+               width is null
+            ? null
+            : new WorkbookThemeShapeObjectDefault(
+                fillThemeColor,
+                fillColor,
+                outlineThemeColor,
+                outlineColor,
+                width);
+    }
+
+    private static WorkbookThemeLineObjectDefault? ReadLineObjectDefault(
+        XElement? lineDefault,
+        XNamespace drawingNs)
+    {
+        var line = lineDefault?
+            .Descendants(drawingNs + "ln")
+            .FirstOrDefault();
+        if (line is null)
+            return null;
+
+        ReadSolidFill(
+            line.Element(drawingNs + "solidFill"),
+            drawingNs,
+            out var strokeThemeColor,
+            out var strokeColor);
+        var width = ReadLineWidthPoints(line);
+
+        return strokeThemeColor is null && strokeColor is null && width is null
+            ? null
+            : new WorkbookThemeLineObjectDefault(strokeThemeColor, strokeColor, width);
+    }
+
+    private static WorkbookThemeTextObjectDefault? ReadTextObjectDefault(
+        XElement? textDefault,
+        XNamespace drawingNs)
+    {
+        if (textDefault is null)
+            return null;
+
+        ReadSolidFill(
+            textDefault.Descendants(drawingNs + "solidFill").FirstOrDefault(),
+            drawingNs,
+            out var textThemeColor,
+            out var textColor);
+        var typeface = textDefault
+            .Descendants(drawingNs + "latin")
+            .Select(element => element.Attribute("typeface")?.Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
+            ?.Trim();
+
+        return textThemeColor is null && textColor is null && string.IsNullOrWhiteSpace(typeface)
+            ? null
+            : new WorkbookThemeTextObjectDefault(textThemeColor, textColor, typeface);
+    }
+
+    private static void ReadSolidFill(
+        XElement? solidFill,
+        XNamespace drawingNs,
+        out WorkbookThemeColorReference? themeColor,
+        out CellColor? color)
+    {
+        themeColor = null;
+        color = null;
+        if (solidFill is null)
+            return;
+
+        if (XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, drawingNs, out var readThemeColor))
+        {
+            themeColor = readThemeColor;
+            return;
+        }
+
+        if (XlsxDrawingColorReader.TryReadConcreteColor(solidFill, drawingNs, out var readColor))
+            color = readColor;
+    }
+
+    private static double? ReadLineWidthPoints(XElement? line)
+    {
+        var widthText = line?.Attribute("w")?.Value;
+        return int.TryParse(widthText, out var emus) && emus > 0
+            ? Math.Round(emus / 12700.0, 3)
+            : null;
     }
 }

@@ -14,7 +14,8 @@ public sealed record WorkbookTheme(
     string? NativeFormatSchemeXml = null,
     string? NativeThemeSupplementXml = null,
     IReadOnlyList<WorkbookThemeAlternateColorScheme> AlternateColorSchemes = null!,
-    bool HasObjectDefaults = false)
+    bool HasObjectDefaults = false,
+    WorkbookThemeObjectDefaults? ObjectDefaults = null)
 {
     private static readonly IReadOnlyDictionary<WorkbookThemeColorSlot, CellColor> OfficeColors =
         new Dictionary<WorkbookThemeColorSlot, CellColor>
@@ -97,11 +98,13 @@ public sealed record WorkbookTheme(
 
     public WorkbookTheme WithSupplementalMetadata(
         IReadOnlyList<WorkbookThemeAlternateColorScheme>? alternateColorSchemes,
-        bool hasObjectDefaults) =>
+        bool hasObjectDefaults,
+        WorkbookThemeObjectDefaults? objectDefaults = null) =>
         this with
         {
             AlternateColorSchemes = alternateColorSchemes?.ToArray() ?? [],
-            HasObjectDefaults = hasObjectDefaults
+            HasObjectDefaults = hasObjectDefaults || objectDefaults is not null,
+            ObjectDefaults = objectDefaults
         };
 
     public WorkbookTheme WithColor(WorkbookThemeColorSlot slot, CellColor color)
@@ -148,6 +151,32 @@ public sealed record WorkbookThemeAlternateColorScheme(
             ? color
             : null;
 }
+
+public sealed record WorkbookThemeObjectDefaults(
+    WorkbookThemeShapeObjectDefault? Shape = null,
+    WorkbookThemeLineObjectDefault? Line = null,
+    WorkbookThemeTextObjectDefault? Text = null,
+    string? NativeObjectDefaultsXml = null)
+{
+    public bool HasModeledDefaults => Shape is not null || Line is not null || Text is not null;
+}
+
+public sealed record WorkbookThemeShapeObjectDefault(
+    WorkbookThemeColorReference? FillThemeColor = null,
+    CellColor? FillColor = null,
+    WorkbookThemeColorReference? OutlineThemeColor = null,
+    CellColor? OutlineColor = null,
+    double? OutlineWidthPoints = null);
+
+public sealed record WorkbookThemeLineObjectDefault(
+    WorkbookThemeColorReference? StrokeThemeColor = null,
+    CellColor? StrokeColor = null,
+    double? StrokeWidthPoints = null);
+
+public sealed record WorkbookThemeTextObjectDefault(
+    WorkbookThemeColorReference? TextThemeColor = null,
+    CellColor? TextColor = null,
+    string? Typeface = null);
 
 public readonly record struct WorkbookThemeColorReference(
     WorkbookThemeColorSlot Slot,
