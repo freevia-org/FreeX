@@ -62,6 +62,21 @@ public sealed class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void DefaultWidths_ExplainEvidencePurposeForResizeBreakpointReview()
+    {
+        RibbonScreenshotTourPlanner.DefaultWidths
+            .Select(width => $"{width.Label}:{width.EvidencePurpose()}")
+            .Should()
+            .Equal(
+            [
+                "max:Maximized baseline before resize pressure.",
+                "1100:Wide ribbon breakpoint before most command groups collapse.",
+                "900:Medium ribbon breakpoint where grouped commands begin to compress.",
+                "750:Narrow ribbon breakpoint for overflow and compact command layouts."
+            ]);
+    }
+
+    [Fact]
     public void BurstPhases_CoverImmediateFirstRenderAndSettledLayoutMoments()
     {
         RibbonScreenshotTourPlanner.BurstPhases
@@ -240,6 +255,10 @@ public sealed class RibbonScreenshotTourPlannerTests
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
+        source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
+        source.Should().Contain("WriteRibbonScreenshotTourManifestAsync");
+        source.Should().Contain("ribbon_screenshot_tour_manifest.json");
+        source.Should().Contain("EvidencePurpose()");
         source.Should().Contain("throw new InvalidOperationException");
     }
 }

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -69,9 +71,12 @@ public partial class MainWindow
 
     private async Task CaptureRibbonTourAsync(string outputDir, RibbonScreenshotTourPlan plan)
     {
+        DeleteStaleRibbonScreenshotTourCaptures(outputDir, plan);
+
         if (plan.IsBurst)
         {
             await CaptureRibbonBurstTourAsync(outputDir, plan);
+            await WriteRibbonScreenshotTourManifestAsync(outputDir, plan);
             return;
         }
 
@@ -85,6 +90,18 @@ public partial class MainWindow
             }
 
             await CaptureRibbonTabAsync(outputDir, capture);
+        }
+
+        await WriteRibbonScreenshotTourManifestAsync(outputDir, plan);
+    }
+
+    private static void DeleteStaleRibbonScreenshotTourCaptures(string outputDir, RibbonScreenshotTourPlan plan)
+    {
+        foreach (var capture in plan.Captures)
+        {
+            var path = Path.Combine(outputDir, $"{capture.FileName}.png");
+            if (File.Exists(path))
+                File.Delete(path);
         }
     }
 
@@ -200,6 +217,67 @@ public partial class MainWindow
         await using var stream = File.Create(path);
         encoder.Save(stream);
     }
+
+    private static async Task WriteRibbonScreenshotTourManifestAsync(string outputDir, RibbonScreenshotTourPlan plan)
+    {
+        var manifest = new RibbonScreenshotTourManifest(
+            Tool: "FREEX_SS_TOUR",
+            OutputDirectory: outputDir,
+            CatalogEvidenceTarget: "docs/UI_TEST_CATALOG.md",
+            BurstMode: plan.IsBurst,
+            CaptureLogicalHeight: ScreenshotTourCaptureHeight,
+            PlannedCaptureCount: plan.Captures.Count,
+            Tabs: plan.Tabs.Select(tab => tab.Header).ToArray(),
+            Widths: plan.Widths
+                .Select(width => new RibbonScreenshotTourManifestWidth(
+                    width.Label,
+                    width.WindowWidth,
+                    width.EvidencePurpose()))
+                .ToArray(),
+            Phases: plan.Phases
+                .Select(phase => new RibbonScreenshotTourManifestPhase(phase.Label, phase.FileNameSuffix))
+                .ToArray(),
+            Captures: plan.Captures
+                .Select(capture => new RibbonScreenshotTourManifestCapture(
+                    capture.Tab.Header,
+                    capture.Width.Label,
+                    capture.Phase.Label,
+                    $"{capture.FileName}.png"))
+                .ToArray(),
+            Limitations:
+            [
+                "Ribbon captures cover the top window band only.",
+                "Transient popups, dropdowns, native dialogs, and context menus require separate guarded captures.",
+                "This in-app tour deletes only the currently requested plan's expected PNG files before capture."
+            ]);
+
+        var path = Path.Combine(outputDir, "ribbon_screenshot_tour_manifest.json");
+        await using var stream = File.Create(path);
+        await JsonSerializer.SerializeAsync(stream, manifest, RibbonScreenshotTourManifestJsonContext.Default.RibbonScreenshotTourManifest);
+    }
+
+    private sealed record RibbonScreenshotTourManifest(
+        string Tool,
+        string OutputDirectory,
+        string CatalogEvidenceTarget,
+        bool BurstMode,
+        double CaptureLogicalHeight,
+        int PlannedCaptureCount,
+        IReadOnlyList<string> Tabs,
+        IReadOnlyList<RibbonScreenshotTourManifestWidth> Widths,
+        IReadOnlyList<RibbonScreenshotTourManifestPhase> Phases,
+        IReadOnlyList<RibbonScreenshotTourManifestCapture> Captures,
+        IReadOnlyList<string> Limitations);
+
+    private sealed record RibbonScreenshotTourManifestWidth(string Label, double? WindowWidth, string EvidencePurpose);
+
+    private sealed record RibbonScreenshotTourManifestPhase(string Label, string? FileNameSuffix);
+
+    private sealed record RibbonScreenshotTourManifestCapture(string Tab, string Width, string Phase, string FileName);
+
+    [JsonSourceGenerationOptions(WriteIndented = true)]
+    [JsonSerializable(typeof(RibbonScreenshotTourManifest))]
+    private sealed partial class RibbonScreenshotTourManifestJsonContext : JsonSerializerContext;
 
     // Activated by FREEX_ACCENT_BAR_TOUR=1 env var. Output lands in <repo-root>/screenshots/accent-bars-tour/.
     private void TryStartAccentBarVisualTour()
