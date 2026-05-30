@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Alt Text">
   <rect width="32" height="32" fill="none"/>
-  <rect x="5.5" y="8" width="17" height="13" rx="1.5" fill="#ffffff" stroke="#242424" stroke-width="1.6"/>
-  <circle cx="10" cy="12" r="1.6" fill="#0F6D8C"/>
-  <path d="M7.5 19l5-5l4 4l2-2l3 3" fill="none" stroke="#0F6D8C" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="24" y="26" font-size="16" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">A</text>
+  <rect x="5.5" y="7.5" width="15" height="13" rx="1.5" fill="#ffffff" stroke="#242424" stroke-width="1.5"/>
+  <circle cx="9.5" cy="11.5" r="1.4" fill="#0F6D8C"/>
+  <path d="M7.5 18l4-4l3 3l2-2l2 3" fill="none" stroke="#0F6D8C" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M23.5 10.5h4M23.5 15.5h3M23.5 20.5h4" fill="none" stroke="#242424" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M23.5 25.5h4" fill="none" stroke="#0F6D8C" stroke-width="1.5" stroke-linecap="round"/>
 </svg>

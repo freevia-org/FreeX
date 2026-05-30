@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="3D Pie Chart">
+  <rect width="32" height="32" fill="none"/>
+  <ellipse cx="16" cy="19" rx="10" ry="5.5" fill="#d9d9d9" stroke="#242424" stroke-width="1.2"/>
+  <path d="M16 8a10 7 0 1 0 9.4 9.4L16 15z" fill="#ffffff" stroke="#242424" stroke-width="1.3" stroke-linejoin="round"/>
+  <path d="M16 8v7l9.4 2.4A10 7 0 0 0 16 8z" fill="#ed7d31" stroke="#242424" stroke-width="1.1" stroke-linejoin="round"/>
+</svg>

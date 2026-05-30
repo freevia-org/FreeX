@@ -4094,7 +4094,7 @@
                         <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="38"/>
                     </Grid.ColumnDefinitions>
-                    <Button x:Name="StatusZoomOutButton" Grid.Column="0" Content="−" Width="22" Height="22"
+                    <Button x:Name="StatusZoomOutButton" Grid.Column="0" Content="-" Width="22" Height="22"
                             Style="{StaticResource StatusBarZoomButtonStyle}"
                             Foreground="White" FontSize="18" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
@@ -4131,9 +4131,7 @@
             </Grid>
         </Border>
 
-        <!-- ═══════════════════════════════════════════════════════════════
-             START SCREEN — full-window overlay shown at launch / via ← Home
-             ═══════════════════════════════════════════════════════════════ -->
+        <!-- START SCREEN - full-window overlay shown at launch / via Backstage Home -->
         <Border x:Name="OpenProgressOverlay"
                 Grid.Row="1" Grid.RowSpan="5"
                 Panel.ZIndex="260"

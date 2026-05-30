@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Increase Indent" shape-rendering="crispEdges">
-<rect width="32" height="32" fill="none"/>
-<rect x="6" y="9" width="15" height="1" fill="#242424"/>
-<rect x="6" y="16" width="12" height="1" fill="#242424"/>
-<rect x="6" y="23" width="15" height="1" fill="#242424"/>
-<path d="M27 16l-7-5v3h-8v4h8v3z" fill="#0078D4"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Increase Indent">
+  <rect width="32" height="32" fill="none"/>
+  <rect x="6" y="8" width="18" height="1" fill="#242424"/>
+  <rect x="6" y="16" width="7" height="1" fill="#242424"/>
+  <rect x="6" y="24" width="18" height="1" fill="#242424"/>
+  <path d="M27 16l-7-5v3h-5v4h5v3z" fill="#0078D4"/>
 </svg>
