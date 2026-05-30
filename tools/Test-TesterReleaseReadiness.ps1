@@ -104,6 +104,7 @@ foreach ($marker in @(
     "accessibility_known_issues:",
     "contents: write",
     "dotnet-version: 10.0.x",
+    "tools\Test-RepositoryPreflight.ps1",
     "TestResults/tests.trx",
     "Public-preview promotion requires completed accessibility gate inputs",
     "gh release create",

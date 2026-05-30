@@ -3,6 +3,7 @@ param(
     [string]$XmlFilesScriptPath = "tools\Test-XmlFiles.ps1",
     [string]$ToolScriptsScriptPath = "tools\Test-ToolScripts.ps1",
     [string]$GitHubWorkflowsScriptPath = "tools\Test-GitHubWorkflows.ps1",
+    [string]$DotNetSdkReadinessScriptPath = "tools\Test-DotNetSdkReadiness.ps1",
     [string]$DotNetProjectReferencesScriptPath = "tools\Test-DotNetProjectReferences.ps1",
     [string]$SolutionProjectsScriptPath = "tools\Test-SolutionProjects.ps1",
     [string]$GeneratedDocsScriptPath = "tools\Test-GeneratedDocs.ps1",
@@ -42,6 +43,7 @@ Invoke-RepositoryPreflight -ScriptPath $JsonFilesScriptPath -Label "JSON files"
 Invoke-RepositoryPreflight -ScriptPath $XmlFilesScriptPath -Label "XML files"
 Invoke-RepositoryPreflight -ScriptPath $ToolScriptsScriptPath -Label "PowerShell tools"
 Invoke-RepositoryPreflight -ScriptPath $GitHubWorkflowsScriptPath -Label "GitHub workflows"
+Invoke-RepositoryPreflight -ScriptPath $DotNetSdkReadinessScriptPath -Label ".NET SDK readiness"
 Invoke-RepositoryPreflight -ScriptPath $DotNetProjectReferencesScriptPath -Label ".NET project references"
 Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "solution projects"
 Invoke-RepositoryPreflight -ScriptPath $GeneratedDocsScriptPath -Label "generated docs"
