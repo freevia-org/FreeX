@@ -38,6 +38,7 @@ public sealed partial class NativeJsonAdapter
         public List<CustomViewDto> CustomViews { get; set; } = [];
         public List<WatchedCellDto> WatchedCells { get; set; } = [];
         public List<ScenarioDto> Scenarios { get; set; } = [];
+        public List<PivotCacheDto> PivotCaches { get; set; } = [];
         public List<SheetDto> Sheets { get; set; } = [];
     }
 
@@ -525,6 +526,7 @@ public sealed partial class NativeJsonAdapter
         public List<DrawingShapeDto> DrawingShapes { get; set; } = [];
         public List<SparklineDto> Sparklines { get; set; } = [];
         public List<ChartDto> Charts { get; set; } = [];
+        public List<PivotTableDto> PivotTables { get; set; } = [];
         public List<DataValidationDto> DataValidations { get; set; } = [];
         public List<ConditionalFormatDto> ConditionalFormats { get; set; } = [];
         public List<CellDto> Cells { get; set; } = [];
@@ -852,6 +854,192 @@ public sealed partial class NativeJsonAdapter
         public string? DataRange { get; set; }
         public string? Location { get; set; }
         public SparklineKind Kind { get; set; } = SparklineKind.Line;
+    }
+
+    private class PivotCacheDto
+    {
+        public int CacheId { get; set; }
+        public PivotCacheSourceType SourceType { get; set; } = PivotCacheSourceType.Unknown;
+        public string? SourceSheetName { get; set; }
+        public string? SourceReference { get; set; }
+        public string? SourceTableName { get; set; }
+        public int? ConnectionId { get; set; }
+        public bool IsOlap { get; set; }
+        public string PackagePart { get; set; } = "";
+        public bool RefreshOnLoad { get; set; } = true;
+        public bool SaveData { get; set; } = true;
+        public bool EnableRefresh { get; set; } = true;
+        public bool PreserveSourceSortFilter { get; set; } = true;
+        public int? MissingItemsLimit { get; set; }
+        public int? RecordCount { get; set; }
+        public int? CreatedVersion { get; set; }
+        public int? MinRefreshableVersion { get; set; }
+        public int? RefreshedVersion { get; set; }
+        public string? RefreshedBy { get; set; }
+        public string? RefreshedDateIso { get; set; }
+        public List<PivotCacheFieldDto> Fields { get; set; } = [];
+    }
+
+    private class PivotCacheFieldDto
+    {
+        public string Name { get; set; } = "";
+        public int? NumberFormatId { get; set; }
+        public int? SharedItemCount { get; set; }
+        public bool ContainsBlank { get; set; }
+        public bool ContainsString { get; set; }
+        public bool ContainsNumber { get; set; }
+        public bool ContainsDate { get; set; }
+        public bool ContainsMixedTypes { get; set; }
+        public bool ContainsSemiMixedTypes { get; set; }
+        public bool ContainsNonDate { get; set; }
+        public bool ContainsInteger { get; set; }
+        public bool ContainsLongText { get; set; }
+        public double? MinValue { get; set; }
+        public double? MaxValue { get; set; }
+        public string? MinDate { get; set; }
+        public string? MaxDate { get; set; }
+        public List<string>? SharedItems { get; set; }
+    }
+
+    private class PivotTableDto
+    {
+        public string Name { get; set; } = "";
+        public int CacheId { get; set; }
+        public string? SourceSheetName { get; set; }
+        public string? SourceRange { get; set; }
+        public string? TargetRange { get; set; }
+        public string PackagePart { get; set; } = "";
+        public int? CreatedVersion { get; set; }
+        public int? UpdatedVersion { get; set; }
+        public int? MinRefreshableVersion { get; set; }
+        public bool DataOnRows { get; set; } = true;
+        public int FirstHeaderRow { get; set; } = 1;
+        public int FirstDataRow { get; set; } = 1;
+        public int FirstDataColumn { get; set; } = 1;
+        public bool ShowSubtotals { get; set; }
+        public PivotSubtotalPlacement SubtotalPlacement { get; set; } = PivotSubtotalPlacement.Bottom;
+        public bool ShowRowGrandTotals { get; set; } = true;
+        public bool ShowColumnGrandTotals { get; set; } = true;
+        public bool RepeatItemLabels { get; set; } = true;
+        public bool BlankLineAfterItems { get; set; }
+        public PivotReportLayout ReportLayout { get; set; } = PivotReportLayout.Tabular;
+        public int CompactRowLabelIndent { get; set; } = 1;
+        public string StyleName { get; set; } = "PivotStyleLight16";
+        public bool ShowRowHeaders { get; set; } = true;
+        public bool ShowColumnHeaders { get; set; } = true;
+        public bool ShowRowStripes { get; set; }
+        public bool ShowColumnStripes { get; set; }
+        public bool ShowFieldHeaders { get; set; } = true;
+        public bool ShowContextualTooltips { get; set; } = true;
+        public bool ShowPropertiesInTooltips { get; set; } = true;
+        public bool ShowClassicLayout { get; set; }
+        public bool MergeAndCenterLabels { get; set; }
+        public bool ShowItemsWithNoDataOnRows { get; set; }
+        public bool ShowItemsWithNoDataOnColumns { get; set; }
+        public bool PageOverThenDown { get; set; }
+        public int PageWrap { get; set; }
+        public string? EmptyValueText { get; set; }
+        public bool ApplyNumberFormats { get; set; } = true;
+        public bool ApplyBorderFormats { get; set; } = true;
+        public bool ApplyFontFormats { get; set; } = true;
+        public bool ApplyPatternFormats { get; set; } = true;
+        public bool AutofitColumnsOnUpdate { get; set; } = true;
+        public bool PreserveFormattingOnUpdate { get; set; } = true;
+        public bool ShowExpandCollapseButtons { get; set; } = true;
+        public bool EnableDrill { get; set; } = true;
+        public bool AsteriskTotals { get; set; }
+        public bool MultipleFieldFilters { get; set; } = true;
+        public bool EnableFieldDialog { get; set; } = true;
+        public bool EnableFieldProperties { get; set; } = true;
+        public bool EnableDataValueEditing { get; set; }
+        public bool PrintTitles { get; set; }
+        public bool PrintExpandCollapseButtons { get; set; }
+        public string? AltTextTitle { get; set; }
+        public string? AltTextDescription { get; set; }
+        public string? DataCaption { get; set; }
+        public string? GrandTotalCaption { get; set; }
+        public string? MissingCaption { get; set; }
+        public string? ErrorCaption { get; set; }
+        public List<PivotFieldDto> RowFields { get; set; } = [];
+        public List<PivotFieldDto> ColumnFields { get; set; } = [];
+        public List<PivotFieldDto> PageFields { get; set; } = [];
+        public List<PivotDataFieldDto> DataFields { get; set; } = [];
+        public List<PivotCalculatedFieldDto> CalculatedFields { get; set; } = [];
+        public List<PivotCalculatedItemDto> CalculatedItems { get; set; } = [];
+        public List<PivotLabelFilterDto> LabelFilters { get; set; } = [];
+        public List<PivotValueFilterDto> ValueFilters { get; set; } = [];
+        public List<PivotSortDto> Sorts { get; set; } = [];
+    }
+
+    private class PivotFieldDto
+    {
+        public int SourceFieldIndex { get; set; }
+        public string? SelectedItem { get; set; }
+        public List<string>? SelectedItems { get; set; }
+        public PivotFieldGrouping Grouping { get; set; } = PivotFieldGrouping.None;
+        public double? GroupStart { get; set; }
+        public double? GroupEnd { get; set; }
+        public double? GroupInterval { get; set; }
+        public bool? ShowAll { get; set; }
+        public bool? IncludeNewItemsInFilter { get; set; }
+        public bool? MultipleItemSelectionAllowed { get; set; }
+        public bool? DragToRow { get; set; }
+        public bool? DragToColumn { get; set; }
+        public bool? DragToPage { get; set; }
+        public bool? DragToData { get; set; }
+        public bool? ShowDropDowns { get; set; }
+    }
+
+    private class PivotDataFieldDto
+    {
+        public int SourceFieldIndex { get; set; }
+        public string Name { get; set; } = "";
+        public string SummaryFunction { get; set; } = "sum";
+        public int? NumberFormatId { get; set; }
+        public string? CalculatedFieldName { get; set; }
+        public PivotShowValuesAs ShowValuesAs { get; set; } = PivotShowValuesAs.None;
+        public int? BaseFieldIndex { get; set; }
+        public string? BaseItem { get; set; }
+        public string? NumberFormatCode { get; set; }
+    }
+
+    private class PivotCalculatedFieldDto
+    {
+        public string Name { get; set; } = "";
+        public string Formula { get; set; } = "";
+    }
+
+    private class PivotCalculatedItemDto
+    {
+        public int SourceFieldIndex { get; set; }
+        public string Name { get; set; } = "";
+        public string Formula { get; set; } = "";
+    }
+
+    private class PivotLabelFilterDto
+    {
+        public int SourceFieldIndex { get; set; }
+        public PivotLabelFilterKind Kind { get; set; } = PivotLabelFilterKind.Equals;
+        public string Value { get; set; } = "";
+        public string? Value2 { get; set; }
+    }
+
+    private class PivotValueFilterDto
+    {
+        public int DataFieldIndex { get; set; }
+        public PivotValueFilterKind Kind { get; set; } = PivotValueFilterKind.Top;
+        public int Count { get; set; }
+        public double? ComparisonValue { get; set; }
+        public double? ComparisonValue2 { get; set; }
+        public int? SourceFieldIndex { get; set; }
+    }
+
+    private class PivotSortDto
+    {
+        public PivotSortTarget Target { get; set; } = PivotSortTarget.Label;
+        public PivotSortDirection Direction { get; set; } = PivotSortDirection.Ascending;
+        public int DataFieldIndex { get; set; }
+        public int FieldIndex { get; set; }
     }
 
     private class CellDto

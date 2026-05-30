@@ -100,9 +100,13 @@ public sealed partial class NativeJsonAdapter
                             Address = change.Address.ToA1(),
                             Value = NativeJsonScalarValueMapper.Serialize(change.Value),
                             ValueType = NativeJsonScalarValueMapper.GetValueType(change.Value)
-                        };
+                    };
                 }).OfType<ScenarioCellDto>().ToList()
             }).Where(scenario => scenario.ChangingCells.Count > 0).ToList(),
+            PivotCaches = workbook.PivotCaches
+                .Where(cache => cache.CacheId > 0)
+                .Select(ToPivotCacheDto)
+                .ToList(),
             Sheets = workbook.Sheets.Select(s => new SheetDto
             {
                 Name = s.Name,
@@ -277,6 +281,10 @@ public sealed partial class NativeJsonAdapter
                 Charts = s.Charts
                     .Where(chart => IsChartOnSheet(chart, s.Id))
                     .Select(ToChartDto)
+                    .ToList(),
+                PivotTables = s.PivotTables
+                    .Select(pivot => ToPivotTableDto(workbook, s, pivot))
+                    .OfType<PivotTableDto>()
                     .ToList(),
                 DataValidations = s.DataValidations
                     .Where(validation => IsDataValidationOnSheet(validation, s.Id) && IsSupportedDataValidation(validation))
