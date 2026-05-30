@@ -35,7 +35,7 @@ public static class ClipboardSerializer
 
     private static void AppendTsvCell(StringBuilder sb, string text)
     {
-        if (text.Contains('\t') || text.Contains('\n') || text.Contains('"'))
+        if (text.Contains('\t') || text.Contains('\r') || text.Contains('\n') || text.Contains('"'))
         {
             sb.Append('"');
             sb.Append(text.Replace("\"", "\"\""));
@@ -51,7 +51,72 @@ public static class ClipboardSerializer
     public static string[][] Deserialize(string text)
     {
         text = text.TrimEnd('\r', '\n');
-        var rows = text.Split(["\r\n", "\n", "\r"], StringSplitOptions.None);
-        return rows.Select(r => r.Split('\t')).ToArray();
+        var rows = new List<string[]>();
+        var row = new List<string>();
+        var field = new StringBuilder();
+        var inQuotes = false;
+        var atFieldStart = true;
+
+        for (var i = 0; i < text.Length; i++)
+        {
+            var ch = text[i];
+            if (inQuotes)
+            {
+                if (ch == '"')
+                {
+                    if (i + 1 < text.Length && text[i + 1] == '"')
+                    {
+                        field.Append('"');
+                        i++;
+                    }
+                    else
+                    {
+                        inQuotes = false;
+                        atFieldStart = false;
+                    }
+                }
+                else
+                {
+                    field.Append(ch);
+                }
+
+                continue;
+            }
+
+            if (ch == '"' && atFieldStart)
+            {
+                inQuotes = true;
+                atFieldStart = false;
+                continue;
+            }
+
+            if (ch == '\t')
+            {
+                row.Add(field.ToString());
+                field.Clear();
+                atFieldStart = true;
+                continue;
+            }
+
+            if (ch == '\r' || ch == '\n')
+            {
+                if (ch == '\r' && i + 1 < text.Length && text[i + 1] == '\n')
+                    i++;
+
+                row.Add(field.ToString());
+                field.Clear();
+                rows.Add(row.ToArray());
+                row.Clear();
+                atFieldStart = true;
+                continue;
+            }
+
+            field.Append(ch);
+            atFieldStart = false;
+        }
+
+        row.Add(field.ToString());
+        rows.Add(row.ToArray());
+        return rows.ToArray();
     }
 }

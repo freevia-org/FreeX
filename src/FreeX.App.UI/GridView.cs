@@ -98,6 +98,7 @@ public partial class GridView : FrameworkElement
     private const double MinCellSize = 5;
     private const double DefaultCellFontSizePoints = 11.0;
     private const double PageMarginGuideHitZone = 5;
+    private const int MarchingAntsPhaseCount = 16;
 
     private static readonly Typeface DefaultTypeface = new("Calibri");
     private static readonly Brush GridLineBrush = MakeBrush(220, 220, 220);
@@ -155,6 +156,9 @@ public partial class GridView : FrameworkElement
     private static readonly Pen SplitScrollbarPen = MakePen(MakeBrush(196, 196, 196), 1);
     private static readonly Brush FormulaTraceArrowBrush = MakeBrush(0, 102, 204);
     private static readonly Pen FormulaTraceArrowPen = MakeFormulaTraceArrowPen();
+    private static readonly Pen[] MarchingAntsBlackPens = CreateMarchingAntsPens(Brushes.Black, 2.5);
+    private static readonly Pen[] MarchingAntsCopyOverlayPens = CreateMarchingAntsPens(Brushes.White, 1.5);
+    private static readonly Pen[] MarchingAntsCutOverlayPens = CreateMarchingAntsPens(MakeBrush(245, 124, 0), 1.5);
 
     // Per-frame render caches: allocated once and cleared at the start of each render pass
     // to avoid GC pressure from fresh Dictionary allocations on every frame.
@@ -216,6 +220,31 @@ public partial class GridView : FrameworkElement
         };
         pen.Freeze();
         return pen;
+    }
+
+    private static Pen[] CreateMarchingAntsPens(Brush brush, double thickness)
+    {
+        var pens = new Pen[MarchingAntsPhaseCount];
+        for (var phase = 0; phase < pens.Length; phase++)
+            pens[phase] = MakeMarchingAntsPen(brush, thickness, phase / 2.0);
+
+        return pens;
+    }
+
+    private static Pen MakeMarchingAntsPen(Brush brush, double thickness, double offset)
+    {
+        var pen = new Pen(brush, thickness)
+        {
+            DashStyle = new DashStyle([4.0, 4.0], offset)
+        };
+        pen.Freeze();
+        return pen;
+    }
+
+    private static int GetMarchingAntsPhase(double offset)
+    {
+        var phase = (int)Math.Round(offset * 2, MidpointRounding.AwayFromZero) % MarchingAntsPhaseCount;
+        return phase < 0 ? phase + MarchingAntsPhaseCount : phase;
     }
 
     private static Pen MakeGridPen()

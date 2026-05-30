@@ -114,7 +114,8 @@ internal static class RibbonAdaptiveTabProfiles
             Defaults: [],
             Breakpoints:
             [
-                Rule(1320, collapseGroups: ["Notes", "Protect"])
+                Rule(1320, collapseGroups: ["Notes", "Protect"]),
+                Rule(1366, collapseGroups: ["Protect"])
             ],
             DisablePriorityExpansion: true),
         new(

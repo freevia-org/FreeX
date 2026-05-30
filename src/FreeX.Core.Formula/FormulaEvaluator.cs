@@ -1551,7 +1551,14 @@ public sealed class FormulaEvaluator
         for (int r = 0; r < indexRange.RowCount; r++)
             for (int c = 0; c < indexRange.ColCount; c++)
             {
-                var index = CoerceChooseIndex(indexRange.Cells[r, c], node.Arguments.Count);
+                var indexValue = indexRange.Cells[r, c];
+                if (indexValue is ErrorValue indexError)
+                {
+                    cells[r, c] = indexError;
+                    continue;
+                }
+
+                var index = CoerceChooseIndex(indexValue, node.Arguments.Count);
                 if (index is null)
                 {
                     cells[r, c] = ErrorValue.Value;

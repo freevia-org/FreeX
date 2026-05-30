@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 
 namespace FreeX.App.Host;
@@ -69,11 +70,50 @@ public sealed partial class PasteSpecialDialog
 
         var ok = new Button { Content = "_OK", Width = 80, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
         var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
+        SetAutomationMetadata(ok, "OK", "PasteSpecialOkButton", "Apply the selected Paste Special options.");
+        SetAutomationMetadata(cancel, "Cancel", "PasteSpecialCancelButton", "Close the Paste Special dialog without applying changes.");
         ok.Click += (_, _) => { DialogResult = true; };
         row.Children.Add(_pasteLinkButton);
         row.Children.Add(ok);
         row.Children.Add(cancel);
         return row;
+    }
+
+    private void ApplyAutomationMetadata()
+    {
+        SetAutomationMetadata(_rbAll, "Paste all", "PasteSpecialAllOption", "Paste all cell contents and formatting.");
+        SetAutomationMetadata(_rbValues, "Paste values", "PasteSpecialValuesOption", "Paste only cell values.");
+        SetAutomationMetadata(_rbFormulas, "Paste formulas", "PasteSpecialFormulasOption", "Paste formulas without changing existing formatting.");
+        SetAutomationMetadata(_rbFormats, "Paste formats", "PasteSpecialFormatsOption", "Paste only cell formatting.");
+        SetAutomationMetadata(_rbComments, "Paste comments and notes", "PasteSpecialCommentsAndNotesOption", "Paste only comments and notes.");
+        SetAutomationMetadata(_rbValidation, "Paste validation", "PasteSpecialValidationOption", "Paste only data validation rules.");
+        SetAutomationMetadata(_rbAllUsingSourceTheme, "Paste all using source theme", "PasteSpecialAllUsingSourceThemeOption", "Paste all content using the copied source theme.");
+        SetAutomationMetadata(_rbAllExceptBorders, "Paste all except borders", "PasteSpecialAllExceptBordersOption", "Paste all content and formatting except cell borders.");
+        SetAutomationMetadata(_rbAllMergingConditionalFormats, "Paste all merging conditional formats", "PasteSpecialAllMergingConditionalFormatsOption", "Paste all content while merging conditional formatting rules.");
+        SetAutomationMetadata(_rbColumnWidths, "Paste column widths", "PasteSpecialColumnWidthsOption", "Paste only copied column widths.");
+        SetAutomationMetadata(_rbFormulasAndNumberFormats, "Paste formulas and number formats", "PasteSpecialFormulasAndNumberFormatsOption", "Paste formulas and number formats.");
+        SetAutomationMetadata(_rbValuesAndNumberFormats, "Paste values and number formats", "PasteSpecialValuesAndNumberFormatsOption", "Paste values and number formats.");
+        SetAutomationMetadata(_rbValuesAndSourceFormatting, "Paste values and source formatting", "PasteSpecialValuesAndSourceFormattingOption", "Paste values with copied source formatting.");
+        SetAutomationMetadata(_rbText, "Paste text", "PasteSpecialTextOption", "Paste clipboard text.");
+        SetAutomationMetadata(_rbUnicodeText, "Paste Unicode text", "PasteSpecialUnicodeTextOption", "Paste clipboard Unicode text.");
+        SetAutomationMetadata(_rbPicture, "Paste picture", "PasteSpecialPictureOption", "Paste copied cells as a picture.");
+        SetAutomationMetadata(_rbLinkedPicture, "Paste linked picture", "PasteSpecialLinkedPictureOption", "Paste copied cells as a linked picture.");
+        SetAutomationMetadata(_skipBlanks, "Skip blanks", "PasteSpecialSkipBlanksBox", "Skip blank cells from the copied range.");
+        SetAutomationMetadata(_transpose, "Transpose", "PasteSpecialTransposeBox", "Switch copied rows and columns while pasting.");
+        SetAutomationMetadata(_keepColumnWidths, "Keep source column widths", "PasteSpecialKeepColumnWidthsBox", "Apply the copied source column widths.");
+        SetAutomationMetadata(_opNone, "Operation none", "PasteSpecialOperationNoneOption", "Paste without a mathematical operation.");
+        SetAutomationMetadata(_opAdd, "Operation add", "PasteSpecialOperationAddOption", "Add copied values to destination values.");
+        SetAutomationMetadata(_opSubtract, "Operation subtract", "PasteSpecialOperationSubtractOption", "Subtract copied values from destination values.");
+        SetAutomationMetadata(_opMultiply, "Operation multiply", "PasteSpecialOperationMultiplyOption", "Multiply destination values by copied values.");
+        SetAutomationMetadata(_opDivide, "Operation divide", "PasteSpecialOperationDivideOption", "Divide destination values by copied values.");
+        SetAutomationMetadata(_pasteLinkButton, "Paste Link", "PasteSpecialPasteLinkButton", "Paste formulas that link to the copied cells.");
+    }
+
+    private static void SetAutomationMetadata(Control control, string name, string automationId, string helpText)
+    {
+        AutomationProperties.SetName(control, name);
+        AutomationProperties.SetAutomationId(control, automationId);
+        AutomationProperties.SetHelpText(control, helpText);
     }
 
     private static void AddPasteChoice(Grid panel, RadioButton button, int row, int column)

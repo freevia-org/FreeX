@@ -1,4 +1,7 @@
 using System.IO;
+using System.Reflection;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -68,5 +71,57 @@ public sealed class CellShiftDialogTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_buttons.FirstOrDefault()?.Focus();");
         source.Should().Contain("Keyboard.Focus(firstButton);");
+    }
+
+    [Theory]
+    [InlineData(CellShiftDialogMode.Insert)]
+    [InlineData(CellShiftDialogMode.Delete)]
+    public void DialogChoiceButtons_ExposeAutomationMetadata(CellShiftDialogMode mode)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new CellShiftDialog(mode);
+            try
+            {
+                var buttons = GetButtons(dialog);
+                (CellShiftDialogChoice Choice, string Name, string HelpText)[] expected = mode == CellShiftDialogMode.Insert
+                    ?
+                    [
+                        (CellShiftDialogChoice.ShiftCellsRight, "Shift cells right", "Insert cells and shift existing cells to the right."),
+                        (CellShiftDialogChoice.ShiftCellsDown, "Shift cells down", "Insert cells and shift existing cells down."),
+                        (CellShiftDialogChoice.EntireRow, "Entire row", "Apply the operation to the entire selected row."),
+                        (CellShiftDialogChoice.EntireColumn, "Entire column", "Apply the operation to the entire selected column.")
+                    ]
+                    :
+                    [
+                        (CellShiftDialogChoice.ShiftCellsLeft, "Shift cells left", "Delete cells and shift remaining cells left."),
+                        (CellShiftDialogChoice.ShiftCellsUp, "Shift cells up", "Delete cells and shift remaining cells up."),
+                        (CellShiftDialogChoice.EntireRow, "Entire row", "Apply the operation to the entire selected row."),
+                        (CellShiftDialogChoice.EntireColumn, "Entire column", "Apply the operation to the entire selected column.")
+                    ];
+
+                buttons.Should().HaveCount(expected.Length);
+                for (var index = 0; index < expected.Length; index++)
+                {
+                    var (choice, name, helpText) = expected[index];
+                    var button = buttons[index];
+                    button.Tag.Should().Be(choice);
+                    AutomationProperties.GetName(button).Should().Be(name);
+                    AutomationProperties.GetAutomationId(button).Should().Be($"CellShift{choice}Option");
+                    AutomationProperties.GetHelpText(button).Should().Be(helpText);
+                }
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    private static IReadOnlyList<RadioButton> GetButtons(CellShiftDialog dialog)
+    {
+        var field = typeof(CellShiftDialog).GetField("_buttons", BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(dialog).Should().BeAssignableTo<IReadOnlyList<RadioButton>>().Subject;
     }
 }

@@ -184,7 +184,10 @@ public sealed class NamedRangeDialogXamlTests
         var source = ReadNamedRangeDialogSource();
 
         source.Should().Contain("Func<string, bool>? isValidRange");
+        source.Should().Contain("Func<string, string?>? validateName");
         source.Should().Contain("isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _)");
+        source.Should().Contain("validateName: _workbook.ValidateNamedRangeName");
+        source.Should().Contain("ValidateNameInput(name, _validateName)");
         source.Should().Contain("FocusNameInput();");
         source.Should().Contain("FocusRefersToInput();");
         source.Should().Contain("private void FocusNameInput()");
@@ -192,6 +195,36 @@ public sealed class NamedRangeDialogXamlTests
         source.Should().Contain("_refersToBox.Focus();");
         source.Should().Contain("_refersToBox.SelectAll();");
         source.Should().Contain("Keyboard.Focus(_refersToBox);");
+    }
+
+    [Theory]
+    [InlineData("Sales")]
+    [InlineData("_2026_Sales")]
+    [InlineData("Q1.Total")]
+    public void NameDefinitionDialogValidateNameInput_AcceptsWorkbookValidNames(string name)
+    {
+        var workbook = new Workbook("Book");
+
+        NameDefinitionDialog.ValidateNameInput(name, workbook.ValidateNamedRangeName)
+            .Should()
+            .BeNull();
+    }
+
+    [Theory]
+    [InlineData("", "Please enter a name.")]
+    [InlineData("Sales Total", "letters, numbers, underscores, and periods")]
+    [InlineData("1Sales", "start with a letter or underscore")]
+    [InlineData("A1", "cell reference")]
+    [InlineData("R1C1", "cell reference")]
+    public void NameDefinitionDialogValidateNameInput_RejectsWorkbookInvalidNames(
+        string name,
+        string expectedMessage)
+    {
+        var workbook = new Workbook("Book");
+
+        var error = NameDefinitionDialog.ValidateNameInput(name, workbook.ValidateNamedRangeName);
+
+        error.Should().Contain(expectedMessage);
     }
 
     [Fact]

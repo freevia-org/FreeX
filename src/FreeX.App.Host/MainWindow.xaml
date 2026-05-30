@@ -2733,7 +2733,6 @@
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ProtectWorkbook}"
                                         local:RibbonTooltip.KeyTip="PW"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PreventStructuralChangesToTheWorkbookSuchAsAddingDeletingOrRenamingSheet_47267D4F}" local:RibbonMetadata.CommandName="Protect Workbook"/>
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PreventStructuralChangesToTheWorkbookSuchAsAddingDeletingOrRenamingSheet_47267D4F}" local:RibbonMetadata.CommandName="Protect Workbook"/>
                                 <Button x:Name="AllowEditRangesButton" Content="{local:Loc Key=MainWindow_Content_AllowUsersToEditRanges}" Width="188" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AllowEditRangesBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AllowUsersToEditRanges}"
                                         local:RibbonTooltip.KeyTip="AR"

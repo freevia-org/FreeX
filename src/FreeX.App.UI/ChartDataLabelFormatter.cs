@@ -17,13 +17,20 @@ public static class ChartDataLabelFormatter
 
     public static string FormatDataLabel(ChartModel chart, string seriesName, string categoryName, double value)
     {
-        var parts = new List<string>();
-        if (chart.ShowDataLabelSeriesName && !string.IsNullOrWhiteSpace(seriesName))
-            parts.Add(seriesName);
-        if (chart.ShowDataLabelCategoryName && !string.IsNullOrWhiteSpace(categoryName))
-            parts.Add(categoryName);
-        parts.Add(FormatLabelValue(chart, value));
-        return string.Join(GetDataLabelSeparatorText(chart.DataLabelSeparator), parts);
+        var valueText = FormatLabelValue(chart, value);
+        var hasSeriesName = chart.ShowDataLabelSeriesName && !string.IsNullOrWhiteSpace(seriesName);
+        var hasCategoryName = chart.ShowDataLabelCategoryName && !string.IsNullOrWhiteSpace(categoryName);
+
+        if (!hasSeriesName && !hasCategoryName)
+            return valueText;
+
+        var separator = GetDataLabelSeparatorText(chart.DataLabelSeparator);
+        return (hasSeriesName, hasCategoryName) switch
+        {
+            (true, true) => $"{seriesName}{separator}{categoryName}{separator}{valueText}",
+            (true, false) => $"{seriesName}{separator}{valueText}",
+            _ => $"{categoryName}{separator}{valueText}"
+        };
     }
 
     public static string GetPieLabelFormat(ChartModel chart, string seriesName)

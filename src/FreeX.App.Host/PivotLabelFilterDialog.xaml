@@ -25,11 +25,20 @@
             </Grid.RowDefinitions>
             <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="{local:Loc Key=PivotLabelFilter_ShowItemsForWhichTheLabel}" Margin="0,0,0,10"/>
             <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=PivotLabelFilter_Operator}" Target="{Binding ElementName=LabelFilterKindBox}" VerticalAlignment="Center" Margin="0,0,8,8"/>
-            <ComboBox x:Name="LabelFilterKindBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" SelectionChanged="LabelFilterKindBox_SelectionChanged" AutomationProperties.Name="{local:Loc Key=PivotLabelFilter_LabelFilterOperator}"/>
+            <ComboBox x:Name="LabelFilterKindBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8" SelectionChanged="LabelFilterKindBox_SelectionChanged"
+                      AutomationProperties.Name="{local:Loc Key=PivotLabelFilter_LabelFilterOperator}"
+                      AutomationProperties.AutomationId="PivotLabelFilterOperatorBox"
+                      AutomationProperties.HelpText="{local:Loc Key=PivotLabelFilter_OperatorHelpText}"/>
             <Label Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=PivotLabelFilter_Value}" Target="{Binding ElementName=LabelFilterValueBox}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <TextBox x:Name="LabelFilterValueBox" Grid.Row="2" Grid.Column="1" AutomationProperties.Name="{local:Loc Key=PivotLabelFilter_LabelFilterValue}"/>
+            <TextBox x:Name="LabelFilterValueBox" Grid.Row="2" Grid.Column="1"
+                     AutomationProperties.Name="{local:Loc Key=PivotLabelFilter_LabelFilterValue}"
+                     AutomationProperties.AutomationId="PivotLabelFilterValueBox"
+                     AutomationProperties.HelpText="{local:Loc Key=PivotLabelFilter_ValueHelpText}"/>
             <Label x:Name="LabelFilterValue2Label" Grid.Row="3" Grid.Column="0" Content="{local:Loc Key=PivotLabelFilter_And}" Target="{Binding ElementName=LabelFilterValue2Box}" VerticalAlignment="Center" Margin="0,8,8,0"/>
-            <TextBox x:Name="LabelFilterValue2Box" Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" AutomationProperties.Name="{local:Loc Key=PivotLabelFilter_EndingLabelFilterValue}"/>
+            <TextBox x:Name="LabelFilterValue2Box" Grid.Row="3" Grid.Column="1" Margin="0,8,0,0"
+                     AutomationProperties.Name="{local:Loc Key=PivotLabelFilter_EndingLabelFilterValue}"
+                     AutomationProperties.AutomationId="PivotLabelFilterEndingValueBox"
+                     AutomationProperties.HelpText="{local:Loc Key=PivotLabelFilter_EndingValueHelpText}"/>
         </Grid>
     </DockPanel>
 </Window>

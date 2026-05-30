@@ -523,12 +523,16 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
-    public void PageBreakDialog_NumberInputsExposeAutomationNames()
+    public void PageBreakDialog_NumberInputsExposeAutomationMetadata()
     {
         var source = ReadClassSource("PageBreakDialog.cs", "public sealed class PageBreakDialog", "public sealed record __NoNextPageBreakDialog");
 
         source.Should().Contain("AutomationProperties.SetName(_rowBreakBox, \"Row page break\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_rowBreakBox, \"PageBreakRowBreakBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_rowBreakBox, \"Enter the row number where the horizontal page break should be inserted.\");");
         source.Should().Contain("AutomationProperties.SetName(_columnBreakBox, \"Column page break\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_columnBreakBox, \"PageBreakColumnBreakBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_columnBreakBox, \"Enter the column number or letter where the vertical page break should be inserted.\");");
     }
 
     [Fact]
@@ -1001,7 +1005,11 @@ public sealed class RemainingDialogTests
         source.Should().Contain("Select Data Range");
         source.Should().Contain("Select Location Range");
         source.Should().Contain("AutomationProperties.SetName(_dataRangePickerButton, \"Select sparkline data range\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_dataRangePickerButton, \"SparklineDataRangePickerButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_dataRangePickerButton, \"Select the worksheet data range for the sparkline.\");");
         source.Should().Contain("AutomationProperties.SetName(_locationPickerButton, \"Select sparkline location range\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_locationPickerButton, \"SparklineLocationRangePickerButton\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_locationPickerButton, \"Select the destination cell for the sparkline.\");");
         source.Should().Contain("RequestRangeSelection");
     }
 
@@ -1013,15 +1021,22 @@ public sealed class RemainingDialogTests
         source.Should().Contain("new Label { Content = \"_Data range:\", Target = _dataRangeBox");
         source.Should().Contain("new Label { Content = \"_Location range:\", Target = _locationBox");
         source.Should().Contain("new Label { Content = \"Sparkline _type:\", Target = _kindBox");
+        source.Should().Contain("AutomationProperties.SetName(_kindBox, \"Sparkline type\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_kindBox, \"SparklineTypeBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_kindBox, \"Choose whether the sparkline is line, column, or win/loss.\");");
     }
 
     [Fact]
-    public void SparklineDialog_RangeEditorsExposeAutomationNames()
+    public void SparklineDialog_RangeEditorsExposeAutomationMetadata()
     {
         var source = ReadRemainingDialogSources();
 
         source.Should().Contain("AutomationProperties.SetName(_dataRangeBox, \"Sparkline data range\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_dataRangeBox, \"SparklineDataRangeBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_dataRangeBox, \"Enter the worksheet data range for the sparkline.\");");
         source.Should().Contain("AutomationProperties.SetName(_locationBox, \"Sparkline location range\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_locationBox, \"SparklineLocationRangeBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_locationBox, \"Enter the destination cell for the sparkline.\");");
     }
 
     [Fact]

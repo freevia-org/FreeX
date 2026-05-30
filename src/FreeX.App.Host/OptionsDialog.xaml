@@ -236,7 +236,9 @@
 
                         <CheckBox x:Name="OptShowFormulaBar"
                                   Content="{local:Loc Key=Options_ShowFormulaBar}"
-                                  FontSize="12" Margin="0,0,0,6"/>
+                                  FontSize="12" Margin="0,0,0,6"
+                                  Checked="ShowFormulaBar_Changed"
+                                  Unchecked="ShowFormulaBar_Changed"/>
                         <CheckBox x:Name="OptFormulaBarExpanded"
                                   Content="{local:Loc Key=Options_ExpandFormulaBar}"
                                   FontSize="12" Margin="0,0,0,4"/>

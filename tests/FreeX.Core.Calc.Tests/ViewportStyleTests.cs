@@ -135,11 +135,14 @@ public class ViewportStyleTests
 
         frozenMetricHelpers.Should().Contain("CombineRowsWithOffset(");
         frozenMetricHelpers.Should().Contain("CombineColumnsWithOffset(");
+        frozenMetricHelpers.Should().Contain("SumRowHeights(pinnedRows)");
+        frozenMetricHelpers.Should().Contain("SumColumnWidths(pinnedColumns)");
         frozenMetricHelpers.Should().Contain("new List<RowMetric>(pinnedRows.Count + bodyRows.Count)");
         frozenMetricHelpers.Should().Contain("new List<ColMetric>(pinnedColumns.Count + bodyColumns.Count)");
         frozenMetricHelpers.Should().NotContain("OffsetRows(");
         frozenMetricHelpers.Should().NotContain("OffsetColumns(");
         frozenMetricHelpers.Should().NotContain("Concat(");
+        frozenMetricHelpers.Should().NotContain(".Sum(");
         frozenMetricHelpers.Should().NotContain(".Select(");
         frozenMetricHelpers.Should().NotContain(".ToList()");
     }

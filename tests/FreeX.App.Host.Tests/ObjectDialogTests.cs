@@ -327,6 +327,41 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ShapeGradientDialog_ColorControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ShapeGradientDialog();
+            try
+            {
+                var startColorBox = GetField<TextBox>(dialog, "_startColorBox");
+                AutomationProperties.GetName(startColorBox).Should().Be("Start gradient color");
+                AutomationProperties.GetAutomationId(startColorBox).Should().Be("ShapeGradientStartColorBox");
+                AutomationProperties.GetHelpText(startColorBox).Should().Be("Enter the first gradient stop color as R,G,B.");
+
+                var endColorBox = GetField<TextBox>(dialog, "_endColorBox");
+                AutomationProperties.GetName(endColorBox).Should().Be("End gradient color");
+                AutomationProperties.GetAutomationId(endColorBox).Should().Be("ShapeGradientEndColorBox");
+                AutomationProperties.GetHelpText(endColorBox).Should().Be("Enter the second gradient stop color as R,G,B.");
+
+                var startColorButton = GetField<Button>(dialog, "_startColorButton");
+                AutomationProperties.GetName(startColorButton).Should().Be("Choose start gradient color");
+                AutomationProperties.GetAutomationId(startColorButton).Should().Be("ShapeGradientStartColorButton");
+                AutomationProperties.GetHelpText(startColorButton).Should().Be("Open the color picker for the first gradient stop.");
+
+                var endColorButton = GetField<Button>(dialog, "_endColorButton");
+                AutomationProperties.GetName(endColorButton).Should().Be("Choose end gradient color");
+                AutomationProperties.GetAutomationId(endColorButton).Should().Be("ShapeGradientEndColorButton");
+                AutomationProperties.GetHelpText(endColorButton).Should().Be("Open the color picker for the second gradient stop.");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void RotationDialog_TryParseRotation_AcceptsNumericDegrees()
     {
         RotationDialog.TryParseRotation("45.5", out var rotation).Should().BeTrue();
@@ -637,6 +672,8 @@ public sealed class ObjectDialogTests
 
         source.Should().Contain("new Label { Content = \"Link _to:\", Target = _linkTypes");
         source.Should().Contain("AutomationProperties.SetName(_linkTypes, \"Link to\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_linkTypes, \"HyperlinkLinkTypeList\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_linkTypes, \"Choose the kind of hyperlink to insert.\");");
     }
 
     [Fact]
@@ -645,6 +682,9 @@ public sealed class ObjectDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs"));
 
         source.Should().Contain("AutomationProperties.SetName(_displayBox, \"Text to display\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_displayBox, \"HyperlinkDisplayTextBox\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_displayBox, \"Enter the text shown in the cell for the hyperlink.\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_targetBox, \"HyperlinkTargetTextBox\");");
         source.Should().Contain("AutomationProperties.SetName(_targetBox, automationName);");
     }
 
@@ -673,6 +713,7 @@ public sealed class ObjectDialogTests
                 targetLabel.Content.Should().Be(expectedLabel);
                 targetLabel.Target.Should().BeSameAs(targetBox);
                 AutomationProperties.GetName(targetBox).Should().Be(expectedAutomationName);
+                AutomationProperties.GetAutomationId(targetBox).Should().Be("HyperlinkTargetTextBox");
                 AutomationProperties.GetHelpText(targetBox).Should().Be(expectedHelpText);
             }
             finally
@@ -688,8 +729,10 @@ public sealed class ObjectDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "HyperlinkDialog.cs"));
 
         source.Should().Contain("AutomationProperties.SetName(_screenTipButton, \"Set ScreenTip\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_screenTipButton, \"HyperlinkScreenTipButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_screenTipButton, \"Set the text shown when pointing to the hyperlink.\");");
         source.Should().Contain("AutomationProperties.SetName(_bookmarkButton, \"Select place in document\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_bookmarkButton, \"HyperlinkBookmarkButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(_bookmarkButton, \"Choose a bookmark, defined name, or cell reference in this workbook.\");");
     }
 

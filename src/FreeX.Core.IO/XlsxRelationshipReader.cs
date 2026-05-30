@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -17,13 +18,16 @@ internal static class XlsxRelationshipReader
             var target = element.Attribute("Target")?.Value;
             if (string.IsNullOrWhiteSpace(id) ||
                 string.IsNullOrWhiteSpace(target) ||
-                targets.ContainsKey(id) ||
                 IsExternalRelationship(element, target))
             {
                 continue;
             }
 
-            targets[id] = resolveTarget(target);
+            ref var targetPath = ref CollectionsMarshal.GetValueRefOrAddDefault(targets, id, out var exists);
+            if (exists)
+                continue;
+
+            targetPath = resolveTarget(target);
         }
 
         return targets;

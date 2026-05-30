@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.Core.Model;
@@ -35,6 +36,9 @@ public sealed class PasswordProtectionDialog : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
+        AutomationProperties.SetName(_passwordBox, "Protection password");
+        AutomationProperties.SetAutomationId(_passwordBox, "ProtectionPasswordBox");
+        AutomationProperties.SetHelpText(_passwordBox, "Enter the optional password for protecting the sheet or workbook.");
 
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new TextBlock
@@ -139,6 +143,9 @@ public sealed class ConfirmPasswordDialog : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
+        AutomationProperties.SetName(_confirmationBox, "Confirm protection password");
+        AutomationProperties.SetAutomationId(_confirmationBox, "ConfirmProtectionPasswordBox");
+        AutomationProperties.SetHelpText(_confirmationBox, "Reenter the password to confirm protection.");
 
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new TextBlock

@@ -33,8 +33,12 @@ internal static class XlsxWorksheetAdditionalViewMapper
             return;
 
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.AdditionalViews is not null))
+        foreach (var sheet in workbook.Sheets)
         {
+            var additionalViews = sheet.AdditionalViews;
+            if (additionalViews is null)
+                continue;
+
             if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
@@ -56,16 +60,20 @@ internal static class XlsxWorksheetAdditionalViewMapper
                 changed = true;
             }
 
-            ApplyNativeAttributes(sheetViews, sheet.AdditionalViews!.NativeAttributes, []);
-            changed |= sheet.AdditionalViews.NativeAttributes.Count > 0;
+            ApplyNativeAttributes(sheetViews, additionalViews.NativeAttributes, []);
+            changed |= additionalViews.NativeAttributes.Count > 0;
             foreach (var view in sheetViews.Elements(WorksheetNs + "sheetView").Where(IsAdditionalView).ToList())
             {
                 view.Remove();
                 changed = true;
             }
 
-            foreach (var view in sheet.AdditionalViews.Views.Select(ToXml).OfType<XElement>())
+            foreach (var viewModel in additionalViews.Views)
             {
+                var view = ToXml(viewModel);
+                if (view is null)
+                    continue;
+
                 sheetViews.Add(view);
                 changed = true;
             }

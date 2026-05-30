@@ -55,6 +55,75 @@ public class DependencyGraphTests
     }
 
     [Fact]
+    public void RecalcEngine_ReturnsSharedEmptyReportForChangedValueCellsWithoutDependents()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
+        var afterPlan = source[
+            source.IndexOf("var plan = _graph.GetRecalcOrder(changedForTraversal);", StringComparison.Ordinal)..
+            source.IndexOf("var recalculated = new List<CellAddress>();", StringComparison.Ordinal)];
+
+        afterPlan.Should().Contain("plan.OrderedCells.Count == 0");
+        afterPlan.Should().Contain("plan.CyclicCells.Count == 0");
+        afterPlan.Should().Contain("_volatileCells.Count == 0");
+        afterPlan.Should().Contain("!HasChangedFormulaCells(workbook, changedCells)");
+        afterPlan.Should().Contain("return EmptyReport;");
+        source.Should().Contain("private static bool HasChangedFormulaCells");
+        source.Should().NotContain("changedCells.Where");
+
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new NumberValue(42));
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+
+        engine.Recalculate(workbook, [a1]).Should().BeSameAs(engine.Recalculate(workbook, [a1]));
+    }
+
+    [Fact]
+    public void RecalcEngine_DetectsVolatileFunctionArgumentsWithoutLinqIterators()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
+        var volatileDetection = source[
+            source.IndexOf("private static bool ContainsVolatileFunction", StringComparison.Ordinal)..
+            source.IndexOf("private static void CollectReferences", StringComparison.Ordinal)];
+
+        volatileDetection.Should().Contain("BuiltInFunctions.IsVolatile(f.FunctionName)");
+        volatileDetection.Should().Contain("ContainsVolatileFunctionArgument(f.Arguments)");
+        volatileDetection.Should().Contain("for (var i = 0; i < arguments.Count; i++)");
+        volatileDetection.Should().Contain("ContainsVolatileFunction(arguments[i])");
+        volatileDetection.Should().NotContain(
+            ".Any(",
+            "volatile formula registration should avoid LINQ iterator/delegate work while walking function arguments");
+    }
+
+    [Fact]
+    public void DependencyGraph_ReturnsSharedEmptyPlanWhenChangedCellsHaveNoDependents()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "DependencyGraph.cs"));
+        var getRecalcOrder = source[
+            source.IndexOf("public RecalcPlan GetRecalcOrder", StringComparison.Ordinal)..
+            source.IndexOf("private void EnqueueUnvisitedDependents", StringComparison.Ordinal)];
+
+        getRecalcOrder.Should().Contain("if (changedCells is IReadOnlyList<CellAddress> changedList)");
+        getRecalcOrder.Should().Contain("changedList.Count == 0 || !HasAnyDependents(changedList)");
+        getRecalcOrder.Should().Contain("return EmptyPlan;");
+        getRecalcOrder.Should().Contain("private bool HasAnyDependents(IReadOnlyList<CellAddress> cells)");
+        getRecalcOrder.IndexOf("return EmptyPlan;", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(getRecalcOrder.IndexOf("var toRecalc = new HashSet<CellAddress>();", StringComparison.Ordinal));
+        source.Should().Contain("private static readonly RecalcPlan EmptyPlan = new([], []);");
+
+        var graph = new DependencyGraph();
+        var sheet = SheetId.New();
+        var a1 = new CellAddress(sheet, 1, 1);
+
+        graph.GetRecalcOrder([a1]).Should().BeSameAs(graph.GetRecalcOrder([a1]));
+    }
+
+    [Fact]
     public void SetDependencies_TracksDependents()
     {
         var graph = new DependencyGraph();

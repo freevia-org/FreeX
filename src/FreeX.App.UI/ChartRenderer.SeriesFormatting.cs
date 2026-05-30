@@ -123,7 +123,10 @@ public static partial class ChartRenderer
         if (ShouldUseNativePieLabels(chart) || !chart.ShowDataLabels || points.Count == 0)
             return;
 
-        var total = points.Sum(point => Math.Max(0, point.Value));
+        var total = 0d;
+        for (var i = 0; i < points.Count; i++)
+            total += Math.Max(0, points[i].Value);
+
         if (total <= 0)
             return;
 
@@ -133,9 +136,11 @@ public static partial class ChartRenderer
         var borderColor = chart.ResolveDataLabelBorderColor(theme);
         var fillColor = chart.ResolveDataLabelFillColor(theme);
         var accumulatedAngle = chart.FirstSliceAngle;
-        foreach (var point in points)
+        for (var i = 0; i < points.Count; i++)
         {
-            var sweep = Math.Max(0, point.Value) / total * 360.0;
+            var point = points[i];
+            var positiveValue = Math.Max(0, point.Value);
+            var sweep = positiveValue / total * 360.0;
             var midAngle = accumulatedAngle + sweep / 2.0;
             accumulatedAngle += sweep;
 

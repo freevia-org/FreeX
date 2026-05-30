@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.Core.Model;
@@ -29,6 +30,15 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         ShowInTaskbar = false;
         _widthBox.Text = picture.Width.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _heightBox.Text = picture.Height.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        AutomationProperties.SetName(_widthBox, "Header/footer picture width");
+        AutomationProperties.SetAutomationId(_widthBox, "HeaderFooterPictureWidthBox");
+        AutomationProperties.SetHelpText(_widthBox, "Enter the header or footer picture width.");
+        AutomationProperties.SetName(_heightBox, "Header/footer picture height");
+        AutomationProperties.SetAutomationId(_heightBox, "HeaderFooterPictureHeightBox");
+        AutomationProperties.SetHelpText(_heightBox, "Enter the header or footer picture height.");
+        AutomationProperties.SetName(_lockAspectRatioBox, "Lock aspect ratio");
+        AutomationProperties.SetAutomationId(_lockAspectRatioBox, "HeaderFooterPictureLockAspectRatioCheckBox");
+        AutomationProperties.SetHelpText(_lockAspectRatioBox, "Keep the header or footer picture width and height proportional.");
         _widthBox.TextChanged += WidthBox_TextChanged;
         _heightBox.TextChanged += HeightBox_TextChanged;
         Content = CreateContent(picture.FileName ?? UiText.Get("HeaderFooterPicture_DefaultFileName"));
@@ -49,6 +59,9 @@ public sealed class HeaderFooterPictureFormatDialog : Window
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             Margin = new Thickness(0, 8, 0, 12)
         };
+        AutomationProperties.SetName(resetButton, "Reset picture size");
+        AutomationProperties.SetAutomationId(resetButton, "HeaderFooterPictureResetSizeButton");
+        AutomationProperties.SetHelpText(resetButton, "Reset the picture width and height to the original size.");
         resetButton.Click += (_, _) => ResetSize();
         stack.Children.Add(resetButton);
         stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));

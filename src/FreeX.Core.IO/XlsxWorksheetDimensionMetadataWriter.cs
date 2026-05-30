@@ -15,8 +15,12 @@ internal static class XlsxWorksheetDimensionMetadataWriter
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.DimensionMetadata is not null))
+        foreach (var sheet in workbook.Sheets)
         {
+            var metadata = sheet.DimensionMetadata;
+            if (metadata is null)
+                continue;
+
             if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
@@ -36,7 +40,7 @@ internal static class XlsxWorksheetDimensionMetadataWriter
                 InsertDimension(root, dimension);
             }
 
-            var (dimAttrs, _) = XmlNativeBagSerializer.Deserialize(sheet.DimensionMetadata!.Get("dimension"));
+            var (dimAttrs, _) = XmlNativeBagSerializer.Deserialize(metadata.Get("dimension"));
             foreach (var attribute in dimAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || string.Equals(attribute.Key, "ref", StringComparison.Ordinal))

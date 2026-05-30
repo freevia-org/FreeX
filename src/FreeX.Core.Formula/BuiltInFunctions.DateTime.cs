@@ -242,6 +242,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue EdateScalar(ScalarValue value, int months)
     {
+        if (IsExcelFakeLeapDay(value)) return EdateFromExcelFakeLeapDay(months);
         if (!TryOADateToDateTime(value, out var dt)) return ErrorValue.Num;
         try
         {
@@ -249,6 +250,15 @@ public static partial class BuiltInFunctions
             return new NumberValue(DateToSerial(result));
         }
         catch { return ErrorValue.Num; }
+    }
+
+    private static ScalarValue EdateFromExcelFakeLeapDay(int months)
+    {
+        if (!TryAddMonthsToExcelYearMonth(1900, 2, months, out var year, out var month))
+            return ErrorValue.Num;
+
+        int day = Math.Min(29, DaysInExcelMonth(year, month));
+        return ExcelDateSerialFromParts(year, month, day);
     }
 
     private static ScalarValue Datedif(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -438,6 +448,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue EomonthScalar(ScalarValue value, int months)
     {
+        if (IsExcelFakeLeapDay(value)) return EomonthFromExcelFakeLeapDay(months);
         if (!TryOADateToDateTime(value, out var dt)) return ErrorValue.Num;
         try
         {
@@ -445,6 +456,35 @@ public static partial class BuiltInFunctions
             var eomonth = new DateTime(target.Year, target.Month, 1).AddDays(-1);
             return new NumberValue(DateToSerial(eomonth));
         }
+        catch { return ErrorValue.Num; }
+    }
+
+    private static ScalarValue EomonthFromExcelFakeLeapDay(int months)
+    {
+        if (!TryAddMonthsToExcelYearMonth(1900, 2, months, out var year, out var month))
+            return ErrorValue.Num;
+
+        return ExcelDateSerialFromParts(year, month, DaysInExcelMonth(year, month));
+    }
+
+    private static bool TryAddMonthsToExcelYearMonth(int year, int month, int offset, out int targetYear, out int targetMonth)
+    {
+        long zeroBasedMonth = (long)year * 12 + month - 1 + offset;
+        targetYear = (int)Math.DivRem(zeroBasedMonth, 12, out var monthIndex);
+        if (monthIndex < 0)
+        {
+            targetYear--;
+            monthIndex += 12;
+        }
+
+        targetMonth = (int)monthIndex + 1;
+        return targetYear is >= 1 and <= 9999;
+    }
+
+    private static ScalarValue ExcelDateSerialFromParts(int year, int month, int day)
+    {
+        if (year == 1900 && month == 2 && day == 29) return new NumberValue(60);
+        try { return new NumberValue(DateToSerial(new DateTime(year, month, day))); }
         catch { return ErrorValue.Num; }
     }
 

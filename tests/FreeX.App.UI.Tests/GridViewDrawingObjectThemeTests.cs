@@ -198,6 +198,52 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void DrawingObjectRendering_ReusesThemeEffectWithinRenderPass()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var renderTextBoxes = source[
+            source.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
+        var renderDrawingShapes = source[
+            source.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)];
+        var drawTextBoxEffect = source[
+            source.IndexOf("private static void DrawTextBoxThemeEffect", StringComparison.Ordinal)..
+            source.IndexOf("private static void DrawShapeThemeEffect", StringComparison.Ordinal)];
+        var drawShapeEffect = source[
+            source.IndexOf("private static void DrawShapeThemeEffect", StringComparison.Ordinal)..
+            source.IndexOf("public static DrawingObjectColors ResolveDrawingShapeColors", StringComparison.Ordinal)];
+
+        renderTextBoxes.Should().Contain("var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);");
+        renderTextBoxes.Should().Contain("DrawTextBoxThemeEffect(dc, rect, themeEffect);");
+        renderTextBoxes.Should().NotContain("DrawTextBoxThemeEffect(dc, rect, WorkbookTheme);");
+        renderDrawingShapes.Should().Contain("var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);");
+        renderDrawingShapes.Should().Contain("DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect);");
+        renderDrawingShapes.Should().NotContain("DrawShapeThemeEffect(dc, shape.Kind, rect, WorkbookTheme);");
+        drawTextBoxEffect.Should().Contain("WorkbookThemeEffectStyle effect");
+        drawTextBoxEffect.Should().NotContain("WorkbookThemeEffectStyle.FromTheme");
+        drawShapeEffect.Should().Contain("WorkbookThemeEffectStyle effect");
+        drawShapeEffect.Should().NotContain("WorkbookThemeEffectStyle.FromTheme");
+    }
+
+    [Fact]
+    public void NativeSlicerRendering_DrawsSelectedTilesWithoutMaterializingArray()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var drawSlicer = source[
+            source.IndexOf("private void DrawNativeSlicerControl", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawNativeTimelineControl", StringComparison.Ordinal)];
+
+        drawSlicer.Should().Contain("var tileCount = selectedItemCount == 0 ? 1 : Math.Min(4, selectedItemCount);");
+        drawSlicer.Should().Contain("slicer.SelectedItems[index]");
+        drawSlicer.Should().NotContain(".Take(4)");
+        drawSlicer.Should().NotContain(".ToArray()");
+        drawSlicer.Should().NotContain("new[]");
+    }
+
+    [Fact]
     public void GridView_ExposesObjectDisplayModeForExcelPlaceholderRendering()
     {
         var source =
@@ -215,10 +261,20 @@ public sealed class GridViewDrawingObjectThemeTests
     public void PictureRenderer_DrawsSelectionAdornerForPictureAtActiveCell()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var adorner = source[
+            source.IndexOf("private void DrawPictureSelectionAdorner", StringComparison.Ordinal)..
+            source.IndexOf("private static bool HasPictureCrop", StringComparison.Ordinal)];
 
         source.Should().Contain("DrawPictureSelectionAdorner");
         source.Should().Contain("SelectedRange?.Start != picture.Anchor");
-        source.Should().Contain("dc.DrawRectangle(null, PictureSelectionPen, rect);");
+        adorner.Should().Contain("dc.DrawRectangle(null, PictureSelectionPen, rect);");
+        adorner.Should().Contain("DrawPictureSelectionHandle(dc, rect.TopLeft, handle);");
+        adorner.Should().Contain("DrawPictureSelectionHandle(dc, rect.TopRight, handle);");
+        adorner.Should().Contain("DrawPictureSelectionHandle(dc, rect.BottomLeft, handle);");
+        adorner.Should().Contain("DrawPictureSelectionHandle(dc, rect.BottomRight, handle);");
+        adorner.Should().Contain("private static void DrawPictureSelectionHandle");
+        adorner.Should().NotContain("new[]");
+        adorner.Should().NotContain("foreach (var point");
     }
 
     [Fact]
@@ -241,6 +297,9 @@ public sealed class GridViewDrawingObjectThemeTests
         source.Should().Contain("private static readonly Pen PictureGridPen = CreateFrozenPen");
         source.Should().Contain("private static readonly Brush PictureSelectionBrush = MakeBrush");
         source.Should().Contain("private static readonly Pen PictureSelectionPen = CreateFrozenPen");
+        renderPictures.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
+        renderPictures.Should().Contain("pixelsPerDip)");
+        renderPictures.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip)");
         renderPictures.Should().NotContain("new Pen(new SolidColorBrush");
         renderPictures.Should().NotContain("new SolidColorBrush");
     }

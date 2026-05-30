@@ -535,6 +535,28 @@ public sealed class SortDialogTests
     }
 
     [Fact]
+    public void SortOptionsDialog_FirstKeySortOrderCaptionTargetsComboBox()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SortOptionsDialog();
+            dialog.Show();
+            try
+            {
+                var combo = GetControl<ComboBox>(dialog, "_firstKeySortOrderBox");
+                var label = FindVisualChildren<Label>(dialog)
+                    .Single(candidate => Equals(candidate.Content, "_First key sort order:"));
+
+                label.Target.Should().BeSameAs(combo);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void BuildRowChoices_LabelsRowsForLeftToRightSorting()
     {
         var sheetId = new SheetId(Guid.NewGuid());

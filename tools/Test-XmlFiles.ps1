@@ -1,6 +1,6 @@
 param(
-    [string[]]$XmlRoots = @("Directory.Build.props", "src", "tests"),
-    [string[]]$XmlExtensions = @(".xml", ".xaml", ".csproj", ".props", ".targets", ".resx", ".config", ".ruleset")
+    [string[]]$XmlRoots = @("Directory.Build.props", "FreeX.slnx", "src", "tests"),
+    [string[]]$XmlExtensions = @(".xml", ".xaml", ".slnx", ".csproj", ".props", ".targets", ".resx", ".config", ".ruleset")
 )
 
 $ErrorActionPreference = "Stop"

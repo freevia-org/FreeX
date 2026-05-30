@@ -59,6 +59,58 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void ConditionalFormatTopBottomRanking_SortsInPlaceWithoutLinqPipelines()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var resolveTopBottom = source[
+            source.IndexOf("private static IReadOnlySet<CellAddress>? ResolveTopBottomMatches", StringComparison.Ordinal)..
+            source.IndexOf("private static IEnumerable<(CellAddress Address, ScalarValue Value)> EnumerateAggregateValues", StringComparison.Ordinal)];
+
+        resolveTopBottom.Should().Contain("rankedValues.Sort(");
+        resolveTopBottom.Should().Contain("new HashSet<CellAddress>(take)");
+        resolveTopBottom.Should().Contain("left.Index.CompareTo(right.Index)");
+        resolveTopBottom.Should().NotContain(".OrderBy(");
+        resolveTopBottom.Should().NotContain(".OrderByDescending(");
+        resolveTopBottom.Should().NotContain(".Take(");
+        resolveTopBottom.Should().NotContain(".Select(");
+        resolveTopBottom.Should().NotContain(".ToHashSet(");
+    }
+
+    [Fact]
+    public void ConditionalFormatContext_NoRulesReusesStaticEmptyContext()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var buildContext = source[
+            source.IndexOf("public static CfEvaluationContext BuildContext", StringComparison.Ordinal)..
+            source.IndexOf("var rulesByPriority", StringComparison.Ordinal)];
+
+        source.Should().Contain("private static readonly CfEvaluationContext EmptyContext");
+        buildContext.Should().Contain("return EmptyContext;");
+        buildContext.Should().NotContain("new CfEvaluationContext(");
+        buildContext.Should().NotContain("new Dictionary<ConditionalFormat, CfAggregateCache>");
+        buildContext.Should().NotContain("new Dictionary<ConditionalFormat, CfFormulaCache>");
+    }
+
+    [Fact]
+    public void ConditionalFormatContext_NonEmptyRulesAvoidsLinqArrayPipelines()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var buildContext = source[
+            source.IndexOf("public static CfEvaluationContext BuildContext", StringComparison.Ordinal)..
+            source.IndexOf("public static CellStyle? Evaluate", StringComparison.Ordinal)];
+
+        buildContext.Should().Contain("CopyRulesByPriority(sheet.ConditionalFormats)");
+        buildContext.Should().Contain("CopyIconRulesByPriority(rulesByPriority)");
+        buildContext.Should().NotContain(".OrderBy(");
+        buildContext.Should().NotContain(".Where(");
+        buildContext.Should().NotContain(".ToArray(");
+        source.Should().Contain("left.Index.CompareTo(right.Index)");
+    }
+
+    [Fact]
     public void ConditionalFormatEvaluation_DoesNotRunLinqRangeFiltersPerDisplayedCell()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
@@ -141,6 +193,40 @@ public class ConditionalFormatTests
 
         a1.Style!.FillColor.Should().Be(new CellColor(255, 0, 0), "A1=5 > 3, so red fill should apply");
         a2.Style!.FillColor.Should().NotBe(new CellColor(255, 0, 0), "A2=2 is not > 3, so red fill should NOT apply");
+    }
+
+    [Fact]
+    public void ConditionalFormatContext_PreservesInsertionOrderForEqualPriorities()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var range = new GridRange(address, address);
+
+        sheet.SetCell(address, Cell.FromValue(new NumberValue(5)));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            Priority = 1,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0",
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(10, 20, 30) }
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            Priority = 1,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0",
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(200, 210, 220) }
+        });
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 1, 1).Style!.FillColor.Should().Be(
+            new CellColor(10, 20, 30),
+            "same-priority conditional formats should keep insertion order");
     }
 
     [Fact]
@@ -367,6 +453,34 @@ public class ConditionalFormatTests
         GetCell(vp, 1, 1).Style!.FillColor.Should().NotBe(new CellColor(198, 239, 206));
         GetCell(vp, 2, 1).Style!.FillColor.Should().Be(new CellColor(198, 239, 206));
         GetCell(vp, 3, 1).Style!.FillColor.Should().Be(new CellColor(198, 239, 206));
+    }
+
+    [Fact]
+    public void Top10_PreservesInsertionOrderWhenValuesTieAtRankBoundary()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromValue(new NumberValue(5)));
+
+        var green = new CellStyle { FillColor = new CellColor(198, 239, 206) };
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.Top10,
+            TopBottomRank = 1,
+            AboveAverage = true,
+            FormatIfTrue = green
+        });
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 1, 1).Style!.FillColor.Should().Be(new CellColor(198, 239, 206));
+        GetCell(vp, 2, 1).Style!.FillColor.Should().NotBe(
+            new CellColor(198, 239, 206),
+            "the in-place sort should preserve the previous stable ordering for tied values");
+        GetCell(vp, 3, 1).Style!.FillColor.Should().NotBe(new CellColor(198, 239, 206));
     }
 
     [Fact]

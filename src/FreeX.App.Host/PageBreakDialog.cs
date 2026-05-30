@@ -142,7 +142,11 @@ public sealed class PageBreakDialog : Window
         _rowBreakBox.Text = (result.RowBreak ?? 2).ToString(CultureInfo.InvariantCulture);
         _columnBreakBox.Text = (result.ColumnBreak ?? 2).ToString(CultureInfo.InvariantCulture);
         AutomationProperties.SetName(_rowBreakBox, "Row page break");
+        AutomationProperties.SetAutomationId(_rowBreakBox, "PageBreakRowBreakBox");
+        AutomationProperties.SetHelpText(_rowBreakBox, "Enter the row number where the horizontal page break should be inserted.");
         AutomationProperties.SetName(_columnBreakBox, "Column page break");
+        AutomationProperties.SetAutomationId(_columnBreakBox, "PageBreakColumnBreakBox");
+        AutomationProperties.SetHelpText(_columnBreakBox, "Enter the column number or letter where the vertical page break should be inserted.");
     }
 
     private UIElement CreateContent()

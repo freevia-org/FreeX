@@ -37,6 +37,11 @@ public sealed class CreateTableDialog : Window
 
         _rangeBox.Text = defaultRangeText;
         AutomationProperties.SetName(_rangeBox, UiText.Get("CreateTable_RangeAutomationName"));
+        AutomationProperties.SetAutomationId(_rangeBox, "CreateTableRangeBox");
+        AutomationProperties.SetHelpText(_rangeBox, UiText.Get("CreateTable_RangeAutomationHelpText"));
+        AutomationProperties.SetName(_headersBox, UiText.Get("CreateTable_HeadersAutomationName"));
+        AutomationProperties.SetAutomationId(_headersBox, "CreateTableHeadersBox");
+        AutomationProperties.SetHelpText(_headersBox, UiText.Get("CreateTable_HeadersAutomationHelpText"));
         var root = new StackPanel { Margin = new Thickness(16) };
         root.Children.Add(new Label { Content = UiText.Get("CreateTable_RangeLabel"), Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         root.Children.Add(CreateReferenceEditor(_rangeBox, UiText.Get("CreateTable_RangePickerAutomationName"), RequestRangeSelection));

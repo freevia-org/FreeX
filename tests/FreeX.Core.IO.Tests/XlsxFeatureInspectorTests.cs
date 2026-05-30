@@ -235,6 +235,38 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_RelationshipOnlyRichDataReference_MatchesTypeAndTargetWithoutLowercaseCopies()
+    {
+        using var package = CreatePackageWithContent(("xl/_rels/workbook.xml.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdRichValue"
+                            Type="HTTP://SCHEMAS.MICROSOFT.COM/OFFICE/2017/06/RELATIONSHIPS/RDRICHVALUE"
+                            Target="RichData\rdrichvalue.xml"/>
+            </Relationships>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.LinkedDataTypes);
+    }
+
+    [Fact]
+    public void InspectRelationships_AvoidsLowercaseStringAllocations()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "XlsxFeatureInspector.cs"));
+        var relationshipInspection = source[
+            source.IndexOf("private static IEnumerable<XlsxUnsupportedFeatureKind> InspectRelationships", StringComparison.Ordinal)..
+            source.IndexOf("private static bool IsSupportedChartPart", StringComparison.Ordinal)];
+
+        relationshipInspection.Should().Contain("NormalizeRelationshipTarget(target)");
+        relationshipInspection.Should().Contain("StringComparison.OrdinalIgnoreCase");
+        relationshipInspection.Should().NotContain(
+            "ToLowerInvariant()",
+            "feature inspection should avoid allocating lowercase copies for every relationship type and target");
+    }
+
+    [Fact]
     public void Inspect_RichDataRelationshipTypeWithUnusualTarget_DetectsLinkedDataTypes()
     {
         using var package = CreatePackageWithContent(("xl/_rels/workbook.xml.rels", """
@@ -777,5 +809,24 @@ public class XlsxFeatureInspectorTests
 
         stream.Position = 0;
         return stream;
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var pathParts = new string[parts.Length + 1];
+            pathParts[0] = directory.FullName;
+            Array.Copy(parts, 0, pathParts, 1, parts.Length);
+
+            var candidate = Path.Combine(pathParts);
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(string.Join(Path.DirectorySeparatorChar, parts));
     }
 }

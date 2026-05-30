@@ -39,6 +39,7 @@ public partial class GridView
     {
         if (TextBoxes == null || Viewport == null) return;
 
+        var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);
         foreach (var textBox in TextBoxes)
         {
             if (!textBox.IsVisible) continue;
@@ -47,7 +48,7 @@ public partial class GridView
 
             var rotationPushed = PushRotation(dc, textBox.RotationDegrees, rect);
             var colors = ResolveTextBoxColors(textBox, WorkbookTheme);
-            DrawTextBoxThemeEffect(dc, rect, WorkbookTheme);
+            DrawTextBoxThemeEffect(dc, rect, themeEffect);
             var fillBrush = MakeBrushAlpha(242, colors.Fill.R, colors.Fill.G, colors.Fill.B);
             var borderPen = new Pen(MakeBrush(colors.Outline.R, colors.Outline.G, colors.Outline.B), 1);
             borderPen.Freeze();
@@ -77,6 +78,7 @@ public partial class GridView
     {
         if (DrawingShapes == null || Viewport == null) return;
 
+        var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);
         foreach (var shape in DrawingShapes)
         {
             if (!shape.IsVisible) continue;
@@ -85,7 +87,7 @@ public partial class GridView
 
             var rotationPushed = PushRotation(dc, shape.RotationDegrees, rect);
             var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
-            DrawShapeThemeEffect(dc, shape.Kind, rect, WorkbookTheme);
+            DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect);
             DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape);
             var pen = new Pen(MakeBrush(colors.Outline.R, colors.Outline.G, colors.Outline.B), 1.5);
             pen.Freeze();
@@ -151,12 +153,11 @@ public partial class GridView
     {
         DrawNativeControlFrame(dc, rect, GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName));
 
-        var items = slicer.SelectedItems.Count == 0
-            ? new[] { slicer.SourceFieldName ?? slicer.CacheName ?? "All" }
-            : slicer.SelectedItems.Take(4).ToArray();
+        var selectedItemCount = slicer.SelectedItems.Count;
+        var tileCount = selectedItemCount == 0 ? 1 : Math.Min(4, selectedItemCount);
         var tileTop = rect.Top + 26;
-        var tileHeight = Math.Max(14, Math.Min(22, (rect.Bottom - tileTop - 6) / Math.Max(1, items.Length)));
-        for (var index = 0; index < items.Length; index++)
+        var tileHeight = Math.Max(14, Math.Min(22, (rect.Bottom - tileTop - 6) / tileCount));
+        for (var index = 0; index < tileCount; index++)
         {
             var tileRect = new Rect(rect.Left + 6, tileTop + index * (tileHeight + 3), Math.Max(1, rect.Width - 12), tileHeight);
             dc.DrawRoundedRectangle(
@@ -165,7 +166,10 @@ public partial class GridView
                 tileRect,
                 2,
                 2);
-            DrawClippedText(dc, items[index], tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1);
+            var tileText = selectedItemCount == 0
+                ? slicer.SourceFieldName ?? slicer.CacheName ?? "All"
+                : slicer.SelectedItems[index];
+            DrawClippedText(dc, tileText, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1);
         }
     }
 
@@ -261,9 +265,8 @@ public partial class GridView
         }
     }
 
-    private static void DrawTextBoxThemeEffect(DrawingContext dc, Rect rect, WorkbookTheme theme)
+    private static void DrawTextBoxThemeEffect(DrawingContext dc, Rect rect, WorkbookThemeEffectStyle effect)
     {
-        var effect = WorkbookThemeEffectStyle.FromTheme(theme);
         if (!effect.HasShadow)
             return;
 
@@ -273,9 +276,8 @@ public partial class GridView
         dc.DrawRectangle(MakeBrushAlpha(alpha, 0, 0, 0), null, shadowRect);
     }
 
-    private static void DrawShapeThemeEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, WorkbookTheme theme)
+    private static void DrawShapeThemeEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, WorkbookThemeEffectStyle effect)
     {
-        var effect = WorkbookThemeEffectStyle.FromTheme(theme);
         if (!effect.HasShadow)
             return;
 

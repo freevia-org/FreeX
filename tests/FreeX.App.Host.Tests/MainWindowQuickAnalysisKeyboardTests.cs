@@ -188,15 +188,13 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         }
 
         public string? FocusedMenuHeader =>
-            ActiveContextMenu is { } menu &&
-            FocusManager.GetFocusedElement(menu) is MenuItem scopedMenuItem
-                ? scopedMenuItem.Header?.ToString()
-                : Keyboard.FocusedElement is MenuItem menuItem
-                    ? menuItem.Header?.ToString()
-                    : ActiveContextMenu?.Items.OfType<MenuItem>()
-                        .FirstOrDefault(item => item.IsEnabled)
-                        ?.Header
-                        ?.ToString();
+            ActiveContextMenu is { } menu
+                ? FocusedMenuItem(menu)?.Header?.ToString()
+                  ?? menu.Items.OfType<MenuItem>()
+                      .FirstOrDefault(item => item.IsEnabled)
+                      ?.Header
+                      ?.ToString()
+                : null;
 
         public string? ContextMenuPlacementTargetName =>
             ActiveContextMenu?.PlacementTarget is FrameworkElement target ? target.Name : null;
@@ -316,14 +314,25 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         {
             get
             {
-                if (Keyboard.FocusedElement is MenuItem menuItem)
-                    return ItemsControl.ItemsControlFromItemContainer(menuItem) as ContextMenu;
-
                 var quickAnalysisMenuField = typeof(MainWindow)
                     .GetField("_quickAnalysisMenu", BindingFlags.Instance | BindingFlags.NonPublic)
                     ?? throw new MissingFieldException(nameof(MainWindow), "_quickAnalysisMenu");
                 return quickAnalysisMenuField.GetValue(_window) as ContextMenu;
             }
+        }
+
+        private static MenuItem? FocusedMenuItem(ContextMenu menu)
+        {
+            if (FocusManager.GetFocusedElement(menu) is MenuItem scopedMenuItem &&
+                ReferenceEquals(ItemsControl.ItemsControlFromItemContainer(scopedMenuItem), menu))
+            {
+                return scopedMenuItem;
+            }
+
+            return Keyboard.FocusedElement is MenuItem keyboardMenuItem &&
+                ReferenceEquals(ItemsControl.ItemsControlFromItemContainer(keyboardMenuItem), menu)
+                    ? keyboardMenuItem
+                    : null;
         }
 
         public void Dispose()

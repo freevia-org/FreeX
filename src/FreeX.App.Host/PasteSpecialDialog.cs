@@ -128,6 +128,7 @@ public sealed partial class PasteSpecialDialog : Window
         _opSubtract = CreateOperationButton("_Subtract");
         _opMultiply = CreateOperationButton("_Multiply");
         _opDivide = CreateOperationButton("_Divide");
+        ApplyAutomationMetadata();
 
         stack.Children.Add(CreatePasteGroup());
         stack.Children.Add(CreatePasteOptionsPanel());

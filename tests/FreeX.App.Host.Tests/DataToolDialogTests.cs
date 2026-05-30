@@ -671,6 +671,61 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void RemoveDuplicatesDialog_ControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new RemoveDuplicatesDialog(
+                [
+                    new RemoveDuplicateColumnChoice(0, "Region", true),
+                    new RemoveDuplicateColumnChoice(1, "Sales", true)
+                ],
+                [
+                    new RemoveDuplicateColumnChoice(0, "Column A", true),
+                    new RemoveDuplicateColumnChoice(1, "Column B", true)
+                ]);
+            dialog.Show();
+            try
+            {
+                var headersBox = FindVisualChildren<CheckBox>(dialog)
+                    .Single(box => Equals(box.Content, "_My data has headers"));
+                AutomationProperties.GetName(headersBox).Should().Be("My data has headers");
+                AutomationProperties.GetAutomationId(headersBox).Should().Be("RemoveDuplicatesHasHeadersBox");
+                AutomationProperties.GetHelpText(headersBox).Should().Be("Select when the first row contains column headers.");
+
+                var columnsPanel = FindVisualChildren<StackPanel>(dialog)
+                    .Single(panel => AutomationProperties.GetAutomationId(panel) == "RemoveDuplicatesColumnsPanel");
+                AutomationProperties.GetName(columnsPanel).Should().Be("Columns");
+                AutomationProperties.GetHelpText(columnsPanel).Should().Be("Choose the columns used to identify duplicate rows.");
+
+                var buttons = FindVisualChildren<Button>(dialog)
+                    .Where(button => button.Content is string)
+                    .ToDictionary(button => (string)button.Content);
+                AutomationProperties.GetAutomationId(buttons["_Select All"]).Should().Be("RemoveDuplicatesSelectAllButton");
+                AutomationProperties.GetName(buttons["_Select All"]).Should().Be("Select all columns");
+                AutomationProperties.GetHelpText(buttons["_Select All"]).Should().Be("Select every column for duplicate detection.");
+                AutomationProperties.GetAutomationId(buttons["_Unselect All"]).Should().Be("RemoveDuplicatesUnselectAllButton");
+                AutomationProperties.GetName(buttons["_Unselect All"]).Should().Be("Unselect all columns");
+                AutomationProperties.GetHelpText(buttons["_Unselect All"]).Should().Be("Clear every column selection.");
+
+                var regionBox = FindVisualChildren<CheckBox>(dialog)
+                    .Single(box => AutomationProperties.GetAutomationId(box) == "RemoveDuplicatesColumn0Box");
+                AutomationProperties.GetName(regionBox).Should().Be("Region column");
+                AutomationProperties.GetHelpText(regionBox).Should().Be("Select to include this column when identifying duplicate rows.");
+
+                headersBox.IsChecked = false;
+
+                regionBox.Content.Should().Be("Column A");
+                AutomationProperties.GetName(regionBox).Should().Be("Column A column");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void RemoveDuplicatesDialog_BuildsHeaderAwareColumnChoices()
     {
         var sheetId = SheetId.New();
@@ -848,6 +903,63 @@ public sealed class DataToolDialogTests
                 buttons.Should().Contain(button => Equals(button.Content, "_Remove All"));
                 buttons.Should().Contain(button => Equals(button.Content, "_OK") && button.IsDefault);
                 buttons.Should().Contain(button => Equals(button.Content, "_Cancel") && button.IsCancel);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void SubtotalDialog_ControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SubtotalDialog(
+                [
+                    new SubtotalColumnChoice(0, "Region", false),
+                    new SubtotalColumnChoice(1, "Sales", true),
+                    new SubtotalColumnChoice(2, "Units", true)
+                ]);
+            dialog.Show();
+            try
+            {
+                var comboBoxes = FindVisualChildren<ComboBox>(dialog).ToList();
+                var groupColumnBox = comboBoxes.Single(box => AutomationProperties.GetAutomationId(box) == "SubtotalGroupColumnBox");
+                AutomationProperties.GetName(groupColumnBox).Should().Be("At each change in");
+                AutomationProperties.GetHelpText(groupColumnBox).Should().Be("Choose the column that defines each subtotal group.");
+
+                var functionBox = comboBoxes.Single(box => AutomationProperties.GetAutomationId(box) == "SubtotalFunctionBox");
+                AutomationProperties.GetName(functionBox).Should().Be("Use function");
+                AutomationProperties.GetHelpText(functionBox).Should().Be("Choose the function used to calculate each subtotal.");
+
+                var columnsPanel = FindVisualChildren<StackPanel>(dialog)
+                    .Single(panel => AutomationProperties.GetAutomationId(panel) == "SubtotalColumnsPanel");
+                AutomationProperties.GetName(columnsPanel).Should().Be("Add subtotal to");
+                AutomationProperties.GetHelpText(columnsPanel).Should().Be("Choose columns that receive subtotal calculations.");
+
+                var salesBox = FindVisualChildren<CheckBox>(dialog)
+                    .Single(box => AutomationProperties.GetAutomationId(box) == "SubtotalColumn1Box");
+                AutomationProperties.GetName(salesBox).Should().Be("Sales subtotal column");
+                AutomationProperties.GetHelpText(salesBox).Should().Be("Select to add a subtotal calculation to this column.");
+
+                AssertCheckBoxAutomation("SubtotalReplaceCurrentBox", "Replace current subtotals", "Replace existing subtotals with the new subtotal settings.");
+                AssertCheckBoxAutomation("SubtotalPageBreakBox", "Page break between groups", "Insert a page break after each subtotal group.");
+                AssertCheckBoxAutomation("SubtotalSummaryBelowBox", "Summary below data", "Place subtotal rows below each group.");
+
+                var removeAll = FindVisualChildren<Button>(dialog)
+                    .Single(button => AutomationProperties.GetAutomationId(button) == "SubtotalRemoveAllButton");
+                AutomationProperties.GetName(removeAll).Should().Be("Remove all subtotals");
+                AutomationProperties.GetHelpText(removeAll).Should().Be("Remove all subtotal rows from the selected data.");
+
+                void AssertCheckBoxAutomation(string automationId, string name, string helpText)
+                {
+                    var checkBox = FindVisualChildren<CheckBox>(dialog)
+                        .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
+                    AutomationProperties.GetName(checkBox).Should().Be(name);
+                    AutomationProperties.GetHelpText(checkBox).Should().Be(helpText);
+                }
             }
             finally
             {
@@ -1256,6 +1368,38 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void AdvancedFilterDialog_ActionControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new AdvancedFilterDialog(SheetId.New(), "A1:C12");
+            dialog.Show();
+            try
+            {
+                AssertRadioAutomation("AdvancedFilterInPlaceButton", "Filter the list, in-place", "Filter the list in its current location.");
+                AssertRadioAutomation("AdvancedFilterCopyToAnotherLocationButton", "Copy to another location", "Copy filtered records to the Copy to destination.");
+
+                var uniqueRecordsOnly = FindVisualChildren<CheckBox>(dialog)
+                    .Single(checkBox => AutomationProperties.GetAutomationId(checkBox) == "AdvancedFilterUniqueRecordsOnlyBox");
+                AutomationProperties.GetName(uniqueRecordsOnly).Should().Be("Unique records only");
+                AutomationProperties.GetHelpText(uniqueRecordsOnly).Should().Be("Show or copy only unique records.");
+
+                void AssertRadioAutomation(string automationId, string name, string helpText)
+                {
+                    var radioButton = FindVisualChildren<RadioButton>(dialog)
+                        .Single(button => AutomationProperties.GetAutomationId(button) == automationId);
+                    AutomationProperties.GetName(radioButton).Should().Be(name);
+                    AutomationProperties.GetHelpText(radioButton).Should().Be(helpText);
+                }
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void AdvancedFilterDialogOpenedFromKeyboard_FocusesInPlaceAction()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AdvancedFilterDialog.cs"));
@@ -1623,6 +1767,66 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("AutomationProperties.SetName(_referenceBox, \"Reference\");");
         source.Should().Contain("AutomationProperties.SetName(_destinationBox, \"Destination cell\");");
+    }
+
+    [Fact]
+    public void ConsolidateDialog_ControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConsolidateDialog(SheetId.New(), "A1:B3; D5:E7", "G10");
+            dialog.Show();
+            try
+            {
+                var functionBox = FindVisualChildren<ComboBox>(dialog)
+                    .Single(box => AutomationProperties.GetAutomationId(box) == "ConsolidateFunctionBox");
+                AutomationProperties.GetName(functionBox).Should().Be("Function");
+                AutomationProperties.GetHelpText(functionBox).Should().Be("Choose the function used to combine source ranges.");
+
+                AssertTextBoxAutomation("ConsolidateReferenceBox", "Reference", "Enter a source range to add to the All references list.");
+                AssertTextBoxAutomation("ConsolidateDestinationCellBox", "Destination cell", "Enter the upper-left destination cell for the consolidated result.");
+
+                var referencesList = FindVisualChildren<ListBox>(dialog)
+                    .Single(list => AutomationProperties.GetAutomationId(list) == "ConsolidateAllReferencesList");
+                AutomationProperties.GetName(referencesList).Should().Be("All references");
+                AutomationProperties.GetHelpText(referencesList).Should().Be("Lists the source ranges that will be consolidated.");
+
+                AssertCheckBoxAutomation("ConsolidateTopRowLabelsBox", "Top row labels", "Use labels from the top row of each source range.");
+                AssertCheckBoxAutomation("ConsolidateLeftColumnLabelsBox", "Left column labels", "Use labels from the left column of each source range.");
+                AssertCheckBoxAutomation("ConsolidateCreateLinksBox", "Create links to source data", "Create formulas that link the result to the source cells.");
+
+                AssertButtonAutomation("ConsolidateAddReferenceButton", "Add reference", "Add the reference range to the All references list.");
+                AssertButtonAutomation("ConsolidateDeleteReferenceButton", "Delete reference", "Delete the selected reference range.");
+
+                void AssertTextBoxAutomation(string automationId, string name, string helpText)
+                {
+                    var textBox = FindVisualChildren<TextBox>(dialog)
+                        .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
+                    AutomationProperties.GetName(textBox).Should().Be(name);
+                    AutomationProperties.GetHelpText(textBox).Should().Be(helpText);
+                }
+
+                void AssertCheckBoxAutomation(string automationId, string name, string helpText)
+                {
+                    var checkBox = FindVisualChildren<CheckBox>(dialog)
+                        .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
+                    AutomationProperties.GetName(checkBox).Should().Be(name);
+                    AutomationProperties.GetHelpText(checkBox).Should().Be(helpText);
+                }
+
+                void AssertButtonAutomation(string automationId, string name, string helpText)
+                {
+                    var button = FindVisualChildren<Button>(dialog)
+                        .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
+                    AutomationProperties.GetName(button).Should().Be(name);
+                    AutomationProperties.GetHelpText(button).Should().Be(helpText);
+                }
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -2053,13 +2257,45 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
-    public void DataTableDialog_CellInputEditorsExposeAutomationNames()
+    public void DataTableDialog_CellInputEditorsExposeAutomationMetadata()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataTableDialog.cs"));
 
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var range = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 8, 5));
+            var dialog = new DataTableDialog(sheetId, range);
+            dialog.Show();
+            try
+            {
+                AssertTextBoxAutomation(
+                    "DataTableRowInputCellBox",
+                    UiText.Get("DataTable_RowInputAutomationName"),
+                    UiText.Get("DataTable_RowInputAutomationHelpText"));
+                AssertTextBoxAutomation(
+                    "DataTableColumnInputCellBox",
+                    UiText.Get("DataTable_ColumnInputAutomationName"),
+                    UiText.Get("DataTable_ColumnInputAutomationHelpText"));
+
+                void AssertTextBoxAutomation(string automationId, string name, string helpText)
+                {
+                    var textBox = FindVisualChildren<TextBox>(dialog)
+                        .Single(box => AutomationProperties.GetAutomationId(box) == automationId);
+                    AutomationProperties.GetName(textBox).Should().Be(name);
+                    AutomationProperties.GetHelpText(textBox).Should().Be(helpText);
+                }
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+
         source.Should().Contain("AutomationProperties.SetName(_rowInputBox, UiText.Get(\"DataTable_RowInputAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_rowInputBox, UiText.Get(\"DataTable_RowInputAutomationHelpText\"));");
         source.Should().Contain("AutomationProperties.SetName(_columnInputBox, UiText.Get(\"DataTable_ColumnInputAutomationName\"));");
-        UiText.Get("DataTable_RowInputAutomationName").Should().Be("Row input cell");
+        source.Should().Contain("AutomationProperties.SetHelpText(_columnInputBox, UiText.Get(\"DataTable_ColumnInputAutomationHelpText\"));");
     }
 
     [Fact]
@@ -2209,12 +2445,37 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
-    public void CreateTableDialog_RangeEditorExposesAutomationName()
+    public void CreateTableDialog_ControlsExposeAutomationMetadata()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateTableDialog.cs"));
 
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new CreateTableDialog(SheetId.New(), "A1:C12", "TableStyleMedium2");
+            dialog.Show();
+            try
+            {
+                var rangeBox = FindVisualChildren<TextBox>(dialog).Single();
+                AutomationProperties.GetName(rangeBox).Should().Be(UiText.Get("CreateTable_RangeAutomationName"));
+                AutomationProperties.GetAutomationId(rangeBox).Should().Be("CreateTableRangeBox");
+                AutomationProperties.GetHelpText(rangeBox).Should().Be(UiText.Get("CreateTable_RangeAutomationHelpText"));
+
+                var headersBox = FindVisualChildren<CheckBox>(dialog)
+                    .Single(box => Equals(box.Content, UiText.Get("CreateTable_HeadersCheckBox")));
+                AutomationProperties.GetName(headersBox).Should().Be(UiText.Get("CreateTable_HeadersAutomationName"));
+                AutomationProperties.GetAutomationId(headersBox).Should().Be("CreateTableHeadersBox");
+                AutomationProperties.GetHelpText(headersBox).Should().Be(UiText.Get("CreateTable_HeadersAutomationHelpText"));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+
         source.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(\"CreateTable_RangeAutomationName\"));");
-        UiText.Get("CreateTable_RangeAutomationName").Should().Be("Table range");
+        source.Should().Contain("AutomationProperties.SetHelpText(_rangeBox, UiText.Get(\"CreateTable_RangeAutomationHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_headersBox, UiText.Get(\"CreateTable_HeadersAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_headersBox, UiText.Get(\"CreateTable_HeadersAutomationHelpText\"));");
     }
 
     [Fact]

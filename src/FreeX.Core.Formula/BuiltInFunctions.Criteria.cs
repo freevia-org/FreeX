@@ -54,8 +54,7 @@ public static partial class BuiltInFunctions
         if (IsWildcardCriteria(crit))
             return cellValue is TextValue tv && WildcardMatch(tv.Value, crit, ignoreCase: true);
 
-        if (double.TryParse(crit, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var numericCriteria)
+        if (TryParseCriteriaNumber(crit, out var numericCriteria)
             && TryCellNumber(cellValue, out double comparableNumber))
             return comparableNumber == numericCriteria;
 
@@ -65,8 +64,7 @@ public static partial class BuiltInFunctions
 
     private static bool ApplyComparisonCriteria(ScalarValue cellValue, string op, string rhs)
     {
-        if (double.TryParse(rhs, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var rhsNum))
+        if (TryParseCriteriaNumber(rhs, out var rhsNum))
         {
             if (!TryCellNumber(cellValue, out double value)) return false;
             return op switch
@@ -100,6 +98,9 @@ public static partial class BuiltInFunctions
             _ => false
         };
     }
+
+    private static bool TryParseCriteriaNumber(string text, out double number) =>
+        ExcelTextNumberParser.TryParse(text, out number);
 
     private static string CriteriaComparableText(ScalarValue value) => value switch
     {

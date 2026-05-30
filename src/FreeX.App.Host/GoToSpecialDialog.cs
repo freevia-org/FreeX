@@ -148,7 +148,9 @@ public sealed class GoToSpecialDialog : Window
     {
         var selected = _buttons.FirstOrDefault(button => button.IsChecked == true);
         SelectedKind = selected?.Tag is GoToSpecialKind kind ? kind : GoToSpecialKind.Blanks;
-        SelectedOptions = new GoToSpecialOptions(GetSelectedValueTypes());
+        SelectedOptions = UsesValueTypeOptions(SelectedKind)
+            ? new GoToSpecialOptions(GetSelectedValueTypes())
+            : new GoToSpecialOptions();
         DialogResult = true;
     }
 
@@ -163,16 +165,19 @@ public sealed class GoToSpecialDialog : Window
             valueTypes |= GoToSpecialValueTypes.Logicals;
         if (_errorsBox.IsChecked == true)
             valueTypes |= GoToSpecialValueTypes.Errors;
-        return valueTypes == GoToSpecialValueTypes.None ? GoToSpecialValueTypes.All : valueTypes;
+        return valueTypes;
     }
 
     private void RefreshValueTypeOptions()
     {
         var selected = _buttons.FirstOrDefault(button => button.IsChecked == true);
-        var enabled = selected?.Tag is GoToSpecialKind.Constants or GoToSpecialKind.Formulas;
+        var enabled = selected?.Tag is GoToSpecialKind kind && UsesValueTypeOptions(kind);
         _numbersBox.IsEnabled = enabled;
         _textBox.IsEnabled = enabled;
         _logicalsBox.IsEnabled = enabled;
         _errorsBox.IsEnabled = enabled;
     }
+
+    private static bool UsesValueTypeOptions(GoToSpecialKind kind) =>
+        kind is GoToSpecialKind.Constants or GoToSpecialKind.Formulas;
 }

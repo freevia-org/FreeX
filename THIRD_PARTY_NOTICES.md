@@ -10,12 +10,13 @@ license text and package-provided license text found in the restored packages.
 ## Audit Status
 
 - Audit command: `dotnet restore FreeX.slnx --disable-parallel -v:minimal`.
-- Restored package inventory: 40 unique NuGet packages across 15
+- Restored package inventory: 41 unique NuGet packages across 15
   `project.assets.json` files.
 - Coverage: every restored package is listed below.
 - Runtime package posture: the publishable app dependency set is covered by
   MIT, Apache-2.0, and BSD-3-Clause style licenses.
-- Package-provided `NOTICE` files found in the local NuGet cache: none.
+- Package-provided `NOTICE` files found in the local NuGet cache:
+  Microsoft.NET.ILLink.Tasks `THIRD-PARTY-NOTICES.TXT`.
 - Package-provided license files found: FluentAssertions `LICENSE`,
   Newtonsoft.Json `LICENSE.md`, SharpVectors.Wpf `lib/License.txt`, and
   System.IO.Packaging `LICENSE.TXT`.
@@ -65,6 +66,7 @@ replace this dependency or confirm the project has the required Xceed license.
 | coverlet.collector | 6.0.4 | MIT | https://github.com/coverlet-coverage/coverlet |
 | FluentAssertions | 8.9.0 | Package license file | https://xceed.com/products/unit-testing/fluent-assertions/ |
 | Microsoft.CodeCoverage | 17.14.1 | MIT | https://github.com/microsoft/vstest |
+| Microsoft.NET.ILLink.Tasks | 10.0.8 | MIT | https://dot.net/ |
 | Microsoft.NET.Test.Sdk | 17.14.1 | MIT | https://github.com/microsoft/vstest |
 | Microsoft.TestPlatform.ObjectModel | 17.14.1 | MIT | https://github.com/microsoft/vstest |
 | Microsoft.TestPlatform.TestHost | 17.14.1 | MIT | https://github.com/microsoft/vstest |
@@ -80,8 +82,9 @@ replace this dependency or confirm the project has the required Xceed license.
 
 ## Common License Texts
 
-- MIT, Apache License 2.0, and package-provided BSD/additional license text are
-  bundled in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+- MIT, Apache License 2.0, package-provided BSD/additional license text, and
+  package-provided third-party notice text are bundled in
+  [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 Some package licenses are provided as files or legacy license URLs inside the
 NuGet package metadata. Preserve those package-provided notices when

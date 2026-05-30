@@ -490,6 +490,72 @@ public sealed class DataValidationDialogTests
     }
 
     [Fact]
+    public void OkAfterSwitchingToAnyValue_DropsHiddenCriteriaFields()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new DataValidation
+            {
+                Type = DvType.List,
+                Formula1 = "Red,Blue",
+                Formula2 = "Hidden",
+                ShowDropdown = true
+            };
+            var dialog = new DataValidationDialog(existing);
+            dialog.Show();
+            try
+            {
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "TypeCombo"), "Any");
+
+                InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
+
+                dialog.Result.Should().NotBeNull();
+                dialog.Result!.Type.Should().Be(DvType.Any);
+                dialog.Result.Formula1.Should().BeEmpty();
+                dialog.Result.Formula2.Should().BeEmpty();
+                dialog.Result.ShowDropdown.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void OkAfterSwitchingToSingleValueOperator_DropsHiddenSecondFormula()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new DataValidation
+            {
+                Type = DvType.WholeNumber,
+                Operator = DvOperator.Between,
+                Formula1 = "1",
+                Formula2 = "10"
+            };
+            var dialog = new DataValidationDialog(existing);
+            dialog.Show();
+            try
+            {
+                SelectComboItemByTag(GetControl<ComboBox>(dialog, "OperatorCombo"), "Equal");
+
+                InvokePrivateAllowingNonModalDialogResult(dialog, "OkButton_Click");
+
+                dialog.Result.Should().NotBeNull();
+                dialog.Result!.Type.Should().Be(DvType.WholeNumber);
+                dialog.Result.Operator.Should().Be(DvOperator.Equal);
+                dialog.Result.Formula1.Should().Be("1");
+                dialog.Result.Formula2.Should().BeEmpty();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void SourcePickerButton_PopulatesListSource()
     {
         StaTestRunner.Run(() =>

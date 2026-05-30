@@ -920,6 +920,23 @@ public class FunctionLibraryTests
         _eval.Evaluate("=COUNTIF(A1:A2,\">40000\")", sheet).Should().Be(new NumberValue(1));
     }
 
+    [Fact]
+    public void CountifAndSumif_DateCriteriaText_ParsesLikeExcel()
+    {
+        var before = DateTimeValue.FromDateTime(new DateTime(2023, 12, 31));
+        var cutoff = DateTimeValue.FromDateTime(new DateTime(2024, 1, 1));
+        var after = DateTimeValue.FromDateTime(new DateTime(2024, 1, 2));
+        var sheet = MakeSheet(
+            (1, 1, before), (1, 2, new NumberValue(10)),
+            (2, 1, cutoff), (2, 2, new NumberValue(20)),
+            (3, 1, after), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=COUNTIF(A1:A3,\">1/1/2024\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SUMIF(A1:A3,\"1/1/2024\",B1:B3)", sheet).Should().Be(new NumberValue(20));
+        _eval.Evaluate("=COUNTIFS(A1:A3,\">=1/1/2024\",A1:A3,\"<1/2/2024\")", sheet)
+            .Should().Be(new NumberValue(1));
+    }
+
     // ── AVERAGEIF ──────────────────────────────────────────────────────────────
 
     [Fact]
@@ -1313,6 +1330,14 @@ public class FunctionLibraryTests
     {
         var sheet = MakeSheet();
         _eval.Evaluate("=PROPER(\"hello world\")", sheet).Should().Be(new TextValue("Hello World"));
+    }
+
+    [Theory]
+    [InlineData("=PROPER(\"2-way street\")", "2-Way Street")]
+    [InlineData("=PROPER(\"76BudGet\")", "76Budget")]
+    public void Proper_CapitalizesLettersAfterNonLettersLikeExcel(string formula, string expected)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new TextValue(expected));
     }
 
     [Fact]
@@ -2989,11 +3014,12 @@ public class FunctionLibraryTests
     }
 
     [Fact]
-    public void Randarray_MinGreaterThanMax_ReturnsValueError()
+    public void Randarray_MinGreaterThanOrEqualToMax_ReturnsValueError()
     {
         var sheet = MakeSheet();
 
         _eval.Evaluate("=RANDARRAY(1,1,10,1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=RANDARRAY(1,1,5,5)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -8740,6 +8766,10 @@ public class FunctionLibraryTests
         _eval.Evaluate("=UNICHAR(65)", MakeSheet()).Should().Be(new TextValue("A"));
 
     [Fact]
+    public void Unichar_SupplementaryPlaneCodePoint_ReturnsSurrogatePairText() =>
+        _eval.Evaluate("=UNICHAR(128512)", MakeSheet()).Should().Be(new TextValue(char.ConvertFromUtf32(128512)));
+
+    [Fact]
     public void Unichar_TruncatesFractionalCodePoint()
     {
         _eval.Evaluate("=UNICHAR(65.9)", MakeSheet()).Should().Be(new TextValue("A"));
@@ -8760,6 +8790,10 @@ public class FunctionLibraryTests
     [Fact]
     public void Unicode_BasicAscii_ReturnsCodePoint() =>
         _eval.Evaluate("=UNICODE(\"A\")", MakeSheet()).Should().Be(new NumberValue(65));
+
+    [Fact]
+    public void Unicode_SupplementaryPlaneText_ReturnsFullCodePoint() =>
+        _eval.Evaluate("=UNICODE(UNICHAR(128512))", MakeSheet()).Should().Be(new NumberValue(128512));
 
     [Theory]
     [InlineData("=UNICODE(65)", 54)]

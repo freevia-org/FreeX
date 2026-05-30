@@ -223,14 +223,16 @@ public partial class DataValidationDialog : Window
             "Information" => DvAlertStyle.Information,
             _ => DvAlertStyle.Stop
         };
+        var formula1 = NormalizeFormula1(typeTag, Formula1Box.Text);
+        var formula2 = NormalizeFormula2(typeTag, opTag, Formula2Box.Text);
 
         Result = new DataValidation
         {
             Id = _resultId,
             Type         = dvType,
             Operator     = dvOp,
-            Formula1     = Formula1Box.Text.Trim(),
-            Formula2     = Formula2Box.Text.Trim(),
+            Formula1     = formula1,
+            Formula2     = formula2,
             AllowBlank   = AllowBlankBox.IsChecked == true,
             ShowDropdown = dvType == DvType.List && ShowDropdownBox.IsChecked == true,
             AlertStyle   = alertStyle,
@@ -259,6 +261,16 @@ public partial class DataValidationDialog : Window
         Keyboard.Focus(target);
         target.SelectAll();
     }
+
+    private static string NormalizeFormula1(string typeTag, string? formula1) =>
+        string.Equals(typeTag, "Any", StringComparison.Ordinal)
+            ? ""
+            : formula1?.Trim() ?? "";
+
+    private static string NormalizeFormula2(string typeTag, string operatorTag, string? formula2) =>
+        RequiresSecondFormula(typeTag, operatorTag)
+            ? formula2?.Trim() ?? ""
+            : "";
 
     private bool IsClearAllState(string typeTag, string opTag, string alertTag) =>
         typeTag == "Any"

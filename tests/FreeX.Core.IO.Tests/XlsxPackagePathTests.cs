@@ -58,10 +58,33 @@ public sealed class XlsxPackagePathTests
         XlsxPackagePath.NormalizeZipPath(path).Should().Be(expected);
     }
 
+    [Fact]
+    public void RelationshipPathEscaping_FastPathsSafeTargetsBeforeSplittingSegments()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "XlsxPackagePath.cs"));
+        var escapingHelpers = source[
+            source.IndexOf("private static string UnescapePathSegments", StringComparison.Ordinal)..
+            source.IndexOf("private static string UnescapePathSegment(string segment)", StringComparison.Ordinal)];
+
+        escapingHelpers.Should().Contain("if (!path.Contains('%', StringComparison.Ordinal))");
+        escapingHelpers.Should().Contain("if (!PathNeedsEscaping(path))");
+        escapingHelpers.Should().Contain("private static bool PathNeedsEscaping(string path)");
+        escapingHelpers.IndexOf("if (!path.Contains('%', StringComparison.Ordinal))", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(escapingHelpers.IndexOf("path.Split('/').Select(UnescapePathSegment)", StringComparison.Ordinal));
+        escapingHelpers.IndexOf("if (!PathNeedsEscaping(path))", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(escapingHelpers.IndexOf("path.Split('/').Select(EscapePathSegment)", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("xl/media/image1.jpeg", "image/jpeg")]
+    [InlineData("xl/media/image1.JPEG", "image/jpeg")]
     [InlineData("xl/media/image1.bmp", "image/bmp")]
+    [InlineData("xl/media/image1.BMP", "image/bmp")]
     [InlineData("xl/media/image1.gif", "image/gif")]
+    [InlineData("xl/media/image1.GIF", "image/gif")]
     [InlineData("xl/media/image1.png", "image/png")]
     [InlineData("xl/media/image1.unknown", "image/png")]
     public void GetImageContentType_MapsSupportedImageExtensions(string path, string expected)
@@ -71,13 +94,32 @@ public sealed class XlsxPackagePathTests
 
     [Theory]
     [InlineData("image/jpeg", ".jpg")]
+    [InlineData("IMAGE/JPEG", ".jpg")]
     [InlineData("image/bmp", ".bmp")]
+    [InlineData("IMAGE/BMP", ".bmp")]
     [InlineData("image/gif", ".gif")]
+    [InlineData("IMAGE/GIF", ".gif")]
     [InlineData("image/png", ".png")]
     [InlineData("application/octet-stream", ".png")]
     public void GetImageExtension_MapsSupportedImageContentTypes(string contentType, string expected)
     {
         XlsxPackagePath.GetImageExtension(contentType).Should().Be(expected);
+    }
+
+    [Fact]
+    public void ImageMediaMapping_AvoidsLowercaseStringAllocations()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "XlsxPackagePath.cs"));
+        var mediaMapping = source[
+            source.IndexOf("public static string GetImageContentType", StringComparison.Ordinal)..
+            source.IndexOf("public static string GetWorksheetBackgroundMediaFileName", StringComparison.Ordinal)];
+
+        mediaMapping.Should().Contain("Path.GetExtension(path.AsSpan())");
+        mediaMapping.Should().Contain("StringComparison.OrdinalIgnoreCase");
+        mediaMapping.Should().NotContain(
+            "ToLowerInvariant()",
+            "picture and background media save/load paths should not allocate lowercase copies for MIME or extension checks");
     }
 
     [Theory]
@@ -87,5 +129,24 @@ public sealed class XlsxPackagePathTests
     public void GetWorksheetBackgroundMediaFileName_UsesSafeNamesOrFallback(string? fileName, int index, string extension, string expected)
     {
         XlsxPackagePath.GetWorksheetBackgroundMediaFileName(fileName, index, extension).Should().Be(expected);
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var pathParts = new string[parts.Length + 1];
+            pathParts[0] = directory.FullName;
+            Array.Copy(parts, 0, pathParts, 1, parts.Length);
+
+            var candidate = Path.Combine(pathParts);
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(string.Join(Path.DirectorySeparatorChar, parts));
     }
 }

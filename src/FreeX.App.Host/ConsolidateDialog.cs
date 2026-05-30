@@ -59,14 +59,21 @@ public sealed partial class ConsolidateDialog : Window
 
         _referenceBox.Text = defaultSource;
         AutomationProperties.SetName(_referenceBox, "Reference");
+        AutomationProperties.SetAutomationId(_referenceBox, "ConsolidateReferenceBox");
+        AutomationProperties.SetHelpText(_referenceBox, "Enter a source range to add to the All references list.");
         foreach (var sourceRange in SplitSourceRangeText(defaultSource))
             _referencesList.Items.Add(sourceRange);
         AutomationProperties.SetName(_referencesList, "All references");
+        AutomationProperties.SetAutomationId(_referencesList, "ConsolidateAllReferencesList");
+        AutomationProperties.SetHelpText(_referencesList, "Lists the source ranges that will be consolidated.");
         _referencesList.SelectionChanged += (_, _) => UpdateReferenceButtons();
         _referencesList.KeyDown += ReferencesList_KeyDown;
 
         _destinationBox.Text = defaultDestination;
         AutomationProperties.SetName(_destinationBox, "Destination cell");
+        AutomationProperties.SetAutomationId(_destinationBox, "ConsolidateDestinationCellBox");
+        AutomationProperties.SetHelpText(_destinationBox, "Enter the upper-left destination cell for the consolidated result.");
+        ApplyAutomationMetadata();
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new Label { Content = "_Function:", Target = _functionBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
         foreach (var function in Enum.GetValues<ConsolidateFunction>())
@@ -83,7 +90,13 @@ public sealed partial class ConsolidateDialog : Window
             Margin = new Thickness(0, 6, 0, 8)
         };
         var addReferenceButton = new Button { Content = "_Add", Width = 76, Margin = new Thickness(0, 0, 8, 0) };
+        AutomationProperties.SetName(addReferenceButton, "Add reference");
+        AutomationProperties.SetAutomationId(addReferenceButton, "ConsolidateAddReferenceButton");
+        AutomationProperties.SetHelpText(addReferenceButton, "Add the reference range to the All references list.");
         addReferenceButton.Click += AddReferenceButton_Click;
+        AutomationProperties.SetName(_deleteReferenceButton, "Delete reference");
+        AutomationProperties.SetAutomationId(_deleteReferenceButton, "ConsolidateDeleteReferenceButton");
+        AutomationProperties.SetHelpText(_deleteReferenceButton, "Delete the selected reference range.");
         _deleteReferenceButton.Click += DeleteReferenceButton_Click;
         referenceButtons.Children.Add(addReferenceButton);
         referenceButtons.Children.Add(_deleteReferenceButton);
@@ -105,6 +118,25 @@ public sealed partial class ConsolidateDialog : Window
         Content = root;
         UpdateReferenceButtons();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void ApplyAutomationMetadata()
+    {
+        AutomationProperties.SetName(_functionBox, "Function");
+        AutomationProperties.SetAutomationId(_functionBox, "ConsolidateFunctionBox");
+        AutomationProperties.SetHelpText(_functionBox, "Choose the function used to combine source ranges.");
+
+        AutomationProperties.SetName(_topRowBox, "Top row labels");
+        AutomationProperties.SetAutomationId(_topRowBox, "ConsolidateTopRowLabelsBox");
+        AutomationProperties.SetHelpText(_topRowBox, "Use labels from the top row of each source range.");
+
+        AutomationProperties.SetName(_leftColumnBox, "Left column labels");
+        AutomationProperties.SetAutomationId(_leftColumnBox, "ConsolidateLeftColumnLabelsBox");
+        AutomationProperties.SetHelpText(_leftColumnBox, "Use labels from the left column of each source range.");
+
+        AutomationProperties.SetName(_createLinksBox, "Create links to source data");
+        AutomationProperties.SetAutomationId(_createLinksBox, "ConsolidateCreateLinksBox");
+        AutomationProperties.SetHelpText(_createLinksBox, "Create formulas that link the result to the source cells.");
     }
 
     private DockPanel CreateReferenceEditor(

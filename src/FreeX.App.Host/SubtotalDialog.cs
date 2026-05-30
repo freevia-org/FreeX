@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.Core.Commands;
@@ -48,6 +49,7 @@ public sealed class SubtotalDialog : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
+        ApplyAutomationMetadata();
 
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new Label { Content = "_At each change in:", Target = _groupColumnBox, Padding = new Thickness(0) });
@@ -68,6 +70,9 @@ public sealed class SubtotalDialog : Window
                 IsChecked = column.IsSelected,
                 Margin = new Thickness(0, 0, 0, 4)
             };
+            AutomationProperties.SetName(box, $"{column.Header} subtotal column");
+            AutomationProperties.SetAutomationId(box, $"SubtotalColumn{column.Offset}Box");
+            AutomationProperties.SetHelpText(box, "Select to add a subtotal calculation to this column.");
             _subtotalColumnBoxes.Add(box);
             _subtotalColumnPanel.Children.Add(box);
         }
@@ -81,6 +86,33 @@ public sealed class SubtotalDialog : Window
         root.Children.Add(CreateSubtotalButtonRow(Accept, RemoveAll));
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+    }
+
+    private void ApplyAutomationMetadata()
+    {
+        AutomationProperties.SetName(_groupColumnBox, "At each change in");
+        AutomationProperties.SetAutomationId(_groupColumnBox, "SubtotalGroupColumnBox");
+        AutomationProperties.SetHelpText(_groupColumnBox, "Choose the column that defines each subtotal group.");
+
+        AutomationProperties.SetName(_functionBox, "Use function");
+        AutomationProperties.SetAutomationId(_functionBox, "SubtotalFunctionBox");
+        AutomationProperties.SetHelpText(_functionBox, "Choose the function used to calculate each subtotal.");
+
+        AutomationProperties.SetName(_subtotalColumnPanel, "Add subtotal to");
+        AutomationProperties.SetAutomationId(_subtotalColumnPanel, "SubtotalColumnsPanel");
+        AutomationProperties.SetHelpText(_subtotalColumnPanel, "Choose columns that receive subtotal calculations.");
+
+        AutomationProperties.SetName(_replaceBox, "Replace current subtotals");
+        AutomationProperties.SetAutomationId(_replaceBox, "SubtotalReplaceCurrentBox");
+        AutomationProperties.SetHelpText(_replaceBox, "Replace existing subtotals with the new subtotal settings.");
+
+        AutomationProperties.SetName(_pageBreakBox, "Page break between groups");
+        AutomationProperties.SetAutomationId(_pageBreakBox, "SubtotalPageBreakBox");
+        AutomationProperties.SetHelpText(_pageBreakBox, "Insert a page break after each subtotal group.");
+
+        AutomationProperties.SetName(_summaryBelowBox, "Summary below data");
+        AutomationProperties.SetAutomationId(_summaryBelowBox, "SubtotalSummaryBelowBox");
+        AutomationProperties.SetHelpText(_summaryBelowBox, "Place subtotal rows below each group.");
     }
 
     public static SubtotalDialogResult CreateResult(
@@ -212,6 +244,9 @@ public sealed class SubtotalDialog : Window
             Width = 92,
             Margin = new Thickness(0, 0, 8, 0)
         };
+        AutomationProperties.SetName(removeButton, "Remove all subtotals");
+        AutomationProperties.SetAutomationId(removeButton, "SubtotalRemoveAllButton");
+        AutomationProperties.SetHelpText(removeButton, "Remove all subtotal rows from the selected data.");
         removeButton.Click += (_, _) => removeAll();
         grid.Children.Add(removeButton);
 

@@ -12,6 +12,63 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Assert-SafeArtifactToken {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Value,
+        [Parameter(Mandatory = $true)]
+        [string]$Label
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value) -or $Value -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]*$') {
+        throw "$Label must contain only letters, numbers, dots, and hyphens, and must not contain path separators."
+    }
+}
+
+function Assert-SafeTimestampUrl {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return
+    }
+
+    $timestampUri = $null
+    if (-not [System.Uri]::TryCreate($Value, [System.UriKind]::Absolute, [ref]$timestampUri) -or
+        $timestampUri.Scheme -notin @("http", "https")) {
+        throw "MsixTimestampUrl must be an absolute http or https URL."
+    }
+}
+
+function Assert-MsixCertificatePath {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $Value -PathType Leaf)) {
+        throw "MsixCertificatePath must reference an existing certificate file."
+    }
+}
+
+function Assert-MsixSigningOptions {
+    param(
+        [string]$CertificatePath,
+        [string]$CertificatePassword,
+        [string]$TimestampUrl
+    )
+
+    if ([string]::IsNullOrWhiteSpace($CertificatePath) -and
+        (-not [string]::IsNullOrWhiteSpace($CertificatePassword) -or -not [string]::IsNullOrWhiteSpace($TimestampUrl))) {
+        throw "MSIX signing options require MsixCertificatePath."
+    }
+}
+
+Assert-SafeArtifactToken -Value $RuntimeIdentifier -Label "RuntimeIdentifier"
+Assert-SafeTimestampUrl -Value $MsixTimestampUrl
+Assert-MsixCertificatePath -Value $MsixCertificatePath
+Assert-MsixSigningOptions -CertificatePath $MsixCertificatePath -CertificatePassword $MsixCertificatePassword -TimestampUrl $MsixTimestampUrl
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "src\FreeX.App.Host\FreeX.App.Host.csproj"
 $appInfoPath = Join-Path $repoRoot "src\FreeX.App.Host\AppInfo.cs"

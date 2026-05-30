@@ -18,6 +18,7 @@ public static partial class ChartRenderer
         WorkbookTheme theme)
     {
         var values = new List<(string Label, double Value)>();
+        var total = 0.0;
         for (uint r = dataStartRow; r <= endRow; r++)
         {
             if (cellLookup.TryGetValue((r, dataStartCol), out var cell) &&
@@ -27,15 +28,12 @@ public static partial class ChartRenderer
                     ? categories[(int)(r - dataStartRow)]
                     : $"Item {r - dataStartRow + 1}";
                 values.Add((label, v));
+                total += v;
             }
         }
 
         values.Sort((a, b) => b.Value.CompareTo(a.Value));
         if (values.Count == 0) return model;
-
-        var total = 0.0;
-        for (var index = 0; index < values.Count; index++)
-            total += values[index].Value;
 
         var bars = new RectangleBarSeries { FillColor = OxyColor.FromRgb(68, 114, 196) };
         var cumulativeLine = new LineSeries
@@ -185,6 +183,7 @@ public static partial class ChartRenderer
         WorkbookTheme theme)
     {
         var values = new List<(string Label, double Value)>();
+        var total = 0.0;
         for (uint r = dataStartRow; r <= endRow; r++)
         {
             if (cellLookup.TryGetValue((r, dataStartCol), out var cell) &&
@@ -194,14 +193,11 @@ public static partial class ChartRenderer
                     ? categories[(int)(r - dataStartRow)]
                     : $"Item {r - dataStartRow + 1}";
                 values.Add((label, v));
+                total += v;
             }
         }
 
         if (values.Count == 0) return model;
-
-        var total = 0.0;
-        for (var index = 0; index < values.Count; index++)
-            total += values[index].Value;
 
         double x = 0;
 
@@ -283,6 +279,7 @@ public static partial class ChartRenderer
         WorkbookTheme theme)
     {
         var values = new List<(string Label, double Value)>();
+        var maxVal = 0.0;
         for (uint r = dataStartRow; r <= endRow; r++)
         {
             if (cellLookup.TryGetValue((r, dataStartCol), out var cell) &&
@@ -291,18 +288,14 @@ public static partial class ChartRenderer
                 var label = (int)(r - dataStartRow) < categories.Count
                     ? categories[(int)(r - dataStartRow)]
                     : $"Stage {r - dataStartRow + 1}";
-                values.Add((label, Math.Abs(v)));
+                var value = Math.Abs(v);
+                values.Add((label, value));
+                if (value > maxVal)
+                    maxVal = value;
             }
         }
 
         if (values.Count == 0) return model;
-
-        var maxVal = 0.0;
-        for (var index = 0; index < values.Count; index++)
-        {
-            if (values[index].Value > maxVal)
-                maxVal = values[index].Value;
-        }
 
         if (maxVal == 0) return model;
 

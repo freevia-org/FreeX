@@ -16,10 +16,14 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
             return;
 
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        foreach (var sheet in workbook.Sheets.Where(sheet =>
-                     sheet.RowPageBreaksMetadata is not null ||
-                     sheet.ColumnPageBreaksMetadata is not null))
+        foreach (var sheet in workbook.Sheets)
         {
+            if (sheet.RowPageBreaksMetadata is null &&
+                sheet.ColumnPageBreaksMetadata is null)
+            {
+                continue;
+            }
+
             if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
@@ -58,22 +62,22 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
             changed = true;
         }
 
-        var validBreaks = modeledBreaks
-            .Where(id => id >= 2)
-            .OrderBy(id => id)
-            .ToList();
-        foreach (var id in validBreaks)
+        var breaksById = BuildBreaksById(pageBreaks);
+        foreach (var id in modeledBreaks)
         {
-            if (pageBreaks.Elements(WorksheetNs + "brk")
-                .Any(element => string.Equals(element.Attribute("id")?.Value, id.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)))
-            {
+            if (id < 2)
                 continue;
-            }
 
-            pageBreaks.Add(new XElement(
+            var idText = id.ToString(CultureInfo.InvariantCulture);
+            if (breaksById.ContainsKey(idText))
+                continue;
+
+            var breakElement = new XElement(
                 WorksheetNs + "brk",
-                new XAttribute("id", id.ToString(CultureInfo.InvariantCulture)),
-                new XAttribute("man", "1")));
+                new XAttribute("id", idText),
+                new XAttribute("man", "1"));
+            pageBreaks.Add(breakElement);
+            breaksById[idText] = breakElement;
             changed = true;
         }
 
@@ -85,10 +89,6 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
             changed |= TrySetNativeAttributeIfDifferent(pageBreaks, attribute.Key, attribute.Value);
         }
 
-        var breaksById = pageBreaks.Elements(WorksheetNs + "brk")
-            .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("id")?.Value))
-            .GroupBy(element => element.Attribute("id")!.Value, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         foreach (var (breakId, attributes) in metadata.BreakNativeAttributes)
         {
             if (!breaksById.TryGetValue(breakId.ToString(CultureInfo.InvariantCulture), out var breakElement))
@@ -104,6 +104,19 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
         }
 
         return changed;
+    }
+
+    private static Dictionary<string, XElement> BuildBreaksById(XElement pageBreaks)
+    {
+        var breaksById = new Dictionary<string, XElement>(StringComparer.Ordinal);
+        foreach (var breakElement in pageBreaks.Elements(WorksheetNs + "brk"))
+        {
+            var id = breakElement.Attribute("id")?.Value;
+            if (!string.IsNullOrWhiteSpace(id) && !breaksById.ContainsKey(id))
+                breaksById[id] = breakElement;
+        }
+
+        return breaksById;
     }
 
     private static bool SetAttributeIfDifferent(XElement element, XName name, string value)

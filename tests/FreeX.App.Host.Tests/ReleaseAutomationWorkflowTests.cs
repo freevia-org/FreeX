@@ -24,7 +24,9 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("contents: write");
         workflow.Should().NotContain("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24");
         workflow.Should().Contain("actions/checkout@v6");
+        workflow.Should().Contain("persist-credentials: false");
         workflow.Should().Contain("actions/setup-dotnet@v5");
+        workflow.Should().Contain("timeout-minutes: 60");
         workflow.Should().Contain("name: Repository preflight");
         workflow.Should().Contain("powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("dotnet restore FreeX.slnx");
@@ -63,6 +65,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("elseif ($overallCompletion -ge 93) { $minor = 7 }");
         workflow.Should().Contain("elseif ($overallCompletion -ge 90) { $minor = 6 }");
         workflow.Should().Contain("$versionLabel = \"$major.$minor.$releasePatch\"");
+        workflow.Should().Contain("Release version must be a single line.");
         workflow.Should().Contain("$releaseStamp = Get-Date -AsUTC -Format \"yyyy-MM-dd-HH-mm-ss\"");
         workflow.Should().Contain("$releaseId = \"$versionSlug-$releaseStamp-run$runNumber-attempt$runAttempt\"");
         workflow.Should().Contain("$tag = \"v$releaseId+$shortSha\"");

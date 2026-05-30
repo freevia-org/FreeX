@@ -215,19 +215,25 @@
                     <Button x:Name="PrintAreaPickerButton" Grid.Row="0" Grid.Column="2" Content="..." Width="24" Height="22" Margin="0,0,0,8"
                             Tag="PrintAreaBox" Click="RangePickerButton_Click"
                             ToolTip="{local:Loc Key=PageSetup_CollapseDialogAndSelectThePrintArea}"
-                            AutomationProperties.Name="{local:Loc Key=PageSetup_SelectPrintArea}"/>
+                            AutomationProperties.Name="{local:Loc Key=PageSetup_SelectPrintArea}"
+                            AutomationProperties.AutomationId="PageSetupPrintAreaPickerButton"
+                            AutomationProperties.HelpText="{local:Loc Key=PageSetup_SelectPrintAreaHelpText}"/>
                     <Label Grid.Row="1" Grid.Column="0" Content="{local:Loc Key=PageSetup_RowsToRepeatAtTop}" Target="{Binding ElementName=RowsRepeatBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="RowsRepeatBox" Grid.Row="1" Grid.Column="1" Margin="0,0,6,8"/>
                     <Button x:Name="RowsRepeatPickerButton" Grid.Row="1" Grid.Column="2" Content="..." Width="24" Height="22" Margin="0,0,0,8"
                             Tag="RowsRepeatBox" Click="RangePickerButton_Click"
                             ToolTip="{local:Loc Key=PageSetup_CollapseDialogAndSelectRowsToRepeatAtTop}"
-                            AutomationProperties.Name="{local:Loc Key=PageSetup_SelectRowsToRepeat}"/>
+                            AutomationProperties.Name="{local:Loc Key=PageSetup_SelectRowsToRepeat}"
+                            AutomationProperties.AutomationId="PageSetupRowsRepeatPickerButton"
+                            AutomationProperties.HelpText="{local:Loc Key=PageSetup_SelectRowsToRepeatHelpText}"/>
                     <Label Grid.Row="2" Grid.Column="0" Content="{local:Loc Key=PageSetup_ColumnsToRepeatAtLeft}" Target="{Binding ElementName=ColumnsRepeatBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,8"/>
                     <TextBox x:Name="ColumnsRepeatBox" Grid.Row="2" Grid.Column="1" Margin="0,0,6,8"/>
                     <Button x:Name="ColumnsRepeatPickerButton" Grid.Row="2" Grid.Column="2" Content="..." Width="24" Height="22" Margin="0,0,0,8"
                             Tag="ColumnsRepeatBox" Click="RangePickerButton_Click"
                             ToolTip="{local:Loc Key=PageSetup_CollapseDialogAndSelectColumnsToRepeatAtLeft}"
-                            AutomationProperties.Name="{local:Loc Key=PageSetup_SelectColumnsToRepeat}"/>
+                            AutomationProperties.Name="{local:Loc Key=PageSetup_SelectColumnsToRepeat}"
+                            AutomationProperties.AutomationId="PageSetupColumnsRepeatPickerButton"
+                            AutomationProperties.HelpText="{local:Loc Key=PageSetup_SelectColumnsToRepeatHelpText}"/>
                     <CheckBox x:Name="PrintGridlinesBox" Grid.Row="3" Grid.Column="1" Content="{local:Loc Key=PageSetup_PrintGridlines}" Margin="0,0,0,8"/>
                     <CheckBox x:Name="PrintHeadingsBox" Grid.Row="4" Grid.Column="1" Content="{local:Loc Key=PageSetup_PrintRowAndColumnHeadings}" Margin="0,0,0,8"/>
                     <Label Grid.Row="5" Grid.Column="0" Content="{local:Loc Key=PageSetup_PageOrder}" Target="{Binding ElementName=PageOrderBox}" Padding="0" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -256,13 +262,28 @@
 
         <DockPanel Grid.Row="1" Margin="0,12,0,0">
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" HorizontalAlignment="Left">
-                <Button Content="{local:Loc Key=PageSetup_Print}" Width="86" Margin="0,0,8,0" Click="PrintButton_Click"/>
-                <Button Content="{local:Loc Key=PageSetup_PrintPreview}" Width="104" Margin="0,0,8,0" Click="PrintPreviewButton_Click"/>
-                <Button Content="{local:Loc Key=PageSetup_Options}" Width="86" Click="OptionsButton_Click"/>
+                <Button Content="{local:Loc Key=PageSetup_Print}" Width="86" Margin="0,0,8,0" Click="PrintButton_Click"
+                        AutomationProperties.Name="{local:Loc Key=PageSetup_PrintAutomationName}"
+                        AutomationProperties.AutomationId="PageSetupPrintButton"
+                        AutomationProperties.HelpText="{local:Loc Key=PageSetup_PrintHelpText}"/>
+                <Button Content="{local:Loc Key=PageSetup_PrintPreview}" Width="104" Margin="0,0,8,0" Click="PrintPreviewButton_Click"
+                        AutomationProperties.Name="{local:Loc Key=PageSetup_PrintPreviewAutomationName}"
+                        AutomationProperties.AutomationId="PageSetupPrintPreviewButton"
+                        AutomationProperties.HelpText="{local:Loc Key=PageSetup_PrintPreviewHelpText}"/>
+                <Button Content="{local:Loc Key=PageSetup_Options}" Width="86" Click="OptionsButton_Click"
+                        AutomationProperties.Name="{local:Loc Key=PageSetup_OptionsAutomationName}"
+                        AutomationProperties.AutomationId="PageSetupOptionsButton"
+                        AutomationProperties.HelpText="{local:Loc Key=PageSetup_OptionsHelpText}"/>
             </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="{local:Loc Key=Common_Ok}" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"/>
-                <Button Content="{local:Loc Key=Common_Cancel}" Width="72" IsCancel="True"/>
+                <Button Content="{local:Loc Key=Common_Ok}" Width="72" Margin="0,0,8,0" Click="OkButton_Click" IsDefault="True"
+                        AutomationProperties.Name="{local:Loc Key=PageSetup_OkAutomationName}"
+                        AutomationProperties.AutomationId="PageSetupOkButton"
+                        AutomationProperties.HelpText="{local:Loc Key=PageSetup_OkHelpText}"/>
+                <Button Content="{local:Loc Key=Common_Cancel}" Width="72" IsCancel="True"
+                        AutomationProperties.Name="{local:Loc Key=PageSetup_CancelAutomationName}"
+                        AutomationProperties.AutomationId="PageSetupCancelButton"
+                        AutomationProperties.HelpText="{local:Loc Key=PageSetup_CancelHelpText}"/>
             </StackPanel>
         </DockPanel>
     </Grid>

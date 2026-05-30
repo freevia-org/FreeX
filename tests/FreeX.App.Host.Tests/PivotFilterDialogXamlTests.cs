@@ -118,6 +118,41 @@ public sealed class PivotFilterDialogXamlTests
         source.Should().Contain("Keyboard.Focus(target);");
     }
 
+    [Theory]
+    [InlineData(
+        "PivotLabelFilterDialog.xaml",
+        "LabelFilterKindBox",
+        "PivotLabelFilterOperatorBox",
+        "LabelFilterValueBox",
+        "PivotLabelFilterValueBox",
+        "LabelFilterValue2Box",
+        "PivotLabelFilterEndingValueBox")]
+    [InlineData(
+        "PivotValueFilterDialog.xaml",
+        "ValueFilterKindBox",
+        "PivotValueFilterOperatorBox",
+        "ValueFilterValueBox",
+        "PivotValueFilterValueBox",
+        "ValueFilterValue2Box",
+        "PivotValueFilterEndingValueBox")]
+    public void PivotConditionDialogs_ExposeAutomationIdsAndHelpText(
+        string xamlFile,
+        string operatorName,
+        string operatorAutomationId,
+        string valueName,
+        string valueAutomationId,
+        string endingValueName,
+        string endingValueAutomationId)
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", xamlFile));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        AssertAutomation(document, presentation, xaml, operatorName, operatorAutomationId);
+        AssertAutomation(document, presentation, xaml, valueName, valueAutomationId);
+        AssertAutomation(document, presentation, xaml, endingValueName, endingValueAutomationId);
+    }
+
     [Fact]
     public void PivotLabelFilterDialog_ShowsSecondValueOnlyForBetween()
     {

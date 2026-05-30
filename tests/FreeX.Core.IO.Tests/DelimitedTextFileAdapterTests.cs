@@ -43,6 +43,23 @@ public sealed class DelimitedTextFileAdapterTests
             "wide sparse delimited saves should not allocate delimiter strings for every row chunk");
     }
 
+    [Fact]
+    public void Save_UsesSinglePassDateTimeShapeProbeWithoutLinq()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "DelimitedTextWorkbookWriter.cs"));
+        var shapeProbe = source[
+            source.IndexOf("private static bool HasSupportedDateTimeShape", StringComparison.Ordinal)..
+            source.IndexOf("private static bool IsUnsignedCurrencyText", StringComparison.Ordinal)];
+
+        shapeProbe.Should().Contain("foreach (var ch in value)");
+        shapeProbe.Should().Contain("if (ch == ':' || char.IsLetter(ch))");
+        shapeProbe.Should().Contain("if (digitRun >= 4)");
+        shapeProbe.Should().NotContain("value.Contains");
+        shapeProbe.Should().NotContain("HasFourConsecutiveDigits");
+        shapeProbe.Should().NotContain(".Any(");
+    }
+
     [Theory]
     [InlineData(".txt")]
     [InlineData(".tsv")]

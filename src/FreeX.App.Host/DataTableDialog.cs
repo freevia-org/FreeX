@@ -57,6 +57,10 @@ public sealed class DataTableDialog : Window
         ShowInTaskbar = false;
         AutomationProperties.SetName(_rowInputBox, UiText.Get("DataTable_RowInputAutomationName"));
         AutomationProperties.SetName(_columnInputBox, UiText.Get("DataTable_ColumnInputAutomationName"));
+        AutomationProperties.SetAutomationId(_rowInputBox, "DataTableRowInputCellBox");
+        AutomationProperties.SetHelpText(_rowInputBox, UiText.Get("DataTable_RowInputAutomationHelpText"));
+        AutomationProperties.SetAutomationId(_columnInputBox, "DataTableColumnInputCellBox");
+        AutomationProperties.SetHelpText(_columnInputBox, UiText.Get("DataTable_ColumnInputAutomationHelpText"));
 
         var root = new StackPanel { Margin = new Thickness(12) };
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 10) };

@@ -14,8 +14,12 @@ internal static class XlsxWorksheetPageMarginsMetadataWriter
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.PageMarginsMetadata is not null))
+        foreach (var sheet in workbook.Sheets)
         {
+            var metadata = sheet.PageMarginsMetadata;
+            if (metadata is null)
+                continue;
+
             if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
@@ -35,7 +39,7 @@ internal static class XlsxWorksheetPageMarginsMetadataWriter
                 InsertPageMargins(root, worksheetNs, pageMargins);
             }
 
-            var (pmAttrs, pmChildren) = XmlNativeBagSerializer.Deserialize(sheet.PageMarginsMetadata!.Get("pageMargins"));
+            var (pmAttrs, pmChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("pageMargins"));
             foreach (var attribute in pmAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledPageMarginsAttribute(attribute.Key))
