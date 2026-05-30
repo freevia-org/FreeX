@@ -11,7 +11,7 @@ public sealed class HomeFormatAsTableCommandSourceTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var button = ExtractButtonElementByClickHandler(xaml, "FormatTableBtn_Click");
 
-        button.Should().Contain("local:RibbonTooltip.Title=\"Format as Table\"");
+        button.ShouldContainInvariantCommandName("Format as Table");
         button.Should().Contain("local:RibbonTooltip.KeyTip=\"T\"");
         button.Should().Contain("Click=\"FormatTableBtn_Click\"");
         button.Should().Contain("x:Name=\"FormatTableGalleryMenu\"");

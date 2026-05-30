@@ -11,7 +11,7 @@ public sealed class HomeCellStyleCommandSourceTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var button = ExtractButtonElementByClickHandler(xaml, "CellStylesBtn_Click");
 
-        button.Should().Contain("local:RibbonTooltip.Title=\"Cell Styles\"");
+        button.ShouldContainInvariantCommandName("Cell Styles");
         button.Should().Contain("local:RibbonTooltip.KeyTip=\"J\"");
         button.Should().Contain("<Button.ContextMenu>");
     }
@@ -48,7 +48,7 @@ public sealed class HomeCellStyleCommandSourceTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
         var menuItem = ExtractMenuItemElementByClickHandler(xaml, handler);
 
-        menuItem.Should().Contain($"Header=\"{header}\"");
+        menuItem.ShouldContainLocalizedAttribute("Header", header);
         menuItem.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         source.Should().Contain($"private void {handler}(object sender, RoutedEventArgs e)");
         source.Should().Contain($"=> ApplyCellStylePreset(CellStylePreset.{preset});");

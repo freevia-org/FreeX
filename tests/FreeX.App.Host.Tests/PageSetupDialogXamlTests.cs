@@ -23,7 +23,7 @@ public sealed class PageSetupDialogXamlTests
             "_Header/Footer",
             "_Sheet"
         })
-            xaml.Should().Contain($"Header=\"{header}\"");
+            xaml.ShouldContainLocalizedAttribute("Header", header);
 
         foreach (var content in new[]
         {
@@ -384,7 +384,7 @@ public sealed class PageSetupDialogXamlTests
         var handlerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.PageLayout.cs"));
 
         foreach (var content in new[] { "Print Pre_view", "_Print...", "_Options..." })
-            xaml.Should().Contain($"Content=\"{content}\"");
+            xaml.ShouldContainLocalizedAttribute("Content", content);
 
         xaml.Should().Contain("Click=\"OptionsButton_Click\"");
         xaml.Should().NotContain("IsEnabled=\"False\"");

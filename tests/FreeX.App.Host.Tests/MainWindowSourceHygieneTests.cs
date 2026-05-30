@@ -196,7 +196,7 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
 
-        xaml.Should().Contain("Text=\"Save _As\"");
+        xaml.ShouldContainLocalizedAttribute("Text", "Save _As");
         xaml.Should().Contain("CommandName=\"Save As\"");
         xaml.Should().Contain("Click=\"SaveAsButton_Click\"");
         backstageSource.Should().Contain("private async void SaveAsButton_Click(object sender, RoutedEventArgs e)");
@@ -1817,21 +1817,27 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("Click=\"Chart3DBarMenuItem_Click\"");
         xaml.Should().Contain("Click=\"ChartSurfaceMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DSurfaceMenuItem_Click\"");
-        xaml.Should().Contain("Surface");
-        xaml.Should().Contain("Treemap");
-        xaml.Should().Contain("Sunburst");
-        xaml.Should().Contain("Histogram");
-        xaml.Should().Contain("Pareto");
-        xaml.Should().Contain("Box Plot");
-        xaml.Should().Contain("Waterfall");
-        xaml.Should().Contain("Funnel");
-        xaml.Should().Contain("Map");
-        xaml.Should().Contain("3D Pie");
-        xaml.Should().Contain("3D Line");
-        xaml.Should().Contain("3D Area");
-        xaml.Should().Contain("3D Column");
-        xaml.Should().Contain("3D Bar");
-        xaml.Should().Contain("3D Surface");
+        foreach (var chartLabel in new[]
+        {
+            "Surface",
+            "Treemap",
+            "Sunburst",
+            "Histogram",
+            "Pareto",
+            "Box Plot",
+            "Waterfall",
+            "Funnel",
+            "Map",
+            "3D Pie",
+            "3D Line",
+            "3D Area",
+            "3D Column",
+            "3D Bar",
+            "3D Surface"
+        })
+        {
+            xaml.ShouldContainLocalizedAttribute("Content", chartLabel);
+        }
     }
 
     [Fact]
@@ -2432,7 +2438,7 @@ public sealed class MainWindowSourceHygieneTests
             "Dotted",
             "More Borders..."
         })
-            xaml.Should().Contain($"Header=\"{label}\"");
+            xaml.ShouldContainLocalizedAttribute("Header", label);
 
         foreach (var handler in new[]
         {
@@ -2584,7 +2590,7 @@ public sealed class MainWindowSourceHygieneTests
         keyboardSource.Should().Contain("KeyboardCommandShortcut.OpenPrintPreview, (_, _) => OpenPrintBackstage()");
         keyboardSource.Should().NotContain("KeyboardCommandShortcut.OpenPrintPreview, PrintButton_Click");
         xaml.Should().Contain("x:Name=\"SsPrintNavBtn\"");
-        xaml.Should().Contain("local:RibbonTooltip.Description=\"Open the print preview and native print dialog for the rendered worksheet.\"");
+        xaml.ShouldContainLocalizedAttribute("local:RibbonTooltip.Description", "Open the print preview and native print dialog for the rendered worksheet.");
     }
 
     [Fact]
@@ -2737,7 +2743,7 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var source = ReadPivotCommandSource();
 
-        xaml.Should().Contain("local:RibbonTooltip.Description=\"Open PivotTable layout and style options.");
+        xaml.ShouldContainLocalizedAttribute("local:RibbonTooltip.Description", "Open PivotTable layout and style options.");
         xaml.Should().NotContain("Cycle grand totals");
         xaml.Should().NotContain("Cycle subtotals");
         xaml.Should().NotContain("Cycle PivotTable style gallery choices.");
@@ -2770,10 +2776,10 @@ public sealed class MainWindowSourceHygieneTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
 
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureButton\"");
-        xaml.Should().Contain("AutomationProperties.HelpText=\"Open crop controls for the selected or most recent inserted picture.\"");
-        xaml.Should().Contain("Header=\"Crop...\"");
+        xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Open crop controls for the selected or most recent inserted picture.");
+        xaml.ShouldContainLocalizedAttribute("Header", "Crop...");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawCropPictureMenuItem\"");
-        xaml.Should().Contain("Header=\"Reset Crop\"");
+        xaml.ShouldContainLocalizedAttribute("Header", "Reset Crop");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawResetPictureCropMenuItem\"");
         xaml.Should().Contain("Click=\"PictureCropDialogMenuItem_Click\"");
         xaml.Should().Contain("Click=\"PictureResetCropMenuItem_Click\"");
@@ -2788,9 +2794,9 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeGradientButton\"");
-        xaml.Should().Contain("AutomationProperties.HelpText=\"Open gradient fill controls for the selected shape.\"");
+        xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Open gradient fill controls for the selected shape.");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeEffectsButton\"");
-        xaml.Should().Contain("AutomationProperties.HelpText=\"Toggle the selected shape shadow effect.\"");
+        xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Toggle the selected shape shadow effect.");
         xaml.Should().Contain("Click=\"ObjectGradientBtn_Click\"");
         xaml.Should().Contain("Click=\"ObjectEffectsBtn_Click\"");
     }
@@ -2874,7 +2880,9 @@ public sealed class MainWindowSourceHygieneTests
 
         if (isDeferred)
         {
-            button.Should().Contain("local:RibbonTooltip.Description=\"Deferred:");
+            button.ShouldContainLocalizedAttribute(
+                "local:RibbonTooltip.Description",
+                "Deferred: retained from XLSX files; authoring and rendering need a dedicated data model.");
         }
         else
         {
@@ -2884,8 +2892,7 @@ public sealed class MainWindowSourceHygieneTests
 
     private static string ExtractButtonElementByContent(string xaml, string content)
     {
-        var contentIndex = xaml.IndexOf($"Content=\"{content}\"", StringComparison.Ordinal);
-        contentIndex.Should().BeGreaterThanOrEqualTo(0, $"the {content} chart button should be present");
+        var contentIndex = FindElementByLocalizedAttributeValue(xaml, "Button", "Content", content);
 
         var start = xaml.LastIndexOf("<Button", contentIndex, StringComparison.Ordinal);
         start.Should().BeGreaterThanOrEqualTo(0, $"the {content} chart button should have a Button start tag");
@@ -2894,6 +2901,33 @@ public sealed class MainWindowSourceHygieneTests
         end.Should().BeGreaterThanOrEqualTo(contentIndex, $"the {content} chart button should be self-closing");
 
         return xaml.Substring(start, end - start + 2);
+    }
+
+    private static int FindElementByLocalizedAttributeValue(string xaml, string elementName, string attributeName, string expectedValue)
+    {
+        var searchFrom = 0;
+        while (searchFrom < xaml.Length)
+        {
+            var start = xaml.IndexOf($"<{elementName}", searchFrom, StringComparison.Ordinal);
+            if (start < 0)
+                break;
+
+            var end = xaml.IndexOf(">", start, StringComparison.Ordinal);
+            end.Should().BeGreaterThan(start, $"the {elementName} element should have a closing bracket");
+            var element = xaml[start..(end + 1)];
+            var match = System.Text.RegularExpressions.Regex.Match(
+                element,
+                $@"(?<![\w\.:]){System.Text.RegularExpressions.Regex.Escape(attributeName)}=""(?<value>[^""]*)""",
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+            if (match.Success && LocalizedXamlTestSupport.ResolveLocalizedValue(match.Groups["value"].Value) == expectedValue)
+                return start + match.Index;
+
+            searchFrom = end + 1;
+        }
+
+        searchFrom.Should().BeLessThan(0, $"the {expectedValue} {elementName} should be present");
+        return -1;
     }
 
     private static string ReadPivotCommandSource()

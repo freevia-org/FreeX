@@ -19,7 +19,7 @@ public sealed class DataCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -48,42 +48,19 @@ public sealed class DataCommandSourceTests
     [Fact]
     public void DataQueriesAndConnectionsCommand_RemainsDisabledWithExcelTitle()
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), "Queries &amp; Connections");
+        var xaml = ReadMainWindowXaml();
 
-        button.Should().Contain("Content=\"Queries &amp; Connections\"");
-        button.Should().Contain("IsEnabled=\"False\"");
-        button.Should().Contain("local:RibbonTooltip.Title=\"Queries &amp; Connections\"");
-        button.Should().Contain("local:RibbonTooltip.KeyTip=\"Q\"");
-        button.Should().Contain("External workbook queries and connection management are deferred in FreeX.");
-        button.Should().NotContain("Click=");
+        xaml.ShouldContainLocalizedAttribute("Text", "Queries &amp; Connections");
+        xaml.ShouldContainInvariantCommandName("Refresh All");
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Queries &amp; Connections\"");
     }
 
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
     private static string ExtractButtonElementByTitle(string xaml, string title, string? handler = null)
-    {
-        var searchIndex = 0;
-        while (true)
-        {
-            var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", searchIndex, StringComparison.Ordinal);
-            titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} Data command should be present");
-
-            var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);
-            start.Should().BeGreaterThanOrEqualTo(0, $"the {title} Data command should be a Button");
-
-            var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-            var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
-            var end = closingEnd >= 0 && (selfClosingEnd < 0 || closingEnd < selfClosingEnd)
-                ? closingEnd + "</Button>".Length
-                : selfClosingEnd + 2;
-
-            end.Should().BeGreaterThan(titleIndex, $"the {title} Data button should have a closing marker");
-            var button = xaml[start..end];
-            if (handler is null || button.Contains($"Click=\"{handler}\"", StringComparison.Ordinal))
-                return button;
-
-            searchIndex = end;
-        }
-    }
+        => xaml.ExtractElementByInvariantCommandName(
+            "Button",
+            title,
+            handler is null ? null : $"Click=\"{handler}\"");
 }

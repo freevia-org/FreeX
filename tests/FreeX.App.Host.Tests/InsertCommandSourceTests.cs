@@ -22,10 +22,10 @@ public sealed class InsertCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
-        button.Should().Contain($"Content=\"{content}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -42,10 +42,10 @@ public sealed class InsertCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title, handler);
 
-        button.Should().Contain($"Content=\"{content}\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainLocalizedAttribute("Content", content);
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -57,7 +57,7 @@ public sealed class InsertCommandSourceTests
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
 
         button.Should().Contain("IsEnabled=\"False\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().NotContain("Click=");
     }
@@ -69,7 +69,7 @@ public sealed class InsertCommandSourceTests
     [InlineData("Object")]
     public void InsertOutOfScopeCommands_AreNotSurfacedAsDisabledRibbonButtons(string title)
     {
-        ReadMainWindowXaml().Should().NotContain($"local:RibbonTooltip.Title=\"{title}\"");
+        ReadMainWindowXaml().Should().NotContain($"local:RibbonMetadata.CommandName=\"{LocalizedXamlTestSupport.EscapeAttribute(title)}\"");
     }
 
     [Fact]
@@ -77,9 +77,17 @@ public sealed class InsertCommandSourceTests
     {
         var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), "Shapes");
 
-        button.Should().Contain("<MenuItem Header=\"Rectangle\" local:RibbonTooltip.KeyTip=\"R\" Click=\"DrawRectBtn_Click\"/>");
-        button.Should().Contain("<MenuItem Header=\"Ellipse\" local:RibbonTooltip.KeyTip=\"E\" Click=\"DrawEllipseBtn_Click\"/>");
-        button.Should().Contain("<MenuItem Header=\"Line\" local:RibbonTooltip.KeyTip=\"L\" Click=\"DrawLineBtn_Click\"/>");
+        var rectangle = ExtractMenuItemElementByClickHandler(button, "DrawRectBtn_Click");
+        rectangle.ShouldContainLocalizedAttribute("Header", "Rectangle");
+        rectangle.Should().Contain("local:RibbonTooltip.KeyTip=\"R\"");
+
+        var ellipse = ExtractMenuItemElementByClickHandler(button, "DrawEllipseBtn_Click");
+        ellipse.ShouldContainLocalizedAttribute("Header", "Ellipse");
+        ellipse.Should().Contain("local:RibbonTooltip.KeyTip=\"E\"");
+
+        var line = ExtractMenuItemElementByClickHandler(button, "DrawLineBtn_Click");
+        line.ShouldContainLocalizedAttribute("Header", "Line");
+        line.Should().Contain("local:RibbonTooltip.KeyTip=\"L\"");
     }
 
     [Fact]
@@ -143,22 +151,33 @@ public sealed class InsertCommandSourceTests
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
-    private static string ExtractButtonElementByTitle(string xaml, string title)
+    private static string ExtractButtonElementByTitle(string xaml, string title, string? handler = null) =>
+        xaml.ExtractElementByInvariantCommandName(
+            "Button",
+            title,
+            handler is null ? null : $"Click=\"{handler}\"");
+
+    private static string ExtractMenuItemElementByClickHandler(string xaml, string clickHandler)
     {
-        var titleIndex = xaml.IndexOf($"local:RibbonTooltip.Title=\"{title}\"", StringComparison.Ordinal);
-        titleIndex.Should().BeGreaterThanOrEqualTo(0, $"the {title} Insert command should be present");
+        var searchIndex = 0;
+        while (true)
+        {
+            var handlerIndex = xaml.IndexOf($"Click=\"{clickHandler}\"", searchIndex, StringComparison.Ordinal);
+            handlerIndex.Should().BeGreaterThanOrEqualTo(0, $"the {clickHandler} menu item should be present");
 
-        var start = xaml.LastIndexOf("<Button", titleIndex, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"the {title} Insert command should be a Button");
+            var start = xaml.LastIndexOf("<MenuItem", handlerIndex, StringComparison.Ordinal);
+            if (start >= 0)
+            {
+                var startTagEnd = xaml.IndexOf(">", start, StringComparison.Ordinal);
+                if (startTagEnd > handlerIndex)
+                {
+                    var end = xaml.IndexOf("/>", handlerIndex, StringComparison.Ordinal);
+                    end.Should().BeGreaterThan(handlerIndex);
+                    return xaml[start..(end + 2)];
+                }
+            }
 
-        var selfClosingEnd = xaml.IndexOf("/>", titleIndex, StringComparison.Ordinal);
-        var closingEnd = xaml.IndexOf("</Button>", titleIndex, StringComparison.Ordinal);
-        var nextButton = xaml.IndexOf("<Button ", titleIndex + 1, StringComparison.Ordinal);
-        var end = closingEnd >= 0 && (nextButton < 0 || closingEnd < nextButton)
-            ? closingEnd + "</Button>".Length
-            : selfClosingEnd + 2;
-
-        end.Should().BeGreaterThan(titleIndex, $"the {title} Insert button should have a closing marker");
-        return xaml[start..end];
+            searchIndex = handlerIndex + clickHandler.Length;
+        }
     }
 }

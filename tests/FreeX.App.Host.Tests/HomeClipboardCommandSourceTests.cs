@@ -18,7 +18,7 @@ public sealed class HomeClipboardCommandSourceTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var button = ExtractButtonElementByClickHandler(xaml, handler);
 
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
+        button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
     }
@@ -38,7 +38,7 @@ public sealed class HomeClipboardCommandSourceTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var menuItem = ExtractMenuItemElementByClickHandler(xaml, handler);
 
-        menuItem.Should().Contain($"Header=\"{header}\"");
+        menuItem.ShouldContainLocalizedAttribute("Header", header);
         menuItem.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         menuItem.Should().Contain($"Click=\"{handler}\"");
     }

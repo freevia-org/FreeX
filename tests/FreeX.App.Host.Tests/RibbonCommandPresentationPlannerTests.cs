@@ -275,7 +275,7 @@ public sealed class RibbonCommandPresentationPlannerTests
         var ribbonXaml = xaml[
             xaml.IndexOf("<TabControl x:Name=\"RibbonTabs\"", StringComparison.Ordinal)..xaml.IndexOf("<Grid Grid.Row=\"3\"", StringComparison.Ordinal)];
         var genericTitles = Regex
-            .Matches(ribbonXaml, "local:RibbonTooltip.Title=\"(?<title>[^\"]+)\"")
+            .Matches(ribbonXaml, "local:RibbonMetadata.CommandName=\"(?<title>[^\"]+)\"")
             .Select(match => match.Groups["title"].Value.Replace("&amp;", "&", StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .Where(title => !title.StartsWith("Excluded ", StringComparison.Ordinal))

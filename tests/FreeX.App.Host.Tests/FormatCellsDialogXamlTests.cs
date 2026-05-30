@@ -35,8 +35,8 @@ public sealed class FormatCellsDialogXamlTests
         foreach (var tab in new[] { "_Number", "_Alignment", "_Font", "F_ill", "_Border", "_Protection" })
             xaml.Should().Contain($"<TabItem Header=\"{tab}\"");
 
-        xaml.Should().Contain("Content=\"_OK\"");
-        xaml.Should().Contain("Content=\"_Cancel\"");
+        xaml.ShouldContainLocalizedAttribute("Content", "_OK");
+        xaml.ShouldContainLocalizedAttribute("Content", "_Cancel");
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class FormatCellsDialogXamlTests
             "_Locked",
             "_Hidden"
         })
-            xaml.Should().Contain($"Content=\"{content}\"");
+            xaml.ShouldContainLocalizedAttribute("Content", content);
 
         foreach (var picker in new[]
         {
@@ -175,9 +175,9 @@ public sealed class FormatCellsDialogXamlTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
 
         xaml.Should().Contain("x:Name=\"DlgShrinkToFitCheck\"");
-        xaml.Should().Contain("Content=\"S_hrink to fit\"");
+        xaml.ShouldContainLocalizedAttribute("Content", "S_hrink to fit");
         xaml.Should().Contain("x:Name=\"DlgMergeCellsCheck\"");
-        xaml.Should().Contain("Content=\"_Merge cells\"");
+        xaml.ShouldContainLocalizedAttribute("Content", "_Merge cells");
     }
 
     [Fact]
@@ -350,7 +350,7 @@ public sealed class FormatCellsDialogXamlTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FormatCellsDialog.xaml"));
 
         xaml.Should().Contain("x:Name=\"NumberCategoryList\"");
-        xaml.Should().Contain("Content=\"_Category:\"");
+        xaml.ShouldContainLocalizedAttribute("Content", "_Category:");
         xaml.Should().Contain("Target=\"{Binding ElementName=NumberCategoryList}\"");
         xaml.Should().Contain("Text=\"Sample\"");
         xaml.Should().Contain("x:Name=\"NumberDecimalPlacesBox\"");

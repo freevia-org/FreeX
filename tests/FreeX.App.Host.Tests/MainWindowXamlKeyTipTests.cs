@@ -66,7 +66,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Select(button => new
             {
                 Click = button.Attribute("Click")?.Value,
-                AutomationName = button.Attribute("AutomationProperties.Name")?.Value,
+                AutomationName = LocalizedAttribute(button, "AutomationProperties.Name"),
                 IconKind = button.Element(local + "RibbonIcon")?.Attribute("Kind")?.Value
             })
             .ToList();
@@ -104,7 +104,7 @@ public sealed class MainWindowXamlKeyTipTests
                 Name = button.Attribute(x + "Name")?.Value,
                 Click = button.Attribute("Click")?.Value,
                 KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
-                AutomationName = button.Attribute("AutomationProperties.Name")?.Value
+                AutomationName = LocalizedAttribute(button, "AutomationProperties.Name")
             })
             .ToList();
 
@@ -316,12 +316,12 @@ public sealed class MainWindowXamlKeyTipTests
         FindTab(document, "Home").Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("H");
         var conditionalFormattingButton = document
             .Descendants(presentation + "Button")
-            .Single(element => element.Attribute(local + "RibbonTooltip.Title")?.Value == "Conditional Formatting");
+            .Single(element => LocalizedAttribute(element, local + "RibbonTooltip.Title") == "Conditional Formatting");
         conditionalFormattingButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("L");
         var greaterThanRule = document
             .Descendants(presentation + "MenuItem")
             .Single(element => element.Attribute("Click")?.Value == "CfGtMenuItem_Click");
-        greaterThanRule.Attribute("Header")?.Value.Should().Be("Greater Than...");
+        LocalizedAttribute(greaterThanRule, "Header").Should().Be("Greater Than...");
         greaterThanRule.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("HG");
         formattingSource.Should().Contain("private void CfGtMenuItem_Click(object sender, RoutedEventArgs e)       => ShowCfDialog(\"Greater Than\");");
 
@@ -399,7 +399,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("Click")?.Value == "SaveAsButton_Click");
 
-        saveAsButton.ToString().Should().Contain("Text=\"Save _As\"");
+        GetButtonText(saveAsButton, presentation).Should().Be("Save _As");
         saveAsButton.Descendants(local + "RibbonIcon")
             .Single()
             .Attribute("CommandName")?.Value.Should().Be("Save As");
@@ -421,8 +421,8 @@ public sealed class MainWindowXamlKeyTipTests
         printButton.Attribute("Click")?.Value.Should().Be("PrintButton_Click");
         printButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("P");
         printButton.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("BackstagePrintButton");
-        printButton.Attribute("AutomationProperties.Name")?.Value.Should().Be("Print");
-        printButton.Attribute("AutomationProperties.HelpText")?.Value
+        LocalizedAttribute(printButton, "AutomationProperties.Name").Should().Be("Print");
+        LocalizedAttribute(printButton, "AutomationProperties.HelpText")
             .Should()
             .Contain("native print access");
     }
@@ -435,7 +435,7 @@ public sealed class MainWindowXamlKeyTipTests
 
         document
             .Descendants(presentation + "TextBlock")
-            .Where(element => element.Attribute("Text")?.Value == AppInfo.VersionText)
+            .Where(element => LocalizedAttribute(element, "Text") == AppInfo.VersionText)
             .Should()
             .ContainSingle("Backstage Info and About should show the same FreeX version");
     }
@@ -448,7 +448,7 @@ public sealed class MainWindowXamlKeyTipTests
 
         var cloudCopy = document
             .Descendants(presentation + "TextBlock")
-            .Select(element => element.Attribute("Text")?.Value ?? element.Value)
+            .Select(element => LocalizedAttribute(element, "Text") ?? element.Value)
             .Where(text =>
                 text.Contains("check in", StringComparison.OrdinalIgnoreCase) ||
                 text.Contains("check out", StringComparison.OrdinalIgnoreCase))
@@ -465,7 +465,7 @@ public sealed class MainWindowXamlKeyTipTests
 
         var inspectorCopy = document
             .Descendants(presentation + "TextBlock")
-            .Select(element => element.Attribute("Text")?.Value ?? element.Value)
+            .Select(element => LocalizedAttribute(element, "Text") ?? element.Value)
             .Where(text =>
                 text.Contains("hidden properties", StringComparison.OrdinalIgnoreCase) ||
                 text.Contains("personal information", StringComparison.OrdinalIgnoreCase))
@@ -483,7 +483,7 @@ public sealed class MainWindowXamlKeyTipTests
 
         document
             .Descendants(presentation + "TextBlock")
-            .Select(element => element.Attribute("Text")?.Value)
+            .Select(element => LocalizedAttribute(element, "Text"))
             .Should()
             .Contain("Formula errors");
 
@@ -534,12 +534,12 @@ public sealed class MainWindowXamlKeyTipTests
             .Where(item => item.Attribute("Click")?.Value is "SsPinItem_Click" or "SsUnpinItem_Click" or "SsRemoveRecentItem_Click")
             .Select(item => new
             {
-                Header = item.Attribute("Header")?.Value,
+                Header = LocalizedAttribute(item, "Header"),
                 Click = item.Attribute("Click")?.Value,
                 KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
                 AutomationId = item.Attribute("AutomationProperties.AutomationId")?.Value,
-                AutomationName = item.Attribute("AutomationProperties.Name")?.Value,
-                AutomationHelpText = item.Attribute("AutomationProperties.HelpText")?.Value
+                AutomationName = LocalizedAttribute(item, "AutomationProperties.Name"),
+                AutomationHelpText = LocalizedAttribute(item, "AutomationProperties.HelpText")
             })
             .ToList();
 
@@ -561,7 +561,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "MenuItem")
             .Select(element => new
             {
-                Header = element.Attribute("Header")?.Value,
+                Header = LocalizedAttribute(element, "Header"),
                 Click = element.Attribute("Click")?.Value
             })
             .ToList();
@@ -580,15 +580,15 @@ public sealed class MainWindowXamlKeyTipTests
 
         var dataTab = document
             .Descendants(presentation + "TabItem")
-            .Single(element => element.Attribute("Header")?.Value == "Data");
+            .Single(element => LocalizedAttribute(element, "Header") == "Data");
 
         var flashFillButton = dataTab
             .Descendants(presentation + "Button")
-            .Single(element => element.Attribute(local + "RibbonTooltip.Title")?.Value == "Flash Fill");
+            .Single(element => LocalizedAttribute(element, local + "RibbonTooltip.Title") == "Flash Fill");
 
         flashFillButton.Attribute("Click")?.Value.Should().Be("FlashFillMenuItem_Click");
         flashFillButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("FF");
-        flashFillButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("examples");
+        LocalizedAttribute(flashFillButton, local + "RibbonTooltip.Description").Should().Contain("examples");
     }
 
     [Fact]
@@ -605,13 +605,13 @@ public sealed class MainWindowXamlKeyTipTests
 
         accountButton.Attribute(x + "Name")?.Value.Should().Be("SsAccountNavBtn");
         accountButton.Attribute("Click")?.Value.Should().Be("SsAccountBtn_Click");
-        accountButton.ToString().Should().Contain("AutomationProperties.Name=\"Account\"");
+        LocalizedAttribute(accountButton, "AutomationProperties.Name").Should().Be("Account");
         accountButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"BackstageAccountButton\"");
-        accountButton.ToString().Should().Contain("AutomationProperties.HelpText=\"Show local account information");
+        LocalizedAttribute(accountButton, "AutomationProperties.HelpText").Should().Contain("Show local account information");
         accountButton.Attribute("IsTabStop")?.Value.Should().Be("True");
-        accountButton.Attribute(local + "RibbonTooltip.Title")?.Value.Should().Contain("Local");
+        LocalizedAttribute(accountButton, local + "RibbonTooltip.Title").Should().Contain("Local");
         accountButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("AC");
-        accountButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Microsoft account");
+        LocalizedAttribute(accountButton, local + "RibbonTooltip.Description").Should().Contain("Microsoft account");
     }
 
     [Fact]
@@ -626,9 +626,9 @@ public sealed class MainWindowXamlKeyTipTests
             .Single(element => element.Attribute(x + "Name")?.Value == "SsOptionsNavBtn");
 
         optionsButton.Attribute("Click")?.Value.Should().Be("SsOptionsBtn_Click");
-        optionsButton.ToString().Should().Contain("AutomationProperties.Name=\"Options\"");
+        LocalizedAttribute(optionsButton, "AutomationProperties.Name").Should().Be("Options");
         optionsButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"BackstageOptionsButton\"");
-        optionsButton.ToString().Should().Contain("AutomationProperties.HelpText=\"Open FreeX settings");
+        LocalizedAttribute(optionsButton, "AutomationProperties.HelpText").Should().Contain("Open FreeX settings");
         optionsButton.Attribute("IsTabStop")?.Value.Should().Be("True");
     }
 
@@ -690,17 +690,17 @@ public sealed class MainWindowXamlKeyTipTests
 
         helpOnline.Attribute("Click")?.Value.Should().Be("HelpOnlineBtn_Click");
         helpOnline.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpOnlineButton\"");
-        helpOnline.ToString().Should().Contain("AutomationProperties.HelpText=\"Open the FreeX help documentation in a web browser.");
+        LocalizedAttribute(helpOnline, "AutomationProperties.HelpText").Should().Be("Open the FreeX help documentation in a web browser.");
         helpOnline.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("HO");
 
         updates.Attribute("Click")?.Value.Should().Be("CheckForUpdatesBtn_Click");
         updates.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpCheckForUpdatesButton\"");
-        updates.ToString().Should().Contain("AutomationProperties.HelpText=\"Open the latest FreeX tester release in a web browser.");
+        LocalizedAttribute(updates, "AutomationProperties.HelpText").Should().Be("Open the latest FreeX tester release in a web browser.");
         updates.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("UP");
 
         feedback.Attribute("Click")?.Value.Should().Be("SendFeedbackBtn_Click");
         feedback.ToString().Should().Contain("AutomationProperties.AutomationId=\"HelpFeedbackButton\"");
-        feedback.ToString().Should().Contain("AutomationProperties.HelpText=\"Open a prefilled GitHub issue with safe app diagnostics.");
+        LocalizedAttribute(feedback, "AutomationProperties.HelpText").Should().Be("Open a prefilled GitHub issue with safe app diagnostics.");
         feedback.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("FE");
     }
 
@@ -767,13 +767,13 @@ public sealed class MainWindowXamlKeyTipTests
                 GetButtonText(element, presentation) == "Export" &&
                 element.Attribute("Click")?.Value == "ExportPdfButton_Click");
 
-        exportButton.Attribute(local + "RibbonTooltip.Title")?.Value.Should().Be("Export PDF/XPS");
-        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("PDF");
-        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("XPS");
-        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("selection");
-        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("workbook");
-        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("active sheet");
-        exportButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("PDF printer");
+        LocalizedAttribute(exportButton, local + "RibbonTooltip.Title").Should().Be("Export PDF/XPS");
+        LocalizedAttribute(exportButton, local + "RibbonTooltip.Description").Should().Contain("PDF");
+        LocalizedAttribute(exportButton, local + "RibbonTooltip.Description").Should().Contain("XPS");
+        LocalizedAttribute(exportButton, local + "RibbonTooltip.Description").Should().Contain("selection");
+        LocalizedAttribute(exportButton, local + "RibbonTooltip.Description").Should().Contain("workbook");
+        LocalizedAttribute(exportButton, local + "RibbonTooltip.Description").Should().NotContain("active sheet");
+        LocalizedAttribute(exportButton, local + "RibbonTooltip.Description").Should().NotContain("PDF printer");
     }
 
     [Fact]
@@ -787,9 +787,9 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("Click")?.Value == "ReviewShowCommentsBtn_Click");
 
-        showCommentsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("list");
-        showCommentsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("hide");
-        showCommentsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("indicators");
+        LocalizedAttribute(showCommentsButton, local + "RibbonTooltip.Description").Should().Contain("list");
+        LocalizedAttribute(showCommentsButton, local + "RibbonTooltip.Description").Should().NotContain("hide");
+        LocalizedAttribute(showCommentsButton, local + "RibbonTooltip.Description").Should().NotContain("indicators");
     }
 
     [Fact]
@@ -813,8 +813,8 @@ public sealed class MainWindowXamlKeyTipTests
         var tooltipTexts = commentButtons
             .Select(element => new
             {
-                Title = element.Attribute(local + "RibbonTooltip.Title")?.Value ?? "",
-                Description = element.Attribute(local + "RibbonTooltip.Description")?.Value ?? ""
+                Title = LocalizedAttribute(element, local + "RibbonTooltip.Title") ?? "",
+                Description = LocalizedAttribute(element, local + "RibbonTooltip.Description") ?? ""
             })
             .ToList();
 
@@ -841,9 +841,9 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("Click")?.Value == "InsertCommentBtn_Click");
 
-        insertCommentButton.Attribute(local + "RibbonTooltip.Title")?.Value.Should().Be("Comment");
-        insertCommentButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("threaded comment");
-        insertCommentButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("not implemented");
+        LocalizedAttribute(insertCommentButton, local + "RibbonTooltip.Title").Should().Be("Comment");
+        LocalizedAttribute(insertCommentButton, local + "RibbonTooltip.Description").Should().Contain("threaded comment");
+        LocalizedAttribute(insertCommentButton, local + "RibbonTooltip.Description").Should().NotContain("not implemented");
         source.Should().Contain("private void InsertCommentBtn_Click(object sender, RoutedEventArgs e) => ReviewNewThreadedCommentBtn_Click(sender, e);");
     }
 
@@ -858,10 +858,10 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("Click")?.Value == "SpellCheckBtn_Click");
 
-        spellingButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("known misspellings");
-        spellingButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("text cells");
-        spellingButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("replace all");
-        spellingButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("proofing engine");
+        LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().Contain("known misspellings");
+        LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().Contain("text cells");
+        LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().Contain("replace all");
+        LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().NotContain("proofing engine");
     }
 
     [Fact]
@@ -875,7 +875,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("Click")?.Value == "AccessibilityCheckerBtn_Click");
 
-        var description = accessibilityButton.Attribute(local + "RibbonTooltip.Description")?.Value;
+        var description = LocalizedAttribute(accessibilityButton, local + "RibbonTooltip.Description");
         description.Should().Contain("merged cells");
         description.Should().Contain("blank table headers");
         description.Should().Contain("alternate text");
@@ -897,11 +897,11 @@ public sealed class MainWindowXamlKeyTipTests
             .Single(element => element.Attribute("Click")?.Value == "AccessibilityCheckerBtn_Click");
 
         statisticsButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"ReviewWorkbookStatisticsButton\"");
-        statisticsButton.ToString().Should().Contain("AutomationProperties.HelpText=\"Show workbook counts for sheets, cells, formulas, comments, and objects.");
+        LocalizedAttribute(statisticsButton, "AutomationProperties.HelpText").Should().Be("Show workbook counts for sheets, cells, formulas, comments, and objects.");
         statisticsButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("W");
 
         accessibilityButton.ToString().Should().Contain("AutomationProperties.AutomationId=\"ReviewAccessibilityCheckerButton\"");
-        accessibilityButton.ToString().Should().Contain("AutomationProperties.HelpText=\"Find merged cells, blank table headers, objects missing alternate text, and charts without titles.");
+        LocalizedAttribute(accessibilityButton, "AutomationProperties.HelpText").Should().Be("Find merged cells, blank table headers, objects missing alternate text, and charts without titles.");
         accessibilityButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("CA");
     }
 
@@ -918,11 +918,11 @@ public sealed class MainWindowXamlKeyTipTests
 
         allowEditRangesButton.Attribute("Name")?.Value.Should().Be("AllowEditRangesButton");
         allowEditRangesButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("AR");
-        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Add");
-        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("delete");
-        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("clear");
-        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("ranges");
-        allowEditRangesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("permissions");
+        LocalizedAttribute(allowEditRangesButton, local + "RibbonTooltip.Description").Should().Contain("Add");
+        LocalizedAttribute(allowEditRangesButton, local + "RibbonTooltip.Description").Should().Contain("delete");
+        LocalizedAttribute(allowEditRangesButton, local + "RibbonTooltip.Description").Should().Contain("clear");
+        LocalizedAttribute(allowEditRangesButton, local + "RibbonTooltip.Description").Should().Contain("ranges");
+        LocalizedAttribute(allowEditRangesButton, local + "RibbonTooltip.Description").Should().NotContain("permissions");
     }
 
     [Fact]
@@ -936,7 +936,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("Click")?.Value == "SetAltTextBtn_Click");
 
-        altTextButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("anchored at the selected cell");
+        LocalizedAttribute(altTextButton, local + "RibbonTooltip.Description").Should().Contain("anchored at the selected cell");
     }
 
     [Fact]
@@ -950,9 +950,9 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("Click")?.Value == "ArrangeAllPickerBtn_Click");
 
-        arrangeAllButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Store");
-        arrangeAllButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("arrangement");
-        arrangeAllButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("multi-window hosting");
+        LocalizedAttribute(arrangeAllButton, local + "RibbonTooltip.Description").Should().Contain("Store");
+        LocalizedAttribute(arrangeAllButton, local + "RibbonTooltip.Description").Should().Contain("arrangement");
+        LocalizedAttribute(arrangeAllButton, local + "RibbonTooltip.Description").Should().Contain("multi-window hosting");
     }
 
     [Fact]
@@ -966,8 +966,8 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("Click")?.Value == "ZoomSelectionBtn_Click");
 
-        zoomSelectionButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("visible grid");
-        zoomSelectionButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("screen");
+        LocalizedAttribute(zoomSelectionButton, local + "RibbonTooltip.Description").Should().Contain("visible grid");
+        LocalizedAttribute(zoomSelectionButton, local + "RibbonTooltip.Description").Should().NotContain("screen");
     }
 
     [Fact]
@@ -981,7 +981,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "ToggleButton")
             .Single(element => element.Attribute("Click")?.Value == "SplitViewBtn_Click");
 
-        splitButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("clears frozen panes");
+        LocalizedAttribute(splitButton, local + "RibbonTooltip.Description").Should().Contain("clears frozen panes");
     }
 
     [Fact]
@@ -995,7 +995,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Single(element => element.Attribute("Click")?.Value == "FreezePanesPickerBtn_Click");
 
-        freezePanesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("clears split panes");
+        LocalizedAttribute(freezePanesButton, local + "RibbonTooltip.Description").Should().Contain("clears split panes");
     }
 
     [Fact]
@@ -1010,9 +1010,9 @@ public sealed class MainWindowXamlKeyTipTests
             .Single(element => element.Attribute("Click")?.Value == "ProtectSheetBtn_Click");
 
         protectSheetButton.Attribute("{http://schemas.microsoft.com/winfx/2006/xaml}Name")?.Value.Should().Be("ProtectSheetButton");
-        protectSheetButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("Set");
-        protectSheetButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("locked cells");
-        protectSheetButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("unwanted changes");
+        LocalizedAttribute(protectSheetButton, local + "RibbonTooltip.Description").Should().Contain("Set");
+        LocalizedAttribute(protectSheetButton, local + "RibbonTooltip.Description").Should().Contain("locked cells");
+        LocalizedAttribute(protectSheetButton, local + "RibbonTooltip.Description").Should().NotContain("unwanted changes");
     }
 
     [Fact]
@@ -1027,8 +1027,8 @@ public sealed class MainWindowXamlKeyTipTests
             .Single(element => element.Attribute("Click")?.Value == "ProtectWorkbookBtn_Click");
 
         protectWorkbookButton.Attribute("{http://schemas.microsoft.com/winfx/2006/xaml}Name")?.Value.Should().Be("ProtectWorkbookButton");
-        protectWorkbookButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("structural changes");
-        protectWorkbookButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("adding, deleting, or renaming sheets");
+        LocalizedAttribute(protectWorkbookButton, local + "RibbonTooltip.Description").Should().Contain("structural changes");
+        LocalizedAttribute(protectWorkbookButton, local + "RibbonTooltip.Description").Should().Contain("adding, deleting, or renaming sheets");
     }
 
     [Fact]
@@ -1042,7 +1042,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Where(element => element.Attribute(local + "RibbonTooltip.Title") is not null)
             .Where(element => element.Attribute("Click")?.Value is not ("SsPinItem_Click" or "SsUnpinItem_Click"))
             .Where(element => element.Attribute(local + "RibbonTooltip.KeyTip") is null)
-            .Select(element => element.Attribute(local + "RibbonTooltip.Title")?.Value ?? element.Name.LocalName)
+            .Select(element => LocalizedAttribute(element, local + "RibbonTooltip.Title") ?? element.Name.LocalName)
             .ToList();
 
         missing.Should().BeEmpty("visible titled ribbon controls should participate in Excel-style Alt keytip navigation");
@@ -1063,7 +1063,7 @@ public sealed class MainWindowXamlKeyTipTests
                     .Where(element => element.Name != presentation + "MenuItem")
                     .GroupBy(element => element.Attribute(local + "RibbonTooltip.KeyTip")!.Value, StringComparer.OrdinalIgnoreCase)
                     .Where(group => group.Count() > 1)
-                    .Select(group => $"{tab.Attribute("Header")?.Value ?? "Tab"}:{group.Key}"))
+                    .Select(group => $"{LocalizedAttribute(tab, "Header") ?? "Tab"}:{group.Key}"))
             .ToList();
 
         duplicates.Should().BeEmpty("unique per-tab keytips are required for deterministic Excel-style command routing");
@@ -1085,10 +1085,10 @@ public sealed class MainWindowXamlKeyTipTests
                     .Where(element => element.Name != presentation + "MenuItem")
                     .Select(element => new
                     {
-                        Scope = tab.Attribute("Header")?.Value ?? "Tab",
-                        Name = element.Attribute(local + "RibbonTooltip.Title")?.Value
-                            ?? element.Attribute("Content")?.Value
-                            ?? element.Attribute("Header")?.Value
+                        Scope = LocalizedAttribute(tab, "Header") ?? "Tab",
+                        Name = LocalizedAttribute(element, local + "RibbonTooltip.Title")
+                            ?? LocalizedAttribute(element, "Content")
+                            ?? LocalizedAttribute(element, "Header")
                             ?? element.Attribute("Click")?.Value
                             ?? element.Name.LocalName,
                         KeyTip = element.Attribute(local + "RibbonTooltip.KeyTip")!.Value
@@ -1132,7 +1132,7 @@ public sealed class MainWindowXamlKeyTipTests
                 .Elements(presentation + "MenuItem")
                 .Where(menuItem => menuItem.Attribute(local + "RibbonTooltip.KeyTip") is null)
                 .Select(menuItem =>
-                    $"{button.Attribute(local + "RibbonTooltip.Title")?.Value}:{menuItem.Attribute("Header")?.Value}"))
+                    $"{LocalizedAttribute(button, local + "RibbonTooltip.Title")}:{LocalizedAttribute(menuItem, "Header")}"))
             .ToList();
 
         missing.Should().BeEmpty("audited ribbon dropdown menus should be reachable through staged Alt keytips");
@@ -1149,7 +1149,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "ContextMenu")
             .Elements(presentation + "MenuItem")
             .Where(menuItem => menuItem.Attribute(local + "RibbonTooltip.KeyTip") is null)
-            .Select(menuItem => menuItem.Attribute("Header")?.Value ?? "MenuItem")
+            .Select(menuItem => LocalizedAttribute(menuItem, "Header") ?? "MenuItem")
             .ToList();
 
         missing.Should().BeEmpty("every command surfaced through a context menu should have deterministic keyboard access metadata");
@@ -1170,7 +1170,7 @@ public sealed class MainWindowXamlKeyTipTests
                     .Elements(presentation + "MenuItem")
                     .Select(item => new
                     {
-                        Header = item.Attribute("Header")?.Value ?? "MenuItem",
+                        Header = LocalizedAttribute(item, "Header") ?? "MenuItem",
                         KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value
                     })
                     .Where(item => !string.IsNullOrWhiteSpace(item.KeyTip))
@@ -1197,13 +1197,13 @@ public sealed class MainWindowXamlKeyTipTests
 
         var cellStylesMenu = document
             .Descendants(presentation + "Button")
-            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Cell Styles")
+            .Single(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") == "Cell Styles")
             .Descendants(presentation + "ContextMenu")
             .Single();
 
         var labels = cellStylesMenu
             .Elements(presentation + "MenuItem")
-            .Select(item => item.Attribute("Header")?.Value)
+            .Select(item => LocalizedAttribute(item, "Header"))
             .ToList();
 
         labels.Should().Contain([
@@ -1235,7 +1235,7 @@ public sealed class MainWindowXamlKeyTipTests
         var menuItemsByHeader = cellStylesMenu
             .Elements(presentation + "MenuItem")
             .ToDictionary(
-                item => item.Attribute("Header")?.Value ?? string.Empty,
+                item => LocalizedAttribute(item, "Header") ?? string.Empty,
                 item => item.Attribute("Click")?.Value ?? string.Empty);
 
         foreach (var preset in Enum.GetValues<CellStylePreset>())
@@ -1279,11 +1279,11 @@ public sealed class MainWindowXamlKeyTipTests
 
         var iconSetsMenu = document
             .Descendants(presentation + "MenuItem")
-            .Single(item => item.Attribute("Header")?.Value == "Icon Sets");
+            .Single(item => LocalizedAttribute(item, "Header") == "Icon Sets");
 
         iconSetsMenu.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("I");
         iconSetsMenu.Elements(presentation + "MenuItem")
-            .Select(item => item.Attribute("Header")?.Value)
+            .Select(item => LocalizedAttribute(item, "Header"))
             .Should()
             .Contain(["Directional", "Shapes", "Indicators", "Ratings", "More Rules..."]);
 
@@ -1317,7 +1317,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Where(button => button.Attribute("Click")?.Value is not ("SsPinItem_Click" or "SsUnpinItem_Click"))
             .Where(button => button.Attribute(local + "RibbonTooltip.KeyTip") is null)
             .Select(button =>
-                button.Attribute("Content")?.Value ??
+                LocalizedAttribute(button, "Content") ??
                 button.Attribute(x + "Name")?.Value ??
                 button.Attribute("Click")!.Value)
             .ToList();
@@ -1359,7 +1359,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Where(button => button.Attribute("Click")?.Value is "SsRecentTab_Click" or "SsPinnedTab_Click")
             .Where(button => button.Attribute(local + "RibbonTooltip.KeyTip") is null)
-            .Select(button => button.Attribute("Content")?.Value ?? button.Attribute("Click")!.Value)
+            .Select(button => LocalizedAttribute(button, "Content") ?? button.Attribute("Click")!.Value)
             .ToList();
 
         missing.Should().BeEmpty("Recent/Pinned Backstage tab selectors should participate in keytip navigation");
@@ -1400,7 +1400,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Where(button => button.Attribute("Click")?.Value is "ZoomOutBtn_Click" or "ZoomInBtn_Click")
             .Where(button => button.Attribute(local + "RibbonTooltip.KeyTip") is null)
-            .Select(button => button.Attribute("Content")?.Value ?? button.Attribute("Click")!.Value)
+            .Select(button => LocalizedAttribute(button, "Content") ?? button.Attribute("Click")!.Value)
             .ToList();
 
         missing.Should().BeEmpty("status-bar zoom commands should participate in the visible command keytip contract");
@@ -1423,7 +1423,7 @@ public sealed class MainWindowXamlKeyTipTests
                 checkBox.Attribute(local + "RibbonTooltip.Title") is null ||
                 checkBox.Attribute(local + "RibbonTooltip.Description") is null ||
                 checkBox.Attribute(local + "RibbonTooltip.KeyTip") is null)
-            .Select(checkBox => checkBox.Attribute("Content")?.Value ?? checkBox.Name.LocalName)
+            .Select(checkBox => LocalizedAttribute(checkBox, "Content") ?? checkBox.Name.LocalName)
             .ToList();
 
         missing.Should().BeEmpty("visible ribbon checkbox commands should expose the same Excel-style tooltip and keytip metadata as button commands");
@@ -1440,9 +1440,9 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "ComboBox")
             .Where(comboBox => comboBox.Attribute(local + "RibbonTooltip.Title") is not null)
             .Where(comboBox =>
-                comboBox.Attribute("AutomationProperties.Name")?.Value !=
-                comboBox.Attribute(local + "RibbonTooltip.Title")!.Value)
-            .Select(comboBox => comboBox.Attribute(local + "RibbonTooltip.Title")!.Value)
+                LocalizedAttribute(comboBox, "AutomationProperties.Name") !=
+                LocalizedAttribute(comboBox, local + "RibbonTooltip.Title")!)
+            .Select(comboBox => LocalizedAttribute(comboBox, local + "RibbonTooltip.Title")!)
             .ToList();
 
         missing.Should().BeEmpty("focusable ribbon combo box commands should announce the same command name shown in Excel-style tooltips");
@@ -1460,10 +1460,10 @@ public sealed class MainWindowXamlKeyTipTests
             XNamespace presentation,
             XNamespace local,
             string title) =>
-            document.Descendants(presentation + "Button")
-                .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == title)
-                .Attribute(local + "RibbonTooltip.Description")!
-                .Value;
+            LocalizedAttribute(
+                document.Descendants(presentation + "Button")
+                    .Single(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") == title),
+                local + "RibbonTooltip.Description")!;
 
         var getData = DescriptionFor(document, presentation, local, "Get Data");
         var refreshAll = DescriptionFor(document, presentation, local, "Refresh All");
@@ -1484,11 +1484,11 @@ public sealed class MainWindowXamlKeyTipTests
 
         var pasteButton = document
             .Descendants(presentation + "Button")
-            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Paste");
+            .Single(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") == "Paste");
 
         var headers = pasteButton
             .Descendants(presentation + "MenuItem")
-            .Select(item => item.Attribute("Header")?.Value)
+            .Select(item => LocalizedAttribute(item, "Header"))
             .Where(header => !string.IsNullOrWhiteSpace(header))
             .ToList();
 
@@ -1520,7 +1520,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Where(button => button.Attribute("AutomationProperties.Name") is null)
             .Select(button =>
                 button.Attribute(x + "Name")?.Value ??
-                button.Attribute("Content")?.Value ??
+                LocalizedAttribute(button, "Content") ??
                 button.Attribute("Click")!.Value)
             .ToList();
 
@@ -1546,9 +1546,9 @@ public sealed class MainWindowXamlKeyTipTests
         helpText.Should().NotBeNull("the zoom slider should disclose the Excel-style zoom range");
         tooltip.Should().NotBeNull("the zoom slider should expose a standard pointer tooltip");
 
-        name!.Value.Should().Be("Zoom Slider");
-        helpText!.Value.Should().Contain("10%").And.Contain("400%");
-        tooltip!.Value.Should().Be("Zoom");
+        LocalizedAttribute(zoomSlider, "AutomationProperties.Name").Should().Be("Zoom Slider");
+        LocalizedAttribute(zoomSlider, "AutomationProperties.HelpText").Should().Contain("10%").And.Contain("400%");
+        LocalizedAttribute(zoomSlider, "ToolTip").Should().Be("Zoom");
     }
 
     [Fact]
@@ -1616,8 +1616,8 @@ public sealed class MainWindowXamlKeyTipTests
 
         name.Should().NotBeNull("formula bar text fields are keyboard-focusable Excel surface controls");
         helpText.Should().NotBeNull("formula bar text fields should announce their workflow role");
-        name!.Value.Should().Be(expectedName);
-        helpText!.Value.Should().Be(expectedHelpText);
+        LocalizedAttribute(textBox, "AutomationProperties.Name").Should().Be(expectedName);
+        LocalizedAttribute(textBox, "AutomationProperties.HelpText").Should().Be(expectedHelpText);
     }
 
     [Fact]
@@ -1765,8 +1765,8 @@ public sealed class MainWindowXamlKeyTipTests
 
         name.Should().NotBeNull("Backstage search is a keyboard-focusable File workflow field");
         helpText.Should().NotBeNull("Backstage search should announce what it filters");
-        name!.Value.Should().Be("Search Recent Files");
-        helpText!.Value.Should().Be("Filter recent and pinned files");
+        LocalizedAttribute(searchBox, "AutomationProperties.Name").Should().Be("Search Recent Files");
+        LocalizedAttribute(searchBox, "AutomationProperties.HelpText").Should().Be("Filter recent and pinned files");
     }
 
     [Fact]
@@ -1780,8 +1780,8 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Border")
             .Single(element => element.Attribute(x + "Name")?.Value == "OpenProgressOverlay");
 
-        overlay.Attribute("AutomationProperties.Name")?.Value.Should().Be("Opening workbook");
-        overlay.Attribute("AutomationProperties.HelpText")?.Value
+        LocalizedAttribute(overlay, "AutomationProperties.Name").Should().Be("Opening workbook");
+        LocalizedAttribute(overlay, "AutomationProperties.HelpText")
             .Should().Be("Shows workbook open progress and blocks workbook interaction until loading finishes or fails.");
         overlay.Attribute("Panel.ZIndex")?.Value.Should().Be("260");
 
@@ -1789,14 +1789,14 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "ProgressBar")
             .Single(element => element.Attribute(x + "Name")?.Value == "OpenProgressBar");
 
-        progressBar.Attribute("AutomationProperties.Name")?.Value.Should().Be("Opening Progress");
+        LocalizedAttribute(progressBar, "AutomationProperties.Name").Should().Be("Opening Progress");
         progressBar.Attribute("Minimum")?.Value.Should().Be("0");
         progressBar.Attribute("Maximum")?.Value.Should().Be("100");
 
         var progressTexts = document
             .Descendants(presentation + "TextBlock")
             .Where(element => element.Attribute(x + "Name")?.Value is "OpenProgressTitle" or "OpenProgressDetail")
-            .Select(element => element.Attribute("AutomationProperties.Name")?.Value)
+            .Select(element => LocalizedAttribute(element, "AutomationProperties.Name"))
             .ToList();
 
         progressTexts.Should().Equal("Open progress title", "Open progress detail");
@@ -1842,7 +1842,7 @@ public sealed class MainWindowXamlKeyTipTests
         var placeholders = document
             .Descendants(presentation + "TextBlock")
             .Where(element => element.Attribute("Tag")?.Value == "RibbonIcon")
-            .Select(element => element.Attribute("Text")?.Value ?? "<unnamed>")
+            .Select(element => LocalizedAttribute(element, "Text") ?? "<unnamed>")
             .ToList();
 
         placeholders.Should().BeEmpty("the ribbon screenshot sweep should render actual SVG/vector icons, not text stand-ins");
@@ -1869,8 +1869,8 @@ public sealed class MainWindowXamlKeyTipTests
 
         name.Should().NotBeNull("worksheet scrollbars are keyboard-focusable Excel surface controls");
         helpText.Should().NotBeNull("worksheet scrollbars should announce whether they move rows or columns");
-        name!.Value.Should().Be(expectedName);
-        helpText!.Value.Should().Be(expectedHelpText);
+        LocalizedAttribute(scrollBar, "AutomationProperties.Name").Should().Be(expectedName);
+        LocalizedAttribute(scrollBar, "AutomationProperties.HelpText").Should().Be(expectedHelpText);
     }
 
     [Fact]
@@ -1886,7 +1886,7 @@ public sealed class MainWindowXamlKeyTipTests
             .SelectMany(menuItem => menuItem
                 .Elements(presentation + "MenuItem")
                 .Where(child => child.Attribute(local + "RibbonTooltip.KeyTip") is null)
-                .Select(child => $"{menuItem.Attribute("Header")?.Value}:{child.Attribute("Header")?.Value}"))
+                .Select(child => $"{LocalizedAttribute(menuItem, "Header")}:{LocalizedAttribute(child, "Header")}"))
             .ToList();
 
         missing.Should().BeEmpty("nested ribbon menu choices should be reachable through staged Alt keytips");
@@ -1908,7 +1908,7 @@ public sealed class MainWindowXamlKeyTipTests
                     .Where(menuItem => menuItem.Attribute(local + "RibbonTooltip.KeyTip") is not null)
                     .GroupBy(menuItem => menuItem.Attribute(local + "RibbonTooltip.KeyTip")!.Value, StringComparer.OrdinalIgnoreCase)
                     .Where(group => group.Count() > 1)
-                    .Select(group => $"{menu.Attribute("Header")?.Value ?? "ContextMenu"}:{group.Key}"))
+                    .Select(group => $"{LocalizedAttribute(menu, "Header") ?? "ContextMenu"}:{group.Key}"))
             .ToList();
 
         duplicates.Should().BeEmpty("menu-level keytips must be unique for deterministic staged Alt routing");
@@ -1930,7 +1930,7 @@ public sealed class MainWindowXamlKeyTipTests
                 var items = menu.Elements(presentation + "MenuItem")
                     .Select(item => new
                     {
-                        Header = item.Attribute("Header")?.Value ?? item.Attribute("Click")?.Value ?? "MenuItem",
+                        Header = LocalizedAttribute(item, "Header") ?? item.Attribute("Click")?.Value ?? "MenuItem",
                         KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value
                     })
                     .Where(item => !string.IsNullOrWhiteSpace(item.KeyTip))
@@ -1939,7 +1939,7 @@ public sealed class MainWindowXamlKeyTipTests
                 return items.SelectMany(item => items
                     .Where(other => !ReferenceEquals(item, other))
                     .Where(other => other.KeyTip!.StartsWith(item.KeyTip!, StringComparison.OrdinalIgnoreCase))
-                    .Select(other => $"{menu.Attribute("Header")?.Value ?? "ContextMenu"}:{item.Header}:{item.KeyTip} prefixes {other.Header}:{other.KeyTip}"));
+                    .Select(other => $"{LocalizedAttribute(menu, "Header") ?? "ContextMenu"}:{item.Header}:{item.KeyTip} prefixes {other.Header}:{other.KeyTip}"));
             })
             .ToList();
 
@@ -1955,13 +1955,13 @@ public sealed class MainWindowXamlKeyTipTests
 
         var errorCheckingButton = document
             .Descendants(presentation + "Button")
-            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Error Checking");
+            .Single(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") == "Error Checking");
 
         var menuItems = errorCheckingButton
             .Descendants(presentation + "MenuItem")
             .Select(item => new
             {
-                Header = item.Attribute("Header")?.Value,
+                Header = LocalizedAttribute(item, "Header"),
                 KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
                 Click = item.Attribute("Click")?.Value
             })
@@ -1986,14 +1986,14 @@ public sealed class MainWindowXamlKeyTipTests
 
         var breaksButton = document
             .Descendants(presentation + "Button")
-            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Breaks");
+            .Single(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") == "Breaks");
 
         breaksButton.Attribute("Click")?.Value.Should().Be("PageBreaksBtn_Click");
         breaksButton.Attribute(local + "RibbonTooltip.KeyTip")?.Value.Should().Be("BK");
         breaksButton.Descendants(presentation + "MenuItem")
             .Select(item => new
             {
-                Header = item.Attribute("Header")?.Value,
+                Header = LocalizedAttribute(item, "Header"),
                 KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
                 Click = item.Attribute("Click")?.Value
             })
@@ -2017,8 +2017,8 @@ public sealed class MainWindowXamlKeyTipTests
             .Where(button =>
                 button.Attribute("Click")?.Value is "PageLayoutDeferredBtn_Click" or "ViewWindowDeferredBtn_Click")
             .Where(button =>
-                button.Attribute(local + "RibbonTooltip.Description")?.Value.Contains("Deferred:", StringComparison.OrdinalIgnoreCase) != true)
-            .Select(button => button.Attribute(local + "RibbonTooltip.Title")?.Value ?? button.Attribute("Content")?.Value ?? "Button")
+                LocalizedAttribute(button, local + "RibbonTooltip.Description")?.Contains("Deferred:", StringComparison.OrdinalIgnoreCase) != true)
+            .Select(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") ?? LocalizedAttribute(button, "Content") ?? "Button")
             .ToList();
 
         missing.Should().BeEmpty("deferred visible commands should clearly say they are deferred before the user clicks");
@@ -2036,9 +2036,9 @@ public sealed class MainWindowXamlKeyTipTests
             .Where(button => button.Attribute("Click")?.Value == "ViewWindowDeferredBtn_Click")
             .Select(button => new
             {
-                Title = button.Attribute(local + "RibbonTooltip.Title")?.Value,
+                Title = LocalizedAttribute(button, local + "RibbonTooltip.Title"),
                 KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
-                Description = button.Attribute(local + "RibbonTooltip.Description")?.Value
+                Description = LocalizedAttribute(button, local + "RibbonTooltip.Description")
             })
             .Should()
             .Equal([
@@ -2076,15 +2076,15 @@ public sealed class MainWindowXamlKeyTipTests
 
         var themesButton = document
             .Descendants(presentation + "Button")
-            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Themes");
+            .Single(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") == "Themes");
 
         themesButton.Attribute("Click")?.Value.Should().Be("ThemeBtn_Click");
-        themesButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("Deferred:");
+        LocalizedAttribute(themesButton, local + "RibbonTooltip.Description").Should().NotContain("Deferred:");
         themesButton.Descendants(presentation + "MenuItem")
-            .Select(item => item.Attribute("Header")?.Value)
+            .Select(item => LocalizedAttribute(item, "Header"))
             .Should().Equal("Office", "FreeX Colorful", "Grayscale", "Customize...");
         themesButton.Descendants(presentation + "MenuItem")
-            .Single(item => item.Attribute("Header")?.Value == "Customize...")
+            .Single(item => LocalizedAttribute(item, "Header") == "Customize...")
             .Attribute("Click")?.Value.Should().Be("ThemeCustomizeMenuItem_Click");
     }
 
@@ -2097,15 +2097,15 @@ public sealed class MainWindowXamlKeyTipTests
 
         var colorsButton = document
             .Descendants(presentation + "Button")
-            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Theme Colors");
+            .Single(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") == "Theme Colors");
 
         colorsButton.Attribute("Click")?.Value.Should().Be("ThemeColorsBtn_Click");
-        colorsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("Deferred:");
+        LocalizedAttribute(colorsButton, local + "RibbonTooltip.Description").Should().NotContain("Deferred:");
         colorsButton.Descendants(presentation + "MenuItem")
-            .Select(item => item.Attribute("Header")?.Value)
+            .Select(item => LocalizedAttribute(item, "Header"))
             .Should().Equal("Office", "FreeX Colorful", "Grayscale", "Customize Colors...");
         colorsButton.Descendants(presentation + "MenuItem")
-            .Single(item => item.Attribute("Header")?.Value == "Customize Colors...")
+            .Single(item => LocalizedAttribute(item, "Header") == "Customize Colors...")
             .Attribute("Click")?.Value.Should().Be("ThemeColorsCustomizeMenuItem_Click");
     }
 
@@ -2118,15 +2118,15 @@ public sealed class MainWindowXamlKeyTipTests
 
         var fontsButton = document
             .Descendants(presentation + "Button")
-            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Theme Fonts");
+            .Single(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") == "Theme Fonts");
 
         fontsButton.Attribute("Click")?.Value.Should().Be("ThemeFontsBtn_Click");
-        fontsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("Deferred:");
+        LocalizedAttribute(fontsButton, local + "RibbonTooltip.Description").Should().NotContain("Deferred:");
         fontsButton.Descendants(presentation + "MenuItem")
-            .Select(item => item.Attribute("Header")?.Value)
+            .Select(item => LocalizedAttribute(item, "Header"))
             .Should().Equal("Office", "Arial", "Times New Roman", "Customize Fonts...");
         fontsButton.Descendants(presentation + "MenuItem")
-            .Single(item => item.Attribute("Header")?.Value == "Customize Fonts...")
+            .Single(item => LocalizedAttribute(item, "Header") == "Customize Fonts...")
             .Attribute("Click")?.Value.Should().Be("ThemeFontsCustomizeMenuItem_Click");
     }
 
@@ -2139,15 +2139,15 @@ public sealed class MainWindowXamlKeyTipTests
 
         var effectsButton = document
             .Descendants(presentation + "Button")
-            .Single(button => button.Attribute(local + "RibbonTooltip.Title")?.Value == "Theme Effects");
+            .Single(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") == "Theme Effects");
 
         effectsButton.Attribute("Click")?.Value.Should().Be("ThemeEffectsBtn_Click");
-        effectsButton.Attribute(local + "RibbonTooltip.Description")?.Value.Should().NotContain("Deferred:");
+        LocalizedAttribute(effectsButton, local + "RibbonTooltip.Description").Should().NotContain("Deferred:");
         effectsButton.Descendants(presentation + "MenuItem")
-            .Select(item => item.Attribute("Header")?.Value)
+            .Select(item => LocalizedAttribute(item, "Header"))
             .Should().Equal("Office", "Subtle", "Refined", "Customize Effects...");
         effectsButton.Descendants(presentation + "MenuItem")
-            .Single(item => item.Attribute("Header")?.Value == "Customize Effects...")
+            .Single(item => LocalizedAttribute(item, "Header") == "Customize Effects...")
             .Attribute("Click")?.Value.Should().Be("ThemeEffectsCustomizeMenuItem_Click");
     }
 
@@ -2188,11 +2188,11 @@ public sealed class MainWindowXamlKeyTipTests
             var menuItem = document
                 .Descendants(presentation + "MenuItem")
                 .Single(item =>
-                    item.Attribute("Header")?.Value == expected.Header &&
+                    LocalizedAttribute(item, "Header") == expected.Header &&
                     item.Attribute("AutomationProperties.AutomationId")?.Value == expected.AutomationId);
 
-            menuItem.Attribute("AutomationProperties.Name")?.Value.Should().Be(expected.AutomationName);
-            menuItem.Attribute("AutomationProperties.HelpText")?.Value.Should().NotBeNullOrWhiteSpace();
+            LocalizedAttribute(menuItem, "AutomationProperties.Name").Should().Be(expected.AutomationName);
+            LocalizedAttribute(menuItem, "AutomationProperties.HelpText").Should().NotBeNullOrWhiteSpace();
         }
 
         static void AssertThemeButton(
@@ -2205,11 +2205,11 @@ public sealed class MainWindowXamlKeyTipTests
         {
             var button = document
                 .Descendants(presentation + "Button")
-                .Single(element => element.Attribute(local + "RibbonTooltip.Title")?.Value == tooltipTitle);
+                .Single(element => LocalizedAttribute(element, local + "RibbonTooltip.Title") == tooltipTitle);
 
-            button.Attribute("AutomationProperties.Name")?.Value.Should().Be(tooltipTitle);
+            LocalizedAttribute(button, "AutomationProperties.Name").Should().Be(tooltipTitle);
             button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
-            button.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(helpText);
+            LocalizedAttribute(button, "AutomationProperties.HelpText").Should().Be(helpText);
         }
     }
 
@@ -2241,7 +2241,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "MenuItem")
             .Select(item => new
             {
-                Header = item.Attribute("Header")?.Value,
+                Header = LocalizedAttribute(item, "Header"),
                 KeyTip = item.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
                 Click = item.Attribute("Click")?.Value,
                 Markup = item.ToString()
@@ -2279,8 +2279,8 @@ public sealed class MainWindowXamlKeyTipTests
                 Content = GetButtonText(button, presentation),
                 Click = button.Attribute("Click")?.Value,
                 KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
-                Title = button.Attribute(local + "RibbonTooltip.Title")?.Value,
-                Description = button.Attribute(local + "RibbonTooltip.Description")?.Value
+                Title = LocalizedAttribute(button, local + "RibbonTooltip.Title"),
+                Description = LocalizedAttribute(button, local + "RibbonTooltip.Description")
             })
             .ToList();
 
@@ -2310,10 +2310,10 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "Button")
             .Where(element => element.Attribute("Click")?.Value == "SsMoreTemplatesBtn_Click")
             .Where(element =>
-                !ContainsExcludedStatus(element.Attribute("Content")?.Value) &&
-                !ContainsExcludedStatus(element.Attribute(local + "RibbonTooltip.Title")?.Value) &&
-                !ContainsExcludedStatus(element.Attribute(local + "RibbonTooltip.Description")?.Value))
-            .Select(element => element.Attribute("Content")?.Value ?? element.Name.LocalName)
+                !ContainsExcludedStatus(LocalizedAttribute(element, "Content")) &&
+                !ContainsExcludedStatus(LocalizedAttribute(element, local + "RibbonTooltip.Title")) &&
+                !ContainsExcludedStatus(LocalizedAttribute(element, local + "RibbonTooltip.Description")))
+            .Select(element => LocalizedAttribute(element, "Content") ?? element.Name.LocalName)
             .ToList();
 
         missing.Should().BeEmpty("online template discovery depends on an external Microsoft service and should not look like a normal local command");
@@ -2323,8 +2323,8 @@ public sealed class MainWindowXamlKeyTipTests
             .Single(element => element.Attribute("Click")?.Value == "SsMoreTemplatesBtn_Click");
 
         button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be("MoreTemplatesExcludedButton");
-        button.Attribute("AutomationProperties.Name")?.Value.Should().Be("More templates unavailable");
-        button.Attribute("AutomationProperties.HelpText")?.Value
+        LocalizedAttribute(button, "AutomationProperties.Name").Should().Be("More templates unavailable");
+        LocalizedAttribute(button, "AutomationProperties.HelpText")
             .Should()
             .Contain("external Microsoft template service");
 
@@ -2379,7 +2379,7 @@ public sealed class MainWindowXamlKeyTipTests
             .ToList();
 
         buttons.Should().NotBeEmpty();
-        buttons[0].Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("detail");
+        LocalizedAttribute(buttons[0], local + "RibbonTooltip.Description").Should().Contain("detail");
     }
 
     [Fact]
@@ -2427,8 +2427,8 @@ public sealed class MainWindowXamlKeyTipTests
             .ToList();
 
         buttons.Should().NotBeEmpty();
-        buttons.Should().AllSatisfy(button => button.Attribute("Content")?.Value.Should().Contain("PivotChart"));
-        buttons.Should().AllSatisfy(button => button.Attribute(local + "RibbonTooltip.Description")?.Value.Should().Contain("PivotTable"));
+        buttons.Should().AllSatisfy(button => LocalizedAttribute(button, "Content").Should().Contain("PivotChart"));
+        buttons.Should().AllSatisfy(button => LocalizedAttribute(button, local + "RibbonTooltip.Description").Should().Contain("PivotTable"));
     }
 
     [Fact]
@@ -2492,7 +2492,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Descendants(presentation + "ListBox")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "PivotAvailableFieldsList");
 
-        searchBox.Attribute("AutomationProperties.Name")?.Value.Should().Be("Search PivotTable Fields");
+        LocalizedAttribute(searchBox, "AutomationProperties.Name").Should().Be("Search PivotTable Fields");
         searchBox.IsBefore(availableFieldsList).Should().BeTrue("search should be above the available fields list");
     }
 
@@ -2502,12 +2502,11 @@ public sealed class MainWindowXamlKeyTipTests
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
-        document
+        var removeButton = document
             .Descendants(presentation + "Button")
-            .Single(button => button.Attribute("Click")?.Value == "PivotFieldRemoveBtn_Click")
-            .Attribute("Content")?.Value
-            .Should()
-            .Be("_Remove");
+            .Single(button => button.Attribute("Click")?.Value == "PivotFieldRemoveBtn_Click");
+
+        LocalizedAttribute(removeButton, "Content").Should().Be("_Remove");
     }
 
     [Fact]
@@ -2576,7 +2575,7 @@ public sealed class MainWindowXamlKeyTipTests
 
         dialogXaml
             .Descendants(presentation + "TabItem")
-            .Select(tab => tab.Attribute("Header")?.Value?.Replace("_", "", StringComparison.Ordinal))
+            .Select(tab => LocalizedAttribute(tab, "Header")?.Replace("_", "", StringComparison.Ordinal))
             .Should()
             .Contain(["Summarize Values By", "Show Values As", "Number Format"]);
 
@@ -2723,12 +2722,11 @@ public sealed class MainWindowXamlKeyTipTests
         XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
-        document
+        var slicerTimelinePane = document
             .Descendants(presentation + "Border")
-            .Single(element => element.Attribute(xaml + "Name")?.Value == "SlicerTimelinePane")
-            .Attribute("AutomationProperties.Name")?.Value
-            .Should()
-            .Be("Slicers and Timelines");
+            .Single(element => element.Attribute(xaml + "Name")?.Value == "SlicerTimelinePane");
+
+        LocalizedAttribute(slicerTimelinePane, "AutomationProperties.Name").Should().Be("Slicers and Timelines");
 
         document.Descendants(presentation + "ItemsControl")
             .Select(element => element.Attribute(xaml + "Name")?.Value)
@@ -2758,7 +2756,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Where(tab => tab.Attribute(xaml + "Name")?.Value is "PivotTableAnalyzeTab" or "PivotTableDesignTab")
             .ToList();
 
-        contextualTabs.Select(tab => tab.Attribute("Header")?.Value)
+        contextualTabs.Select(tab => LocalizedAttribute(tab, "Header"))
             .Should()
             .BeEquivalentTo(["PivotTable Analyze", "Design"]);
 
@@ -2828,17 +2826,41 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     private static bool ContainsExcludedStatus(string? value) =>
-        value?.Contains("excluded", StringComparison.OrdinalIgnoreCase) == true;
+        ResolveLocalizedValue(value)?.Contains("excluded", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static string? CommandName(XElement element, XNamespace local) =>
+        element.Attribute(local + "RibbonMetadata.CommandName")?.Value ??
+        LocalizedAttribute(element, local + "RibbonTooltip.Title");
+
+    private static string? LocalizedAttribute(XElement element, XName name) =>
+        ResolveLocalizedValue(element.Attribute(name)?.Value);
+
+    private static string? LocalizedAttribute(XElement element, string name) =>
+        ResolveLocalizedValue(element.Attribute(name)?.Value);
+
+    private static string? ResolveLocalizedValue(string? value)
+    {
+        const string locPrefix = "{local:Loc Key=";
+        if (value is not { Length: > 0 } ||
+            !value.StartsWith(locPrefix, StringComparison.Ordinal) ||
+            !value.EndsWith("}", StringComparison.Ordinal))
+        {
+            return value;
+        }
+
+        var key = value[locPrefix.Length..^1];
+        return UiText.Get(key);
+    }
 
     private static string? GetButtonText(XElement button, XNamespace presentation)
     {
-        if (button.Attribute("Content")?.Value is { } content)
+        if (LocalizedAttribute(button, "Content") is { } content)
             return content;
 
         return button
             .Descendants()
             .Where(element => element.Name == presentation + "TextBlock" || element.Name == presentation + "AccessText")
-            .Select(element => element.Attribute("Text")?.Value ?? element.Value)
+            .Select(element => LocalizedAttribute(element, "Text") ?? element.Value)
             .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
     }
 
@@ -2848,7 +2870,7 @@ public sealed class MainWindowXamlKeyTipTests
 
         return document
             .Descendants(presentation + "TabItem")
-            .Single(element => element.Attribute("Header")?.Value == header);
+            .Single(element => LocalizedAttribute(element, "Header") == header);
     }
 
     private static string ReadPivotCommandSource()
