@@ -118,9 +118,10 @@ public sealed class DotNetProjectReferencesPreflightTests
 
             var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{projectRoot}\"");
 
+            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("target escapes project root");
-            (result.Output + result.Error).Should().Contain("..\\external\\Outside.csproj");
+            combinedOutput.Should().Contain("target escapes project root");
+            combinedOutput.Should().Contain("..\\external\\Outside.csproj");
         }
         finally
         {
