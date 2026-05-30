@@ -358,6 +358,8 @@ public static partial class BuiltInFunctions
     {
         var text = ToText(value);
         if (!TextHasTimeComponent(text)) return ErrorValue.Value;
+        if (TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out var fakeLeapSerial))
+            return new NumberValue(fakeLeapSerial - Math.Floor(fakeLeapSerial));
         if (TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out var ts) && ts.Days == 0)
             return new NumberValue(ts.TotalDays);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,

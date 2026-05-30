@@ -564,6 +564,87 @@ public sealed class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData(".", "alan.turing@contoso.com")]
+    [InlineData("_", "alan_turing@contoso.com")]
+    [InlineData("-", "alan-turing@contoso.com")]
+    public void Fill_FullNamesToFirstLastEmail_LearnsSeparatorAndSharedDomain(
+        string separator,
+        string expected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", $"ada{separator}lovelace@contoso.com"),
+                ("Grace Hopper", $"grace{separator}hopper@contoso.com")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNamesToFirstLastEmail_UsesFirstAndLastAcrossMiddleNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Byron Lovelace", "ada.lovelace@contoso.com"),
+                ("Grace Brewster Hopper", "grace.hopper@contoso.com")
+            ],
+            ["Katherine Coleman Johnson"]);
+
+        result.Should().BeEquivalentTo(["katherine.johnson@contoso.com"], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData(".", "turing.alan@contoso.com")]
+    [InlineData("_", "turing_alan@contoso.com")]
+    [InlineData("-", "turing-alan@contoso.com")]
+    public void Fill_FullNamesToLastFirstEmail_LearnsSeparatorAndSharedDomain(
+        string separator,
+        string expected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", $"lovelace{separator}ada@contoso.com"),
+                ("Grace Hopper", $"hopper{separator}grace@contoso.com")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("", "aturing@contoso.com")]
+    [InlineData(".", "a.turing@contoso.com")]
+    [InlineData("_", "a_turing@contoso.com")]
+    [InlineData("-", "a-turing@contoso.com")]
+    public void Fill_FullNamesToFirstInitialLastEmail_LearnsSeparatorAndSharedDomain(
+        string separator,
+        string expected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", $"a{separator}lovelace@contoso.com"),
+                ("Grace Hopper", $"g{separator}hopper@contoso.com")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_FullNamesToEmail_ReturnsNullWhenExampleDomainsDiffer()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Ada Lovelace", "ada.lovelace@contoso.com"),
+                ("Grace Hopper", "grace.hopper@example.org")
+            ],
+            ["Alan Turing"]);
+
+        result.Should().BeNull();
+    }
+
     [Fact]
     public void Fill_DelimitedWordsInitials_BuildsInitials()
     {
@@ -1031,6 +1112,19 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownNameTitlesAndSuffixes_GeneratesEmailFromCleanedNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Dr. Ada Byron Lovelace Jr.", "ada.lovelace@contoso.com"),
+                ("Prof Grace Brewster Hopper Sr.", "grace.hopper@contoso.com")
+            ],
+            ["Ms. Katherine Coleman Johnson III"]);
+
+        result.Should().BeEquivalentTo(["katherine.johnson@contoso.com"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Fill_KnownNameTitlesAndSuffixes_ReturnsNullUnlessRemainingHasBoth()
     {
         var result = FlashFillService.Fill(
@@ -1221,6 +1315,27 @@ public sealed class FlashFillServiceTests
                 ["Grace", "Hopper"]
             ],
             [$"ada{separator}lovelace@contoso.com", $"grace{separator}hopper@contoso.com"],
+            [
+                ["Alan", "Turing"]
+            ]);
+
+        result.Should().BeEquivalentTo([expected], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData(".", "turing.alan@contoso.com")]
+    [InlineData("_", "turing_alan@contoso.com")]
+    [InlineData("-", "turing-alan@contoso.com")]
+    public void FillFromColumns_LastFirstSeparatedEmail_LearnsSeparatorAndConstantDomain(
+        string separator,
+        string expected)
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                ["Ada", "Lovelace"],
+                ["Grace", "Hopper"]
+            ],
+            [$"lovelace{separator}ada@contoso.com", $"hopper{separator}grace@contoso.com"],
             [
                 ["Alan", "Turing"]
             ]);

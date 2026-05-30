@@ -15,6 +15,7 @@ public sealed class TesterReleaseReadinessPreflightTests
         script.Should().Contain("release/progress.json overallCompletion must be between 0 and 100.");
         script.Should().Contain("Unsupported releasePatchSource");
         script.Should().Contain("Unsupported release channel");
+        script.Should().Contain("tools\\Test-RepositoryPreflight.ps1");
         script.Should().Contain("Public-preview preflight requires completed accessibility gate inputs");
         script.Should().Contain("Tester release readiness preflight passed.");
     }

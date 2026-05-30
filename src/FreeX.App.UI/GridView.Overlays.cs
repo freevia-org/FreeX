@@ -42,10 +42,7 @@ public partial class GridView
         if (!top.HasValue || !left.HasValue || !bottom.HasValue || !right.HasValue) return;
 
         var rect = new Rect(left.Value, top.Value, right.Value - left.Value, bottom.Value - top.Value);
-        var dashPen = new Pen(new SolidColorBrush(Color.FromRgb(0, 0, 0)), 2.0)
-            { DashStyle = new DashStyle([4.0, 4.0], 0) };
-        dashPen.Freeze();
-        dc.DrawRectangle(null, dashPen, rect);
+        dc.DrawRectangle(null, AutofillPreviewPen, rect);
     }
 
     private void RenderMarchingAnts(DrawingContext dc)

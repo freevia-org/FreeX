@@ -722,7 +722,7 @@ public partial class MainWindow
                     UpdateRibbonCompactMode(force: true);
                 }
             }),
-            DispatcherPriority.Send);
+            DispatcherPriority.Render);
     }
 
     internal RibbonFallbackDiagnosticsSnapshot GetRibbonFallbackDiagnosticsForTests() =>

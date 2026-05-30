@@ -172,9 +172,15 @@ public static partial class BuiltInFunctions
     private static readonly Dictionary<string, double> ConvertPrefixes = new(StringComparer.Ordinal)
     {
         ["Y"] = 1e24, ["Z"] = 1e21, ["E"] = 1e18, ["P"] = 1e15, ["T"] = 1e12,
-        ["G"] = 1e9, ["M"] = 1e6, ["k"] = 1e3, ["h"] = 1e2, ["e"] = 1e1,
+        ["G"] = 1e9, ["M"] = 1e6, ["k"] = 1e3, ["h"] = 1e2, ["da"] = 1e1, ["e"] = 1e1,
         ["d"] = 1e-1, ["c"] = 1e-2, ["m"] = 1e-3, ["u"] = 1e-6, ["n"] = 1e-9,
         ["p"] = 1e-12, ["f"] = 1e-15, ["a"] = 1e-18, ["z"] = 1e-21, ["y"] = 1e-24
+    };
+
+    private static readonly Dictionary<string, double> ConvertBinaryPrefixes = new(StringComparer.Ordinal)
+    {
+        ["Yi"] = Math.Pow(2, 80), ["Zi"] = Math.Pow(2, 70), ["Ei"] = Math.Pow(2, 60), ["Pi"] = Math.Pow(2, 50),
+        ["Ti"] = Math.Pow(2, 40), ["Gi"] = Math.Pow(2, 30), ["Mi"] = Math.Pow(2, 20), ["ki"] = Math.Pow(2, 10)
     };
 
     private static bool TryResolveUnit(string unit, out UnitCategory cat, out double factor)
@@ -185,13 +191,44 @@ public static partial class BuiltInFunctions
             factor = entry.Factor;
             return true;
         }
+        if (TryResolveBinaryPrefixedUnit(unit, out cat, out factor)) return true;
+
         // Try a SI prefix only when at least 2 chars remain — we don't want
         // single-letter prefixes (e.g. "m") to be re-interpreted when they
         // already exist as base units in the table above.
-        if (unit.Length >= 2)
+        if (TryResolvePrefixedUnit(unit, 2, out cat, out factor)) return true;
+        if (TryResolvePrefixedUnit(unit, 1, out cat, out factor)) return true;
+
+        cat = default; factor = 0; return false;
+    }
+
+    private static bool TryResolveBinaryPrefixedUnit(string unit, out UnitCategory cat, out double factor)
+    {
+        if (unit.Length > 2)
         {
-            string p = unit[..1];
-            string rest = unit[1..];
+            string p = unit[..2];
+            string rest = unit[2..];
+            if (ConvertBinaryPrefixes.TryGetValue(p, out double pFactor)
+                && ConvertUnits.TryGetValue(rest, out var rEntry)
+                && rEntry.Cat == UnitCategory.Information)
+            {
+                cat = rEntry.Cat;
+                factor = rEntry.Factor * pFactor;
+                return true;
+            }
+        }
+
+        cat = default;
+        factor = 0;
+        return false;
+    }
+
+    private static bool TryResolvePrefixedUnit(string unit, int prefixLength, out UnitCategory cat, out double factor)
+    {
+        if (unit.Length > prefixLength)
+        {
+            string p = unit[..prefixLength];
+            string rest = unit[prefixLength..];
             if (ConvertPrefixes.TryGetValue(p, out double pFactor)
                 && ConvertUnits.TryGetValue(rest, out var rEntry)
                 && rEntry.Cat != UnitCategory.Temperature)
@@ -201,7 +238,10 @@ public static partial class BuiltInFunctions
                 return true;
             }
         }
-        cat = default; factor = 0; return false;
+
+        cat = default;
+        factor = 0;
+        return false;
     }
 
     private static ScalarValue Convert(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

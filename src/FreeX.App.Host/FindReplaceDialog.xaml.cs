@@ -57,7 +57,12 @@ public sealed partial class FindReplaceDialog : Window
     private void FindAll_Click(object sender, RoutedEventArgs e) => FindAll();
     private void Replace_Click(object sender, RoutedEventArgs e) => ReplaceOne();
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
-    private void FindReplaceTabs_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateReplaceButtonVisibility();
+    private void FindReplaceTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateReplaceButtonVisibility();
+        if (IsLoaded)
+            FocusSearchBox();
+    }
 
     private void UpdateReplaceButtonVisibility()
     {

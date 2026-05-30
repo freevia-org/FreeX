@@ -139,6 +139,7 @@ public partial class GridView : FrameworkElement
     private static readonly Brush QuickAnalysisScatterChartPreviewBrush = MakeBrushAlpha(190, 112, 173, 71);
     private static readonly Pen QuickAnalysisColumnChartAxisPen = MakePen(MakeBrush(89, 89, 89), 1);
     private static readonly Pen ResizeLinePen = MakeResizeLinePen();
+    private static readonly Pen AutofillPreviewPen = MakeAutofillPreviewPen();
     private static readonly Pen FreezePen = MakeFreezePen();
     private static readonly Brush PageBreakPreviewBrush = MakeBrushAlpha(28, 0, 103, 192);
     private static readonly Pen PageBreakPen = MakePageBreakPen();
@@ -203,6 +204,16 @@ public partial class GridView : FrameworkElement
     private static Pen MakeResizeLinePen()
     {
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(100, 100, 100)), 1);
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Pen MakeAutofillPreviewPen()
+    {
+        var pen = new Pen(MakeBrush(0, 0, 0), 2.0)
+        {
+            DashStyle = new DashStyle([4.0, 4.0], 0)
+        };
         pen.Freeze();
         return pen;
     }

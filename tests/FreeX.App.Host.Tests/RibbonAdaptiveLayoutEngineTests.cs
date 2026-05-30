@@ -122,6 +122,26 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
+    public void Plan_ExpandsProtectedInsertTablesByCollapsingLowerPriorityGroups()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Tables", 320, 100, 60, 40),
+            new RibbonAdaptiveGroup("Illustrations", 420, 100, 70, 40),
+            new RibbonAdaptiveGroup("Add-ins", 150, 100, 70, 40),
+            new RibbonAdaptiveGroup("Charts", 150, 100, 70, 40)
+        };
+
+        var layout = RibbonAdaptiveLayoutEngine.Plan(780, groups, fixedChromeWidth: 0, selectedTabHeader: "Insert");
+
+        layout.States[0].Should().Be(RibbonAdaptiveGroupState.Full);
+        layout.States[1].Should().NotBe(RibbonAdaptiveGroupState.Full);
+        layout.States[2].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        layout.States[3].Should().Be(RibbonAdaptiveGroupState.Collapsed);
+        layout.PlannedWidth.Should().BeLessThanOrEqualTo(780);
+    }
+
+    [Fact]
     public void BuildResizeThresholds_UsesRuntimeVisibilityStatesFromPurePlan()
     {
         var dataGroups = new[]
@@ -147,7 +167,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
             .Contain(470);
         RibbonAdaptiveLayoutEngine.BuildResizeThresholds(insertGroups, fixedChromeWidth: 20)
             .Should()
-            .Contain(290);
+            .Contain(850);
     }
 
     [Fact]
@@ -182,6 +202,18 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         method.Should().NotContain(".Distinct()");
         method.Should().NotContain(".OrderBy(");
         method.Should().NotContain(".ToList()");
+    }
+
+    [Fact]
+    public void Plan_SourceStaysFreeOfWpfVisualTreeMeasurementWork()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));
+
+        source.Should().NotContain("System.Windows", "the adaptive planner should remain CI-safe and independent of WPF runtime state");
+        source.Should().NotContain("FrameworkElement", "the adaptive planner should operate on measured group data rather than controls");
+        source.Should().NotContain("VisualTreeHelper", "visual-tree walking belongs in the WPF adapter, not the pure layout planner");
+        source.Should().NotContain("Dispatcher", "resize planning should not schedule UI work while computing a layout");
+        source.Should().NotContain(".Measure(", "WPF measurement should stay outside the pure layout planner");
     }
 
     [Fact]
@@ -283,6 +315,6 @@ public sealed class RibbonAdaptiveLayoutEngineTests
             .NotBe(RibbonAdaptiveGroupState.Full);
         layout.States[Array.IndexOf(groupNames, "Forecast")]
             .Should()
-            .NotBe(RibbonAdaptiveGroupState.Full);
+            .Be(RibbonAdaptiveGroupState.Full, "Forecast is a protected Data tab group and should remain expanded when lower-priority groups can be collapsed instead");
     }
 }

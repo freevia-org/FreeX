@@ -108,6 +108,8 @@ public partial class MainWindow : Window
     private IReadOnlyList<RibbonCompactGroupSnapshot>? _ribbonCompactGroupSnapshotCache;
     private IReadOnlyList<RibbonAdaptiveGroupState>? _lastRibbonAdaptiveAppliedStates;
     private string? _lastRibbonCollapsedFootprintMode;
+    private string? _ribbonAdaptiveLayoutPlanCacheKey;
+    private readonly Dictionary<string, RibbonAdaptiveLayoutResult> _ribbonAdaptiveLayoutPlanCache = [];
     private readonly Dictionary<string, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
     private readonly Dictionary<string, bool> _ribbonMeasuredOverflowCache = [];
     private bool _ribbonAdaptiveStateDiffInvalidated;
@@ -115,6 +117,8 @@ public partial class MainWindow : Window
     private int _ribbonAdaptiveGroupMeasurementCount;
     private int _ribbonCompactSnapshotCaptureCount;
     private int _ribbonResizeThresholdRebuildCount;
+    private int _ribbonAdaptiveLayoutPlanComputeCount;
+    private int _ribbonAdaptiveLayoutPlanCacheHitCount;
     private int _ribbonMeasuredOverflowMeasurementCount;
     private int _ribbonCorrectedStateCacheHitCount;
     private int _ribbonAppliedStateSkipCount;
