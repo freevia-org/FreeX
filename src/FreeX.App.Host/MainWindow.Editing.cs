@@ -432,6 +432,9 @@ public partial class MainWindow
     {
         if (_inlineEditor?.IsVisible == true)
         {
+            if (ReferenceEquals(Keyboard.FocusedElement, FormulaBar))
+                return;
+
             if (IsFormulaRangeEntryActive(_inlineEditor))
                 return;
 
