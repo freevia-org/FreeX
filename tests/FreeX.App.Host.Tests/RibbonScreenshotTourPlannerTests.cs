@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -74,6 +75,32 @@ public sealed class RibbonScreenshotTourPlannerTests
                 "900:Medium ribbon breakpoint where grouped commands begin to compress.",
                 "750:Narrow ribbon breakpoint for overflow and compact command layouts."
             ]);
+    }
+
+    [Fact]
+    public void DefaultWidths_MatchPowerShellScreenshotEvidenceMatrix()
+    {
+        var expectedLabels = RibbonScreenshotTourPlanner.DefaultWidths
+            .Select(width => width.Label)
+            .ToArray();
+
+        foreach (var scriptName in new[] { "screenshot_excel.ps1", "screenshot_ribbon.ps1" })
+        {
+            var source = File.ReadAllText(WorkspaceFileLocator.Find("tools", scriptName));
+            var widthBlock = Regex.Match(
+                source,
+                @"\$defaultCaptureWidths\s*=\s*@\((?<widths>.*?)\)\s*function Resolve-CaptureWidths",
+                RegexOptions.Singleline);
+
+            widthBlock.Success.Should().BeTrue($"{scriptName} should declare the default ribbon evidence width matrix");
+
+            var actualLabels = Regex
+                .Matches(widthBlock.Groups["widths"].Value, @"Label\s*=\s*""(?<label>[^""]+)""")
+                .Select(match => match.Groups["label"].Value)
+                .ToArray();
+
+            actualLabels.Should().Equal(expectedLabels);
+        }
     }
 
     [Fact]

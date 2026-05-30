@@ -154,6 +154,13 @@ public sealed partial class UiTestCatalogInventoryTests
         row.Should().Contain("ribbon_screenshot_tour_manifest.json");
         row.Should().Contain("resize breakpoint");
         row.Should().Contain("deletes only the currently requested plan");
+        row.Should().Contain("max/1100/900/750 by tab matrix");
+        row.Should().Contain("36 captures each");
+        row.Should().Contain("excel_<WidthLabel>_<RibbonTab>.png");
+        row.Should().Contain("ribbon_<WidthLabel>_<RibbonTab>.png");
+        row.Should().Contain("PairKey");
+        row.Should().Contain("ribbon:<WidthLabel>:<TabFileName>");
+        row.Should().Contain("counterpart file names");
     }
 
     [Theory]

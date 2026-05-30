@@ -1,4 +1,5 @@
 using System.IO;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 
@@ -7,8 +8,8 @@ namespace FreeX.App.Host.Tests;
 public sealed class ScreenshotHarnessScriptTests
 {
     [Theory]
-    [InlineData("screenshot_excel.ps1", "screenshots_excel", "excel_<RibbonTab>.png", "excel_$safe.png")]
-    [InlineData("screenshot_ribbon.ps1", "screenshots", "ribbon_<RibbonTab>.png", "ribbon_$safe.png")]
+    [InlineData("screenshot_excel.ps1", "screenshots_excel", "excel_<WidthLabel>_<RibbonTab>.png", "excel_$($widthSpec.Label)_$safe.png")]
+    [InlineData("screenshot_ribbon.ps1", "screenshots", "ribbon_<WidthLabel>_<RibbonTab>.png", "ribbon_$($widthSpec.Label)_$safe.png")]
     public void ScreenshotScripts_RecordOutputNamingAndWindowBoundsInEvidenceManifest(
         string scriptName,
         string outputDirectory,
@@ -22,11 +23,15 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("screenshot_manifest.json");
         script.Should().Contain($"OutputNaming = \"{namingPattern}\"");
         script.Should().Contain($"CatalogEvidenceTarget = \"docs/UI_TEST_CATALOG.md\"");
+        script.Should().Contain("WidthSource = \"RibbonScreenshotTourPlanner.DefaultWidths\"");
+        script.Should().Contain("PlannedCaptureCount = $tabNames.Count * $widths.Count");
         script.Should().Contain("WindowBounds = [pscustomobject]");
         script.Should().Contain("CaptureLogicalHeight = $captureLogicalHeight");
         script.Should().Contain("CapturePhysicalHeight = $capturePhysicalHeight");
+        script.Should().Contain("Widths = $widths");
         script.Should().Contain("Captures = $files");
-        script.Should().Contain($"$path = \"$outDir\\{filePattern}\"");
+        script.Should().Contain($"$fileName = \"{filePattern}\"");
+        script.Should().Contain("$path = Join-Path $outDir $fileName");
     }
 
     [Theory]
@@ -42,6 +47,73 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("Transient popups, dropdowns, native dialogs, and context menus require separate guarded captures.");
         script.Should().Contain("Ribbon tab captures cover the top window band only.");
         script.Should().Contain("Global input is blocked unless the expected process and window title own the foreground window.");
+    }
+
+    [Theory]
+    [InlineData("screenshot_excel.ps1")]
+    [InlineData("screenshot_ribbon.ps1")]
+    public void ScreenshotScripts_DefaultWidthsMatchRibbonScreenshotTourPlanner(string scriptName)
+    {
+        var script = ReadScript(scriptName);
+
+        script.Should().Contain("[string]$Widths = $env:FREEX_SS_TOUR_WIDTHS");
+        script.Should().Contain("$defaultCaptureWidths = @(");
+        script.Should().Contain("$captureWidths = @(Resolve-CaptureWidths $Widths)");
+        script.Should().Contain("foreach ($widthSpec in $captureWidths)");
+        script.Should().Contain("Screenshot-Tab $tabName $widthSpec");
+
+        foreach (var width in RibbonScreenshotTourPlanner.DefaultWidths)
+        {
+            script.Should().Contain($"Label = \"{width.Label}\"");
+            script.Should().Contain(width.WindowWidth is null
+                ? "WindowLogicalWidth = $null"
+                : $"WindowLogicalWidth = {width.WindowWidth.Value.ToString("0.0", CultureInfo.InvariantCulture)}");
+            script.Should().Contain(width.EvidencePurpose());
+        }
+    }
+
+    [Theory]
+    [InlineData(
+        "screenshot_excel.ps1",
+        "excel",
+        "Microsoft Excel",
+        "freex",
+        "screenshot_ribbon.ps1",
+        "ribbon_<WidthLabel>_<RibbonTab>.png",
+        "ribbon_$($widthSpec.Label)_$safe.png")]
+    [InlineData(
+        "screenshot_ribbon.ps1",
+        "freex",
+        "FreeX",
+        "excel",
+        "screenshot_excel.ps1",
+        "excel_<WidthLabel>_<RibbonTab>.png",
+        "excel_$($widthSpec.Label)_$safe.png")]
+    public void ScreenshotScripts_EmitPairableRibbonEvidenceMetadata(
+        string scriptName,
+        string evidenceSubject,
+        string evidenceApp,
+        string counterpartSubject,
+        string counterpartTool,
+        string counterpartOutputNaming,
+        string counterpartFileName)
+    {
+        var script = ReadScript(scriptName);
+
+        script.Should().Contain("EvidenceFamily = \"ribbon\"");
+        script.Should().Contain($"EvidenceSubject = \"{evidenceSubject}\"");
+        script.Should().Contain($"EvidenceApp = \"{evidenceApp}\"");
+        script.Should().Contain("Pairing = [pscustomobject]");
+        script.Should().Contain("PairKeyPattern = \"ribbon:<WidthLabel>:<TabFileName>\"");
+        script.Should().Contain($"CounterpartSubject = \"{counterpartSubject}\"");
+        script.Should().Contain($"CounterpartTool = \"{counterpartTool}\"");
+        script.Should().Contain($"CounterpartOutputNaming = \"{counterpartOutputNaming}\"");
+        script.Should().Contain("PairKey = \"ribbon:$($widthSpec.Label):$safe\"");
+        script.Should().Contain("TabFileName = $safe");
+        script.Should().Contain("WidthLabel = $widthSpec.Label");
+        script.Should().Contain("WindowLogicalWidth = $widthSpec.WindowLogicalWidth");
+        script.Should().Contain("EvidencePurpose = $widthSpec.EvidencePurpose");
+        script.Should().Contain($"CounterpartFileName = \"{counterpartFileName}\"");
     }
 
     [Fact]
