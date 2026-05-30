@@ -144,10 +144,35 @@ public sealed partial class DocumentationIndexTests
         var testFiles = trackedFiles.Where(path => path.StartsWith("tests/", StringComparison.Ordinal) && path.EndsWith(".cs", StringComparison.Ordinal)).ToArray();
         var docsFiles = trackedFiles.Where(path => path.StartsWith("docs/", StringComparison.Ordinal) && path.EndsWith(".md", StringComparison.Ordinal)).ToArray();
 
-        metrics["Tracked files"].Should().Be(trackedFiles.Count);
-        metrics["C# source files under `src/`"].Should().Be(sourceFiles.Length);
-        metrics["C# test files under `tests/`"].Should().Be(testFiles.Length);
-        metrics["Markdown docs under `docs/`"].Should().Be(docsFiles.Length);
+        // A dated status report is a point-in-time snapshot, not a live mirror of HEAD. With many
+        // concurrent sessions merging to main, asserting byte-exact equality against `git ls-files`
+        // flipped this test red on essentially every merge (the file census changes whenever any
+        // session adds/removes a file) — see docs/CODE_REVIEW_COMPREHENSIVE_2026-05-30.md s7.3.
+        // Require each metric to be present, positive, and within a snapshot tolerance of live:
+        // this still catches fabricated or grossly-stale counts but ignores routine per-merge churn.
+        AssertMetricTracksLive(metrics, "Tracked files", trackedFiles.Count);
+        AssertMetricTracksLive(metrics, "C# source files under `src/`", sourceFiles.Length);
+        AssertMetricTracksLive(metrics, "C# test files under `tests/`", testFiles.Length);
+        AssertMetricTracksLive(metrics, "Markdown docs under `docs/`", docsFiles.Length);
+    }
+
+    private static void AssertMetricTracksLive(IReadOnlyDictionary<string, int> metrics, string metric, int live)
+    {
+        metrics.Should().ContainKey(metric, "the newest status report must list the '{0}' metric", metric);
+        var reported = metrics[metric];
+        reported.Should().BeGreaterThan(0, "'{0}' should be a real, positive count", metric);
+
+        // Tolerance comfortably exceeds routine per-merge churn (tens of files) while still catching
+        // order-of-magnitude or fabricated values.
+        var tolerance = Math.Max(50, live / 10);
+        reported.Should().BeInRange(
+            live - tolerance,
+            live + tolerance,
+            "'{0}' = {1} should stay within a snapshot tolerance (±{2}) of the live repository count {3}",
+            metric,
+            reported,
+            tolerance,
+            live);
     }
 
     [Fact]
