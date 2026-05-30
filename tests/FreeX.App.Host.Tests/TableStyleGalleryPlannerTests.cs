@@ -52,4 +52,14 @@ public sealed class TableStyleGalleryPlannerTests
         TableStyleGalleryPlanner.GetOption(-10).StyleName.Should().Be("TableStyleLight1");
         TableStyleGalleryPlanner.GetOption(999).StyleName.Should().Be("TableStyleDark11");
     }
+
+    [Fact]
+    public void TryGetOption_ResolvesStyleNamesCaseInsensitively()
+    {
+        var found = TableStyleGalleryPlanner.TryGetOption("tablestylemedium2", out var option);
+
+        found.Should().BeTrue();
+        option.StyleName.Should().Be("TableStyleMedium2");
+        TableStyleGalleryPlanner.TryGetOption("CustomTableStyle", out _).Should().BeFalse();
+    }
 }
