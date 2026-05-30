@@ -21,7 +21,7 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("$buildStamp = Get-Date -Format \"yyyyMMdd-HHmmss\"");
         script.Should().Contain("freex-$versionSlug-$buildStamp-$commitId-$RuntimeIdentifier-$modeSlug");
         script.Should().Contain("$launchExeName = \"$artifactName.exe\"");
-        script.Should().Contain("Move-Item -LiteralPath $defaultExePath -Destination $launchExePath");
+        script.Should().Contain("Move-Item -LiteralPath $defaultExePath -Destination $artifactExePath");
         script.Should().Contain("IsPathRooted");
         script.Should().Contain("\"--self-contained\", \"false\"");
         script.Should().Contain("-p:PublishSingleFile=true");
@@ -33,7 +33,6 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("$artifactExePath = Join-Path $artifactRoot \"$artifactName.exe\"");
         script.Should().Contain("$artifactExeHashPath = \"$artifactExePath.sha256\"");
         script.Should().Contain("Remove-Item -LiteralPath $artifactExeHashPath -Force");
-        script.Should().Contain("Move-Item -LiteralPath $launchExePath -Destination $artifactExePath");
         script.Should().Contain("Remove-Item -LiteralPath $publishDir -Recurse -Force");
         script.Should().Contain("Write-Host \"Created $artifactExePath\"");
         script.Should().Contain("Write-Host \"Created $artifactExeHashPath\"");
@@ -42,6 +41,7 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("FREEX_DIAGNOSTICS=0");
         script.Should().Contain("FreeX is not affiliated with, endorsed by, or sponsored by Microsoft.");
         script.Should().Contain("Microsoft Excel is a trademark of Microsoft Corporation.");
+        script.Should().Contain("In the app: Help > Legal Notices");
         script.Should().Contain("docs/PRIVACY.md");
         script.Should().Contain("THIRD_PARTY_NOTICES.md");
     }
@@ -55,6 +55,7 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("if ($PublishMode -eq \"SingleFile\")");
         script.Should().Contain("-p:PublishSingleFile=false");
         script.Should().Contain("FreeX.cmd");
+        script.Should().Contain("Move-Item -LiteralPath $defaultExePath -Destination $launchExePath");
         script.Should().Contain("set \"APP_EXE=%APP_DIR%$launchExeName\"");
         script.Should().Contain("Compress-Archive");
         script.Should().Contain("Test-Path -LiteralPath $zipPath");
