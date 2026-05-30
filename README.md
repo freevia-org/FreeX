@@ -24,6 +24,7 @@ Start with the [user guide](docs/USER_GUIDE.md) and the [documentation index](do
 - [Legal notices](docs/LEGAL_NOTICES.md)
 - [Privacy notice](docs/PRIVACY.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
+- [Third-party license texts](THIRD_PARTY_LICENSES.md)
 - [Project license](LICENSE)
 
 ## Development
