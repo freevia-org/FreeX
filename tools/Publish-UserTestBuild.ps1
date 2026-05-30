@@ -12,6 +12,21 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Assert-SafeArtifactToken {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Value,
+        [Parameter(Mandatory = $true)]
+        [string]$Label
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value) -or $Value -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]*$') {
+        throw "$Label must contain only letters, numbers, dots, and hyphens, and must not contain path separators."
+    }
+}
+
+Assert-SafeArtifactToken -Value $RuntimeIdentifier -Label "RuntimeIdentifier"
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot "src\FreeX.App.Host\FreeX.App.Host.csproj"
 $appInfoPath = Join-Path $repoRoot "src\FreeX.App.Host\AppInfo.cs"

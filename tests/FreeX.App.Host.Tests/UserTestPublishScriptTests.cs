@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using FluentAssertions;
 
@@ -17,6 +18,8 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("[string]$PublishMode = \"SingleFile\"");
         script.Should().Contain("AppInfo.cs");
         script.Should().Contain("function ConvertTo-MsixPackageVersion");
+        script.Should().Contain("function Assert-SafeArtifactToken");
+        script.Should().Contain("Assert-SafeArtifactToken -Value $RuntimeIdentifier -Label \"RuntimeIdentifier\"");
         script.Should().Contain("rev-parse --short=8 HEAD");
         script.Should().Contain("$buildStamp = Get-Date -Format \"yyyyMMdd-HHmmss\"");
         script.Should().Contain("freex-$versionSlug-$buildStamp-$commitId-$RuntimeIdentifier-$modeSlug");
@@ -44,6 +47,28 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("Microsoft Excel is a trademark of Microsoft Corporation.");
         script.Should().Contain("docs/PRIVACY.md");
         script.Should().Contain("THIRD_PARTY_NOTICES.md");
+    }
+
+    [Fact]
+    public void PublishScript_RejectsRuntimeIdentifierPathSegmentsBeforePublishing()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-publish-script-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            var result = RunPowerShellScript(scriptPath, $"-RuntimeIdentifier \"..\\outside\" -Version 0.8.0 -OutputRoot \"{tempDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("RuntimeIdentifier must contain only letters, numbers, dots, and hyphens");
+            (result.Output + result.Error).Should().Contain("path separators");
+            Directory.GetFileSystemEntries(tempDirectory).Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
     }
 
     [Fact]
@@ -91,4 +116,28 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("https://dotnet.microsoft.com/download/dotnet/10.0");
         script.Should().Contain("FreeX.cmd");
     }
+
+    private static PowerShellResult RunPowerShellScript(string scriptPath, string arguments)
+    {
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
+            WorkingDirectory = Path.GetTempPath(),
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        process.Start().Should().BeTrue();
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        return new PowerShellResult(process.ExitCode, output, error);
+    }
+
+    private sealed record PowerShellResult(int ExitCode, string Output, string Error);
 }
