@@ -69,6 +69,16 @@ public class ClipboardTests
     }
 
     [Fact]
+    public void Deserialize_ExcelQuotedCells_PreservesEmbeddedTabsNewlinesAndQuotes()
+    {
+        var rows = ClipboardSerializer.Deserialize("A\t\"two\tpart\"\tC\r\n\"line\r\nbreak\"\t\"say \"\"hi\"\"\"");
+
+        Assert.Equal(2, rows.Length);
+        Assert.Equal(["A", "two\tpart", "C"], rows[0]);
+        Assert.Equal(["line\r\nbreak", "say \"hi\""], rows[1]);
+    }
+
+    [Fact]
     public void Serialize_CellWithTab_QuotesCell()
     {
         var workbook = new Workbook("test");
@@ -101,5 +111,26 @@ public class ClipboardTests
             new CellAddress(sheet.Id, 1, 1)));
 
         Assert.Equal("\"a\nb\"", text);
+    }
+
+    [Fact]
+    public void Serialize_CellWithCarriageReturn_QuotesCellForRoundTrip()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("a\rb")));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new TextValue("c")));
+
+        var svc = new ViewportService();
+        var vp = svc.GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        var text = ClipboardSerializer.Serialize(vp, new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 2)));
+
+        Assert.Equal("\"a\rb\"\tc", text);
+        var rows = ClipboardSerializer.Deserialize(text);
+        Assert.Single(rows);
+        Assert.Equal(["a\rb", "c"], rows[0]);
     }
 }

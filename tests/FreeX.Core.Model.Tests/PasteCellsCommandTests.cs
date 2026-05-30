@@ -840,6 +840,24 @@ public sealed class PasteCellsCommandTests
         sheet.GetValue(new CellAddress(sheet.Id, 4, 3)).Should().Be(new TextValue("West"));
     }
 
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    public void PasteCommandFactory_ExternalTextKeepsNonFiniteNumericTokensAsText(string text)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var address = new CellAddress(sheet.Id, 3, 2);
+
+        var command = PasteCommandFactory.CreateExternalTextPasteCommand(sheet.Id, address, [[text]]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(address).Should().Be(new TextValue(text));
+    }
+
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
     {
         public Workbook Workbook { get; } = wb;
