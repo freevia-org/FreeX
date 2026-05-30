@@ -30,6 +30,537 @@
   <data name="Common_WarningTitle" xml:space="preserve">
     <value>Warning</value>
   </data>
+  <data name="AccessibilityChecker_CloseAutomationName" xml:space="preserve">
+    <value>Close Accessibility Checker</value>
+  </data>
+  <data name="AccessibilityChecker_CloseButton" xml:space="preserve">
+    <value>_Close</value>
+  </data>
+  <data name="AccessibilityChecker_CloseHelpText" xml:space="preserve">
+    <value>Close the Accessibility Checker without navigating to an issue.</value>
+  </data>
+  <data name="AccessibilityChecker_GoToAutomationName" xml:space="preserve">
+    <value>Go to selected accessibility issue</value>
+  </data>
+  <data name="AccessibilityChecker_GoToButton" xml:space="preserve">
+    <value>_Go To</value>
+  </data>
+  <data name="AccessibilityChecker_GoToHelpText" xml:space="preserve">
+    <value>Navigate to the selected accessibility issue.</value>
+  </data>
+  <data name="AccessibilityChecker_IssueListAutomationName" xml:space="preserve">
+    <value>Accessibility issues</value>
+  </data>
+  <data name="AccessibilityChecker_IssueListHelpText" xml:space="preserve">
+    <value>Select an accessibility issue and choose Go To to navigate to its workbook location.</value>
+  </data>
+  <data name="AccessibilityChecker_IssuesLabel" xml:space="preserve">
+    <value>_Issues:</value>
+  </data>
+  <data name="AccessibilityChecker_NoIssuesMessage" xml:space="preserve">
+    <value>No accessibility issues found.</value>
+  </data>
+  <data name="AccessibilityChecker_ResultAutomationName" xml:space="preserve">
+    <value>Accessibility checker result</value>
+  </data>
+  <data name="AccessibilityChecker_ResultHelpText" xml:space="preserve">
+    <value>Summarizes the workbook accessibility check when no issues are found.</value>
+  </data>
+  <data name="AccessibilityChecker_Title" xml:space="preserve">
+    <value>Accessibility Checker</value>
+  </data>
+  <data name="AddWatch_AddAutomationName" xml:space="preserve">
+    <value>Add</value>
+  </data>
+  <data name="AddWatch_AddButton" xml:space="preserve">
+    <value>_Add</value>
+  </data>
+  <data name="AddWatch_AddHelpText" xml:space="preserve">
+    <value>Add the selected cells to the Watch Window.</value>
+  </data>
+  <data name="AddWatch_BodyText" xml:space="preserve">
+    <value>The selected cells will be added to the Watch Window.</value>
+  </data>
+  <data name="AddWatch_CancelAutomationName" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="AddWatch_CancelHelpText" xml:space="preserve">
+    <value>Close the Add Watch dialog without adding cells.</value>
+  </data>
+  <data name="AddWatch_SelectedRangeAutomationName" xml:space="preserve">
+    <value>Selected range</value>
+  </data>
+  <data name="AddWatch_SelectedRangeHelpText" xml:space="preserve">
+    <value>Shows the selected worksheet cells that will be watched.</value>
+  </data>
+  <data name="AddWatch_SelectedRangeLabel" xml:space="preserve">
+    <value>Selected _range:</value>
+  </data>
+  <data name="AddWatch_Title" xml:space="preserve">
+    <value>Add Watch</value>
+  </data>
+  <data name="AllowEditRange_ClearAllAutomationName" xml:space="preserve">
+    <value>Clear All</value>
+  </data>
+  <data name="AllowEditRange_ClearAllButton" xml:space="preserve">
+    <value>Clear _All</value>
+  </data>
+  <data name="AllowEditRange_ClearAllHelpText" xml:space="preserve">
+    <value>Delete all editable ranges for this worksheet.</value>
+  </data>
+  <data name="AllowEditRange_DeleteAutomationName" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="AllowEditRange_DeleteButton" xml:space="preserve">
+    <value>_Delete</value>
+  </data>
+  <data name="AllowEditRange_DeleteHelpText" xml:space="preserve">
+    <value>Delete the selected editable range.</value>
+  </data>
+  <data name="AllowEditRange_ExampleText" xml:space="preserve">
+    <value>Use an A1-style range, for example A1:C10.</value>
+  </data>
+  <data name="AllowEditRange_ExistingRangesAutomationName" xml:space="preserve">
+    <value>Ranges unlocked by password</value>
+  </data>
+  <data name="AllowEditRange_ExistingRangesHelpText" xml:space="preserve">
+    <value>Select an existing editable range to delete.</value>
+  </data>
+  <data name="AllowEditRange_ExistingRangesLabel" xml:space="preserve">
+    <value>_Ranges unlocked by password:</value>
+  </data>
+  <data name="AllowEditRange_IntroText" xml:space="preserve">
+    <value>Specify a worksheet range that can be edited while the sheet is protected.</value>
+  </data>
+  <data name="AllowEditRange_InvalidRangeMessage" xml:space="preserve">
+    <value>Enter a valid range.</value>
+  </data>
+  <data name="AllowEditRange_PickerAutomationName" xml:space="preserve">
+    <value>Select editable range</value>
+  </data>
+  <data name="AllowEditRange_PickerHelpText" xml:space="preserve">
+    <value>Collapse dialog and select the editable range from the worksheet.</value>
+  </data>
+  <data name="AllowEditRange_PickerToolTip" xml:space="preserve">
+    <value>Collapse dialog and select editable range</value>
+  </data>
+  <data name="AllowEditRange_RangeAutomationName" xml:space="preserve">
+    <value>Editable range</value>
+  </data>
+  <data name="AllowEditRange_RangeGroupHeader" xml:space="preserve">
+    <value>Range</value>
+  </data>
+  <data name="AllowEditRange_RangeHelpText" xml:space="preserve">
+    <value>Enter the worksheet range that users can edit while the sheet is protected.</value>
+  </data>
+  <data name="AllowEditRange_RangeLabel" xml:space="preserve">
+    <value>_Range:</value>
+  </data>
+  <data name="AllowEditRange_Title" xml:space="preserve">
+    <value>Allow Users to Edit Ranges</value>
+  </data>
+  <data name="CellShift_DeleteGroupHeader" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="CellShift_DeletePrompt" xml:space="preserve">
+    <value>Delete cells</value>
+  </data>
+  <data name="CellShift_DeleteTitle" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="CellShift_EntireColumn" xml:space="preserve">
+    <value>Entire _column</value>
+  </data>
+  <data name="CellShift_EntireRow" xml:space="preserve">
+    <value>Entire _row</value>
+  </data>
+  <data name="CellShift_InsertGroupHeader" xml:space="preserve">
+    <value>Insert</value>
+  </data>
+  <data name="CellShift_InsertPrompt" xml:space="preserve">
+    <value>Insert cells</value>
+  </data>
+  <data name="CellShift_InsertTitle" xml:space="preserve">
+    <value>Insert</value>
+  </data>
+  <data name="CellShift_ShiftCellsDown" xml:space="preserve">
+    <value>Shift cells _down</value>
+  </data>
+  <data name="CellShift_ShiftCellsLeft" xml:space="preserve">
+    <value>Shift cells _left</value>
+  </data>
+  <data name="CellShift_ShiftCellsRight" xml:space="preserve">
+    <value>Shift cells _right</value>
+  </data>
+  <data name="CellShift_ShiftCellsUp" xml:space="preserve">
+    <value>Shift cells _up</value>
+  </data>
+  <data name="CreateNamesFromSelection_BodyText" xml:space="preserve">
+    <value>Excel creates named ranges from the selected row or column labels.</value>
+  </data>
+  <data name="CreateNamesFromSelection_BottomRow" xml:space="preserve">
+    <value>_Bottom row</value>
+  </data>
+  <data name="CreateNamesFromSelection_BottomRowHelpText" xml:space="preserve">
+    <value>Use the bottom row of the selection as names.</value>
+  </data>
+  <data name="CreateNamesFromSelection_GroupAutomationName" xml:space="preserve">
+    <value>Create names from selected labels</value>
+  </data>
+  <data name="CreateNamesFromSelection_GroupHeader" xml:space="preserve">
+    <value>Create names from</value>
+  </data>
+  <data name="CreateNamesFromSelection_GroupHelpText" xml:space="preserve">
+    <value>Choose which row or column labels Excel uses to create named ranges.</value>
+  </data>
+  <data name="CreateNamesFromSelection_IntroText" xml:space="preserve">
+    <value>Create names from values in the:</value>
+  </data>
+  <data name="CreateNamesFromSelection_LeftColumn" xml:space="preserve">
+    <value>_Left column</value>
+  </data>
+  <data name="CreateNamesFromSelection_LeftColumnHelpText" xml:space="preserve">
+    <value>Use the left column of the selection as names.</value>
+  </data>
+  <data name="CreateNamesFromSelection_NoSelectionMessage" xml:space="preserve">
+    <value>Select at least one row or column label position.</value>
+  </data>
+  <data name="CreateNamesFromSelection_RightColumn" xml:space="preserve">
+    <value>_Right column</value>
+  </data>
+  <data name="CreateNamesFromSelection_RightColumnHelpText" xml:space="preserve">
+    <value>Use the right column of the selection as names.</value>
+  </data>
+  <data name="CreateNamesFromSelection_Title" xml:space="preserve">
+    <value>Create Names from Selection</value>
+  </data>
+  <data name="CreateNamesFromSelection_TopRow" xml:space="preserve">
+    <value>_Top row</value>
+  </data>
+  <data name="CreateNamesFromSelection_TopRowHelpText" xml:space="preserve">
+    <value>Use the top row of the selection as names.</value>
+  </data>
+  <data name="CreateTable_HeadersCheckBox" xml:space="preserve">
+    <value>_My table has headers</value>
+  </data>
+  <data name="CreateTable_InvalidRangeMessage" xml:space="preserve">
+    <value>Enter a valid table range.</value>
+  </data>
+  <data name="CreateTable_MinimumRowsMessage" xml:space="preserve">
+    <value>Table range must include at least two rows.</value>
+  </data>
+  <data name="CreateTable_MissingRangeMessage" xml:space="preserve">
+    <value>Enter a table range.</value>
+  </data>
+  <data name="CreateTable_RangeAutomationName" xml:space="preserve">
+    <value>Table range</value>
+  </data>
+  <data name="CreateTable_RangeLabel" xml:space="preserve">
+    <value>_Where is the data for your table?</value>
+  </data>
+  <data name="CreateTable_RangePickerAutomationName" xml:space="preserve">
+    <value>Select table range</value>
+  </data>
+  <data name="CreateTable_Title" xml:space="preserve">
+    <value>Create Table</value>
+  </data>
+  <data name="CustomViewName_BlankNameMessage" xml:space="preserve">
+    <value>Enter a view name.</value>
+  </data>
+  <data name="CustomViewName_HiddenFilterSettingsAutomationName" xml:space="preserve">
+    <value>Hidden rows, columns and filter settings</value>
+  </data>
+  <data name="CustomViewName_HiddenFilterSettingsCheckBox" xml:space="preserve">
+    <value>_Hidden rows, columns and filter settings</value>
+  </data>
+  <data name="CustomViewName_HiddenFilterSettingsHelpText" xml:space="preserve">
+    <value>Include hidden rows, hidden columns, and filter settings in the custom view.</value>
+  </data>
+  <data name="CustomViewName_NameAutomationName" xml:space="preserve">
+    <value>Custom view name</value>
+  </data>
+  <data name="CustomViewName_NameHelpText" xml:space="preserve">
+    <value>Enter the name for the custom workbook view.</value>
+  </data>
+  <data name="CustomViewName_NameLabel" xml:space="preserve">
+    <value>_Name:</value>
+  </data>
+  <data name="CustomViewName_PrintSettingsAutomationName" xml:space="preserve">
+    <value>Print settings</value>
+  </data>
+  <data name="CustomViewName_PrintSettingsCheckBox" xml:space="preserve">
+    <value>_Print settings</value>
+  </data>
+  <data name="CustomViewName_PrintSettingsHelpText" xml:space="preserve">
+    <value>Include print settings in the custom view.</value>
+  </data>
+  <data name="CustomViewName_Title" xml:space="preserve">
+    <value>Add View</value>
+  </data>
+  <data name="DataTable_ColumnInputAutomationName" xml:space="preserve">
+    <value>Column input cell</value>
+  </data>
+  <data name="DataTable_ColumnInputInsideRangeMessage" xml:space="preserve">
+    <value>Column input cell cannot be inside the data table range.</value>
+  </data>
+  <data name="DataTable_ColumnInputLabel" xml:space="preserve">
+    <value>_Column input cell:</value>
+  </data>
+  <data name="DataTable_ColumnInputPickerAutomationName" xml:space="preserve">
+    <value>Select column input cell</value>
+  </data>
+  <data name="DataTable_InvalidCellsMessage" xml:space="preserve">
+    <value>Enter valid data table cells.</value>
+  </data>
+  <data name="DataTable_InvalidColumnInputMessage" xml:space="preserve">
+    <value>Enter a valid column input cell.</value>
+  </data>
+  <data name="DataTable_InvalidRowInputMessage" xml:space="preserve">
+    <value>Enter a valid row input cell.</value>
+  </data>
+  <data name="DataTable_MissingInputMessage" xml:space="preserve">
+    <value>Enter either a row input cell or a column input cell.</value>
+  </data>
+  <data name="DataTable_RowInputAutomationName" xml:space="preserve">
+    <value>Row input cell</value>
+  </data>
+  <data name="DataTable_RowInputInsideRangeMessage" xml:space="preserve">
+    <value>Row input cell cannot be inside the data table range.</value>
+  </data>
+  <data name="DataTable_RowInputLabel" xml:space="preserve">
+    <value>_Row input cell:</value>
+  </data>
+  <data name="DataTable_RowInputPickerAutomationName" xml:space="preserve">
+    <value>Select row input cell</value>
+  </data>
+  <data name="DataTable_SameInputCellMessage" xml:space="preserve">
+    <value>Row and column input cells must be different.</value>
+  </data>
+  <data name="DataTable_Title" xml:space="preserve">
+    <value>Data Table</value>
+  </data>
+  <data name="ErrorChecking_ActionIntroText" xml:space="preserve">
+    <value>Choose an action for the selected issue.</value>
+  </data>
+  <data name="ErrorChecking_CellColumnHeader" xml:space="preserve">
+    <value>Cell</value>
+  </data>
+  <data name="ErrorChecking_CloseButton" xml:space="preserve">
+    <value>_Close</value>
+  </data>
+  <data name="ErrorChecking_DescriptionColumnHeader" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="ErrorChecking_EditInFormulaBarButton" xml:space="preserve">
+    <value>_Edit in Formula Bar</value>
+  </data>
+  <data name="ErrorChecking_FormulaColumnHeader" xml:space="preserve">
+    <value>Formula</value>
+  </data>
+  <data name="ErrorChecking_GoToButton" xml:space="preserve">
+    <value>_Go To</value>
+  </data>
+  <data name="ErrorChecking_HelpButton" xml:space="preserve">
+    <value>_Help on this error</value>
+  </data>
+  <data name="ErrorChecking_HelpGroupHeader" xml:space="preserve">
+    <value>Error help</value>
+  </data>
+  <data name="ErrorChecking_HelpTitle" xml:space="preserve">
+    <value>Error Checking Help</value>
+  </data>
+  <data name="ErrorChecking_IgnoreErrorButton" xml:space="preserve">
+    <value>_Ignore Error</value>
+  </data>
+  <data name="ErrorChecking_IssueColumnHeader" xml:space="preserve">
+    <value>Issue</value>
+  </data>
+  <data name="ErrorChecking_IssueCountHeader" xml:space="preserve">
+    <value>{0} issue(s) found.</value>
+  </data>
+  <data name="ErrorChecking_IssuesAutomationName" xml:space="preserve">
+    <value>Issues</value>
+  </data>
+  <data name="ErrorChecking_IssuesLabel" xml:space="preserve">
+    <value>_Issues:</value>
+  </data>
+  <data name="ErrorChecking_NextButton" xml:space="preserve">
+    <value>_Next</value>
+  </data>
+  <data name="ErrorChecking_NoSelectionHelpBody" xml:space="preserve">
+    <value>Select an issue to see its description and available correction actions.</value>
+  </data>
+  <data name="ErrorChecking_OptionsButton" xml:space="preserve">
+    <value>_Options...</value>
+  </data>
+  <data name="ErrorChecking_PreviousButton" xml:space="preserve">
+    <value>_Previous</value>
+  </data>
+  <data name="ErrorChecking_SelectedIssueHelpBody" xml:space="preserve">
+    <value>{0}&#x0A;&#x0A;{1}&#x0A;&#x0A;Use Show Calculation Steps to trace the formula, Ignore Error to suppress this issue, or Edit in Formula Bar to correct the formula.</value>
+  </data>
+  <data name="ErrorChecking_SheetColumnHeader" xml:space="preserve">
+    <value>Sheet</value>
+  </data>
+  <data name="ErrorChecking_ShowCalculationStepsButton" xml:space="preserve">
+    <value>Show _Calculation Steps</value>
+  </data>
+  <data name="ErrorChecking_Title" xml:space="preserve">
+    <value>Error Checking</value>
+  </data>
+  <data name="ErrorChecking_TraceErrorButton" xml:space="preserve">
+    <value>_Trace Error</value>
+  </data>
+  <data name="EvaluateFormula_CloseButton" xml:space="preserve">
+    <value>_Close</value>
+  </data>
+  <data name="EvaluateFormula_EvaluateButton" xml:space="preserve">
+    <value>_Evaluate</value>
+  </data>
+  <data name="EvaluateFormula_EvaluationLabel" xml:space="preserve">
+    <value>Evaluation:</value>
+  </data>
+  <data name="EvaluateFormula_FormulaPrefix" xml:space="preserve">
+    <value>Formula: </value>
+  </data>
+  <data name="EvaluateFormula_HelpBody" xml:space="preserve">
+    <value>Evaluate Formula shows the selected formula one calculation step at a time. Use Evaluate to advance, Step In when a nested formula can be inspected, Step Out to return to the previous step, and Restart to begin again.</value>
+  </data>
+  <data name="EvaluateFormula_HelpButton" xml:space="preserve">
+    <value>Help on this _Function</value>
+  </data>
+  <data name="EvaluateFormula_HelpTitle" xml:space="preserve">
+    <value>Evaluate Formula Help</value>
+  </data>
+  <data name="EvaluateFormula_NoIntermediateStepsText" xml:space="preserve">
+    <value>No intermediate evaluation steps.</value>
+  </data>
+  <data name="EvaluateFormula_RestartButton" xml:space="preserve">
+    <value>_Restart</value>
+  </data>
+  <data name="EvaluateFormula_ResultText" xml:space="preserve">
+    <value>Result: {0}</value>
+  </data>
+  <data name="EvaluateFormula_StepInButton" xml:space="preserve">
+    <value>Step _In</value>
+  </data>
+  <data name="EvaluateFormula_StepOutButton" xml:space="preserve">
+    <value>Step _Out</value>
+  </data>
+  <data name="EvaluateFormula_StepPositionText" xml:space="preserve">
+    <value>Step {0} of {1}</value>
+  </data>
+  <data name="EvaluateFormula_Title" xml:space="preserve">
+    <value>Evaluate Formula</value>
+  </data>
+  <data name="EvaluateFormula_ValueText" xml:space="preserve">
+    <value>Value: {0}</value>
+  </data>
+  <data name="FillSeriesStep_AutoFill" xml:space="preserve">
+    <value>_AutoFill</value>
+  </data>
+  <data name="FillSeriesStep_Columns" xml:space="preserve">
+    <value>_Columns</value>
+  </data>
+  <data name="FillSeriesStep_Date" xml:space="preserve">
+    <value>_Date</value>
+  </data>
+  <data name="FillSeriesStep_DateUnitHeader" xml:space="preserve">
+    <value>Date unit</value>
+  </data>
+  <data name="FillSeriesStep_Day" xml:space="preserve">
+    <value>Da_y</value>
+  </data>
+  <data name="FillSeriesStep_Growth" xml:space="preserve">
+    <value>_Growth</value>
+  </data>
+  <data name="FillSeriesStep_InvalidStepMessage" xml:space="preserve">
+    <value>Enter a numeric step value.</value>
+  </data>
+  <data name="FillSeriesStep_InvalidStopMessage" xml:space="preserve">
+    <value>Enter a numeric stop value or leave it blank.</value>
+  </data>
+  <data name="FillSeriesStep_Linear" xml:space="preserve">
+    <value>_Linear</value>
+  </data>
+  <data name="FillSeriesStep_Month" xml:space="preserve">
+    <value>_Month</value>
+  </data>
+  <data name="FillSeriesStep_Rows" xml:space="preserve">
+    <value>_Rows</value>
+  </data>
+  <data name="FillSeriesStep_SeriesInHeader" xml:space="preserve">
+    <value>Series in</value>
+  </data>
+  <data name="FillSeriesStep_StepValueAutomationName" xml:space="preserve">
+    <value>Step value</value>
+  </data>
+  <data name="FillSeriesStep_StepValueHelpText" xml:space="preserve">
+    <value>Enter the amount to increment each value in the series.</value>
+  </data>
+  <data name="FillSeriesStep_StepValueLabel" xml:space="preserve">
+    <value>Step _value:</value>
+  </data>
+  <data name="FillSeriesStep_StopValueAutomationName" xml:space="preserve">
+    <value>Stop value</value>
+  </data>
+  <data name="FillSeriesStep_StopValueHelpText" xml:space="preserve">
+    <value>Enter the optional final value for the series.</value>
+  </data>
+  <data name="FillSeriesStep_StopValueLabel" xml:space="preserve">
+    <value>S_top value:</value>
+  </data>
+  <data name="FillSeriesStep_Title" xml:space="preserve">
+    <value>Series</value>
+  </data>
+  <data name="FillSeriesStep_TypeHeader" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="FillSeriesStep_Weekday" xml:space="preserve">
+    <value>_Weekday</value>
+  </data>
+  <data name="FillSeriesStep_Year" xml:space="preserve">
+    <value>Y_ear</value>
+  </data>
+  <data name="ForecastSheet_CreateButton" xml:space="preserve">
+    <value>_Create</value>
+  </data>
+  <data name="ForecastSheet_InvalidPeriodsMessage" xml:space="preserve">
+    <value>Enter a positive whole number of forecast periods.</value>
+  </data>
+  <data name="ForecastSheet_PeriodsAutomationName" xml:space="preserve">
+    <value>Forecast periods</value>
+  </data>
+  <data name="ForecastSheet_PeriodsHelpText" xml:space="preserve">
+    <value>Enter the positive whole number of periods to forecast.</value>
+  </data>
+  <data name="ForecastSheet_PeriodsLabel" xml:space="preserve">
+    <value>Forecast _periods:</value>
+  </data>
+  <data name="ForecastSheet_Title" xml:space="preserve">
+    <value>Forecast Sheet</value>
+  </data>
+  <data name="FunctionArguments_DefaultArgumentDescription" xml:space="preserve">
+    <value>The first value, reference, or expression.</value>
+  </data>
+  <data name="FunctionArguments_FormulaResultAutomationName" xml:space="preserve">
+    <value>Formula result</value>
+  </data>
+  <data name="FunctionArguments_FormulaResultHelpText" xml:space="preserve">
+    <value>Shows the formula that will be inserted from the current argument values.</value>
+  </data>
+  <data name="FunctionArguments_FormulaResultLabel" xml:space="preserve">
+    <value>Formula result =</value>
+  </data>
+  <data name="FunctionArguments_HelpButton" xml:space="preserve">
+    <value>_Help on this function</value>
+  </data>
+  <data name="FunctionArguments_HelpTitle" xml:space="preserve">
+    <value>Function Help</value>
+  </data>
+  <data name="FunctionArguments_Title" xml:space="preserve">
+    <value>Function Arguments</value>
+  </data>
   <data name="DeferredCommand_AutoCorrectOptions_Body" xml:space="preserve">
     <value>AutoCorrect replacement dictionaries are not implemented in FreeX. Proofing options shown here are informational until a local spelling and replacement dictionary model exists.</value>
   </data>

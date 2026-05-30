@@ -153,11 +153,12 @@ public sealed class InsertFunctionDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FunctionArgumentsDialog.cs"));
 
-        source.Should().Contain("Content = \"_Help on this function\"");
+        source.Should().Contain("Content = UiText.Get(\"FunctionArguments_HelpButton\")");
         source.Should().Contain("ShowFunctionHelp");
         source.Should().Contain("btnRow.Children.Add(help)");
         source.Should().Contain("btnRow.Children.Add(ok)");
         source.Should().Contain("btnRow.Children.Add(cancel)");
+        UiText.Get("FunctionArguments_HelpButton").Should().Be("_Help on this function");
     }
 
     [Fact]
@@ -165,9 +166,10 @@ public sealed class InsertFunctionDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FunctionArgumentsDialog.cs"));
 
-        source.Should().Contain("Text = \"Formula result =\"");
-        source.Should().Contain("AutomationProperties.SetName(_formulaPreview, \"Formula result\");");
+        source.Should().Contain("Text = UiText.Get(\"FunctionArguments_FormulaResultLabel\")");
+        source.Should().Contain("AutomationProperties.SetName(_formulaPreview, UiText.Get(\"FunctionArguments_FormulaResultAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetHelpText(_formulaPreview");
+        UiText.Get("FunctionArguments_FormulaResultLabel").Should().Be("Formula result =");
     }
 
     [Fact]

@@ -15,10 +15,11 @@ public sealed class ErrorCheckingDialogSourceTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
 
-        source.Should().Contain("issue(s) found.");
-        source.Should().Contain("Header = \"Issue\"");
+        source.Should().Contain("UiText.Format(\"ErrorChecking_IssueCountHeader\", _issues.Count)");
+        source.Should().Contain("Header = UiText.Get(\"ErrorChecking_IssueColumnHeader\")");
         source.Should().NotContain("error(s) found.");
         source.Should().NotContain("Header = \"Error\"");
+        UiText.Get("ErrorChecking_IssueColumnHeader").Should().Be("Issue");
     }
 
     [Fact]
@@ -38,7 +39,7 @@ public sealed class ErrorCheckingDialogSourceTests
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
 
         dialogSource.Should().Contain("Action? openOptions");
-        dialogSource.Should().Contain("Content = \"_Options...\"");
+        dialogSource.Should().Contain("Content = UiText.Get(\"ErrorChecking_OptionsButton\")");
         dialogSource.Should().Contain("_openOptions?.Invoke()");
         formulaSource.Should().Contain("ShowOptionsDialog");
         backstageSource.Should().Contain("private void ShowOptionsDialog()");
@@ -51,17 +52,18 @@ public sealed class ErrorCheckingDialogSourceTests
 
         foreach (var content in new[]
         {
-            "_Go To",
-            "_Previous",
-            "_Next",
-            "_Ignore Error",
-            "_Trace Error",
-            "_Options...",
-            "_Close"
+            "ErrorChecking_GoToButton",
+            "ErrorChecking_PreviousButton",
+            "ErrorChecking_NextButton",
+            "ErrorChecking_IgnoreErrorButton",
+            "ErrorChecking_TraceErrorButton",
+            "ErrorChecking_OptionsButton",
+            "ErrorChecking_CloseButton"
         })
-            source.Should().Contain($"Content = \"{content}\"");
+            source.Should().Contain($"Content = UiText.Get(\"{content}\")");
 
-        source.Should().Contain("Content = \"_Close\", Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true");
+        source.Should().Contain("Content = UiText.Get(\"ErrorChecking_CloseButton\"), Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0), IsCancel = true");
+        UiText.Get("ErrorChecking_CloseButton").Should().Be("_Close");
     }
 
     [Fact]
@@ -81,8 +83,9 @@ public sealed class ErrorCheckingDialogSourceTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
 
-        source.Should().Contain("new Label { Content = \"_Issues:\", Target = _listView");
-        source.Should().Contain("AutomationProperties.SetName(_listView, \"Issues\");");
+        source.Should().Contain("new Label { Content = UiText.Get(\"ErrorChecking_IssuesLabel\"), Target = _listView");
+        source.Should().Contain("AutomationProperties.SetName(_listView, UiText.Get(\"ErrorChecking_IssuesAutomationName\"));");
+        UiText.Get("ErrorChecking_IssuesLabel").Should().Be("_Issues:");
     }
 
     [Fact]
@@ -90,13 +93,14 @@ public sealed class ErrorCheckingDialogSourceTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
 
-        source.Should().Contain("Error help");
-        source.Should().Contain("Content = \"_Help on this error\"");
+        source.Should().Contain("UiText.Get(\"ErrorChecking_HelpGroupHeader\")");
+        source.Should().Contain("Content = UiText.Get(\"ErrorChecking_HelpButton\")");
         source.Should().Contain("ShowSelectedIssueHelp");
-        source.Should().Contain("Content = \"Show _Calculation Steps\"");
-        source.Should().Contain("Content = \"_Ignore Error\"");
-        source.Should().Contain("Content = \"_Edit in Formula Bar\"");
+        source.Should().Contain("Content = UiText.Get(\"ErrorChecking_ShowCalculationStepsButton\")");
+        source.Should().Contain("Content = UiText.Get(\"ErrorChecking_IgnoreErrorButton\")");
+        source.Should().Contain("Content = UiText.Get(\"ErrorChecking_EditInFormulaBarButton\")");
         source.Should().NotContain("SystemSounds.Asterisk.Play");
+        UiText.Get("ErrorChecking_HelpGroupHeader").Should().Be("Error help");
     }
 
     [Fact]

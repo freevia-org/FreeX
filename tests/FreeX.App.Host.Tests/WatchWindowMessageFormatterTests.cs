@@ -80,10 +80,12 @@ public sealed class WatchWindowMessageFormatterTests
 
         watchWindowSource.Should().NotContain("public sealed class AddWatchDialog");
         source.Should().Contain("public sealed class AddWatchDialog");
-        source.Should().Contain("Title = \"Add Watch\"");
-        source.Should().Contain("Content = \"Selected _range:\"");
+        source.Should().Contain("Title = UiText.Get(\"AddWatch_Title\")");
+        source.Should().Contain("Content = UiText.Get(\"AddWatch_SelectedRangeLabel\")");
         source.Should().Contain("Target = _rangeBox");
-        source.Should().Contain("Content = \"_Add\"");
+        source.Should().Contain("Content = UiText.Get(\"AddWatch_AddButton\")");
+        UiText.Get("AddWatch_Title").Should().Be("Add Watch");
+        UiText.Get("AddWatch_SelectedRangeLabel").Should().Be("Selected _range:");
     }
 
     [Fact]
@@ -91,9 +93,10 @@ public sealed class WatchWindowMessageFormatterTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AddWatchDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Selected range\");");
+        source.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(\"AddWatch_SelectedRangeAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_rangeBox, \"AddWatchSelectedRangeBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_rangeBox, \"Shows the selected worksheet cells that will be watched.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_rangeBox, UiText.Get(\"AddWatch_SelectedRangeHelpText\"));");
+        UiText.Get("AddWatch_SelectedRangeAutomationName").Should().Be("Selected range");
     }
 
     [Fact]
@@ -101,13 +104,14 @@ public sealed class WatchWindowMessageFormatterTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AddWatchDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(add, \"Add\");");
+        source.Should().Contain("AutomationProperties.SetName(add, UiText.Get(\"AddWatch_AddAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(add, \"AddWatchAddButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(add, \"Add the selected cells to the Watch Window.\");");
-        source.Should().Contain("var cancel = new Button { Content = \"_Cancel\", Width = 76, IsCancel = true };");
-        source.Should().Contain("AutomationProperties.SetName(cancel, \"Cancel\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(add, UiText.Get(\"AddWatch_AddHelpText\"));");
+        source.Should().Contain("var cancel = new Button { Content = UiText.Cancel, Width = 76, IsCancel = true };");
+        source.Should().Contain("AutomationProperties.SetName(cancel, UiText.Get(\"AddWatch_CancelAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancel, \"AddWatchCancelButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(cancel, \"Close the Add Watch dialog without adding cells.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(cancel, UiText.Get(\"AddWatch_CancelHelpText\"));");
+        UiText.Get("AddWatch_AddAutomationName").Should().Be("Add");
     }
 
     [Fact]

@@ -2035,15 +2035,15 @@ public sealed class DataToolDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataTableDialog.cs"));
 
-        source.Should().Contain("AddReferenceRow(grid, 0, \"_Row input cell:\", _rowInputBox");
-        source.Should().Contain("AddReferenceRow(grid, 1, \"_Column input cell:\", _columnInputBox");
+        source.Should().Contain("UiText.Get(\"DataTable_RowInputLabel\")");
+        source.Should().Contain("UiText.Get(\"DataTable_ColumnInputLabel\")");
         source.Should().NotContain("_formulaBox");
         source.Should().NotContain("_modeBox");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
         source.Should().Contain("RequestRangeSelection");
         source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
-        source.Should().Contain("Select row input cell");
-        source.Should().Contain("Select column input cell");
+        source.Should().Contain("UiText.Get(\"DataTable_RowInputPickerAutomationName\")");
+        source.Should().Contain("UiText.Get(\"DataTable_ColumnInputPickerAutomationName\")");
         source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().Contain("var labelBlock = new Label");
         source.Should().Contain("Target = textBox");
@@ -2057,8 +2057,9 @@ public sealed class DataToolDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DataTableDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_rowInputBox, \"Row input cell\");");
-        source.Should().Contain("AutomationProperties.SetName(_columnInputBox, \"Column input cell\");");
+        source.Should().Contain("AutomationProperties.SetName(_rowInputBox, UiText.Get(\"DataTable_RowInputAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetName(_columnInputBox, UiText.Get(\"DataTable_ColumnInputAutomationName\"));");
+        UiText.Get("DataTable_RowInputAutomationName").Should().Be("Row input cell");
     }
 
     [Fact]
@@ -2078,8 +2079,8 @@ public sealed class DataToolDialogTests
 
         source.Should().Contain("FocusInvalidInput(error);");
         source.Should().Contain("private void FocusInvalidInput(string? error)");
-        source.Should().Contain("Column input cell cannot be inside the data table range.");
-        source.Should().Contain("Row and column input cells must be different.");
+        source.Should().Contain("UiText.Get(\"DataTable_ColumnInputInsideRangeMessage\")");
+        source.Should().Contain("UiText.Get(\"DataTable_SameInputCellMessage\")");
         source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
 
@@ -2197,13 +2198,14 @@ public sealed class DataToolDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateTableDialog.cs"));
 
         source.Should().Contain("_headersBox");
-        source.Should().Contain("Content = \"_My table has headers\"");
-        source.Should().Contain("new Label { Content = \"_Where is the data for your table?\", Target = _rangeBox");
+        source.Should().Contain("Content = UiText.Get(\"CreateTable_HeadersCheckBox\")");
+        source.Should().Contain("new Label { Content = UiText.Get(\"CreateTable_RangeLabel\"), Target = _rangeBox");
         source.Should().Contain("CreateReferenceEditor(_rangeBox");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
         source.Should().Contain("RequestRangeSelection");
         source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
-        source.Should().Contain("Select table range");
+        source.Should().Contain("UiText.Get(\"CreateTable_RangePickerAutomationName\")");
+        UiText.Get("CreateTable_HeadersCheckBox").Should().Be("_My table has headers");
     }
 
     [Fact]
@@ -2211,7 +2213,8 @@ public sealed class DataToolDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CreateTableDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Table range\");");
+        source.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(\"CreateTable_RangeAutomationName\"));");
+        UiText.Get("CreateTable_RangeAutomationName").Should().Be("Table range");
     }
 
     [Fact]

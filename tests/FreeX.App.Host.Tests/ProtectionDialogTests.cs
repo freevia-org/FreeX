@@ -122,12 +122,13 @@ public sealed class ProtectionDialogTests
         var source = ReadProtectionDialogSources();
 
         source.Should().Contain("DialogButtonRowFactory.Create");
-        source.Should().Contain("new Label { Content = \"_Range:\"");
+        source.Should().Contain("new Label { Content = UiText.Get(\"AllowEditRange_RangeLabel\")");
+        UiText.Get("AllowEditRange_RangeLabel").Should().Be("_Range:");
         source.Should().Contain("Target = _rangeBox");
-        source.Should().Contain("Header = \"Range\"");
+        source.Should().Contain("Header = UiText.Get(\"AllowEditRange_RangeGroupHeader\")");
         source.Should().Contain("Content = \"...\"");
-        source.Should().Contain("ToolTip = \"Collapse dialog and select editable range\"");
-        source.Should().Contain("AutomationProperties.SetName(rangePicker, \"Select editable range\")");
+        source.Should().Contain("ToolTip = UiText.Get(\"AllowEditRange_PickerToolTip\")");
+        source.Should().Contain("AutomationProperties.SetName(rangePicker, UiText.Get(\"AllowEditRange_PickerAutomationName\"))");
         source.Should().Contain("AutomationProperties.SetHelpText");
         source.Should().Contain("rangePicker.Click += RangePicker_Click");
         source.Should().Contain("private void RangePicker_Click");
@@ -138,7 +139,7 @@ public sealed class ProtectionDialogTests
             source.IndexOf("private void RangePicker_Click", StringComparison.Ordinal)..
             source.IndexOf("public static AllowEditRangeSelectionRequest", StringComparison.Ordinal)];
         pickerHandlerSource.Should().Contain("FocusRangeInput();");
-        source.Should().Contain("Use an A1-style range");
+        source.Should().Contain("UiText.Get(\"AllowEditRange_ExampleText\")");
     }
 
     [Fact]
@@ -178,10 +179,10 @@ public sealed class ProtectionDialogTests
         source.Should().Contain("public enum AllowEditRangeDialogAction");
         source.Should().Contain("public sealed record AllowEditRangeDialogResult");
         source.Should().Contain("private readonly ListBox _existingRangesBox");
-        source.Should().Contain("new Label { Content = \"_Ranges unlocked by password:\", Target = _existingRangesBox");
+        source.Should().Contain("new Label { Content = UiText.Get(\"AllowEditRange_ExistingRangesLabel\"), Target = _existingRangesBox");
         source.Should().NotContain("Header = \"Ranges unlocked by password\"");
-        source.Should().Contain("Content = \"_Delete\"");
-        source.Should().Contain("Content = \"Clear _All\"");
+        source.Should().Contain("Content = UiText.Get(\"AllowEditRange_DeleteButton\")");
+        source.Should().Contain("Content = UiText.Get(\"AllowEditRange_ClearAllButton\")");
         source.Should().Contain("private void DeleteSelectedRange_Click");
         source.Should().Contain("private void ClearAllRanges_Click");
         source.Should().Contain("CreateRemoveResult");
@@ -193,9 +194,10 @@ public sealed class ProtectionDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AllowEditRangeDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_existingRangesBox, \"Ranges unlocked by password\");");
+        source.Should().Contain("AutomationProperties.SetName(_existingRangesBox, UiText.Get(\"AllowEditRange_ExistingRangesAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_existingRangesBox, \"AllowEditRangeExistingRangesList\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_existingRangesBox, \"Select an existing editable range to delete.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_existingRangesBox, UiText.Get(\"AllowEditRange_ExistingRangesHelpText\"));");
+        UiText.Get("AllowEditRange_ExistingRangesAutomationName").Should().Be("Ranges unlocked by password");
     }
 
     [Fact]
@@ -203,9 +205,10 @@ public sealed class ProtectionDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AllowEditRangeDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_rangeBox, \"Editable range\");");
+        source.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(\"AllowEditRange_RangeAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_rangeBox, \"AllowEditRangeBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_rangeBox, \"Enter the worksheet range that users can edit while the sheet is protected.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_rangeBox, UiText.Get(\"AllowEditRange_RangeHelpText\"));");
+        UiText.Get("AllowEditRange_RangeAutomationName").Should().Be("Editable range");
     }
 
     [Fact]
@@ -213,16 +216,16 @@ public sealed class ProtectionDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AllowEditRangeDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_deleteRangeButton, \"Delete\");");
+        source.Should().Contain("AutomationProperties.SetName(_deleteRangeButton, UiText.Get(\"AllowEditRange_DeleteAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_deleteRangeButton, \"AllowEditRangeDeleteButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_deleteRangeButton, \"Delete the selected editable range.\");");
-        source.Should().Contain("AutomationProperties.SetName(_clearRangesButton, \"Clear All\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_deleteRangeButton, UiText.Get(\"AllowEditRange_DeleteHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_clearRangesButton, UiText.Get(\"AllowEditRange_ClearAllAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_clearRangesButton, \"AllowEditRangeClearAllButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_clearRangesButton, \"Delete all editable ranges for this worksheet.\");");
-        source.Should().Contain("AutomationProperties.SetName(rangePicker, \"Select editable range\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_clearRangesButton, UiText.Get(\"AllowEditRange_ClearAllHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(rangePicker, UiText.Get(\"AllowEditRange_PickerAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(rangePicker, \"AllowEditRangePickerButton\");");
         source.Should().Contain("AutomationProperties.SetHelpText(");
-        source.Should().Contain("\"Collapse dialog and select the editable range from the worksheet.\");");
+        source.Should().Contain("UiText.Get(\"AllowEditRange_PickerHelpText\"));");
     }
 
     [Fact]

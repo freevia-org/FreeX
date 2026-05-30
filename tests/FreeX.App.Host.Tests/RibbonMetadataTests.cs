@@ -191,6 +191,29 @@ public sealed class RibbonMetadataTests
     }
 
     [Fact]
+    public void CommandName_TrimsAttachedMetadataForInvariantRibbonIdentity()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var button = new Button();
+            RibbonMetadata.SetCommandName(button, "  Paste Special  ");
+
+            RibbonMetadata.TryGetCommandName(button, out var commandName).Should().BeTrue();
+            commandName.Should().Be("Paste Special");
+        });
+    }
+
+    [Fact]
+    public void CommandName_ReturnsFalseWhenMissing()
+    {
+        StaTestRunner.Run(() =>
+        {
+            RibbonMetadata.TryGetCommandName(new Button(), out var commandName).Should().BeFalse();
+            commandName.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
     public void CollapsedChevron_UsesAttachedRoleOnly()
     {
         StaTestRunner.Run(() =>

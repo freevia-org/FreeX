@@ -49,21 +49,33 @@ public sealed class DataTableDialog : Window
         _sheetId = sheetId;
         _range = range;
         _requestRangeSelection = requestRangeSelection;
-        Title = "Data Table";
+        Title = UiText.Get("DataTable_Title");
         Width = 360;
         Height = 210;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
-        AutomationProperties.SetName(_rowInputBox, "Row input cell");
-        AutomationProperties.SetName(_columnInputBox, "Column input cell");
+        AutomationProperties.SetName(_rowInputBox, UiText.Get("DataTable_RowInputAutomationName"));
+        AutomationProperties.SetName(_columnInputBox, UiText.Get("DataTable_ColumnInputAutomationName"));
 
         var root = new StackPanel { Margin = new Thickness(12) };
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 10) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        AddReferenceRow(grid, 0, "_Row input cell:", _rowInputBox, "Select row input cell", DataTableRangeSelectionTarget.RowInputCell);
-        AddReferenceRow(grid, 1, "_Column input cell:", _columnInputBox, "Select column input cell", DataTableRangeSelectionTarget.ColumnInputCell);
+        AddReferenceRow(
+            grid,
+            0,
+            UiText.Get("DataTable_RowInputLabel"),
+            _rowInputBox,
+            UiText.Get("DataTable_RowInputPickerAutomationName"),
+            DataTableRangeSelectionTarget.RowInputCell);
+        AddReferenceRow(
+            grid,
+            1,
+            UiText.Get("DataTable_ColumnInputLabel"),
+            _columnInputBox,
+            UiText.Get("DataTable_ColumnInputPickerAutomationName"),
+            DataTableRangeSelectionTarget.ColumnInputCell);
         root.Children.Add(grid);
         root.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 76));
         Content = root;
@@ -85,37 +97,37 @@ public sealed class DataTableDialog : Window
         var hasColumnInput = !string.IsNullOrWhiteSpace(columnInputCellText);
         if (!TryParseOptionalCell(currentSheetId, rowInputCellText, hasRowInput, out var rowInputCell))
         {
-            error = "Enter a valid row input cell.";
+            error = UiText.Get("DataTable_InvalidRowInputMessage");
             return false;
         }
 
         if (!TryParseOptionalCell(currentSheetId, columnInputCellText, hasColumnInput, out var columnInputCell))
         {
-            error = "Enter a valid column input cell.";
+            error = UiText.Get("DataTable_InvalidColumnInputMessage");
             return false;
         }
 
         if (!hasRowInput && !hasColumnInput)
         {
-            error = "Enter either a row input cell or a column input cell.";
+            error = UiText.Get("DataTable_MissingInputMessage");
             return false;
         }
 
         if (rowInputCell is { } rowCell && range.Contains(rowCell))
         {
-            error = "Row input cell cannot be inside the data table range.";
+            error = UiText.Get("DataTable_RowInputInsideRangeMessage");
             return false;
         }
 
         if (columnInputCell is { } columnCell && range.Contains(columnCell))
         {
-            error = "Column input cell cannot be inside the data table range.";
+            error = UiText.Get("DataTable_ColumnInputInsideRangeMessage");
             return false;
         }
 
         if (rowInputCell is { } rowInput && columnInputCell is { } columnInput && rowInput == columnInput)
         {
-            error = "Row and column input cells must be different.";
+            error = UiText.Get("DataTable_SameInputCellMessage");
             return false;
         }
 
@@ -218,9 +230,9 @@ public sealed class DataTableDialog : Window
 
     private void FocusInvalidInput(string? error)
     {
-        var target = string.Equals(error, "Enter a valid column input cell.", StringComparison.Ordinal) ||
-            string.Equals(error, "Column input cell cannot be inside the data table range.", StringComparison.Ordinal) ||
-            string.Equals(error, "Row and column input cells must be different.", StringComparison.Ordinal)
+        var target = string.Equals(error, UiText.Get("DataTable_InvalidColumnInputMessage"), StringComparison.Ordinal) ||
+            string.Equals(error, UiText.Get("DataTable_ColumnInputInsideRangeMessage"), StringComparison.Ordinal) ||
+            string.Equals(error, UiText.Get("DataTable_SameInputCellMessage"), StringComparison.Ordinal)
             ? _columnInputBox
             : _rowInputBox;
         DialogFocus.FocusAndSelect(target);
@@ -230,7 +242,7 @@ public sealed class DataTableDialog : Window
     {
         if (!TryParse(_sheetId, _range, _rowInputBox.Text, _columnInputBox.Text, out var result, out var error))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? "Enter valid data table cells.", Title);
+            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("DataTable_InvalidCellsMessage"), Title);
             FocusInvalidInput(error);
             return;
         }

@@ -143,12 +143,13 @@ public sealed class CustomViewsDialogXamlTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewNameDialog.cs"));
 
-        source.Should().Contain("new Label { Content = \"_Name:\"");
+        source.Should().Contain("new Label { Content = UiText.Get(\"CustomViewName_NameLabel\")");
         source.Should().Contain("Target = _nameBox");
-        source.Should().Contain("Content = \"_Print settings\"");
-        source.Should().Contain("Content = \"_Hidden rows, columns and filter settings\"");
-        source.Should().Contain("Content = \"_OK\"");
-        source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("Content = UiText.Get(\"CustomViewName_PrintSettingsCheckBox\")");
+        source.Should().Contain("Content = UiText.Get(\"CustomViewName_HiddenFilterSettingsCheckBox\")");
+        source.Should().Contain("Content = UiText.Ok");
+        source.Should().Contain("Content = UiText.Cancel");
+        UiText.Get("CustomViewName_NameLabel").Should().Be("_Name:");
     }
 
     [Fact]
@@ -156,15 +157,16 @@ public sealed class CustomViewsDialogXamlTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewNameDialog.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_nameBox, \"Custom view name\");");
+        source.Should().Contain("AutomationProperties.SetName(_nameBox, UiText.Get(\"CustomViewName_NameAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_nameBox, \"CustomViewNameBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_nameBox, \"Enter the name for the custom workbook view.\");");
-        source.Should().Contain("AutomationProperties.SetName(_printSettingsBox, \"Print settings\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_nameBox, UiText.Get(\"CustomViewName_NameHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_printSettingsBox, UiText.Get(\"CustomViewName_PrintSettingsAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_printSettingsBox, \"CustomViewPrintSettingsCheckBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_printSettingsBox, \"Include print settings in the custom view.\");");
-        source.Should().Contain("AutomationProperties.SetName(_hiddenFilterSettingsBox, \"Hidden rows, columns and filter settings\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_printSettingsBox, UiText.Get(\"CustomViewName_PrintSettingsHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_hiddenFilterSettingsBox, UiText.Get(\"CustomViewName_HiddenFilterSettingsAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_hiddenFilterSettingsBox, \"CustomViewHiddenFilterSettingsCheckBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_hiddenFilterSettingsBox, \"Include hidden rows, hidden columns, and filter settings in the custom view.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(_hiddenFilterSettingsBox, UiText.Get(\"CustomViewName_HiddenFilterSettingsHelpText\"));");
+        UiText.Get("CustomViewName_NameAutomationName").Should().Be("Custom view name");
     }
 
     [Fact]
@@ -192,7 +194,7 @@ public sealed class CustomViewsDialogXamlTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewNameDialog.cs"));
         var dialogSource = source[source.IndexOf("public sealed class CustomViewNameDialog", StringComparison.Ordinal)..];
 
-        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Enter a view name.\", Title);");
+        dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"CustomViewName_BlankNameMessage\"), Title);");
         dialogSource.Should().Contain("FocusNameInput();");
         dialogSource.Should().Contain("private void FocusNameInput()");
         dialogSource.Should().Contain("DialogFocus.FocusAndSelect(_nameBox);");

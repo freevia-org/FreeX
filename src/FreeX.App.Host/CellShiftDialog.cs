@@ -32,7 +32,9 @@ public sealed class CellShiftDialog : Window
     public CellShiftDialog(CellShiftDialogMode mode)
     {
         _mode = mode;
-        Title = mode == CellShiftDialogMode.Insert ? "Insert" : "Delete";
+        Title = mode == CellShiftDialogMode.Insert
+            ? UiText.Get("CellShift_InsertTitle")
+            : UiText.Get("CellShift_DeleteTitle");
         Width = 310;
         Height = 245;
         ResizeMode = ResizeMode.NoResize;
@@ -44,14 +46,18 @@ public sealed class CellShiftDialog : Window
         DockPanel.SetDock(optionPanel, Dock.Top);
         root.Children.Add(new TextBlock
         {
-            Text = mode == CellShiftDialogMode.Insert ? "Insert cells" : "Delete cells",
+            Text = mode == CellShiftDialogMode.Insert
+                ? UiText.Get("CellShift_InsertPrompt")
+                : UiText.Get("CellShift_DeletePrompt"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 6)
         });
 
         var group = new GroupBox
         {
-            Header = mode == CellShiftDialogMode.Insert ? "Insert" : "Delete",
+            Header = mode == CellShiftDialogMode.Insert
+                ? UiText.Get("CellShift_InsertGroupHeader")
+                : UiText.Get("CellShift_DeleteGroupHeader"),
             Margin = new Thickness(0, 0, 0, 10),
             Content = optionPanel
         };
@@ -82,10 +88,24 @@ public sealed class CellShiftDialog : Window
     }
 
     public static IReadOnlyList<CellShiftDialogOption> GetAvailableChoices(CellShiftDialogMode mode) =>
-        CellShiftDialogPlanner.GetAvailableChoices(mode);
+        CellShiftDialogPlanner.GetAvailableChoices(mode)
+            .Select(option => option with { Label = GetChoiceLabel(option.Choice) })
+            .ToList();
 
     public static KeyboardInsertDeleteDialogChoice ToKeyboardChoice(CellShiftDialogMode mode, CellShiftDialogChoice choice) =>
         CellShiftDialogPlanner.ToKeyboardChoice(mode, choice);
+
+    private static string GetChoiceLabel(CellShiftDialogChoice choice) =>
+        choice switch
+        {
+            CellShiftDialogChoice.ShiftCellsRight => UiText.Get("CellShift_ShiftCellsRight"),
+            CellShiftDialogChoice.ShiftCellsDown => UiText.Get("CellShift_ShiftCellsDown"),
+            CellShiftDialogChoice.ShiftCellsLeft => UiText.Get("CellShift_ShiftCellsLeft"),
+            CellShiftDialogChoice.ShiftCellsUp => UiText.Get("CellShift_ShiftCellsUp"),
+            CellShiftDialogChoice.EntireRow => UiText.Get("CellShift_EntireRow"),
+            CellShiftDialogChoice.EntireColumn => UiText.Get("CellShift_EntireColumn"),
+            _ => choice.ToString()
+        };
 
     private void FocusInitialKeyboardTarget()
     {
