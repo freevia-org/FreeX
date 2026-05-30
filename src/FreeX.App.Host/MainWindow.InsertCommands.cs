@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Diagnostics;
 using System.Windows;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -155,19 +154,14 @@ public partial class MainWindow
             return true;
         }
 
-        if (!HyperlinkNavigationPlanner.IsAllowedScheme(plan.Target))
+        switch (ExternalUrlLauncher.Open(plan.Target))
         {
-            ShowOwnedMessage("This hyperlink type is not supported for security reasons.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return true;
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo(plan.Target) { UseShellExecute = true });
-        }
-        catch
-        {
-            ShowOwnedMessage("The hyperlink target could not be opened.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+            case ExternalUrlLaunchResult.BlockedScheme:
+                ShowOwnedMessage("This hyperlink type is not supported for security reasons.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+                break;
+            case ExternalUrlLaunchResult.LaunchFailed:
+                ShowOwnedMessage("The hyperlink target could not be opened.", "Open Hyperlink", MessageBoxButton.OK, MessageBoxImage.Warning);
+                break;
         }
 
         return true;

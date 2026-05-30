@@ -172,6 +172,31 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsSpreadsheetMlColumnSpanLayout()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Layout">
+                <ss:Table>
+                  <ss:Column ss:Index="2" ss:Span="2" ss:Width="21.25" ss:Hidden="1"/>
+                  <ss:Row>
+                    <ss:Cell ss:Index="4"><ss:Data ss:Type="String">After span</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.ColumnWidths[2].Should().Be(21.25);
+        sheet.ColumnWidths[3].Should().Be(21.25);
+        sheet.ColumnWidths[4].Should().Be(21.25);
+        sheet.HiddenCols.Should().Contain([2u, 3u, 4u]);
+        sheet.GetCell(1, 4)!.Value.Should().Be(new TextValue("After span"));
+    }
+
+    [Fact]
     public void Load_ReadsSpreadsheetMlMergeAcrossAndMergeDown()
     {
         using var stream = StreamFromString("""
@@ -662,6 +687,52 @@ public sealed class SpreadsheetXmlFileAdapterTests
         sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(12.5));
         sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("Beta"));
         sheet.GetCell(2, 2)!.Value.Should().Be(new NumberValue(7.25));
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlHyperlinksAndComments()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row name="Review" url="https://example.com/review" note="Check generated output"/>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Generated">
+                    <ss:Table>
+                      <xsl:for-each select="row">
+                        <ss:Row>
+                          <ss:Cell ss:HRef="{@url}" ss:HRefScreenTip="Open source">
+                            <ss:Data ss:Type="String"><xsl:value-of select="@name"/></ss:Data>
+                            <ss:Comment ss:Author="XSLT">
+                              <ss:Data><xsl:value-of select="@note"/></ss:Data>
+                            </ss:Comment>
+                          </ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.GetCell(address)!.Value.Should().Be(new TextValue("Review"));
+        sheet.Hyperlinks[address].Should().Be("https://example.com/review");
+        sheet.HyperlinkMetadata[address].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open source",
+            ""));
+        sheet.Comments[address].Should().Be("Check generated output");
     }
 
     [Fact]

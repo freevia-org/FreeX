@@ -615,6 +615,7 @@ public partial class MainWindow
         EnsureCellVisible(selectedRange.Start);
         UpdateViewport();
         RefreshValidationDropdown();
+        FocusSheetGridIfNeeded();
         e.Handled = true;
     }
 

@@ -4199,6 +4199,9 @@
                             Style="{StaticResource StatusBarZoomButtonStyle}"
                             Foreground="White" FontSize="18" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomOutBtn_Click"
+                            AutomationProperties.Name="Zoom Out"
+                            AutomationProperties.HelpText="Decrease worksheet zoom"
+                            AutomationProperties.AutomationId="StatusZoomOutButton"
                             local:RibbonTooltip.Title="Zoom Out"
                             local:RibbonTooltip.KeyTip="SZ"/>
                     <Slider x:Name="ZoomSlider" Grid.Column="2" Width="120" Height="22" Minimum="0" Maximum="200" Value="100"
@@ -4213,6 +4216,9 @@
                             Style="{StaticResource StatusBarZoomButtonStyle}"
                             Foreground="White" FontSize="18" Padding="0"
                             VerticalAlignment="Center" Cursor="Hand" Click="ZoomInBtn_Click"
+                            AutomationProperties.Name="Zoom In"
+                            AutomationProperties.HelpText="Increase worksheet zoom"
+                            AutomationProperties.AutomationId="StatusZoomInButton"
                             local:RibbonTooltip.Title="Zoom In"
                             local:RibbonTooltip.KeyTip="SX"/>
                     <TextBlock x:Name="StatusZoomText" Grid.Column="6" Text="100%" Foreground="White" FontSize="12"
