@@ -1,5 +1,8 @@
 using FluentAssertions;
 using System.IO;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
 
 namespace FreeX.App.Host.Tests;
 
@@ -174,6 +177,39 @@ public sealed class SymbolPickerDialogSourceTests
         source.Should().Contain("AutomationProperties.SetName(item, $\"{special.Name}, {CreateSymbolAutomationName(special.Symbol)}\");");
     }
 
+    [Fact]
+    public void Dialog_AppliesSelectedFontToInitialAndRecentSymbols()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SymbolPickerDialog();
+            try
+            {
+                var fontBox = FindLogicalChildren<ComboBox>(dialog)
+                    .Single(box => AutomationProperties.GetName(box) == "Symbol font");
+                var preview = FindLogicalChildren<TextBlock>(dialog)
+                    .Single(text => AutomationProperties.GetName(text) == "Selected symbol preview");
+                var symbolButtons = FindLogicalChildren<Button>(dialog)
+                    .Where(button => button.Tag is string)
+                    .ToList();
+
+                fontBox.SelectedItem.Should().Be("Segoe UI Symbol");
+                preview.FontFamily.Source.Should().Be("Segoe UI Symbol");
+                symbolButtons.Should().NotBeEmpty();
+                symbolButtons.Should().AllSatisfy(button => button.FontFamily.Source.Should().Be("Segoe UI Symbol"));
+
+                fontBox.SelectedItem = "Arial";
+
+                preview.FontFamily.Source.Should().Be("Arial");
+                symbolButtons.Should().AllSatisfy(button => button.FontFamily.Source.Should().Be("Arial"));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     [Theory]
     [InlineData("03C0", "\u03c0")]
     [InlineData("U+2192", "\u2192")]
@@ -239,4 +275,17 @@ public sealed class SymbolPickerDialogSourceTests
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SymbolPickerDialog.Layout.cs")) +
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SymbolPickerDialog.Catalog.cs")) +
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SymbolPickerSelectionPlanner.cs"));
+
+    private static IEnumerable<T> FindLogicalChildren<T>(DependencyObject parent)
+        where T : DependencyObject
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(parent).OfType<DependencyObject>())
+        {
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in FindLogicalChildren<T>(child))
+                yield return descendant;
+        }
+    }
 }
