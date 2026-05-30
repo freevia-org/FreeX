@@ -15,6 +15,25 @@ public sealed class RibbonScreenshotTourPlannerTests
     ];
 
     [Fact]
+    public void DefaultTabs_CoverMainRibbonTourOrderAndFileNames()
+    {
+        RibbonScreenshotTourPlanner.DefaultTabs
+            .Should()
+            .Equal(
+            [
+                ("Home", "Home"),
+                ("Insert", "Insert"),
+                ("Draw", "Draw"),
+                ("Page Layout", "Page_Layout"),
+                ("Formulas", "Formulas"),
+                ("Data", "Data"),
+                ("Review", "Review"),
+                ("View", "View"),
+                ("Help", "Help")
+            ]);
+    }
+
+    [Fact]
     public void FilterTabs_ReturnsDefaultTourWhenNoFilterIsProvided()
     {
         RibbonScreenshotTourPlanner.FilterTabs(Tabs, null)
@@ -48,6 +67,7 @@ public sealed class RibbonScreenshotTourPlannerTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ScreenshotTour.cs"));
 
         source.Should().Contain("RibbonScreenshotTourPlanner.FilterTabs");
+        source.Should().Contain("RibbonScreenshotTourPlanner.DefaultTabs");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_TABS\")");
         source.Should().Contain("RibbonScreenshotTourPlanner.ParseWidths");
         source.Should().Contain("Environment.GetEnvironmentVariable(\"FREEX_SS_TOUR_WIDTHS\")");
