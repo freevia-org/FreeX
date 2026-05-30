@@ -920,6 +920,23 @@ public class FunctionLibraryTests
         _eval.Evaluate("=COUNTIF(A1:A2,\">40000\")", sheet).Should().Be(new NumberValue(1));
     }
 
+    [Fact]
+    public void CountifAndSumif_DateCriteriaText_ParsesLikeExcel()
+    {
+        var before = DateTimeValue.FromDateTime(new DateTime(2023, 12, 31));
+        var cutoff = DateTimeValue.FromDateTime(new DateTime(2024, 1, 1));
+        var after = DateTimeValue.FromDateTime(new DateTime(2024, 1, 2));
+        var sheet = MakeSheet(
+            (1, 1, before), (1, 2, new NumberValue(10)),
+            (2, 1, cutoff), (2, 2, new NumberValue(20)),
+            (3, 1, after), (3, 2, new NumberValue(30)));
+
+        _eval.Evaluate("=COUNTIF(A1:A3,\">1/1/2024\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SUMIF(A1:A3,\"1/1/2024\",B1:B3)", sheet).Should().Be(new NumberValue(20));
+        _eval.Evaluate("=COUNTIFS(A1:A3,\">=1/1/2024\",A1:A3,\"<1/2/2024\")", sheet)
+            .Should().Be(new NumberValue(1));
+    }
+
     // ── AVERAGEIF ──────────────────────────────────────────────────────────────
 
     [Fact]
