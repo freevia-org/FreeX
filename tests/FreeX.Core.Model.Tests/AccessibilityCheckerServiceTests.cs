@@ -58,7 +58,9 @@ public sealed class AccessibilityCheckerServiceTests
         {
             Type = ChartType.Bar,
             DataRange = dataRange,
-            Title = "Sales by quarter"
+            Title = "Sales by quarter",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Sales"
         });
 
         var issues = AccessibilityCheckerService.FindIssues(workbook);
@@ -88,13 +90,17 @@ public sealed class AccessibilityCheckerServiceTests
         {
             Type = ChartType.Column,
             DataRange = dataRange,
-            Title = title
+            Title = title,
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Sales"
         });
         sheet.Charts.Add(new ChartModel
         {
             Type = ChartType.Bar,
             DataRange = dataRange,
-            Title = "Sales by quarter"
+            Title = "Sales by quarter",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Sales"
         });
 
         var issue = AccessibilityCheckerService.FindIssues(workbook)
@@ -117,6 +123,8 @@ public sealed class AccessibilityCheckerServiceTests
             Type = ChartType.Column,
             DataRange = dataRange,
             Title = "Sales by quarter",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Sales",
             ChartAreaFillColor = new CellColor(130, 130, 130),
             ChartTitleTextColor = new CellColor(120, 120, 120)
         });
@@ -126,6 +134,132 @@ public sealed class AccessibilityCheckerServiceTests
 
         issue.Location.Should().Be("A1:B4");
         issue.Message.Should().Be("Chart title should have at least 4.5:1 contrast against its background.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsChartsWithMissingAxisTitles()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Sales by quarter",
+            XAxisTitle = "",
+            YAxisTitle = "   "
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook)
+            .Where(i => i.Kind == AccessibilityIssueKind.ChartMissingAxisTitle)
+            .ToList();
+
+        issues.Select(i => i.Location).Should().Equal("A1:B4", "A1:B4");
+        issues.Select(i => i.Message).Should().Equal(
+            "Chart X-axis is missing a title.",
+            "Chart Y-axis is missing a title.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsChartsWithGenericAxisTitles()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = dataRange,
+            Title = "Sales by quarter",
+            XAxisTitle = "Axis Title",
+            YAxisTitle = "Value Axis 1"
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook)
+            .Where(i => i.Kind == AccessibilityIssueKind.GenericChartAxisTitle)
+            .ToList();
+
+        issues.Select(i => i.Message).Should().Equal(
+            "Chart X-axis title should describe the axis.",
+            "Chart Y-axis title should describe the axis.");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresAxisTitleRulesForHiddenAxesAndChartsWithoutAxes()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Pie,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 2)),
+            Title = "Product mix"
+        });
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 6, 1),
+                new CellAddress(sheet.Id, 9, 2)),
+            Title = "Hidden axes",
+            HideXAxis = true,
+            HideYAxis = true
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should()
+            .NotContain(i =>
+                i.Kind == AccessibilityIssueKind.ChartMissingAxisTitle ||
+                i.Kind == AccessibilityIssueKind.GenericChartAxisTitle);
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastChartAxisLabelsDataTableAndTrendlineText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Charts");
+        var dataRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 2));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = dataRange,
+            Title = "Sales by quarter",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Revenue",
+            ChartAreaFillColor = new CellColor(130, 130, 130),
+            ChartTitleTextColor = CellColor.Black,
+            AxisTitleTextColor = CellColor.Black,
+            XAxisLabelTextColor = new CellColor(120, 120, 120),
+            YAxisLabelTextColor = CellColor.Black,
+            DataTable = new ChartDataTableModel
+            {
+                FillColor = new CellColor(130, 130, 130),
+                TextColor = new CellColor(120, 120, 120),
+                FontSize = 10
+            },
+            ShowLinearTrendline = true,
+            ShowTrendlineEquation = true,
+            TrendlineLabelFillColor = new CellColor(130, 130, 130),
+            TrendlineLabelTextColor = new CellColor(120, 120, 120)
+        });
+
+        var messages = AccessibilityCheckerService.FindIssues(workbook)
+            .Where(i => i.Kind == AccessibilityIssueKind.LowContrastChartText)
+            .Select(i => i.Message);
+
+        messages.Should().Equal(
+            "X-axis labels should have at least 4.5:1 contrast against its background.",
+            "Chart data table text should have at least 4.5:1 contrast against its background.",
+            "Trendline label text should have at least 4.5:1 contrast against its background.");
     }
 
     [Fact]
@@ -457,6 +591,30 @@ public sealed class AccessibilityCheckerServiceTests
             .Should()
             .BeEquivalentTo(["C:C", "F:F"]);
         issues.Should().NotContain(i => i.Location == "H8");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsStructuredTablesWithoutHeaderRows()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            HeaderRowCount = 0,
+            HasAutoFilter = true,
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.TableMissingHeaderRow).Subject;
+
+        issue.SheetId.Should().Be(sheet.Id);
+        issue.SheetName.Should().Be("Sales");
+        issue.Location.Should().Be("A1:B3");
+        issue.Message.Should().Be("Tables should include a header row.");
     }
 
     [Fact]
