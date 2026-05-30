@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="100% Stacked Bar Chart">
+  <rect width="32" height="32" fill="none"/>
+  <path d="M7.5 24V7M7 24.5h19" fill="none" stroke="#242424" stroke-width="1.4" stroke-linecap="round"/>
+  <rect x="9" y="10" width="7" height="4" fill="#5b9bd5"/>
+  <rect x="16" y="10" width="5" height="4" fill="#70ad47"/>
+  <rect x="21" y="10" width="5" height="4" fill="#ed7d31"/>
+  <rect x="9" y="18" width="10" height="4" fill="#5b9bd5"/>
+  <rect x="19" y="18" width="3" height="4" fill="#70ad47"/>
+  <rect x="22" y="18" width="4" height="4" fill="#ed7d31"/>
+</svg>

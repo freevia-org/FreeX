@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Crop Picture">
   <rect width="32" height="32" fill="none"/>
   <rect x="8.5" y="8.5" width="15" height="15" fill="#ffffff" stroke="#8a8a8a" stroke-width="1.2"/>
-  <path d="M6 4.5v8H3.5M6 4.5h8M26 27.5v-8h2.5M26 27.5h-8" fill="none" stroke="#242424" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="round"/>
-  <path d="M23.5 8.5v15M8.5 23.5h15" fill="none" stroke="#0F6D8C" stroke-width="1.5"/>
+  <path d="M9.5 21.5l4.5-5 3.5 3 3-3.5 2 5.5z" fill="#D8EEF6" stroke="#0F6D8C" stroke-width="1"/>
+  <circle cx="19.5" cy="12.5" r="1.5" fill="#ffb900"/>
+  <path d="M6.5 4.5v21M4.5 6.5h21M25.5 27.5v-21M27.5 25.5h-21" fill="none" stroke="#242424" stroke-width="1.5" stroke-linecap="square"/>
 </svg>

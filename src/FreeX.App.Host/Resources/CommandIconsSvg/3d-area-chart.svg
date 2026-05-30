@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="3D Area Chart">
+  <rect width="32" height="32" fill="none"/>
+  <path d="M7 24.5h18M7.5 24V8" fill="none" stroke="#242424" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M11 22l4-7l5 4l4-7v12H11z" fill="#c9e7ef" stroke="#8a8a8a" stroke-width="1"/>
+  <path d="M9 20l4-7l5 4l4-7v14H9z" fill="#8fd3e1" stroke="#0F6D8C" stroke-width="1.4" stroke-linejoin="round"/>
+</svg>

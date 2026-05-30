@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Calculate Now">
   <rect width="32" height="32" fill="none"/>
-  <text x="10.5" y="21.5" font-size="17" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">fx</text>
-  <path d="M21 5l-4 9h4l-2.5 8.5L27 11h-4l3-6z" fill="#f6d14a" stroke="#242424" stroke-width="1.5" stroke-linejoin="round"/>
-  <path d="M24.5 24a8 8 0 0 1-12.5-2.5M11 24v-4.5h4.5" fill="none" stroke="#0F6D8C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="10" y="21" font-size="17" fill="#242424" font-family="Segoe UI,Arial,sans-serif" font-weight="700" text-anchor="middle">fx</text>
+  <path d="M22.5 5.5l-5 9h4l-3 10l8-12h-4l3-7z" fill="#f6d14a" stroke="#242424" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M24.5 24.5a9 9 0 0 1-12 0M12.5 24.5h4.5" fill="none" stroke="#0F6D8C" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
