@@ -15,8 +15,12 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.HeaderFooterMetadata is not null))
+        foreach (var sheet in workbook.Sheets)
         {
+            var metadata = sheet.HeaderFooterMetadata;
+            if (metadata is null)
+                continue;
+
             if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
                 continue;
 
@@ -36,7 +40,7 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
                 root.Add(headerFooter);
             }
 
-            var (hhAttrs, hhChildren) = XmlNativeBagSerializer.Deserialize(sheet.HeaderFooterMetadata!.Get("headerFooter"));
+            var (hhAttrs, hhChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("headerFooter"));
             foreach (var attribute in hhAttrs)
             {
                 if (string.IsNullOrWhiteSpace(attribute.Key) || IsModeledHeaderFooterAttribute(attribute.Key))
