@@ -26,6 +26,7 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("actions/checkout@v6");
         workflow.Should().Contain("persist-credentials: false");
         workflow.Should().Contain("actions/setup-dotnet@v5");
+        workflow.Should().Contain("timeout-minutes: 60");
         workflow.Should().Contain("name: Repository preflight");
         workflow.Should().Contain("powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1");
         workflow.Should().Contain("dotnet restore FreeX.slnx");

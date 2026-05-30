@@ -29,6 +29,7 @@ if ($workflows.Count -eq 0) {
 $errors = [System.Collections.Generic.List[string]]::new()
 foreach ($workflow in $workflows) {
     $content = Get-Content -LiteralPath $workflow.FullName -Raw
+    $lines = $content -split "\r?\n"
     if ($content -match "`t") {
         $errors.Add("$($workflow.Name): workflow YAML must use spaces for indentation, not tabs.")
     }
@@ -41,6 +42,47 @@ foreach ($workflow in $workflows) {
         $runnerBlock = (($match.Value -split "\r?\n") | ForEach-Object { $_ -replace "#.*$", "" }) -join "`n"
         if ($runnerBlock -match "(?i)(^|[\[\s,'`"-])self-hosted($|[\]\s,'`"])") {
             $errors.Add("$($workflow.Name): workflow must not use self-hosted runners.")
+        }
+    }
+
+    for ($lineIndex = 0; $lineIndex -lt $lines.Count; $lineIndex++) {
+        $runsOnMatch = [regex]::Match($lines[$lineIndex], "^(\s*)runs-on\s*:\s*(?<runner>[^\r\n#]*)")
+        if (-not $runsOnMatch.Success) {
+            continue
+        }
+
+        $propertyIndent = $runsOnMatch.Groups[1].Value
+        $runner = $runsOnMatch.Groups["runner"].Value.Trim("`"", "'")
+        if ([string]::IsNullOrWhiteSpace($runner)) {
+            $runner = "runs-on"
+        }
+
+        $escapedPropertyIndent = [regex]::Escape($propertyIndent)
+        $jobStartIndex = $lineIndex
+        for ($previousLineIndex = $lineIndex - 1; $previousLineIndex -ge 0; $previousLineIndex--) {
+            $indentMatch = [regex]::Match($lines[$previousLineIndex], "^(\s*)\S")
+            if ($indentMatch.Success -and
+                $indentMatch.Groups[1].Value.Length -lt $propertyIndent.Length) {
+                $jobStartIndex = $previousLineIndex
+                break
+            }
+        }
+
+        $jobLines = [System.Collections.Generic.List[string]]::new()
+        for ($nextLineIndex = $jobStartIndex; $nextLineIndex -lt $lines.Count; $nextLineIndex++) {
+            $indentMatch = [regex]::Match($lines[$nextLineIndex], "^(\s*)\S")
+            if ($nextLineIndex -gt $jobStartIndex -and
+                $indentMatch.Success -and
+                $indentMatch.Groups[1].Value.Length -lt $propertyIndent.Length) {
+                break
+            }
+
+            $jobLines.Add($lines[$nextLineIndex])
+        }
+
+        $jobBlock = $jobLines -join "`n"
+        if ($jobBlock -notmatch "(?m)^$escapedPropertyIndent\s*timeout-minutes:\s*\d+\s*(?:#.*)?$") {
+            $errors.Add("$($workflow.Name): job running on '$runner' must declare timeout-minutes.")
         }
     }
 
@@ -62,7 +104,6 @@ foreach ($workflow in $workflows) {
         }
     }
 
-    $lines = $content -split "\r?\n"
     for ($lineIndex = 0; $lineIndex -lt $lines.Count; $lineIndex++) {
         if ($lines[$lineIndex] -notmatch "^(\s*)-\s+(?:name|uses):") {
             continue
