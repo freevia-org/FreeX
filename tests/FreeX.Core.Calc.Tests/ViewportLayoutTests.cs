@@ -263,6 +263,30 @@ public class ViewportLayoutTests
     }
 
     [Fact]
+    public void GetViewport_WithSplitPaneIncludesThreadedCommentOnlyPinnedPaneCells()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SplitRow = 4;
+        sheet.SplitColumn = 4;
+        var commentAddress = new CellAddress(sheet.Id, 20, 1);
+        sheet.ThreadedComments[commentAddress] = new ThreadedComment("Discuss row");
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(20, 10, 120, 160));
+
+        viewport.SplitPanes.Should().NotBeNull();
+        var commentCell = viewport.SplitPanes!.Cells
+            .Should().ContainSingle(cell => cell.Row == 20 && cell.Col == 1)
+            .Subject;
+        commentCell.DisplayText.Should().BeEmpty();
+        commentCell.RawValue.Should().Be(BlankValue.Instance);
+        commentCell.HasComment.Should().BeTrue();
+    }
+
+    [Fact]
     public void GetViewport_WithSplitPaneOffsetsUsesIndependentTopRightAndBottomLeftStarts()
     {
         var workbook = new Workbook("test");
