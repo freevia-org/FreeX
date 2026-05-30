@@ -145,7 +145,11 @@ public sealed partial class ScenarioManagerDialog : Window
         };
         Grid.SetRow(closeRow, 1);
         root.Children.Add(closeRow);
-        closeRow.Children.Add(new Button { Content = "_Close", Width = 72, IsCancel = true });
+        var closeButton = new Button { Content = "_Close", Width = 72, IsCancel = true };
+        AutomationProperties.SetName(closeButton, "Close");
+        AutomationProperties.SetAutomationId(closeButton, "ScenarioManagerCloseButton");
+        AutomationProperties.SetHelpText(closeButton, "Close the Scenario Manager dialog.");
+        closeRow.Children.Add(closeButton);
 
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
@@ -181,10 +185,37 @@ public sealed partial class ScenarioManagerDialog : Window
     private Button AddActionButton(Panel panel, string label, ScenarioManagerAction action, bool isEnabled = true, bool isDefault = false)
     {
         var button = new Button { Content = label, Width = 82, Margin = new Thickness(0, 0, 0, 6), IsEnabled = isEnabled, IsDefault = isDefault };
+        AutomationProperties.SetName(button, GetActionAutomationName(action));
+        AutomationProperties.SetAutomationId(button, $"ScenarioManager{action}Button");
+        AutomationProperties.SetHelpText(button, GetActionHelpText(action));
         button.Click += (_, _) => Accept(action);
         panel.Children.Add(button);
         return button;
     }
+
+    private static string GetActionAutomationName(ScenarioManagerAction action) =>
+        action switch
+        {
+            ScenarioManagerAction.Add => "Add scenario",
+            ScenarioManagerAction.Edit => "Edit scenario",
+            ScenarioManagerAction.Delete => "Delete scenario",
+            ScenarioManagerAction.List => "List scenarios",
+            ScenarioManagerAction.Show => "Show scenario",
+            ScenarioManagerAction.Report => "Scenario summary",
+            _ => "Save scenario"
+        };
+
+    private static string GetActionHelpText(ScenarioManagerAction action) =>
+        action switch
+        {
+            ScenarioManagerAction.Add => "Add a scenario using the scenario fields.",
+            ScenarioManagerAction.Edit => "Edit the selected scenario using the scenario fields.",
+            ScenarioManagerAction.Delete => "Delete the selected scenario.",
+            ScenarioManagerAction.List => "Show the list of workbook scenarios.",
+            ScenarioManagerAction.Show => "Apply the selected scenario to the workbook.",
+            ScenarioManagerAction.Report => "Create a scenario summary report.",
+            _ => "Save the scenario using the scenario fields."
+        };
 
     private void FocusInitialKeyboardTarget()
     {
