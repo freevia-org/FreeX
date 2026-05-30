@@ -11,6 +11,7 @@ public sealed class HelpCommandSourceTests
     [InlineData("Copy Diagnostics", "DG", "CopyDiagnosticsBtn_Click")]
     [InlineData("Check for Updates", "UP", "CheckForUpdatesBtn_Click")]
     [InlineData("About FreeX", "AB", "AboutBtn_Click")]
+    [InlineData("Legal Notices", "LN", "LegalNoticesBtn_Click")]
     public void HelpEnabledCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string keyTip,
@@ -25,17 +26,12 @@ public sealed class HelpCommandSourceTests
     }
 
     [Theory]
-    [InlineData("Contact Support", "CS")]
-    [InlineData("Show Training", "TR")]
-    [InlineData("What's New", "WN")]
-    public void HelpDeferredCommands_RemainDisabledWithoutClickHandlers(string title, string keyTip)
+    [InlineData("Contact Support")]
+    [InlineData("Show Training")]
+    [InlineData("What's New")]
+    public void HelpOutOfScopeCommands_AreNotSurfacedAsDisabledRibbonButtons(string title)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
-
-        button.Should().Contain("IsEnabled=\"False\"");
-        button.Should().Contain($"local:RibbonTooltip.Title=\"{title}\"");
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().NotContain("Click=");
+        ReadMainWindowXaml().Should().NotContain($"local:RibbonTooltip.Title=\"{title}\"");
     }
 
     [Fact]
@@ -47,6 +43,8 @@ public sealed class HelpCommandSourceTests
         source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, \"Check for Updates\")");
         source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), \"Feedback\")");
         source.Should().Contain("AppInfo.AboutText");
+        source.Should().Contain("var dialog = new LegalNoticesDialog();");
+        source.Should().Contain("ShowOwnedDialog(dialog);");
         source.Should().Contain("AppIssueReporter.CreateDiagnosticsText(context)");
         source.Should().Contain("Clipboard.SetText(diagnosticsText);");
         source.Should().Contain("ExternalUrlLauncher.Open(");

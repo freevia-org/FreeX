@@ -329,7 +329,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Zoom", harness.DebugActiveRibbonChildren);
             harness.VisibleViewShowCheckBoxLabels.Should().Contain(
                 ["Gridlines", "Headings", "Formula Bar"],
-                "Excel keeps the Show checkbox group visible at medium workbook widths before collapsing Macros");
+                "Excel keeps the Show checkbox group visible at medium workbook widths before collapsing lower-priority view groups");
         });
     }
 
@@ -680,7 +680,7 @@ public sealed class MainWindowAdaptiveRibbonTests
                 0.5,
                 $"Help at {width}px should fit without exposing hidden horizontal scroll; {harness.DebugActiveRibbonChildren}");
             harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["Help Online", "Feedback", "Copy Diagnostics", "Check for Updates", "About FreeX"],
+                ["Help Online", "Feedback", "Copy Diagnostics", "Check for Updates", "About FreeX", "Legal Notices"],
                 "the enabled Help commands should remain directly usable at common Excel widths");
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Help", harness.DebugActiveRibbonChildren);
         });

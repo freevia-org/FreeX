@@ -133,6 +133,39 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
     }
 
     [Fact]
+    public void AdaptiveCompaction_ReusesLayoutPlansWhenReturningToPreviouslySeenWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonAdaptiveDiagnosticsHarness.Create();
+            var warmedWidths = new[] { 1180d, 980d, 760d };
+
+            harness.SelectRibbonTab("Data", 1280);
+            harness.UpdateCompact(force: true);
+            foreach (var width in warmedWidths)
+            {
+                harness.SetWidth(width);
+                harness.UpdateCompact(force: true);
+            }
+
+            foreach (var width in warmedWidths.Reverse().Concat(warmedWidths))
+            {
+                harness.SetWidth(width);
+                harness.ResetDiagnostics();
+                harness.UpdateCompact(force: true);
+
+                var reused = harness.Diagnostics;
+                reused.MeasurementInvalidationCount.Should().Be(0, $"{width} is a width-only revisit");
+                reused.GroupMeasurementCount.Should().Be(0, $"{width} should reuse measured groups");
+                reused.CompactSnapshotCaptureCount.Should().Be(0, $"{width} should reuse compact snapshots");
+                reused.ResizeThresholdRebuildCount.Should().Be(0, $"{width} should reuse resize thresholds");
+                reused.LayoutPlanComputeCount.Should().Be(0, $"{width} should reuse the cached pure layout plan");
+                reused.LayoutPlanCacheHitCount.Should().Be(1, $"{width} should require exactly one cached layout lookup");
+            }
+        });
+    }
+
+    [Fact]
     public void AdaptiveCompaction_ReusesMeasurementsAcrossResizeWidthsForEveryMainRibbonTab()
     {
         StaTestRunner.Run(() =>

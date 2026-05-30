@@ -79,6 +79,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Help Online", RibbonCommandIconKind.Help)]
     [InlineData("Report Issue", RibbonCommandIconKind.Feedback)]
     [InlineData("Copy Diagnostics", RibbonCommandIconKind.Info)]
+    [InlineData("Legal Notices", RibbonCommandIconKind.Info)]
     [InlineData("Get Add-ins", RibbonCommandIconKind.Insert)]
     [InlineData("Stocks", RibbonCommandIconKind.Table)]
     [InlineData("Geography", RibbonCommandIconKind.Table)]
@@ -112,6 +113,28 @@ public sealed class RibbonCommandPresentationPlannerTests
     }
 
     [Theory]
+    [InlineData("Home", "Insert", RibbonCommandIconKind.Insert)]
+    [InlineData("Home", "Sort & Filter", RibbonCommandIconKind.Sort)]
+    [InlineData("Insert", "Get Add-ins", RibbonCommandIconKind.Insert)]
+    [InlineData("Insert", "Shapes", RibbonCommandIconKind.Rectangle)]
+    [InlineData("Data", "Queries & Connections", RibbonCommandIconKind.GetData)]
+    [InlineData("Data", "Advanced Filter", RibbonCommandIconKind.Filter)]
+    [InlineData("View", "Normal", RibbonCommandIconKind.Grid)]
+    [InlineData("View", "Arrange All", RibbonCommandIconKind.PageBreak)]
+    public void GetIcon_MapsHighRiskRibbonTabCommandsToNonGenericIcons(
+        string tabName,
+        string commandName,
+        RibbonCommandIconKind expectedKind)
+    {
+        var icon = RibbonCommandPresentationPlanner.GetIcon(commandName);
+
+        icon.Kind.Should().NotBe(
+            RibbonCommandIconKind.Generic,
+            $"{tabName} command labels should have explicit icon presentation");
+        icon.Kind.Should().Be(expectedKind);
+    }
+
+    [Theory]
     [InlineData("Column Chart", RibbonCommandIconAccent.Chart)]
     [InlineData("Get Data", RibbonCommandIconAccent.Data)]
     [InlineData("Theme Colors", RibbonCommandIconAccent.Theme)]
@@ -123,6 +146,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Contact Support", RibbonCommandIconAccent.Help)]
     [InlineData("Show Training", RibbonCommandIconAccent.Help)]
     [InlineData("What's New", RibbonCommandIconAccent.Help)]
+    [InlineData("Legal Notices", RibbonCommandIconAccent.Help)]
     public void GetIcon_AssignsExcelLikeAccentFamilies(string commandName, RibbonCommandIconAccent expectedAccent)
     {
         RibbonCommandPresentationPlanner.GetIcon(commandName).Accent.Should().Be(expectedAccent);
@@ -196,6 +220,24 @@ public sealed class RibbonCommandPresentationPlannerTests
         RibbonCommandIconKind expectedKind)
     {
         RibbonCommandPresentationPlanner.GetGroupIcon(groupName).Kind.Should().Be(expectedKind);
+    }
+
+    [Theory]
+    [InlineData("Home", "Styles", RibbonCommandIconKind.Theme)]
+    [InlineData("Insert", "Tables", RibbonCommandIconKind.Table)]
+    [InlineData("Data", "Get & Transform Data", RibbonCommandIconKind.GetData)]
+    [InlineData("View", "Workbook Views", RibbonCommandIconKind.Grid)]
+    public void GetGroupIcon_MapsHighRiskRibbonTabGroupsToNonGenericIcons(
+        string tabName,
+        string groupName,
+        RibbonCommandIconKind expectedKind)
+    {
+        var icon = RibbonCommandPresentationPlanner.GetGroupIcon(groupName);
+
+        icon.Kind.Should().NotBe(
+            RibbonCommandIconKind.Generic,
+            $"{tabName} group labels should have explicit collapsed-group icon presentation");
+        icon.Kind.Should().Be(expectedKind);
     }
 
     [Theory]
