@@ -21,6 +21,8 @@ internal static class RibbonRuntimeCatalogPlanner
     [
         CreateFormatAsTableSurface(),
         CreateNumberFormatSurface(),
+        CreateConditionalFormattingDataBarSurface(),
+        CreateConditionalFormattingColorScaleSurface(),
         CreateConditionalFormattingIconSetSurface(),
         CreatePageLayoutThemeSurface(),
         CreatePivotTableStyleSurface()
@@ -62,6 +64,32 @@ internal static class RibbonRuntimeCatalogPlanner
                         .ToArray())
             ]);
 
+    private static RibbonRuntimeCatalogSurface CreateConditionalFormattingDataBarSurface() =>
+        new(
+            "Home",
+            "Conditional Formatting Data Bars",
+            "Home",
+            "Conditional Formatting",
+            nameof(ConditionalFormatPresetGalleryPlanner),
+            ConditionalFormatPresetGalleryPlanner.DataBarGroups
+                .Select(group => new RibbonRuntimeCatalogGroup(
+                    group.Name,
+                    group.Options.Select(option => option.Label).ToArray()))
+                .ToArray());
+
+    private static RibbonRuntimeCatalogSurface CreateConditionalFormattingColorScaleSurface() =>
+        new(
+            "Home",
+            "Conditional Formatting Color Scales",
+            "Home",
+            "Conditional Formatting",
+            nameof(ConditionalFormatPresetGalleryPlanner),
+            ConditionalFormatPresetGalleryPlanner.ColorScaleGroups
+                .Select(group => new RibbonRuntimeCatalogGroup(
+                    group.Name,
+                    group.Options.Select(option => option.Label).ToArray()))
+                .ToArray());
+
     private static RibbonRuntimeCatalogSurface CreateConditionalFormattingIconSetSurface() =>
         new(
             "Home",
@@ -81,12 +109,20 @@ internal static class RibbonRuntimeCatalogPlanner
             "Themes",
             "Page Layout",
             "Themes",
-            nameof(WorkbookThemeWorkflow),
+            nameof(WorkbookThemeCatalog),
             [
-                new RibbonRuntimeCatalogGroup("Themes", ["Office", "FreeX Colorful", "Grayscale", "Custom Theme..."]),
-                new RibbonRuntimeCatalogGroup("Colors", ["Office", "Colorful", "Grayscale", "Customize Colors..."]),
-                new RibbonRuntimeCatalogGroup("Fonts", ["Office", "Customize Fonts..."]),
-                new RibbonRuntimeCatalogGroup("Effects", ["Office", "Subtle", "Refined", "Customize Effects..."])
+                new RibbonRuntimeCatalogGroup(
+                    "Themes",
+                    WorkbookThemeCatalog.ThemePresets.Select(option => option.Label).ToArray()),
+                new RibbonRuntimeCatalogGroup(
+                    "Colors",
+                    WorkbookThemeCatalog.ColorPresets.Select(option => option.Label).ToArray()),
+                new RibbonRuntimeCatalogGroup(
+                    "Fonts",
+                    WorkbookThemeCatalog.FontPresets.Select(option => option.Label).ToArray()),
+                new RibbonRuntimeCatalogGroup(
+                    "Effects",
+                    WorkbookThemeCatalog.EffectPresets.Select(option => option.Label).ToArray())
             ]);
 
     private static RibbonRuntimeCatalogSurface CreatePivotTableStyleSurface()
