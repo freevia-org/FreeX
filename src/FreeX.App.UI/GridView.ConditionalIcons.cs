@@ -34,17 +34,25 @@ public partial class GridView
         return !string.IsNullOrEmpty(cell.DisplayText) || cell.ConditionalIcon is not null;
     }
 
+    public static bool IsOverflowOccupied(DisplayCell cell, CellAddress? editingCell)
+    {
+        if (editingCell is { } address && address.Row == cell.Row && address.Col == cell.Col)
+            return true;
+
+        return !string.IsNullOrEmpty(cell.DisplayText) ||
+               cell.ConditionalIcon is not null ||
+               cell.Formula is not null ||
+               cell.RawValue is not null and not BlankValue;
+    }
+
     public static HashSet<(uint Row, uint Col)> BuildOccupiedCellSet(IEnumerable<DisplayCell> cells, CellAddress? editingCell)
     {
         var occupied = new HashSet<(uint Row, uint Col)>();
         foreach (var cell in cells)
         {
-            if (!string.IsNullOrEmpty(cell.DisplayText) || cell.ConditionalIcon is not null)
+            if (IsOverflowOccupied(cell, editingCell))
                 occupied.Add((cell.Row, cell.Col));
         }
-
-        if (editingCell is { } address)
-            occupied.Add((address.Row, address.Col));
 
         return occupied;
     }

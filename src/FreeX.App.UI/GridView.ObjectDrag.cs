@@ -119,6 +119,9 @@ public partial class GridView
     private ObjectDragKind HitTestObjectHandle(Point pos, Rect objRect)
         => GridObjectDragPlanner.HitTestHandle(pos, objRect, HandleSize, HandleHitPad);
 
+    private bool IsOnUnsupportedObjectHandle(Point pos, Rect objRect)
+        => GridObjectDragPlanner.IsUnsupportedHandleZone(pos, objRect, HandleSize, HandleHitPad);
+
     // Returns the cell address closest to the given screen coordinates (for anchor snapping)
     private CellAddress? HitTestAnchorCell(Point pos) =>
         GridObjectDragPlanner.HitTestAnchorCell(

@@ -733,6 +733,41 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void SplitPaneCellLayoutPlanner_EmptyFormulaCellsStopTextOverflow()
+    {
+        var cells = new[]
+        {
+            Cell(1, 1, "long text"),
+            new DisplayCell(1, 2, new TextValue(""), "", "IF(A1,\"\",\"\")", StyleId.Default, null),
+            Cell(1, 3, "")
+        };
+        var viewport = new ViewportModel(
+            cells,
+            [new RowMetric(1, 18, 0)],
+            [
+                new ColMetric(1, 40, 0),
+                new ColMetric(2, 40, 40),
+                new ColMetric(3, 40, 80)
+            ],
+            SplitPanes: new SplitPaneState(
+                2,
+                2,
+                [new RowMetric(1, 18, 0)],
+                [
+                    new ColMetric(1, 40, 0),
+                    new ColMetric(2, 40, 40),
+                    new ColMetric(3, 40, 80)
+                ],
+                cells));
+
+        var layouts = SplitPaneCellLayoutPlanner.CalculateLayouts(viewport);
+
+        layouts.Single(layout => layout.Cell.Col == 1)
+            .TextClipRect.Width
+            .Should().Be(40);
+    }
+
+    [Fact]
     public void RenderSplitPaneCells_UsesPrecomputedLayoutRegionForClipping()
     {
         var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));

@@ -75,6 +75,66 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsWorkbookNamedRangesFromSpreadsheetMlNames()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Names>
+                <ss:NamedRange ss:Name="SalesData" ss:RefersTo="=Report!A1:B2"/>
+                <ss:NamedRange ss:Name="SingleCell" ss:RefersTo="'Q1 Summary'!$C$3"/>
+                <ss:NamedRange ss:Name="UnsupportedFormula" ss:RefersTo="=SUM(Report!A1:B2)"/>
+              </ss:Names>
+              <ss:Worksheet ss:Name="Report"><ss:Table/></ss:Worksheet>
+              <ss:Worksheet ss:Name="Q1 Summary"><ss:Table/></ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var report = workbook.GetSheet("Report")!;
+        var summary = workbook.GetSheet("Q1 Summary")!;
+        workbook.NamedRanges.Should().ContainKey("SalesData");
+        workbook.NamedRanges["SalesData"].Should().Be(new GridRange(
+            new CellAddress(report.Id, 1, 1),
+            new CellAddress(report.Id, 2, 2)));
+        workbook.NamedRanges["SingleCell"].Should().Be(new GridRange(
+            new CellAddress(summary.Id, 3, 3),
+            new CellAddress(summary.Id, 3, 3)));
+        workbook.NamedRanges.Should().NotContainKey("UnsupportedFormula");
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsWorkbookNamedRangesAsSpreadsheetMlNames()
+    {
+        var workbook = new Workbook("XmlNames");
+        var sheet = workbook.AddSheet("Q1 Summary");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 2, 1),
+            new CellAddress(sheet.Id, 4, 3));
+        workbook.DefineNamedRange("SalesData", range);
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var namedRange = document.Descendants(ss + "NamedRange").Should().ContainSingle().Which;
+        namedRange.Attribute(ss + "Name")!.Value.Should().Be("SalesData");
+        namedRange.Attribute(ss + "RefersTo")!.Value.Should().Be("='Q1 Summary'!A2:C4");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+
+        var loadedSheet = loaded.GetSheet("Q1 Summary")!;
+        loaded.NamedRanges.Should().ContainKey("SalesData");
+        loaded.NamedRanges["SalesData"].Should().Be(new GridRange(
+            new CellAddress(loadedSheet.Id, 2, 1),
+            new CellAddress(loadedSheet.Id, 4, 3)));
+    }
+
+    [Fact]
     public void Load_NormalizesInvalidBlankDuplicateAndLongWorksheetNames()
     {
         using var stream = StreamFromString("""

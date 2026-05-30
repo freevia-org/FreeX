@@ -65,6 +65,19 @@ public sealed class GridViewEditingCellTests
     }
 
     [Fact]
+    public void BuildOccupiedCellSet_TreatsEmptyFormulaResultAsOccupied()
+    {
+        var cells = new[]
+        {
+            new DisplayCell(3, 4, new TextValue(""), "", "IF(A1,\"\",\"\")", StyleId.Default, null),
+        };
+
+        GridView.BuildOccupiedCellSet(cells, editingCell: null)
+            .Should()
+            .Contain((3u, 4u));
+    }
+
+    [Fact]
     public void BuildOccupiedCellSet_AvoidsLinqPipelines()
     {
         var source = File.ReadAllText(FindWorkspaceFile(

@@ -151,11 +151,22 @@ public partial class GridView
         else
         {
             var selectedObjectDragKind = ObjectDragKind.None;
+            var selectedObjectUnsupportedHandle = false;
             if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
-                selectedObjectDragKind = HitTestObjectHandle(pos, GetSelectedObjectRect());
+            {
+                var selectedObjectRect = GetSelectedObjectRect();
+                selectedObjectDragKind = HitTestObjectHandle(pos, selectedObjectRect);
+                selectedObjectUnsupportedHandle = IsOnUnsupportedObjectHandle(pos, selectedObjectRect);
+            }
             if (selectedObjectDragKind != ObjectDragKind.None)
             {
                 Cursor = ObjectDragCursor(selectedObjectDragKind);
+                return;
+            }
+
+            if (selectedObjectUnsupportedHandle)
+            {
+                Cursor = null;
                 return;
             }
 
@@ -234,6 +245,12 @@ public partial class GridView
         {
             var selRect = GetSelectedObjectRect();
             var dragKind = HitTestObjectHandle(pos, selRect);
+            if (dragKind == ObjectDragKind.None && IsOnUnsupportedObjectHandle(pos, selRect))
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (dragKind != ObjectDragKind.None)
             {
                 _selectedObjectId = SelectedObjectId;
