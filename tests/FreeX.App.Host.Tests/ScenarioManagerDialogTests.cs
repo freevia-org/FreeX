@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreeX.Core.Model;
 using System.IO;
 using System.Reflection;
+using System.Windows.Automation;
 using System.Windows.Controls;
 
 namespace FreeX.App.Host.Tests;
@@ -282,6 +283,66 @@ public sealed class ScenarioManagerDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.cs"));
 
         source.Should().Contain("AutomationProperties.SetName(_scenarioList, \"Scenarios\");");
+    }
+
+    [Fact]
+    public void DialogControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("test");
+            var sheet = workbook.AddSheet("Sheet1");
+            var dialog = new ScenarioManagerDialog(workbook, sheet.Id, name => name == sheet.Name ? sheet.Id : null);
+            try
+            {
+                AssertAutomation(
+                    GetField<ListBox>(dialog, "_scenarioList"),
+                    "Scenarios",
+                    "ScenarioManagerScenarioList",
+                    "Select a scenario to show, edit, or delete.");
+                AssertAutomation(
+                    GetField<TextBox>(dialog, "_newNameBox"),
+                    "Scenario name",
+                    "ScenarioManagerScenarioNameBox",
+                    "Enter the scenario name to add or edit.");
+                AssertAutomation(
+                    GetField<TextBox>(dialog, "_changingCellsBox"),
+                    "Changing cells",
+                    "ScenarioManagerChangingCellsBox",
+                    "Enter the worksheet cells whose values change in the scenario.");
+                AssertAutomation(
+                    GetField<TextBox>(dialog, "_resultCellsBox"),
+                    "Result cells",
+                    "ScenarioManagerResultCellsBox",
+                    "Enter optional result cells to include in a scenario summary.");
+                AssertAutomation(
+                    GetField<TextBox>(dialog, "_commentBox"),
+                    "Comment",
+                    "ScenarioManagerCommentBox",
+                    "Enter an optional comment for the scenario.");
+                AssertAutomation(
+                    GetField<CheckBox>(dialog, "_lockedBox"),
+                    "Prevent changes",
+                    "ScenarioManagerPreventChangesCheckBox",
+                    "Prevent changes to the scenario when the sheet is protected.");
+                AssertAutomation(
+                    GetField<CheckBox>(dialog, "_hiddenBox"),
+                    "Hide",
+                    "ScenarioManagerHideCheckBox",
+                    "Hide the scenario when the sheet is protected.");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+
+        static void AssertAutomation(Control control, string name, string automationId, string helpText)
+        {
+            AutomationProperties.GetName(control).Should().Be(name);
+            AutomationProperties.GetAutomationId(control).Should().Be(automationId);
+            AutomationProperties.GetHelpText(control).Should().Be(helpText);
+        }
     }
 
     [Fact]

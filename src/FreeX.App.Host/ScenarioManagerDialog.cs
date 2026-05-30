@@ -71,6 +71,8 @@ public sealed partial class ScenarioManagerDialog : Window
 
         left.Children.Add(new Label { Content = "_Scenarios:", Target = _scenarioList, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
         AutomationProperties.SetName(_scenarioList, "Scenarios");
+        AutomationProperties.SetAutomationId(_scenarioList, "ScenarioManagerScenarioList");
+        AutomationProperties.SetHelpText(_scenarioList, "Select a scenario to show, edit, or delete.");
         _scenarioList.ItemsSource = BuildScenarioItems(workbook);
         _scenarioList.DisplayMemberPath = nameof(ScenarioManagerItem.Name);
         _scenarioList.SelectionChanged += (_, _) => UpdateSelectionState();
@@ -105,6 +107,24 @@ public sealed partial class ScenarioManagerDialog : Window
         AddField(fields, row: 3, "_Comment:", _commentBox);
         AddCheckBox(fields, row: 4, _lockedBox);
         AddCheckBox(fields, row: 5, _hiddenBox);
+        AutomationProperties.SetName(_newNameBox, "Scenario name");
+        AutomationProperties.SetAutomationId(_newNameBox, "ScenarioManagerScenarioNameBox");
+        AutomationProperties.SetHelpText(_newNameBox, "Enter the scenario name to add or edit.");
+        AutomationProperties.SetName(_changingCellsBox, "Changing cells");
+        AutomationProperties.SetAutomationId(_changingCellsBox, "ScenarioManagerChangingCellsBox");
+        AutomationProperties.SetHelpText(_changingCellsBox, "Enter the worksheet cells whose values change in the scenario.");
+        AutomationProperties.SetName(_resultCellsBox, "Result cells");
+        AutomationProperties.SetAutomationId(_resultCellsBox, "ScenarioManagerResultCellsBox");
+        AutomationProperties.SetHelpText(_resultCellsBox, "Enter optional result cells to include in a scenario summary.");
+        AutomationProperties.SetName(_commentBox, "Comment");
+        AutomationProperties.SetAutomationId(_commentBox, "ScenarioManagerCommentBox");
+        AutomationProperties.SetHelpText(_commentBox, "Enter an optional comment for the scenario.");
+        AutomationProperties.SetName(_lockedBox, "Prevent changes");
+        AutomationProperties.SetAutomationId(_lockedBox, "ScenarioManagerPreventChangesCheckBox");
+        AutomationProperties.SetHelpText(_lockedBox, "Prevent changes to the scenario when the sheet is protected.");
+        AutomationProperties.SetName(_hiddenBox, "Hide");
+        AutomationProperties.SetAutomationId(_hiddenBox, "ScenarioManagerHideCheckBox");
+        AutomationProperties.SetHelpText(_hiddenBox, "Hide the scenario when the sheet is protected.");
 
         var sideButtons = new StackPanel { Margin = new Thickness(10, 20, 0, 0) };
         Grid.SetColumn(sideButtons, 1);
