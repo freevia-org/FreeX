@@ -71,18 +71,33 @@ public static partial class SpellCheckService
     /// </summary>
     public static IReadOnlyList<SpellingIssue> FindIssuesInCell(CellAddress address, string text)
     {
-        var issues = new List<SpellingIssue>();
+        var issues = new List<(int Index, SpellingIssue Issue)>();
         var ignoredSpans = FindIgnoredSpans(text);
         foreach (Match match in WordRegex().Matches(text))
         {
-            if (IsInIgnoredSpan(match.Index, ignoredSpans))
+            if (OverlapsIgnoredSpan(match.Index, match.Length, ignoredSpans))
                 continue;
 
             if (KnownCorrections.TryGetValue(match.Value, out var suggestion))
-                issues.Add(new SpellingIssue(address, match.Value, suggestion, text));
+                issues.Add((match.Index, new SpellingIssue(address, match.Value, MatchCapitalization(match.Value, suggestion), text)));
         }
 
-        return issues;
+        foreach (Match match in RepeatedWordRegex().Matches(text))
+        {
+            if (OverlapsIgnoredSpan(match.Index, match.Length, ignoredSpans))
+                continue;
+
+            var repeatedWord = match.Groups["word"].Value;
+            if (KnownCorrections.ContainsKey(repeatedWord))
+                continue;
+
+            issues.Add((match.Index, new SpellingIssue(address, match.Value, repeatedWord, text)));
+        }
+
+        return issues
+            .OrderBy(issue => issue.Index)
+            .Select(issue => issue.Issue)
+            .ToList();
     }
 
     /// <summary>
@@ -143,7 +158,7 @@ public static partial class SpellCheckService
             text,
             match =>
             {
-                if (IsInIgnoredSpan(match.Index, ignoredSpans))
+                if (OverlapsIgnoredSpan(match.Index, match.Length, ignoredSpans))
                     return match.Value;
 
                 if (!KnownCorrections.TryGetValue(match.Value, out var suggestion))
@@ -164,8 +179,11 @@ public static partial class SpellCheckService
             .Select(match => new Range(match.Index, match.Index + match.Length))
             .ToList();
 
-    private static bool IsInIgnoredSpan(int index, IReadOnlyList<Range> ignoredSpans) =>
-        ignoredSpans.Any(span => index >= span.Start.Value && index < span.End.Value);
+    private static bool OverlapsIgnoredSpan(int index, int length, IReadOnlyList<Range> ignoredSpans)
+    {
+        var end = index + length;
+        return ignoredSpans.Any(span => index < span.End.Value && end > span.Start.Value);
+    }
 
     private static IEnumerable<Sheet> EnumerateTargetSheets(Workbook workbook, SheetId? sheetId)
     {
@@ -193,13 +211,17 @@ public static partial class SpellCheckService
     [GeneratedRegex(@"\b[\p{L}']+\b")]
     private static partial Regex WordRegex();
 
+    [GeneratedRegex(@"\b(?<word>[\p{L}']{2,})\b[\s\u00A0]+\k<word>\b", RegexOptions.IgnoreCase)]
+    private static partial Regex RepeatedWordRegex();
+
     [GeneratedRegex(@"(?ix)
         (?:
-            \b(?:https?|ftp)://[^\s,;]+
-          | \bwww\.[^\s,;]+
-          | \b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b
-          | \b[A-Z]:\\[^\s,;]+
-          | \bfile://[^\s,;]+
+            (?<![\p{L}\p{N}_])(?:[A-Z][A-Z0-9+.-]*://|mailto:)[^\s<>""']+
+          | (?<![\p{L}\p{N}_])www\.[^\s<>""']+
+          | (?<![\p{L}\p{N}_])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b
+          | (?<![\p{L}\p{N}_])(?:[A-Z]:[\\/]|\\\\)[^\s<>""']+
+          | (?<![\p{L}\p{N}_])(?:~|/)[\w.-]+(?:/[\w .-]+)+
+          | (?<![\p{L}\p{N}_])[\w.-]+\.(?:xlsx?|xlsm|csv|tsv|txt|pdf|docx?|pptx?|zip|json|xml|html?|png|jpe?g|gif|svg)\b
         )")]
     private static partial Regex IgnoredAddressSpanRegex();
 }
