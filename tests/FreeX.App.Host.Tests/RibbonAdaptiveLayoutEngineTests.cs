@@ -21,7 +21,6 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         {
             new RibbonAdaptiveGroup("Get & Transform Data", 170, 130, 78, 58),
             new RibbonAdaptiveGroup("Queries & Connections", 155, 118, 70, 58),
-            new RibbonAdaptiveGroup("Data Types", 140, 110, 66, 58),
             new RibbonAdaptiveGroup("Sort & Filter", 150, 112, 72, 58),
             new RibbonAdaptiveGroup("Data Tools", 210, 168, 92, 58),
             new RibbonAdaptiveGroup("Forecast", 125, 96, 58, 58),
@@ -50,7 +49,6 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         {
             new RibbonAdaptiveGroup("Get & Transform Data", 100, 80, 60, 40),
             new RibbonAdaptiveGroup("Queries & Connections", 100, 80, 60, 40),
-            new RibbonAdaptiveGroup("Data Types", 100, 80, 60, 40),
             new RibbonAdaptiveGroup("Sort & Filter", 100, 80, 60, 40),
             new RibbonAdaptiveGroup("Data Tools", 300, 200, 70, 40),
             new RibbonAdaptiveGroup("Forecast", 100, 80, 60, 40),
@@ -62,12 +60,11 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         layout.States.Should().Equal(
             RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.Collapsed,
-            RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.IconOnly,
             RibbonAdaptiveGroupState.IconOnly,
             RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.Collapsed);
-        layout.PlannedWidth.Should().Be(470);
+        layout.PlannedWidth.Should().Be(430);
         layout.RequiresMeasuredCorrection.Should().BeTrue();
     }
 
@@ -106,7 +103,6 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         {
             new RibbonAdaptiveGroup("Tables", 650, 90, 60, 40),
             new RibbonAdaptiveGroup("Illustrations", 100, 80, 60, 40),
-            new RibbonAdaptiveGroup("Add-ins", 100, 80, 60, 40),
             new RibbonAdaptiveGroup("Charts", 260, 180, 100, 40)
         };
 
@@ -115,9 +111,8 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         layout.States.Should().Equal(
             RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed);
-        layout.PlannedWidth.Should().Be(850);
+        layout.PlannedWidth.Should().Be(810);
         layout.RequiresMeasuredCorrection.Should().BeTrue();
     }
 
@@ -128,7 +123,6 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         {
             new RibbonAdaptiveGroup("Tables", 320, 100, 60, 40),
             new RibbonAdaptiveGroup("Illustrations", 420, 100, 70, 40),
-            new RibbonAdaptiveGroup("Add-ins", 150, 100, 70, 40),
             new RibbonAdaptiveGroup("Charts", 150, 100, 70, 40)
         };
 
@@ -137,7 +131,6 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         layout.States[0].Should().Be(RibbonAdaptiveGroupState.Full);
         layout.States[1].Should().NotBe(RibbonAdaptiveGroupState.Full);
         layout.States[2].Should().Be(RibbonAdaptiveGroupState.Collapsed);
-        layout.States[3].Should().Be(RibbonAdaptiveGroupState.Collapsed);
         layout.PlannedWidth.Should().BeLessThanOrEqualTo(780);
     }
 
@@ -148,7 +141,6 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         {
             new RibbonAdaptiveGroup("Get & Transform Data", 100, 80, 60, 40),
             new RibbonAdaptiveGroup("Queries & Connections", 100, 80, 60, 40),
-            new RibbonAdaptiveGroup("Data Types", 100, 80, 60, 40),
             new RibbonAdaptiveGroup("Sort & Filter", 100, 80, 60, 40),
             new RibbonAdaptiveGroup("Data Tools", 300, 200, 70, 40),
             new RibbonAdaptiveGroup("Forecast", 100, 80, 60, 40),
@@ -158,16 +150,15 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         {
             new RibbonAdaptiveGroup("Tables", 650, 90, 60, 40),
             new RibbonAdaptiveGroup("Illustrations", 100, 80, 60, 40),
-            new RibbonAdaptiveGroup("Add-ins", 100, 80, 60, 40),
             new RibbonAdaptiveGroup("Charts", 260, 180, 100, 40)
         };
 
         RibbonAdaptiveLayoutEngine.BuildResizeThresholds(dataGroups, fixedChromeWidth: 20)
             .Should()
-            .Contain(470);
+            .Contain(430);
         RibbonAdaptiveLayoutEngine.BuildResizeThresholds(insertGroups, fixedChromeWidth: 20)
             .Should()
-            .Contain(850);
+            .Contain(810);
     }
 
     [Fact]
@@ -299,7 +290,6 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         {
             new RibbonAdaptiveGroup("Get & Transform Data", 170, 130, 78, 58),
             new RibbonAdaptiveGroup("Queries & Connections", 155, 118, 70, 58),
-            new RibbonAdaptiveGroup("Data Types", 140, 110, 66, 58),
             new RibbonAdaptiveGroup("Sort & Filter", 150, 112, 72, 58),
             new RibbonAdaptiveGroup("Data Tools", 500, 168, 92, 58),
             new RibbonAdaptiveGroup("Forecast", 420, 96, 58, 58),
