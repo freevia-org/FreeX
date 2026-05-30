@@ -16,6 +16,7 @@ public partial class WorkbookThemeDialog : Window
 
         _initialTheme = theme;
         InitializeComponent();
+        ApplyThemeColorAutomationMetadata();
         PopulateOptions();
         WirePreviewRefresh();
         LoadTheme(theme);

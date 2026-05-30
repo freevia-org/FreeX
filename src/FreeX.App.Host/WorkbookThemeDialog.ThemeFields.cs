@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using System.Windows.Automation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -26,4 +27,36 @@ public partial class WorkbookThemeDialog
         yield return new(WorkbookThemeColorSlot.Hyperlink, HyperlinkColorBox, HyperlinkColorPickerButton);
         yield return new(WorkbookThemeColorSlot.FollowedHyperlink, FollowedHyperlinkColorBox, FollowedHyperlinkColorPickerButton);
     }
+
+    private void ApplyThemeColorAutomationMetadata()
+    {
+        foreach (var field in ThemeColorFields())
+        {
+            var label = FormatThemeColorSlotName(field.Slot);
+
+            AutomationProperties.SetName(field.TextBox, $"{label} theme color");
+            AutomationProperties.SetAutomationId(field.TextBox, $"WorkbookTheme{field.Slot}ColorBox");
+            AutomationProperties.SetHelpText(field.TextBox, "Enter a theme color as a #RRGGBB value.");
+
+            AutomationProperties.SetAutomationId(field.Button, $"WorkbookTheme{field.Slot}ColorPickerButton");
+            AutomationProperties.SetHelpText(field.Button, $"Pick the {label} theme color.");
+        }
+    }
+
+    private static string FormatThemeColorSlotName(WorkbookThemeColorSlot slot) => slot switch
+    {
+        WorkbookThemeColorSlot.Dark1 => "Dark 1",
+        WorkbookThemeColorSlot.Light1 => "Light 1",
+        WorkbookThemeColorSlot.Dark2 => "Dark 2",
+        WorkbookThemeColorSlot.Light2 => "Light 2",
+        WorkbookThemeColorSlot.Accent1 => "Accent 1",
+        WorkbookThemeColorSlot.Accent2 => "Accent 2",
+        WorkbookThemeColorSlot.Accent3 => "Accent 3",
+        WorkbookThemeColorSlot.Accent4 => "Accent 4",
+        WorkbookThemeColorSlot.Accent5 => "Accent 5",
+        WorkbookThemeColorSlot.Accent6 => "Accent 6",
+        WorkbookThemeColorSlot.Hyperlink => "Hyperlink",
+        WorkbookThemeColorSlot.FollowedHyperlink => "Followed Hyperlink",
+        _ => slot.ToString()
+    };
 }
