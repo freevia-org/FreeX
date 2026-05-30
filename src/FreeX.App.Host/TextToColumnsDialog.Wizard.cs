@@ -102,6 +102,7 @@ public sealed partial class TextToColumnsDialog
     {
         _wizardStep = Math.Clamp(_wizardStep + direction, 1, 3);
         UpdateWizardStep();
+        FocusCurrentWizardStepTarget();
     }
 
     private void UpdateWizardStep()
@@ -153,5 +154,30 @@ public sealed partial class TextToColumnsDialog
         _fixedWidthRuler.Opacity = plan.FixedWidthRulerOpacity;
         UpdateWizardStep();
         RefreshPreview();
+    }
+
+    private void FocusCurrentWizardStepTarget()
+    {
+        switch (_wizardStep)
+        {
+            case 1:
+                FocusControl(_fixedWidthButton.IsChecked == true ? _fixedWidthButton : _delimitedButton);
+                break;
+            case 2 when _fixedWidthButton.IsChecked == true:
+                DialogFocus.FocusAndSelect(_fixedWidthBreaksBox);
+                break;
+            case 2:
+                FocusControl(_tabBox);
+                break;
+            default:
+                FocusControl(_formatColumnBox);
+                break;
+        }
+    }
+
+    private static void FocusControl(Control target)
+    {
+        target.Focus();
+        Keyboard.Focus(target);
     }
 }

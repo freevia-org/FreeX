@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Commands;
@@ -306,6 +307,40 @@ public sealed class DataToolDialogTests
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
         source.Should().Contain("_delimitedButton.Focus();");
         source.Should().Contain("Keyboard.Focus(_delimitedButton);");
+    }
+
+    [Fact]
+    public void TextToColumnsWizardNavigation_FocusesFirstControlOnNewStep()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var dialog = new TextToColumnsDialog(
+                ["East,42"],
+                new CellAddress(sheetId, 2, 6));
+            dialog.Show();
+            try
+            {
+                var next = FindVisualChildren<Button>(dialog)
+                    .Single(button => Equals(button.Content, "_Next >"));
+
+                next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                var tabDelimiter = FindVisualChildren<CheckBox>(dialog)
+                    .Single(checkBox => Equals(checkBox.Content, "_Tab"));
+                Keyboard.FocusedElement.Should().BeSameAs(tabDelimiter);
+
+                next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                var columnSelector = FindVisualChildren<ComboBox>(dialog)
+                    .Single(comboBox => comboBox.Items.OfType<string>().Contains("Column 1"));
+                Keyboard.FocusedElement.Should().BeSameAs(columnSelector);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
