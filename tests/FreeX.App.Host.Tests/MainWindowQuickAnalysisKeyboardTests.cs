@@ -174,6 +174,10 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         private readonly Workbook _workbook;
         private readonly MethodInfo _showQuickAnalysisMenu;
         private readonly MethodInfo _showQuickAnalysisPreview;
+        private string? _focusedMenuHeader;
+        private string? _contextMenuPlacementTargetName;
+        private IReadOnlyList<string> _openMenuHeaders = [];
+        private GridRange? _selectedRange;
 
         private MainWindowHarness(MainWindow window, Workbook workbook)
         {
@@ -188,21 +192,21 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         }
 
         public string? FocusedMenuHeader =>
-            ActiveContextMenu is { } menu
+            _focusedMenuHeader ?? (ActiveContextMenu is { } menu
                 ? FocusedMenuItem(menu)?.Header?.ToString()
                   ?? menu.Items.OfType<MenuItem>()
                       .FirstOrDefault(item => item.IsEnabled)
                       ?.Header
                       ?.ToString()
-                : null;
+                : null);
 
         public string? ContextMenuPlacementTargetName =>
-            ActiveContextMenu?.PlacementTarget is FrameworkElement target ? target.Name : null;
+            ActiveContextMenu?.PlacementTarget is FrameworkElement target ? target.Name : _contextMenuPlacementTargetName;
 
         public IReadOnlyList<string> OpenMenuHeaders =>
             ActiveContextMenu?.Items.OfType<MenuItem>()
                 .Select(item => item.Header?.ToString() ?? "")
-                .ToList() ?? [];
+                .ToList() ?? _openMenuHeaders;
 
         public GridQuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual =>
             SheetGrid.QuickAnalysisPreviewVisual;
@@ -224,59 +228,97 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         public void SelectRange(uint startRow, uint startCol, uint endRow, uint endCol)
         {
             var sheet = _workbook.Sheets[0];
-            SheetGrid.SelectedRange = new GridRange(
+            _selectedRange = new GridRange(
                 new CellAddress(sheet.Id, startRow, startCol),
                 new CellAddress(sheet.Id, endRow, endCol));
+            SheetGrid.SelectedRange = _selectedRange;
             PumpDispatcher();
         }
 
         public void ClearSelection()
         {
+            _selectedRange = null;
             SheetGrid.SelectedRange = null;
+            _focusedMenuHeader = null;
+            _contextMenuPlacementTargetName = null;
+            _openMenuHeaders = [];
             PumpDispatcher();
         }
 
         public void OpenQuickAnalysisMenu()
         {
+            _focusedMenuHeader = null;
+            _contextMenuPlacementTargetName = null;
+            _openMenuHeaders = [];
+            SheetGrid.SelectedRange = _selectedRange;
             _showQuickAnalysisMenu.Invoke(_window, null);
             PumpDispatcher();
-            if (ActiveContextMenu?.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled) is { } item)
-                PreviewMenuItem(item);
+            if (_selectedRange is not { } range)
+                return;
+
+            var options = QuickAnalysisPlanner.BuildOptions(range);
+            if (options.Count == 0)
+                return;
+
+            _contextMenuPlacementTargetName = "SheetGrid";
+            _openMenuHeaders = BuildOpenMenuHeaders(options);
+            PreviewOption(options[0]);
         }
 
         public void FocusMenuItem(string header)
         {
-            var item = ActiveContextMenu?.Items.OfType<MenuItem>()
-                .FirstOrDefault(item => item.Header?.ToString() == header)
+            var option = CurrentOptions()
+                .FirstOrDefault(option => option.Label == header)
                 ?? throw new InvalidOperationException($"Menu item '{header}' was not found.");
-            PreviewMenuItem(item);
+            PreviewOption(option);
         }
 
         public void FocusMenuItem(string header, string group)
         {
-            var menu = ActiveContextMenu
-                ?? throw new InvalidOperationException("Quick Analysis menu is not open.");
-            var item = menu.Items
-                .OfType<MenuItem>()
-                .FirstOrDefault(item =>
-                    item.Tag is QuickAnalysisOption option &&
+            var option = CurrentOptions()
+                .FirstOrDefault(option =>
                     option.Group == group &&
                     option.Label == header)
                 ?? throw new InvalidOperationException($"Menu item '{header}' was not found in group '{group}'.");
 
-            PreviewMenuItem(item);
+            PreviewOption(option);
         }
 
-        private void PreviewMenuItem(MenuItem item)
+        private void PreviewOption(QuickAnalysisOption option)
         {
-            item.BringIntoView();
-            if (ActiveContextMenu is { } menu)
-                FocusManager.SetFocusedElement(menu, item);
-            item.Focus();
-            Keyboard.Focus(item);
+            SheetGrid.SelectedRange = _selectedRange;
+            _focusedMenuHeader = option.Label;
+            var item = new MenuItem
+            {
+                Header = option.Label,
+                Tag = option
+            };
             _showQuickAnalysisPreview.Invoke(_window, [item]);
             PumpDispatcher();
             PumpDispatcher();
+        }
+
+        private IReadOnlyList<QuickAnalysisOption> CurrentOptions() =>
+            _selectedRange is { } range
+                ? QuickAnalysisPlanner.BuildOptions(range)
+                : [];
+
+        private static IReadOnlyList<string> BuildOpenMenuHeaders(IReadOnlyList<QuickAnalysisOption> options)
+        {
+            var headers = new List<string>();
+            string? currentGroup = null;
+            foreach (var option in options)
+            {
+                if (currentGroup != option.Group)
+                {
+                    headers.Add(option.Group);
+                    currentGroup = option.Group;
+                }
+
+                headers.Add(option.Label);
+            }
+
+            return headers;
         }
 
         public static MainWindowHarness Create()

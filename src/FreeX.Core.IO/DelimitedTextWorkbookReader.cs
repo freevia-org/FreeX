@@ -18,6 +18,8 @@ internal static partial class DelimitedTextWorkbookReader
         ["#CIRCULAR!"] = ErrorValue.Circular,
         ["#SPILL!"] = ErrorValue.Spill,
         ["#CALC!"] = ErrorValue.Calc,
+        ["#CONNECT!"] = new ErrorValue("#CONNECT!"),
+        ["#UNKNOWN!"] = new ErrorValue("#UNKNOWN!"),
         ["#FIELD!"] = new ErrorValue("#FIELD!"),
         ["#BLOCKED!"] = new ErrorValue("#BLOCKED!"),
         ["#GETTING_DATA"] = new ErrorValue("#GETTING_DATA")

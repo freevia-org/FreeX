@@ -405,14 +405,17 @@ public sealed class CsvFileAdapterTests
         cell.Value.Should().Be(new TextValue("=A1*2"));
     }
 
-    [Fact]
-    public void Load_UsesExcelLikeTextCoercionForGettingDataErrorLiteral()
+    [Theory]
+    [InlineData("#GETTING_DATA")]
+    [InlineData("#CONNECT!")]
+    [InlineData("#UNKNOWN!")]
+    public void Load_UsesExcelLikeTextCoercionForModernErrorLiterals(string errorCode)
     {
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("#GETTING_DATA\r\n"));
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes($"{errorCode}\r\n"));
         var workbook = new CsvFileAdapter().Load(stream);
         var sheet = workbook.Sheets.Single();
 
-        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new ErrorValue("#GETTING_DATA"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new ErrorValue(errorCode));
     }
 
     [Fact]
@@ -833,6 +836,8 @@ public sealed class CsvFileAdapterTests
     [InlineData("sep=\t")]
     [InlineData("#N/A")]
     [InlineData("#DIV/0!")]
+    [InlineData("#CONNECT!")]
+    [InlineData("#UNKNOWN!")]
     [InlineData("#FIELD!")]
     [InlineData("#BLOCKED!")]
     [InlineData("#GETTING_DATA")]
