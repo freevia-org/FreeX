@@ -33,6 +33,10 @@ foreach ($workflow in $workflows) {
         $errors.Add("$($workflow.Name): workflow YAML must use spaces for indentation, not tabs.")
     }
 
+    if ($content -match "(?m)^\s*pull_request_target\s*:") {
+        $errors.Add("$($workflow.Name): workflow must not use the privileged pull_request_target event.")
+    }
+
     $permissionsMatch = [regex]::Match($content, "(?m)^permissions:\s*(?<value>[^\r\n#]*)")
     if (-not $permissionsMatch.Success) {
         $errors.Add("$($workflow.Name): workflow must declare top-level permissions explicitly.")
