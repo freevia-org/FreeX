@@ -116,16 +116,24 @@ public static partial class ChartRenderer
     {
         // Collect all numeric values from the first data column
         var rawValues = new List<double>();
+        var min = double.MaxValue;
+        var max = double.MinValue;
         for (uint r = dataStartRow; r <= endRow; r++)
+        {
             if (cellLookup.TryGetValue((r, dataStartCol), out var cell) &&
                 double.TryParse(cell.DisplayText, NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
+            {
                 rawValues.Add(v);
+                if (v < min)
+                    min = v;
+                if (v > max)
+                    max = v;
+            }
+        }
 
         if (rawValues.Count == 0) return model;
 
         int binCount = Math.Max(2, (int)Math.Ceiling(Math.Sqrt(rawValues.Count)));
-        double min   = rawValues.Min();
-        double max   = rawValues.Max();
         double range = max - min;
         if (range == 0) range = 1;
         double binWidth = range / binCount;
