@@ -50,6 +50,7 @@ public sealed partial class NativeJsonAdapter
         public string? NativeColorSchemeXml { get; set; }
         public string? NativeFontSchemeXml { get; set; }
         public string? NativeFormatSchemeXml { get; set; }
+        public string? NativeThemeSupplementXml { get; set; }
         public List<WorkbookThemeColorDto> Colors { get; set; } = [];
     }
 

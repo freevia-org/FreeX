@@ -27,7 +27,8 @@ public sealed partial class NativeJsonAdapter
         return theme
             .WithNativeColorSchemeXml(dto.NativeColorSchemeXml)
             .WithNativeFontSchemeXml(dto.NativeFontSchemeXml)
-            .WithNativeFormatSchemeXml(dto.NativeFormatSchemeXml);
+            .WithNativeFormatSchemeXml(dto.NativeFormatSchemeXml)
+            .WithNativeThemeSupplementXml(dto.NativeThemeSupplementXml);
     }
 
     private static WorkbookThemeDto FromWorkbookTheme(WorkbookTheme theme) =>
@@ -40,6 +41,7 @@ public sealed partial class NativeJsonAdapter
             NativeColorSchemeXml = theme.NativeColorSchemeXml,
             NativeFontSchemeXml = theme.NativeFontSchemeXml,
             NativeFormatSchemeXml = theme.NativeFormatSchemeXml,
+            NativeThemeSupplementXml = theme.NativeThemeSupplementXml,
             Colors = Enum.GetValues<WorkbookThemeColorSlot>()
                 .Select(slot => new WorkbookThemeColorDto
                 {

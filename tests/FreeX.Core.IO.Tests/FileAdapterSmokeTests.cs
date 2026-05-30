@@ -1987,7 +1987,12 @@ public partial class FileAdapterSmokeTests
             .WithFonts("Aptos Display", "Aptos")
             .WithEffects("FreeXEffects")
             .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(12, 34, 56))
-            .WithColor(WorkbookThemeColorSlot.Hyperlink, new CellColor(1, 99, 193));
+            .WithColor(WorkbookThemeColorSlot.Hyperlink, new CellColor(1, 99, 193))
+            .WithNativeThemeSupplementXml("""
+                <a:objectDefaults xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                    <a:spDef/>
+                </a:objectDefaults>
+                """);
 
         var adapter = new NativeJsonAdapter();
         using var ms = new MemoryStream();
@@ -2002,6 +2007,7 @@ public partial class FileAdapterSmokeTests
         loaded.Theme.EffectsName.Should().Be("FreeXEffects");
         loaded.Theme.GetColor(WorkbookThemeColorSlot.Accent1).Should().Be(new CellColor(12, 34, 56));
         loaded.Theme.GetColor(WorkbookThemeColorSlot.Hyperlink).Should().Be(new CellColor(1, 99, 193));
+        loaded.Theme.NativeThemeSupplementXml.Should().Contain("objectDefaults");
     }
 
     [Fact]
