@@ -215,6 +215,32 @@ public class NumberFormatterTests
     }
 
     [Theory]
+    [InlineData("[DBNum1][$-804]#,##0.00", 1234.5, "\u4E00,\u4E8C\u4E09\u56DB.\u4E94\u3007")]
+    [InlineData("[DBNum2][$-804]0", 123, "\u58F9\u8D30\u53C1")]
+    [InlineData("[DBNum2][$-404]0", 123, "\u58F9\u8CB3\u53C3")]
+    [InlineData("[DBNum3][$-804]#,##0.00", 1234.5, "\uFF11,\uFF12\uFF13\uFF14.\uFF15\uFF10")]
+    [InlineData("[NatNum1][$-041E]#,##0.00", 1234.5, "\u0E51,\u0E52\u0E53\u0E54.\u0E55\u0E50")]
+    [InlineData("[NatNum1][$-0439]#,##0.00", 1234567.89, "\u0967\u0968,\u0969\u096A,\u096B\u096C\u096D.\u096E\u096F")]
+    [InlineData("[NatNum3][$-409]0.0%", 0.125, "\uFF11\uFF13.\uFF10%")]
+    public void CustomNumberSubset_AppliesDbNumAndNatNumDigitSubstitution(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void CustomNumberSubset_AppliesDbNumDigitSubstitutionToDateSerials()
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(45292), "[DBNum1][$-804]m/d/yyyy");
+
+        Assert.Equal("\u4E00/\u4E00/\u4E8C\u3007\u4E8C\u56DB", result);
+    }
+
+    [Theory]
     [InlineData("[Red][<0]0.00;[Blue]0.00", -2.5, "-2.50", "#FF0000")]
     [InlineData("[Red][<0]0.00;[Blue]0.00", 2.5, "2.50", "#0070C0")]
     [InlineData("[Color3][<0]0.00;[Color5]0.00", -2.5, "-2.50", "#FF0000")]
