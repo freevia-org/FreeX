@@ -7,6 +7,14 @@ internal enum ExportOptionsFocusTarget
     PdfLanguage
 }
 
+internal sealed record ExportOptionsFormatAvailability(
+    bool PdfBookmarksEnabled,
+    bool PdfInitialViewEnabled,
+    bool PdfOpenModeEnabled,
+    bool PdfLanguageEnabled,
+    bool PdfBitmapTextEnabled,
+    bool MinimumSizeEnabled);
+
 internal static class ExportOptionsDialogPlanner
 {
     public static ExportOptions CreateResult(
@@ -23,8 +31,9 @@ internal static class ExportOptionsDialogPlanner
         bool bitmapTextWhenFontsMayNotBeEmbedded = false,
         string? pdfLanguage = ExportPlanner.DefaultPdfLanguage,
         PdfConformance pdfConformance = PdfConformance.Standard,
-        bool includeDocumentStructureTags = false) =>
-        new(
+        bool includeDocumentStructureTags = false,
+        ExportFormat format = ExportFormat.Pdf) =>
+        ExportPlanner.CreateEffectiveOptionsForFormat(new ExportOptions(
             Enum.IsDefined(scope) ? scope : ExportContentScope.ActiveSheet,
             includeDocumentProperties,
             openAfterPublish,
@@ -38,7 +47,25 @@ internal static class ExportOptionsDialogPlanner
             bitmapTextWhenFontsMayNotBeEmbedded,
             ExportPlanner.NormalizePdfLanguage(pdfLanguage),
             Enum.IsDefined(pdfConformance) ? pdfConformance : PdfConformance.Standard,
-            includeDocumentStructureTags);
+            includeDocumentStructureTags),
+            format);
+
+    public static ExportOptionsFormatAvailability CreateFormatAvailability(ExportFormat format) =>
+        format == ExportFormat.Xps
+            ? new ExportOptionsFormatAvailability(
+                PdfBookmarksEnabled: false,
+                PdfInitialViewEnabled: false,
+                PdfOpenModeEnabled: false,
+                PdfLanguageEnabled: false,
+                PdfBitmapTextEnabled: false,
+                MinimumSizeEnabled: false)
+            : new ExportOptionsFormatAvailability(
+                PdfBookmarksEnabled: true,
+                PdfInitialViewEnabled: true,
+                PdfOpenModeEnabled: true,
+                PdfLanguageEnabled: true,
+                PdfBitmapTextEnabled: true,
+                MinimumSizeEnabled: true);
 
     public static PdfBookmarkMode BookmarkModeFromIndex(int selectedIndex) =>
         selectedIndex switch
