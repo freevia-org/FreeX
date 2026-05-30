@@ -102,7 +102,7 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void AppChrome_DoesNotUseLegacyFreexcelGreenThemeConstants()
+    public void AppChrome_DoesNotUseLegacyGreenThemeConstants()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
         var legacyFragments = new[]
@@ -128,7 +128,7 @@ public sealed class MainWindowSourceHygieneTests
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        offenders.Should().BeEmpty("old Freexcel-green chrome should use the shared FreeX theme resources or #0F6D8C accent instead");
+        offenders.Should().BeEmpty("legacy green chrome should use the shared FreeX theme resources or #0F6D8C accent instead");
     }
 
     [Fact]
