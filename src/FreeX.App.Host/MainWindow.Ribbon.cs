@@ -895,7 +895,7 @@ public partial class MainWindow
         }
     }
 
-    private static void UpdateRibbonLayoutIfNeeded(FrameworkElement element, bool force = false)
+    private static bool UpdateRibbonLayoutIfNeeded(FrameworkElement element, bool force = false)
     {
         if (force ||
             !element.IsMeasureValid ||
@@ -903,7 +903,10 @@ public partial class MainWindow
             (element.IsVisible && (element.ActualWidth <= 0 || element.ActualHeight <= 0)))
         {
             element.UpdateLayout();
+            return true;
         }
+
+        return false;
     }
 
     private void UpdateActiveRibbonLayoutBeforeFirstFrame()
@@ -914,14 +917,14 @@ public partial class MainWindow
         if (GetRibbonTabContentRoot(tabItem) is FrameworkElement content)
         {
             content.ApplyTemplate();
-            content.UpdateLayout();
+            UpdateRibbonLayoutIfNeeded(content);
             _ribbonFirstFrameLayoutUpdateCount++;
             return;
         }
 
         if (GetActiveRibbonPanel() is { } activePanel)
         {
-            activePanel.UpdateLayout();
+            UpdateRibbonLayoutIfNeeded(activePanel);
             _ribbonFirstFrameLayoutUpdateCount++;
         }
     }

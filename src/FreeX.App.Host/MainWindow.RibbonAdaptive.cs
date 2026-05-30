@@ -33,7 +33,6 @@ public partial class MainWindow
             return;
 
         var selectedTabHeader = GetRibbonAdaptiveTabIdentity(activePanel);
-        _ribbonMeasuredOverflowCache.Clear();
         var cacheKey = controlCacheKey;
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups;
         double fixedChromeWidth;
@@ -76,7 +75,7 @@ public partial class MainWindow
         var layoutStates = layout.States.ToArray();
         var plannedStates = layoutStates.ToArray();
 
-        var correctionCacheKey = CreateRibbonCorrectionCacheKey(availableWidth, plannedStates);
+        var correctionCacheKey = CreateRibbonCorrectionCacheKey(cacheKey, availableWidth, plannedStates);
         var hasCachedCorrection = _ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates);
         if (hasCachedCorrection)
             _ribbonCorrectedStateCacheHitCount++;
@@ -399,7 +398,7 @@ public partial class MainWindow
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroupState> states)
     {
-        var overflowCacheKey = CreateRibbonMeasuredOverflowCacheKey(availableWidth, states);
+        var overflowCacheKey = CreateRibbonMeasuredOverflowCacheKey(measurementCacheKey, availableWidth, states);
         if (_ribbonMeasuredOverflowCache.TryGetValue(overflowCacheKey, out var overflows))
             return overflows;
 
@@ -426,17 +425,21 @@ public partial class MainWindow
     }
 
     private static RibbonCorrectionCacheKey CreateRibbonCorrectionCacheKey(
+        string measurementCacheKey,
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroupState> states) =>
         new(
+            measurementCacheKey,
             RoundRibbonWidthToTenths(availableWidth),
             CreateRibbonStateSignature(states));
 
     private static RibbonMeasuredOverflowCacheKey CreateRibbonMeasuredOverflowCacheKey(
+        string measurementCacheKey,
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroupState> states)
     {
         return new RibbonMeasuredOverflowCacheKey(
+            measurementCacheKey,
             RoundRibbonWidthToTenths(availableWidth),
             GetCollapsedRibbonFootprintMode(availableWidth),
             CreateRibbonStateSignature(states));
@@ -987,10 +990,12 @@ public partial class MainWindow
         RibbonStateSignature States);
 
     private readonly record struct RibbonCorrectionCacheKey(
+        string MeasurementCacheKey,
         int AvailableWidthTenths,
         RibbonStateSignature States);
 
     private readonly record struct RibbonMeasuredOverflowCacheKey(
+        string MeasurementCacheKey,
         int AvailableWidthTenths,
         RibbonCollapsedGroupFootprintMode FootprintMode,
         RibbonStateSignature States);
