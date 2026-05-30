@@ -40,6 +40,8 @@ internal sealed class SelectionPaneDialogItem(SelectionPaneItem item)
         _ => Source.Kind.ToString()
     };
     public bool IsVisible { get; set; } = item.IsVisible;
+    public bool IsDropBefore { get; set; }
+    public bool IsDropAfter { get; set; }
 }
 
 internal sealed record SelectionPaneFilterChoice(string Value, string Label);
@@ -82,6 +84,7 @@ public sealed partial class SelectionPaneDialog : Window
         _list.PreviewMouseLeftButtonDown += List_PreviewMouseLeftButtonDown;
         _list.MouseMove += List_MouseMove;
         _list.DragOver += List_DragOver;
+        _list.DragLeave += List_DragLeave;
         _list.Drop += List_Drop;
         _list.KeyDown += List_KeyDown;
         _items = items.Select(item => new SelectionPaneDialogItem(item)).ToList();
@@ -187,6 +190,11 @@ public sealed partial class SelectionPaneDialog : Window
 
     private static DataTemplate CreateItemTemplate()
     {
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(Border.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(0x20, 0x7A, 0xC5)));
+        border.SetValue(Border.BorderThicknessProperty, new Thickness(0));
+        border.SetValue(Border.PaddingProperty, new Thickness(0, 2, 0, 2));
+
         var panel = new FrameworkElementFactory(typeof(StackPanel));
         panel.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
         panel.SetValue(FrameworkElement.MinHeightProperty, 24.0);
@@ -221,7 +229,27 @@ public sealed partial class SelectionPaneDialog : Window
         kind.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.Kind)));
         panel.AppendChild(kind);
 
-        return new DataTemplate { VisualTree = panel };
+        border.AppendChild(panel);
+
+        var beforeTrigger = new DataTrigger
+        {
+            Binding = new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.IsDropBefore)),
+            Value = true
+        };
+        beforeTrigger.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(0, 2, 0, 0)));
+
+        var afterTrigger = new DataTrigger
+        {
+            Binding = new System.Windows.Data.Binding(nameof(SelectionPaneDialogItem.IsDropAfter)),
+            Value = true
+        };
+        afterTrigger.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(0, 0, 0, 2)));
+
+        return new DataTemplate
+        {
+            VisualTree = border,
+            Triggers = { beforeTrigger, afterTrigger }
+        };
     }
 
     private static Viewbox CreateEyeIcon()

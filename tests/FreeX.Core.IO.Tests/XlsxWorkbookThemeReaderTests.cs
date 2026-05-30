@@ -112,6 +112,14 @@ public sealed class XlsxWorkbookThemeReaderTests
         theme.NativeThemeSupplementXml.Should().Contain("objectDefaults");
         theme.NativeThemeSupplementXml.Should().Contain("extraClrSchemeLst");
         theme.NativeThemeSupplementXml.Should().Contain("extLst");
+        theme.HasObjectDefaults.Should().BeTrue();
+        theme.AlternateColorSchemes.Should().ContainSingle()
+            .Which.Should().Match<WorkbookThemeAlternateColorScheme>(scheme =>
+                scheme.Name == "Alternate Colors" &&
+                scheme.GetColor(WorkbookThemeColorSlot.Dark1) == new CellColor(1, 1, 1) &&
+                scheme.GetColor(WorkbookThemeColorSlot.Light1) == new CellColor(254, 254, 254) &&
+                scheme.NativeColorSchemeXml != null &&
+                scheme.NativeColorSchemeXml.Contains("Alternate Colors"));
 
         package.Position = 0;
         XlsxWorkbookThemeWriter.Save(package, theme);
@@ -126,6 +134,37 @@ public sealed class XlsxWorkbookThemeReaderTests
         savedXml.Should().Contain("extraClrSchemeLst");
         savedXml.Should().Contain("Alternate Colors");
         savedXml.Should().Contain("compatExt spid=\"1\"");
+    }
+
+    [Fact]
+    public void Save_WritesModeledAlternateColorSchemesWhenSupplementXmlIsMissing()
+    {
+        using var package = CreatePackage();
+        var theme = WorkbookTheme.Office.WithSupplementalMetadata(
+            [
+                new WorkbookThemeAlternateColorScheme(
+                    "Modeled Alternate",
+                    new Dictionary<WorkbookThemeColorSlot, CellColor>
+                    {
+                        [WorkbookThemeColorSlot.Accent1] = new(17, 34, 51),
+                        [WorkbookThemeColorSlot.Hyperlink] = new(68, 85, 102)
+                    })
+            ],
+            hasObjectDefaults: false);
+
+        XlsxWorkbookThemeWriter.Save(package, theme);
+        package.Position = 0;
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
+        using var reader = new StreamReader(archive.GetEntry("xl/theme/theme1.xml")!.Open());
+        var savedXml = reader.ReadToEnd();
+
+        savedXml.Should().Contain("extraClrSchemeLst");
+        savedXml.Should().Contain("Modeled Alternate");
+        savedXml.Should().Contain("accent1");
+        savedXml.Should().Contain("112233");
+        savedXml.Should().Contain("hlink");
+        savedXml.Should().Contain("445566");
     }
 
     [Fact]

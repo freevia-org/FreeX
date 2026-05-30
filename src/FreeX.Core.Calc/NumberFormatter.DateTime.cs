@@ -58,12 +58,14 @@ public static partial class NumberFormatter
 
     private static string FormatDateTime(double oaDate, string format)
     {
+        string NativeDigits(string text) => ApplyNativeDigitSubstitution(text, format);
+
         var (_, cleanFmt) = NumberFormatColorMapper.ExtractColor(format);
         if (TryResolveSpecialDateTimeLocaleToken(cleanFmt, out var specialDateTimeToken))
         {
             try
             {
-                return FormatSpecialDateTimeLocaleValue(DateTime.FromOADate(oaDate), specialDateTimeToken);
+                return NativeDigits(FormatSpecialDateTimeLocaleValue(DateTime.FromOADate(oaDate), specialDateTimeToken));
             }
             catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
         }
@@ -71,7 +73,7 @@ public static partial class NumberFormatter
 
         var elapsedMatch = DateTimeElapsedTokenRegex.Match(cleanFmt);
         if (elapsedMatch.Success)
-            return FormatElapsedTime(oaDate, RemoveSpacingAndFillDirectives(cleanFmt), elapsedMatch);
+            return NativeDigits(FormatElapsedTime(oaDate, RemoveSpacingAndFillDirectives(cleanFmt), elapsedMatch));
 
         cleanFmt = DateTimeBracketDirectiveRegex.Replace(cleanFmt, "");
         cleanFmt = RemoveSpacingAndFillDirectives(cleanFmt);
@@ -79,8 +81,8 @@ public static partial class NumberFormatter
         {
             var dt = DateTime.FromOADate(oaDate);
             if (IsDateTimeFormat(cleanFmt))
-                return FormatDateTimeValue(dt, cleanFmt, dateTimeFormat);
-            return dt.ToString(cleanFmt, dateTimeFormat);
+                return NativeDigits(FormatDateTimeValue(dt, cleanFmt, dateTimeFormat));
+            return NativeDigits(dt.ToString(cleanFmt, dateTimeFormat));
         }
         catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
     }

@@ -170,6 +170,9 @@ public static partial class NumberFormatter
         string format,
         bool preserveAccountingZeroDashAlignment = false)
     {
+        var nativeDigitFormat = format;
+        string NativeDigits(string text) => ApplyNativeDigitSubstitution(text, nativeDigitFormat);
+
         if (string.IsNullOrEmpty(format) || IsGeneralFormat(format))
             return FormatNumberGeneral(value);
 
@@ -178,7 +181,7 @@ public static partial class NumberFormatter
             try
             {
                 var dt = DateTime.FromOADate(value);
-                return FormatSpecialDateTimeLocaleValue(dt, specialDateTimeToken);
+                return NativeDigits(FormatSpecialDateTimeLocaleValue(dt, specialDateTimeToken));
             }
             catch { return value.ToString(CultureInfo.InvariantCulture); }
         }
@@ -189,7 +192,7 @@ public static partial class NumberFormatter
         var elapsedMatch = NumericElapsedTokenRegex.Match(format);
         if (elapsedMatch.Success)
         {
-            return FormatElapsedTime(value, RemoveSpacingAndFillDirectives(format), elapsedMatch);
+            return NativeDigits(FormatElapsedTime(value, RemoveSpacingAndFillDirectives(format), elapsedMatch));
         }
 
         // Remove any remaining bracket content (conditions, locale, etc.)
@@ -209,9 +212,9 @@ public static partial class NumberFormatter
             string numFmt = QuoteActivePercentTokens(format).Trim();
             try
             {
-                return pctValue.ToString(string.IsNullOrEmpty(numFmt) ? "0" : numFmt, numberFormat);
+                return NativeDigits(pctValue.ToString(string.IsNullOrEmpty(numFmt) ? "0" : numFmt, numberFormat));
             }
-            catch { return pctValue.ToString("0", numberFormat) + "%"; }
+            catch { return NativeDigits(pctValue.ToString("0", numberFormat) + "%"); }
         }
 
         // Date / time format
@@ -220,16 +223,16 @@ public static partial class NumberFormatter
             try
             {
                 var dt = DateTime.FromOADate(value);
-                return FormatDateTimeValue(dt, format, dateTimeFormat);
+                return NativeDigits(FormatDateTimeValue(dt, format, dateTimeFormat));
             }
             catch { return value.ToString(CultureInfo.InvariantCulture); }
         }
 
         if (IsSimpleFractionFormat(format))
-            return FormatSimpleFraction(value, format);
+            return NativeDigits(FormatSimpleFraction(value, format));
 
         if (IsScientificFormat(format))
-            return FormatScientific(value, format, numberFormat);
+            return NativeDigits(FormatScientific(value, format, numberFormat));
 
         // Accounting / text literals — strip quoted strings to expose the numeric pattern
         var stripped = NumericQuotedTextRegex.Replace(format, "");
@@ -243,21 +246,21 @@ public static partial class NumberFormatter
 
             if (format.All(c => c is '?' || char.IsWhiteSpace(c)) &&
                 !ShouldRenderQuestionOnlyFormat(prefix, suffix))
-                return prefix + suffix;
+                return NativeDigits(prefix + suffix);
 
             if (string.IsNullOrEmpty(format))
-                return prefix + suffix;
+                return NativeDigits(prefix + suffix);
         }
 
         // Pass the cleaned format to .NET — it understands #,##0.00, 0.00, 0, # etc.
         if (HasActiveQuestionPlaceholder(format))
-            return prefix + FormatQuestionPlaceholderNumber(value, format, numberFormat) + suffix;
+            return NativeDigits(prefix + FormatQuestionPlaceholderNumber(value, format, numberFormat) + suffix);
 
         string numStr;
         try   { numStr = value.ToString(format, numberFormat); }
         catch { numStr = value.ToString(numberFormat); }
 
-        return prefix + numStr + suffix;
+        return NativeDigits(prefix + numStr + suffix);
     }
 
     private static int CountActivePercentTokens(string format)

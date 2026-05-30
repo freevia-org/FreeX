@@ -107,6 +107,69 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
+    public void SelectionPaneDialogStatePlanner_PlanDropVisual_AllowsSameKindInsertionCue()
+    {
+        var front = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
+        var back = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
+
+        var plan = SelectionPaneDialogStatePlanner.PlanDropVisual(
+            [front, back],
+            draggedId: back.Id,
+            targetId: front.Id,
+            placement: SelectionPaneDropPlacement.Before);
+
+        plan.Should().Be(new SelectionPaneDropVisualPlan(
+            front.Id,
+            SelectionPaneDropPlacement.Before,
+            IsAllowed: true));
+    }
+
+    [Fact]
+    public void SelectionPaneDialogStatePlanner_PlanDropVisual_RejectsSameItemAndCrossKindCues()
+    {
+        var picture = DialogState(SelectionPaneObjectKind.Picture, "Picture", isVisible: true);
+        var shape = DialogState(SelectionPaneObjectKind.Shape, "Shape", isVisible: true);
+
+        var sameItem = SelectionPaneDialogStatePlanner.PlanDropVisual(
+            [picture, shape],
+            draggedId: picture.Id,
+            targetId: picture.Id,
+            placement: SelectionPaneDropPlacement.After);
+        var crossKind = SelectionPaneDialogStatePlanner.PlanDropVisual(
+            [picture, shape],
+            draggedId: picture.Id,
+            targetId: shape.Id,
+            placement: SelectionPaneDropPlacement.After);
+
+        sameItem.Should().Be(new SelectionPaneDropVisualPlan(
+            picture.Id,
+            SelectionPaneDropPlacement.After,
+            IsAllowed: false));
+        crossKind.Should().Be(new SelectionPaneDropVisualPlan(
+            shape.Id,
+            SelectionPaneDropPlacement.After,
+            IsAllowed: false));
+    }
+
+    [Fact]
+    public void SelectionPaneDialogStatePlanner_PlanDropVisual_RejectsNoOpAdjacentCue()
+    {
+        var front = DialogState(SelectionPaneObjectKind.Picture, "Front", isVisible: true);
+        var back = DialogState(SelectionPaneObjectKind.Picture, "Back", isVisible: true);
+
+        var plan = SelectionPaneDialogStatePlanner.PlanDropVisual(
+            [front, back],
+            draggedId: front.Id,
+            targetId: back.Id,
+            placement: SelectionPaneDropPlacement.Before);
+
+        plan.Should().Be(new SelectionPaneDropVisualPlan(
+            back.Id,
+            SelectionPaneDropPlacement.Before,
+            IsAllowed: false));
+    }
+
+    [Fact]
     public void SelectionPaneDialogStatePlanner_PlanDragReorder_HandlesLargeListsWithConsolidatedLookup()
     {
         const int itemCount = 5_000;
@@ -589,6 +652,11 @@ public sealed class SelectionPanePlannerTests
         source.Should().Contain("GetDropPlacement");
         source.Should().Contain("SelectionPaneDropPlacement.After");
         source.Should().Contain("CreateDragMoveChanges");
+        source.Should().Contain("PlanDropVisual");
+        source.Should().Contain("IsDropBefore");
+        source.Should().Contain("IsDropAfter");
+        source.Should().Contain("List_DragLeave");
+        source.Should().Contain("ClearDropVisual");
     }
 
     private static string ReadSelectionPaneDialogSources() =>

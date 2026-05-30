@@ -17,6 +17,11 @@ internal sealed record SelectionPaneDragMovePlan(
     int InsertIndex,
     IReadOnlyList<SelectionPaneMoveChange> MoveChanges);
 
+internal sealed record SelectionPaneDropVisualPlan(
+    Guid TargetId,
+    SelectionPaneDropPlacement Placement,
+    bool IsAllowed);
+
 public enum SelectionPaneDropPlacement
 {
     Before,
@@ -90,6 +95,16 @@ internal static class SelectionPaneDialogStatePlanner
         orderedIds.RemoveAt(dragPlan.DraggedIndex);
         orderedIds.Insert(dragPlan.InsertIndex, dragged);
         return new SelectionPaneDialogReorderPlan(orderedIds, dragPlan.MoveChanges);
+    }
+
+    public static SelectionPaneDropVisualPlan PlanDropVisual(
+        IReadOnlyList<SelectionPaneDialogItemState> items,
+        Guid draggedId,
+        Guid targetId,
+        SelectionPaneDropPlacement placement = SelectionPaneDropPlacement.Before)
+    {
+        var dragPlan = CreateDragMovePlan(items, draggedId, targetId, placement);
+        return new SelectionPaneDropVisualPlan(targetId, placement, dragPlan is not null);
     }
 
     public static int FindSameKindMoveTargetIndex(
@@ -198,7 +213,7 @@ internal static class SelectionPaneDialogStatePlanner
         return CreateDragMovePlan(dragged.Kind, dragged.Id, draggedIndex, targetIndex, placement);
     }
 
-    private static SelectionPaneDragMovePlan CreateDragMovePlan(
+    private static SelectionPaneDragMovePlan? CreateDragMovePlan(
         SelectionPaneObjectKind kind,
         Guid draggedId,
         int draggedIndex,
@@ -210,7 +225,7 @@ internal static class SelectionPaneDialogStatePlanner
             insertIndex--;
 
         if (insertIndex == draggedIndex)
-            return new SelectionPaneDragMovePlan(draggedIndex, insertIndex, []);
+            return null;
 
         var moves = new List<SelectionPaneMoveChange>(Math.Abs(draggedIndex - insertIndex));
         var forward = draggedIndex > insertIndex;
