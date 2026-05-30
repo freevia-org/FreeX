@@ -31,7 +31,8 @@ public sealed partial class NativeJsonAdapter
             .WithNativeThemeSupplementXml(dto.NativeThemeSupplementXml)
             .WithSupplementalMetadata(
                 (dto.AlternateColorSchemes ?? []).Select(ToAlternateColorScheme).ToArray(),
-                dto.HasObjectDefaults);
+                dto.HasObjectDefaults,
+                ToObjectDefaults(dto.ObjectDefaults));
     }
 
     private static WorkbookThemeDto FromWorkbookTheme(WorkbookTheme theme) =>
@@ -46,6 +47,7 @@ public sealed partial class NativeJsonAdapter
             NativeFormatSchemeXml = theme.NativeFormatSchemeXml,
             NativeThemeSupplementXml = theme.NativeThemeSupplementXml,
             HasObjectDefaults = theme.HasObjectDefaults,
+            ObjectDefaults = FromObjectDefaults(theme.ObjectDefaults),
             AlternateColorSchemes = (theme.AlternateColorSchemes ?? [])
                 .Select(FromAlternateColorScheme)
                 .ToList(),
@@ -57,6 +59,95 @@ public sealed partial class NativeJsonAdapter
                 })
                 .ToList()
         };
+
+    private static WorkbookThemeObjectDefaults? ToObjectDefaults(
+        WorkbookThemeObjectDefaultsDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        return new WorkbookThemeObjectDefaults(
+            ToShapeObjectDefault(dto.Shape),
+            ToLineObjectDefault(dto.Line),
+            ToTextObjectDefault(dto.Text),
+            dto.NativeObjectDefaultsXml);
+    }
+
+    private static WorkbookThemeShapeObjectDefault? ToShapeObjectDefault(
+        WorkbookThemeShapeObjectDefaultDto? dto) =>
+        dto is null
+            ? null
+            : new WorkbookThemeShapeObjectDefault(
+                ToThemeColorReference(dto.FillThemeColor),
+                ParseColor(dto.FillColor ?? ""),
+                ToThemeColorReference(dto.OutlineThemeColor),
+                ParseColor(dto.OutlineColor ?? ""),
+                dto.OutlineWidthPoints);
+
+    private static WorkbookThemeLineObjectDefault? ToLineObjectDefault(
+        WorkbookThemeLineObjectDefaultDto? dto) =>
+        dto is null
+            ? null
+            : new WorkbookThemeLineObjectDefault(
+                ToThemeColorReference(dto.StrokeThemeColor),
+                ParseColor(dto.StrokeColor ?? ""),
+                dto.StrokeWidthPoints);
+
+    private static WorkbookThemeTextObjectDefault? ToTextObjectDefault(
+        WorkbookThemeTextObjectDefaultDto? dto) =>
+        dto is null
+            ? null
+            : new WorkbookThemeTextObjectDefault(
+                ToThemeColorReference(dto.TextThemeColor),
+                ParseColor(dto.TextColor ?? ""),
+                dto.Typeface);
+
+    private static WorkbookThemeObjectDefaultsDto? FromObjectDefaults(
+        WorkbookThemeObjectDefaults? defaults) =>
+        defaults is null
+            ? null
+            : new WorkbookThemeObjectDefaultsDto
+            {
+                Shape = FromShapeObjectDefault(defaults.Shape),
+                Line = FromLineObjectDefault(defaults.Line),
+                Text = FromTextObjectDefault(defaults.Text),
+                NativeObjectDefaultsXml = defaults.NativeObjectDefaultsXml
+            };
+
+    private static WorkbookThemeShapeObjectDefaultDto? FromShapeObjectDefault(
+        WorkbookThemeShapeObjectDefault? shape) =>
+        shape is null
+            ? null
+            : new WorkbookThemeShapeObjectDefaultDto
+            {
+                FillThemeColor = FromThemeColorReference(shape.FillThemeColor),
+                FillColor = shape.FillColor is { } fillColor ? FormatColor(fillColor) : null,
+                OutlineThemeColor = FromThemeColorReference(shape.OutlineThemeColor),
+                OutlineColor = shape.OutlineColor is { } outlineColor ? FormatColor(outlineColor) : null,
+                OutlineWidthPoints = shape.OutlineWidthPoints
+            };
+
+    private static WorkbookThemeLineObjectDefaultDto? FromLineObjectDefault(
+        WorkbookThemeLineObjectDefault? line) =>
+        line is null
+            ? null
+            : new WorkbookThemeLineObjectDefaultDto
+            {
+                StrokeThemeColor = FromThemeColorReference(line.StrokeThemeColor),
+                StrokeColor = line.StrokeColor is { } strokeColor ? FormatColor(strokeColor) : null,
+                StrokeWidthPoints = line.StrokeWidthPoints
+            };
+
+    private static WorkbookThemeTextObjectDefaultDto? FromTextObjectDefault(
+        WorkbookThemeTextObjectDefault? text) =>
+        text is null
+            ? null
+            : new WorkbookThemeTextObjectDefaultDto
+            {
+                TextThemeColor = FromThemeColorReference(text.TextThemeColor),
+                TextColor = text.TextColor is { } textColor ? FormatColor(textColor) : null,
+                Typeface = text.Typeface
+            };
 
     private static WorkbookThemeAlternateColorScheme ToAlternateColorScheme(
         WorkbookThemeAlternateColorSchemeDto dto)
