@@ -490,7 +490,7 @@ public partial class GridView
 
             if (dragKind == ObjectDragKind.Move)
             {
-                var newAnchor = HitTestAnchorCell(pos);
+                var newAnchor = HitTestAnchorCell(new Point(currentRect.Left, currentRect.Top));
                 if (newAnchor.HasValue && newAnchor.Value != _objectDragStartAnchor)
                     ObjectMoved?.Invoke(id, kind, newAnchor.Value);
             }

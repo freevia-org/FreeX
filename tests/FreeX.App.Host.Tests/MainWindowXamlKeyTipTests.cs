@@ -1633,6 +1633,7 @@ public sealed class MainWindowXamlKeyTipTests
         source.Should().Contain("private void CellAddressBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)");
         source.Should().Contain("GoToDialog.TryParseReferenceRange(");
         source.Should().Contain("SetSelectionRange(selectedRange, selectedRange.Start);");
+        source.Should().Contain("FocusSheetGridIfNeeded();");
         source.Should().Contain("CellAddressBox.SelectAll();");
     }
 

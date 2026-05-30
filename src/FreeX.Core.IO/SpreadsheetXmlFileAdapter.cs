@@ -12,6 +12,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static readonly XNamespace OfficeNs = "urn:schemas-microsoft-com:office:office";
     private static readonly XNamespace ExcelNs = "urn:schemas-microsoft-com:office:excel";
     private static readonly XName SpreadsheetIndexAttribute = SpreadsheetNs + "Index";
+    private static readonly XName SpreadsheetSpanAttribute = SpreadsheetNs + "Span";
     private static readonly XName SpreadsheetNameAttribute = SpreadsheetNs + "Name";
     private static readonly XName SpreadsheetFormulaAttribute = SpreadsheetNs + "Formula";
     private static readonly XName SpreadsheetTypeAttribute = SpreadsheetNs + "Type";
@@ -194,8 +195,14 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             if (columnIndex > CellAddress.MaxCol)
                 break;
 
-            ReadColumnLayout(sheet, columnElement, columnIndex);
-            columnIndex++;
+            var span = ReadSpan(columnElement);
+            var lastColumnIndex = span > CellAddress.MaxCol - columnIndex
+                ? CellAddress.MaxCol
+                : columnIndex + span;
+            for (var currentColumnIndex = columnIndex; currentColumnIndex <= lastColumnIndex; currentColumnIndex++)
+                ReadColumnLayout(sheet, columnElement, currentColumnIndex);
+
+            columnIndex = lastColumnIndex + 1;
         }
     }
 
@@ -332,6 +339,14 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static uint ReadMergeExtent(XElement cellElement, XName attributeName)
     {
         var text = cellElement.Attribute(attributeName)?.Value;
+        return uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : 0u;
+    }
+
+    private static uint ReadSpan(XElement element)
+    {
+        var text = element.Attribute(SpreadsheetSpanAttribute)?.Value;
         return uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
             ? value
             : 0u;
