@@ -16,6 +16,7 @@ public sealed class GitHubWorkflowPreflightTests
         script.Should().Contain("workflow must declare top-level permissions explicitly");
         script.Should().Contain("must be pinned to an explicit major version");
         script.Should().Contain("must declare an explicit shell");
+        script.Should().Contain("must stay within the workflow workspace");
         script.Should().Contain("workflow YAML must use spaces for indentation");
         script.Should().Contain("Validated $($workflows.Count) GitHub workflow file(s).");
     }
@@ -65,6 +66,45 @@ public sealed class GitHubWorkflowPreflightTests
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("must declare an explicit shell");
             (result.Output + result.Error).Should().Contain("Missing shell");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GitHubWorkflowPreflight_FailsWhenLocalActionEscapesWorkspace()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-workflow-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDirectory);
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(tempDirectory, "broken.yml"),
+                """
+                name: Broken
+
+                on:
+                  workflow_dispatch:
+
+                permissions:
+                  contents: read
+
+                jobs:
+                  build:
+                    runs-on: windows-latest
+                    steps:
+                      - uses: ./../outside-action
+                """);
+            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1");
+
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-WorkflowDirectory \"{tempDirectory}\"");
+
+            result.ExitCode.Should().NotBe(0);
+            (result.Output + result.Error).Should().Contain("must stay within the workflow workspace");
+            (result.Output + result.Error).Should().Contain("./../outside-action");
         }
         finally
         {

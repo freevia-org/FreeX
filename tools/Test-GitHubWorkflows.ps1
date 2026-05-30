@@ -47,7 +47,13 @@ foreach ($workflow in $workflows) {
 
     foreach ($match in [regex]::Matches($content, "(?m)^\s*(?:-\s*)?uses:\s+([^\s#]+)")) {
         $actionRef = $match.Groups[1].Value.Trim("`"", "'")
-        if ($actionRef -match "^\./") {
+        if ($actionRef -match "^\.[\\/]") {
+            $localActionPath = $actionRef.Substring(2)
+            $segments = $localActionPath -split "[\\/]+"
+            if ($segments -contains "..") {
+                $errors.Add("$($workflow.Name): local action reference '$actionRef' must stay within the workflow workspace.")
+            }
+
             continue
         }
 
