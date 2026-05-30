@@ -85,8 +85,8 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e) => ToggleSelectedDrawingShapeEffect();");
         source.Should().Contain("new BringDrawingShapeForwardCommand(sheetId, target?.Id ?? Guid.Empty)");
         source.Should().Contain("new SendDrawingShapeBackwardCommand(sheetId, target?.Id ?? Guid.Empty)");
-        source.Should().Contain("new ObjectSizeDialog(target.Width, target.Height, \"Object Size\")");
-        source.Should().Contain("new RotationDialog(target.RotationDegrees, \"Rotate Object\")");
+        source.Should().Contain("new ObjectSizeDialog(target.Width, target.Height, UiText.Get(\"MainWindowMessage_ObjectSizeTitle\"))");
+        source.Should().Contain("new RotationDialog(target.RotationDegrees, UiText.Get(\"MainWindowMessage_RotateObjectTitle\"))");
         source.Should().Contain("new SetDrawingShapeColorsCommand(");
         source.Should().Contain("new SetTextBoxColorsCommand(");
         source.Should().Contain("new ShapeGradientDialog");

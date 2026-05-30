@@ -144,7 +144,9 @@ public sealed class InsertCommandSourceTests
         insertSource.Should().Contain("CreateSingleCellEditCommand(currentAddress, Cell.FromValue(new TextValue(currentText)))");
 
         drawingSource.Should().Contain("private void DrawTextBtn_Click(object sender, RoutedEventArgs e)    => InsertTextBox();");
-        drawingSource.Should().Contain("new TextEntryDialog(\"Insert Text Box\", \"Text:\", \"\")");
+        drawingSource.Should().Contain("new TextEntryDialog(");
+        drawingSource.Should().Contain("UiText.Get(\"MainWindowDialog_InsertTextBoxTitle\")");
+        drawingSource.Should().Contain("UiText.Get(\"MainWindowDialog_TextEntryLabel\")");
         drawingSource.Should().Contain("new AddTextBoxCommand(");
     }
 
