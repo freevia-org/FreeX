@@ -4,17 +4,26 @@ internal sealed record RibbonScreenshotTourTab(string Header, string FileName);
 
 internal sealed record RibbonScreenshotTourWidth(string Label, double? WindowWidth);
 
+internal sealed record RibbonScreenshotTourPhase(string Label, string? FileNameSuffix);
+
 internal sealed record RibbonScreenshotTourCapture(
     RibbonScreenshotTourTab Tab,
-    RibbonScreenshotTourWidth Width)
+    RibbonScreenshotTourWidth Width,
+    RibbonScreenshotTourPhase Phase)
 {
-    public string FileName => $"{Width.Label}_{Tab.FileName}";
+    public string FileName => Phase.FileNameSuffix is { Length: > 0 } suffix
+        ? $"{Width.Label}_{Tab.FileName}_{suffix}"
+        : $"{Width.Label}_{Tab.FileName}";
 }
 
 internal sealed record RibbonScreenshotTourPlan(
     IReadOnlyList<RibbonScreenshotTourTab> Tabs,
     IReadOnlyList<RibbonScreenshotTourWidth> Widths,
-    IReadOnlyList<RibbonScreenshotTourCapture> Captures);
+    IReadOnlyList<RibbonScreenshotTourPhase> Phases,
+    IReadOnlyList<RibbonScreenshotTourCapture> Captures)
+{
+    public bool IsBurst => Phases.Count > 1;
+}
 
 internal static class RibbonScreenshotTourPlanner
 {
@@ -39,15 +48,34 @@ internal static class RibbonScreenshotTourPlanner
         new("750", 750)
     ];
 
-    public static RibbonScreenshotTourPlan CreatePlan(string? requestedTabs, string? requestedWidths)
+    public static RibbonScreenshotTourPhase SettledPhase { get; } =
+        new("settled", null);
+
+    public static IReadOnlyList<RibbonScreenshotTourPhase> DefaultPhases { get; } =
+    [
+        SettledPhase
+    ];
+
+    public static IReadOnlyList<RibbonScreenshotTourPhase> BurstPhases { get; } =
+    [
+        new("immediate", "immediate"),
+        new("first-render", "first_render"),
+        new("settled", "settled")
+    ];
+
+    public static RibbonScreenshotTourPlan CreatePlan(string? requestedTabs, string? requestedWidths) =>
+        CreatePlan(requestedTabs, requestedWidths, burstMode: false);
+
+    public static RibbonScreenshotTourPlan CreatePlan(string? requestedTabs, string? requestedWidths, bool burstMode)
     {
         var tabs = FilterTabs(DefaultTabs, requestedTabs);
         var widths = ParseWidths(requestedWidths);
+        var phases = burstMode ? BurstPhases : DefaultPhases;
         var captures = widths
-            .SelectMany(width => tabs.Select(tab => new RibbonScreenshotTourCapture(tab, width)))
+            .SelectMany(width => tabs.SelectMany(tab => phases.Select(phase => new RibbonScreenshotTourCapture(tab, width, phase))))
             .ToList();
 
-        return new RibbonScreenshotTourPlan(tabs, widths, captures);
+        return new RibbonScreenshotTourPlan(tabs, widths, phases, captures);
     }
 
     public static IReadOnlyList<RibbonScreenshotTourTab> FilterTabs(
