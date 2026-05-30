@@ -37,6 +37,14 @@ foreach ($workflow in $workflows) {
         $errors.Add("$($workflow.Name): workflow must declare top-level permissions explicitly.")
     }
 
+    foreach ($match in [regex]::Matches($content, "(?ms)^(\s*)-\s+name:\s+(?<name>[^\r\n]+).*?^\1\s+run:\s+")) {
+        $stepBlock = $match.Value
+        if ($stepBlock -notmatch "(?m)^\s+shell:\s+") {
+            $stepName = $match.Groups["name"].Value.Trim("`"", "'")
+            $errors.Add("$($workflow.Name): run step '$stepName' must declare an explicit shell.")
+        }
+    }
+
     foreach ($match in [regex]::Matches($content, "(?m)^\s*(?:-\s*)?uses:\s+([^\s#]+)")) {
         $actionRef = $match.Groups[1].Value.Trim("`"", "'")
         if ($actionRef -match "^\./") {
