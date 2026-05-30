@@ -13404,4 +13404,330 @@ Changing cell value: {2}</value>
   <data name="TextToColumns_ThousandsSeparatorLabel" xml:space="preserve">
     <value>_Thousands separator:</value>
   </data>
+  <data name="MainWindowMessage_AboutFreeXTitle" xml:space="preserve">
+    <value>About FreeX</value>
+  </data>
+  <data name="MainWindowMessage_AllowEditRangeAdded" xml:space="preserve">
+    <value>{0} can now be edited while this sheet is protected.</value>
+  </data>
+  <data name="MainWindowMessage_AllowEditRangeRemoved" xml:space="preserve">
+    <value>{0} is no longer unlocked while this sheet is protected.</value>
+  </data>
+  <data name="MainWindowMessage_AllowEditRangesCleared" xml:space="preserve">
+    <value>All allow-edit ranges were removed from this sheet.</value>
+  </data>
+  <data name="MainWindowMessage_AllowEditRangesTitle" xml:space="preserve">
+    <value>Allow Users to Edit Ranges</value>
+  </data>
+  <data name="MainWindowMessage_AltTextLabel" xml:space="preserve">
+    <value>Alt text:</value>
+  </data>
+  <data name="MainWindowMessage_AltTextNoObjectAtSelection" xml:space="preserve">
+    <value>No picture, shape, or text box is anchored at the selected cell.</value>
+  </data>
+  <data name="MainWindowMessage_AltTextTitle" xml:space="preserve">
+    <value>Alt Text</value>
+  </data>
+  <data name="MainWindowMessage_ChartBubbleOptionsUnsupported" xml:space="preserve">
+    <value>Bubble format options only apply to bubble charts.</value>
+  </data>
+  <data name="MainWindowMessage_ChartComboUnsupported" xml:space="preserve">
+    <value>Combo line overlays require a supported chart with at least two data series.</value>
+  </data>
+  <data name="MainWindowMessage_ChartDoughnutHoleSizeUnsupported" xml:space="preserve">
+    <value>Doughnut hole size only applies to doughnut charts.</value>
+  </data>
+  <data name="MainWindowMessage_ChartExplodedSliceUnsupported" xml:space="preserve">
+    <value>Exploded slices require a pie or doughnut chart with chart data.</value>
+  </data>
+  <data name="MainWindowMessage_ChartFamilyDeferred" xml:space="preserve">
+    <value>This chart family is retained when opening XLSX files, but authoring and rendering are deferred until its data model and renderer are implemented.</value>
+  </data>
+  <data name="MainWindowMessage_ChartFamilyDeferredTitle" xml:space="preserve">
+    <value>Chart family deferred</value>
+  </data>
+  <data name="MainWindowMessage_ChartFirstSliceAngleUnsupported" xml:space="preserve">
+    <value>First-slice angle only applies to pie and doughnut charts.</value>
+  </data>
+  <data name="MainWindowMessage_ChartGapWidthUnsupported" xml:space="preserve">
+    <value>Gap width and overlap only apply to bar and column charts.</value>
+  </data>
+  <data name="MainWindowMessage_ChartInvalidDataRange" xml:space="preserve">
+    <value>Enter a valid chart data range.</value>
+  </data>
+  <data name="MainWindowMessage_ChartPieOptionsUnsupported" xml:space="preserve">
+    <value>Pie format options only apply to pie and doughnut charts.</value>
+  </data>
+  <data name="MainWindowMessage_ChartPointDataLabelNeedsDataPoints" xml:space="preserve">
+    <value>Add chart data points before changing point data-label formatting.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSecondaryAxisUnsupported" xml:space="preserve">
+    <value>Secondary value axes require a supported chart with at least two data series.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectBarColumnForGapWidth" xml:space="preserve">
+    <value>Insert or select a bar or column chart before changing gap width.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectBeforeCommand" xml:space="preserve">
+    <value>Insert or select a chart before using this command.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectBubbleForOptions" xml:space="preserve">
+    <value>Insert or select a bubble chart before changing bubble options.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectDoughnutForHoleSize" xml:space="preserve">
+    <value>Insert or select a doughnut chart before changing hole size.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForChartAreaFormatting" xml:space="preserve">
+    <value>Insert or select a chart before changing chart area formatting.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForComboOptions" xml:space="preserve">
+    <value>Insert or select a chart before changing combo chart options.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForComboSeries" xml:space="preserve">
+    <value>Insert or select a chart before changing combo chart series.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForDataLabelOptions" xml:space="preserve">
+    <value>Insert or select a chart before changing data label options.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForDataLabels" xml:space="preserve">
+    <value>Insert or select a chart before changing data labels.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForErrorBars" xml:space="preserve">
+    <value>Insert or select a chart before changing error bars.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForMovingAveragePeriod" xml:space="preserve">
+    <value>Insert or select a chart before changing moving-average period.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForPointDataLabel" xml:space="preserve">
+    <value>Insert or select a chart before changing point data-label formatting.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForPolynomialOrder" xml:space="preserve">
+    <value>Insert or select a chart before changing polynomial order.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForSecondaryAxisSeries" xml:space="preserve">
+    <value>Insert or select a chart before changing secondary-axis series.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForSeriesFormatting" xml:space="preserve">
+    <value>Insert or select a chart before changing series formatting.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForTitles" xml:space="preserve">
+    <value>Insert or select a chart before editing chart titles.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForTrendlineInformation" xml:space="preserve">
+    <value>Insert or select a chart before changing trendline information.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectForTrendlines" xml:space="preserve">
+    <value>Insert or select a chart before changing trendlines.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectPieDoughnutForExplode" xml:space="preserve">
+    <value>Insert or select a pie or doughnut chart before exploding a slice.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectPieDoughnutForFirstSliceAngle" xml:space="preserve">
+    <value>Insert or select a pie or doughnut chart before changing first-slice angle.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectPieDoughnutForOptions" xml:space="preserve">
+    <value>Insert or select a pie or doughnut chart before changing pie options.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSelectStockForOptions" xml:space="preserve">
+    <value>Insert or select a stock chart before changing stock options.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSeriesFormattingNeedsDataSeries" xml:space="preserve">
+    <value>Add data series before changing series formatting.</value>
+  </data>
+  <data name="MainWindowMessage_ChartSeriesMarkersSupportedTypes" xml:space="preserve">
+    <value>Series marker shape and size are currently supported for line and scatter charts.</value>
+  </data>
+  <data name="MainWindowMessage_ChartStockOptionsUnsupported" xml:space="preserve">
+    <value>Stock format options only apply to stock charts.</value>
+  </data>
+  <data name="MainWindowMessage_ChartTargetSheetNotFound" xml:space="preserve">
+    <value>Target sheet was not found.</value>
+  </data>
+  <data name="MainWindowMessage_ChartTrendlineInformationSupportedTypes" xml:space="preserve">
+    <value>Trendline information is currently supported for column, line, bar, scatter, bubble, and area charts.</value>
+  </data>
+  <data name="MainWindowMessage_ChartTrendlinesSupportedTypes" xml:space="preserve">
+    <value>Trendlines are currently supported for column, line, bar, scatter, bubble, and area charts.</value>
+  </data>
+  <data name="MainWindowMessage_CheckForUpdatesTitle" xml:space="preserve">
+    <value>Check for Updates</value>
+  </data>
+  <data name="MainWindowMessage_CommentAdded" xml:space="preserve">
+    <value>Comment added to {0}.</value>
+  </data>
+  <data name="MainWindowMessage_CommentForCellLabel" xml:space="preserve">
+    <value>Comment for {0}:</value>
+  </data>
+  <data name="MainWindowMessage_CommentTitle" xml:space="preserve">
+    <value>Comment</value>
+  </data>
+  <data name="MainWindowMessage_CommentsTitle" xml:space="preserve">
+    <value>Comments</value>
+  </data>
+  <data name="MainWindowMessage_CopyDiagnosticsTitle" xml:space="preserve">
+    <value>Copy Diagnostics</value>
+  </data>
+  <data name="MainWindowMessage_DataTableSelectRange" xml:space="preserve">
+    <value>Select the data table range, including the formula row and input values.</value>
+  </data>
+  <data name="MainWindowMessage_DataTableTitle" xml:space="preserve">
+    <value>Data Table</value>
+  </data>
+  <data name="MainWindowMessage_DeleteOnlyVisibleSheet" xml:space="preserve">
+    <value>Cannot delete the only visible sheet.</value>
+  </data>
+  <data name="MainWindowMessage_DeleteSheetPrompt" xml:space="preserve">
+    <value>Delete sheet &quot;{0}&quot;?</value>
+  </data>
+  <data name="MainWindowMessage_DeleteSheetTitle" xml:space="preserve">
+    <value>Delete Sheet</value>
+  </data>
+  <data name="MainWindowMessage_DiagnosticsCopied" xml:space="preserve">
+    <value>Diagnostics copied to the clipboard.</value>
+  </data>
+  <data name="MainWindowMessage_DiagnosticsCopyFailed" xml:space="preserve">
+    <value>Could not copy diagnostics to the clipboard:
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_ExternalLinkBlockedScheme" xml:space="preserve">
+    <value>This link type is not supported for security reasons.</value>
+  </data>
+  <data name="MainWindowMessage_ExternalLinkCouldNotBeOpened" xml:space="preserve">
+    <value>The link could not be opened.</value>
+  </data>
+  <data name="MainWindowMessage_ExternalLinkOpenFailed" xml:space="preserve">
+    <value>Could not open the external link:
+{0}
+
+{1}</value>
+  </data>
+  <data name="MainWindowMessage_FeedbackTitle" xml:space="preserve">
+    <value>Feedback</value>
+  </data>
+  <data name="MainWindowMessage_ForecastSheetSelectRange" xml:space="preserve">
+    <value>Select a two-column range with headers and at least two data rows.</value>
+  </data>
+  <data name="MainWindowMessage_ForecastSheetTitle" xml:space="preserve">
+    <value>Forecast Sheet</value>
+  </data>
+  <data name="MainWindowMessage_FormatBarColumnTitle" xml:space="preserve">
+    <value>Format Bar/Column</value>
+  </data>
+  <data name="MainWindowMessage_FormatBubbleChartTitle" xml:space="preserve">
+    <value>Format Bubble Chart</value>
+  </data>
+  <data name="MainWindowMessage_FormatPieDoughnutTitle" xml:space="preserve">
+    <value>Format Pie/Doughnut</value>
+  </data>
+  <data name="MainWindowMessage_FormatStockChartTitle" xml:space="preserve">
+    <value>Format Stock Chart</value>
+  </data>
+  <data name="MainWindowMessage_GetDataTitle" xml:space="preserve">
+    <value>Get Data</value>
+  </data>
+  <data name="MainWindowMessage_HelpOnlineTitle" xml:space="preserve">
+    <value>Help Online</value>
+  </data>
+  <data name="MainWindowMessage_HiddenSheetNotFound" xml:space="preserve">
+    <value>Hidden sheet not found.</value>
+  </data>
+  <data name="MainWindowMessage_InsertPivotTableTitle" xml:space="preserve">
+    <value>Insert PivotTable</value>
+  </data>
+  <data name="MainWindowMessage_MoveChartTitle" xml:space="preserve">
+    <value>Move Chart</value>
+  </data>
+  <data name="MainWindowMessage_NoCommentsOnSheet" xml:space="preserve">
+    <value>No comments on this sheet.</value>
+  </data>
+  <data name="MainWindowMessage_NoHiddenSheets" xml:space="preserve">
+    <value>No hidden sheets.</value>
+  </data>
+  <data name="MainWindowMessage_NoImportAdapters" xml:space="preserve">
+    <value>No import adapters are available.</value>
+  </data>
+  <data name="MainWindowMessage_OptionalPasswordLabel" xml:space="preserve">
+    <value>_Password (optional):</value>
+  </data>
+  <data name="MainWindowMessage_PivotFieldFilterTitle" xml:space="preserve">
+    <value>{0} Filter</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableFieldsTitle" xml:space="preserve">
+    <value>PivotTable Fields</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableInvalidDestinationCell" xml:space="preserve">
+    <value>Enter a destination cell on the active worksheet.</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableInvalidSourceRange" xml:space="preserve">
+    <value>Enter a valid PivotTable source range.</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableRequiresValueField" xml:space="preserve">
+    <value>A PivotTable requires at least one value field.</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableSelectExistingForFieldList" xml:space="preserve">
+    <value>Select a cell inside an existing PivotTable before showing the field list.</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableSelectExistingForRefresh" xml:space="preserve">
+    <value>Select a cell inside an existing PivotTable, or open a workbook with a PivotTable on the active sheet.</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableSelectSourceRange" xml:space="preserve">
+    <value>Select a source range with a header row before creating a PivotTable.</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableSelectValueForDetails" xml:space="preserve">
+    <value>Select a value cell inside an existing PivotTable before showing detail rows.</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableSourceMinimumShape" xml:space="preserve">
+    <value>PivotTable source data must include at least two columns and a header row.</value>
+  </data>
+  <data name="MainWindowMessage_ProtectSheetTitle" xml:space="preserve">
+    <value>Protect Sheet</value>
+  </data>
+  <data name="MainWindowMessage_ProtectWorkbookTitle" xml:space="preserve">
+    <value>Protect Workbook</value>
+  </data>
+  <data name="MainWindowMessage_RefreshPivotTableTitle" xml:space="preserve">
+    <value>Refresh PivotTable</value>
+  </data>
+  <data name="MainWindowMessage_RemoveDuplicatesRemovedRows" xml:space="preserve">
+    <value>Removed {0} duplicate rows.</value>
+  </data>
+  <data name="MainWindowMessage_RemoveDuplicatesTitle" xml:space="preserve">
+    <value>Remove Duplicates</value>
+  </data>
+  <data name="MainWindowMessage_SelectDataSourceTitle" xml:space="preserve">
+    <value>Select Data Source</value>
+  </data>
+  <data name="MainWindowMessage_ShareWorkbookFailed" xml:space="preserve">
+    <value>Failed to open Windows Share:
+{0}</value>
+  </data>
+  <data name="MainWindowMessage_ShareWorkbookTitle" xml:space="preserve">
+    <value>Share Workbook</value>
+  </data>
+  <data name="MainWindowMessage_ShowPivotTableDetailsTitle" xml:space="preserve">
+    <value>Show PivotTable Details</value>
+  </data>
+  <data name="MainWindowMessage_SpellCheckComplete" xml:space="preserve">
+    <value>Spelling check is complete.</value>
+  </data>
+  <data name="MainWindowMessage_SpellCheckTitle" xml:space="preserve">
+    <value>Spell Check</value>
+  </data>
+  <data name="MainWindowMessage_SubtotalSelectRange" xml:space="preserve">
+    <value>Select a range with a header row and data rows.</value>
+  </data>
+  <data name="MainWindowMessage_SubtotalTitle" xml:space="preserve">
+    <value>Subtotal</value>
+  </data>
+  <data name="MainWindowMessage_TextToColumnsReplaceDataPrompt" xml:space="preserve">
+    <value>There&apos;s already data here. Do you want to replace it?</value>
+  </data>
+  <data name="MainWindowMessage_TextToColumnsSingleColumnRequired" xml:space="preserve">
+    <value>Text to Columns works on one column at a time. Select a single column of cells and try again.</value>
+  </data>
+  <data name="MainWindowMessage_TextToColumnsTitle" xml:space="preserve">
+    <value>Text to Columns</value>
+  </data>
+  <data name="MainWindowMessage_UnhideSheetTitle" xml:space="preserve">
+    <value>Unhide Sheet</value>
+  </data>
 </root>

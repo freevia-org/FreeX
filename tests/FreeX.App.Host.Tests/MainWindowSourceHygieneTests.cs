@@ -403,7 +403,7 @@ public sealed class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("SetActiveCell(destination);");
         dataCommandsSource.Should().Contain("EnsureCellVisible(destination);");
         dataCommandsSource.Should().Contain("RefreshStatusBar();");
-        dataCommandsSource.Should().Contain("ShowOwnedMessage(\"No import adapters are available.\"");
+        dataCommandsSource.Should().Contain("UiText.Get(\"MainWindowMessage_NoImportAdapters\")");
         dataCommandsSource.Should().Contain("ImportFailureDiagnosticFactory.FromException(ext, ex)");
         dataCommandsSource.Should().Contain("ShowOwnedMessage(diagnostic.UserMessage");
         dataCommandsSource.Should().Contain("errorDetail: diagnostic.Detail");
@@ -760,9 +760,9 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ExternalUrlLauncher.Open(url)");
         source.Should().NotContain("UseShellExecute");
         source.Should().Contain("ShowOwnedMessage(");
-        source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, \"Help Online\")");
-        source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, \"Check for Updates\")");
-        source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), \"Feedback\")");
+        source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, UiText.Get(\"MainWindowMessage_HelpOnlineTitle\"))");
+        source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, UiText.Get(\"MainWindowMessage_CheckForUpdatesTitle\"))");
+        source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), UiText.Get(\"MainWindowMessage_FeedbackTitle\"))");
     }
 
     [Fact]
@@ -1786,7 +1786,7 @@ public sealed class MainWindowSourceHygieneTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
         source.Should().Contain("ShowDeferredChartFamilyMessage");
-        source.Should().Contain("retained when opening XLSX files");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferred\")");
         source.Should().Contain("ChartTreemapMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Treemap)");
         source.Should().Contain("ChartSunburstMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Sunburst)");
         source.Should().Contain("ChartHistogramMenuItem_Click(object sender, RoutedEventArgs e) => InsertChartOfType(ChartType.Histogram)");
@@ -2606,7 +2606,7 @@ public sealed class MainWindowSourceHygieneTests
         printSource.Should().Contain("PrintSettingsPlanner.Build(sheet)");
         printSource.Should().Contain("new PrintPreviewDialog(");
         printSource.Should().Contain("refreshPreviewWithSettings: BuildActiveSheetPrintPreview");
-        previewSource.Should().Contain("Content = \"_Print...\"");
+        previewSource.Should().Contain("Content = UiText.Get(\"PrintPreview_PrintButton\")");
         previewSource.Should().Contain("ShowNativePrintDialog");
         previewSource.Should().Contain("PrintDocument(paginator");
     }

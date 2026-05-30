@@ -605,7 +605,7 @@ public sealed class DataToolDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
 
         source.Should().Contain("FindOverwriteTargets");
-        source.Should().Contain("There's already data here. Do you want to replace it?");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_TextToColumnsReplaceDataPrompt\")");
         source.Should().Contain("_messageService.AskYesNo");
         source.Should().Contain("BuildTextToColumnsEdits");
     }
@@ -2652,7 +2652,7 @@ public sealed class DataToolDialogTests
         source.Should().Contain("RefreshColumnLabels");
         source.Should().Contain("HasHeaders");
         mainWindowSource.Should().Contain("RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders)");
-        mainWindowSource.Should().Contain("ShowOwnedMessage($\"Removed {command?.RemovedRowCount ?? 0} duplicate rows.\"");
+        mainWindowSource.Should().Contain("UiText.Format(\"MainWindowMessage_RemoveDuplicatesRemovedRows\", command?.RemovedRowCount ?? 0)");
     }
 
     [Fact]
