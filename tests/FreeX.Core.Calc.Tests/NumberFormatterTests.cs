@@ -216,13 +216,30 @@ public class NumberFormatterTests
 
     [Theory]
     [InlineData("[DBNum1][$-804]#,##0.00", 1234.5, "\u4E00,\u4E8C\u4E09\u56DB.\u4E94\u3007")]
-    [InlineData("[DBNum2][$-804]0", 123, "\u58F9\u8D30\u53C1")]
-    [InlineData("[DBNum2][$-404]0", 123, "\u58F9\u8CB3\u53C3")]
+    [InlineData("[DBNum2][$-804]0", 123, "\u58F9\u4F70\u8D30\u62FE\u53C1")]
+    [InlineData("[DBNum2][$-404]0", 123, "\u58F9\u4F70\u8CB3\u62FE\u53C3")]
     [InlineData("[DBNum3][$-804]#,##0.00", 1234.5, "\uFF11,\uFF12\uFF13\uFF14.\uFF15\uFF10")]
     [InlineData("[NatNum1][$-041E]#,##0.00", 1234.5, "\u0E51,\u0E52\u0E53\u0E54.\u0E55\u0E50")]
     [InlineData("[NatNum1][$-0439]#,##0.00", 1234567.89, "\u0967\u0968,\u0969\u096A,\u096B\u096C\u096D.\u096E\u096F")]
     [InlineData("[NatNum3][$-409]0.0%", 0.125, "\uFF11\uFF12.\uFF15%")]
     public void CustomNumberSubset_AppliesDbNumAndNatNumDigitSubstitution(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("[DBNum1][$-804]0", 123, "\u4E00\u767E\u4E8C\u5341\u4E09")]
+    [InlineData("[DBNum1][$-804]#,##0", 1005, "\u4E00\u5343\u96F6\u4E94")]
+    [InlineData("[DBNum1][$-804]#,##0", 1002003, "\u4E00\u767E\u4E07\u4E8C\u5343\u96F6\u4E09")]
+    [InlineData("[DBNum1][$-404]#,##0", 12345, "\u4E00\u842C\u4E8C\u5343\u4E09\u767E\u56DB\u5341\u4E94")]
+    [InlineData("[DBNum2][$-804]0", 1203, "\u58F9\u4EDF\u8D30\u4F70\u96F6\u53C1")]
+    [InlineData("[DBNum2][$-404]0", 1203, "\u58F9\u4EDF\u8CB3\u4F70\u96F6\u53C3")]
+    public void CustomNumberSubset_AppliesChineseDbNumIntegerPlaceValues(
         string format,
         double value,
         string expected)
