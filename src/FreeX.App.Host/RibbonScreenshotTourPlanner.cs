@@ -2,6 +2,19 @@ namespace FreeX.App.Host;
 
 internal static class RibbonScreenshotTourPlanner
 {
+    public static IReadOnlyList<(string Header, string FileName)> DefaultTabs { get; } =
+    [
+        ("Home", "Home"),
+        ("Insert", "Insert"),
+        ("Draw", "Draw"),
+        ("Page Layout", "Page_Layout"),
+        ("Formulas", "Formulas"),
+        ("Data", "Data"),
+        ("Review", "Review"),
+        ("View", "View"),
+        ("Help", "Help")
+    ];
+
     public static IReadOnlyList<(string Header, string FileName)> FilterTabs(
         IReadOnlyList<(string Header, string FileName)> tabs,
         string? requestedTabs)

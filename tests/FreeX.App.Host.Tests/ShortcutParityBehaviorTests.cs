@@ -25,7 +25,7 @@ public sealed class ShortcutParityBehaviorTests
         shortcut.Should().Be(KeyboardCommandShortcut.OpenPrintPreview);
     }
 
-    // --- Ctrl+Z / Alt+Backspace (Undo) ---
+    // --- Ctrl+Z / Alt+Backspace (Undo), Ctrl+Y / Ctrl+Shift+Z (Redo) ---
 
     [Theory]
     [InlineData(Key.Z, Key.None, ModifierKeys.Control)]
@@ -38,6 +38,18 @@ public sealed class ShortcutParityBehaviorTests
             .Should().BeTrue();
 
         shortcut.Should().Be(KeyboardCommandShortcut.Undo);
+    }
+
+    [Theory]
+    [InlineData(Key.Y, Key.None, ModifierKeys.Control)]
+    [InlineData(Key.Z, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
+    public void RedoShortcuts_AreRegisteredAsRedoCommand(Key key, Key systemKey, ModifierKeys modifiers)
+    {
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+            key, systemKey, modifiers, out var shortcut)
+            .Should().BeTrue();
+
+        shortcut.Should().Be(KeyboardCommandShortcut.Redo);
     }
 
     [Fact]

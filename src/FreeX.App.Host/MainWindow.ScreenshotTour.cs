@@ -18,19 +18,6 @@ public partial class MainWindow
     [DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
 
-    private static readonly (string Header, string FileName)[] TourTabs =
-    [
-        ("Home", "Home"),
-        ("Insert", "Insert"),
-        ("Draw", "Draw"),
-        ("Page Layout", "Page_Layout"),
-        ("Formulas", "Formulas"),
-        ("Data", "Data"),
-        ("Review", "Review"),
-        ("View", "View"),
-        ("Help", "Help"),
-    ];
-
     // Activated by FREEX_SS_TOUR=1 env var.  Output lands in <repo-root>/screenshots/.
     private void TryStartScreenshotTour()
     {
@@ -124,7 +111,7 @@ public partial class MainWindow
 
     private static IReadOnlyList<(string Header, string FileName)> GetScreenshotTourTabs()
         => RibbonScreenshotTourPlanner.FilterTabs(
-            TourTabs,
+            RibbonScreenshotTourPlanner.DefaultTabs,
             Environment.GetEnvironmentVariable("FREEX_SS_TOUR_TABS"));
 
     private static IReadOnlyList<double> GetScreenshotTourRequestedWidths()
