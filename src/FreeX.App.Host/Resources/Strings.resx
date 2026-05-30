@@ -8736,6 +8736,34 @@
     <value>_Add a Language...</value>
   </data>
 
+<data name="Options_ChooseDisplayLanguage" xml:space="preserve">
+    <value>Choose display language</value>
+  </data>
+
+<data name="Options_AppLanguage" xml:space="preserve">
+    <value>App _language:</value>
+  </data>
+
+<data name="Options_AppLanguageHelpText" xml:space="preserve">
+    <value>Select the display language FreeX uses for menus, dialogs, and messages.</value>
+  </data>
+
+<data name="Options_AppLanguageSystemDefault" xml:space="preserve">
+    <value>Use system default</value>
+  </data>
+
+<data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve">
+    <value>English (United States)</value>
+  </data>
+
+<data name="Options_AppLanguageRestartNotice" xml:space="preserve">
+    <value>Some open windows may keep their current language until you restart FreeX.</value>
+  </data>
+
+<data name="Options_AppLanguageRestartMessage" xml:space="preserve">
+    <value>Your language choice was saved. Restart FreeX to refresh every open window.</value>
+  </data>
+
 <data name="Options_EaseOfAccessOptions" xml:space="preserve">
     <value>Ease of Access options</value>
   </data>

@@ -105,6 +105,12 @@ public partial class OptionsDialog : Window
         OptRecentFilesPath.Text = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "FreeX", "recent.json");
+
+        // Language
+        OptAppLanguage.ItemsSource = AppLanguageCatalog.GetAvailableLanguages();
+        OptAppLanguage.SelectedValue = AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage);
+        if (OptAppLanguage.SelectedIndex < 0)
+            OptAppLanguage.SelectedIndex = 0;
     }
 
     private void TabList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -194,6 +200,7 @@ public partial class OptionsDialog : Window
                 _ => FreeXObjectDisplay.All
             },
             DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? ".json" : ".xlsx",
+            AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
             CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true,
             CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
             PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),
@@ -220,9 +227,6 @@ public partial class OptionsDialog : Window
 
     private void AutoCorrectOptionsButton_Click(object sender, RoutedEventArgs e) =>
         ShowDeferredOptionsMessage(DeferredCommandMessages.AutoCorrectOptions());
-
-    private void AddLanguageButton_Click(object sender, RoutedEventArgs e) =>
-        ShowDeferredOptionsMessage(DeferredCommandMessages.EditingLanguages());
 
     private void RibbonImportExportButton_Click(object sender, RoutedEventArgs e) =>
         ShowDeferredOptionsMessage(DeferredCommandMessages.RibbonCustomizationImportExport());

@@ -42,7 +42,8 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         var path = Path.Combine(_tempDirectory, "options.json");
         var options = new FreeXOptions
         {
-            DefaultFormat = ".fxl"
+            DefaultFormat = ".fxl",
+            AppLanguage = "uk-UA"
         };
 
         options.SaveToPath(_tempDirectory).Should().BeFalse();
@@ -54,6 +55,10 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
             .GetString()
             .Should()
             .Be(".fxl");
+        FreeXOptions.LoadFromPath(path)
+            .AppLanguage
+            .Should()
+            .Be("uk-UA");
         Directory.EnumerateFiles(_tempDirectory, "*.tmp").Should().BeEmpty();
     }
 
