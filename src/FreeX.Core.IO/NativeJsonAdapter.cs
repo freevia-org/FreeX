@@ -59,13 +59,16 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         foreach (var errorCode in dto.DisabledFormulaErrorCodes ?? [])
             if (IsSupportedFormulaErrorCode(errorCode))
                 workbook.DisabledFormulaErrorCodes.Add(errorCode);
+        LoadPivotCaches(workbook, dto.PivotCaches);
 
         var loadedSheetsBySourceName = new Dictionary<string, Sheet>(StringComparer.OrdinalIgnoreCase);
+        var pendingPivotTables = new List<(Sheet Sheet, SheetDto Dto)>();
         var sheetIndex = 1;
         foreach (var sDto in dto.Sheets ?? [])
         {
             if (sDto is null) continue;
             var sheet = workbook.AddSheet(UniqueSheetName(workbook, sDto.Name, sheetIndex++));
+            pendingPivotTables.Add((sheet, sDto));
             if (!string.IsNullOrWhiteSpace(sDto.Name))
                 loadedSheetsBySourceName.TryAdd(sDto.Name, sheet);
             sheet.IsHidden = sDto.IsHidden;
@@ -338,6 +341,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
         if (workbook.Sheets.Count == 0)
             workbook.AddSheet("Sheet1");
+
+        LoadPivotTables(workbook, loadedSheetsBySourceName, pendingPivotTables);
 
         var maxLoadedSheetIndex = Math.Max(0, workbook.Sheets.Count - 1);
         workbook.FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.FirstVisibleSheetIndex, maxLoadedSheetIndex);

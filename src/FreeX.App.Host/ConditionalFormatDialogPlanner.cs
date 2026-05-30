@@ -5,64 +5,7 @@ namespace FreeX.App.Host;
 public static class ConditionalFormatDialogPlanner
 {
     public static ConditionalFormat CloneRule(ConditionalFormat source)
-    {
-        var clone = new ConditionalFormat
-        {
-            Id = source.Id,
-            AppliesTo = source.AppliesTo,
-            Priority = source.Priority,
-            RuleType = source.RuleType,
-            Operator = source.Operator,
-            Value1 = source.Value1,
-            Value2 = source.Value2,
-            FormatIfTrue = source.FormatIfTrue?.Clone(),
-            MinColor = source.MinColor,
-            MidColor = source.MidColor,
-            MaxColor = source.MaxColor,
-            UseThreeColorScale = source.UseThreeColorScale,
-            MinThresholdType = source.MinThresholdType,
-            MinThresholdValue = source.MinThresholdValue,
-            MinThresholdGreaterThanOrEqual = source.MinThresholdGreaterThanOrEqual,
-            MidThresholdType = source.MidThresholdType,
-            MidThresholdValue = source.MidThresholdValue,
-            MidThresholdGreaterThanOrEqual = source.MidThresholdGreaterThanOrEqual,
-            MaxThresholdType = source.MaxThresholdType,
-            MaxThresholdValue = source.MaxThresholdValue,
-            MaxThresholdGreaterThanOrEqual = source.MaxThresholdGreaterThanOrEqual,
-            DataBarColor = source.DataBarColor,
-            DataBarMinThresholdType = source.DataBarMinThresholdType,
-            DataBarMinThresholdValue = source.DataBarMinThresholdValue,
-            DataBarMaxThresholdType = source.DataBarMaxThresholdType,
-            DataBarMaxThresholdValue = source.DataBarMaxThresholdValue,
-            DataBarShowValue = source.DataBarShowValue,
-            DataBarMinLength = source.DataBarMinLength,
-            DataBarMaxLength = source.DataBarMaxLength,
-            DataBarGradient = source.DataBarGradient,
-            DataBarBorder = source.DataBarBorder,
-            DataBarAxisPosition = source.DataBarAxisPosition,
-            DataBarAxisColor = source.DataBarAxisColor,
-            DataBarNegativeFillColor = source.DataBarNegativeFillColor,
-            DataBarNegativeBorderColor = source.DataBarNegativeBorderColor,
-            AboveAverage = source.AboveAverage,
-            FormulaText = source.FormulaText,
-            IconSetStyle = source.IconSetStyle,
-            IconSetShowValue = source.IconSetShowValue,
-            IconSetReverse = source.IconSetReverse,
-            TopBottomRank = source.TopBottomRank,
-            TopBottomPercent = source.TopBottomPercent,
-            TextRuleText = source.TextRuleText,
-            DateOccurringPeriod = source.DateOccurringPeriod,
-            StopIfTrue = source.StopIfTrue,
-            NativeAttributes = source.NativeAttributes,
-            NativeChildXmls = source.NativeChildXmls,
-            NativePayloadAttributes = source.NativePayloadAttributes,
-            NativePayloadChildXmls = source.NativePayloadChildXmls,
-            NativeContainerAttributes = source.NativeContainerAttributes,
-            NativeContainerChildXmls = source.NativeContainerChildXmls
-        };
-        clone.IconSetThresholds.AddRange(source.IconSetThresholds);
-        return clone;
-    }
+        => ManageConditionalFormatsPlanner.CloneWithPriority(source, source.Priority);
 
     public static string RuleTypeLabel(ConditionalFormat cf) => cf.RuleType switch
     {
