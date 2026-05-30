@@ -231,10 +231,20 @@ public sealed class GridViewDrawingObjectThemeTests
     public void PictureRenderer_DrawsSelectionAdornerForPictureAtActiveCell()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var adorner = source[
+            source.IndexOf("private void DrawPictureSelectionAdorner", StringComparison.Ordinal)..
+            source.IndexOf("private static bool HasPictureCrop", StringComparison.Ordinal)];
 
         source.Should().Contain("DrawPictureSelectionAdorner");
         source.Should().Contain("SelectedRange?.Start != picture.Anchor");
-        source.Should().Contain("dc.DrawRectangle(null, PictureSelectionPen, rect);");
+        adorner.Should().Contain("dc.DrawRectangle(null, PictureSelectionPen, rect);");
+        adorner.Should().Contain("DrawPictureSelectionHandle(dc, rect.TopLeft, handle);");
+        adorner.Should().Contain("DrawPictureSelectionHandle(dc, rect.TopRight, handle);");
+        adorner.Should().Contain("DrawPictureSelectionHandle(dc, rect.BottomLeft, handle);");
+        adorner.Should().Contain("DrawPictureSelectionHandle(dc, rect.BottomRight, handle);");
+        adorner.Should().Contain("private static void DrawPictureSelectionHandle");
+        adorner.Should().NotContain("new[]");
+        adorner.Should().NotContain("foreach (var point");
     }
 
     [Fact]

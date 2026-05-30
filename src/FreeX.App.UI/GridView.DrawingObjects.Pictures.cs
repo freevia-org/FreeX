@@ -118,13 +118,18 @@ public partial class GridView
 
         dc.DrawRectangle(null, PictureSelectionPen, rect);
         const double handle = 6;
-        foreach (var point in new[] { rect.TopLeft, rect.TopRight, rect.BottomLeft, rect.BottomRight })
-        {
-            dc.DrawRectangle(
-                PictureSelectionBrush,
-                null,
-                new Rect(point.X - handle / 2, point.Y - handle / 2, handle, handle));
-        }
+        DrawPictureSelectionHandle(dc, rect.TopLeft, handle);
+        DrawPictureSelectionHandle(dc, rect.TopRight, handle);
+        DrawPictureSelectionHandle(dc, rect.BottomLeft, handle);
+        DrawPictureSelectionHandle(dc, rect.BottomRight, handle);
+    }
+
+    private static void DrawPictureSelectionHandle(DrawingContext dc, Point point, double handle)
+    {
+        dc.DrawRectangle(
+            PictureSelectionBrush,
+            null,
+            new Rect(point.X - handle / 2, point.Y - handle / 2, handle, handle));
     }
 
     private static bool HasPictureCrop(PictureModel picture) =>
