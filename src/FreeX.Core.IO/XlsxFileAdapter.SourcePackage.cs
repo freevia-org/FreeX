@@ -199,12 +199,10 @@ public sealed partial class XlsxFileAdapter
             yield break;
 
         var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-        var legacyDrawingRelIds = worksheetXml.Root?
+        var legacyDrawingRelId = worksheetXml.Root?
             .Element(workbookNs + "legacyDrawingHF")?
             .Attribute(relNs + "id")?
-            .Value is { Length: > 0 } relId
-            ? new HashSet<string>([relId], StringComparer.Ordinal)
-            : [];
+            .Value;
 
         var relationshipPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var relationshipEntry = archive.GetEntry(relationshipPath);
@@ -212,27 +210,30 @@ public sealed partial class XlsxFileAdapter
             yield break;
 
         var relationshipsXml = XlsxPackageXmlEditor.LoadXml(relationshipEntry);
-        var targets = relationshipsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(relationship =>
-                legacyDrawingRelIds.Contains(relationship.Attribute("Id")?.Value ?? "") ||
-                string.Equals(
-                    relationship.Attribute("Type")?.Value,
-                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
-                    StringComparison.OrdinalIgnoreCase))
-            .Select(relationship => relationship.Attribute("Target")?.Value)
-            .Where(target => !string.IsNullOrWhiteSpace(target))
-            .ToList()
-            ?? [];
-        foreach (var target in targets)
+        foreach (var relationship in relationshipsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
         {
-            var vmlPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target!);
+            if (!IsLegacyDrawingHfRelationship(relationship, legacyDrawingRelId))
+                continue;
+
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target))
+                continue;
+
+            var vmlPath = XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
             yield return vmlPath;
             yield return XlsxPackagePath.GetRelationshipPartPath(vmlPath);
             foreach (var dependencyPath in GetRelationshipDependencyPaths(archive, vmlPath, packageRelNs))
                 yield return dependencyPath;
         }
     }
+
+    private static bool IsLegacyDrawingHfRelationship(XElement relationship, string? legacyDrawingRelId) =>
+        (!string.IsNullOrEmpty(legacyDrawingRelId) &&
+         string.Equals(relationship.Attribute("Id")?.Value, legacyDrawingRelId, StringComparison.Ordinal)) ||
+        string.Equals(
+            relationship.Attribute("Type")?.Value,
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing",
+            StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<string> GetRelationshipDependencyPaths(
         ZipArchive archive,

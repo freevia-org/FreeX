@@ -29,6 +29,9 @@ public sealed class XlsxFileAdapterFormatTests
         var preserveSourcePackageParts = sourcePackageSource[
             sourcePackageSource.IndexOf("private static void PreserveSourcePackageParts", StringComparison.Ordinal)..
             sourcePackageSource.IndexOf("private struct SourcePackagePartSummary", StringComparison.Ordinal)];
+        var legacyDrawingHfDependencies = sourcePackageSource[
+            sourcePackageSource.IndexOf("private static IEnumerable<string> GetLegacyDrawingHfDependencyPaths", StringComparison.Ordinal)..
+            sourcePackageSource.IndexOf("private static IEnumerable<string> GetRelationshipDependencyPaths", StringComparison.Ordinal)];
 
         adapterSource.Should().NotContain("packageStream.ToArray()");
         saveSource.Should().NotContain("GetUsedCells()");
@@ -69,6 +72,15 @@ public sealed class XlsxFileAdapterFormatTests
             "HasUnsupportedSheetPackagePart(sourceArchive",
             "unsupported sheet package part detection should reuse the single source package summary");
         sourcePackageSource.Should().Contain("foreach (var entry in archive.Entries)");
+        legacyDrawingHfDependencies.Should().Contain("var legacyDrawingRelId =");
+        legacyDrawingHfDependencies.Should().Contain("foreach (var relationship in relationshipsXml.Root?.Elements");
+        legacyDrawingHfDependencies.Should().Contain("IsLegacyDrawingHfRelationship(relationship, legacyDrawingRelId)");
+        legacyDrawingHfDependencies.Should().NotContain(
+            "new HashSet<string>([relId]",
+            "legacy header/footer drawing cleanup only needs a single relationship id comparison");
+        legacyDrawingHfDependencies.Should().NotContain(
+            ".ToList()",
+            "legacy header/footer drawing cleanup should stream relationship targets instead of allocating a target list");
     }
 
     [Fact]
