@@ -43,6 +43,16 @@ public static partial class NumberFormatter
                 continue;
             }
 
+            if (c == '[')
+            {
+                int close = section.IndexOf(']', i + 1);
+                if (close >= 0)
+                {
+                    i = close;
+                    continue;
+                }
+            }
+
             if (c is '_' or '*' && i + 1 < section.Length)
             {
                 i++;
