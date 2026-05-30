@@ -54,6 +54,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 sheetIndex++);
             var sheet = workbook.AddSheet(sheetName);
             ReadWorksheetVisibility(sheet, worksheetElement);
+            ReadWorksheetOptions(sheet, worksheetElement);
             ReadWorksheet(sheet, worksheetElement, styles);
         }
 
@@ -137,6 +138,20 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         sheet.IsVeryHidden = string.Equals(visibility, "SheetVeryHidden", StringComparison.OrdinalIgnoreCase);
         sheet.IsHidden = sheet.IsVeryHidden ||
                          string.Equals(visibility, "SheetHidden", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void ReadWorksheetOptions(Sheet sheet, XElement worksheetElement)
+    {
+        var optionsElement = worksheetElement.Element(ExcelNs + "WorksheetOptions");
+        if (optionsElement is null)
+            return;
+
+        sheet.ShowGridlines = optionsElement.Element(ExcelNs + "DoNotDisplayGridlines") is null;
+        if (optionsElement.Element(ExcelNs + "FreezePanes") is null)
+            return;
+
+        sheet.FrozenRows = ReadPaneSplit(optionsElement, ExcelNs + "SplitHorizontal", CellAddress.MaxRow);
+        sheet.FrozenCols = ReadPaneSplit(optionsElement, ExcelNs + "SplitVertical", CellAddress.MaxCol);
     }
 
     private static Dictionary<string, StyleId> ReadStyles(Workbook workbook, XElement workbookElement)
@@ -400,6 +415,14 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             : 0u;
     }
 
+    private static uint ReadPaneSplit(XElement element, XName elementName, uint maxValue)
+    {
+        var text = element.Element(elementName)?.Value;
+        return uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value <= maxValue
+            ? value
+            : 0u;
+    }
+
     private static uint AdvanceColumnIndex(uint columnIndex, uint mergeAcross)
     {
         if (mergeAcross > CellAddress.MaxCol - columnIndex)
@@ -449,7 +472,31 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             ToWorksheetVisibilityAttribute(sheet),
             new XElement(
                 SpreadsheetNs + "Table",
-                ToTableElements(sheet, styleIds)));
+                ToTableElements(sheet, styleIds)),
+            ToWorksheetOptionsElement(sheet));
+
+    private static XElement? ToWorksheetOptionsElement(Sheet sheet)
+    {
+        var frozenRows = sheet.FrozenRows is > 0 and <= CellAddress.MaxRow ? sheet.FrozenRows : 0;
+        var frozenCols = sheet.FrozenCols is > 0 and <= CellAddress.MaxCol ? sheet.FrozenCols : 0;
+        if (sheet.ShowGridlines && frozenRows == 0 && frozenCols == 0)
+            return null;
+
+        return new XElement(
+            ExcelNs + "WorksheetOptions",
+            sheet.ShowGridlines ? null : new XElement(ExcelNs + "DoNotDisplayGridlines"),
+            frozenRows > 0 || frozenCols > 0
+                ? new object?[]
+                {
+                    new XElement(ExcelNs + "FreezePanes"),
+                    new XElement(ExcelNs + "FrozenNoSplit"),
+                    frozenRows > 0 ? new XElement(ExcelNs + "SplitHorizontal", frozenRows.ToString(CultureInfo.InvariantCulture)) : null,
+                    frozenRows > 0 ? new XElement(ExcelNs + "TopRowBottomPane", frozenRows.ToString(CultureInfo.InvariantCulture)) : null,
+                    frozenCols > 0 ? new XElement(ExcelNs + "SplitVertical", frozenCols.ToString(CultureInfo.InvariantCulture)) : null,
+                    frozenCols > 0 ? new XElement(ExcelNs + "LeftColumnRightPane", frozenCols.ToString(CultureInfo.InvariantCulture)) : null
+                }
+                : null);
+    }
 
     private static IEnumerable<XElement> ToTableElements(Sheet sheet, IReadOnlyDictionary<StyleId, string> styleIds) =>
         ToColumnElements(sheet).Concat(ToRowElements(sheet, styleIds));
