@@ -340,6 +340,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("contact support")) return new(RibbonCommandIconKind.Help, RibbonCommandIconAccent.Help);
         if (name.Contains("training")) return new(RibbonCommandIconKind.Book, RibbonCommandIconAccent.Help);
         if (name.Contains("what's new")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
+        if (name.Contains("legal notice")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("check for updates")) return new(RibbonCommandIconKind.Refresh, RibbonCommandIconAccent.Help);
         if (name.Contains("account")) return new(RibbonCommandIconKind.Info, RibbonCommandIconAccent.Help);
         if (name.Contains("options")) return new(RibbonCommandIconKind.View, RibbonCommandIconAccent.Help);

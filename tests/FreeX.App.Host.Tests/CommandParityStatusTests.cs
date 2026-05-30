@@ -66,6 +66,7 @@ public sealed class CommandParityStatusTests
             ("Copy Diagnostics", "Implemented"),
             ("Check for Updates", "Implemented"),
             ("About FreeX", "Implemented"),
+            ("Legal Notices", "Implemented"),
             ("Contact Support", "Excluded"),
             ("Show Training", "Excluded"),
             ("What's New", "Excluded")

@@ -11,6 +11,7 @@ public sealed class HelpCommandSourceTests
     [InlineData("Copy Diagnostics", "DG", "CopyDiagnosticsBtn_Click")]
     [InlineData("Check for Updates", "UP", "CheckForUpdatesBtn_Click")]
     [InlineData("About FreeX", "AB", "AboutBtn_Click")]
+    [InlineData("Legal Notices", "LN", "LegalNoticesBtn_Click")]
     public void HelpEnabledCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string keyTip,
@@ -42,6 +43,8 @@ public sealed class HelpCommandSourceTests
         source.Should().Contain("OpenExternalHelpLink(AppUpdateSource.CreateDefault().ReleasePageUrl, \"Check for Updates\")");
         source.Should().Contain("OpenExternalHelpLink(AppIssueReporter.CreateIssueUrl(context), \"Feedback\")");
         source.Should().Contain("AppInfo.AboutText");
+        source.Should().Contain("var dialog = new LegalNoticesDialog();");
+        source.Should().Contain("ShowOwnedDialog(dialog);");
         source.Should().Contain("AppIssueReporter.CreateDiagnosticsText(context)");
         source.Should().Contain("Clipboard.SetText(diagnosticsText);");
         source.Should().Contain("ExternalUrlLauncher.Open(");

@@ -431,6 +431,12 @@ public partial class MainWindow
             "About FreeX", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
+    private void LegalNoticesBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new LegalNoticesDialog();
+        ShowOwnedDialog(dialog);
+    }
+
     private void SendFeedbackBtn_Click(object sender, RoutedEventArgs e)
     {
         var context = CreateIssueReportContext();

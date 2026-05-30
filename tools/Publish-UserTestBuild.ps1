@@ -216,16 +216,10 @@ if (-not (Test-Path -LiteralPath $defaultExePath)) {
     throw "Expected apphost was not published at $defaultExePath"
 }
 
-if (Test-Path -LiteralPath $launchExePath) {
-    Remove-Item -LiteralPath $launchExePath -Force
-}
-
-Move-Item -LiteralPath $defaultExePath -Destination $launchExePath
-
 $runtimeUrl = "https://dotnet.microsoft.com/download/dotnet/10.0"
 
 if ($PublishMode -eq "SingleFile") {
-    Move-Item -LiteralPath $launchExePath -Destination $artifactExePath
+    Move-Item -LiteralPath $defaultExePath -Destination $artifactExePath
     $hash = Get-FileHash -LiteralPath $artifactExePath -Algorithm SHA256
     Set-Content -LiteralPath $artifactExeHashPath -Value "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $artifactExePath)" -Encoding ASCII
     Remove-Item -LiteralPath $publishDir -Recurse -Force
@@ -233,6 +227,12 @@ if ($PublishMode -eq "SingleFile") {
     Write-Host "Created $artifactExeHashPath"
     exit 0
 }
+
+if (Test-Path -LiteralPath $launchExePath) {
+    Remove-Item -LiteralPath $launchExePath -Force
+}
+
+Move-Item -LiteralPath $defaultExePath -Destination $launchExePath
 
 if ($PublishMode -eq "Msix") {
     $assetsDir = Join-Path $publishDir "Assets"
@@ -428,6 +428,7 @@ Trademark notice:
   Microsoft Excel is a trademark of Microsoft Corporation.
 
 Legal and privacy notices:
+  In the app: Help > Legal Notices
   https://github.com/tony-xmelon/FreeX/blob/main/docs/LEGAL_NOTICES.md
   https://github.com/tony-xmelon/FreeX/blob/main/docs/PRIVACY.md
   https://github.com/tony-xmelon/FreeX/blob/main/THIRD_PARTY_NOTICES.md
