@@ -244,9 +244,32 @@ public partial class MainWindow
     private void NumberFormatBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressToolbarSync) return;
-        if (NumberFormatBox.SelectedIndex < 0) return;
-        if (NumberFormatBox.SelectedIndex < NumberFormatOptions.Length)
-            ApplyStyleDiff(new StyleDiff(NumberFormat: NumberFormatOptions[NumberFormatBox.SelectedIndex].Code));
+        var selectedIndex = NumberFormatBox.SelectedIndex;
+        if (selectedIndex < 0 || selectedIndex >= HomeNumberFormatDropdownPlanner.Options.Count) return;
+
+        var option = HomeNumberFormatDropdownPlanner.Options[selectedIndex];
+        if (option.OpensFormatCellsDialog)
+        {
+            ResetNumberFormatBoxSelection();
+            OpenFormatCellsDialog(FormatCellsDialogTab.Number);
+            return;
+        }
+
+        if (option.Code is { } code)
+            ApplyStyleDiff(new StyleDiff(NumberFormat: code));
+    }
+
+    private void ResetNumberFormatBoxSelection()
+    {
+        _suppressToolbarSync = true;
+        try
+        {
+            NumberFormatBox.SelectedIndex = HomeNumberFormatDropdownPlanner.DefaultSelectionIndex;
+        }
+        finally
+        {
+            _suppressToolbarSync = false;
+        }
     }
 
     // ── Font group additions ─────────────────────────────────────────────────

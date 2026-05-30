@@ -35,6 +35,33 @@ public sealed class HomeNumberFormatCommandSourceTests
     }
 
     [Fact]
+    public void HomeNumberFormatDropdown_ProjectsFormatCellsCatalogAndMoreNumberFormatsAction()
+    {
+        HomeNumberFormatDropdownPlanner.Options
+            .Where(option => !option.OpensFormatCellsDialog)
+            .Select(option => option.Label)
+            .Should()
+            .Contain(FormatCellsNumberFormatPlanner.Options.Select(option => option.Label).Distinct(StringComparer.OrdinalIgnoreCase));
+
+        HomeNumberFormatDropdownPlanner.Options.Should().ContainSingle(option =>
+            option.Label == HomeNumberFormatDropdownPlanner.MoreNumberFormatsLabel
+            && option.Code == null
+            && option.OpensFormatCellsDialog);
+        HomeNumberFormatDropdownPlanner.Options.Last().OpensFormatCellsDialog.Should().BeTrue();
+    }
+
+    [Fact]
+    public void HomeNumberFormatDropdown_SourceUsesProjectionPlannerAndOpensFormatCellsNumberTab()
+    {
+        var startupSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Startup.cs"));
+        var formattingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
+
+        startupSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options.Select(option => option.Label)");
+        formattingSource.Should().Contain("HomeNumberFormatDropdownPlanner.Options[selectedIndex]");
+        formattingSource.Should().Contain("OpenFormatCellsDialog(FormatCellsDialogTab.Number)");
+    }
+
+    [Fact]
     public void DecimalPlaceHandlers_UseDecimalAdjusterThroughRepeatableStyleDiff()
     {
         var formattingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));

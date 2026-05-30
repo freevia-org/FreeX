@@ -43,15 +43,24 @@ internal static class RibbonRuntimeCatalogPlanner
     private static RibbonRuntimeCatalogSurface CreateNumberFormatSurface() =>
         new(
             "Home",
-            "Format Cells Number Catalog",
+            "Number Format Dropdown",
             "Home",
             "Custom Number Format",
-            nameof(FormatCellsNumberFormatPlanner),
-            FormatCellsNumberFormatPlanner.Categories
-                .Select(category => new RibbonRuntimeCatalogGroup(
-                    category,
-                    FormatCellsNumberFormatPlanner.LabelsForCategory(category).ToArray()))
-                .ToArray());
+            nameof(HomeNumberFormatDropdownPlanner),
+            [
+                new RibbonRuntimeCatalogGroup(
+                    "Formats",
+                    HomeNumberFormatDropdownPlanner.Options
+                        .Where(option => !option.OpensFormatCellsDialog)
+                        .Select(option => option.Label)
+                        .ToArray()),
+                new RibbonRuntimeCatalogGroup(
+                    "Actions",
+                    HomeNumberFormatDropdownPlanner.Options
+                        .Where(option => option.OpensFormatCellsDialog)
+                        .Select(option => option.Label)
+                        .ToArray())
+            ]);
 
     private static RibbonRuntimeCatalogSurface CreateConditionalFormattingIconSetSurface() =>
         new(
