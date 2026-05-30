@@ -671,6 +671,61 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void RemoveDuplicatesDialog_ControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new RemoveDuplicatesDialog(
+                [
+                    new RemoveDuplicateColumnChoice(0, "Region", true),
+                    new RemoveDuplicateColumnChoice(1, "Sales", true)
+                ],
+                [
+                    new RemoveDuplicateColumnChoice(0, "Column A", true),
+                    new RemoveDuplicateColumnChoice(1, "Column B", true)
+                ]);
+            dialog.Show();
+            try
+            {
+                var headersBox = FindVisualChildren<CheckBox>(dialog)
+                    .Single(box => Equals(box.Content, "_My data has headers"));
+                AutomationProperties.GetName(headersBox).Should().Be("My data has headers");
+                AutomationProperties.GetAutomationId(headersBox).Should().Be("RemoveDuplicatesHasHeadersBox");
+                AutomationProperties.GetHelpText(headersBox).Should().Be("Select when the first row contains column headers.");
+
+                var columnsPanel = FindVisualChildren<StackPanel>(dialog)
+                    .Single(panel => AutomationProperties.GetAutomationId(panel) == "RemoveDuplicatesColumnsPanel");
+                AutomationProperties.GetName(columnsPanel).Should().Be("Columns");
+                AutomationProperties.GetHelpText(columnsPanel).Should().Be("Choose the columns used to identify duplicate rows.");
+
+                var buttons = FindVisualChildren<Button>(dialog)
+                    .Where(button => button.Content is string)
+                    .ToDictionary(button => (string)button.Content);
+                AutomationProperties.GetAutomationId(buttons["_Select All"]).Should().Be("RemoveDuplicatesSelectAllButton");
+                AutomationProperties.GetName(buttons["_Select All"]).Should().Be("Select all columns");
+                AutomationProperties.GetHelpText(buttons["_Select All"]).Should().Be("Select every column for duplicate detection.");
+                AutomationProperties.GetAutomationId(buttons["_Unselect All"]).Should().Be("RemoveDuplicatesUnselectAllButton");
+                AutomationProperties.GetName(buttons["_Unselect All"]).Should().Be("Unselect all columns");
+                AutomationProperties.GetHelpText(buttons["_Unselect All"]).Should().Be("Clear every column selection.");
+
+                var regionBox = FindVisualChildren<CheckBox>(dialog)
+                    .Single(box => AutomationProperties.GetAutomationId(box) == "RemoveDuplicatesColumn0Box");
+                AutomationProperties.GetName(regionBox).Should().Be("Region column");
+                AutomationProperties.GetHelpText(regionBox).Should().Be("Select to include this column when identifying duplicate rows.");
+
+                headersBox.IsChecked = false;
+
+                regionBox.Content.Should().Be("Column A");
+                AutomationProperties.GetName(regionBox).Should().Be("Column A column");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void RemoveDuplicatesDialog_BuildsHeaderAwareColumnChoices()
     {
         var sheetId = SheetId.New();
