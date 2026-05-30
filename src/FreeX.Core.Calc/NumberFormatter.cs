@@ -260,6 +260,9 @@ public static partial class NumberFormatter
         try   { numStr = value.ToString(format, numberFormat); }
         catch { numStr = value.ToString(numberFormat); }
 
+        if (TryFormatDbNumIntegerPlaceValue(value, nativeDigitFormat, format, prefix, suffix, out var placeValueText))
+            return placeValueText;
+
         return NativeDigits(prefix + numStr + suffix);
     }
 

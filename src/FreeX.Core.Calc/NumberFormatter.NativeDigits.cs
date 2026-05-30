@@ -21,6 +21,21 @@ public static partial class NumberFormatter
     private static readonly string[] ChineseTraditionalFinancialDigits =
         ["零", "壹", "貳", "參", "肆", "伍", "陸", "柒", "捌", "玖"];
 
+    private static readonly string[] ChineseLowerPlaceDigits =
+        ["\u96F6", "\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D", "\u4E03", "\u516B", "\u4E5D"];
+
+    private static readonly string[] ChineseLowerSmallUnits =
+        ["", "\u5341", "\u767E", "\u5343"];
+
+    private static readonly string[] ChineseFinancialSmallUnits =
+        ["", "\u62FE", "\u4F70", "\u4EDF"];
+
+    private static readonly string[] ChineseSimplifiedLargeUnits =
+        ["", "\u4E07", "\u4EBF", "\u5146"];
+
+    private static readonly string[] ChineseTraditionalLargeUnits =
+        ["", "\u842C", "\u5104", "\u5146"];
+
     private static readonly IReadOnlyDictionary<string, string[]> NatNumDigitCatalog =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
@@ -62,20 +77,182 @@ public static partial class NumberFormatter
 
     private static bool TryResolveNativeDigitMap(string format, out string[] digits)
     {
-        var match = NativeDigitDirectiveRegex.Match(format);
-        if (!match.Success ||
-            !int.TryParse(match.Groups["variant"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var variant))
+        if (!TryResolveNativeDigitDirective(format, out var kind, out var variant, out var locale))
         {
             digits = [];
             return false;
         }
 
-        var locale = ResolveNativeDigitLocale(format);
-        var kind = match.Groups["kind"].Value;
         if (string.Equals(kind, "DBNum", StringComparison.OrdinalIgnoreCase))
             return TryResolveDbNumDigitMap(variant, locale, out digits);
 
         return TryResolveNatNumDigitMap(variant, locale, out digits);
+    }
+
+    private static bool TryResolveNativeDigitDirective(
+        string format,
+        out string kind,
+        out int variant,
+        out string? locale)
+    {
+        var match = NativeDigitDirectiveRegex.Match(format);
+        if (!match.Success ||
+            !int.TryParse(match.Groups["variant"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out variant))
+        {
+            kind = "";
+            variant = 0;
+            locale = null;
+            return false;
+        }
+
+        kind = match.Groups["kind"].Value;
+        locale = ResolveNativeDigitLocale(format);
+        return true;
+    }
+
+    private static bool TryFormatDbNumIntegerPlaceValue(
+        double value,
+        string nativeDigitFormat,
+        string integerFormat,
+        string prefix,
+        string suffix,
+        out string text)
+    {
+        text = "";
+        if (!TryResolveNativeDigitDirective(nativeDigitFormat, out var kind, out var variant, out var locale) ||
+            !string.Equals(kind, "DBNum", StringComparison.OrdinalIgnoreCase) ||
+            !IsChineseDbNumPlaceValueLocale(locale) ||
+            variant is not (1 or 2) ||
+            !IsDbNumIntegerPattern(integerFormat))
+        {
+            return false;
+        }
+
+        var rounded = Math.Round(Math.Abs(value), 0, MidpointRounding.AwayFromZero);
+        if (double.IsNaN(rounded) || double.IsInfinity(rounded) || rounded > 999_999_999_999_999d)
+            return false;
+
+        var digits = variant == 1
+            ? ChineseLowerPlaceDigits
+            : IsTraditionalChineseLocale(locale)
+                ? ChineseTraditionalFinancialDigits
+                : ChineseSimplifiedFinancialDigits;
+        var largeUnits = IsTraditionalChineseLocale(locale)
+            ? ChineseTraditionalLargeUnits
+            : ChineseSimplifiedLargeUnits;
+        var smallUnits = variant == 1
+            ? ChineseLowerSmallUnits
+            : ChineseFinancialSmallUnits;
+
+        var sign = value < 0 ? "-" : "";
+        text = sign + prefix + FormatChineseDbNumInteger(
+            (long)rounded,
+            digits,
+            smallUnits,
+            largeUnits,
+            omitLeadingOneBeforeTen: variant == 1) + suffix;
+        return true;
+    }
+
+    private static bool IsChineseDbNumPlaceValueLocale(string? locale)
+        => string.IsNullOrEmpty(locale) ||
+            string.Equals(locale, "804", StringComparison.OrdinalIgnoreCase) ||
+            IsTraditionalChineseLocale(locale);
+
+    private static bool IsDbNumIntegerPattern(string format)
+    {
+        var hasDigitPlaceholder = false;
+        foreach (var c in format)
+        {
+            switch (c)
+            {
+                case '0':
+                case '#':
+                    hasDigitPlaceholder = true;
+                    break;
+                case ',':
+                case ' ':
+                    break;
+                default:
+                    return false;
+            }
+        }
+
+        return hasDigitPlaceholder;
+    }
+
+    private static string FormatChineseDbNumInteger(
+        long value,
+        string[] digits,
+        string[] smallUnits,
+        string[] largeUnits,
+        bool omitLeadingOneBeforeTen)
+    {
+        if (value == 0)
+            return digits[0];
+
+        var groups = new List<int>();
+        while (value > 0)
+        {
+            groups.Add((int)(value % 10_000));
+            value /= 10_000;
+        }
+
+        var sb = new System.Text.StringBuilder();
+        var pendingZero = false;
+        for (var groupIndex = groups.Count - 1; groupIndex >= 0; groupIndex--)
+        {
+            var group = groups[groupIndex];
+            if (group == 0)
+            {
+                pendingZero = sb.Length > 0;
+                continue;
+            }
+
+            if (pendingZero || (sb.Length > 0 && group < 1000))
+                sb.Append(digits[0]);
+
+            sb.Append(FormatChineseDbNumGroup(group, digits, smallUnits, omitLeadingOneBeforeTen));
+            if (groupIndex < largeUnits.Length)
+                sb.Append(largeUnits[groupIndex]);
+
+            pendingZero = false;
+        }
+
+        return sb.ToString();
+    }
+
+    private static string FormatChineseDbNumGroup(
+        int group,
+        string[] digits,
+        string[] smallUnits,
+        bool omitLeadingOneBeforeTen)
+    {
+        var sb = new System.Text.StringBuilder();
+        var pendingZero = false;
+        for (var place = 3; place >= 0; place--)
+        {
+            var factor = (int)Math.Pow(10, place);
+            var digit = group / factor % 10;
+            if (digit == 0)
+            {
+                if (sb.Length > 0 && group % factor > 0)
+                    pendingZero = true;
+                continue;
+            }
+
+            if (pendingZero)
+            {
+                sb.Append(digits[0]);
+                pendingZero = false;
+            }
+
+            if (!(omitLeadingOneBeforeTen && place == 1 && digit == 1 && sb.Length == 0))
+                sb.Append(digits[digit]);
+            sb.Append(smallUnits[place]);
+        }
+
+        return sb.ToString();
     }
 
     private static bool TryResolveDbNumDigitMap(int variant, string? locale, out string[] digits)
