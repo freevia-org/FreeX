@@ -170,6 +170,9 @@ public static partial class NumberFormatter
         string format,
         bool preserveAccountingZeroDashAlignment = false)
     {
+        if (TryFormatCjkNativeNumberText(value, format, out var cjkNativeNumberText))
+            return cjkNativeNumberText;
+
         var nativeDigitFormat = format;
         string NativeDigits(string text) => ApplyNativeDigitSubstitution(text, nativeDigitFormat);
 

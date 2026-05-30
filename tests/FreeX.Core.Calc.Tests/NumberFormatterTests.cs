@@ -219,10 +219,31 @@ public class NumberFormatterTests
     [InlineData("[DBNum2][$-804]0", 123, "\u58F9\u8D30\u53C1")]
     [InlineData("[DBNum2][$-404]0", 123, "\u58F9\u8CB3\u53C3")]
     [InlineData("[DBNum3][$-804]#,##0.00", 1234.5, "\uFF11,\uFF12\uFF13\uFF14.\uFF15\uFF10")]
+    [InlineData("[NatNum1][$-411]0", 123, "\u4E00\u4E8C\u4E09")]
+    [InlineData("[NatNum2][$-411]0", 123, "\u58F1\u5F10\u53C2")]
     [InlineData("[NatNum1][$-041E]#,##0.00", 1234.5, "\u0E51,\u0E52\u0E53\u0E54.\u0E55\u0E50")]
     [InlineData("[NatNum1][$-0439]#,##0.00", 1234567.89, "\u0967\u0968,\u0969\u096A,\u096B\u096C\u096D.\u096E\u096F")]
     [InlineData("[NatNum3][$-409]0.0%", 0.125, "\uFF11\uFF12.\uFF15%")]
     public void CustomNumberSubset_AppliesDbNumAndNatNumDigitSubstitution(
+        string format,
+        double value,
+        string expected)
+    {
+        var result = NumberFormatter.Format(new NumberValue(value), format);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("[DBNum1][$-804]General", 1234.56, "\u4E00\u5343\u4E8C\u767E\u4E09\u5341\u56DB\u70B9\u4E94\u516D")]
+    [InlineData("[DBNum2][$-804]General", 1002, "\u58F9\u4EDF\u96F6\u8D30")]
+    [InlineData("[DBNum2][$-404]General", 123, "\u58F9\u4F70\u8CB3\u62FE\u53C3")]
+    [InlineData("[DBNum1][$-411]G/\u6A19\u6E96", 123456, "\u5341\u4E8C\u4E07\u4E09\u5343\u56DB\u767E\u4E94\u5341\u516D")]
+    [InlineData("[DBNum1][$-411]General", 0, "\u3007")]
+    [InlineData("[DBNum1][$-412]General", 123, "\u4E00\u767E\u4E8C\u5341\u4E09")]
+    [InlineData("[NatNum4][$-804]General", 1203, "\u4E00\u5343\u4E8C\u767E\u96F6\u4E09")]
+    [InlineData("[NatNum5][$-804]General\"\u5143\u6574\"", 1203, "\u58F9\u4EDF\u8D30\u4F70\u96F6\u53C1\u5143\u6574")]
+    public void CustomNumberSubset_AppliesCjkDbNumAndNatNumPlaceValueSpellOut(
         string format,
         double value,
         string expected)
