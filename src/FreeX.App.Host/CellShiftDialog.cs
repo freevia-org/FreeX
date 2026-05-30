@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -66,6 +67,9 @@ public sealed class CellShiftDialog : Window
                 Tag = option.Choice,
                 Margin = new Thickness(0, 0, 0, 6)
             };
+            AutomationProperties.SetName(button, GetChoiceAutomationName(option.Choice));
+            AutomationProperties.SetAutomationId(button, $"CellShift{option.Choice}Option");
+            AutomationProperties.SetHelpText(button, GetChoiceHelpText(option.Choice));
             _buttons.Add(button);
             optionPanel.Children.Add(button);
         }
@@ -103,4 +107,26 @@ public sealed class CellShiftDialog : Window
             : GetAvailableChoices(_mode)[0].Choice;
         DialogResult = true;
     }
+
+    private static string GetChoiceAutomationName(CellShiftDialogChoice choice) =>
+        choice switch
+        {
+            CellShiftDialogChoice.ShiftCellsRight => "Shift cells right",
+            CellShiftDialogChoice.ShiftCellsDown => "Shift cells down",
+            CellShiftDialogChoice.ShiftCellsLeft => "Shift cells left",
+            CellShiftDialogChoice.ShiftCellsUp => "Shift cells up",
+            CellShiftDialogChoice.EntireRow => "Entire row",
+            _ => "Entire column"
+        };
+
+    private static string GetChoiceHelpText(CellShiftDialogChoice choice) =>
+        choice switch
+        {
+            CellShiftDialogChoice.ShiftCellsRight => "Insert cells and shift existing cells to the right.",
+            CellShiftDialogChoice.ShiftCellsDown => "Insert cells and shift existing cells down.",
+            CellShiftDialogChoice.ShiftCellsLeft => "Delete cells and shift remaining cells left.",
+            CellShiftDialogChoice.ShiftCellsUp => "Delete cells and shift remaining cells up.",
+            CellShiftDialogChoice.EntireRow => "Apply the operation to the entire selected row.",
+            _ => "Apply the operation to the entire selected column."
+        };
 }

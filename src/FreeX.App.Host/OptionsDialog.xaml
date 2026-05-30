@@ -235,7 +235,9 @@
 
                         <CheckBox x:Name="OptShowFormulaBar"
                                   Content="Show formula _bar"
-                                  FontSize="12" Margin="0,0,0,6"/>
+                                  FontSize="12" Margin="0,0,0,6"
+                                  Checked="ShowFormulaBar_Changed"
+                                  Unchecked="ShowFormulaBar_Changed"/>
                         <CheckBox x:Name="OptFormulaBarExpanded"
                                   Content="Expand formula ba_r"
                                   FontSize="12" Margin="0,0,0,4"/>

@@ -17,6 +17,7 @@
             <ListView x:Name="ViewsList" SelectionChanged="ViewsList_SelectionChanged"
                       MouseDoubleClick="ViewsList_MouseDoubleClick"
                       AutomationProperties.Name="Custom views"
+                      AutomationProperties.AutomationId="CustomViewsList"
                       AutomationProperties.HelpText="Shows saved workbook views that can be shown or deleted.">
                 <ListView.View>
                         <GridView>
@@ -30,10 +31,18 @@
         </GroupBox>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="ShowButton" Content="_Show" Width="72" Margin="0,0,8,0" IsDefault="True" Click="ShowButton_Click"/>
-            <Button Content="_Add..." Width="72" Margin="0,0,8,0" Click="AddButton_Click"/>
-            <Button x:Name="DeleteButton" Content="_Delete" Width="72" Margin="0,0,8,0" Click="DeleteButton_Click"/>
-            <Button Content="_Close" Width="72" IsCancel="True" Click="CloseButton_Click"/>
+            <Button x:Name="ShowButton" Content="_Show" Width="72" Margin="0,0,8,0" IsDefault="True" Click="ShowButton_Click"
+                    AutomationProperties.AutomationId="CustomViewsShowButton"
+                    AutomationProperties.HelpText="Apply the selected custom view."/>
+            <Button Content="_Add..." Width="72" Margin="0,0,8,0" Click="AddButton_Click"
+                    AutomationProperties.AutomationId="CustomViewsAddButton"
+                    AutomationProperties.HelpText="Create a new custom view from the current workbook state."/>
+            <Button x:Name="DeleteButton" Content="_Delete" Width="72" Margin="0,0,8,0" Click="DeleteButton_Click"
+                    AutomationProperties.AutomationId="CustomViewsDeleteButton"
+                    AutomationProperties.HelpText="Delete the selected custom view."/>
+            <Button Content="_Close" Width="72" IsCancel="True" Click="CloseButton_Click"
+                    AutomationProperties.AutomationId="CustomViewsCloseButton"
+                    AutomationProperties.HelpText="Close the Custom Views dialog."/>
         </StackPanel>
     </Grid>
 </Window>

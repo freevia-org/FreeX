@@ -17,6 +17,7 @@ public sealed class CustomViewsDialogXamlTests
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml"));
 
         xaml.Should().Contain("AutomationProperties.Name=\"Custom views\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"CustomViewsList\"");
         xaml.Should().Contain("AutomationProperties.HelpText=\"Shows saved workbook views");
     }
 
@@ -83,6 +84,53 @@ public sealed class CustomViewsDialogXamlTests
             .Select(element => element.Attribute("Content")?.Value)
             .Should()
             .Contain(["_Show", "_Add...", "_Delete", "_Close"]);
+    }
+
+    [Fact]
+    public void DialogActionButtons_ExposeAutomationMetadata()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "CustomViewsDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        AssertButtonAutomation(
+            document,
+            presentation,
+            "_Show",
+            "CustomViewsShowButton",
+            "Apply the selected custom view.");
+        AssertButtonAutomation(
+            document,
+            presentation,
+            "_Add...",
+            "CustomViewsAddButton",
+            "Create a new custom view from the current workbook state.");
+        AssertButtonAutomation(
+            document,
+            presentation,
+            "_Delete",
+            "CustomViewsDeleteButton",
+            "Delete the selected custom view.");
+        AssertButtonAutomation(
+            document,
+            presentation,
+            "_Close",
+            "CustomViewsCloseButton",
+            "Close the Custom Views dialog.");
+
+        static void AssertButtonAutomation(
+            XDocument document,
+            XNamespace presentation,
+            string content,
+            string automationId,
+            string helpText)
+        {
+            var button = document
+                .Descendants(presentation + "Button")
+                .Single(element => element.Attribute("Content")?.Value == content);
+
+            button.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
+            button.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(helpText);
+        }
     }
 
     [Fact]

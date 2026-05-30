@@ -51,6 +51,57 @@ public sealed class GoalSeekDialogXamlTests
     }
 
     [Fact]
+    public void Dialog_InputFieldsExposeAutomationMetadata()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoalSeekDialog.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        AssertTextBoxAutomation(
+            document,
+            presentation,
+            xaml,
+            "SetCellBox",
+            "GoalSeekSetCellBox",
+            "Set cell",
+            "Enter the formula cell that Goal Seek should solve.");
+        AssertTextBoxAutomation(
+            document,
+            presentation,
+            xaml,
+            "ToValueBox",
+            "GoalSeekToValueBox",
+            "To value",
+            "Enter the target value for the set cell.");
+        AssertTextBoxAutomation(
+            document,
+            presentation,
+            xaml,
+            "ChangingCellBox",
+            "GoalSeekChangingCellBox",
+            "By changing cell",
+            "Enter the cell whose value Goal Seek can change.");
+
+        static void AssertTextBoxAutomation(
+            XDocument document,
+            XNamespace presentation,
+            XNamespace xaml,
+            string textBoxName,
+            string automationId,
+            string name,
+            string helpText)
+        {
+            var textBox = document
+                .Descendants(presentation + "TextBox")
+                .Single(element => element.Attribute(xaml + "Name")?.Value == textBoxName);
+
+            textBox.Attribute("AutomationProperties.AutomationId")?.Value.Should().Be(automationId);
+            textBox.Attribute("AutomationProperties.Name")?.Value.Should().Be(name);
+            textBox.Attribute("AutomationProperties.HelpText")?.Value.Should().Be(helpText);
+        }
+    }
+
+    [Fact]
     public void CreateRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         GoalSeekDialog.CreateRangeSelectionRequest(GoalSeekRangeSelectionTarget.ChangingCell, " $B$2 ")
