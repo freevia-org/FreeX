@@ -860,8 +860,8 @@
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_AboveAverage}"       local:RibbonTooltip.KeyTip="TA" Click="CfAboveAvgMenuItem_Click" local:RibbonMetadata.CommandName="Above Average"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_BelowAverage}"       local:RibbonTooltip.KeyTip="TL" Click="CfBelowAvgMenuItem_Click" local:RibbonMetadata.CommandName="Below Average"/>
                                             </MenuItem>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_DataBars}"               local:RibbonTooltip.KeyTip="D" Click="CfDataBarMenuItem_Click" local:RibbonMetadata.CommandName="Data Bars"/>
-                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_ColorScales}"            local:RibbonTooltip.KeyTip="C" Click="CfColorScaleMenuItem_Click" local:RibbonMetadata.CommandName="Color Scales"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_DataBars}"               local:RibbonTooltip.KeyTip="D" SubmenuOpened="CfDataBarsMenuItem_SubmenuOpened" local:RibbonMetadata.CommandName="Data Bars"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_ColorScales}"            local:RibbonTooltip.KeyTip="C" SubmenuOpened="CfColorScalesMenuItem_SubmenuOpened" local:RibbonMetadata.CommandName="Color Scales"/>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_IconSets}"                  local:RibbonTooltip.KeyTip="I" local:RibbonMetadata.CommandName="Icon Sets">
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_Directional}" local:RibbonTooltip.KeyTip="ID" IsEnabled="False" local:RibbonMetadata.CommandName="Directional"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3Arrows}"               local:RibbonTooltip.KeyTip="I3" Tag="3Arrows" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Arrows"/>

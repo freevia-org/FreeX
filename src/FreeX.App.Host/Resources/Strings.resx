@@ -2175,6 +2175,66 @@
   <data name="ConditionalFormatDialog_GradientFill" xml:space="preserve">
     <value>_Gradient fill</value>
   </data>
+  <data name="ConditionalFormatDataBar_Category_GradientFill" xml:space="preserve">
+    <value>Gradient Fill</value>
+  </data>
+  <data name="ConditionalFormatDataBar_Category_SolidFill" xml:space="preserve">
+    <value>Solid Fill</value>
+  </data>
+  <data name="ConditionalFormatDataBar_Blue_Label" xml:space="preserve">
+    <value>Blue Data Bar</value>
+  </data>
+  <data name="ConditionalFormatDataBar_Green_Label" xml:space="preserve">
+    <value>Green Data Bar</value>
+  </data>
+  <data name="ConditionalFormatDataBar_Red_Label" xml:space="preserve">
+    <value>Red Data Bar</value>
+  </data>
+  <data name="ConditionalFormatDataBar_Orange_Label" xml:space="preserve">
+    <value>Orange Data Bar</value>
+  </data>
+  <data name="ConditionalFormatDataBar_LightBlue_Label" xml:space="preserve">
+    <value>Light Blue Data Bar</value>
+  </data>
+  <data name="ConditionalFormatDataBar_Purple_Label" xml:space="preserve">
+    <value>Purple Data Bar</value>
+  </data>
+  <data name="ConditionalFormatColorScale_Category_ThreeColor" xml:space="preserve">
+    <value>3-Color Scale</value>
+  </data>
+  <data name="ConditionalFormatColorScale_Category_TwoColor" xml:space="preserve">
+    <value>2-Color Scale</value>
+  </data>
+  <data name="ConditionalFormatColorScale_GreenYellowRed_Label" xml:space="preserve">
+    <value>Green - Yellow - Red Color Scale</value>
+  </data>
+  <data name="ConditionalFormatColorScale_RedYellowGreen_Label" xml:space="preserve">
+    <value>Red - Yellow - Green Color Scale</value>
+  </data>
+  <data name="ConditionalFormatColorScale_GreenWhiteRed_Label" xml:space="preserve">
+    <value>Green - White - Red Color Scale</value>
+  </data>
+  <data name="ConditionalFormatColorScale_RedWhiteGreen_Label" xml:space="preserve">
+    <value>Red - White - Green Color Scale</value>
+  </data>
+  <data name="ConditionalFormatColorScale_BlueWhiteRed_Label" xml:space="preserve">
+    <value>Blue - White - Red Color Scale</value>
+  </data>
+  <data name="ConditionalFormatColorScale_RedWhiteBlue_Label" xml:space="preserve">
+    <value>Red - White - Blue Color Scale</value>
+  </data>
+  <data name="ConditionalFormatColorScale_WhiteRed_Label" xml:space="preserve">
+    <value>White - Red Color Scale</value>
+  </data>
+  <data name="ConditionalFormatColorScale_RedWhite_Label" xml:space="preserve">
+    <value>Red - White Color Scale</value>
+  </data>
+  <data name="ConditionalFormatColorScale_GreenWhite_Label" xml:space="preserve">
+    <value>Green - White Color Scale</value>
+  </data>
+  <data name="ConditionalFormatColorScale_WhiteGreen_Label" xml:space="preserve">
+    <value>White - Green Color Scale</value>
+  </data>
   <data name="ConditionalFormatDialog_ShowBorder" xml:space="preserve">
     <value>Show _border:</value>
   </data>

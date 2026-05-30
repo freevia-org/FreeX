@@ -21,6 +21,8 @@ internal static class RibbonRuntimeCatalogPlanner
     [
         CreateFormatAsTableSurface(),
         CreateNumberFormatSurface(),
+        CreateConditionalFormattingDataBarSurface(),
+        CreateConditionalFormattingColorScaleSurface(),
         CreateConditionalFormattingIconSetSurface(),
         CreatePageLayoutThemeSurface(),
         CreatePivotTableStyleSurface()
@@ -61,6 +63,32 @@ internal static class RibbonRuntimeCatalogPlanner
                         .Select(option => option.Label)
                         .ToArray())
             ]);
+
+    private static RibbonRuntimeCatalogSurface CreateConditionalFormattingDataBarSurface() =>
+        new(
+            "Home",
+            "Conditional Formatting Data Bars",
+            "Home",
+            "Conditional Formatting",
+            nameof(ConditionalFormatPresetGalleryPlanner),
+            ConditionalFormatPresetGalleryPlanner.DataBarGroups
+                .Select(group => new RibbonRuntimeCatalogGroup(
+                    group.Name,
+                    group.Options.Select(option => option.Label).ToArray()))
+                .ToArray());
+
+    private static RibbonRuntimeCatalogSurface CreateConditionalFormattingColorScaleSurface() =>
+        new(
+            "Home",
+            "Conditional Formatting Color Scales",
+            "Home",
+            "Conditional Formatting",
+            nameof(ConditionalFormatPresetGalleryPlanner),
+            ConditionalFormatPresetGalleryPlanner.ColorScaleGroups
+                .Select(group => new RibbonRuntimeCatalogGroup(
+                    group.Name,
+                    group.Options.Select(option => option.Label).ToArray()))
+                .ToArray());
 
     private static RibbonRuntimeCatalogSurface CreateConditionalFormattingIconSetSurface() =>
         new(
