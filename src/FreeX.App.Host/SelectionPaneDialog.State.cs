@@ -59,9 +59,25 @@ public sealed partial class SelectionPaneDialog
     private void List_DragOver(object sender, DragEventArgs e)
     {
         var dragged = e.Data.GetData(typeof(SelectionPaneDialogItem)) as SelectionPaneDialogItem;
-        var target = FindListItem(e.OriginalSource);
-        e.Effects = CanDropDraggedItem(dragged, target) ? DragDropEffects.Move : DragDropEffects.None;
+        var targetContainer = FindListBoxItem(e.OriginalSource);
+        var target = targetContainer?.DataContext as SelectionPaneDialogItem;
+        var placement = targetContainer is null ? SelectionPaneDropPlacement.Before : GetDropPlacement(e, targetContainer);
+        var visualPlan = dragged is null || target is null
+            ? null
+            : SelectionPaneDialogStatePlanner.PlanDropVisual(
+                CurrentItemStates(),
+                dragged.Source.Id,
+                target.Source.Id,
+                placement);
+        ApplyDropVisual(visualPlan);
+        e.Effects = visualPlan?.IsAllowed == true ? DragDropEffects.Move : DragDropEffects.None;
         e.Handled = true;
+    }
+
+    private void List_DragLeave(object sender, DragEventArgs e)
+    {
+        if (!IsPointerOverList(e))
+            ClearDropVisual();
     }
 
     private void List_Drop(object sender, DragEventArgs e)
@@ -70,8 +86,12 @@ public sealed partial class SelectionPaneDialog
         var targetContainer = FindListBoxItem(e.OriginalSource);
         var target = targetContainer?.DataContext as SelectionPaneDialogItem;
         if (!CanDropDraggedItem(dragged, target))
+        {
+            ClearDropVisual();
             return;
+        }
 
+        ClearDropVisual();
         DragReorder(dragged!, target!, GetDropPlacement(e, targetContainer!));
         e.Handled = true;
     }
@@ -165,6 +185,34 @@ public sealed partial class SelectionPaneDialog
             ? SelectionPaneDropPlacement.After
             : SelectionPaneDropPlacement.Before;
     }
+
+    private bool IsPointerOverList(DragEventArgs e)
+    {
+        var position = e.GetPosition(_list);
+        return position.X >= 0 &&
+            position.Y >= 0 &&
+            position.X <= _list.ActualWidth &&
+            position.Y <= _list.ActualHeight;
+    }
+
+    private void ApplyDropVisual(SelectionPaneDropVisualPlan? plan)
+    {
+        var changed = false;
+        foreach (var item in _items)
+        {
+            var isTarget = plan?.IsAllowed == true && item.Source.Id == plan.TargetId;
+            var isBefore = isTarget && plan!.Placement == SelectionPaneDropPlacement.Before;
+            var isAfter = isTarget && plan!.Placement == SelectionPaneDropPlacement.After;
+            changed |= item.IsDropBefore != isBefore || item.IsDropAfter != isAfter;
+            item.IsDropBefore = isBefore;
+            item.IsDropAfter = isAfter;
+        }
+
+        if (changed)
+            _list.Items.Refresh();
+    }
+
+    private void ClearDropVisual() => ApplyDropVisual(null);
 
     private static bool CanDropDraggedItem(SelectionPaneDialogItem? dragged, SelectionPaneDialogItem? target) =>
         dragged is not null &&
