@@ -387,10 +387,63 @@ public sealed class ShapeCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
         shape.HasShadowEffect.Should().BeFalse();
+        shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.None);
 
         command.Revert(ctx);
 
         shape.HasShadowEffect.Should().BeTrue();
+        shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.None);
+        shape.GetEffectiveEffectPreset().Should().Be(DrawingShapeEffectPreset.Shadow);
+    }
+
+    [Fact]
+    public void SetDrawingShapeEffectCommand_SetsNamedPresetAndUndoRestoresMetadata()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            HasShadowEffect = true,
+            EffectPreset = DrawingShapeEffectPreset.Shadow
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var command = new SetDrawingShapeEffectCommand(sheet.Id, shape.Id, DrawingShapeEffectPreset.Glow);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Glow);
+        shape.HasShadowEffect.Should().BeFalse();
+        shape.GetEffectiveEffectPreset().Should().Be(DrawingShapeEffectPreset.Glow);
+
+        command.Revert(ctx);
+
+        shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Shadow);
+        shape.HasShadowEffect.Should().BeTrue();
+        shape.GetEffectiveEffectPreset().Should().Be(DrawingShapeEffectPreset.Shadow);
+    }
+
+    [Fact]
+    public void SetDrawingShapeEffectCommand_RejectsUnknownPreset()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            EffectPreset = DrawingShapeEffectPreset.SoftEdges
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var outcome = new SetDrawingShapeEffectCommand(
+            sheet.Id,
+            shape.Id,
+            (DrawingShapeEffectPreset)99).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        shape.EffectPreset.Should().Be(DrawingShapeEffectPreset.SoftEdges);
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext

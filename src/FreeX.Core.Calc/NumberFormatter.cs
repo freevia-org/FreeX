@@ -170,6 +170,9 @@ public static partial class NumberFormatter
         string format,
         bool preserveAccountingZeroDashAlignment = false)
     {
+        if (TryFormatCjkNativeNumberText(value, format, out var cjkNativeNumberText))
+            return cjkNativeNumberText;
+
         var nativeDigitFormat = format;
         string NativeDigits(string text) => ApplyNativeDigitSubstitution(text, nativeDigitFormat);
 
@@ -259,9 +262,6 @@ public static partial class NumberFormatter
         string numStr;
         try   { numStr = value.ToString(format, numberFormat); }
         catch { numStr = value.ToString(numberFormat); }
-
-        if (TryFormatDbNumIntegerPlaceValue(value, nativeDigitFormat, format, prefix, suffix, out var placeValueText))
-            return placeValueText;
 
         return NativeDigits(prefix + numStr + suffix);
     }

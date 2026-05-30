@@ -80,6 +80,10 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("AltTextTargetResolver.Resolve(sheet, SheetGrid.SelectedRange?.Start, preferredKind)");
         source.Should().Contain("CommentNavigationPlanner.GetDefaultCommentText(sheet.Comments, addr)");
         source.Should().Contain("new ThreadedCommentDialog(addr.ToA1(), existing)");
+        source.Should().Contain("case ThreadedCommentDialogAction.EditReply");
+        source.Should().Contain("new UpdateThreadedCommentReplyCommand(");
+        source.Should().Contain("case ThreadedCommentDialogAction.DeleteReply");
+        source.Should().Contain("new DeleteThreadedCommentReplyCommand(");
         source.Should().Contain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
         source.Should().Contain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
         source.Should().Contain("ProtectionDialogPlanner.CreateSheetResult(");

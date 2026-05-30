@@ -7,6 +7,14 @@ public enum DrawingShapeKind
     Line
 }
 
+public enum DrawingShapeEffectPreset
+{
+    None,
+    Shadow,
+    Glow,
+    SoftEdges
+}
+
 public sealed class DrawingShapeModel
 {
     public Guid Id { get; init; } = Guid.NewGuid();
@@ -25,6 +33,7 @@ public sealed class DrawingShapeModel
     public WorkbookThemeColorReference? FillThemeColor { get; set; }
     public WorkbookThemeColorReference? OutlineThemeColor { get; set; }
     public bool HasShadowEffect { get; set; }
+    public DrawingShapeEffectPreset EffectPreset { get; set; }
     public bool IsSourceLoaded { get; set; }
 
     public CellColor GetEffectiveFillColor(WorkbookTheme theme, CellColor fallback) =>
@@ -32,4 +41,14 @@ public sealed class DrawingShapeModel
 
     public CellColor GetEffectiveOutlineColor(WorkbookTheme theme, CellColor fallback) =>
         OutlineThemeColor?.Resolve(theme) ?? OutlineColor ?? fallback;
+
+    public DrawingShapeEffectPreset GetEffectiveEffectPreset()
+    {
+        if (Enum.IsDefined(EffectPreset) && EffectPreset != DrawingShapeEffectPreset.None)
+            return EffectPreset;
+
+        return HasShadowEffect
+            ? DrawingShapeEffectPreset.Shadow
+            : DrawingShapeEffectPreset.None;
+    }
 }

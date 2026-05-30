@@ -279,7 +279,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     spreadsheetDrawingNs,
                     drawingNs,
                     shape.GradientFillEndColor,
-                    shape.HasShadowEffect)),
+                    shape.GetEffectiveEffectPreset())),
             new XElement(spreadsheetDrawingNs + "clientData"));
 
     private static XElement ToDrawingAnchorFrom(CellAddress anchor, XNamespace spreadsheetDrawingNs) =>
@@ -299,7 +299,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         CellColor? gradientFillEndColor = null,
-        bool hasShadowEffect = false)
+        DrawingShapeEffectPreset effectPreset = DrawingShapeEffectPreset.None)
     {
         var rotation = NormalizeRotation(rotationDegrees);
         return new XElement(spreadsheetDrawingNs + "spPr",
@@ -312,7 +312,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 ? ToGradientFill(gradientStartColor, gradientEndColor, drawingNs)
                 : ToSolidFill(fillThemeColor, fillColor, drawingNs),
             ToLineProperties(outlineThemeColor, outlineColor, drawingNs),
-            hasShadowEffect ? ToOuterShadowEffect(drawingNs) : null);
+            ToEffectList(effectPreset, drawingNs));
     }
 
     private static XElement ToGradientFill(CellColor startColor, CellColor endColor, XNamespace drawingNs) =>
@@ -335,6 +335,19 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XAttribute("dist", "20000"),
                 new XAttribute("dir", "5400000"),
                 ToRgbColorElement(new CellColor(128, 128, 128), drawingNs)));
+
+    private static XElement? ToEffectList(DrawingShapeEffectPreset effectPreset, XNamespace drawingNs) =>
+        effectPreset switch
+        {
+            DrawingShapeEffectPreset.Shadow => ToOuterShadowEffect(drawingNs),
+            DrawingShapeEffectPreset.Glow => new XElement(drawingNs + "effectLst",
+                new XElement(drawingNs + "glow",
+                    new XAttribute("rad", "50000"),
+                    ToRgbColorElement(new CellColor(91, 155, 213), drawingNs))),
+            DrawingShapeEffectPreset.SoftEdges => new XElement(drawingNs + "effectLst",
+                new XElement(drawingNs + "softEdge", new XAttribute("rad", "30000"))),
+            _ => null
+        };
 
     private static XElement ToRgbColorElement(CellColor color, XNamespace drawingNs) =>
         new(drawingNs + "srgbClr", new XAttribute("val", FormatColor(color)));
