@@ -1382,6 +1382,131 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesPrintableInvisibleLinkAnnotationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = new FixedDocument();
+            var page = new FixedPage { Width = 200, Height = 100 };
+            page.Children.Add(new VisualHost
+            {
+                LinkOverlays =
+                [
+                    new PdfLinkOverlay(
+                        "https://example.com/metadata",
+                        HyperlinkTargetKind.ExistingFileOrWebPage,
+                        X: 12,
+                        Y: 24,
+                        Width: 48,
+                        Height: 12)
+                ]
+            });
+            var content = new PageContent();
+            ((IAddChild)content).AddChild(page);
+            document.Pages.Add(content);
+            document.DocumentPaginator.PageSize = new Size(200, 100);
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                var annotation = ReadLinkAnnotations(pdf.Pages[0]).Should().ContainSingle().Subject;
+                annotation.Elements.GetName("/H").Should().Be("/I");
+                annotation.Elements.GetInteger("/F").Should().Be(4);
+                annotation.Elements.GetString("/Contents").Should().Be("https://example.com/metadata");
+                ReadLinkAnnotationBorder(annotation).Should().Equal(0, 0, 0);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_ClampsLinkAnnotationRectToPdfPage()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = new FixedDocument();
+            var page = new FixedPage { Width = 200, Height = 100 };
+            page.Children.Add(new VisualHost
+            {
+                LinkOverlays =
+                [
+                    new PdfLinkOverlay(
+                        "https://example.com/clamped",
+                        HyperlinkTargetKind.ExistingFileOrWebPage,
+                        X: -24,
+                        Y: -12,
+                        Width: 260,
+                        Height: 140)
+                ]
+            });
+            var content = new PageContent();
+            ((IAddChild)content).AddChild(page);
+            document.Pages.Add(content);
+            document.DocumentPaginator.PageSize = new Size(200, 100);
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                var rect = ReadLinkAnnotationRects(pdf.Pages[0]).Should().ContainSingle().Subject;
+                rect.Should().Equal(0, 0, 150, 75);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
+    public void PdfDocumentExporter_SkipsInternalWorkbookLinkAnnotations()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = new FixedDocument();
+            var page = new FixedPage { Width = 200, Height = 100 };
+            page.Children.Add(new VisualHost
+            {
+                LinkOverlays =
+                [
+                    new PdfLinkOverlay(
+                        "Sheet2!A1",
+                        HyperlinkTargetKind.PlaceInThisDocument,
+                        X: 12,
+                        Y: 24,
+                        Width: 48,
+                        Height: 12)
+                ]
+            });
+            var content = new PageContent();
+            ((IAddChild)content).AddChild(page);
+            document.Pages.Add(content);
+            document.DocumentPaginator.PageSize = new Size(200, 100);
+
+            try
+            {
+                PdfDocumentExporter.Save(document, path);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                ReadLinkAnnotations(pdf.Pages[0]).Should().BeEmpty();
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfLinkOverlayExtractor_IncludesRenderTranslationTransformsButNotLayoutTranslation()
     {
         StaTestRunner.Run(() =>
@@ -2441,17 +2566,9 @@ public class ExportPlannerTests
 
     private static IReadOnlyList<string> ReadLinkAnnotationUris(PdfPage page)
     {
-        var annotations = page.Elements.GetArray("/Annots");
-        if (annotations is null)
-            return [];
-
         var uris = new List<string>();
-        foreach (var item in annotations.Elements)
+        foreach (var annotation in ReadLinkAnnotations(page))
         {
-            var annotation = ResolveDictionary(item);
-            if (annotation is null || annotation.Elements.GetName("/Subtype") != "/Link")
-                continue;
-
             var action = annotation.Elements.GetDictionary("/A");
             action.Should().NotBeNull();
             action!.Elements.GetName("/S").Should().Be("/URI");
@@ -2463,17 +2580,9 @@ public class ExportPlannerTests
 
     private static IReadOnlyList<double[]> ReadLinkAnnotationRects(PdfPage page)
     {
-        var annotations = page.Elements.GetArray("/Annots");
-        if (annotations is null)
-            return [];
-
         var rects = new List<double[]>();
-        foreach (var item in annotations.Elements)
+        foreach (var annotation in ReadLinkAnnotations(page))
         {
-            var annotation = ResolveDictionary(item);
-            if (annotation is null || annotation.Elements.GetName("/Subtype") != "/Link")
-                continue;
-
             var rect = annotation.Elements.GetArray("/Rect");
             rect.Should().NotBeNull();
             rects.Add([
@@ -2485,6 +2594,34 @@ public class ExportPlannerTests
         }
 
         return rects;
+    }
+
+    private static IReadOnlyList<PdfDictionary> ReadLinkAnnotations(PdfPage page)
+    {
+        var annotations = page.Elements.GetArray("/Annots");
+        if (annotations is null)
+            return [];
+
+        var result = new List<PdfDictionary>();
+        foreach (var item in annotations.Elements)
+        {
+            var annotation = ResolveDictionary(item);
+            if (annotation is not null && annotation.Elements.GetName("/Subtype") == "/Link")
+                result.Add(annotation);
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<int> ReadLinkAnnotationBorder(PdfDictionary annotation)
+    {
+        var border = annotation.Elements.GetArray("/Border");
+        border.Should().NotBeNull();
+        return [
+            border!.Elements.GetInteger(0),
+            border.Elements.GetInteger(1),
+            border.Elements.GetInteger(2)
+        ];
     }
 
     private static PdfDictionary? ResolveDictionary(PdfItem item)

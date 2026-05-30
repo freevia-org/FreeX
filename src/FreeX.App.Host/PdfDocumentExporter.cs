@@ -296,11 +296,7 @@ internal static class PdfDocumentExporter
                 continue;
             }
 
-            var left = overlay.X * 72.0 / StandardDpi;
-            var right = (overlay.X + overlay.Width) * 72.0 / StandardDpi;
-            var top = pdfPage.Height.Point - overlay.Y * 72.0 / StandardDpi;
-            var bottom = pdfPage.Height.Point - (overlay.Y + overlay.Height) * 72.0 / StandardDpi;
-            if (right <= left || top <= bottom)
+            if (!TryCreateLinkAnnotationRect(pdfPage, overlay, out var rect) || rect is null)
                 continue;
 
             var annotations = pdfPage.Elements.GetArray("/Annots");
@@ -317,14 +313,52 @@ internal static class PdfDocumentExporter
             var annotation = new PdfDictionary(pdfPage.Owner);
             annotation.Elements.SetName("/Type", "/Annot");
             annotation.Elements.SetName("/Subtype", "/Link");
-            annotation.Elements.SetRectangle("/Rect", new PdfRectangle(new XRect(left, bottom, right - left, top - bottom)));
+            annotation.Elements.SetRectangle("/Rect", rect);
+            annotation.Elements.SetName("/H", "/I");
+            annotation.Elements.SetInteger("/F", 4);
+            annotation.Elements["/Border"] = CreateInvisibleAnnotationBorder(pdfPage.Owner);
+            annotation.Elements.SetString("/Contents", uri);
             annotation.Elements["/A"] = action;
             annotations.Elements.Add(annotation);
         }
     }
 
+    private static bool TryCreateLinkAnnotationRect(PdfPage pdfPage, PdfLinkOverlay overlay, out PdfRectangle? rect)
+    {
+        var left = overlay.X * 72.0 / StandardDpi;
+        var right = (overlay.X + overlay.Width) * 72.0 / StandardDpi;
+        var top = pdfPage.Height.Point - overlay.Y * 72.0 / StandardDpi;
+        var bottom = pdfPage.Height.Point - (overlay.Y + overlay.Height) * 72.0 / StandardDpi;
+
+        left = Math.Clamp(left, 0, pdfPage.Width.Point);
+        right = Math.Clamp(right, 0, pdfPage.Width.Point);
+        bottom = Math.Clamp(bottom, 0, pdfPage.Height.Point);
+        top = Math.Clamp(top, 0, pdfPage.Height.Point);
+
+        if (right <= left || top <= bottom)
+        {
+            rect = default;
+            return false;
+        }
+
+        rect = new PdfRectangle(new XRect(left, bottom, right - left, top - bottom));
+        return true;
+    }
+
+    private static PdfArray CreateInvisibleAnnotationBorder(PdfDocument owner)
+    {
+        var border = new PdfArray(owner);
+        border.Elements.Add(new PdfInteger(0));
+        border.Elements.Add(new PdfInteger(0));
+        border.Elements.Add(new PdfInteger(0));
+        return border;
+    }
+
     private static string? NormalizeLinkAnnotationUri(PdfLinkOverlay overlay)
     {
+        if (overlay.TargetKind == HyperlinkTargetKind.PlaceInThisDocument)
+            return null;
+
         var target = overlay.Target.Trim();
         if (target.Length == 0)
             return null;
