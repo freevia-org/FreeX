@@ -303,6 +303,7 @@ public sealed class KeyboardShortcutMatcherTests
     }
 
     [Theory]
+    [InlineData(Key.System, Key.Back, ModifierKeys.Alt, KeyboardCommandShortcut.Undo)]
     [InlineData(Key.System, Key.F1, ModifierKeys.Alt, KeyboardCommandShortcut.InsertEmbeddedChart)]
     [InlineData(Key.System, Key.F1, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.InsertWorksheet)]
     [InlineData(Key.System, Key.OemPlus, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
@@ -381,6 +382,7 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.System, Key.F12, ModifierKeys.Alt)]
     [InlineData(Key.System, Key.F12, ModifierKeys.Shift | ModifierKeys.Alt)]
     [InlineData(Key.System, Key.Apps, ModifierKeys.Alt)]
+    [InlineData(Key.System, Key.Back, ModifierKeys.Alt | ModifierKeys.Shift)]
     [InlineData(Key.Back, Key.None, ModifierKeys.Alt | ModifierKeys.Shift)]
     public void TryGetCommandShortcut_DoesNotStealExtraModifierCombinations(Key key, Key systemKey, ModifierKeys modifiers)
     {
