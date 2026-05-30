@@ -97,8 +97,8 @@ public sealed class OpenWorkbookLoaderTests
     }
 
     [Theory]
-    [InlineData(".xlt", "Excel 97-2003 Template")]
-    [InlineData(".xltx", "Excel Template")]
+    [InlineData(".xlt", "XLT 97-2003 Template")]
+    [InlineData(".xltx", "XLTX Template")]
     public async Task LoadAsync_ReturnsTemplateMetadataFromSelectedFormat(string extension, string formatName)
     {
         var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}{extension}");
@@ -218,7 +218,7 @@ public sealed class OpenWorkbookLoaderTests
                 tempPath,
                 adapter,
                 extension,
-                new FileFormatDescriptor(extension, "Excel Binary", CanOpen: true, CanSave: false, opensAsTemplate),
+                new FileFormatDescriptor(extension, "XLSB Binary", CanOpen: true, CanSave: false, opensAsTemplate),
                 new ImmediateProgress<OpenProgressUpdate>(_ => { }));
 
             inspected.Should().BeFalse();

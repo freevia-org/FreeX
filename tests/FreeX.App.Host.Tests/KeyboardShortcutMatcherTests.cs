@@ -209,6 +209,7 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.Insert, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.Paste)]
     [InlineData(Key.A, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SelectCurrentRegionOrAll)]
     [InlineData(Key.Z, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Undo)]
+    [InlineData(Key.Back, Key.None, ModifierKeys.Alt, KeyboardCommandShortcut.Undo)]
     [InlineData(Key.Y, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Redo)]
     [InlineData(Key.T, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CreateTable)]
     [InlineData(Key.L, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.CreateTable)]
@@ -379,7 +380,6 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.System, Key.F12, ModifierKeys.Alt)]
     [InlineData(Key.System, Key.F12, ModifierKeys.Shift | ModifierKeys.Alt)]
     [InlineData(Key.System, Key.Apps, ModifierKeys.Alt)]
-    [InlineData(Key.Back, Key.None, ModifierKeys.Alt)]
     [InlineData(Key.Back, Key.None, ModifierKeys.Alt | ModifierKeys.Shift)]
     public void TryGetCommandShortcut_DoesNotStealExtraModifierCombinations(Key key, Key systemKey, ModifierKeys modifiers)
     {

@@ -9,6 +9,7 @@
     <SolidColorBrush x:Key="FreeXTitleBarButtonBorderBrush" Color="#55FFFFFF"/>
     <SolidColorBrush x:Key="FreeXAccentSoftBrush" Color="#E6F6FA"/>
     <SolidColorBrush x:Key="FreeXAccentPressedBrush" Color="#CCEAF2"/>
+    <SolidColorBrush x:Key="FreeXRibbonButtonHoverBrush" Color="#BEE6FD"/>
     <SolidColorBrush x:Key="FreeXTextBrush" Color="#1F1F1F"/>
     <SolidColorBrush x:Key="FreeXMutedTextBrush" Color="#5F6368"/>
     <SolidColorBrush x:Key="FreeXSubtleTextBrush" Color="#767676"/>

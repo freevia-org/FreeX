@@ -15,6 +15,54 @@ namespace FreeX.App.Host.Tests;
 public sealed class MainWindowFormulaBarSyncTests
 {
     [Fact]
+    public void NewWorkbook_SelectsA1AndBindsFormulaBarEditsToA1()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var expected = new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 1),
+                new CellAddress(harness.CurrentSheetId, 1, 1));
+
+            harness.SelectedRange.Should().Be(expected);
+            harness.CellAddressBoxText.Should().Be("A1");
+
+            harness.SetFormulaBarText("fresh value");
+            harness.CommitEdit().Should().BeTrue();
+
+            harness.CellText(1, 1).Should().Be("fresh value");
+            harness.SelectedRange.Should().Be(expected);
+            harness.CellAddressBoxText.Should().Be("A1");
+        });
+    }
+
+    [Fact]
+    public void InsertedSheet_RebindsActiveCellToCurrentSheet()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var firstSheetId = harness.CurrentSheetId;
+
+            harness.SetFormulaBarText("first sheet");
+            harness.CommitEdit().Should().BeTrue();
+            harness.InsertNewSheet();
+
+            harness.CurrentSheetId.Should().NotBe(firstSheetId);
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 1),
+                new CellAddress(harness.CurrentSheetId, 1, 1)));
+            harness.CellAddressBoxText.Should().Be("A1");
+
+            harness.SetFormulaBarText("second sheet");
+            harness.CommitEdit().Should().BeTrue();
+
+            harness.CellText(1, 1, firstSheetId).Should().Be("first sheet");
+            harness.CellText(1, 1, harness.CurrentSheetId).Should().Be("second sheet");
+        });
+    }
+
+    [Fact]
     public void ClearSelection_RefreshesFormulaBarForClearedActiveCell()
     {
         StaTestRunner.Run(() =>
@@ -111,9 +159,12 @@ public sealed class MainWindowFormulaBarSyncTests
     {
         private readonly MainWindow _window;
         private readonly FieldInfo _workbookField;
+        private readonly FieldInfo _currentSheetIdField;
         private readonly FieldInfo _formulaEditCellField;
         private readonly FieldInfo _inlineEditorField;
+        private readonly MethodInfo _commitEdit;
         private readonly MethodInfo _commitEditAcrossSelection;
+        private readonly MethodInfo _insertNewSheet;
         private readonly MethodInfo _setActiveCell;
         private readonly MethodInfo _showInlineEditor;
         private readonly MethodInfo _executeClearSelection;
@@ -124,15 +175,24 @@ public sealed class MainWindowFormulaBarSyncTests
             _workbookField = typeof(MainWindow)
                 .GetField("_workbook", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_workbook");
+            _currentSheetIdField = typeof(MainWindow)
+                .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
             _formulaEditCellField = typeof(MainWindow)
                 .GetField("_formulaEditCell", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_formulaEditCell");
             _inlineEditorField = typeof(MainWindow)
                 .GetField("_inlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_inlineEditor");
+            _commitEdit = typeof(MainWindow)
+                .GetMethod("CommitEdit", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CommitEdit");
             _commitEditAcrossSelection = typeof(MainWindow)
                 .GetMethod("CommitEditAcrossSelection", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "CommitEditAcrossSelection");
+            _insertNewSheet = typeof(MainWindow)
+                .GetMethod("InsertNewSheet", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "InsertNewSheet");
             _setActiveCell = typeof(MainWindow)
                 .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
@@ -146,6 +206,12 @@ public sealed class MainWindowFormulaBarSyncTests
 
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
 
+        public string CellAddressBoxText => ((TextBox)_window.FindName("CellAddressBox")).Text;
+
+        public SheetId CurrentSheetId => (SheetId)_currentSheetIdField.GetValue(_window)!;
+
+        public GridRange? SelectedRange => ((SheetGridView)_window.FindName("SheetGrid")).SelectedRange;
+
         public string? InlineEditorText => InlineEditor?.Text;
 
         public void SetCellText(uint row, uint col, string text)
@@ -154,9 +220,12 @@ public sealed class MainWindowFormulaBarSyncTests
             sheet.SetCell(new CellAddress(sheet.Id, row, col), Cell.FromValue(new TextValue(text)));
         }
 
-        public string? CellText(uint row, uint col)
+        public string? CellText(uint row, uint col) => CellText(row, col, Workbook.Sheets[0].Id);
+
+        public string? CellText(uint row, uint col, SheetId sheetId)
         {
-            var sheet = Workbook.Sheets[0];
+            var sheet = Workbook.GetSheet(sheetId)
+                ?? throw new InvalidOperationException($"Sheet {sheetId} not found.");
             return sheet.GetCell(new CellAddress(sheet.Id, row, col))?.Value is TextValue text
                 ? text.Value
                 : null;
@@ -199,6 +268,19 @@ public sealed class MainWindowFormulaBarSyncTests
             var committed = (bool)_commitEditAcrossSelection.Invoke(_window, [fillFormulaEditCellOnly])!;
             PumpDispatcher();
             return committed;
+        }
+
+        public bool CommitEdit()
+        {
+            var committed = (bool)_commitEdit.Invoke(_window, null)!;
+            PumpDispatcher();
+            return committed;
+        }
+
+        public void InsertNewSheet()
+        {
+            _insertNewSheet.Invoke(_window, null);
+            PumpDispatcher();
         }
 
         public void ShowInlineEditor(uint row, uint col)
