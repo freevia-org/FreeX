@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -41,6 +42,24 @@ public sealed class ScreenshotHarnessScriptTests
         script.Should().Contain("Transient popups, dropdowns, native dialogs, and context menus require separate guarded captures.");
         script.Should().Contain("Ribbon tab captures cover the top window band only.");
         script.Should().Contain("Global input is blocked unless the expected process and window title own the foreground window.");
+    }
+
+    [Fact]
+    public void FreeXScreenshotScript_TabListMatchesRibbonScreenshotTourPlanner()
+    {
+        var script = ReadScript("screenshot_ribbon.ps1");
+        var match = Regex.Match(script, @"\$tabNames\s*=\s*@\((?<tabs>[^)]*)\)");
+
+        match.Success.Should().BeTrue("the guarded FreeX screenshot harness should declare an explicit tab sweep");
+
+        var scriptTabs = Regex
+            .Matches(match.Groups["tabs"].Value, "\"(?<tab>[^\"]+)\"")
+            .Select(item => item.Groups["tab"].Value)
+            .ToArray();
+
+        scriptTabs.Should().Equal(
+            RibbonScreenshotTourPlanner.DefaultTabs.Select(tab => tab.Header),
+            "the foreground-gated PowerShell harness should not drift from the CI-safe in-app ribbon tour");
     }
 
     [Theory]

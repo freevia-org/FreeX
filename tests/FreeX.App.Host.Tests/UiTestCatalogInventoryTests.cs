@@ -135,6 +135,22 @@ public sealed partial class UiTestCatalogInventoryTests
         catalog.Should().Contain("Continue expanding the source-based machine-readable inventory guard");
     }
 
+    [Fact]
+    public void ScreenshotHarnessCatalogRow_DocumentsInAppRibbonTourPath()
+    {
+        var catalog = File.ReadAllText(WorkspaceFileLocator.Find("docs", "UI_TEST_CATALOG.md"));
+        var row = catalog
+            .Split(Environment.NewLine)
+            .Single(line => line.StartsWith("| UI-CMD-HARNESS-001 |", StringComparison.Ordinal));
+        var plannedCaptureCount = RibbonScreenshotTourPlanner.DefaultTabs.Count *
+                                  RibbonScreenshotTourPlanner.DefaultWidths.Count;
+
+        row.Should().Contain("FREEX_SS_TOUR=1");
+        row.Should().Contain("FREEX_SS_TOUR_TABS");
+        row.Should().Contain("FREEX_SS_TOUR_WIDTHS");
+        row.Should().Contain($"{plannedCaptureCount} planned captures");
+    }
+
     [Theory]
     [InlineData("screenshot_excel.ps1")]
     [InlineData("screenshot_ribbon.ps1")]

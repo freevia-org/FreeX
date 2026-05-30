@@ -34,6 +34,20 @@ public sealed class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void DefaultTabs_MatchVisibleRibbonCatalogExceptBackstageAndContextualTabs()
+    {
+        var expectedTabs = RibbonXamlCatalogSnapshotReader.ReadMainWindow()
+            .VisibleTabs
+            .Select(tab => tab.Header)
+            .Where(header => header != "File")
+            .ToArray();
+
+        RibbonScreenshotTourPlanner.DefaultTabs.Select(tab => tab.Header)
+            .Should()
+            .Equal(expectedTabs);
+    }
+
+    [Fact]
     public void DefaultWidths_CoverRepresentativeRibbonWidths()
     {
         RibbonScreenshotTourPlanner.DefaultWidths
@@ -145,6 +159,10 @@ public sealed class RibbonScreenshotTourPlannerTests
 
         plan.Tabs.Should().Equal(RibbonScreenshotTourPlanner.DefaultTabs);
         plan.Widths.Should().Equal(RibbonScreenshotTourPlanner.DefaultWidths);
+        plan.Captures.Should().HaveCount(
+            RibbonScreenshotTourPlanner.DefaultTabs.Count *
+            RibbonScreenshotTourPlanner.DefaultWidths.Count);
+        plan.Captures.Should().OnlyHaveUniqueItems(capture => capture.FileName);
         plan.Captures
             .Select(capture => $"{capture.Width.Label}:{capture.Tab.Header}:{capture.FileName}")
             .Should()
