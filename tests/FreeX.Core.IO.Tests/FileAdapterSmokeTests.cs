@@ -21448,6 +21448,54 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_FreshSave_RoundTripsStructuredTableCustomStyleNameAndOptions()
+    {
+        var workbook = CreateStructuredTableWorkbook("StructuredTableCustomStyleOptionsTest");
+        var sheet = workbook.GetSheetAt(0);
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            HasAutoFilter = true,
+            StyleName = "CorporateLedger",
+            ShowFirstColumn = true,
+            ShowRowStripes = true,
+            ShowColumnStripes = true
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Category"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        sheet.StructuredTables.Add(table);
+
+        var saved = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var tableXml = LoadPackageXml(archive.GetEntry("xl/tables/table1.xml")!);
+            var styleInfo = tableXml.Root!.Element(workbookNs + "tableStyleInfo");
+            styleInfo.Should().NotBeNull();
+            styleInfo!.Attribute("name")!.Value.Should().Be("CorporateLedger");
+            styleInfo.Attribute("showFirstColumn")!.Value.Should().Be("1");
+            styleInfo.Attribute("showLastColumn")!.Value.Should().Be("0");
+            styleInfo.Attribute("showRowStripes")!.Value.Should().Be("1");
+            styleInfo.Attribute("showColumnStripes")!.Value.Should().Be("1");
+        }
+
+        saved.Position = 0;
+        var roundTrippedTable = adapter.Load(saved).GetSheetAt(0).StructuredTables.Should().ContainSingle().Subject;
+        roundTrippedTable.StyleName.Should().Be("CorporateLedger");
+        roundTrippedTable.ShowFirstColumn.Should().BeTrue();
+        roundTrippedTable.ShowLastColumn.Should().BeFalse();
+        roundTrippedTable.ShowRowStripes.Should().BeTrue();
+        roundTrippedTable.ShowColumnStripes.Should().BeTrue();
+    }
+
+    [Fact]
     public void XlsxAdapter_FreshSave_PreservesStructuredTableNativeStyleInfoWithoutNamedStyle()
     {
         var workbook = CreateStructuredTableWorkbook("StructuredTableNativeStyleInfoOnlyTest");

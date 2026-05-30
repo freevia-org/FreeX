@@ -130,7 +130,66 @@ public sealed record StructuredTableStyleBanding(
     CellColor HeaderFill,
     CellColor OddRowFill,
     CellColor EvenRowFill,
-    CellColor HeaderFontColor);
+    CellColor HeaderFontColor,
+    CellColor? BodyFill = null)
+{
+    public CellColor EffectiveBodyFill => BodyFill ?? CellColor.White;
+
+    internal static StructuredTableStyleBanding CaptureCurrent(Workbook workbook, Sheet sheet, StructuredTableModel table)
+    {
+        var hasHeaderRow = table.HeaderRowCount is null or > 0;
+        var hasTotalsRow = table.TotalsRowShown;
+        var dataStartRow = table.Range.Start.Row + (hasHeaderRow ? 1u : 0u);
+        var dataEndRow = table.Range.End.Row - (hasTotalsRow && table.Range.End.Row > table.Range.Start.Row ? 1u : 0u);
+        var bodyFill = dataStartRow <= dataEndRow
+            ? SampleRowFill(workbook, sheet, dataStartRow, table.Range.Start.Col, table.Range.End.Col)
+            : CellColor.White;
+        var oddRowFill = dataStartRow < dataEndRow
+            ? SampleRowFill(workbook, sheet, dataStartRow + 1, table.Range.Start.Col, table.Range.End.Col)
+            : bodyFill;
+        var headerStyle = hasHeaderRow
+            ? SampleRowStyle(workbook, sheet, table.Range.Start.Row, table.Range.Start.Col, table.Range.End.Col)
+            : null;
+
+        return new StructuredTableStyleBanding(
+            headerStyle?.FillColor ?? bodyFill,
+            oddRowFill,
+            bodyFill,
+            headerStyle?.FontColor ?? CellColor.Black,
+            bodyFill);
+    }
+
+    private static CellStyle? SampleRowStyle(Workbook workbook, Sheet sheet, uint row, uint startCol, uint endCol)
+    {
+        for (var col = startCol; col <= endCol; col++)
+        {
+            if (sheet.GetCell(row, col) is { } cell)
+                return workbook.GetStyle(cell.StyleId);
+        }
+
+        return null;
+    }
+
+    private static CellColor SampleRowFill(Workbook workbook, Sheet sheet, uint row, uint startCol, uint endCol)
+    {
+        var fills = new Dictionary<CellColor, int>();
+        for (var col = startCol; col <= endCol; col++)
+        {
+            var fill = sheet.GetCell(row, col) is { } cell
+                ? workbook.GetStyle(cell.StyleId).FillColor ?? CellColor.White
+                : CellColor.White;
+            fills[fill] = fills.TryGetValue(fill, out var count) ? count + 1 : 1;
+        }
+
+        return fills
+            .OrderByDescending(pair => pair.Value)
+            .ThenBy(pair => pair.Key.R)
+            .ThenBy(pair => pair.Key.G)
+            .ThenBy(pair => pair.Key.B)
+            .FirstOrDefault()
+            .Key;
+    }
+}
 
 public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
 {
@@ -251,7 +310,7 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
                 var rowOffset = row - dataStartRow;
                 var fill = table.ShowRowStripes
                     ? rowOffset % 2 == 0 ? _banding.EvenRowFill : _banding.OddRowFill
-                    : CellColor.White;
+                    : _banding.EffectiveBodyFill;
                 yield return CreateRangeStyleCommand(
                     row,
                     table.Range.Start.Col,
@@ -327,6 +386,71 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand
         _appliedStyleCommands.Clear();
         _configureCommand?.Revert(ctx);
         _configureCommand = null;
+    }
+}
+
+public sealed class ReapplyStructuredTableStyleCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly int _tableId;
+    private readonly bool? _showFirstColumn;
+    private readonly bool? _showLastColumn;
+    private readonly bool? _showRowStripes;
+    private readonly bool? _showColumnStripes;
+    private readonly bool? _hasAutoFilter;
+    private ApplyStructuredTableStyleCommand? _applyStyleCommand;
+
+    public string Label => "Reapply Table Style";
+
+    public ReapplyStructuredTableStyleCommand(
+        SheetId sheetId,
+        int tableId,
+        bool? showFirstColumn = null,
+        bool? showLastColumn = null,
+        bool? showRowStripes = null,
+        bool? showColumnStripes = null,
+        bool? hasAutoFilter = null)
+    {
+        _sheetId = sheetId;
+        _tableId = tableId;
+        _showFirstColumn = showFirstColumn;
+        _showLastColumn = showLastColumn;
+        _showRowStripes = showRowStripes;
+        _showColumnStripes = showColumnStripes;
+        _hasAutoFilter = hasAutoFilter;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        _applyStyleCommand = null;
+        var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
+            return protectedOutcome;
+
+        var table = sheet.StructuredTables.FirstOrDefault(candidate => candidate.Id == _tableId);
+        if (table is null)
+            return new CommandOutcome(false, "Table was not found.");
+
+        _applyStyleCommand = new ApplyStructuredTableStyleCommand(
+            _sheetId,
+            _tableId,
+            StructuredTableStyleBanding.CaptureCurrent(ctx.Workbook, sheet, table),
+            showFirstColumn: _showFirstColumn,
+            showLastColumn: _showLastColumn,
+            showRowStripes: _showRowStripes,
+            showColumnStripes: _showColumnStripes,
+            hasAutoFilter: _hasAutoFilter);
+        var outcome = _applyStyleCommand.Apply(ctx);
+        if (!outcome.Success)
+            _applyStyleCommand = null;
+
+        return outcome;
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        _applyStyleCommand?.Revert(ctx);
+        _applyStyleCommand = null;
     }
 }
 
