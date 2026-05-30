@@ -371,7 +371,7 @@ public sealed class SelectionPanePlannerTests
             "SelectionPaneDialog.Planning.cs"));
 
         source.Should().Contain("private static (int DraggedIndex, int TargetIndex) FindDragIndexes");
-        source.Should().Contain("var dragPlan = CreateDragMovePlan(items, draggedId, targetId);");
+        source.Should().Contain("var dragPlan = CreateDragMovePlan(items, draggedId, targetId, placement);");
         source.Should().NotContain("items.Select(item => (item.Kind, item.Id)).ToList()");
         source.Should().NotContain("var draggedIndex = FindIndex(items, draggedId);");
         source.Should().NotContain("var targetIndex = FindIndex(items, targetId);");
