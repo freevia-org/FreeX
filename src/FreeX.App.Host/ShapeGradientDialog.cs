@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeX.Core.Model;
 
@@ -31,6 +32,18 @@ public sealed class ShapeGradientDialog : Window
         ShowInTaskbar = false;
         _startColorBox.Text = FormatColor(_startColor);
         _endColorBox.Text = FormatColor(_endColor);
+        AutomationProperties.SetName(_startColorBox, "Start gradient color");
+        AutomationProperties.SetAutomationId(_startColorBox, "ShapeGradientStartColorBox");
+        AutomationProperties.SetHelpText(_startColorBox, "Enter the first gradient stop color as R,G,B.");
+        AutomationProperties.SetName(_endColorBox, "End gradient color");
+        AutomationProperties.SetAutomationId(_endColorBox, "ShapeGradientEndColorBox");
+        AutomationProperties.SetHelpText(_endColorBox, "Enter the second gradient stop color as R,G,B.");
+        AutomationProperties.SetName(_startColorButton, "Choose start gradient color");
+        AutomationProperties.SetAutomationId(_startColorButton, "ShapeGradientStartColorButton");
+        AutomationProperties.SetHelpText(_startColorButton, "Open the color picker for the first gradient stop.");
+        AutomationProperties.SetName(_endColorButton, "Choose end gradient color");
+        AutomationProperties.SetAutomationId(_endColorButton, "ShapeGradientEndColorButton");
+        AutomationProperties.SetHelpText(_endColorButton, "Open the color picker for the second gradient stop.");
         _startColorButton.Click += StartColorButton_Click;
         _endColorButton.Click += EndColorButton_Click;
         _startColorBox.TextChanged += (_, _) => SyncGradientTextFromInputs();

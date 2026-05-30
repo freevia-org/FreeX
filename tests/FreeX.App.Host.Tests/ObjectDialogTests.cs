@@ -327,6 +327,41 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ShapeGradientDialog_ColorControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ShapeGradientDialog();
+            try
+            {
+                var startColorBox = GetField<TextBox>(dialog, "_startColorBox");
+                AutomationProperties.GetName(startColorBox).Should().Be("Start gradient color");
+                AutomationProperties.GetAutomationId(startColorBox).Should().Be("ShapeGradientStartColorBox");
+                AutomationProperties.GetHelpText(startColorBox).Should().Be("Enter the first gradient stop color as R,G,B.");
+
+                var endColorBox = GetField<TextBox>(dialog, "_endColorBox");
+                AutomationProperties.GetName(endColorBox).Should().Be("End gradient color");
+                AutomationProperties.GetAutomationId(endColorBox).Should().Be("ShapeGradientEndColorBox");
+                AutomationProperties.GetHelpText(endColorBox).Should().Be("Enter the second gradient stop color as R,G,B.");
+
+                var startColorButton = GetField<Button>(dialog, "_startColorButton");
+                AutomationProperties.GetName(startColorButton).Should().Be("Choose start gradient color");
+                AutomationProperties.GetAutomationId(startColorButton).Should().Be("ShapeGradientStartColorButton");
+                AutomationProperties.GetHelpText(startColorButton).Should().Be("Open the color picker for the first gradient stop.");
+
+                var endColorButton = GetField<Button>(dialog, "_endColorButton");
+                AutomationProperties.GetName(endColorButton).Should().Be("Choose end gradient color");
+                AutomationProperties.GetAutomationId(endColorButton).Should().Be("ShapeGradientEndColorButton");
+                AutomationProperties.GetHelpText(endColorButton).Should().Be("Open the color picker for the second gradient stop.");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void RotationDialog_TryParseRotation_AcceptsNumericDegrees()
     {
         RotationDialog.TryParseRotation("45.5", out var rotation).Should().BeTrue();
