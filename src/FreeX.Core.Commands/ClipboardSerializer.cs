@@ -35,7 +35,7 @@ public static class ClipboardSerializer
 
     private static void AppendTsvCell(StringBuilder sb, string text)
     {
-        if (text.Contains('\t') || text.Contains('\n') || text.Contains('"'))
+        if (text.Contains('\t') || text.Contains('\r') || text.Contains('\n') || text.Contains('"'))
         {
             sb.Append('"');
             sb.Append(text.Replace("\"", "\"\""));

@@ -112,4 +112,25 @@ public class ClipboardTests
 
         Assert.Equal("\"a\nb\"", text);
     }
+
+    [Fact]
+    public void Serialize_CellWithCarriageReturn_QuotesCellForRoundTrip()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("a\rb")));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new TextValue("c")));
+
+        var svc = new ViewportService();
+        var vp = svc.GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        var text = ClipboardSerializer.Serialize(vp, new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 2)));
+
+        Assert.Equal("\"a\rb\"\tc", text);
+        var rows = ClipboardSerializer.Deserialize(text);
+        Assert.Single(rows);
+        Assert.Equal(["a\rb", "c"], rows[0]);
+    }
 }
