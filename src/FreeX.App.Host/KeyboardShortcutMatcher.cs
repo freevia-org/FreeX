@@ -231,6 +231,7 @@ public enum KeyboardCommandShortcut
     RebuildDependenciesAndCalculate,
     ToggleFormulaBarExpansion,
     ToggleFilter,
+    ReapplyFilter,
     QuickAnalysis,
     OpenPrintPreview,
     PasteValues,

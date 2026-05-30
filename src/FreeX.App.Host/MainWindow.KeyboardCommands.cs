@@ -43,6 +43,7 @@ public partial class MainWindow
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.RebuildDependenciesAndCalculate, (_, _) => RebuildDependenciesAndCalculate());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ToggleFormulaBarExpansion, FormulaBarExpandBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ToggleFilter, FilterButton_Click);
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ReapplyFilter, (_, _) => ReapplyAutoFilter());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.QuickAnalysis, (_, _) => ShowQuickAnalysisMenu());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenPrintPreview, (_, _) => OpenPrintBackstage());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.PasteValues, (_, _) => ExecutePaste(PasteMode.Values));
