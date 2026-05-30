@@ -276,11 +276,29 @@ public sealed class GridViewRenderPerformanceTests
 
         renderCells.Should().Contain("GetRenderCellLookups(viewport)");
         rendering.Should().Contain("ReferenceEquals(cached.Viewport, viewport)");
-        rendering.Should().Contain("GetOccupiedCellLookup(viewport, EditingCell)");
+        rendering.Should().Contain("occupied ??= GetOccupiedCellLookup(viewport, EditingCell);");
         cacheSource.Should().Contain("private sealed record RenderCellLookupCache");
         cacheSource.Should().Contain("private sealed record OccupiedCellLookupCache");
         propertiesSource.Should().Contain("OnViewportChanged");
         propertiesSource.Should().Contain("grid.ClearRenderLookupCache();");
+    }
+
+    [Fact]
+    public void RenderCells_LazilyBuildsOverflowOccupancyLookup()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var textPass = source[
+            source.IndexOf("// Pass 3: text", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderCellBackgroundBase", StringComparison.Ordinal)];
+        var setup = textPass[..textPass.IndexOf("foreach (var cell in viewport.Cells)", StringComparison.Ordinal)];
+        var overflowBlock = textPass[
+            textPass.IndexOf("if (canOverflow)", StringComparison.Ordinal)..
+            textPass.IndexOf("var typeface = CreateCellTypeface", StringComparison.Ordinal)];
+
+        setup.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
+        setup.Should().NotContain("GetOccupiedCellLookup(viewport, EditingCell)");
+        overflowBlock.Should().Contain("occupied ??= GetOccupiedCellLookup(viewport, EditingCell);");
+        overflowBlock.Should().Contain("!occupied.Contains((cell.Row, nextCol))");
     }
 
     [Fact]

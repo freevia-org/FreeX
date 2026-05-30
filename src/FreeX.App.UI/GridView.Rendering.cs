@@ -427,7 +427,7 @@ public partial class GridView
         var rowLookup = rowLookupAll;
         var colLookup = colLookupAll;
 
-        var occupied = GetOccupiedCellLookup(viewport, EditingCell);
+        HashSet<(uint Row, uint Col)>? occupied = null;
 
         foreach (var cell in viewport.Cells)
         {
@@ -473,6 +473,7 @@ public partial class GridView
 
             if (canOverflow)
             {
+                occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
                 uint nextCol = colMetric.Col + 1;
                 while (colLookup.TryGetValue(nextCol, out var nextMetric)
                        && !occupied.Contains((cell.Row, nextCol)))
