@@ -88,8 +88,19 @@ public sealed class XlsxWorkbookThemeReaderTests
               </a:themeElements>
               <a:objectDefaults>
                 <a:spDef>
-                  <a:spPr><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:spPr>
+                  <a:spPr>
+                    <a:solidFill><a:schemeClr val="accent1"><a:lumMod val="80000"/></a:schemeClr></a:solidFill>
+                    <a:ln w="19050"><a:solidFill><a:srgbClr val="445566"/></a:solidFill></a:ln>
+                  </a:spPr>
                 </a:spDef>
+                <a:lnDef>
+                  <a:spPr><a:ln w="25400"><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></a:ln></a:spPr>
+                </a:lnDef>
+                <a:txDef>
+                  <a:lstStyle>
+                    <a:defRPr><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="Aptos"/></a:defRPr>
+                  </a:lstStyle>
+                </a:txDef>
               </a:objectDefaults>
               <a:extraClrSchemeLst>
                 <a:extraClrScheme>
@@ -113,6 +124,21 @@ public sealed class XlsxWorkbookThemeReaderTests
         theme.NativeThemeSupplementXml.Should().Contain("extraClrSchemeLst");
         theme.NativeThemeSupplementXml.Should().Contain("extLst");
         theme.HasObjectDefaults.Should().BeTrue();
+        theme.ObjectDefaults.Should().NotBeNull();
+        theme.ObjectDefaults!.Shape.Should().Be(new WorkbookThemeShapeObjectDefault(
+            new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, -0.2),
+            null,
+            null,
+            new CellColor(68, 85, 102),
+            1.5));
+        theme.ObjectDefaults.Line.Should().Be(new WorkbookThemeLineObjectDefault(
+            new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            null,
+            2));
+        theme.ObjectDefaults.Text.Should().Be(new WorkbookThemeTextObjectDefault(
+            new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
+            null,
+            "Aptos"));
         theme.AlternateColorSchemes.Should().ContainSingle()
             .Which.Should().Match<WorkbookThemeAlternateColorScheme>(scheme =>
                 scheme.Name == "Alternate Colors" &&
@@ -134,6 +160,42 @@ public sealed class XlsxWorkbookThemeReaderTests
         savedXml.Should().Contain("extraClrSchemeLst");
         savedXml.Should().Contain("Alternate Colors");
         savedXml.Should().Contain("compatExt spid=\"1\"");
+    }
+
+    [Fact]
+    public void Save_WritesModeledObjectDefaultsWhenSupplementXmlIsMissing()
+    {
+        using var package = CreatePackage();
+        var theme = WorkbookTheme.Office.WithSupplementalMetadata(
+            alternateColorSchemes: [],
+            hasObjectDefaults: true,
+            objectDefaults: new WorkbookThemeObjectDefaults(
+                new WorkbookThemeShapeObjectDefault(
+                    FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.25),
+                    OutlineThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4),
+                    OutlineWidthPoints: 1.25),
+                new WorkbookThemeLineObjectDefault(
+                    StrokeColor: new CellColor(10, 20, 30),
+                    StrokeWidthPoints: 2.5),
+                new WorkbookThemeTextObjectDefault(
+                    TextThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
+                    Typeface: "Aptos")));
+
+        XlsxWorkbookThemeWriter.Save(package, theme);
+        package.Position = 0;
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: false);
+        using var reader = new StreamReader(archive.GetEntry("xl/theme/theme1.xml")!.Open());
+        var savedXml = reader.ReadToEnd();
+
+        savedXml.Should().Contain("objectDefaults");
+        savedXml.Should().Contain("spDef");
+        savedXml.Should().Contain("schemeClr val=\"accent3\"");
+        savedXml.Should().Contain("lumOff val=\"25000\"");
+        savedXml.Should().Contain("ln w=\"15875\"");
+        savedXml.Should().Contain("srgbClr val=\"0A141E\"");
+        savedXml.Should().Contain("txDef");
+        savedXml.Should().Contain("typeface=\"Aptos\"");
     }
 
     [Fact]

@@ -52,6 +52,7 @@ public sealed partial class NativeJsonAdapter
         public string? NativeFormatSchemeXml { get; set; }
         public string? NativeThemeSupplementXml { get; set; }
         public bool HasObjectDefaults { get; set; }
+        public WorkbookThemeObjectDefaultsDto? ObjectDefaults { get; set; }
         public List<WorkbookThemeAlternateColorSchemeDto> AlternateColorSchemes { get; set; } = [];
         public List<WorkbookThemeColorDto> Colors { get; set; } = [];
     }
@@ -61,6 +62,37 @@ public sealed partial class NativeJsonAdapter
         public string? Name { get; set; }
         public string? NativeColorSchemeXml { get; set; }
         public List<WorkbookThemeColorDto> Colors { get; set; } = [];
+    }
+
+    private class WorkbookThemeObjectDefaultsDto
+    {
+        public WorkbookThemeShapeObjectDefaultDto? Shape { get; set; }
+        public WorkbookThemeLineObjectDefaultDto? Line { get; set; }
+        public WorkbookThemeTextObjectDefaultDto? Text { get; set; }
+        public string? NativeObjectDefaultsXml { get; set; }
+    }
+
+    private class WorkbookThemeShapeObjectDefaultDto
+    {
+        public ThemeColorReferenceDto? FillThemeColor { get; set; }
+        public string? FillColor { get; set; }
+        public ThemeColorReferenceDto? OutlineThemeColor { get; set; }
+        public string? OutlineColor { get; set; }
+        public double? OutlineWidthPoints { get; set; }
+    }
+
+    private class WorkbookThemeLineObjectDefaultDto
+    {
+        public ThemeColorReferenceDto? StrokeThemeColor { get; set; }
+        public string? StrokeColor { get; set; }
+        public double? StrokeWidthPoints { get; set; }
+    }
+
+    private class WorkbookThemeTextObjectDefaultDto
+    {
+        public ThemeColorReferenceDto? TextThemeColor { get; set; }
+        public string? TextColor { get; set; }
+        public string? Typeface { get; set; }
     }
 
     private class WorkbookThemeColorDto

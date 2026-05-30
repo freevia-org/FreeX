@@ -54,9 +54,19 @@ public sealed class WorkbookThemeTests
                 [WorkbookThemeColorSlot.Accent1] = new(1, 2, 3)
             });
 
-        var theme = WorkbookTheme.Office.WithSupplementalMetadata([alternate], hasObjectDefaults: true);
+        var objectDefaults = new WorkbookThemeObjectDefaults(
+            Shape: new WorkbookThemeShapeObjectDefault(
+                FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+                OutlineWidthPoints: 1.5));
+
+        var theme = WorkbookTheme.Office.WithSupplementalMetadata(
+            [alternate],
+            hasObjectDefaults: true,
+            objectDefaults);
 
         theme.HasObjectDefaults.Should().BeTrue();
+        theme.ObjectDefaults.Should().Be(objectDefaults);
+        theme.ObjectDefaults!.HasModeledDefaults.Should().BeTrue();
         theme.AlternateColorSchemes.Should().ContainSingle()
             .Which.GetColor(WorkbookThemeColorSlot.Accent1)
             .Should().Be(new CellColor(1, 2, 3));
