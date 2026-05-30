@@ -156,26 +156,54 @@ public partial class MainWindow
         bool? hasAutoFilter = null,
         bool? totalsRowShown = null)
     {
-        IWorkbookCommand command = TableStyleGalleryPlanner.TryGetOption(table.StyleName, out var option)
-            ? new ApplyStructuredTableStyleCommand(
-                _currentSheetId,
-                table.Id,
-                option.Banding,
-                showFirstColumn: showFirstColumn,
-                showLastColumn: showLastColumn,
-                showRowStripes: showRowStripes,
-                showColumnStripes: showColumnStripes,
-                hasAutoFilter: hasAutoFilter,
-                totalsRowShown: totalsRowShown)
-            : new ConfigureStructuredTableStyleOptionsCommand(
+        var commands = new List<IWorkbookCommand>();
+        var totalsRowChanged = false;
+        if (totalsRowShown is { } showTotals && showTotals != table.TotalsRowShown)
+        {
+            totalsRowChanged = true;
+            commands.Add(new SetStructuredTableTotalsRowCommand(_currentSheetId, table.Id, showTotals));
+        }
+
+        var styleOptionChanged =
+            showFirstColumn.HasValue ||
+            showLastColumn.HasValue ||
+            showRowStripes.HasValue ||
+            showColumnStripes.HasValue ||
+            hasAutoFilter.HasValue;
+
+        if (TableStyleGalleryPlanner.TryGetOption(table.StyleName, out var option))
+        {
+            if (styleOptionChanged || totalsRowChanged)
+            {
+                commands.Add(new ApplyStructuredTableStyleCommand(
+                    _currentSheetId,
+                    table.Id,
+                    option.Banding,
+                    showFirstColumn: showFirstColumn,
+                    showLastColumn: showLastColumn,
+                    showRowStripes: showRowStripes,
+                    showColumnStripes: showColumnStripes,
+                    hasAutoFilter: hasAutoFilter));
+            }
+        }
+        else if (styleOptionChanged)
+        {
+            commands.Add(new ConfigureStructuredTableStyleOptionsCommand(
                 _currentSheetId,
                 table.Id,
                 showFirstColumn ?? table.ShowFirstColumn,
                 showLastColumn ?? table.ShowLastColumn,
                 showRowStripes ?? table.ShowRowStripes,
                 showColumnStripes ?? table.ShowColumnStripes,
-                hasAutoFilter: hasAutoFilter,
-                totalsRowShown: totalsRowShown);
+                hasAutoFilter: hasAutoFilter));
+        }
+
+        if (commands.Count == 0)
+            return;
+
+        var command = commands.Count == 1
+            ? commands[0]
+            : new CompositeWorkbookCommand("Table Style Options", commands);
 
         if (!TryExecuteCommand(command, "Table Style Options"))
             return;
