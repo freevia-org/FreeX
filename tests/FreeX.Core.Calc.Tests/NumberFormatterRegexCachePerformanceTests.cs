@@ -37,6 +37,26 @@ public sealed class NumberFormatterRegexCachePerformanceTests
         dateTimeSource.Should().NotContain(".Any(section => section.Condition");
     }
 
+    [Fact]
+    public void HotNumberFormatColorMapping_AvoidsUppercaseNormalizedTokenAllocations()
+    {
+        var colorSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "NumberFormatColorMapper.cs"));
+
+        colorSource.Should().Contain("TokenEqualsIgnoringWhitespace(token, \"THEMEACCENT1\")");
+        colorSource.Should().Contain("TokenStartsWithIgnoringWhitespace(token, \"THEME\")");
+        colorSource.Should().Contain("StringComparison.OrdinalIgnoreCase");
+        colorSource.Should().NotContain(
+            "ToUpperInvariant() switch",
+            "named color mapping should compare directly instead of allocating an uppercase token copy");
+        colorSource.Should().NotContain(
+            "ColorTokenWhitespaceRegex",
+            "theme color directives should skip whitespace while comparing instead of regex-normalizing each token");
+        colorSource.Should().NotContain(
+            "NormalizeToken(",
+            "theme color directives should avoid allocating normalized token strings on number-format hot paths");
+    }
+
     private const string StaticRegexCallPattern = @"\bRegex\.(?:Match|IsMatch|Replace)\s*\(";
 
     private static string FindWorkspaceFile(params string[] relativeParts)
