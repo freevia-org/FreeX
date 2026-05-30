@@ -20,7 +20,7 @@ public sealed class RibbonTopLevelKeyTipRouterTests
     [InlineData("JD", RibbonTopLevelKeyTipActionKind.RibbonTab, "Design")]
     public void Resolve_MapsExcelStyleTopLevelKeyTips(string keyTip, RibbonTopLevelKeyTipActionKind kind, string? header)
     {
-        var action = RibbonTopLevelKeyTipRouter.Resolve(keyTip);
+        var action = RibbonTopLevelKeyTipRouter.Resolve(keyTip, AllCatalogEntries());
 
         action.Should().NotBeNull();
         action!.Value.Kind.Should().Be(kind);
@@ -30,10 +30,37 @@ public sealed class RibbonTopLevelKeyTipRouterTests
     [Fact]
     public void Resolve_NormalizesCaseAndRejectsUnknownKeyTips()
     {
-        RibbonTopLevelKeyTipRouter.Resolve("h")!.Value.RibbonTabHeader.Should().Be("Home");
-        RibbonTopLevelKeyTipRouter.Resolve(" h ")!.Value.RibbonTabHeader.Should().Be("Home");
-        RibbonTopLevelKeyTipRouter.Resolve("ZZ").Should().BeNull();
-        RibbonTopLevelKeyTipRouter.Resolve("").Should().BeNull();
+        var entries = AllCatalogEntries();
+
+        RibbonTopLevelKeyTipRouter.Resolve("h", entries)!.Value.RibbonTabHeader.Should().Be("Home");
+        RibbonTopLevelKeyTipRouter.Resolve(" h ", entries)!.Value.RibbonTabHeader.Should().Be("Home");
+        RibbonTopLevelKeyTipRouter.Resolve("ZZ", entries).Should().BeNull();
+        RibbonTopLevelKeyTipRouter.Resolve("", entries).Should().BeNull();
+    }
+
+    [Fact]
+    public void Resolve_UsesCandidateCatalogAndRoutesContextualTabsOnlyWhenVisible()
+    {
+        var visibleEntries = VisibleCatalogEntries();
+
+        RibbonTopLevelKeyTipRouter.Resolve("J", visibleEntries)!.Value.RibbonTabHeader.Should().Be("Draw");
+        RibbonTopLevelKeyTipRouter.Resolve("JA", visibleEntries).Should().BeNull(
+            "hidden contextual tabs should not route from top-level keytip mode");
+
+        RibbonTopLevelKeyTipRouter.Resolve("JA", AllCatalogEntries())!.Value.RibbonTabHeader.Should().Be("PivotTable Analyze");
+        RibbonTopLevelKeyTipRouter.Resolve("JD", AllCatalogEntries())!.Value.RibbonTabHeader.Should().Be("Design");
+    }
+
+    [Fact]
+    public void Resolve_PreservesLegacyAltDDataAliasOnlyWhenDataTabCandidateExists()
+    {
+        RibbonTopLevelKeyTipRouter.Resolve("D", VisibleCatalogEntries())!.Value.RibbonTabHeader.Should().Be("Data");
+
+        RibbonTopLevelKeyTipRouter.Resolve(
+                "D",
+                [new RibbonTopLevelKeyTipEntry("Draw", "J")])
+            .Should()
+            .BeNull();
     }
 
     [Theory]
@@ -66,4 +93,15 @@ public sealed class RibbonTopLevelKeyTipRouterTests
             .Should()
             .BeFalse("ordinary top-level keytips should route when no visible longer prefix exists");
     }
+
+    private static IReadOnlyList<RibbonTopLevelKeyTipEntry> VisibleCatalogEntries() =>
+        EntriesFrom(RibbonXamlCatalogSnapshotReader.ReadMainWindow().VisibleTabs);
+
+    private static IReadOnlyList<RibbonTopLevelKeyTipEntry> AllCatalogEntries() =>
+        EntriesFrom(RibbonXamlCatalogSnapshotReader.ReadMainWindow().Tabs);
+
+    private static IReadOnlyList<RibbonTopLevelKeyTipEntry> EntriesFrom(IEnumerable<RibbonTabDefinition> tabs) =>
+        tabs
+            .Select(tab => new RibbonTopLevelKeyTipEntry(tab.Header, tab.KeyTip))
+            .ToArray();
 }
