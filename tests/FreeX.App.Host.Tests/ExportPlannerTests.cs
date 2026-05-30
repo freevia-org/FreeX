@@ -1254,6 +1254,38 @@ public class ExportPlannerTests
     }
 
     [Fact]
+    public void PdfDocumentExporter_WritesVisualHostGeometryAsVectorContent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            var document = CreateVectorGeometryDocument();
+
+            try
+            {
+                PdfDocumentExporter.Save(
+                    document,
+                    path,
+                    null,
+                    null,
+                    includeSelectableText: true);
+
+                using var pdf = PdfReader.Open(path, PdfDocumentOpenMode.Import);
+                var content = ReadDecodedPageContent(pdf.Pages[0]);
+                content.Should().Contain("15 72 m");
+                content.Should().Contain("45 57 l");
+                content.Should().Contain("B*");
+                content.Should().Contain("1 0 0 rg");
+                content.Should().Contain("0 0 1 RG");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        });
+    }
+
+    [Fact]
     public void PdfDocumentExporter_WritesLinkAnnotationsForPrintedWorksheetHyperlinks()
     {
         StaTestRunner.Run(() =>
@@ -2624,6 +2656,18 @@ public class ExportPlannerTests
         ];
     }
 
+    private static string ReadDecodedPageContent(PdfPage page)
+    {
+        var builder = new StringBuilder();
+        foreach (var content in page.Contents)
+        {
+            if (content.Stream?.Value is { } bytes)
+                builder.Append(Encoding.ASCII.GetString(bytes));
+        }
+
+        return builder.ToString();
+    }
+
     private static PdfDictionary? ResolveDictionary(PdfItem item)
     {
         return item switch
@@ -2632,6 +2676,36 @@ public class ExportPlannerTests
             PdfReference reference => reference.Value as PdfDictionary,
             _ => null
         };
+    }
+
+    private static FixedDocument CreateVectorGeometryDocument()
+    {
+        var document = new FixedDocument();
+        document.DocumentPaginator.PageSize = new System.Windows.Size(160, 120);
+        var page = new FixedPage
+        {
+            Width = 160,
+            Height = 120,
+            Background = Brushes.White
+        };
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            dc.DrawGeometry(
+                Brushes.Red,
+                new System.Windows.Media.Pen(Brushes.Blue, 2),
+                new RectangleGeometry(new Rect(8, 10, 40, 20)));
+        }
+
+        var host = new VisualHost { Visual = visual };
+        Canvas.SetLeft(host, 12);
+        Canvas.SetTop(host, 14);
+        page.Children.Add(host);
+
+        var content = new PageContent();
+        ((IAddChild)content).AddChild(page);
+        document.Pages.Add(content);
+        return document;
     }
 
     private static FixedDocument CreateNestedTextDocument()
