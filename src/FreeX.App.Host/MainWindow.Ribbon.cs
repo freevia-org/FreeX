@@ -244,6 +244,24 @@ public partial class MainWindow
                     "custom views",
             "ViewZoomGroup" =>
                 normalizedCommandName is "zoom" or "100%" or "zoom to selection",
+            "PageLayoutThemesGroup" =>
+                normalizedCommandName is "themes" or
+                    "theme colors" or
+                    "theme fonts" or
+                    "theme effects",
+            "PageLayoutScaleToFitGroup" =>
+                normalizedCommandName is "scale to fit",
+            "FormulasFunctionLibraryGroup" =>
+                normalizedCommandName is "insert function" or "autosum",
+            "FormulasDefinedNamesGroup" =>
+                normalizedCommandName is "name manager" or
+                    "define name" or
+                    "use in formula" or
+                    "create from selection",
+            "FormulasCalculationGroup" =>
+                normalizedCommandName is "calculate now" or
+                    "calculate sheet" or
+                    "calculation options",
             _ => false
         };
     }
