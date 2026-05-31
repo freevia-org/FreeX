@@ -649,6 +649,27 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Save_RoundTripsTrailingExplicitEmptyTextField()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("head"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue(""));
+
+        var adapter = new CsvFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("head,\"\"\r\n");
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var loadedSheet = roundTripped.Sheets.Single();
+
+        loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 1)).Should().Be(new TextValue("head"));
+        loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 2)).Should().Be(new TextValue(""));
+    }
+
+    [Fact]
     public void Save_RoundTripsFormulaLikeTextFieldsAsLiteralText()
     {
         var workbook = new Workbook("Book1");
