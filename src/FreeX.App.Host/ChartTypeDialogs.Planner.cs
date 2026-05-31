@@ -42,7 +42,7 @@ public static class ChartTypePickerPlanner
     ];
 
     public static IReadOnlyList<ChartTypePickerOption> GetSupportedOptions() =>
-        Options.Where(option => ChartTypeSupport.IsRenderable(option.Type)).ToList();
+        Options.Where(option => ChartAuthoringPlanner.CanAuthor(option.Type)).ToList();
 
     public static IReadOnlyList<ChartTypePickerOption> GetRecommendedOptions() =>
         new[]
@@ -54,7 +54,7 @@ public static class ChartTypePickerPlanner
             ChartType.Scatter
         }
         .Select(type => Options.Single(option => option.Type == type))
-        .Where(option => option.IsRecommended && ChartTypeSupport.IsRenderable(option.Type))
+        .Where(option => option.IsRecommended && ChartAuthoringPlanner.CanAuthor(option.Type))
         .ToList();
 
     public static IReadOnlyList<ChartTypePickerCategory> GetCategories()

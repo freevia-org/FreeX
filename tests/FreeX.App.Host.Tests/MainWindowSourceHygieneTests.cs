@@ -1879,7 +1879,7 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("Click=\"ChartLineMenuItem_Click\"");
         xaml.Should().Contain("Click=\"ChartPieMenuItem_Click\"");
         source.Should().Contain("private void InsertChartOfType(ChartType type)");
-        source.Should().Contain("ChartTypeSupport.IsRenderable(type)");
+        source.Should().Contain("ChartAuthoringPlanner.CanAuthor(type)");
         source.Should().Contain("new AddChartCommand(_currentSheetId, currentRange, type, \"Chart\")");
         source.Should().Contain("UpdateViewport();");
     }

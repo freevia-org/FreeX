@@ -32,8 +32,8 @@ public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
             return new CommandOutcome(false, "PivotChart was not found.");
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
             return new CommandOutcome(false, "Selected chart is not a PivotChart.");
-        if (!ChartTypeSupport.IsRenderable(_chartType))
-            return new CommandOutcome(false, "This chart family is recognized for XLSX preservation but cannot be authored yet.");
+        if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
+            return unsupportedOutcome;
 
         _previousType = chart.Type;
         _previousFirstColIsCategories = chart.FirstColIsCategories;
@@ -142,8 +142,8 @@ public sealed class ChangeChartTypeCommand : IWorkbookCommand
             return new CommandOutcome(false, "Chart was not found.");
         if (chart.IsPivotChart)
             return new CommandOutcome(false, "Selected chart is a PivotChart.");
-        if (!ChartTypeSupport.IsRenderable(_chartType))
-            return new CommandOutcome(false, "This chart family is recognized for XLSX preservation but cannot be authored yet.");
+        if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
+            return unsupportedOutcome;
 
         var firstColIsCategories = _chartType is not (ChartType.Scatter or ChartType.Bubble);
         if (!HasUsableChartData(_chartType, chart.DataRange, chart.FirstRowIsHeader, firstColIsCategories))

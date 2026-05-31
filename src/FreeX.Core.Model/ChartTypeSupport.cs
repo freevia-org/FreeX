@@ -4,6 +4,31 @@ public static class ChartTypeSupport
 {
     public static bool IsKnown(ChartType type) => Enum.IsDefined(type);
 
+    public static bool IsAdvancedFamily(ChartType type) =>
+        type is ChartType.Treemap
+            or ChartType.Sunburst
+            or ChartType.Histogram
+            or ChartType.Pareto
+            or ChartType.BoxAndWhisker
+            or ChartType.Waterfall
+            or ChartType.Funnel
+            or ChartType.Map;
+
+    public static bool IsChartExFamily(ChartType type) =>
+        type is ChartType.Treemap
+            or ChartType.Sunburst
+            or ChartType.Histogram
+            or ChartType.Pareto
+            or ChartType.BoxAndWhisker
+            or ChartType.Waterfall
+            or ChartType.Funnel;
+
+    public static bool IsAuthorable(ChartType type) =>
+        IsRenderable(type);
+
+    public static bool IsDeferredAuthoringFamily(ChartType type) =>
+        IsKnown(type) && !IsAuthorable(type);
+
     public static bool IsRenderable(ChartType type) =>
         type is ChartType.Column
             or ChartType.StackedColumn

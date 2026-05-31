@@ -78,6 +78,8 @@ public sealed class XlsxChartPartReaderTests
 
         chart.Type.Should().Be(ChartType.Map);
         ChartTypeSupport.IsRenderable(chart.Type).Should().BeFalse();
+        ChartTypeSupport.IsAuthorable(chart.Type).Should().BeFalse();
+        ChartTypeSupport.IsDeferredAuthoringFamily(chart.Type).Should().BeTrue();
     }
 
     [Theory]

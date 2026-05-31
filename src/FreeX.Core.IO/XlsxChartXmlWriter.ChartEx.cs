@@ -11,10 +11,10 @@ internal static partial class XlsxChartXmlWriter
     private const string ChartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
 
     public static string GetContentType(ChartModel chart) =>
-        IsChartExChart(chart.Type) ? ChartExContentType : ChartContentType;
+        ChartTypeSupport.IsChartExFamily(chart.Type) ? ChartExContentType : ChartContentType;
 
     public static string GetRelationshipType(ChartModel chart) =>
-        IsChartExChart(chart.Type) ? ChartExRelationshipType : ChartRelationshipType;
+        ChartTypeSupport.IsChartExFamily(chart.Type) ? ChartExRelationshipType : ChartRelationshipType;
 
     private static XDocument ToChartExXml(ChartModel chart, Sheet sheet)
     {
@@ -90,15 +90,6 @@ internal static partial class XlsxChartXmlWriter
             }
         }
     }
-
-    private static bool IsChartExChart(ChartType chartType) =>
-        chartType is ChartType.Treemap
-            or ChartType.Sunburst
-            or ChartType.Histogram
-            or ChartType.Pareto
-            or ChartType.BoxAndWhisker
-            or ChartType.Waterfall
-            or ChartType.Funnel;
 
     private static string ToChartExDataId(int seriesIndex) =>
         FormattableString.Invariant($"data{seriesIndex}");

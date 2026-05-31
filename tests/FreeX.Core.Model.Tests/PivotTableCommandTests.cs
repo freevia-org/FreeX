@@ -507,6 +507,22 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void AddPivotChartCommand_RejectsDeferredAdvancedFamiliesBeforeRefresh()
+    {
+        var workbook = new Workbook("PivotChartCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        sheet.PivotTables.Add(CreateCategoryAmountPivot(sheet));
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new AddPivotChartCommand(sheet.Id, "PivotTable1", ChartType.Map).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("recognized for XLSX preservation");
+        sheet.Charts.Should().BeEmpty();
+    }
+
+    [Fact]
     public void AddPivotChartCommand_RejectsProtectedSheetWithoutUsePivotReportsPermission()
     {
         var workbook = new Workbook("PivotChartProtectionTest");
@@ -611,6 +627,30 @@ public sealed class PivotTableCommandTests
 
         command.Apply(ctx).Success.Should().BeFalse();
 
+        chart.Type.Should().Be(ChartType.Column);
+    }
+
+    [Fact]
+    public void ChangePivotChartTypeCommand_RejectsDeferredAdvancedFamiliesBeforeMutation()
+    {
+        var workbook = new Workbook("PivotChartTypeCommandTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedData(sheet);
+        var ctx = new SimpleCtx(workbook);
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = Range(sheet, "D3", "E5"),
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            PivotCacheId = 7
+        };
+        sheet.Charts.Add(chart);
+
+        var outcome = new ChangePivotChartTypeCommand(sheet.Id, chart.Id, ChartType.Map).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("recognized for XLSX preservation");
         chart.Type.Should().Be(ChartType.Column);
     }
 

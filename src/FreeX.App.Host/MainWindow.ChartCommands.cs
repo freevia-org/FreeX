@@ -48,7 +48,7 @@ public partial class MainWindow
 
     private void InsertChartOfType(ChartType type)
     {
-        if (!ChartTypeSupport.IsRenderable(type))
+        if (!ChartAuthoringPlanner.CanAuthor(type))
         {
             ShowDeferredChartFamilyMessage();
             return;
