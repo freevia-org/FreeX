@@ -26,6 +26,9 @@
 
 - Use subagents for independent work whenever the task can be split into non-overlapping scopes.
 - Keep working until the assigned area is exhausted completely: implement the requested scope, close obvious follow-up gaps in that area, verify, document, commit/merge when appropriate, and report any remaining blockers explicitly.
+- The local environment is configured for full access. Do not ask the user for permission prompts, do not request escalation, do not include `sandbox_permissions`, and do not use `require_escalated` in tool calls.
+- If a command or tool is blocked by sandbox/setup/environment policy, report the exact blocker and stop that slice cleanly instead of waiting for approval.
+- When launching or re-prompting subagents, explicitly tell them they inherit full access and must follow the same no-permission/no-escalation rule.
 
 ## Ownership
 
