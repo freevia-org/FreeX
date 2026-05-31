@@ -1077,6 +1077,21 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void RibbonMenuButtons_DrawHorizontalSplitBelowTallButtonLabels()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Formulas", 1465);
+
+            harness.HorizontalDropdownZoneClearsCommandLabel("Calculation Options")
+                .Should()
+                .BeTrue("the split-button separator should sit below the visible label instead of slicing through it");
+        });
+    }
+
+    [Fact]
     public void ExpandedRibbonGroups_HideCollapsedGroupDropdownGlyphs()
     {
         StaTestRunner.Run(() =>
@@ -1341,6 +1356,42 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
                 .Where(button => button.ContextMenu is not null || RibbonMetadata.IsDropdownMenuButton(button))
                 .ToList();
+
+        public bool HorizontalDropdownZoneClearsCommandLabel(string title)
+        {
+            var button = ActiveRibbonButton(title);
+            button.Should().NotBeNull(DebugActiveRibbonChildren);
+
+            var method = typeof(MainWindow).GetMethod(
+                "TryGetRibbonDropdownZoneBounds",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            method.Should().NotBeNull();
+            var args = new object[] { button!, Rect.Empty };
+            ((bool)method!.Invoke(null, args)!).Should().BeTrue();
+            var dropdownBounds = (Rect)args[1];
+            dropdownBounds.Y.Should().BeGreaterThan(0, "this check is only for horizontal tall-button split zones");
+
+            var labelBottom = EnumerateSelfAndVisualDescendants(button!)
+                .Concat(EnumerateLogicalDescendants(button!))
+                .OfType<TextBlock>()
+                .Distinct()
+                .Where(RibbonMetadata.IsCommandLabel)
+                .Where(IsEffectivelyVisible)
+                .Select(label => label.TransformToAncestor(button!)
+                    .TransformBounds(new Rect(0, 0, label.ActualWidth, label.ActualHeight))
+                    .Bottom)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            return dropdownBounds.Y >= labelBottom - 0.5;
+        }
+
+        private Button? ActiveRibbonButton(string title) =>
+            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                .Concat(EnumerateLogicalDescendants(SelectedRibbonContentRoot))
+                .OfType<Button>()
+                .Distinct()
+                .FirstOrDefault(button => string.Equals(RibbonTooltip.GetTitle(button), title, StringComparison.Ordinal));
 
         private static int DropdownChevronCount(ButtonBase button) =>
             EnumerateSelfAndVisualDescendants(button)

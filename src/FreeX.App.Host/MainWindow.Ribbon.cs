@@ -477,20 +477,27 @@ public partial class MainWindow
             return false;
 
         var layout = GetRibbonDropdownZoneLayout(button);
+        var horizontalZoneHeight = GetRibbonHorizontalDropdownZoneHeight(height);
         bounds = layout switch
         {
             RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium =>
-                new Rect(0, Math.Max(0, height - 20), width, Math.Min(20, height)),
+                new Rect(0, Math.Max(0, height - horizontalZoneHeight), width, Math.Min(horizontalZoneHeight, height)),
             RibbonCommandContentLayout.IconOnly =>
                 new Rect(Math.Max(0, width - 16), Math.Max(0, height - 16), Math.Min(16, width), Math.Min(16, height)),
             _ => new Rect(Math.Max(0, width - 18), 0, Math.Min(18, width), height)
         };
 
-        if (TryGetRibbonDropdownChevronBounds(button, out var chevronBounds))
+        if (layout is not (RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium) &&
+            TryGetRibbonDropdownChevronBounds(button, out var chevronBounds))
+        {
             bounds.Union(chevronBounds);
+        }
 
         return bounds is { Width: > 0, Height: > 0 };
     }
+
+    private static double GetRibbonHorizontalDropdownZoneHeight(double buttonHeight) =>
+        buttonHeight <= 66 ? 12 : 16;
 
     private static RibbonCommandContentLayout GetRibbonDropdownZoneLayout(ButtonBase button)
     {
