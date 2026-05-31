@@ -501,7 +501,7 @@ public partial class MainWindow
 
     private static RibbonCollapsedGroupFootprintMode GetCollapsedRibbonFootprintMode(double availableWidth)
     {
-        if (availableWidth <= 760)
+        if (availableWidth <= 700)
             return RibbonCollapsedGroupFootprintMode.Captionless;
 
         return availableWidth <= 920
@@ -671,11 +671,12 @@ public partial class MainWindow
     private static Button CreateRibbonCollapsedGroupButton(FrameworkElement group, ISet<string>? usedKeyTips = null)
     {
         var groupName = GetRibbonGroupName(group);
+        var displayName = GetCollapsedRibbonGroupDisplayName(group);
         var icon = RibbonCommandPresentationPlanner.GetGroupIcon(groupName);
         var (slotBackground, slotBorder, glyphBrush) = GetRibbonIconAccentBrushes(icon.Accent);
         var label = new TextBlock
         {
-            Text = groupName,
+            Text = displayName,
             FontSize = 12,
             TextWrapping = TextWrapping.NoWrap,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -737,6 +738,18 @@ public partial class MainWindow
         };
         return button;
     }
+
+    private static string GetCollapsedRibbonGroupDisplayName(FrameworkElement group) =>
+        GetRibbonGroupCatalogId(group) switch
+        {
+            "TableDesignStyleOptionsGroup" => "Options",
+            "TableDesignStylesGroup" => "Styles",
+            "PivotTableAnalyzeActiveFieldGroup" => "Field",
+            "PivotTableAnalyzeCalculationsGroup" => "Calc.",
+            "PivotTableDesignStyleOptionsGroup" => "Style Options",
+            "PivotTableDesignStylesGroup" => "Styles",
+            _ => GetRibbonGroupName(group)
+        };
 
     private static void EnsureCollapsedGroupChevronAdorner(Button button)
     {

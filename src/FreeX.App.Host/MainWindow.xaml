@@ -1211,7 +1211,7 @@
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                 </Button>
-                                <Button Content="{local:Loc Key=MainWindow_Content_Recommended}" Width="116" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RecommendedPivotTablesMenuItem_Click"
+                                <Button Content="{local:Loc Key=MainWindow_Header_RecommendedPivotTables}" Width="150" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RecommendedPivotTablesMenuItem_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RecommendedPivotTables}"
                                         local:RibbonTooltip.KeyTip="RP"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PreviewRecommendedPivotTableLayoutsForTheSelectedRange}" local:RibbonMetadata.CommandName="Recommended PivotTables"/>
@@ -2902,7 +2902,7 @@
                             <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="TableDesignToolsGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_SummarizeWithPivotTable}" Width="148" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableDesignSummarizeWithPivotTableBtn_Click"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_SummarizeWithPivotTable}" Width="210" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableDesignSummarizeWithPivotTableBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SummarizeWithPivotTable}"
                                             local:RibbonTooltip.KeyTip="S"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CreateAPivotTableFromTheActiveTable}" local:RibbonMetadata.CommandName="Summarize with PivotTable"/>

@@ -204,6 +204,10 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Pens", RibbonCommandIconKind.Line)]
     [InlineData("Convert", RibbonCommandIconKind.Math)]
     [InlineData("Help", RibbonCommandIconKind.Help)]
+    [InlineData("Table Style Options", RibbonCommandIconKind.List)]
+    [InlineData("Table Styles", RibbonCommandIconKind.Theme)]
+    [InlineData("PivotTable Style Options", RibbonCommandIconKind.List)]
+    [InlineData("PivotTable Styles", RibbonCommandIconKind.Theme)]
     [InlineData("Unknown", RibbonCommandIconKind.Generic)]
     public void GetGroupIcon_MapsExcelRibbonGroupsToSemanticVectorKinds(string groupName, RibbonCommandIconKind expectedKind)
     {

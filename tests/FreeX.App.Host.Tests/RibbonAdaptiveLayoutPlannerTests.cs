@@ -427,7 +427,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             ["Get & Transform Data", "Sort & Filter", "Data Tools"],
             selectedTabHeader: "Data");
 
-        thresholds.Should().Contain([700, 760, 900, 1120, 1465]);
+        thresholds.Should().Contain([700, 900, 920, 1120, 1465]);
         thresholds.Should().BeInAscendingOrder();
         thresholds.Should().OnlyHaveUniqueItems();
     }
@@ -438,7 +438,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
         var thresholds = RibbonAdaptiveTabProfiles.GetBreakpointThresholds(
             ["Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline"]);
 
-        thresholds.Should().Contain([700, 760, 900, 920, 1120, 1465]);
+        thresholds.Should().Contain([700, 900, 920, 1120, 1465]);
         thresholds.Should().BeInAscendingOrder();
         thresholds.Should().OnlyHaveUniqueItems();
     }

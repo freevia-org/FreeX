@@ -230,7 +230,7 @@ public sealed class MainWindowAdaptiveRibbonTests
 
             harness.CollapsedActiveRibbonGroupNames.Should().NotContain("Tables", harness.DebugActiveRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().Contain(
-                ["PivotTable", "Recommended", "Table"],
+                ["PivotTable", "Recommended PivotTables", "Table"],
                 "Excel keeps the first Insert groups expanded at normal narrow widths before collapsing gallery-heavy groups");
         });
     }
@@ -572,8 +572,7 @@ public sealed class MainWindowAdaptiveRibbonTests
                 new RibbonFallbackExpectation("Data", 1120, Expanded: ["Sort & Filter", "Data Tools", "Forecast"], Collapsed: ["Queries & Connections", "Outline"]),
                 new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Page Setup"], Collapsed: ["Themes", "Arrange"]),
                 new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show", "Zoom"], Collapsed: ["Window"]),
-                new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views"], Collapsed: ["Show", "Zoom", "Window"]),
-                new RibbonFallbackExpectation("Draw", 900, Expanded: ["Tools", "Pens"], Collapsed: ["Convert", "Arrange", "Format"])
+                new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views"], Collapsed: ["Show", "Zoom", "Window"])
             };
 
             foreach (var expectation in expectations)
@@ -592,6 +591,24 @@ public sealed class MainWindowAdaptiveRibbonTests
                     0.5,
                     $"{expectation.Tab} at {expectation.Width:0}px should fit without a hidden-scroll overflow after fallback ordering; {harness.DebugActiveRibbonChildren}");
             }
+        });
+    }
+
+    [Fact]
+    public void DrawRibbon_KeepsCurrentGroupsExpandedWhenTheyFit()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Draw", 900);
+
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
+                ["Arrange", "Format"],
+                $"the current Draw tab has only arrange/format command groups, so normal widths should spend available space on the real commands; {harness.DebugActiveRibbonChildren}");
+            harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                0.5,
+                $"Draw at 900px should fit without hidden-scroll overflow; {harness.DebugActiveRibbonChildren}");
         });
     }
 

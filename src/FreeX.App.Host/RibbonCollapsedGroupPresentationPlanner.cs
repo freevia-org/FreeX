@@ -4,30 +4,30 @@ namespace FreeX.App.Host;
 
 internal static class RibbonCollapsedGroupPresentationPlanner
 {
-    public static IReadOnlyList<double> BreakpointThresholds { get; } = [760, 920];
+    public static IReadOnlyList<double> BreakpointThresholds { get; } = [700, 920];
 
     public static RibbonCollapsedGroupFootprint CreateFootprint(double availableWidth)
     {
         var compact = availableWidth <= 920;
-        var captionless = availableWidth <= 760;
+        var captionless = availableWidth <= 700;
         return new RibbonCollapsedGroupFootprint(
             Mode: captionless
                 ? RibbonCollapsedGroupFootprintMode.Captionless
                 : compact
                     ? RibbonCollapsedGroupFootprintMode.Compact
                     : RibbonCollapsedGroupFootprintMode.Normal,
-            Width: compact ? 44 : 64,
+            Width: compact ? 52 : 64,
             Margin: compact ? new Thickness(0, 0, 2, 0) : new Thickness(1, 0, 3, 0),
             Padding: compact ? new Thickness(1, 2, 1, 2) : new Thickness(3, 2, 3, 2),
             CaptionVisibility: captionless ? Visibility.Collapsed : Visibility.Visible,
             CaptionFontSize: 12,
-            CaptionMaxWidth: compact ? 40 : 60,
+            CaptionMaxWidth: compact ? 48 : 60,
             IconFontSize: compact ? 18 : 22);
     }
 
     public static double GetPlannedWidth(double measuredCollapsedWidth, double availableWidth)
     {
-        var plannedWidth = availableWidth <= 920 ? 46 : 68;
+        var plannedWidth = availableWidth <= 920 ? 54 : 68;
         return Math.Min(Math.Max(0, measuredCollapsedWidth), plannedWidth);
     }
 
