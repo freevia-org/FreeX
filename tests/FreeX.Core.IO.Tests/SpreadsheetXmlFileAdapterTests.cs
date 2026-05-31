@@ -1055,6 +1055,82 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlWorkbookAndSheetMetadata()
+    {
+        using var source = StreamFromString("""
+            <report sheet="Generated">
+              <row name="Alpha" amount="12.5"/>
+              <row name="Beta" amount="7.25"/>
+            </report>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+                xmlns:x="urn:schemas-microsoft-com:office:excel">
+              <xsl:template match="/report">
+                <ss:Workbook>
+                  <ss:Names>
+                    <ss:NamedRange ss:Name="GeneratedData" ss:RefersTo="=Generated!A1:B3"/>
+                  </ss:Names>
+                  <ss:Worksheet ss:Name="{@sheet}" ss:Visible="SheetHidden">
+                    <ss:Table>
+                      <ss:Column ss:Width="18.5"/>
+                      <ss:Column ss:Index="3" ss:Hidden="1"/>
+                      <ss:Row ss:Height="27.5">
+                        <ss:Cell><ss:Data ss:Type="String">Name</ss:Data></ss:Cell>
+                        <ss:Cell ss:Index="3"><ss:Data ss:Type="String">Amount</ss:Data></ss:Cell>
+                      </ss:Row>
+                      <xsl:for-each select="row">
+                        <ss:Row ss:Index="{position() + 1}">
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@name"/></ss:Data></ss:Cell>
+                          <ss:Cell ss:Index="3"><ss:Data ss:Type="Number"><xsl:value-of select="@amount"/></ss:Data></ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                      <ss:Row ss:Index="4" ss:Hidden="1">
+                        <ss:Cell><ss:Data ss:Type="String">Hidden footer</ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                    <x:WorksheetOptions>
+                      <x:DoNotDisplayGridlines/>
+                      <x:Print>
+                        <x:Gridlines/>
+                      </x:Print>
+                      <x:FreezePanes/>
+                      <x:FrozenNoSplit/>
+                      <x:SplitHorizontal>1</x:SplitHorizontal>
+                      <x:TopRowBottomPane>1</x:TopRowBottomPane>
+                      <x:SplitVertical>2</x:SplitVertical>
+                      <x:LeftColumnRightPane>2</x:LeftColumnRightPane>
+                    </x:WorksheetOptions>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Generated");
+        sheet.IsHidden.Should().BeTrue();
+        sheet.IsVeryHidden.Should().BeFalse();
+        sheet.ShowGridlines.Should().BeFalse();
+        sheet.PrintGridlines.Should().BeTrue();
+        sheet.FrozenRows.Should().Be(1);
+        sheet.FrozenCols.Should().Be(2);
+        sheet.RowHeights[1].Should().Be(27.5);
+        sheet.HiddenRows.Should().Contain(4u);
+        sheet.ColumnWidths[1].Should().Be(18.5);
+        sheet.HiddenCols.Should().Contain(3u);
+        sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("Alpha"));
+        sheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(7.25));
+        workbook.NamedRanges["GeneratedData"].Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2)));
+    }
+
+    [Fact]
     public void LoadTransformed_UsesCurrentStreamPositionsAndLeavesInputStreamsOpen()
     {
         using var source = PositionedStreamFromString("ignored", "<rows><row name=\"Gamma\"/></rows>");
