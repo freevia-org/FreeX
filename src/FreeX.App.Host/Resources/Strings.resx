@@ -14422,17 +14422,29 @@ and {0} more.</value>
   <data name="MainWindow_TooltipDescription_RenamingTablesFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
     <value>Renaming tables from the ribbon is deferred in FreeX.</value>
   </data>
+  <data name="MainWindow_TooltipDescription_RenameTheActiveTable" xml:space="preserve">
+    <value>Rename the active table.</value>
+  </data>
   <data name="MainWindow_TooltipDescription_ResizingStructuredTablesFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
     <value>Resizing structured tables from the ribbon is deferred in FreeX.</value>
   </data>
+  <data name="MainWindow_TooltipDescription_ResizeTheActiveTableRange" xml:space="preserve">
+    <value>Resize the active table range.</value>
+  </data>
   <data name="MainWindow_TooltipDescription_TablePivotSummaryShortcutIsDeferredInFreeX" xml:space="preserve">
     <value>The table PivotTable summary shortcut is deferred in FreeX.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_CreateAPivotTableFromTheActiveTable" xml:space="preserve">
+    <value>Create a PivotTable from the active table.</value>
   </data>
   <data name="MainWindow_TooltipDescription_DeleteDuplicateRowsFromTheActiveTable" xml:space="preserve">
     <value>Delete duplicate rows from the active table.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ConvertingTablesToPlainRangesIsDeferredInFreeX" xml:space="preserve">
     <value>Converting tables to plain ranges is deferred in FreeX.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ConvertTheActiveTableToAPlainRange" xml:space="preserve">
+    <value>Convert the active table to a plain range.</value>
   </data>
   <data name="MainWindow_TooltipDescription_HeaderRowsRemainVisibleForStructuredTablesInFreeX" xml:space="preserve">
     <value>Header rows remain visible for structured tables in FreeX.</value>
@@ -14457,5 +14469,17 @@ and {0} more.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ChooseAStyleForTheActiveStructuredTable" xml:space="preserve">
     <value>Choose a style for the active structured table.</value>
+  </data>
+  <data name="TableDesign_ConvertToRangeConfirmation" xml:space="preserve">
+    <value>Convert this table to a normal range? Existing cell values and formatting will remain.</value>
+  </data>
+  <data name="TableDesign_InvalidResizeRange" xml:space="preserve">
+    <value>Enter a valid table range.</value>
+  </data>
+  <data name="TableDesign_TableNameLabel" xml:space="preserve">
+    <value>_Table name:</value>
+  </data>
+  <data name="TableDesign_TableRangeLabel" xml:space="preserve">
+    <value>_Table range:</value>
   </data>
 </root>
