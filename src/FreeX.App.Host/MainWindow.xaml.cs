@@ -177,6 +177,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private readonly WorkbookWindowRegistry? _windowRegistry;
     private string _windowTitleSuffix = string.Empty;
     private bool _adoptSharedWorkbookOnLoad;
+    private bool _suppressScrollBroadcast;
 
     public MainWindow(
         ILogger<MainWindow> logger,

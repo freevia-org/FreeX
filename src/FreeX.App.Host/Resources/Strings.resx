@@ -3660,6 +3660,12 @@
   <data name="MainWindow_Content_NewWindow" xml:space="preserve">
     <value>New Window</value>
   </data>
+  <data name="MainWindow_Content_HideWindow" xml:space="preserve">
+    <value>Hide</value>
+  </data>
+  <data name="MainWindow_Content_UnhideWindow" xml:space="preserve">
+    <value>Unhide</value>
+  </data>
   <data name="MainWindow_Content_Next" xml:space="preserve">
     <value>Next</value>
   </data>
@@ -5523,6 +5529,33 @@
   <data name="MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow" xml:space="preserve">
     <value>Unavailable: requires more than one visible workbook window.</value>
   </data>
+  <data name="MainWindow_TooltipDescription_HideThisWorkbookWindowFromView" xml:space="preserve">
+    <value>Hide this workbook window from view.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_UnavailableHideRequiresSecondVisibleWindow" xml:space="preserve">
+    <value>Unavailable: at least one other window must stay visible.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_RestoreAHiddenWorkbookWindow" xml:space="preserve">
+    <value>Restore a hidden workbook window.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_UnavailableUnhideRequiresAHiddenWindow" xml:space="preserve">
+    <value>Unavailable: no workbook window is currently hidden.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ResetThisWindowToAStandardSizeAndPosition" xml:space="preserve">
+    <value>Reset this window to a standard size and position.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_TileThisWindowAndAnotherSideBySideToCompareThem" xml:space="preserve">
+    <value>Tile this window and another side by side to compare them.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_UnavailableViewSideBySideRequiresSecondVisibleWindow" xml:space="preserve">
+    <value>Unavailable: requires a second visible workbook window.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ScrollBothSideBySideWindowsTogether" xml:space="preserve">
+    <value>Scroll both side-by-side windows together.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_UnavailableSynchronousScrollingRequiresViewSideBySide" xml:space="preserve">
+    <value>Unavailable: turn on View Side by Side first.</value>
+  </data>
   <data name="MainWindow_TooltipDescription_DeferredRetainedFromXLSXFilesAuthoringAndRenderingNeedADedicatedDataMode_568CFF74" xml:space="preserve">
     <value>Deferred: retained from XLSX files; authoring and rendering need a dedicated data model.</value>
   </data>
@@ -7040,6 +7073,12 @@
   </data>
   <data name="MainWindow_TooltipTitle_SwitchWindows" xml:space="preserve">
     <value>Switch Windows</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_HideWindow" xml:space="preserve">
+    <value>Hide</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_UnhideWindow" xml:space="preserve">
+    <value>Unhide</value>
   </data>
   <data name="MainWindow_TooltipTitle_Symbol" xml:space="preserve">
     <value>Symbol</value>

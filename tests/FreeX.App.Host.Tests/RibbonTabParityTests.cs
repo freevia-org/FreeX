@@ -238,7 +238,8 @@ public sealed class RibbonTabParityTests
             "Freeze Panes",
             "Split",
             "Switch Windows");
-        CommandTitles(windowGroup).Should().NotContain([
+        // The full Excel-style View ▸ Window command set is now live in the ribbon.
+        CommandTitles(windowGroup).Should().Contain([
             "Hide",
             "Unhide",
             "View Side by Side",

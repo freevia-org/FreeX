@@ -15,6 +15,10 @@ public sealed class WorkbookWindowRegistryTests
         public void ApplyWindowTitleSuffix(string suffix) => Suffix = suffix;
         public void RefreshFromSharedWorkbook() => RefreshCount++;
         public void ActivateWindow() => ActivateCount++;
+        public void SetWindowVisible(bool visible) { }
+        public WorkbookScrollOffset GetScrollOffset() => default;
+        public void SetScrollOffset(WorkbookScrollOffset offset) { }
+        public void TileToWorkArea(System.Windows.Rect bounds) { }
     }
 
     [Fact]

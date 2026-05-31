@@ -13689,5 +13689,44 @@
   <data name="TableDesign_TableRangeLabel" xml:space="preserve">
     <value>_Обхват на масата:</value>
   </data>
+  <data name="MainWindow_Content_HideWindow" xml:space="preserve">
+    <value>Скриване</value>
+  </data>
+  <data name="MainWindow_Content_UnhideWindow" xml:space="preserve">
+    <value>Показване</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_HideThisWorkbookWindowFromView" xml:space="preserve">
+    <value>Скриване на този прозорец на работната книга.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_UnavailableHideRequiresSecondVisibleWindow" xml:space="preserve">
+    <value>Недостъпно: поне един друг прозорец трябва да остане видим.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_RestoreAHiddenWorkbookWindow" xml:space="preserve">
+    <value>Възстановяване на скрит прозорец на работната книга.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_UnavailableUnhideRequiresAHiddenWindow" xml:space="preserve">
+    <value>Недостъпно: в момента няма скрит прозорец на работната книга.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ResetThisWindowToAStandardSizeAndPosition" xml:space="preserve">
+    <value>Нулиране на този прозорец до стандартен размер и позиция.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_TileThisWindowAndAnotherSideBySideToCompareThem" xml:space="preserve">
+    <value>Подреждане на този и друг прозорец един до друг за сравнение.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_UnavailableViewSideBySideRequiresSecondVisibleWindow" xml:space="preserve">
+    <value>Недостъпно: изисква втори видим прозорец на работната книга.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ScrollBothSideBySideWindowsTogether" xml:space="preserve">
+    <value>Едновременно превъртане на двата прозореца, подредени един до друг.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_UnavailableSynchronousScrollingRequiresViewSideBySide" xml:space="preserve">
+    <value>Недостъпно: първо включете Преглед рамо до рамо.</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_HideWindow" xml:space="preserve">
+    <value>Скриване</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_UnhideWindow" xml:space="preserve">
+    <value>Показване</value>
+  </data>
 </root>
 

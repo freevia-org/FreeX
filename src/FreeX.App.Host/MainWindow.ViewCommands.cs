@@ -169,7 +169,55 @@ public partial class MainWindow
             UiText.Get(canSwitchWindows
                 ? "MainWindow_TooltipDescription_SwitchToAnotherVisibleWorkbookWindow"
                 : "MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow"));
+
+        // Hide is available only while another window would remain visible.
+        var canHide = (_windowRegistry?.VisibleCount ?? 1) > 1;
+        ApplyRibbonWindowCommandState(
+            ViewHideWindowBtn,
+            canHide,
+            UiText.Get(canHide
+                ? "MainWindow_TooltipDescription_HideThisWorkbookWindowFromView"
+                : "MainWindow_TooltipDescription_UnavailableHideRequiresSecondVisibleWindow"));
+
+        // Unhide is available only when at least one window is hidden.
+        var canUnhide = (_windowRegistry?.HiddenWindows.Count ?? 0) > 0;
+        ApplyRibbonWindowCommandState(
+            ViewUnhideWindowBtn,
+            canUnhide,
+            UiText.Get(canUnhide
+                ? "MainWindow_TooltipDescription_RestoreAHiddenWorkbookWindow"
+                : "MainWindow_TooltipDescription_UnavailableUnhideRequiresAHiddenWindow"));
+
+        // Reset Window Position is always available; it re-centers/cascades this window.
+        ApplyRibbonWindowCommandState(
+            ViewResetWindowPositionBtn,
+            isEnabled: true,
+            UiText.Get("MainWindow_TooltipDescription_ResetThisWindowToAStandardSizeAndPosition"));
+
+        // View Side by Side needs a second visible window to pair with.
+        var sideBySideActive = _windowRegistry?.IsSideBySideActive ?? false;
+        var canSideBySide = sideBySideActive || (_windowRegistry?.VisibleCount ?? 1) > 1;
+        ApplyRibbonWindowToggleState(
+            ViewSideBySideBtn,
+            canSideBySide,
+            sideBySideActive,
+            UiText.Get(canSideBySide
+                ? "MainWindow_TooltipDescription_TileThisWindowAndAnotherSideBySideToCompareThem"
+                : "MainWindow_TooltipDescription_UnavailableViewSideBySideRequiresSecondVisibleWindow"));
+
+        // Synchronous Scrolling is only meaningful while side-by-side is active.
+        var syncActive = _windowRegistry?.IsSynchronousScrollActive ?? false;
+        ApplyRibbonWindowToggleState(
+            ViewSynchronousScrollingBtn,
+            sideBySideActive,
+            syncActive,
+            UiText.Get(sideBySideActive
+                ? "MainWindow_TooltipDescription_ScrollBothSideBySideWindowsTogether"
+                : "MainWindow_TooltipDescription_UnavailableSynchronousScrollingRequiresViewSideBySide"));
     }
+
+    /// <summary>Reflects the registry's side-by-side state onto the toggle button without re-toggling it.</summary>
+    private void SyncViewSideBySideToggleState() => ApplyLiveWindowCommandState();
 
     private static void ApplyRibbonWindowCommandState(
         System.Windows.Controls.Button? button,
@@ -180,6 +228,21 @@ public partial class MainWindow
             return;
 
         button.IsEnabled = isEnabled;
+        RibbonTooltip.SetDescription(button, description);
+        AutomationProperties.SetHelpText(button, description);
+    }
+
+    private static void ApplyRibbonWindowToggleState(
+        System.Windows.Controls.Primitives.ToggleButton? button,
+        bool isEnabled,
+        bool isChecked,
+        string description)
+    {
+        if (button is null)
+            return;
+
+        button.IsEnabled = isEnabled;
+        button.IsChecked = isChecked;
         RibbonTooltip.SetDescription(button, description);
         AutomationProperties.SetHelpText(button, description);
     }

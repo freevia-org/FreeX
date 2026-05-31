@@ -12,6 +12,7 @@ public partial class MainWindow
     private void Scroll_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         UpdateViewport();
+        BroadcastScrollOffsetToSideBySidePartner();
     }
 
     private void VerticalScroll_Scroll(object sender, ScrollEventArgs e)
