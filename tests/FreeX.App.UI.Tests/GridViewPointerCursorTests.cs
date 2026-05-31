@@ -517,6 +517,7 @@ public sealed class GridViewPointerCursorTests
         lostCapture.Should().Contain("_autofillDragging = false;");
         lostCapture.Should().Contain("_autofillSourceRange = null;");
         lostCapture.Should().Contain("_autofillTarget = null;");
+        lostCapture.Should().Contain("Cursor = null;");
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)
