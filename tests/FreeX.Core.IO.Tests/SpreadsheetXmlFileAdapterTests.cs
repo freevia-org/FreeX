@@ -648,6 +648,41 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsSpreadsheetMlHyperlinkOnlyCells()
+    {
+        var workbook = new Workbook("XmlHyperlinkOnly");
+        var sheet = workbook.AddSheet("Links");
+        var address = new CellAddress(sheet.Id, 3, 2);
+        sheet.Hyperlinks[address] = "https://example.com/blank";
+        sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open blank link",
+            "");
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var linkCell = document.Descendants(ss + "Cell")
+            .Single(cell => cell.Attribute(ss + "HRef")?.Value == "https://example.com/blank");
+        linkCell.Attribute(ss + "HRefScreenTip")!.Value.Should().Be("Open blank link");
+        linkCell.Element(ss + "Data").Should().BeNull();
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedAddress = new CellAddress(loadedSheet.Id, 3, 2);
+        loadedSheet.Hyperlinks[loadedAddress].Should().Be("https://example.com/blank");
+        loadedSheet.HyperlinkMetadata[loadedAddress].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Open blank link",
+            ""));
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsSpreadsheetMlCellComments()
     {
         var workbook = new Workbook("XmlNotes");
