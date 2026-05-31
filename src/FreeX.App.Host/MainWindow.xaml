@@ -1748,12 +1748,12 @@
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SelectionPane}"
                                         local:RibbonTooltip.KeyTip="SP"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ListSheetObjectsAndControlVisibilityOrStackingOrder}" local:RibbonMetadata.CommandName="Selection Pane"/>
-                                <StackPanel VerticalAlignment="Center" Margin="2,0">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Rotate}" Width="68" Height="28" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectRotateBtn_Click"
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_Rotate}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36" Style="{StaticResource RibbonBtn}" Click="ObjectRotateBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RotateObject}"
                                             local:RibbonTooltip.KeyTip="RO"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RotateTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Rotate Object"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Size}"   Width="68" Height="28" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_Size}"   Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ObjectSize}"
                                             local:RibbonTooltip.KeyTip="SZ"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ResizeTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Object Size"/>
@@ -2101,12 +2101,12 @@
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SelectionPane}"
                                         local:RibbonTooltip.KeyTip="SP"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ListSheetObjectsAndControlVisibilityOrStackingOrder}" local:RibbonMetadata.CommandName="Selection Pane"/>
-                                <StackPanel VerticalAlignment="Center" Margin="2,0">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Rotate}" Width="68" Height="28" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectRotateBtn_Click"
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0">
+                                    <Button Content="{local:Loc Key=MainWindow_Content_Rotate}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36" Style="{StaticResource RibbonBtn}" Click="ObjectRotateBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RotateObject}"
                                             local:RibbonTooltip.KeyTip="RO"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RotateTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Rotate Object"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Size}" Width="68" Height="28" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_Size}" Width="72" Height="64" Margin="1,0" local:RibbonMetadata.CompactFullWidth="72" local:RibbonMetadata.CompactWidth="36" Style="{StaticResource RibbonBtn}" Click="ObjectSizeBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ObjectSize}"
                                             local:RibbonTooltip.KeyTip="OZ"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ResizeTheSelectedOrMostRecentDrawingObject}" local:RibbonMetadata.CommandName="Object Size"/>
@@ -2247,6 +2247,8 @@
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RemoveArrows}"
                                             local:RibbonTooltip.KeyTip="RA"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RemoveTheTracerArrowsAddedByTracePrecedentsOrTraceDependents}" local:RibbonMetadata.CommandName="Remove Arrows"/>
+                                </StackPanel>
+                                <StackPanel VerticalAlignment="Center">
                                     <Button Content="{local:Loc Key=MainWindow_Content_ShowFormulas}"     Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShowFormulasBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShowFormulas}"
                                             local:RibbonTooltip.KeyTip="SF"
@@ -2266,12 +2268,12 @@
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_EvaluateFormula}"
                                             local:RibbonTooltip.KeyTip="V"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowTheSelectedFormulaAndItsCurrentCalculatedResult}" local:RibbonMetadata.CommandName="Evaluate Formula"/>
+                                </StackPanel>
+                                <StackPanel VerticalAlignment="Center">
                                     <Button Content="{local:Loc Key=MainWindow_Content_WatchWindow}"      Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="WatchWindowBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_WatchWindow}"
                                             local:RibbonTooltip.KeyTip="W"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ShowWatchedCellsAndTheirCurrentValues}" local:RibbonMetadata.CommandName="Watch Window"/>
-                                </StackPanel>
-                                <StackPanel VerticalAlignment="Center">
                                     <Button Content="{local:Loc Key=MainWindow_Content_AddWatch}" Width="100" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AddWatchBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AddWatch}"
                                             local:RibbonTooltip.KeyTip="AW"

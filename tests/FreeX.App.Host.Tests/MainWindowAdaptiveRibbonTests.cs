@@ -75,7 +75,7 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void HomeRibbon_CollapsesEditingBeforeLabelsClipAtWideWidths()
+    public void HomeRibbon_ExpandsEditingWhenWideWidthHasRoom()
     {
         StaTestRunner.Run(() =>
         {
@@ -83,8 +83,27 @@ public sealed class MainWindowAdaptiveRibbonTests
 
             harness.SetRibbonWidth(1465);
 
-            harness.CollapsedRibbonGroupNames.Should().Contain("Editing", harness.DebugRibbonChildren);
-            harness.VisibleRibbonCommandLabels.Should().NotContain("Find & Select", harness.DebugRibbonChildren);
+            harness.CollapsedRibbonGroupNames.Should().NotContain("Editing", harness.DebugRibbonChildren);
+            harness.VisibleRibbonCommandLabels.Should().Contain(
+                ["AutoSum", "Fill", "Clear", "Sort & Filter", "Find & Select"],
+                "Excel spends available wide Home ribbon space on the Editing commands instead of leaving a collapsed group beside empty space");
+        });
+    }
+
+    [Fact]
+    public void HomeRibbon_NormalizesToggleCommandsIntoSmallIconLabelRows()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetRibbonWidth(1465);
+
+            harness.NamedRibbonButtonContentLayout("WrapTextBtn").Should().Be(
+                RibbonCommandContentLayout.Small,
+                "small toggle commands should use the same canonical icon slot and label row as ordinary stacked commands");
+            harness.NamedRibbonButtonHasIconSlot("WrapTextBtn").Should().BeTrue(
+                "stacked toggle commands need a fixed icon slot so their icons align with adjacent rows");
         });
     }
 
@@ -502,7 +521,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             if (harness.CanUseRequestedRibbonWidth(1465))
             {
                 harness.TallLargeRibbonCommandLabels.Should().Contain(
-                    ["Themes", "Colors", "Fonts", "Effects", "Scale"],
+                    ["Themes", "Colors", "Fonts", "Effects", "Scale", "Bring Forward", "Send Backward", "Selection Pane", "Rotate", "Size"],
                     $"Page Layout should spend wide ribbon space on standalone large commands while keeping stacked Page Setup compact; {harness.DebugActiveRibbonChildren}");
                 harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                     0.5,
@@ -869,6 +888,10 @@ public sealed class MainWindowAdaptiveRibbonTests
                 harness.StackedRibbonRowColumnIconOffsets.Should().OnlyContain(
                     stack => stack.Offsets.Max() - stack.Offsets.Min() <= 1.0,
                     $"{tab} stacked small-command rows should align each icon column across rows");
+
+                harness.GridRibbonColumnIconOffsets.Should().OnlyContain(
+                    stack => stack.Offsets.Max() - stack.Offsets.Min() <= 1.0,
+                    $"{tab} grid-based small-command columns should align icons vertically inside each column");
             }
         });
     }
@@ -1608,6 +1631,22 @@ public sealed class MainWindowAdaptiveRibbonTests
             VisibleOrCollapsedRibbonButton(title) is { } button &&
             HasDropdownZoneHighlight(button);
 
+        public RibbonCommandContentLayout? NamedRibbonButtonContentLayout(string name)
+        {
+            if (_window.FindName(name) is not ButtonBase button ||
+                button.Content is not FrameworkElement content ||
+                !RibbonMetadata.TryGetCommandContentLayout(content, out var layout))
+            {
+                return null;
+            }
+
+            return layout;
+        }
+
+        public bool NamedRibbonButtonHasIconSlot(string name) =>
+            _window.FindName(name) is ButtonBase button &&
+            TryGetCommandIconSlot(button, out _);
+
         public IReadOnlyList<string> ActiveRibbonMenuButtonsWithoutSplitTreatment =>
             ActiveRibbonMenuButtons
                 .Where(button => DropdownChevronCount(button) != 1 ||
@@ -1858,6 +1897,14 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .OfType<StackPanel>()
                 .Where(panel => panel.Orientation == Orientation.Vertical)
                 .SelectMany(GetStackedRowColumnIconOffsets)
+                .ToList();
+
+        public IReadOnlyList<RibbonIconStackOffsets> GridRibbonColumnIconOffsets =>
+            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                .OfType<Grid>()
+                .Where(grid => !RibbonMetadata.IsRibbonGroup(grid) &&
+                               !RibbonMetadata.TryGetCommandContentLayout(grid, out _))
+                .SelectMany(GetGridColumnIconOffsets)
                 .ToList();
 
         public IReadOnlyList<CheckBoxLabelOffset> ViewShowCheckBoxLabelOffsets =>
@@ -2251,6 +2298,23 @@ public sealed class MainWindowAdaptiveRibbonTests
                 yield return new RibbonIconStackOffsets(
                     buttons.Select(GetButtonLabel).ToArray(),
                     buttons.Select(button => GetDirectIconSlotCenterOffset(panel, button)).ToArray());
+            }
+        }
+
+        private static IEnumerable<RibbonIconStackOffsets> GetGridColumnIconOffsets(Grid grid)
+        {
+            var columns = grid.Children
+                .OfType<ButtonBase>()
+                .Where(IsSmallLabeledCommandButton)
+                .GroupBy(Grid.GetColumn)
+                .Where(group => group.Count() >= 2);
+
+            foreach (var column in columns)
+            {
+                var buttons = column.ToArray();
+                yield return new RibbonIconStackOffsets(
+                    buttons.Select(GetButtonLabel).ToArray(),
+                    buttons.Select(button => GetDirectIconSlotCenterOffset(grid, button)).ToArray());
             }
         }
 
