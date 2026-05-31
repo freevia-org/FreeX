@@ -283,6 +283,27 @@ public sealed class MainWindowFormulaBarSyncTests
         });
     }
 
+    [Fact]
+    public void NameBoxEscape_RestoresSelectedRangeReferenceAndReturnsFocusToGrid()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var expectedRange = new GridRange(
+                new CellAddress(harness.CurrentSheetId, 2, 2),
+                new CellAddress(harness.CurrentSheetId, 3, 3));
+
+            harness.SelectRange(2, 2, 3, 3);
+            harness.SetCellAddressBoxText("Z99");
+
+            harness.PressCellAddressBoxKey(Key.Escape).Should().BeTrue();
+
+            harness.SelectedRange.Should().Be(expectedRange);
+            harness.CellAddressBoxText.Should().Be("B2:C3");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
