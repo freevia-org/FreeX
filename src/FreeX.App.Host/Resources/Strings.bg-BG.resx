@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Common_Cancel" xml:space="preserve">
+    <value>_Отказ</value>
+  </data>
+  <data name="Common_ConfirmTitle" xml:space="preserve">
+    <value>Потвърждение</value>
+  </data>
+  <data name="Common_ErrorTitle" xml:space="preserve">
+    <value>Грешка</value>
+  </data>
+  <data name="Common_InformationTitle" xml:space="preserve">
+    <value>Информация</value>
+  </data>
+  <data name="Common_Ok" xml:space="preserve">
+    <value>_ОК</value>
+  </data>
+  <data name="Common_WarningTitle" xml:space="preserve">
+    <value>Предупреждение</value>
+  </data>
+  <data name="MainWindow_Header_Data" xml:space="preserve">
+    <value>Данни</value>
+  </data>
+  <data name="MainWindow_Header_Formulas" xml:space="preserve">
+    <value>Формули</value>
+  </data>
+  <data name="MainWindow_Header_Home" xml:space="preserve">
+    <value>Начало</value>
+  </data>
+  <data name="MainWindow_Header_Insert" xml:space="preserve">
+    <value>Вмъкване</value>
+  </data>
+  <data name="MainWindow_Header_PageLayout" xml:space="preserve">
+    <value>Оформление на страницата</value>
+  </data>
+  <data name="MainWindow_Header_Review" xml:space="preserve">
+    <value>Преглед</value>
+  </data>
+  <data name="MainWindow_Header_View" xml:space="preserve">
+    <value>Изглед</value>
+  </data>
+  <data name="MainWindow_Text_Home" xml:space="preserve">
+    <value>Начало</value>
+  </data>
+  <data name="Options_Advanced" xml:space="preserve">
+    <value>_Разширени</value>
+  </data>
+  <data name="Options_AddIns" xml:space="preserve">
+    <value>_Добавки</value>
+  </data>
+  <data name="Options_AppLanguage" xml:space="preserve">
+    <value>Език на _приложението:</value>
+  </data>
+  <data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve">
+    <value>Английски (САЩ)</value>
+  </data>
+  <data name="Options_AppLanguageHelpText" xml:space="preserve">
+    <value>Изберете езика, който FreeX използва за менюта, диалози и съобщения.</value>
+  </data>
+  <data name="Options_AppLanguageRestartMessage" xml:space="preserve">
+    <value>Изборът на език е запазен. Рестартирайте FreeX, за да се обновят всички отворени прозорци.</value>
+  </data>
+  <data name="Options_AppLanguageRestartNotice" xml:space="preserve">
+    <value>Някои отворени прозорци може да запазят текущия си език, докато не рестартирате FreeX.</value>
+  </data>
+  <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
+    <value>Използване на системния език</value>
+  </data>
+  <data name="Options_ChooseDisplayLanguage" xml:space="preserve">
+    <value>Изберете език на показване</value>
+  </data>
+  <data name="Options_CustomizeRibbon" xml:space="preserve">
+    <value>_Персонализиране на лентата</value>
+  </data>
+  <data name="Options_EaseOfAccess" xml:space="preserve">
+    <value>_Достъпност</value>
+  </data>
+  <data name="Options_Formulas" xml:space="preserve">
+    <value>_Формули</value>
+  </data>
+  <data name="Options_FreeXOptions" xml:space="preserve">
+    <value>Опции на FreeX</value>
+  </data>
+  <data name="Options_General" xml:space="preserve">
+    <value>_Общи</value>
+  </data>
+  <data name="Options_GeneralOptionsForWorkingWithFreeX" xml:space="preserve">
+    <value>Общи опции за работа с FreeX.</value>
+  </data>
+  <data name="Options_Language" xml:space="preserve">
+    <value>_Език</value>
+  </data>
+  <data name="Options_OptionsCategories" xml:space="preserve">
+    <value>Категории с опции</value>
+  </data>
+  <data name="Options_Proofing" xml:space="preserve">
+    <value>_Проверка</value>
+  </data>
+  <data name="Options_QuickAccessToolbar" xml:space="preserve">
+    <value>Лента с _бърз достъп</value>
+  </data>
+  <data name="Options_Save" xml:space="preserve">
+    <value>_Записване</value>
+  </data>
+  <data name="Options_SelectAFreeXOptionsCategory" xml:space="preserve">
+    <value>Изберете категория с опции на FreeX.</value>
+  </data>
+  <data name="Options_TrustCenter" xml:space="preserve">
+    <value>_Център за надеждност</value>
+  </data>
+  <data name="Options_UserInterfaceOptions" xml:space="preserve">
+    <value>Опции на потребителския интерфейс</value>
+  </data>
+  <data name="Options_View" xml:space="preserve">
+    <value>_Изглед</value>
+  </data>
+  <data name="Startup_CrashReportsConsentPrompt" xml:space="preserve">
+    <value>Искате ли FreeX да изпраща отчети за сривове, за да ни помогне да подобрим стабилността?</value>
+  </data>
+  <data name="Startup_CrashReportsTitle" xml:space="preserve">
+    <value>Отчети за сривове на FreeX</value>
+  </data>
+</root>
