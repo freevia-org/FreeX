@@ -53,6 +53,8 @@ public static partial class FlashFillService
             ?? TryFinalWhitespaceToken(examples)
             ?? TryRemoveFinalDottedToken(examples)
             ?? TryExtractFinalDottedToken(examples)
+            ?? TryRemoveFinalDelimitedToken(examples)
+            ?? TryExtractFinalDelimitedToken(examples)
             ?? TryExtractByDelimiter(examples)
             ?? TryPrefixTrim(examples)
             ?? TrySuffixTrim(examples)
