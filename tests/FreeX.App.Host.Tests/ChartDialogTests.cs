@@ -36,7 +36,7 @@ public sealed class ChartDialogTests
             ChartType.Stock,
             ChartType.Surface,
             ChartType.ThreeDSurface);
-        options.Should().NotContain(option => !ChartTypeSupport.IsRenderable(option.Type));
+        options.Should().NotContain(option => !ChartAuthoringPlanner.CanAuthor(option.Type));
         options.Single(option => option.Type == ChartType.PercentStackedColumn).DisplayName
             .Should()
             .Be("100% Stacked Column");
@@ -71,7 +71,7 @@ public sealed class ChartDialogTests
             "Stock",
             "Radar",
             "Surface");
-        categories.Should().OnlyContain(category => category.Options.All(option => ChartTypeSupport.IsRenderable(option.Type)));
+        categories.Should().OnlyContain(category => category.Options.All(option => ChartAuthoringPlanner.CanAuthor(option.Type)));
         categories.Single(category => category.Name == "Column").Options.Select(option => option.Type).Should().ContainInOrder(
             ChartType.Column,
             ChartType.StackedColumn,

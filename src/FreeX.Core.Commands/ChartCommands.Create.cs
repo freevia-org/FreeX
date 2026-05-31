@@ -37,8 +37,8 @@ public sealed class AddChartCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
-        if (!ChartTypeSupport.IsRenderable(_chart.Type))
-            return new CommandOutcome(false, "This chart family is recognized for XLSX preservation but cannot be authored yet.");
+        if (ChartAuthoringPlanner.RejectIfUnsupported(_chart.Type) is { } unsupportedOutcome)
+            return unsupportedOutcome;
         if (_chart.DataRange.Start.Sheet != _sheetId || _chart.DataRange.End.Sheet != _sheetId)
             return new CommandOutcome(false, "Chart data range must be on the target sheet.");
         if (!double.IsFinite(_chart.Width) || !double.IsFinite(_chart.Height) || _chart.Width <= 0 || _chart.Height <= 0)
@@ -98,8 +98,8 @@ public sealed class AddChartSheetCommand : IWorkbookCommand
     {
         if (CommandGuards.RejectIfWorkbookStructureProtected(ctx.Workbook) is { } protectedOutcome)
             return protectedOutcome;
-        if (!ChartTypeSupport.IsRenderable(_chartType))
-            return new CommandOutcome(false, "This chart family is recognized for XLSX preservation but cannot be authored yet.");
+        if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
+            return unsupportedOutcome;
         if (_dataRange.Start.Sheet != _sourceSheetId || _dataRange.End.Sheet != _sourceSheetId)
             return new CommandOutcome(false, "Chart data range must be on the source sheet.");
 
@@ -179,8 +179,8 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
     {
         if (string.IsNullOrWhiteSpace(_pivotTableName))
             return new CommandOutcome(false, "PivotTable name is required.");
-        if (!ChartTypeSupport.IsRenderable(_chartType))
-            return new CommandOutcome(false, "This chart family is recognized for XLSX preservation but cannot be authored yet.");
+        if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
+            return unsupportedOutcome;
         if (!double.IsFinite(_width) || !double.IsFinite(_height) || _width <= 0 || _height <= 0)
             return new CommandOutcome(false, "Chart size must be positive.");
 

@@ -52,17 +52,28 @@ public sealed class ChartCommandTests
     [InlineData(ChartType.BoxAndWhisker)]
     [InlineData(ChartType.Waterfall)]
     [InlineData(ChartType.Funnel)]
-    public void AdvancedChartFamilies_AreKnownAndRenderable(ChartType type)
+    public void AdvancedChartFamilies_AreKnownRenderableAuthorableAndChartExBacked(ChartType type)
     {
         ChartTypeSupport.IsKnown(type).Should().BeTrue();
+        ChartTypeSupport.IsAdvancedFamily(type).Should().BeTrue();
+        ChartTypeSupport.IsChartExFamily(type).Should().BeTrue();
         ChartTypeSupport.IsRenderable(type).Should().BeTrue();
+        ChartTypeSupport.IsAuthorable(type).Should().BeTrue();
+        ChartAuthoringPlanner.CanAuthor(type).Should().BeTrue();
     }
 
     [Fact]
-    public void MapChartType_IsKnownButNotRenderable()
+    public void MapChartType_IsKnownButDeferredForAuthoringAndRendering()
     {
         ChartTypeSupport.IsKnown(ChartType.Map).Should().BeTrue();
+        ChartTypeSupport.IsAdvancedFamily(ChartType.Map).Should().BeTrue();
+        ChartTypeSupport.IsChartExFamily(ChartType.Map).Should().BeFalse();
         ChartTypeSupport.IsRenderable(ChartType.Map).Should().BeFalse();
+        ChartTypeSupport.IsAuthorable(ChartType.Map).Should().BeFalse();
+        ChartTypeSupport.IsDeferredAuthoringFamily(ChartType.Map).Should().BeTrue();
+        ChartAuthoringPlanner.CanAuthor(ChartType.Map).Should().BeFalse();
+        ChartAuthoringPlanner.RejectIfUnsupported(ChartType.Map)!.ErrorMessage
+            .Should().Contain("recognized for XLSX preservation");
     }
 
     [Fact]
@@ -431,6 +442,23 @@ public sealed class ChartCommandTests
         sheet.Charts.Should().BeEmpty();
     }
 
+    [Fact]
+    public void AddChartSheetCommand_RejectsDeferredAdvancedFamiliesBeforeCreatingSheet()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 3));
+
+        var outcome = new AddChartSheetCommand(sheet.Id, range, ChartType.Map, "Map").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("recognized for XLSX preservation");
+        wb.Sheets.Should().ContainSingle().Which.Should().BeSameAs(sheet);
+    }
+
     [Theory]
     [InlineData(ChartType.Treemap)]
     [InlineData(ChartType.Sunburst)]
@@ -578,6 +606,25 @@ public sealed class ChartCommandTests
 
         chart.Type.Should().Be(ChartType.Column);
         chart.FirstColIsCategories.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ChangeChartTypeCommand_RejectsDeferredAdvancedFamiliesBeforeMutation()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 3));
+        new AddChartCommand(sheet.Id, range, ChartType.Column, "Sales").Apply(ctx);
+        var chart = sheet.Charts[0];
+
+        var outcome = new ChangeChartTypeCommand(sheet.Id, chart.Id, ChartType.Map).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("recognized for XLSX preservation");
+        chart.Type.Should().Be(ChartType.Column);
     }
 
     [Fact]

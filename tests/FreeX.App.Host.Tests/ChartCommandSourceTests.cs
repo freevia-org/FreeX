@@ -63,7 +63,7 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("new InsertChartDialog { Owner = this }");
         source.Should().Contain("InsertChartOfType(dialog.Result.ChartType)");
         source.Should().Contain("private void InsertChartOfType(ChartType type)");
-        source.Should().Contain("ChartTypeSupport.IsRenderable(type)");
+        source.Should().Contain("ChartAuthoringPlanner.CanAuthor(type)");
         source.Should().Contain("ShowDeferredChartFamilyMessage();");
         source.Should().Contain("new AddChartCommand(_currentSheetId, currentRange, type, \"Chart\")");
         source.Should().Contain("private void DeferredChartFamilyMenuItem_Click(object sender, RoutedEventArgs e)");

@@ -13,7 +13,7 @@ internal static partial class XlsxChartXmlWriter
 
     public static XDocument ToChartXml(ChartModel chart, Sheet sheet)
     {
-        if (IsChartExChart(chart.Type))
+        if (ChartTypeSupport.IsChartExFamily(chart.Type))
             return ToChartExXml(chart, sheet);
 
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
@@ -395,34 +395,7 @@ internal static partial class XlsxChartXmlWriter
         ChartTypeSupport.GetDataSeriesCount(chart) > 0 &&
         ChartTypeSupport.GetDataPointCount(chart) > 0 &&
         (!Enum.IsDefined(chart.Type) ||
-            chart.Type is ChartType.Column
-                or ChartType.StackedColumn
-                or ChartType.PercentStackedColumn
-                or ChartType.Bar
-                or ChartType.StackedBar
-                or ChartType.PercentStackedBar
-                or ChartType.Line
-                or ChartType.ThreeDLine
-                or ChartType.Scatter
-                or ChartType.Area
-                or ChartType.ThreeDArea
-                or ChartType.Bubble
-                or ChartType.Pie
-                or ChartType.ThreeDPie
-                or ChartType.Doughnut
-                or ChartType.Radar
-                or ChartType.Stock
-                or ChartType.Surface
-                or ChartType.ThreeDSurface
-                or ChartType.ThreeDColumn
-                or ChartType.ThreeDBar
-                or ChartType.Treemap
-                or ChartType.Sunburst
-                or ChartType.Histogram
-                or ChartType.Pareto
-                or ChartType.BoxAndWhisker
-                or ChartType.Waterfall
-                or ChartType.Funnel);
+            ChartTypeSupport.IsAuthorable(chart.Type));
 
     private static string ToXlsxBarDirection(ChartType chartType) =>
         chartType is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar
