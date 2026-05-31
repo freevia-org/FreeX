@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -36,26 +35,34 @@ internal static class XlsxWorksheetDataConsolidationMapper
         if (worksheetPathMap is null)
             return;
 
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.DataConsolidation is not null))
+        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
+        Save(session, workbook);
+    }
+
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
         {
-            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+            var dataConsolidationModel = sheet.DataConsolidation;
+            if (dataConsolidationModel is null)
                 continue;
 
-            var entry = archive.GetEntry(worksheetPath);
-            if (entry is null)
+            if (!session.TryGetWorksheet(sheet, out var edit))
                 continue;
 
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
+            var root = edit.Root;
+            var existingDataConsolidate = root.Element(WorksheetNs + "dataConsolidate");
+            var changed = existingDataConsolidate is not null;
+            existingDataConsolidate?.Remove();
 
-            root.Element(WorksheetNs + "dataConsolidate")?.Remove();
-            if (ToXml(sheet.DataConsolidation!) is { } dataConsolidate)
+            if (ToXml(dataConsolidationModel) is { } dataConsolidate)
+            {
                 root.Add(dataConsolidate);
+                changed = true;
+            }
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            if (changed)
+                session.MarkDirty(edit);
         }
     }
 

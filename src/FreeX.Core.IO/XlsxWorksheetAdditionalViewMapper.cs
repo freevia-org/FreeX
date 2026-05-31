@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -32,24 +31,22 @@ internal static class XlsxWorksheetAdditionalViewMapper
         if (worksheetPathMap is null)
             return;
 
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
+        Save(session, workbook);
+    }
+
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
         foreach (var sheet in workbook.Sheets)
         {
             var additionalViews = sheet.AdditionalViews;
             if (additionalViews is null)
                 continue;
 
-            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+            if (!session.TryGetWorksheet(sheet, out var edit))
                 continue;
 
-            var entry = archive.GetEntry(worksheetPath);
-            if (entry is null)
-                continue;
-
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
+            var root = edit.Root;
 
             var changed = false;
             var sheetViews = root.Element(WorksheetNs + "sheetViews");
@@ -79,7 +76,7 @@ internal static class XlsxWorksheetAdditionalViewMapper
             }
 
             if (changed)
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+                session.MarkDirty(edit);
         }
     }
 

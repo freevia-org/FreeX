@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -34,26 +33,34 @@ internal static class XlsxWorksheetSortStateMapper
         if (worksheetPathMap is null)
             return;
 
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.SortState is not null))
+        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
+        Save(session, workbook);
+    }
+
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
         {
-            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+            var sortStateModel = sheet.SortState;
+            if (sortStateModel is null)
                 continue;
 
-            var entry = archive.GetEntry(worksheetPath);
-            if (entry is null)
+            if (!session.TryGetWorksheet(sheet, out var edit))
                 continue;
 
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
+            var root = edit.Root;
+            var existingSortState = root.Element(WorksheetNs + "sortState");
+            var changed = existingSortState is not null;
+            existingSortState?.Remove();
 
-            root.Element(WorksheetNs + "sortState")?.Remove();
-            if (ToXml(sheet.SortState!) is { } sortState)
+            if (ToXml(sortStateModel) is { } sortState)
+            {
                 InsertSortState(root, sortState);
+                changed = true;
+            }
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            if (changed)
+                session.MarkDirty(edit);
         }
     }
 

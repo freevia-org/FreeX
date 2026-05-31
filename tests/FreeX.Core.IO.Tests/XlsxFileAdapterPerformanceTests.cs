@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using FluentAssertions;
@@ -242,6 +243,56 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void Benchmark_SaveLoadedWorksheetReplayMetadataWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var package = CreateWorksheetReplayMetadataSourcePackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var loadStream = new MemoryStream(package, writable: false))
+            workbook = adapter.Load(loadStream);
+        ApplyWorksheetReplayMetadata(workbook);
+
+        var markerAddress = new CellAddress(workbook.Sheets[0].Id, 1, 2);
+        workbook.Sheets[0].SetCell(markerAddress, new NumberValue(1000));
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            workbook.Sheets[0].SetCell(markerAddress, new NumberValue(1001 + i));
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_WORKSHEET_REPLAY_METADATA " +
+            $"sheets={WorksheetReplayMetadataSheetCount} rows={WorksheetReplayMetadataRowsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Benchmark_StructuredTableWriterTrailingNumber_AvoidsReverseIteratorAllocation()
     {
         var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStructuredTableWriter.cs"));
@@ -380,11 +431,36 @@ public sealed class XlsxFileAdapterPerformanceTests
         sessionSource.Should().Contain("XlsxPackageXmlEditor.ReplaceXml(_archive, path, _documents[path]);");
     }
 
+    [Fact]
+    public void SavePostProcessing_BatchesSourcePackageReplayWorksheetMetadataXmlWrites()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var batchSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "XlsxWorksheetPostProcessingMetadataBatchWriter.cs"));
+
+        adapterSource.Should().Contain(
+            "XlsxWorksheetPostProcessingMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());");
+        adapterSource.Should().Contain(
+            "XlsxWorksheetPostProcessingMetadataBatchWriter.SaveWorksheetElementMetadata(");
+        adapterSource.Should().Contain("XlsxWorksheetPostProcessingMetadataBatchWriter.HasReplayMetadata");
+        adapterSource.Should().Contain("XlsxWorksheetPostProcessingMetadataBatchWriter.HasWorksheetElementMetadata");
+        batchSource.Should().Contain("using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);");
+        batchSource.Should().Contain("XlsxWorksheetSmartTagMapper.Save(session, workbook);");
+        batchSource.Should().Contain("XlsxWorksheetSortStateMapper.Save(session, workbook);");
+        batchSource.Should().Contain("XlsxWorksheetAdditionalViewMapper.Save(session, workbook);");
+        batchSource.Should().Contain("XlsxWorksheetDataConsolidationMapper.Save(session, workbook);");
+        batchSource.Should().Contain("XlsxWorksheetPageSetupMetadataWriter.Save(session, workbook);");
+    }
+
     private const int DenseSheetCount = 8;
     private const int DenseRowsPerSheet = 80;
     private const int DenseColumnsPerSheet = 24;
     private const int WorksheetNativeMetadataSheetCount = 8;
     private const int WorksheetNativeMetadataRowsPerSheet = 40;
+    private const int WorksheetReplayMetadataSheetCount = 8;
+    private const int WorksheetReplayMetadataRowsPerSheet = 40;
 
     private static byte[] CreateDenseXlsxPackage()
     {
@@ -541,6 +617,89 @@ public sealed class XlsxFileAdapterPerformanceTests
         }
 
         return workbook;
+    }
+
+    private static byte[] CreateWorksheetReplayMetadataSourcePackage()
+    {
+        using var workbook = new XLWorkbook();
+        for (var sheetIndex = 1; sheetIndex <= WorksheetReplayMetadataSheetCount; sheetIndex++)
+        {
+            var sheet = workbook.Worksheets.Add($"Replay {sheetIndex}");
+            for (var row = 1; row <= WorksheetReplayMetadataRowsPerSheet; row++)
+                sheet.Cell(row, 1).Value = $"R{row}";
+        }
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    private static void ApplyWorksheetReplayMetadata(Workbook workbook)
+    {
+        for (var i = 0; i < workbook.Sheets.Count; i++)
+        {
+            var sheet = workbook.Sheets[i];
+            var sheetIndex = i + 1;
+            sheet.SmartTags = new WorksheetSmartTagsModel
+            {
+                NativeXml = "<smartTags xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" +
+                    $"<cellSmartTags r=\"A{sheetIndex}\"><cellSmartTag type=\"{sheetIndex}\" deleted=\"0\">" +
+                    $"<cellSmartTagPr key=\"place\" val=\"City{sheetIndex}\" /></cellSmartTag></cellSmartTags></smartTags>"
+            };
+            sheet.SortState = new WorksheetSortStateModel
+            {
+                Reference = $"A1:A{WorksheetReplayMetadataRowsPerSheet}",
+                CaseSensitive = true,
+                Conditions =
+                [
+                    new WorksheetSortConditionModel
+                    {
+                        Reference = $"A1:A{WorksheetReplayMetadataRowsPerSheet}",
+                        Descending = sheetIndex % 2 == 0,
+                        SortBy = "value"
+                    }
+                ]
+            };
+            sheet.AdditionalViews = new WorksheetAdditionalViewsModel
+            {
+                NativeAttributes = { ["customSheetViewsAttr"] = $"views-{sheetIndex}" },
+                Views =
+                [
+                    new WorksheetAdditionalViewModel
+                    {
+                        WorkbookViewId = (sheetIndex + 1).ToString(CultureInfo.InvariantCulture),
+                        NativeAttributes = { ["customViewAttr"] = $"view-{sheetIndex}" }
+                    }
+                ]
+            };
+            sheet.DataConsolidation = new WorksheetDataConsolidationModel
+            {
+                Function = "sum",
+                LeftLabels = true,
+                TopLabels = true,
+                Link = sheetIndex % 2 == 0,
+                NativeAttributes = { ["customDataConsolidationFlag"] = $"data-{sheetIndex}" },
+                References =
+                [
+                    new WorksheetDataConsolidationReferenceModel
+                    {
+                        Reference = "A1:A2",
+                        Sheet = sheet.Name,
+                        NativeAttributes = { ["customDataRefFlag"] = $"ref-{sheetIndex}" }
+                    }
+                ]
+            };
+            sheet.UsePrinterDefaults = false;
+            sheet.PrintCopies = 2 + sheetIndex;
+            sheet.PrintQualityVerticalDpi = 300 + sheetIndex;
+            sheet.PageSetupMetadata = MakeBag(
+                "pageSetup",
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["customPageSetupAttr"] = $"page-setup-{sheetIndex}"
+                },
+                [$"<fx:nativePageSetupChild xmlns:fx=\"urn:freex:test\" id=\"{sheetIndex}\" />"]);
+        }
     }
 
     private static NativeXmlPreserveBag MakeBag(

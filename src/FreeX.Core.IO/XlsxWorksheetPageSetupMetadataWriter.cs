@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -25,25 +24,23 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         Workbook workbook,
         XlsxWorkbookWorksheetPathMap? worksheetPathMap)
     {
-        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
         if (worksheetPathMap is null)
             return;
 
+        using var session = new XlsxWorksheetXmlEditSession(packageStream, worksheetPathMap);
+        Save(session, workbook);
+    }
+
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         foreach (var sheet in workbook.Sheets)
         {
-            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+            if (!session.TryGetWorksheet(sheet, out var edit))
                 continue;
 
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
+            var root = edit.Root;
 
             var changed = false;
             changed |= ApplyPageSetupAttributes(root, workbookNs, sheet);
@@ -51,7 +48,7 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
             changed |= ApplyOutlineProperties(root, workbookNs, sheet);
 
             if (changed)
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+                session.MarkDirty(edit);
         }
     }
 
