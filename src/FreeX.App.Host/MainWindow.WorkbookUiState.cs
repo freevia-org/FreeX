@@ -146,15 +146,12 @@ public partial class MainWindow
 
     private void RefreshToolbar()
     {
-        var canUndo = _commandBus.CanUndo(_workbook.Id);
-        var canRedo = _commandBus.CanRedo(_workbook.Id);
+        RefreshQuickAccessCommandState();
 
         if (SheetGrid.SelectedRange is not { } range)
         {
             _toolbarVisualStateCache.Clear();
             _lastToolbarVisualState = null;
-            UndoQatBtn.IsEnabled = canUndo;
-            RedoQatBtn.IsEnabled = canRedo;
             return;
         }
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -162,27 +159,21 @@ public partial class MainWindow
         {
             _toolbarVisualStateCache.Clear();
             _lastToolbarVisualState = null;
-            UndoQatBtn.IsEnabled = canUndo;
-            RedoQatBtn.IsEnabled = canRedo;
             return;
         }
         var styleId = sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default;
-        if (_toolbarVisualStateCache.TryGetCurrent(styleId, canUndo, canRedo, out _))
+        if (_toolbarVisualStateCache.TryGetCurrent(styleId, out _))
             return;
 
         var state = _toolbarVisualStateCache.GetOrCreate(
             styleId,
-            canUndo,
-            canRedo,
-            () => ToolbarVisualState.From(_workbook.GetStyle(styleId), canUndo, canRedo));
+            () => ToolbarVisualState.From(_workbook.GetStyle(styleId)));
         if (state == _lastToolbarVisualState)
             return;
 
         _suppressToolbarSync = true;
         try
         {
-            UndoQatBtn.IsEnabled = state.CanUndo;
-            RedoQatBtn.IsEnabled = state.CanRedo;
             BoldButton.IsChecked = state.Bold;
             ItalicButton.IsChecked = state.Italic;
             UnderlineButton.IsChecked = state.Underline;
@@ -204,6 +195,19 @@ public partial class MainWindow
         {
             _suppressToolbarSync = false;
         }
+    }
+
+    private void RefreshQuickAccessCommandState()
+    {
+        var state = new QuickAccessCommandState(
+            _commandBus.CanUndo(_workbook.Id),
+            _commandBus.CanRedo(_workbook.Id));
+        if (_lastQuickAccessCommandState == state)
+            return;
+
+        UndoQatBtn.IsEnabled = state.CanUndo;
+        RedoQatBtn.IsEnabled = state.CanRedo;
+        _lastQuickAccessCommandState = state;
     }
 
     private void ApplyStyleDiff(StyleDiff diff)

@@ -474,13 +474,10 @@ public partial class MainWindow
 
     private void SetStatusBarModeText(string text)
     {
-        if (StatusStatsPanel is not null)
-            StatusStatsPanel.Visibility = Visibility.Collapsed;
-        if (StatusReadyText is null)
+        if (StatusStatsPanel is null || StatusReadyText is null)
             return;
 
-        StatusReadyText.Visibility = Visibility.Visible;
-        StatusReadyText.Text = text;
+        ApplyStatusBarDisplayState(StatusBarDisplayState.Ready(text));
     }
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)

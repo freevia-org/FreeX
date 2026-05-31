@@ -1381,11 +1381,18 @@ public sealed class MainWindowSourceHygieneTests
     public void QuickAccessUndoRedoButtons_ReflectCommandStackState()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var toolbarSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ToolbarVisualState.cs"));
+        var cacheSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ToolbarVisualStateCache.cs"));
 
-        source.Should().Contain("var canUndo = _commandBus.CanUndo(_workbook.Id);");
-        source.Should().Contain("var canRedo = _commandBus.CanRedo(_workbook.Id);");
+        source.Should().Contain("private void RefreshQuickAccessCommandState()");
+        source.Should().Contain("_commandBus.CanUndo(_workbook.Id)");
+        source.Should().Contain("_commandBus.CanRedo(_workbook.Id)");
         source.Should().Contain("UndoQatBtn.IsEnabled = state.CanUndo;");
         source.Should().Contain("RedoQatBtn.IsEnabled = state.CanRedo;");
+        source.Should().Contain("RefreshQuickAccessCommandState();");
+        toolbarSource.Should().NotContain("bool CanUndo");
+        toolbarSource.Should().NotContain("bool CanRedo");
+        cacheSource.Should().Contain("private readonly record struct Source(StyleId StyleId);");
     }
 
     [Fact]
@@ -2118,9 +2125,10 @@ public sealed class MainWindowSourceHygieneTests
         xaml.IndexOf("x:Name=\"StatusNumericalCountText\"", StringComparison.Ordinal)
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusSumText\"", StringComparison.Ordinal));
 
-        gridStatusSource.Should().Contain("StatusCountText.Text = $\"Count: {stats.Count}\"");
-        gridStatusSource.Should().Contain("StatusNumericalCountText.Text = $\"Numerical Count: {stats.NumericalCount}\"");
-        gridStatusSource.Should().Contain("StatusSumText.Text   = stats.NumericalCount > 0");
+        gridStatusSource.Should().Contain("ApplyStatusBarDisplayState(StatusBarDisplayState.Stats(stats))");
+        gridStatusSource.Should().Contain("SetTextIfChanged(StatusCountText, state.CountText)");
+        gridStatusSource.Should().Contain("SetTextIfChanged(StatusNumericalCountText, state.NumericalCountText)");
+        gridStatusSource.Should().Contain("SetTextIfChanged(StatusSumText, state.SumText)");
         gridStatusSource.Should().Contain("if (stats.Count == 0)");
     }
 

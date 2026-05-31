@@ -5,18 +5,16 @@ namespace FreeX.App.Host;
 
 public sealed class ToolbarVisualStateCache
 {
-    private readonly record struct Source(StyleId StyleId, bool CanUndo, bool CanRedo);
+    private readonly record struct Source(StyleId StyleId);
 
     private Source? _lastSource;
     private ToolbarVisualState? _lastState;
 
     public ToolbarVisualState GetOrCreate(
         StyleId styleId,
-        bool canUndo,
-        bool canRedo,
         Func<ToolbarVisualState> create)
     {
-        var source = new Source(styleId, canUndo, canRedo);
+        var source = new Source(styleId);
         if (_lastSource == source && _lastState is { } cached)
             return cached;
 
@@ -26,9 +24,9 @@ public sealed class ToolbarVisualStateCache
         return state;
     }
 
-    public bool TryGetCurrent(StyleId styleId, bool canUndo, bool canRedo, out ToolbarVisualState state)
+    public bool TryGetCurrent(StyleId styleId, out ToolbarVisualState state)
     {
-        var source = new Source(styleId, canUndo, canRedo);
+        var source = new Source(styleId);
         if (_lastSource == source && _lastState is { } cached)
         {
             state = cached;

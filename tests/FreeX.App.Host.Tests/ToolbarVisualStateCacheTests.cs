@@ -6,19 +6,17 @@ namespace FreeX.App.Host.Tests;
 public sealed class ToolbarVisualStateCacheTests
 {
     [Fact]
-    public void GetOrCreate_ReusesStateWhenStyleAndUndoRedoSourceAreUnchanged()
+    public void GetOrCreate_ReusesStateWhenStyleSourceIsUnchanged()
     {
         var cache = new ToolbarVisualStateCache();
         var styleId = new StyleId(4);
         var calls = 0;
 
-        cache.GetOrCreate(styleId, canUndo: true, canRedo: false, CreateState);
-        var second = cache.GetOrCreate(styleId, canUndo: true, canRedo: false, CreateState);
+        cache.GetOrCreate(styleId, CreateState);
+        var second = cache.GetOrCreate(styleId, CreateState);
 
         calls.Should().Be(1);
         second.Should().Be(new ToolbarVisualState(
-            CanUndo: true,
-            CanRedo: false,
             Bold: true,
             Italic: false,
             Underline: false,
@@ -33,28 +31,49 @@ public sealed class ToolbarVisualStateCacheTests
         ToolbarVisualState CreateState()
         {
             calls++;
-            return ToolbarVisualState.From(new CellStyle { Bold = true }, canUndo: true, canRedo: false);
+            return ToolbarVisualState.From(new CellStyle { Bold = true });
         }
     }
 
     [Fact]
-    public void GetOrCreate_RebuildsStateWhenUndoAvailabilityChanges()
+    public void GetOrCreate_DoesNotRebuildFormattingStateWhenUndoAvailabilityChanges()
     {
         var cache = new ToolbarVisualStateCache();
         var styleId = new StyleId(4);
         var calls = 0;
+        var canUndo = false;
 
-        cache.GetOrCreate(styleId, canUndo: false, canRedo: false, () => CreateState(false));
-        var second = cache.GetOrCreate(styleId, canUndo: true, canRedo: false, () => CreateState(true));
+        cache.GetOrCreate(styleId, CreateState);
+        canUndo = true;
+        var second = cache.GetOrCreate(styleId, CreateState);
 
-        calls.Should().Be(2);
-        second.CanUndo.Should().BeTrue();
+        calls.Should().Be(1);
+        second.Bold.Should().BeFalse();
         return;
 
-        ToolbarVisualState CreateState(bool canUndo)
+        ToolbarVisualState CreateState()
         {
             calls++;
-            return ToolbarVisualState.From(CellStyle.Default, canUndo, canRedo: false);
+            return ToolbarVisualState.From(new CellStyle { Bold = canUndo });
+        }
+    }
+
+    [Fact]
+    public void GetOrCreate_RebuildsStateWhenStyleChanges()
+    {
+        var cache = new ToolbarVisualStateCache();
+        var calls = 0;
+
+        cache.GetOrCreate(new StyleId(4), CreateState);
+        cache.GetOrCreate(new StyleId(5), CreateState);
+
+        calls.Should().Be(2);
+        return;
+
+        ToolbarVisualState CreateState()
+        {
+            calls++;
+            return ToolbarVisualState.From(CellStyle.Default);
         }
     }
 }

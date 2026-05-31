@@ -57,7 +57,9 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _suppressToolbarSync;
     private readonly ToolbarVisualStateCache _toolbarVisualStateCache = new();
     private ToolbarVisualState? _lastToolbarVisualState;
+    private QuickAccessCommandState? _lastQuickAccessCommandState;
     private readonly StatusBarStatsCache _statusBarStatsCache = new();
+    private StatusBarDisplayState? _lastStatusBarDisplayState;
     private readonly SparklineValueCache _sparklineValueCache = new();
     private ulong _navigationCacheRevision;
     private bool _suppressViewOptionSync;

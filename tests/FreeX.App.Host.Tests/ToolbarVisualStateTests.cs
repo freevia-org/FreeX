@@ -6,7 +6,7 @@ namespace FreeX.App.Host.Tests;
 public sealed class ToolbarVisualStateTests
 {
     [Fact]
-    public void From_CapturesFormattingAndUndoRedoState()
+    public void From_CapturesFormattingState()
     {
         var style = new CellStyle
         {
@@ -18,11 +18,9 @@ public sealed class ToolbarVisualStateTests
             WrapText = true
         };
 
-        var state = ToolbarVisualState.From(style, canUndo: true, canRedo: false);
+        var state = ToolbarVisualState.From(style);
 
         state.Should().Be(new ToolbarVisualState(
-            CanUndo: true,
-            CanRedo: false,
             Bold: true,
             Italic: true,
             Underline: true,
