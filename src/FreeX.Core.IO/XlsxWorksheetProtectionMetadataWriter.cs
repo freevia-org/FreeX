@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -12,7 +11,12 @@ internal static class XlsxWorksheetProtectionMetadataWriter
         if (worksheetPathMap is null)
             return;
 
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
+        Save(session, workbook);
+    }
+
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         foreach (var sheet in workbook.Sheets)
@@ -21,22 +25,14 @@ internal static class XlsxWorksheetProtectionMetadataWriter
             if (metadata is null)
                 continue;
 
-            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+            if (!session.TryGetWorksheet(sheet, out var worksheetEdit))
                 continue;
 
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
+            var root = worksheetEdit.Root;
             if (!sheet.IsProtected)
             {
                 root.Element(worksheetNs + "sheetProtection")?.Remove();
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+                session.MarkDirty(worksheetEdit);
                 continue;
             }
 
@@ -79,7 +75,7 @@ internal static class XlsxWorksheetProtectionMetadataWriter
             if (sheet.IsProtected)
                 protection.SetAttributeValue("sheet", "1");
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            session.MarkDirty(worksheetEdit);
         }
     }
 

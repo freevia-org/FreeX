@@ -304,55 +304,24 @@ public sealed partial class XlsxFileAdapter
                 XlsxWorksheetAutoFilterMapper.Save(packageStream, workbook, GetWorksheetPathMap());
             }
 
-            if (workbook.Sheets.Any(sheet => sheet.ProtectionMetadata is not null))
+            if (workbook.Sheets.Any(HasSourcePackageIndependentWorksheetNativeMetadata))
             {
                 packageStream.Position = 0;
-                XlsxWorksheetProtectionMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
-            }
-
-            if (workbook.Sheets.Any(sheet => sheet.PrintOptionsMetadata is not null))
-            {
-                packageStream.Position = 0;
-                XlsxWorksheetPrintOptionsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
-            }
-
-            if (workbook.Sheets.Any(sheet => sheet.DimensionMetadata is not null))
-            {
-                packageStream.Position = 0;
-                XlsxWorksheetDimensionMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
-            }
-
-            if (workbook.Sheets.Any(sheet => sheet.SheetPropertiesMetadata is not null))
-            {
-                packageStream.Position = 0;
-                XlsxWorksheetSheetPropertiesMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
-            }
-
-            if (workbook.Sheets.Any(sheet => sheet.PrimaryViewMetadata is not null))
-            {
-                packageStream.Position = 0;
-                XlsxWorksheetPrimaryViewMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
-            }
-
-            if (workbook.Sheets.Any(sheet => sheet.PageMarginsMetadata is not null))
-            {
-                packageStream.Position = 0;
-                XlsxWorksheetPageMarginsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
-            }
-
-            if (workbook.Sheets.Any(sheet => sheet.RowPageBreaksMetadata is not null || sheet.ColumnPageBreaksMetadata is not null))
-            {
-                packageStream.Position = 0;
-                XlsxWorksheetPageBreaksMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
-            }
-
-            if (workbook.Sheets.Any(sheet => sheet.HeaderFooterMetadata is not null))
-            {
-                packageStream.Position = 0;
-                XlsxWorksheetHeaderFooterMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+                XlsxWorksheetNativeMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());
             }
         }
     }
+
+    private static bool HasSourcePackageIndependentWorksheetNativeMetadata(Sheet sheet) =>
+        sheet.ProtectionMetadata is not null ||
+        sheet.PrintOptionsMetadata is not null ||
+        sheet.DimensionMetadata is not null ||
+        sheet.SheetPropertiesMetadata is not null ||
+        sheet.PrimaryViewMetadata is not null ||
+        sheet.PageMarginsMetadata is not null ||
+        sheet.RowPageBreaksMetadata is not null ||
+        sheet.ColumnPageBreaksMetadata is not null ||
+        sheet.HeaderFooterMetadata is not null;
 
     private static bool HasPivotCustomNumberFormats(Workbook workbook)
     {

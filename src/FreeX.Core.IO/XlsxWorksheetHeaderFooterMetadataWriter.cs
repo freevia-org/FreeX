@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -12,7 +11,12 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
         if (worksheetPathMap is null)
             return;
 
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
+        Save(session, workbook);
+    }
+
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         foreach (var sheet in workbook.Sheets)
@@ -21,18 +25,10 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
             if (metadata is null)
                 continue;
 
-            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+            if (!session.TryGetWorksheet(sheet, out var worksheetEdit))
                 continue;
 
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
+            var root = worksheetEdit.Root;
             var headerFooter = root.Element(worksheetNs + "headerFooter");
             if (headerFooter is null)
             {
@@ -66,7 +62,7 @@ internal static class XlsxWorksheetHeaderFooterMetadataWriter
                 }
             }
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            session.MarkDirty(worksheetEdit);
         }
     }
 
