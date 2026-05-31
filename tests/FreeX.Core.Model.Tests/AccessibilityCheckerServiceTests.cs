@@ -749,6 +749,79 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_WhenPatternForegroundIsLowContrast()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        var patternedStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = CellColor.Black,
+            FillColor = CellColor.White,
+            FillPatternStyle = CellFillPatternStyle.DarkGrid,
+            FillPatternColor = CellColor.Black
+        });
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("Patterned exception note"),
+            StyleId = patternedStyle
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("B2");
+        issue.Message.Should().Be("Cell text should have at least 4.5:1 contrast against its fill.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_WhenGrayPatternBlendIsLowContrast()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 3, 2);
+        var patternedStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = CellColor.White,
+            FillColor = CellColor.Black,
+            FillPatternStyle = CellFillPatternStyle.DarkGray,
+            FillPatternColor = CellColor.White
+        });
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("Patterned risk note"),
+            StyleId = patternedStyle
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("B3");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresPatternedCellTextWithSufficientBaseAndPatternContrast()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var patternedStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = CellColor.Black,
+            FillColor = CellColor.White,
+            FillPatternStyle = CellFillPatternStyle.DarkGrid,
+            FillPatternColor = new CellColor(230, 230, 230)
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new Cell
+        {
+            Value = new TextValue("Readable patterned note"),
+            StyleId = patternedStyle
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
+
+    [Fact]
     public void FindIssues_IgnoresConditionalFormatContrastWhenRuleDoesNotMatchCell()
     {
         var workbook = new Workbook("Accessibility");
