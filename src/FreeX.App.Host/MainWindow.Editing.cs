@@ -691,11 +691,14 @@ public partial class MainWindow
         if (edits.Count == 0)
             return false;
 
-        return CommitPreparedEdits(
+        var selectionCommitted = CommitPreparedEdits(
             edits,
             text,
             edits.Select(edit => edit.Address).ToList(),
             "Edit Selection");
+        if (selectionCommitted)
+            ClearFormulaRangeEntryState();
+        return selectionCommitted;
     }
 
     private bool TryCreateCellFromEntryText(CellAddress addr, string text, out Cell newCell)

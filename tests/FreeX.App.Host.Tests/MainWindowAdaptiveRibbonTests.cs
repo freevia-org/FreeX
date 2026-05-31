@@ -491,6 +491,37 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void PageLayoutAndFormulasRibbon_PromoteStandaloneCommandsToTallIconLabelsAtWideWidth()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Page Layout", 1465);
+            if (harness.CanUseRequestedRibbonWidth(1465))
+            {
+                harness.TallLargeRibbonCommandLabels.Should().Contain(
+                    ["Themes", "Colors", "Fonts", "Effects", "Scale"],
+                    $"Page Layout should spend wide ribbon space on standalone large commands while keeping stacked Page Setup compact; {harness.DebugActiveRibbonChildren}");
+                harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                    0.5,
+                    $"Page Layout should promote standalone commands without hidden overflow; {harness.DebugActiveRibbonChildren}");
+            }
+
+            harness.SelectRibbonTab("Formulas", 1465);
+            if (harness.CanUseRequestedRibbonWidth(1465))
+            {
+                harness.TallLargeRibbonCommandLabels.Should().Contain(
+                    ["Insert Function", "AutoSum", "Name Manager", "Define Name", "Use in Formula", "Create from Selection", "Calculate Now", "Calculate Sheet", "Calc Options"],
+                    $"Formulas should use large icon-label commands for standalone ribbon actions before compacting dense stacks; {harness.DebugActiveRibbonChildren}");
+                harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                    0.5,
+                    $"Formulas should promote standalone commands without hidden overflow; {harness.DebugActiveRibbonChildren}");
+            }
+        });
+    }
+
+    [Fact]
     public void RibbonTabs_RemainSingleRowAtNarrowWidths()
     {
         StaTestRunner.Run(() =>
@@ -727,7 +758,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             {
                 new RibbonFallbackExpectation("Insert", 900, Expanded: ["Tables"], Collapsed: ["Charts"]),
                 new RibbonFallbackExpectation("Data", 1120, Expanded: ["Sort & Filter", "Data Tools", "Forecast"], Collapsed: []),
-                new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup"], Collapsed: ["Arrange"]),
+                new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup", "Arrange"], Collapsed: []),
                 new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show"], Collapsed: []),
                 new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views", "Show", "Window"], Collapsed: [])
             };
