@@ -53,12 +53,6 @@ public sealed partial class XlsxFileAdapter
             XlsxAllowEditRangeMapper.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.DataValidations.Any(XlsxDataValidationNativeMetadataMapper.HasNativeMetadata)))
-        {
-            packageStream.Position = 0;
-            XlsxDataValidationNativeMetadataMapper.Save(packageStream, workbook);
-        }
-
         if (XlsxAdvancedConditionalFormatWriter.HasAdvancedConditionalFormats(workbook))
         {
             packageStream.Position = 0;

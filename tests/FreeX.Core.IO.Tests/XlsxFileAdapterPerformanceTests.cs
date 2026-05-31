@@ -286,6 +286,49 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void Benchmark_SaveDataValidationNativeMetadataWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var workbook = CreateDataValidationNativeMetadataWorkbook();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_DATA_VALIDATION_NATIVE_METADATA " +
+            $"sheets={WorksheetNativeMetadataSheetCount} validations_per_sheet={WorksheetNativeMetadataRowsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Benchmark_SaveLoadedWorksheetReplayMetadataWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -458,6 +501,7 @@ public sealed class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("XlsxWorksheetSourceIndependentMetadataBatchWriter.HasMetadata");
         adapterSource.Should().NotContain("XlsxWorksheetNativeMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());");
         adapterSource.Should().NotContain("XlsxWorksheetAutoFilterMapper.Save(packageStream, workbook, GetWorksheetPathMap());");
+        adapterSource.Should().NotContain("XlsxDataValidationNativeMetadataMapper.Save(packageStream, workbook);");
         adapterSource.Should().NotContain("HasSourcePackageIndependentWorksheetNativeMetadata");
         foreach (var legacyCall in new[]
         {
@@ -479,6 +523,7 @@ public sealed class XlsxFileAdapterPerformanceTests
         batchSource.Should().Contain("XlsxWorksheetProtectionMetadataWriter.Save(session, workbook);");
         batchSource.Should().Contain("XlsxWorksheetHeaderFooterMetadataWriter.Save(session, workbook);");
         sourceIndependentBatchSource.Should().Contain("XlsxWorksheetAutoFilterMapper.Save(session, workbook);");
+        sourceIndependentBatchSource.Should().Contain("XlsxDataValidationNativeMetadataMapper.Save(session, workbook);");
         sourceIndependentBatchSource.Should().Contain("XlsxWorksheetNativeMetadataBatchWriter.Save(session, workbook);");
         sessionSource.Should().Contain("private readonly Dictionary<string, XDocument> _documents");
         sessionSource.Should().Contain("XlsxPackageXmlEditor.ReplaceXml(_archive, path, _documents[path]);");
@@ -705,6 +750,49 @@ public sealed class XlsxFileAdapterPerformanceTests
                 {
                     ["customFilterColumnAttr"] = $"filter-column-{sheet.Name}"
                 }));
+        }
+
+        return workbook;
+    }
+
+    private static Workbook CreateDataValidationNativeMetadataWorkbook()
+    {
+        var workbook = new Workbook("Data validation native metadata IO");
+        for (var sheetIndex = 1; sheetIndex <= WorksheetNativeMetadataSheetCount; sheetIndex++)
+        {
+            var sheet = workbook.AddSheet($"DV Metadata {sheetIndex}");
+            for (uint row = 1; row <= WorksheetNativeMetadataRowsPerSheet; row++)
+            {
+                sheet.SetCell(
+                    new CellAddress(sheet.Id, row, 1),
+                    new NumberValue(row));
+                sheet.DataValidations.Add(new DataValidation
+                {
+                    AppliesTo = new GridRange(
+                        new CellAddress(sheet.Id, row, 1),
+                        new CellAddress(sheet.Id, row, 1)),
+                    Type = DvType.WholeNumber,
+                    Operator = DvOperator.Between,
+                    Formula1 = "1",
+                    Formula2 = "100",
+                    NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["imeMode"] = "noControl",
+                        ["customDvAttr"] = $"dv-{sheetIndex}-{row}"
+                    },
+                    NativeChildXmls =
+                    [
+                        $"<extLst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><ext uri=\"{{FREEX-DV-{sheetIndex}-{row}}}\" /></extLst>"
+                    ],
+                    NativeContainerAttributes = row == 1
+                        ? new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["disablePrompts"] = "0",
+                            ["customDvContainerAttr"] = $"container-{sheetIndex}"
+                        }
+                        : null
+                });
+            }
         }
 
         return workbook;
