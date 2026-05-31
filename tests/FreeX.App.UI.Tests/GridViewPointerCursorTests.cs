@@ -232,6 +232,25 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void ObjectDragMouseUpClearsCursorAndCaptureAfterCommit()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Input.cs"));
+        var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
+        var objectMouseUpBlock = source[
+            source.IndexOf("if (_objectDragKind != ObjectDragKind.None)", mouseUpStart, StringComparison.Ordinal)..
+            source.IndexOf("if (_marginDragEdge.HasValue)", mouseUpStart, StringComparison.Ordinal)];
+
+        objectMouseUpBlock.Should().Contain("_objectDragKind = ObjectDragKind.None;");
+        objectMouseUpBlock.Should().Contain("_objectDragCurrentRect = Rect.Empty;");
+        objectMouseUpBlock.Should().Contain("Cursor = null;");
+        objectMouseUpBlock.Should().Contain("ReleaseMouseCapture();");
+        objectMouseUpBlock.Should().Contain("e.Handled = true;");
+        objectMouseUpBlock.IndexOf("Cursor = null;", StringComparison.Ordinal)
+            .Should().BeLessThan(objectMouseUpBlock.IndexOf("ReleaseMouseCapture();", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SplitPaneDividerMouseDownCapturesDragBeforeAutofillAndResize()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
@@ -517,6 +536,7 @@ public sealed class GridViewPointerCursorTests
         lostCapture.Should().Contain("_autofillDragging = false;");
         lostCapture.Should().Contain("_autofillSourceRange = null;");
         lostCapture.Should().Contain("_autofillTarget = null;");
+        lostCapture.Should().Contain("Cursor = null;");
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)

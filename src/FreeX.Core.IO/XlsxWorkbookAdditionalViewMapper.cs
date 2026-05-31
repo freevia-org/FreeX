@@ -16,6 +16,11 @@ internal static class XlsxWorkbookAdditionalViewMapper
             return null;
 
         var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        return Read(workbookXml);
+    }
+
+    public static WorkbookAdditionalViewsModel? Read(XDocument workbookXml)
+    {
         var bookViews = workbookXml.Root?.Element(WorkbookNs + "bookViews");
         if (bookViews is null)
             return null;
@@ -36,18 +41,26 @@ internal static class XlsxWorkbookAdditionalViewMapper
 
     public static void Save(Stream xlsxStream, Workbook workbook)
     {
-        if (workbook.AdditionalViews is null)
-            return;
-
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
         if (workbookEntry is null)
             return;
 
         var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        if (!ApplyToWorkbookXml(workbookXml, workbook))
+            return;
+
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+    }
+
+    public static bool ApplyToWorkbookXml(XDocument workbookXml, Workbook workbook)
+    {
+        if (workbook.AdditionalViews is null)
+            return false;
+
         var root = workbookXml.Root;
         if (root is null)
-            return;
+            return false;
 
         var bookViews = root.Element(WorkbookNs + "bookViews");
         if (bookViews is null)
@@ -67,7 +80,7 @@ internal static class XlsxWorkbookAdditionalViewMapper
         foreach (var view in workbook.AdditionalViews.Views.Select(ToXml).OfType<XElement>())
             bookViews.Add(view);
 
-        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        return true;
     }
 
     private static WorkbookAdditionalViewModel ReadView(XElement element)

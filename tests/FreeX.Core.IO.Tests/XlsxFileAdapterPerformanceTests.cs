@@ -149,6 +149,55 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void Benchmark_SaveLoadedDenseWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var package = CreateDenseXlsxPackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var loadStream = new MemoryStream(package, writable: false))
+            workbook = adapter.Load(loadStream);
+
+        var sheet = workbook.Sheets[0];
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(42));
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_DENSE " +
+            $"sheets={DenseSheetCount} rows={DenseRowsPerSheet} cols={DenseColumnsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Benchmark_StructuredTableWriterTrailingNumber_AvoidsReverseIteratorAllocation()
     {
         var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStructuredTableWriter.cs"));
@@ -190,6 +239,70 @@ public sealed class XlsxFileAdapterPerformanceTests
         source.Should().NotContain(
             ".Where(pair => pair.Key >= 164",
             "catalog seeding should avoid a temporary LINQ filtered dictionary projection");
+    }
+
+    [Fact]
+    public void LoadCore_ReadsWorkbookMetadataInSinglePackagePass()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var metadataSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookMetadataReader.cs"));
+
+        adapterSource.Should().Contain("var workbookMetadata = XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageStream);");
+        foreach (var legacyCall in new[]
+        {
+            "LoadUses1904DateSystem(packageStream)",
+            "LoadWorkbookProperties(packageStream)",
+            "LoadWorkbookViewProperties(packageStream)",
+            "LoadFileSharing(packageStream)",
+            "LoadFileRecoveryProperties(packageStream)",
+            "LoadFileVersion(packageStream)",
+            "LoadFunctionGroups(packageStream)",
+            "LoadSmartTags(packageStream)",
+            "LoadProtection(packageStream)",
+            "LoadProtectionMetadata(packageStream)",
+            "LoadCalculationProperties(packageStream)",
+            "LoadCustomViews(packageStream)"
+        })
+        {
+            adapterSource.Should().NotContain(legacyCall);
+        }
+
+        metadataSource.Should().Contain("public static XlsxWorkbookMetadataSnapshot LoadWorkbookMetadata(Stream xlsxStream)");
+        metadataSource.Should().Contain("var workbookEntry = archive.GetEntry(\"xl/workbook.xml\");");
+        metadataSource.Should().Contain("return LoadWorkbookMetadata(workbookXml);");
+    }
+
+    [Fact]
+    public void LoadCore_ReusesSingleStylesheetParseForLoadMetadata()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+
+        adapterSource.Should().Contain("var stylesXml = XlsxStylesheetReader.Load(packageStream);");
+        adapterSource.Should().Contain("XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(stylesXml)");
+        adapterSource.Should().Contain("XlsxIndexedColorPaletteMapper.Load(stylesXml)");
+        adapterSource.Should().Contain("XlsxPivotTableStyleMetadataReader.Load(stylesXml)");
+        adapterSource.Should().Contain("LoadSheetXmlLayout(packageStream, stylesXml)");
+        adapterSource.Should().NotContain("LoadNumberFormatCatalog(packageStream)");
+        adapterSource.Should().NotContain("XlsxIndexedColorPaletteMapper.Load(packageStream)");
+        adapterSource.Should().NotContain("XlsxPivotTableStyleMetadataReader.Load(packageStream)");
+        adapterSource.Should().NotContain("LoadSheetXmlLayout(packageStream);");
+    }
+
+    [Fact]
+    public void SavePostProcessing_BatchesWorkbookMetadataXmlWrites()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var writerSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookMetadataWriter.cs"));
+
+        adapterSource.Should().Contain("XlsxWorkbookMetadataWriter.SavePostProcessingMetadata(packageStream, workbook);");
+        adapterSource.Should().Contain("XlsxWorkbookMetadataWriter.SaveSourcePackageReplayMetadata(packageStream, workbook);");
+        adapterSource.Should().NotContain("XlsxWorkbookMetadataWriter.SaveWorkbookProperties(packageStream, workbook);");
+        adapterSource.Should().NotContain("XlsxWorkbookMetadataWriter.SaveCalculationProperties(packageStream, workbook);");
+        adapterSource.Should().NotContain("XlsxWorkbookAdditionalViewMapper.Save(packageStream, workbook);");
+
+        writerSource.Should().Contain("public static void SavePostProcessingMetadata(Stream xlsxStream, Workbook workbook)");
+        writerSource.Should().Contain("public static void SaveSourcePackageReplayMetadata(Stream xlsxStream, Workbook workbook)");
+        writerSource.Should().Contain("private static void SaveWorkbookXml(Stream xlsxStream, Workbook workbook");
     }
 
     private const int DenseSheetCount = 8;

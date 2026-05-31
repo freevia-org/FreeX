@@ -20,8 +20,9 @@ public partial class GridView
             return;
         }
 
-        var rowLookup = BuildSparklineRowMetricLookup(Viewport.RowMetrics);
-        var colLookup = BuildSparklineColumnMetricLookup(Viewport.ColMetrics);
+        var lookups = GetRenderCellLookups(Viewport);
+        var rowLookup = lookups.Rows;
+        var colLookup = lookups.Columns;
 
         foreach (var sparkline in Sparklines)
         {
@@ -48,24 +49,6 @@ public partial class GridView
         }
     }
 
-    private static Dictionary<uint, RowMetric> BuildSparklineRowMetricLookup(IReadOnlyList<RowMetric> rows)
-    {
-        var lookup = new Dictionary<uint, RowMetric>(rows.Count);
-        foreach (var row in rows)
-            lookup.Add(row.Row, row);
-
-        return lookup;
-    }
-
-    private static Dictionary<uint, ColMetric> BuildSparklineColumnMetricLookup(IReadOnlyList<ColMetric> columns)
-    {
-        var lookup = new Dictionary<uint, ColMetric>(columns.Count);
-        foreach (var column in columns)
-            lookup.Add(column.Col, column);
-
-        return lookup;
-    }
-
     private static SolidColorBrush FrozenBrush(Color color)
     {
         var brush = new SolidColorBrush(color);
@@ -82,15 +65,8 @@ public partial class GridView
 
     private static void DrawLineSparkline(DrawingContext dc, IReadOnlyList<double> values, Rect rect, Pen pen)
     {
-        var layout = SparklineLayoutPlanner.CalculateLineLayout(values, rect);
-        if (layout.SinglePoint is { } point)
-        {
-            dc.DrawEllipse(pen.Brush, null, point, 1.5, 1.5);
-            return;
-        }
-
-        foreach (var segment in layout.Segments)
-            dc.DrawLine(pen, segment.Start, segment.End);
+        var consumer = new LineSparklineDrawingConsumer(dc, pen);
+        SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer);
     }
 
     private static void DrawColumnSparkline(
@@ -101,7 +77,25 @@ public partial class GridView
         Brush positiveFill,
         Brush negativeFill)
     {
-        foreach (var bar in SparklineLayoutPlanner.CalculateColumnLayout(values, rect, winLoss).Bars)
-            dc.DrawRectangle(bar.IsNegative ? negativeFill : positiveFill, null, bar.Rect);
+        var consumer = new ColumnSparklineDrawingConsumer(dc, positiveFill, negativeFill);
+        SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer);
+    }
+
+    private readonly struct LineSparklineDrawingConsumer(DrawingContext dc, Pen pen) : ISparklineLineLayoutConsumer
+    {
+        public void AcceptSinglePoint(Point point) =>
+            dc.DrawEllipse(pen.Brush, null, point, 1.5, 1.5);
+
+        public void AcceptSegment(Point start, Point end) =>
+            dc.DrawLine(pen, start, end);
+    }
+
+    private readonly struct ColumnSparklineDrawingConsumer(
+        DrawingContext dc,
+        Brush positiveFill,
+        Brush negativeFill) : ISparklineColumnLayoutConsumer
+    {
+        public void AcceptBar(Rect rect, bool isNegative) =>
+            dc.DrawRectangle(isNegative ? negativeFill : positiveFill, null, rect);
     }
 }

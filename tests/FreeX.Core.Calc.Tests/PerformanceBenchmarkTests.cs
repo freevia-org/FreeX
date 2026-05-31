@@ -293,6 +293,65 @@ public class PerformanceBenchmarkTests
     }
 
     [Fact]
+    public void Benchmark_DependencyRebuildWithFormulaFreeSheet_ReportsTiming()
+    {
+        var workbook = new Workbook("Benchmark");
+        var valueSheet = workbook.AddSheet("ValuesOnly");
+        var formulaSheet = workbook.AddSheet("Formulas");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+        const uint valueCellCount = 200_000;
+        const uint formulaCount = 1_000;
+        const int iterations = 8;
+
+        for (uint row = 1; row <= valueCellCount; row++)
+            valueSheet.SetCell(new CellAddress(valueSheet.Id, row, 1), new NumberValue(row));
+
+        for (uint row = 1; row <= formulaCount; row++)
+        {
+            formulaSheet.SetCell(new CellAddress(formulaSheet.Id, row, 1), new NumberValue(row));
+            formulaSheet.SetFormula(new CellAddress(formulaSheet.Id, row, 2), $"A{row}*2");
+        }
+
+        engine.RebuildFormulaDependencies(workbook);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+            engine.RebuildFormulaDependencies(workbook);
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Formula-free sheet dependency rebuild: {iterations} iterations, " +
+            $"{valueCellCount:N0} value cells, {formulaCount:N0} formulas, " +
+            $"{sw.Elapsed.TotalMilliseconds:F2}ms, {allocated:N0} bytes allocated, " +
+            $"{allocated / iterations:N0} bytes/iteration");
+
+        valueSheet.HasFormulas.Should().BeFalse();
+        formulaSheet.FormulaCellCount.Should().Be((int)formulaCount);
+        allocated.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void RebuildFormulaDependencies_SkipsFormulaFreeSheetsBeforeEnumeratingCells()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Calc", "RecalcEngine.cs"));
+        var rebuild = source[
+            source.IndexOf("public void RebuildFormulaDependencies", StringComparison.Ordinal)..
+            source.IndexOf("public RecalcReport RecalculateAllFormulas", StringComparison.Ordinal)];
+
+        rebuild.Should().Contain("if (!sheet.HasFormulas)");
+        rebuild.IndexOf("if (!sheet.HasFormulas)", StringComparison.Ordinal)
+            .Should().BeLessThan(rebuild.IndexOf("foreach (var addr in sheet.EnumerateFormulaCells())", StringComparison.Ordinal));
+        rebuild.Should().NotContain("foreach (var (addr, cell) in sheet.EnumerateCells())");
+    }
+
+    [Fact]
     public void Benchmark_SingleSectionNumberFormat_AvoidsSplitScaffoldingAllocation()
     {
         const int iterations = 10_000;

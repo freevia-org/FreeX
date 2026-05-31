@@ -58,7 +58,7 @@ public sealed class RibbonIconFactorySvgTests
             {
                 CommandName = "Open",
                 Kind = RibbonCommandIconKind.GetData,
-                IconSize = 15,
+                IconSize = 24,
                 Foreground = Brushes.White
             };
 
@@ -86,13 +86,13 @@ public sealed class RibbonIconFactorySvgTests
             var icon = RibbonIconFactory.CreateCommandIcon(
                 commandName,
                 new RibbonCommandIcon(RibbonCommandIconKind.Generic),
-                size: 15,
+                size: 24,
                 Brushes.White);
 
             var image = icon.Should().BeOfType<Image>().Subject;
             image.Source.Should().BeOfType<DrawingImage>();
-            image.Width.Should().Be(15);
-            image.Height.Should().Be(15);
+            image.Width.Should().Be(24);
+            image.Height.Should().Be(24);
         });
     }
 
@@ -106,13 +106,13 @@ public sealed class RibbonIconFactorySvgTests
             var icon = RibbonIconFactory.CreateCommandIcon(
                 commandName,
                 new RibbonCommandIcon(RibbonCommandIconKind.Pin),
-                size: 16,
+                size: 24,
                 Brushes.Black);
 
             var image = icon.Should().BeOfType<Image>().Subject;
             image.Source.Should().BeOfType<DrawingImage>();
-            image.Width.Should().Be(16);
-            image.Height.Should().Be(16);
+            image.Width.Should().Be(24);
+            image.Height.Should().Be(24);
         });
     }
 

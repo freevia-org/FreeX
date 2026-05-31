@@ -4,6 +4,11 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
 
+internal interface IQuickAnalysisPreviewRectConsumer
+{
+    void Accept(Rect rect);
+}
+
 internal static class QuickAnalysisPreviewLayoutPlanner
 {
     public static Rect? CalculatePreviewRect(
@@ -19,6 +24,31 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
+        var rows = BuildRowMetricLookup(viewport.RowMetrics);
+        var cols = BuildColMetricLookup(viewport.ColMetrics);
+        var consumer = new ListRectConsumer();
+        VisitDataBarPreviewRects(
+            viewport,
+            range,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            rows,
+            cols,
+            ref consumer);
+
+        return consumer.ToResult();
+    }
+
+    internal static void VisitDataBarPreviewRects<TConsumer>(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        Dictionary<uint, RowMetric> rows,
+        Dictionary<uint, ColMetric> cols,
+        ref TConsumer consumer)
+        where TConsumer : struct, IQuickAnalysisPreviewRectConsumer
+    {
         var max = 0d;
         var hasNumericCell = false;
         foreach (var cell in viewport.Cells)
@@ -33,29 +63,18 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         }
 
         if (!hasNumericCell)
-            return [];
+            return;
 
-        var rows = BuildRowMetricLookup(viewport.RowMetrics);
-        var cols = BuildColMetricLookup(viewport.ColMetrics);
-        var rects = new List<Rect>();
         foreach (var cell in viewport.Cells)
         {
-            if (!IsCellInRange(cell, range) ||
-                !TryGetPreviewNumber(cell, out var value) ||
-                !rows.TryGetValue(cell.Row, out var row) ||
-                !cols.TryGetValue(cell.Col, out var col))
-                continue;
-
-            var fraction = max <= 0 ? 0 : Math.Clamp(Math.Max(0, value) / max, 0, 1);
-            var availableWidth = Math.Max(0, col.Width - 6);
-            rects.Add(new Rect(
-                col.LeftOffset + rowHeaderWidth + 3,
-                row.TopOffset + columnHeaderHeight + 4,
-                Math.Round(availableWidth * fraction, 3),
-                Math.Max(0, row.Height - 8)));
+            if (IsCellInRange(cell, range) &&
+                TryGetPreviewNumber(cell, out var value) &&
+                rows.TryGetValue(cell.Row, out var row) &&
+                cols.TryGetValue(cell.Col, out var col))
+            {
+                consumer.Accept(CreateDataBarRect(row, col, value, max, rowHeaderWidth, columnHeaderHeight));
+            }
         }
-
-        return rects;
     }
 
     private static bool IsCellInRange(DisplayCell cell, GridRange range) =>
@@ -70,7 +89,19 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
-        var rects = new List<Rect>();
+        var consumer = new ListRectConsumer();
+        VisitCellPreviewRects(viewport, range, rowHeaderWidth, columnHeaderHeight, ref consumer);
+        return consumer.ToResult();
+    }
+
+    internal static void VisitCellPreviewRects<TConsumer>(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        ref TConsumer consumer)
+        where TConsumer : struct, IQuickAnalysisPreviewRectConsumer
+    {
         foreach (var row in viewport.RowMetrics)
         {
             if (row.Row < range.Start.Row || row.Row > range.End.Row)
@@ -81,15 +112,13 @@ internal static class QuickAnalysisPreviewLayoutPlanner
                 if (col.Col < range.Start.Col || col.Col > range.End.Col)
                     continue;
 
-                rects.Add(new Rect(
+                consumer.Accept(new Rect(
                     col.LeftOffset + rowHeaderWidth + 3,
                     row.TopOffset + columnHeaderHeight + 3,
                     Math.Max(0, col.Width - 6),
                     Math.Max(0, row.Height - 6)));
             }
         }
-
-        return rects.Count == 0 ? [] : rects;
     }
 
     public static IReadOnlyList<Rect> CalculateSparklinePreviewRects(
@@ -98,11 +127,23 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
+        var consumer = new ListRectConsumer();
+        VisitSparklinePreviewRects(viewport, range, rowHeaderWidth, columnHeaderHeight, ref consumer);
+        return consumer.ToResult();
+    }
+
+    internal static void VisitSparklinePreviewRects<TConsumer>(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        ref TConsumer consumer)
+        where TConsumer : struct, IQuickAnalysisPreviewRectConsumer
+    {
         var col = FirstVisibleColumnInRange(viewport.ColMetrics, range);
         if (col is null)
-            return [];
+            return;
 
-        var rects = new List<Rect>();
         foreach (var row in viewport.RowMetrics)
         {
             if (row.Row < range.Start.Row || row.Row > range.End.Row)
@@ -113,14 +154,12 @@ internal static class QuickAnalysisPreviewLayoutPlanner
             if (width < 6)
                 continue;
 
-            rects.Add(new Rect(
+            consumer.Accept(new Rect(
                 col.LeftOffset + rowHeaderWidth + 6,
                 row.TopOffset + columnHeaderHeight + Math.Round((row.Height - height) / 2),
                 width,
                 height));
         }
-
-        return rects;
     }
 
     private static ColMetric? FirstVisibleColumnInRange(
@@ -154,6 +193,23 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         return lookup;
     }
 
+    private static Rect CreateDataBarRect(
+        RowMetric row,
+        ColMetric col,
+        double value,
+        double max,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var fraction = max <= 0 ? 0 : Math.Clamp(Math.Max(0, value) / max, 0, 1);
+        var availableWidth = Math.Max(0, col.Width - 6);
+        return new Rect(
+            col.LeftOffset + rowHeaderWidth + 3,
+            row.TopOffset + columnHeaderHeight + 4,
+            Math.Round(availableWidth * fraction, 3),
+            Math.Max(0, row.Height - 8));
+    }
+
     private static bool TryGetPreviewNumber(DisplayCell cell, out double value)
     {
         switch (cell.RawValue)
@@ -168,5 +224,18 @@ internal static class QuickAnalysisPreviewLayoutPlanner
                 value = 0;
                 return false;
         }
+    }
+
+    private struct ListRectConsumer : IQuickAnalysisPreviewRectConsumer
+    {
+        private List<Rect>? _rects;
+
+        public void Accept(Rect rect)
+        {
+            _rects ??= [];
+            _rects.Add(rect);
+        }
+
+        public readonly IReadOnlyList<Rect> ToResult() => _rects is { Count: > 0 } rects ? rects : [];
     }
 }

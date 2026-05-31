@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -8,17 +7,20 @@ internal static class XlsxPivotTableStyleMetadataReader
 {
     public static List<PivotTableStyleModel> Load(Stream xlsxStream)
     {
+        var stylesXml = XlsxStylesheetReader.Load(xlsxStream);
+        return Load(stylesXml);
+    }
+
+    public static List<PivotTableStyleModel> Load(XDocument? stylesXml)
+    {
         var result = new List<PivotTableStyleModel>();
         try
         {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var stylesEntry = archive.GetEntry("xl/styles.xml");
-            if (stylesEntry is null)
+            if (stylesXml?.Root is null)
                 return result;
 
-            var stylesXml = XlsxPackageXmlEditor.LoadXml(stylesEntry);
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-            foreach (var styleElement in stylesXml.Root?
+            foreach (var styleElement in stylesXml.Root
                          .Element(workbookNs + "tableStyles")?
                          .Elements(workbookNs + "tableStyle") ?? [])
             {

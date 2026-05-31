@@ -14,4 +14,10 @@ public partial class GridView
         ViewportModel Viewport,
         CellAddress? EditingCell,
         HashSet<(uint Row, uint Col)> Occupied);
+
+    private sealed record PageBreakLookupCache(
+        IReadOnlyCollection<uint> Source,
+        int Count,
+        ulong Fingerprint,
+        IReadOnlySet<uint> Lookup);
 }

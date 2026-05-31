@@ -33,14 +33,19 @@ public sealed class UiAutomationCatalogSnapshotTests
         snapshot.Select(control => control.Name)
             .Should()
             .Contain(expectedTabNames)
-            .And.Contain(["Zoom Slider", "Insert Sheet", "Save", "Undo", "Redo"]);
+            .And.Contain([
+                UiText.Get("MainWindow_AutomationName_ZoomSlider"),
+                UiText.Get("MainWindow_AutomationName_InsertSheet"),
+                UiText.Get("MainWindow_AutomationName_Save"),
+                UiText.Get("MainWindow_AutomationName_Undo"),
+                UiText.Get("MainWindow_AutomationName_Redo")]);
 
         snapshot.Select(control => control.AutomationId)
             .Should()
             .Contain(expectedVisibleAutomationIds);
 
-        snapshot.Should().Contain(control => control.AutomationId == "ZoomSlider" && control.Name == "Zoom Slider" && control.ControlType == "Slider");
-        snapshot.Should().Contain(control => control.AutomationId == "AddSheetButton" && control.Name == "Insert Sheet" && control.ControlType == "Button");
+        snapshot.Should().Contain(control => control.AutomationId == "ZoomSlider" && control.Name == UiText.Get("MainWindow_AutomationName_ZoomSlider") && control.ControlType == "Slider");
+        snapshot.Should().Contain(control => control.AutomationId == "AddSheetButton" && control.Name == UiText.Get("MainWindow_AutomationName_InsertSheet") && control.ControlType == "Button");
     }
 
     [Fact]
@@ -54,12 +59,12 @@ public sealed class UiAutomationCatalogSnapshotTests
         var root = AutomationElement.FromHandle(run.WindowHandle)
             ?? throw new InvalidOperationException("UI Automation could not attach to the FreeX window.");
 
-        SelectTab(root, run.ProcessId, "Formulas");
-        AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "FormulasInsertFunctionButton", "Insert Function");
+        SelectTab(root, run.ProcessId, UiText.Get("MainWindow_Header_Formulas"));
+        AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "FormulasInsertFunctionButton", UiText.Get("MainWindow_AutomationName_InsertFunction"));
 
-        SelectTab(root, run.ProcessId, "File");
-        AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "BackstageAccountButton", "Account");
-        AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "BackstageOptionsButton", "Options");
+        SelectTab(root, run.ProcessId, UiText.Get("MainWindow_Header_File"));
+        AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "BackstageAccountButton", UiText.Get("MainWindow_AutomationName_Account"));
+        AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "BackstageOptionsButton", UiText.Get("MainWindow_AutomationName_Options"));
     }
 
     [Fact]
@@ -73,8 +78,8 @@ public sealed class UiAutomationCatalogSnapshotTests
         var root = AutomationElement.FromHandle(run.WindowHandle)
             ?? throw new InvalidOperationException("UI Automation could not attach to the FreeX window.");
 
-        AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.NameProperty, "Home", ControlType.TabItem, SelectionItemPattern.Pattern);
-        AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.NameProperty, "Insert", ControlType.TabItem, SelectionItemPattern.Pattern);
+        AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.NameProperty, UiText.Get("MainWindow_Header_Home"), ControlType.TabItem, SelectionItemPattern.Pattern);
+        AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.NameProperty, UiText.Get("MainWindow_Header_Insert"), ControlType.TabItem, SelectionItemPattern.Pattern);
         AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.AutomationIdProperty, "SaveQatBtn", ControlType.Button, InvokePattern.Pattern);
         AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.AutomationIdProperty, "UndoQatBtn", ControlType.Button, InvokePattern.Pattern);
         AssertVisibleElementExposesPattern(root, run.ProcessId, AutomationElement.AutomationIdProperty, "RedoQatBtn", ControlType.Button, InvokePattern.Pattern);
@@ -84,6 +89,20 @@ public sealed class UiAutomationCatalogSnapshotTests
 
     private static IReadOnlyList<string> ReadCatalogTopLevelTabNames()
     {
+        var resourceKeyByCatalogName = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["File"] = "MainWindow_Header_File",
+            ["Home"] = "MainWindow_Header_Home",
+            ["Insert"] = "MainWindow_Header_Insert",
+            ["Draw"] = "MainWindow_Header_Draw",
+            ["Page Layout"] = "MainWindow_Header_PageLayout",
+            ["Formulas"] = "MainWindow_Header_Formulas",
+            ["Data"] = "MainWindow_Header_Data",
+            ["Review"] = "MainWindow_Header_Review",
+            ["View"] = "MainWindow_Header_View",
+            ["Help"] = "MainWindow_Header_Help"
+        };
+
         using var document = JsonDocument.Parse(File.ReadAllText(WorkspaceFileLocator.Find("docs", "COMMAND_INVENTORY.json")));
         return document.RootElement
             .GetProperty("keyTips")
@@ -91,6 +110,7 @@ public sealed class UiAutomationCatalogSnapshotTests
             .EnumerateArray()
             .Select(tab => tab.GetProperty("name").GetString()!)
             .Select(name => name == "File/Backstage" ? "File" : name)
+            .Select(name => UiText.Get(resourceKeyByCatalogName[name]))
             .ToList();
     }
 
@@ -98,11 +118,13 @@ public sealed class UiAutomationCatalogSnapshotTests
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-        var expected = new[]
+        var dynamicQuickAccessToolbarIds = QuickAccessToolbarCatalog.DefaultCommandIds
+            .Select(id => QuickAccessToolbarCatalog.TryGet(id, out var command) ? command.AutomationId : null)
+            .Where(id => id is not null)
+            .Cast<string>()
+            .ToArray();
+        var expectedDeclaredNames = new[]
         {
-            "SaveQatBtn",
-            "UndoQatBtn",
-            "RedoQatBtn",
             "CloseSysBtn",
             "VerticalScroll",
             "HorizontalScroll",
@@ -118,8 +140,8 @@ public sealed class UiAutomationCatalogSnapshotTests
             .Where(name => name is not null)
             .ToHashSet(StringComparer.Ordinal);
 
-        declaredNames.Should().Contain(expected);
-        return expected;
+        declaredNames.Should().Contain(expectedDeclaredNames);
+        return dynamicQuickAccessToolbarIds.Concat(expectedDeclaredNames).ToArray();
     }
 
     private static void AssertVisibleButtonExposesInvokePattern(

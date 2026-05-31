@@ -121,9 +121,16 @@ public static partial class RibbonCommandPresentationPlanner
         name.Contains("breaks") ||
         name.Contains("background") ||
         name.Contains("print titles") ||
+        name.Contains("theme colors") ||
+        name.Contains("theme fonts") ||
+        name.Contains("theme effects") ||
+        name.Contains("scale to fit") ||
         name.Contains("insert function") ||
         name.Contains("autosum") ||
         name.Contains("name manager") ||
+        name.Contains("define name") ||
+        name.Contains("use in formula") ||
+        name.Contains("create from selection") ||
         name.Contains("calculation options") ||
         name.Contains("calculate now") ||
         name.Contains("calculate sheet") ||
@@ -158,14 +165,12 @@ public static partial class RibbonCommandPresentationPlanner
         name.Contains("page layout") ||
         name.Contains("custom views") ||
         name == "zoom" ||
+        name == "100%" ||
         name.Contains("zoom to 100") ||
         name.Contains("zoom to selection") ||
         name == "macros";
 
     private static bool IsMediumRibbonCommand(string name) =>
-        name.Contains("theme colors") ||
-        name.Contains("theme fonts") ||
-        name.Contains("theme effects") ||
         name.Contains("line sparkline") ||
         name.Contains("column sparkline") ||
         name.Contains("win/loss");

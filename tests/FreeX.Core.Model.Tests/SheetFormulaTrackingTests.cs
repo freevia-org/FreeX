@@ -20,16 +20,19 @@ public sealed class SheetFormulaTrackingTests
 
         sheet.HasFormulas.Should().BeTrue();
         sheet.FormulaCellCount.Should().Be(2);
+        sheet.EnumerateFormulaCells().Should().BeEquivalentTo([a1, b1]);
 
         sheet.SetCell(a1, new NumberValue(2));
 
         sheet.HasFormulas.Should().BeTrue();
         sheet.FormulaCellCount.Should().Be(1);
+        sheet.EnumerateFormulaCells().Should().Equal(b1);
 
         sheet.SetCell(b1, Cell.FromValue(new NumberValue(4)));
 
         sheet.HasFormulas.Should().BeFalse();
         sheet.FormulaCellCount.Should().Be(0);
+        sheet.EnumerateFormulaCells().Should().BeEmpty();
     }
 
     [Fact]
@@ -43,6 +46,7 @@ public sealed class SheetFormulaTrackingTests
         sheet.SetCell(a1, Cell.FromFormula("3+3"));
 
         sheet.FormulaCellCount.Should().Be(1);
+        sheet.EnumerateFormulaCells().Should().Equal(a1);
 
         sheet.ClearCell(a1);
 

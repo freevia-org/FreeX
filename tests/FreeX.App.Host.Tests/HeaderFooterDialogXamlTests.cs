@@ -272,9 +272,9 @@ public sealed class HeaderFooterDialogXamlTests
     {
         var source = ReadHeaderFooterDialogSource();
 
-        source.Should().Contain("AutomationProperties.SetName(resetButton, \"Reset picture size\");");
+        source.Should().Contain("AutomationProperties.SetName(resetButton, UiText.Get(\"HeaderFooterPicture_ResetSizeAutomationName\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(resetButton, \"HeaderFooterPictureResetSizeButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(resetButton, \"Reset the picture width and height to the original size.\");");
+        source.Should().Contain("AutomationProperties.SetHelpText(resetButton, UiText.Get(\"HeaderFooterPicture_ResetSizeHelpText\"));");
     }
 
     [Fact]

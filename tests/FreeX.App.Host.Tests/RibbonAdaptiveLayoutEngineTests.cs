@@ -156,6 +156,23 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
+    public void Plan_ReopensFormulaGroupsAtNarrowWidthsWhenTheyFit()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Function Library", 180, 120, 70, 52),
+            new RibbonAdaptiveGroup("Defined Names", 130, 96, 58, 52),
+            new RibbonAdaptiveGroup("Formula Auditing", 180, 120, 70, 52),
+            new RibbonAdaptiveGroup("Calculation", 130, 96, 58, 52)
+        };
+
+        var layout = RibbonAdaptiveLayoutEngine.Plan(750, groups, fixedChromeWidth: 36, selectedTabHeader: "Formulas");
+
+        layout.States.Should().OnlyContain(state => state == RibbonAdaptiveGroupState.Full);
+        layout.PlannedWidth.Should().BeLessThanOrEqualTo(750);
+    }
+
+    [Fact]
     public void Plan_ExpandsProtectedInsertTablesByCollapsingLowerPriorityGroups()
     {
         var groups = new[]

@@ -41,6 +41,35 @@ public sealed class BulgarianLocalizationTests
     }
 
     [Fact]
+    public void BulgarianResx_UsesExcelAlignedTerminologyForHighValueCommands()
+    {
+        var bulgarian = ReadResxValues("Strings.bg-BG.resx");
+        var expected = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["MainWindow_Header_Paste"] = "Постави",
+            ["MainWindow_Content_Copy"] = "Копирай",
+            ["MainWindow_Content_Cut"] = "Изрежи",
+            ["MainWindow_Header_FlashFill"] = "Примерно запълване",
+            ["MainWindow_Text_Wrap"] = "Текст на повече редове",
+            ["InsertChart_AllChartsTab"] = "_Всички диаграми",
+            ["ChartType_Pie"] = "Кръгова",
+            ["ChartType_Doughnut"] = "Пръстеновидна",
+            ["ChartType_Scatter"] = "XY (точкова)",
+            ["ChartType_Stock"] = "Борсова",
+            ["MainWindow_TooltipTitle_Trendline"] = "Линия на тенденцията",
+            ["Sparkline_InsertSparkline"] = "Вмъкване на блещукаща линия",
+            ["PivotSlicerTimeline_InsertSlicer"] = "Вмъкване на сегментатор",
+            ["MainWindow_Header_TableDesign"] = "Проектиране на таблица",
+            ["TableDesign_TableRangeLabel"] = "_Диапазон на таблицата:",
+        };
+
+        foreach (var expectedEntry in expected)
+        {
+            bulgarian[expectedEntry.Key].Should().Be(expectedEntry.Value);
+        }
+    }
+
+    [Fact]
     public void BulgarianSatelliteResource_ContainsFullResourceSetWithoutParentFallback()
     {
         var resourceManager = new ResourceManager("FreeX.App.Host.Resources.Strings", typeof(UiText).Assembly);

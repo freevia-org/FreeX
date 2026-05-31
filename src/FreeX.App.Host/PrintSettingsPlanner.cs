@@ -16,11 +16,11 @@ public static class PrintSettingsPlanner
         var lines = new List<string>
         {
             DescribeScope(sheet, ignorePrintArea),
-            $"Orientation: {sheet.PageOrientation}",
-            $"Paper size: {sheet.PaperSize}",
-            $"Scaling: {DescribeScaling(sheet.ScaleToFit)}",
-            $"Gridlines: {(sheet.PrintGridlines ? "on" : "off")}",
-            $"Headings: {(sheet.PrintHeadings ? "on" : "off")}"
+            UiText.Format("PrintSettings_OrientationFormat", DescribeOrientation(sheet.PageOrientation)),
+            UiText.Format("PrintSettings_PaperSizeFormat", DescribePaperSize(sheet.PaperSize)),
+            UiText.Format("PrintSettings_ScalingFormat", DescribeScaling(sheet.ScaleToFit)),
+            UiText.Format("PrintSettings_GridlinesFormat", DescribeOnOff(sheet.PrintGridlines)),
+            UiText.Format("PrintSettings_HeadingsFormat", DescribeOnOff(sheet.PrintHeadings))
         };
 
         return new PrintSettingsPlan(lines);
@@ -29,11 +29,11 @@ public static class PrintSettingsPlanner
     private static string DescribeScope(Sheet sheet, bool ignorePrintArea)
     {
         if (sheet.PrintArea is null)
-            return "Print active sheet";
+            return UiText.Get("PrintSettings_PrintActiveSheet");
 
         return ignorePrintArea
-            ? "Print active sheet (ignore print area)"
-            : "Print selected print area";
+            ? UiText.Get("PrintSettings_PrintActiveSheetIgnorePrintArea")
+            : UiText.Get("PrintSettings_PrintSelectedPrintArea");
     }
 
     private static string DescribeScaling(WorksheetScaleToFit scale)
@@ -42,8 +42,26 @@ public static class PrintSettingsPlanner
         if (scale.ScalePercent is not null)
             parts.Add($"{scale.ScalePercent}%");
         if (scale.FitToPagesWide is not null || scale.FitToPagesTall is not null)
-            parts.Add($"fit {scale.FitToPagesWide?.ToString() ?? "auto"} page wide by {scale.FitToPagesTall?.ToString() ?? "auto"} tall");
+            parts.Add(UiText.Format(
+                "PrintSettings_FitPagesWideByTall",
+                scale.FitToPagesWide?.ToString() ?? UiText.Get("PrintSettings_Auto"),
+                scale.FitToPagesTall?.ToString() ?? UiText.Get("PrintSettings_Auto")));
 
-        return parts.Count == 0 ? "Automatic" : string.Join("; ", parts);
+        return parts.Count == 0 ? UiText.Get("PrintSettings_Automatic") : string.Join("; ", parts);
     }
+
+    private static string DescribeOrientation(WorksheetPageOrientation orientation) =>
+        orientation == WorksheetPageOrientation.Landscape
+            ? UiText.Get("PageSetup_Landscape")
+            : UiText.Get("PageSetup_Portrait");
+
+    private static string DescribePaperSize(WorksheetPaperSize paperSize) => paperSize switch
+    {
+        WorksheetPaperSize.Letter => UiText.Get("MainWindow_Header_Letter"),
+        WorksheetPaperSize.Legal => UiText.Get("MainWindow_Header_Legal"),
+        _ => UiText.Get("MainWindow_Header_A4")
+    };
+
+    private static string DescribeOnOff(bool value) =>
+        value ? UiText.Get("PrintSettings_On") : UiText.Get("PrintSettings_Off");
 }

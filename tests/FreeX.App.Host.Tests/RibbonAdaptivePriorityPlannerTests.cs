@@ -201,6 +201,16 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     }
 
     [Fact]
+    public void SpaceFillingExpandableGroupIndexes_StillUseAvailableSpaceAtNarrowWidths()
+    {
+        var groupNames = new[] { "Function Library", "Defined Names", "Formula Auditing", "Calculation" };
+
+        RibbonAdaptivePriorityPlanner.GetSpaceFillingExpandableGroupIndexes(groupNames, 750)
+            .Should()
+            .Equal(0, 1, 2, 3);
+    }
+
+    [Fact]
     public void RuntimeVisibilityProtectedGroupIndexes_ProtectOnlyVisibleRuntimeOverrides()
     {
         var dataGroups = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast" };

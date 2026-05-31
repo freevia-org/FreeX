@@ -7,26 +7,65 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorkbookMetadataWriter
 {
+    private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+    public static void SavePostProcessingMetadata(Stream xlsxStream, Workbook workbook) =>
+        SaveWorkbookXml(xlsxStream, workbook, static (workbookXml, root, model) =>
+        {
+            ApplyWorkbookProperties(root, model);
+            ApplyWorkbookViewProperties(root, model);
+            XlsxWorkbookAdditionalViewMapper.ApplyToWorkbookXml(workbookXml, model);
+
+            if (model.FileVersion is not null)
+                ApplyFileVersion(root, model);
+            if (model.FunctionGroups is not null)
+                ApplyFunctionGroups(root, model);
+            if (model.SmartTags is not null)
+                ApplySmartTags(root, model);
+            if (model.FileSharing is not null)
+                ApplyFileSharing(root, model);
+            if (model.FileRecoveryProperties.Count > 0)
+                ApplyFileRecoveryProperties(root, model);
+            if (model.IsStructureProtected || model.ProtectionMetadata is not null)
+                ApplyProtection(root, model);
+
+            ApplyCalculationProperties(root, model);
+            return true;
+        });
+
+    public static void SaveSourcePackageReplayMetadata(Stream xlsxStream, Workbook workbook) =>
+        SaveWorkbookXml(xlsxStream, workbook, static (workbookXml, root, model) =>
+        {
+            var changed = XlsxWorkbookAdditionalViewMapper.ApplyToWorkbookXml(workbookXml, model);
+
+            if (model.FileVersion is not null)
+                changed |= ApplyFileVersion(root, model);
+            if (model.FunctionGroups is not null)
+                changed |= ApplyFunctionGroups(root, model);
+            if (model.SmartTags is not null)
+                changed |= ApplySmartTags(root, model);
+            if (model.FileSharing is not null)
+                changed |= ApplyFileSharing(root, model);
+            if (model.FileRecoveryProperties.Count > 0)
+                changed |= ApplyFileRecoveryProperties(root, model);
+
+            return changed;
+        });
+
     public static void SaveWorkbookProperties(Stream xlsxStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
+        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyWorkbookProperties(root, model));
+    }
 
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var root = workbookXml.Root;
-        if (root is null)
-            return;
-
-        var workbookProperties = root.Element(workbookNs + "workbookPr");
+    private static bool ApplyWorkbookProperties(XElement root, Workbook workbook)
+    {
+        var workbookProperties = root.Element(WorkbookNs + "workbookPr");
         if (workbookProperties is null)
         {
             if (!workbook.Uses1904DateSystem && workbook.Properties is null)
-                return;
+                return false;
 
-            workbookProperties = new XElement(workbookNs + "workbookPr");
+            workbookProperties = new XElement(WorkbookNs + "workbookPr");
             root.AddFirst(workbookProperties);
         }
 
@@ -36,43 +75,37 @@ internal static class XlsxWorkbookMetadataWriter
         }
 
         workbookProperties.SetAttributeValue("date1904", workbook.Uses1904DateSystem ? "1" : null);
-        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        return true;
     }
 
     public static void SaveWorkbookViewProperties(Stream xlsxStream, Workbook workbook)
+    {
+        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyWorkbookViewProperties(root, model));
+    }
+
+    private static bool ApplyWorkbookViewProperties(XElement root, Workbook workbook)
     {
         if (workbook.ShowSheetTabs is null &&
             workbook.SheetTabRatio is null &&
             workbook.FirstVisibleSheetIndex is null &&
             workbook.ActiveSheetIndex is null)
         {
-            return;
+            return false;
         }
 
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
-
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var root = workbookXml.Root;
-        if (root is null)
-            return;
-
-        var bookViews = root.Element(workbookNs + "bookViews");
+        var bookViews = root.Element(WorkbookNs + "bookViews");
         if (bookViews is null)
         {
-            bookViews = new XElement(workbookNs + "bookViews");
-            var sheets = root.Element(workbookNs + "sheets");
+            bookViews = new XElement(WorkbookNs + "bookViews");
+            var sheets = root.Element(WorkbookNs + "sheets");
             if (sheets is not null)
                 sheets.AddBeforeSelf(bookViews);
             else
                 root.Add(bookViews);
         }
 
-        var primaryView = bookViews.Elements(workbookNs + "workbookView").FirstOrDefault()
-            ?? new XElement(workbookNs + "workbookView");
+        var primaryView = bookViews.Elements(WorkbookNs + "workbookView").FirstOrDefault()
+            ?? new XElement(WorkbookNs + "workbookView");
         if (primaryView.Parent is null)
             bookViews.AddFirst(primaryView);
 
@@ -81,31 +114,24 @@ internal static class XlsxWorkbookMetadataWriter
         primaryView.SetAttributeValue("firstSheet", XlsxWorkbookMetadataXmlHelper.ClampWorkbookViewInteger(workbook.FirstVisibleSheetIndex, 0, Math.Max(0, workbook.Sheets.Count - 1)));
         primaryView.SetAttributeValue("activeTab", XlsxWorkbookMetadataXmlHelper.ClampWorkbookViewInteger(workbook.ActiveSheetIndex, 0, Math.Max(0, workbook.Sheets.Count - 1)));
 
-        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        return true;
     }
 
     public static void SaveFileSharing(Stream xlsxStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
+        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyFileSharing(root, model));
+    }
 
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var root = workbookXml.Root;
-        if (root is null)
-            return;
-
-        var existingFileSharing = root.Element(workbookNs + "fileSharing");
+    private static bool ApplyFileSharing(XElement root, Workbook workbook)
+    {
+        var existingFileSharing = root.Element(WorkbookNs + "fileSharing");
         var fileSharing = existingFileSharing is not null
             ? new XElement(existingFileSharing)
-            : new XElement(workbookNs + "fileSharing");
+            : new XElement(WorkbookNs + "fileSharing");
         existingFileSharing?.Remove();
         if (workbook.FileSharing is null)
         {
-            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
-            return;
+            return true;
         }
 
         fileSharing.Attribute("readOnlyRecommended")?.Remove();
@@ -121,44 +147,37 @@ internal static class XlsxWorkbookMetadataWriter
             "reservationPassword",
             string.IsNullOrWhiteSpace(workbook.FileSharing.ReservationPassword) ? null : workbook.FileSharing.ReservationPassword);
 
-        var workbookProtection = root.Element(workbookNs + "workbookProtection");
+        var workbookProtection = root.Element(WorkbookNs + "workbookProtection");
         if (workbookProtection is not null)
             workbookProtection.AddBeforeSelf(fileSharing);
         else
         {
-            var sheets = root.Element(workbookNs + "sheets");
+            var sheets = root.Element(WorkbookNs + "sheets");
             if (sheets is not null)
                 sheets.AddBeforeSelf(fileSharing);
             else
                 root.Add(fileSharing);
         }
 
-        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        return true;
     }
 
     public static void SaveFileRecoveryProperties(Stream xlsxStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
+        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyFileRecoveryProperties(root, model));
+    }
 
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var root = workbookXml.Root;
-        if (root is null)
-            return;
-
-        root.Elements(workbookNs + "fileRecoveryPr").Remove();
+    private static bool ApplyFileRecoveryProperties(XElement root, Workbook workbook)
+    {
+        root.Elements(WorkbookNs + "fileRecoveryPr").Remove();
         if (workbook.FileRecoveryProperties.Count == 0)
         {
-            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
-            return;
+            return true;
         }
 
         var recoveryElements = workbook.FileRecoveryProperties.Select(item =>
         {
-            var element = new XElement(workbookNs + "fileRecoveryPr");
+            var element = new XElement(WorkbookNs + "fileRecoveryPr");
             foreach (var attribute in item.NativeAttributes)
             {
                 if (!string.IsNullOrWhiteSpace(attribute.Key) &&
@@ -175,15 +194,15 @@ internal static class XlsxWorkbookMetadataWriter
             return element;
         }).ToArray();
 
-        var webPublishObjects = root.Element(workbookNs + "webPublishObjects");
+        var webPublishObjects = root.Element(WorkbookNs + "webPublishObjects");
         if (webPublishObjects is not null)
             webPublishObjects.AddBeforeSelf(recoveryElements);
-        else if (root.Element(workbookNs + "extLst") is { } extensionList)
+        else if (root.Element(WorkbookNs + "extLst") is { } extensionList)
             extensionList.AddBeforeSelf(recoveryElements);
         else
             root.Add(recoveryElements);
 
-        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        return true;
 
         static void SetBooleanAttribute(XElement element, string name, bool? value) =>
             element.SetAttributeValue(name, value is { } boolValue ? boolValue ? "1" : "0" : null);
@@ -191,25 +210,18 @@ internal static class XlsxWorkbookMetadataWriter
 
     public static void SaveFileVersion(Stream xlsxStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
+        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyFileVersion(root, model));
+    }
 
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var root = workbookXml.Root;
-        if (root is null)
-            return;
-
-        root.Element(workbookNs + "fileVersion")?.Remove();
+    private static bool ApplyFileVersion(XElement root, Workbook workbook)
+    {
+        root.Element(WorkbookNs + "fileVersion")?.Remove();
         if (workbook.FileVersion is null)
         {
-            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
-            return;
+            return true;
         }
 
-        var fileVersion = new XElement(workbookNs + "fileVersion");
+        var fileVersion = new XElement(WorkbookNs + "fileVersion");
         foreach (var attribute in workbook.FileVersion.NativeAttributes)
         {
             if (!string.IsNullOrWhiteSpace(attribute.Key) &&
@@ -226,30 +238,23 @@ internal static class XlsxWorkbookMetadataWriter
         fileVersion.SetAttributeValue("codeName", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.CodeName));
 
         root.AddFirst(fileVersion);
-        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        return true;
     }
 
     public static void SaveFunctionGroups(Stream xlsxStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
+        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyFunctionGroups(root, model));
+    }
 
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var root = workbookXml.Root;
-        if (root is null)
-            return;
-
-        root.Element(workbookNs + "functionGroups")?.Remove();
+    private static bool ApplyFunctionGroups(XElement root, Workbook workbook)
+    {
+        root.Element(WorkbookNs + "functionGroups")?.Remove();
         if (workbook.FunctionGroups is null)
         {
-            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
-            return;
+            return true;
         }
 
-        var functionGroups = new XElement(workbookNs + "functionGroups");
+        var functionGroups = new XElement(WorkbookNs + "functionGroups");
         foreach (var attribute in workbook.FunctionGroups.NativeAttributes)
         {
             if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key != "builtInGroupCount")
@@ -259,7 +264,7 @@ internal static class XlsxWorkbookMetadataWriter
         functionGroups.SetAttributeValue("builtInGroupCount", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FunctionGroups.BuiltInGroupCount));
         foreach (var group in workbook.FunctionGroups.Groups)
         {
-            var element = new XElement(workbookNs + "functionGroup");
+            var element = new XElement(WorkbookNs + "functionGroup");
             foreach (var attribute in group.NativeAttributes)
             {
                 if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key != "name")
@@ -270,39 +275,32 @@ internal static class XlsxWorkbookMetadataWriter
             functionGroups.Add(element);
         }
 
-        var oleSize = root.Element(workbookNs + "oleSize");
+        var oleSize = root.Element(WorkbookNs + "oleSize");
         if (oleSize is not null)
             oleSize.AddBeforeSelf(functionGroups);
-        else if (root.Element(workbookNs + "extLst") is { } extensionList)
+        else if (root.Element(WorkbookNs + "extLst") is { } extensionList)
             extensionList.AddBeforeSelf(functionGroups);
         else
             root.Add(functionGroups);
 
-        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        return true;
     }
 
     public static void SaveSmartTags(Stream xlsxStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
+        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplySmartTags(root, model));
+    }
 
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var root = workbookXml.Root;
-        if (root is null)
-            return;
-
-        root.Element(workbookNs + "smartTagPr")?.Remove();
-        root.Element(workbookNs + "smartTagTypes")?.Remove();
+    private static bool ApplySmartTags(XElement root, Workbook workbook)
+    {
+        root.Element(WorkbookNs + "smartTagPr")?.Remove();
+        root.Element(WorkbookNs + "smartTagTypes")?.Remove();
         if (workbook.SmartTags is null)
         {
-            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
-            return;
+            return true;
         }
 
-        var smartTagProperties = new XElement(workbookNs + "smartTagPr");
+        var smartTagProperties = new XElement(WorkbookNs + "smartTagPr");
         foreach (var attribute in workbook.SmartTags.PropertiesNativeAttributes)
         {
             if (!string.IsNullOrWhiteSpace(attribute.Key) && attribute.Key is not "embed" and not "show")
@@ -312,7 +310,7 @@ internal static class XlsxWorkbookMetadataWriter
         smartTagProperties.SetAttributeValue("embed", workbook.SmartTags.Embed is { } embed ? embed ? "1" : "0" : null);
         smartTagProperties.SetAttributeValue("show", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.SmartTags.Show));
 
-        var smartTagTypes = new XElement(workbookNs + "smartTagTypes");
+        var smartTagTypes = new XElement(WorkbookNs + "smartTagTypes");
         foreach (var attribute in workbook.SmartTags.TypesNativeAttributes)
         {
             if (!string.IsNullOrWhiteSpace(attribute.Key))
@@ -321,7 +319,7 @@ internal static class XlsxWorkbookMetadataWriter
 
         foreach (var type in workbook.SmartTags.Types)
         {
-            var element = new XElement(workbookNs + "smartTagType");
+            var element = new XElement(WorkbookNs + "smartTagType");
             foreach (var attribute in type.NativeAttributes)
             {
                 if (!string.IsNullOrWhiteSpace(attribute.Key) &&
@@ -337,38 +335,31 @@ internal static class XlsxWorkbookMetadataWriter
             smartTagTypes.Add(element);
         }
 
-        var extensionList = root.Element(workbookNs + "extLst");
+        var extensionList = root.Element(WorkbookNs + "extLst");
         if (extensionList is not null)
             extensionList.AddBeforeSelf(smartTagProperties, smartTagTypes);
         else
             root.Add(smartTagProperties, smartTagTypes);
 
-        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        return true;
     }
 
     public static void SaveProtection(Stream xlsxStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
+        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyProtection(root, model));
+    }
 
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var root = workbookXml.Root;
-        if (root is null)
-            return;
-
-        root.Element(workbookNs + "workbookProtection")?.Remove();
+    private static bool ApplyProtection(XElement root, Workbook workbook)
+    {
+        root.Element(WorkbookNs + "workbookProtection")?.Remove();
         if (!workbook.IsStructureProtected &&
             string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword) &&
             workbook.ProtectionMetadata is null)
         {
-            XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
-            return;
+            return true;
         }
 
-        var protection = new XElement(workbookNs + "workbookProtection");
+        var protection = new XElement(WorkbookNs + "workbookProtection");
         if (workbook.ProtectionMetadata is not null)
         {
             XmlNativeBagSerializer.ApplyToElement(protection, workbook.ProtectionMetadata.Get("workbookProtection"),
@@ -380,32 +371,26 @@ internal static class XlsxWorkbookMetadataWriter
         if (!string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword))
             protection.SetAttributeValue("workbookPassword", XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash(workbook.StructureProtectionPassword));
 
-        var sheets = root.Element(workbookNs + "sheets");
+        var sheets = root.Element(WorkbookNs + "sheets");
         if (sheets is not null)
             sheets.AddBeforeSelf(protection);
         else
             root.Add(protection);
 
-        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        return true;
     }
 
     public static void SaveCalculationProperties(Stream xlsxStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        if (workbookEntry is null)
-            return;
+        SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyCalculationProperties(root, model));
+    }
 
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var root = workbookXml.Root;
-        if (root is null)
-            return;
-
-        var calcPr = root.Element(workbookNs + "calcPr");
+    private static bool ApplyCalculationProperties(XElement root, Workbook workbook)
+    {
+        var calcPr = root.Element(WorkbookNs + "calcPr");
         if (calcPr is null)
         {
-            calcPr = new XElement(workbookNs + "calcPr");
+            calcPr = new XElement(WorkbookNs + "calcPr");
             root.Add(calcPr);
         }
 
@@ -420,10 +405,24 @@ internal static class XlsxWorkbookMetadataWriter
             "iterateDelta",
             workbook.MaxCalculationChange is { } maxChange ? maxChange.ToString(CultureInfo.InvariantCulture) : null);
 
-        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+        return true;
 
         static void SetBooleanAttribute(XElement element, string name, bool value) =>
             element.SetAttributeValue(name, value ? "1" : null);
     }
 
+    private static void SaveWorkbookXml(Stream xlsxStream, Workbook workbook, Func<XDocument, XElement, Workbook, bool> apply)
+    {
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        if (workbookEntry is null)
+            return;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        var root = workbookXml.Root;
+        if (root is null || !apply(workbookXml, root, workbook))
+            return;
+
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
+    }
 }

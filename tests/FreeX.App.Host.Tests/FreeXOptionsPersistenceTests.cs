@@ -43,7 +43,14 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         var options = new FreeXOptions
         {
             DefaultFormat = ".fxl",
-            AppLanguage = "uk-UA"
+            AppLanguage = "uk-UA",
+            QuickAccessToolbarBelowRibbon = true,
+            QuickAccessToolbarCommands =
+            [
+                QuickAccessToolbarCommandIds.Open,
+                QuickAccessToolbarCommandIds.Save,
+                QuickAccessToolbarCommandIds.Print
+            ]
         };
 
         options.SaveToPath(_tempDirectory).Should().BeFalse();
@@ -59,7 +66,31 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
             .AppLanguage
             .Should()
             .Be("uk-UA");
+        var reloaded = FreeXOptions.LoadFromPath(path);
+        reloaded.QuickAccessToolbarBelowRibbon.Should().BeTrue();
+        reloaded.QuickAccessToolbarCommands.Should().Equal(
+            QuickAccessToolbarCommandIds.Open,
+            QuickAccessToolbarCommandIds.Save,
+            QuickAccessToolbarCommandIds.Print);
         Directory.EnumerateFiles(_tempDirectory, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void QuickAccessToolbarCatalog_NormalizesDuplicatesUnknownCommandsAndEmptyLists()
+    {
+        QuickAccessToolbarCatalog.NormalizeCommandIds(
+        [
+            QuickAccessToolbarCommandIds.Save,
+            "missing-command",
+            QuickAccessToolbarCommandIds.Save,
+            QuickAccessToolbarCommandIds.Print
+        ]).Should().Equal(
+            QuickAccessToolbarCommandIds.Save,
+            QuickAccessToolbarCommandIds.Print);
+
+        QuickAccessToolbarCatalog.NormalizeCommandIds([])
+            .Should()
+            .Equal(QuickAccessToolbarCatalog.DefaultCommandIds);
     }
 
     [Fact]

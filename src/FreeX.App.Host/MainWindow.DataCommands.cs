@@ -70,7 +70,6 @@ public partial class MainWindow
             SetActiveCell(destination);
             EnsureCellVisible(destination);
             UpdateViewport();
-            RefreshStatusBar();
             RecordDiagnosticEvent("import_completed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, null, imported.Sheets.Count));
         }
         catch (Exception ex)
@@ -513,18 +512,21 @@ public partial class MainWindow
             return;
 
         var forecastSheet = _workbook.Sheets.LastOrDefault();
+        var refreshedSelectionUi = false;
         if (forecastSheet is not null)
         {
             _currentSheetId = forecastSheet.Id;
             _groupedSheetIds.Clear();
             _groupedSheetIds.Add(_currentSheetId);
             SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
+            refreshedSelectionUi = true;
         }
 
         RecalculateWorkbook();
         UpdateViewport();
         RefreshSheetTabs();
-        RefreshStatusBar();
+        if (!refreshedSelectionUi)
+            RefreshStatusBar();
     }
 
     private void DataTableBtn_Click(object sender, RoutedEventArgs e)

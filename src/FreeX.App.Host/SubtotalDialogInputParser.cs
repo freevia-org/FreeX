@@ -19,20 +19,20 @@ public static class SubtotalDialogInputParser
 
         if (!uint.TryParse(groupColumnText.Trim(), out var groupColumnOffset))
         {
-            error = "Enter a valid group column offset.";
+            error = UiText.Get("Subtotal_EnterValidGroupColumnOffset");
             return false;
         }
 
         var subtotalColumnOffsets = ParseColumnOffsets(subtotalColumnsText);
         if (subtotalColumnOffsets.Count == 0)
         {
-            error = "Enter one or more valid subtotal column offsets.";
+            error = UiText.Get("Subtotal_EnterValidSubtotalColumnOffsets");
             return false;
         }
 
         if (!SubtotalFunctionService.TryParse(functionText, out var functionNumber))
         {
-            error = "Unsupported SUBTOTAL function.";
+            error = UiText.Get("Subtotal_UnsupportedSubtotalFunction");
             return false;
         }
 

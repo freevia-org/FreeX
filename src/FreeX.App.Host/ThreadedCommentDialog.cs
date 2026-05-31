@@ -35,7 +35,7 @@ public sealed class ThreadedCommentDialog : Window
 
     public ThreadedCommentDialog(string cellRef, ThreadedComment? existing)
     {
-        Title = $"Comment - {cellRef}";
+        Title = UiText.Format("ThreadedComment_TitleFormat", cellRef);
         Width = 480;
         MinHeight = 280;
         MaxHeight = 600;
@@ -45,21 +45,21 @@ public sealed class ThreadedCommentDialog : Window
 
         _resolveBox = new CheckBox
         {
-            Content = "_Mark as Resolved",
+            Content = UiText.Get("ThreadedComment_MarkAsResolved"),
             IsChecked = existing?.IsResolved ?? false,
             Margin = new Thickness(0, 4, 0, 8)
         };
 
         var root = new DockPanel { Margin = new Thickness(12) };
 
-        var ok = new Button { Content = existing is null ? "_Add" : "_Reply", IsDefault = true, Width = 80, Margin = new Thickness(0, 0, 8, 0) };
-        var cancel = new Button { Content = "Ca_ncel", IsCancel = true, Width = 80 };
-        AutomationProperties.SetName(ok, existing is null ? "Add comment" : "Reply to comment");
+        var ok = new Button { Content = existing is null ? UiText.Get("ThreadedComment_AddButton") : UiText.Get("ThreadedComment_ReplyButton"), IsDefault = true, Width = 80, Margin = new Thickness(0, 0, 8, 0) };
+        var cancel = new Button { Content = UiText.Get("ThreadedComment_CancelButton"), IsCancel = true, Width = 80 };
+        AutomationProperties.SetName(ok, existing is null ? UiText.Get("ThreadedComment_AddCommentAutomationName") : UiText.Get("ThreadedComment_ReplyToCommentAutomationName"));
         AutomationProperties.SetAutomationId(ok, existing is null ? "ThreadedCommentAddButton" : "ThreadedCommentReplyButton");
-        AutomationProperties.SetHelpText(ok, existing is null ? "Add the threaded comment." : "Add a reply to the threaded comment.");
-        AutomationProperties.SetName(cancel, "Cancel");
+        AutomationProperties.SetHelpText(ok, existing is null ? UiText.Get("ThreadedComment_AddCommentHelpText") : UiText.Get("ThreadedComment_ReplyToCommentHelpText"));
+        AutomationProperties.SetName(cancel, UiText.CreateAutomationName(UiText.Cancel));
         AutomationProperties.SetAutomationId(cancel, "ThreadedCommentCancelButton");
-        AutomationProperties.SetHelpText(cancel, "Close the comment dialog without applying changes.");
+        AutomationProperties.SetHelpText(cancel, UiText.Get("ThreadedComment_CancelHelpText"));
         ok.Click += (_, _) => SubmitThreadedCommentDialog(existing);
         var btnRow = new StackPanel
         {
@@ -89,20 +89,20 @@ public sealed class ThreadedCommentDialog : Window
         var inner = new StackPanel();
         inner.Children.Add(scroll);
         _rootBox.Text = existing?.Text ?? "";
-        AutomationProperties.SetName(_rootBox, existing is null ? "Comment" : "Edit comment");
+        AutomationProperties.SetName(_rootBox, existing is null ? UiText.Get("ThreadedComment_CommentAutomationName") : UiText.Get("ThreadedComment_EditCommentAutomationName"));
         AutomationProperties.SetAutomationId(_rootBox, "ThreadedCommentRootBox");
-        AutomationProperties.SetHelpText(_rootBox, existing is null ? "Enter the threaded comment text." : "Edit the root comment text.");
-        inner.Children.Add(new Label { Content = existing is null ? "_Comment:" : "Edit _comment:", Target = _rootBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
+        AutomationProperties.SetHelpText(_rootBox, existing is null ? UiText.Get("ThreadedComment_CommentHelpText") : UiText.Get("ThreadedComment_EditCommentHelpText"));
+        inner.Children.Add(new Label { Content = existing is null ? UiText.Get("ThreadedComment_CommentLabel") : UiText.Get("ThreadedComment_EditCommentLabel"), Target = _rootBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
         inner.Children.Add(_rootBox);
         if (existing is not null)
         {
             if (existing.Replies.Count > 0)
                 inner.Children.Add(BuildSelectedReplyEditor(existing));
 
-            inner.Children.Add(new Label { Content = "Repl_y:", Target = _replyBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
-            AutomationProperties.SetName(_replyBox, "Reply");
+            inner.Children.Add(new Label { Content = UiText.Get("ThreadedComment_ReplyLabel"), Target = _replyBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
+            AutomationProperties.SetName(_replyBox, UiText.Get("ThreadedComment_ReplyAutomationName"));
             AutomationProperties.SetAutomationId(_replyBox, "ThreadedCommentReplyBox");
-            AutomationProperties.SetHelpText(_replyBox, "Enter an optional reply to the threaded comment. Press Ctrl+Enter to reply.");
+            AutomationProperties.SetHelpText(_replyBox, UiText.Get("ThreadedComment_ReplyHelpText"));
             _replyBox.PreviewKeyDown += (_, e) =>
             {
                 if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.Enter)
@@ -113,9 +113,9 @@ public sealed class ThreadedCommentDialog : Window
             };
             inner.Children.Add(_replyBox);
         }
-        AutomationProperties.SetName(_resolveBox, "Mark as resolved");
+        AutomationProperties.SetName(_resolveBox, UiText.Get("ThreadedComment_MarkAsResolvedAutomationName"));
         AutomationProperties.SetAutomationId(_resolveBox, "ThreadedCommentResolvedBox");
-        AutomationProperties.SetHelpText(_resolveBox, "Mark the threaded comment as resolved.");
+        AutomationProperties.SetHelpText(_resolveBox, UiText.Get("ThreadedComment_MarkAsResolvedHelpText"));
         inner.Children.Add(_resolveBox);
         root.Children.Add(inner);
 
@@ -132,7 +132,7 @@ public sealed class ThreadedCommentDialog : Window
     {
         if (!TryCreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true, out var result, out var error))
         {
-            ShowInvalidThreadedCommentWarning(error ?? "Enter a comment.", _rootBox);
+            ShowInvalidThreadedCommentWarning(error ?? UiText.Get("ThreadedComment_EnterCommentMessage"), _rootBox);
             return;
         }
 
@@ -151,13 +151,13 @@ public sealed class ThreadedCommentDialog : Window
         result = CreateResult(existing, rootText, replyText, isResolved);
         if (existing is not null && string.IsNullOrWhiteSpace(rootText))
         {
-            error = "Enter a comment.";
+            error = UiText.Get("ThreadedComment_EnterCommentMessage");
             return false;
         }
 
         if (existing is null && string.IsNullOrWhiteSpace(result.ReplyText))
         {
-            error = "Enter a comment.";
+            error = UiText.Get("ThreadedComment_EnterCommentMessage");
             return false;
         }
 
@@ -181,19 +181,19 @@ public sealed class ThreadedCommentDialog : Window
             (replyText ?? "").Trim());
         if (existing is null)
         {
-            error = "No threaded comment is available.";
+            error = UiText.Get("ThreadedComment_NoThreadedCommentAvailableMessage");
             return false;
         }
 
         if (!IsValidReplyIndex(existing, replyIndex))
         {
-            error = "Select a reply.";
+            error = UiText.Get("ThreadedComment_SelectReplyMessage");
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(result.ReplyEditText))
         {
-            error = "Enter a reply.";
+            error = UiText.Get("ThreadedComment_EnterReplyMessage");
             return false;
         }
 
@@ -215,13 +215,13 @@ public sealed class ThreadedCommentDialog : Window
             replyIndex);
         if (existing is null)
         {
-            error = "No threaded comment is available.";
+            error = UiText.Get("ThreadedComment_NoThreadedCommentAvailableMessage");
             return false;
         }
 
         if (!IsValidReplyIndex(existing, replyIndex))
         {
-            error = "Select a reply.";
+            error = UiText.Get("ThreadedComment_SelectReplyMessage");
             return false;
         }
 
@@ -258,9 +258,9 @@ public sealed class ThreadedCommentDialog : Window
     private StackPanel BuildSelectedReplyEditor(ThreadedComment existing)
     {
         var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-        AutomationProperties.SetName(_replySelector, "Reply to edit or delete");
+        AutomationProperties.SetName(_replySelector, UiText.Get("ThreadedComment_ReplyToEditOrDeleteAutomationName"));
         AutomationProperties.SetAutomationId(_replySelector, "ThreadedCommentReplySelector");
-        AutomationProperties.SetHelpText(_replySelector, "Select a threaded comment reply to edit or delete.");
+        AutomationProperties.SetHelpText(_replySelector, UiText.Get("ThreadedComment_ReplySelectorHelpText"));
         for (var i = 0; i < existing.Replies.Count; i++)
         {
             var item = new ComboBoxItem { Content = FormatReplyChoice(i, existing.Replies[i]) };
@@ -270,23 +270,23 @@ public sealed class ThreadedCommentDialog : Window
 
         _replySelector.SelectionChanged += (_, _) => PopulateSelectedReplyText(existing);
         _replySelector.SelectedIndex = 0;
-        panel.Children.Add(new Label { Content = "Select re_ply:", Target = _replySelector, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
+        panel.Children.Add(new Label { Content = UiText.Get("ThreadedComment_SelectReplyLabel"), Target = _replySelector, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 2) });
         panel.Children.Add(_replySelector);
 
-        AutomationProperties.SetName(_selectedReplyBox, "Selected reply text");
+        AutomationProperties.SetName(_selectedReplyBox, UiText.Get("ThreadedComment_SelectedReplyTextAutomationName"));
         AutomationProperties.SetAutomationId(_selectedReplyBox, "ThreadedCommentSelectedReplyBox");
-        AutomationProperties.SetHelpText(_selectedReplyBox, "Edit the selected reply text before choosing Update Reply.");
-        panel.Children.Add(new Label { Content = "Selected reply te_xt:", Target = _selectedReplyBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
+        AutomationProperties.SetHelpText(_selectedReplyBox, UiText.Get("ThreadedComment_SelectedReplyTextHelpText"));
+        panel.Children.Add(new Label { Content = UiText.Get("ThreadedComment_SelectedReplyTextLabel"), Target = _selectedReplyBox, Padding = new Thickness(0), Margin = new Thickness(0, 8, 0, 2) });
         panel.Children.Add(_selectedReplyBox);
 
-        var updateReply = new Button { Content = "_Update Reply", Width = 112, Margin = new Thickness(0, 8, 8, 0) };
-        var deleteReply = new Button { Content = "_Delete Reply", Width = 112, Margin = new Thickness(0, 8, 0, 0) };
-        AutomationProperties.SetName(updateReply, "Update selected reply");
+        var updateReply = new Button { Content = UiText.Get("ThreadedComment_UpdateReplyButton"), Width = 112, Margin = new Thickness(0, 8, 8, 0) };
+        var deleteReply = new Button { Content = UiText.Get("ThreadedComment_DeleteReplyButton"), Width = 112, Margin = new Thickness(0, 8, 0, 0) };
+        AutomationProperties.SetName(updateReply, UiText.Get("ThreadedComment_UpdateSelectedReplyAutomationName"));
         AutomationProperties.SetAutomationId(updateReply, "ThreadedCommentUpdateReplyButton");
-        AutomationProperties.SetHelpText(updateReply, "Update the selected threaded comment reply.");
-        AutomationProperties.SetName(deleteReply, "Delete selected reply");
+        AutomationProperties.SetHelpText(updateReply, UiText.Get("ThreadedComment_UpdateSelectedReplyHelpText"));
+        AutomationProperties.SetName(deleteReply, UiText.Get("ThreadedComment_DeleteSelectedReplyAutomationName"));
         AutomationProperties.SetAutomationId(deleteReply, "ThreadedCommentDeleteReplyButton");
-        AutomationProperties.SetHelpText(deleteReply, "Delete the selected threaded comment reply.");
+        AutomationProperties.SetHelpText(deleteReply, UiText.Get("ThreadedComment_DeleteSelectedReplyHelpText"));
         updateReply.Click += (_, _) => SubmitThreadedCommentReplyEdit(existing);
         deleteReply.Click += (_, _) => SubmitThreadedCommentReplyDelete(existing);
 
@@ -310,7 +310,7 @@ public sealed class ThreadedCommentDialog : Window
     {
         if (!TryCreateReplyEditResult(existing, _replySelector.SelectedIndex, _selectedReplyBox.Text, out var result, out var error))
         {
-            ShowInvalidThreadedCommentWarning(error ?? "Enter a reply.", _selectedReplyBox);
+            ShowInvalidThreadedCommentWarning(error ?? UiText.Get("ThreadedComment_EnterReplyMessage"), _selectedReplyBox);
             return;
         }
 
@@ -322,7 +322,7 @@ public sealed class ThreadedCommentDialog : Window
     {
         if (!TryCreateReplyDeleteResult(existing, _replySelector.SelectedIndex, out var result, out var error))
         {
-            ShowInvalidThreadedCommentWarning(error ?? "Select a reply.", _selectedReplyBox);
+            ShowInvalidThreadedCommentWarning(error ?? UiText.Get("ThreadedComment_SelectReplyMessage"), _selectedReplyBox);
             return;
         }
 
@@ -337,7 +337,7 @@ public sealed class ThreadedCommentDialog : Window
         $"{index + 1}. {FormatMessageHeading(reply.Author, reply.CreatedAtUtc)}: {SummarizeReplyText(reply.Text)}";
 
     private static string FormatReplyAutomationName(int index, CommentReply reply) =>
-        $"Reply {index + 1} by {FormatMessageHeading(reply.Author, reply.CreatedAtUtc)}: {SummarizeReplyText(reply.Text)}";
+        UiText.Format("ThreadedComment_ReplyAutomationNameFormat", index + 1, FormatMessageHeading(reply.Author, reply.CreatedAtUtc), SummarizeReplyText(reply.Text));
 
     private static string SummarizeReplyText(string text)
     {

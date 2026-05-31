@@ -139,7 +139,10 @@ internal static class RibbonAdaptiveTabProfiles
             ],
             Breakpoints:
             [
-                Rule(760, collapseGroups: ["Show"])
+                Rule(
+                    760,
+                    states: [State("Workbook Views", RibbonAdaptiveGroupState.IconOnly)],
+                    collapseGroups: ["Zoom"])
             ],
             RequiresMeasuredCorrection: true),
         new(

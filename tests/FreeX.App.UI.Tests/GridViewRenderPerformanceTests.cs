@@ -73,6 +73,19 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCells_DoesNotClipStyledTextUnlessItWrapsOrOverflows()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var shouldClipText = source[
+            source.IndexOf("private static bool ShouldClipText(", StringComparison.Ordinal)..
+            source.IndexOf("private static Pen UnderlinePenForTextBrush", StringComparison.Ordinal)];
+
+        shouldClipText.Should().Contain("if (wrapText)");
+        shouldClipText.Should().Contain("textPoint.X + text.Width > clipRect.Right + tolerance");
+        shouldClipText.Should().NotContain("style is not null || wrapText");
+    }
+
+    [Fact]
     public void RenderHeaders_ReusesPixelsPerDipAcrossFormattedTextCalls()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
@@ -161,16 +174,23 @@ public sealed class GridViewRenderPerformanceTests
 
         renderSparklines.Should().Contain("Sparklines is not { Count: > 0 }");
         renderSparklines.Should().Contain("SparklineValues is not { Count: > 0 }");
-        renderSparklines.Should().Contain("BuildSparklineRowMetricLookup(Viewport.RowMetrics)");
-        renderSparklines.Should().Contain("BuildSparklineColumnMetricLookup(Viewport.ColMetrics)");
+        renderSparklines.Should().Contain("GetRenderCellLookups(Viewport)");
+        renderSparklines.Should().Contain("var rowLookup = lookups.Rows;");
+        renderSparklines.Should().Contain("var colLookup = lookups.Columns;");
         source.Should().Contain("private static readonly SolidColorBrush SparklinePositiveBrush");
         source.Should().Contain("private static readonly Pen SparklineLinePen");
-        source.Should().Contain("lookup.Add(row.Row, row)");
-        source.Should().Contain("lookup.Add(column.Col, column)");
+        renderSparklines.Should().Contain("DrawLineSparkline(dc, values, rect, SparklineLinePen)");
+        renderSparklines.Should().Contain("DrawColumnSparkline(dc, values, rect, sparkline.Kind == SparklineKind.WinLoss, SparklinePositiveBrush, SparklineNegativeBrush)");
+        source.Should().Contain("SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer)");
+        source.Should().Contain("SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer)");
+        source.Should().NotContain("BuildSparklineRowMetricLookup");
+        source.Should().NotContain("BuildSparklineColumnMetricLookup");
         renderSparklines.Should().NotContain(".ToDictionary(");
         renderSparklines.Should().NotContain(".Select(");
         renderSparklines.Should().NotContain("new SolidColorBrush");
         renderSparklines.Should().NotContain("new Pen");
+        source.Should().NotContain("CalculateLineLayout(values, rect)");
+        source.Should().NotContain("CalculateColumnLayout(values, rect, winLoss)");
     }
 
     [Fact]
@@ -241,7 +261,8 @@ public sealed class GridViewRenderPerformanceTests
         properties.Should().Contain("public static readonly DependencyProperty IsLiveResizingProperty");
         properties.Should().Contain("FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender)");
         onRender.Should().Contain("var isLiveResizing = IsLiveResizing;");
-        onRender.Should().Contain("if (!isLiveResizing)");
+        onRender.Should().Contain("var skipHeavyLayers = isLiveResizing || _resizeTarget != ResizeTarget.None;");
+        onRender.Should().Contain("if (!skipHeavyLayers)");
         onRender.Should().Contain("RenderLiveResizeContinuation(dc);");
         onRender.Should().Contain("RenderCells(dc);");
         onRender.Should().Contain("RenderSelection(dc);");
@@ -251,7 +272,7 @@ public sealed class GridViewRenderPerformanceTests
         onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal)
             .Should().BeLessThan(onRender.IndexOf("RenderFormulaTraceArrows(dc);", StringComparison.Ordinal));
         onRender.IndexOf("if (ObjectDisplayMode == GridObjectDisplayMode.Placeholders)", StringComparison.Ordinal)
-            .Should().BeGreaterThan(onRender.LastIndexOf("if (!isLiveResizing)", StringComparison.Ordinal));
+            .Should().BeGreaterThan(onRender.LastIndexOf("if (!skipHeavyLayers)", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -299,6 +320,7 @@ public sealed class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<Brush, Pen> _underlinePenCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();");
+        gridViewSource.Should().Contain("private readonly Dictionary<TextWidthLayoutKey, double> _textWidthLayoutCache = new();");
         gridViewSource.Should().Contain("private RenderCellLookupCache? _renderCellLookupCache;");
         gridViewSource.Should().Contain("private OccupiedCellLookupCache? _occupiedCellLookupCache;");
     }
@@ -311,11 +333,26 @@ public sealed class GridViewRenderPerformanceTests
         var headers = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
 
         cacheSource.Should().Contain("private FormattedText GetDefaultFormattedText");
+        cacheSource.Should().Contain("private static bool CanUseDefaultFormattedText");
         cacheSource.Should().Contain("_defaultTextLayoutCache.TryGetValue");
         cacheSource.Should().Contain("_defaultTextLayoutCache.Count >= DefaultTextLayoutCacheLimit");
-        rendering.Should().Contain("style is null");
+        rendering.Should().Contain("CanUseDefaultFormattedText(style, wrapText)");
         rendering.Should().Contain("GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)");
         headers.Should().Contain("GetDefaultFormattedText(");
+    }
+
+    [Fact]
+    public void ShrinkToFitTextWidthMeasurements_AreCachedAcrossRenderPasses()
+    {
+        var cacheSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.TextLayoutCache.cs"));
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+
+        cacheSource.Should().Contain("private double MeasureCellTextWidth");
+        cacheSource.Should().Contain("_textWidthLayoutCache.TryGetValue");
+        cacheSource.Should().Contain("_textWidthLayoutCache.Count >= TextWidthLayoutCacheLimit");
+        rendering.Should().Contain("var typefaceKey = CreateCellTypefaceKey(style);");
+        rendering.Should().Contain("MeasureCellTextWidth(cell.DisplayText, typefaceKey, typeface, size, pixelsPerDip)");
+        rendering.Should().NotContain("size => new FormattedText(");
     }
 
     [Fact]
@@ -448,7 +485,8 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("CreateCellTypeface(style, _typefaceCache)");
+        renderCells.Should().Contain("var typefaceKey = CreateCellTypefaceKey(style);");
+        renderCells.Should().Contain("CreateCellTypeface(typefaceKey, _typefaceCache)");
     }
 
     [Fact]
@@ -582,16 +620,23 @@ public sealed class GridViewRenderPerformanceTests
     public void RenderManualPageBreaks_ScansVisibleMetricsOnce()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
+        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
         var renderManualPageBreaks = source[
             source.IndexOf("private void RenderManualPageBreaks", StringComparison.Ordinal)..
             source.IndexOf("public enum FormulaTraceArrowLayoutKind", StringComparison.Ordinal)];
 
-        renderManualPageBreaks.Should().Contain("AsPageBreakLookup(rowPageBreaks)");
-        renderManualPageBreaks.Should().Contain("AsPageBreakLookup(columnPageBreaks)");
-        renderManualPageBreaks.Should().Contain("pageBreaks as IReadOnlySet<uint> ?? new HashSet<uint>(pageBreaks)");
+        renderManualPageBreaks.Should().Contain("GetPageBreakLookup(rowPageBreaks, ref _rowPageBreakLookupCache)");
+        renderManualPageBreaks.Should().Contain("GetPageBreakLookup(columnPageBreaks, ref _columnPageBreakLookupCache)");
+        renderManualPageBreaks.Should().Contain("pageBreaks is IReadOnlySet<uint> set");
+        renderManualPageBreaks.Should().Contain("CalculatePageBreakFingerprint(pageBreaks)");
+        renderManualPageBreaks.Should().Contain("cache.Fingerprint == fingerprint");
         renderManualPageBreaks.Should().Contain("foreach (var metric in Viewport.RowMetrics)");
         renderManualPageBreaks.Should().Contain("foreach (var metric in Viewport.ColMetrics)");
         renderManualPageBreaks.Should().NotContain("FirstOrDefault");
+        gridViewSource.Should().Contain("private PageBreakLookupCache? _rowPageBreakLookupCache;");
+        propertiesSource.Should().Contain("OnRowPageBreaksChanged");
+        propertiesSource.Should().Contain("OnColumnPageBreaksChanged");
     }
 
     [Fact]

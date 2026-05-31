@@ -37,10 +37,10 @@ public sealed partial class Sheet
     private readonly Dictionary<(uint Row, uint Col), ScalarValue> _spillValues = [];
     private readonly Dictionary<(uint Row, uint Col), (uint Rows, uint Cols)> _spillAnchors = [];
     private readonly Dictionary<(uint Row, uint Col), StyleId> _styleOnly = [];
+    private readonly HashSet<(uint Row, uint Col)> _formulaCells = [];
     private MergeRegionIndex? _mergeIndex;
     private GridRange? _usedRangeCache;
     private bool _usedRangeCacheDirty = true;
-    private int _formulaCellCount;
 
     /// <summary>Unique identifier for this sheet.</summary>
     public SheetId Id { get; }
@@ -437,7 +437,7 @@ public sealed partial class Sheet
         TrackUsedRangeCellSet(address.Row, address.Col);
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
-            TrackFormulaCellReplacement(existing, hasNewFormula: false);
+            TrackFormulaCellReplacement(address.Row, address.Col, existing, hasNewFormula: false);
             existing.Value = value;
             existing.FormulaText = null;
             existing.IgnoreFormulaError = false;
@@ -459,14 +459,14 @@ public sealed partial class Sheet
         TrackUsedRangeCellSet(address.Row, address.Col);
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
         {
-            TrackFormulaCellReplacement(existing, hasNewFormula: true);
+            TrackFormulaCellReplacement(address.Row, address.Col, existing, hasNewFormula: true);
             existing.FormulaText = formulaText;
             existing.IgnoreFormulaError = false;
         }
         else
         {
             _cells[(address.Row, address.Col)] = Cell.FromFormula(formulaText);
-            _formulaCellCount++;
+            _formulaCells.Add((address.Row, address.Col));
         }
         _styleOnly.Remove((address.Row, address.Col));
     }
@@ -477,9 +477,9 @@ public sealed partial class Sheet
         ClearSpillRange(address);
         TrackUsedRangeCellSet(address.Row, address.Col);
         if (_cells.TryGetValue((address.Row, address.Col), out var existing))
-            TrackFormulaCellReplacement(existing, cell.HasFormula);
+            TrackFormulaCellReplacement(address.Row, address.Col, existing, cell.HasFormula);
         else if (cell.HasFormula)
-            _formulaCellCount++;
+            _formulaCells.Add((address.Row, address.Col));
 
         _cells[(address.Row, address.Col)] = cell;
         _styleOnly.Remove((address.Row, address.Col));
@@ -492,7 +492,7 @@ public sealed partial class Sheet
         if (_cells.Remove((row, col), out var removed))
         {
             if (removed.HasFormula)
-                _formulaCellCount--;
+                _formulaCells.Remove((row, col));
             TrackUsedRangeCellCleared(row, col);
         }
     }
@@ -504,7 +504,7 @@ public sealed partial class Sheet
         if (_cells.Remove((address.Row, address.Col), out var removed))
         {
             if (removed.HasFormula)
-                _formulaCellCount--;
+                _formulaCells.Remove((address.Row, address.Col));
             TrackUsedRangeCellCleared(address.Row, address.Col);
         }
     }
@@ -611,14 +611,21 @@ public sealed partial class Sheet
         }
     }
 
+    /// <summary>Enumerate cells that currently contain formulas.</summary>
+    public IEnumerable<CellAddress> EnumerateFormulaCells()
+    {
+        foreach (var (row, col) in _formulaCells)
+            yield return new CellAddress(Id, row, col);
+    }
+
     /// <summary>Total number of non-empty cells.</summary>
     public int CellCount => _cells.Count;
 
     /// <summary>Number of cells that currently contain formulas.</summary>
-    public int FormulaCellCount => _formulaCellCount;
+    public int FormulaCellCount => _formulaCells.Count;
 
     /// <summary>Whether any cell on the sheet currently contains a formula.</summary>
-    public bool HasFormulas => _formulaCellCount > 0;
+    public bool HasFormulas => _formulaCells.Count > 0;
 
     /// <summary>Get all non-empty cells as a dictionary keyed by CellAddress.</summary>
     public Dictionary<CellAddress, Cell> GetUsedCells()
@@ -700,12 +707,15 @@ public sealed partial class Sheet
         }
     }
 
-    private void TrackFormulaCellReplacement(Cell existing, bool hasNewFormula)
+    private void TrackFormulaCellReplacement(uint row, uint col, Cell existing, bool hasNewFormula)
     {
         if (existing.HasFormula == hasNewFormula)
             return;
 
-        _formulaCellCount += hasNewFormula ? 1 : -1;
+        if (hasNewFormula)
+            _formulaCells.Add((row, col));
+        else
+            _formulaCells.Remove((row, col));
     }
 
 }

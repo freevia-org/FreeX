@@ -49,6 +49,9 @@ public class DependencyGraphTests
         source.Should().Contain(
             "if (!sheet.HasFormulas)",
             "sheets without formulas should be skipped before enumerating occupied cells");
+        source.Should().Contain(
+            "sheet.EnumerateFormulaCells()",
+            "recalculation should use tracked formula addresses instead of scanning every occupied value cell");
         source.Should().NotContain(
             ".Where(entry => entry.Cell.HasFormula)",
             "formula-cell collection should avoid LINQ iterator/list scaffolding on recalculation hot paths");

@@ -447,7 +447,8 @@ public partial class MainWindow
         await CaptureElementAsync(TitleBarRoot, outputDir, "title-normal");
         await CaptureElementAsync(StatusBarRoot, outputDir, "status-normal");
 
-        await HoverAndCaptureElementAsync(SaveQatBtn, TitleBarRoot, outputDir, "title-save-hover");
+        if (GetQuickAccessToolbarButton(QuickAccessToolbarCommandIds.Save) is { } saveQatButton)
+            await HoverAndCaptureElementAsync(saveQatButton, TitleBarRoot, outputDir, "title-save-hover");
         await HoverAndCaptureElementAsync(MaxRestoreBtn, TitleBarRoot, outputDir, "title-system-hover");
         await HoverAndCaptureElementAsync(StatusZoomOutButton, StatusBarRoot, outputDir, "status-minus-hover");
         await HoverAndCaptureElementAsync(StatusZoomInButton, StatusBarRoot, outputDir, "status-plus-hover");

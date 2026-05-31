@@ -46,6 +46,29 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_NormalizesSpreadsheetMlDateTimesWithOffsetsToUtc()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Dates">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="DateTime">2026-05-31T11:15:30+03:00</ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="DateTime">2026-05-31T08:15:30Z</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
+        var expectedUtc = DateTimeValue.FromDateTime(new DateTime(2026, 5, 31, 8, 15, 30));
+
+        sheet.GetCell(1, 1)!.Value.Should().Be(expectedUtc);
+        sheet.GetCell(1, 2)!.Value.Should().Be(expectedUtc);
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsMultipleSheetsAndValueTypes()
     {
         var workbook = new Workbook("XmlRoundTrip");
@@ -410,6 +433,33 @@ public sealed class SpreadsheetXmlFileAdapterTests
         var sheet = workbook.GetSheetAt(0);
         workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
         workbook.GetStyle(sheet.GetStyleOnly(1, 2)!.Value).NumberFormat.Should().Be("0.0%");
+    }
+
+    [Fact]
+    public void Load_ReadsSpreadsheetMlInheritedNumberFormatStyles()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Styles>
+                <ss:Style ss:ID="currency">
+                  <ss:NumberFormat ss:Format="$#,##0.00"/>
+                </ss:Style>
+                <ss:Style ss:ID="currencyChild" ss:Parent="currency"/>
+              </ss:Styles>
+              <ss:Worksheet ss:Name="Styles">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell ss:StyleID="currencyChild"><ss:Data ss:Type="Number">12.5</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
     }
 
     [Fact]
@@ -1034,6 +1084,49 @@ public sealed class SpreadsheetXmlFileAdapterTests
                     <ss:Table>
                       <ss:Row>
                         <ss:Cell ss:StyleID="money">
+                          <ss:Data ss:Type="Number"><xsl:value-of select="row/@amount"/></ss:Data>
+                        </ss:Cell>
+                        <ss:Cell ss:Index="3" ss:StyleID="money"/>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+        sheet.GetCell(1, 3).Should().BeNull();
+        workbook.GetStyle(sheet.GetStyleOnly(1, 3)!.Value).NumberFormat.Should().Be("$#,##0.00");
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlInheritedNumberFormatStyles()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row amount="12.5"/>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <ss:Style ss:ID="money">
+                      <ss:NumberFormat ss:Format="$#,##0.00"/>
+                    </ss:Style>
+                    <ss:Style ss:ID="moneyGenerated" ss:Parent="money"/>
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Generated">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell ss:StyleID="moneyGenerated">
                           <ss:Data ss:Type="Number"><xsl:value-of select="row/@amount"/></ss:Data>
                         </ss:Cell>
                       </ss:Row>

@@ -85,41 +85,35 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void QuickAccessToolbar_SaveUndoRedoExposeKeyTipsAndSharedCommandRoutes()
+    public void QuickAccessToolbar_BuildsPersistedCommandsWithKeyTipsAndSharedCommandRoutes()
     {
-        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var catalogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "QuickAccessToolbarCatalog.cs"));
+        var qatSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAccessToolbar.cs"));
         var keyTipSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.KeyTips.cs"));
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
         var commandSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.CommandExecution.cs"));
-        var shellSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Shell.cs"));
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-        XNamespace local = "clr-namespace:FreeX.App.Host";
 
-        var qatButtons = document
-            .Descendants(presentation + "Button")
-            .Where(button => button.Attribute(x + "Name")?.Value is "SaveQatBtn" or "UndoQatBtn" or "RedoQatBtn")
-            .Select(button => new
-            {
-                Name = button.Attribute(x + "Name")?.Value,
-                Click = button.Attribute("Click")?.Value,
-                KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
-                AutomationName = LocalizedAttribute(button, "AutomationProperties.Name")
-            })
-            .ToList();
-
-        qatButtons.Should().BeEquivalentTo(
-        [
-            new { Name = "SaveQatBtn", Click = "SaveButton_Click", KeyTip = "1", AutomationName = "Save" },
-            new { Name = "UndoQatBtn", Click = "UndoQatBtn_Click", KeyTip = "2", AutomationName = "Undo" },
-            new { Name = "RedoQatBtn", Click = "RedoQatBtn_Click", KeyTip = "3", AutomationName = "Redo" }
-        ]);
+        xaml.Should().Contain("x:Name=\"TitleBarQatPanel\"");
+        xaml.Should().Contain("x:Name=\"BelowRibbonQatPanel\"");
+        catalogSource.Should().Contain("DefaultCommandIds");
+        catalogSource.Should().Contain("QuickAccessToolbarCommandIds.Save");
+        catalogSource.Should().Contain("QuickAccessToolbarCommandIds.Undo");
+        catalogSource.Should().Contain("QuickAccessToolbarCommandIds.Redo");
+        catalogSource.Should().Contain("QuickAccessToolbarCommandIds.Print");
+        catalogSource.Should().Contain("QuickAccessToolbarCommandIds.InsertFunction");
+        catalogSource.Should().Contain("QuickAccessToolbarCommandIds.NameManager");
+        qatSource.Should().Contain("RebuildQuickAccessToolbar()");
+        qatSource.Should().Contain("RibbonTooltip.SetKeyTip(button, FormatQuickAccessToolbarKeyTip(visibleIndex));");
+        qatSource.Should().Contain("AutomationProperties.SetAutomationId(button, command.AutomationId);");
+        qatSource.Should().Contain("RegisterName(command.AutomationId, button);");
+        qatSource.Should().Contain("ExecuteQuickAccessToolbarCommand(command.Id, button, args)");
 
         keyTipSource.Should().Contain("private bool TryInvokeTopLevelQatKeyTip(string keyTip)");
         keyTipSource.Should().Contain("GetVisibleKeyTipElements(RibbonKeyTipScope.TopLevel)");
         keyTipSource.Should().Contain("private IEnumerable<FrameworkElement> EnumerateKeyTipCandidateElements");
         keyTipSource.Should().Contain("RibbonTabs.Items.OfType<TabItem>()");
-        keyTipSource.Should().Contain("EnumerateQuickAccessKeyTipButtons()");
+        keyTipSource.Should().Contain("EnumerateQuickAccessToolbarButtons()");
         keyTipSource.Should().Contain("selectedTab.Content as DependencyObject ?? selectedTab");
         keyTipSource.Should().Contain("if (!match.IsEnabled)");
         keyTipSource.Should().Contain("match.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, match));");
@@ -131,8 +125,10 @@ public sealed class MainWindowXamlKeyTipTests
         backstageSource.Should().Contain("MarkWorkbookSaved()");
         backstageSource.Should().Contain("UpdateTitleBar()");
 
-        shellSource.Should().Contain("private void UndoQatBtn_Click(object sender, RoutedEventArgs e) => ExecuteUndo();");
-        shellSource.Should().Contain("private void RedoQatBtn_Click(object sender, RoutedEventArgs e) => ExecuteRedo();");
+        qatSource.Should().Contain("case QuickAccessToolbarCommandIds.Undo:");
+        qatSource.Should().Contain("ExecuteUndo();");
+        qatSource.Should().Contain("case QuickAccessToolbarCommandIds.Redo:");
+        qatSource.Should().Contain("ExecuteRedo();");
         commandSource.Should().Contain("_commandBus.Undo(_workbook.Id)");
         commandSource.Should().Contain("_commandBus.Redo(_workbook.Id)");
         commandSource.Should().Contain("RefreshToolbar()");
@@ -393,6 +389,60 @@ public sealed class MainWindowXamlKeyTipTests
             ?.Value
             .Should()
             .Be("True");
+    }
+
+    [Fact]
+    public void BackstageInteractiveIcons_UseLargeReadableSlots()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var resources = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "MainWindowResources.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var sidebarStyle = StyleByKey(resources, presentation, x, "BackstageSidebarIcon");
+        SetterValue(sidebarStyle, presentation, "IconSize").Should().Be("24");
+        SetterValue(sidebarStyle, presentation, "Margin").Should().Be("0,0,12,0");
+
+        var pinButtonStyle = StyleByKey(resources, presentation, x, "BackstageRecentPinCommandButton");
+        SetterValue(pinButtonStyle, presentation, "Width").Should().Be("32");
+        SetterValue(pinButtonStyle, presentation, "Height").Should().Be("32");
+
+        var pinIconStyle = StyleByKey(resources, presentation, x, "BackstageRecentPinCommandIcon");
+        SetterValue(pinIconStyle, presentation, "IconSize").Should().Be("24");
+
+        var sidebar = document
+            .Descendants(presentation + "DockPanel")
+            .Single(element => element.Attribute(x + "Name")?.Value == "StartScreenSidebar");
+
+        var sidebarIcons = sidebar
+            .Descendants(local + "RibbonIcon")
+            .ToList();
+
+        sidebarIcons.Should().NotBeEmpty();
+        sidebarIcons.Should().OnlyContain(icon => icon.Attribute("IconSize") == null);
+        sidebarIcons
+            .Select(icon => icon.Attribute("Style")?.Value)
+            .Should()
+            .OnlyContain(style =>
+                string.Equals(style, "{StaticResource BackstageSidebarIcon}", StringComparison.Ordinal) ||
+                string.Equals(style, "{StaticResource BackstageSidebarBackIcon}", StringComparison.Ordinal));
+
+        var pinButtons = document
+            .Descendants(presentation + "Button")
+            .Where(button => button.Attribute("AutomationProperties.AutomationId")?.Value is
+                "BackstageRecentPinButton" or "BackstagePinnedUnpinButton")
+            .ToList();
+
+        pinButtons.Should().HaveCount(2);
+        pinButtons.Select(button => button.Attribute("Style")?.Value)
+            .Should()
+            .OnlyContain(style => string.Equals(style, "{StaticResource BackstageRecentPinCommandButton}", StringComparison.Ordinal));
+        pinButtons
+            .SelectMany(button => button.Descendants(local + "RibbonIcon"))
+            .Select(icon => icon.Attribute("Style")?.Value)
+            .Should()
+            .OnlyContain(style => string.Equals(style, "{StaticResource BackstageRecentPinCommandIcon}", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -2960,6 +3010,18 @@ public sealed class MainWindowXamlKeyTipTests
 
     private static bool ContainsExcludedStatus(string? value) =>
         ResolveLocalizedValue(value)?.Contains("excluded", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static XElement StyleByKey(XDocument document, XNamespace presentation, XNamespace x, string key) =>
+        document
+            .Descendants(presentation + "Style")
+            .Single(style => style.Attribute(x + "Key")?.Value == key);
+
+    private static string? SetterValue(XElement style, XNamespace presentation, string property) =>
+        style
+            .Elements(presentation + "Setter")
+            .Single(setter => setter.Attribute("Property")?.Value == property)
+            .Attribute("Value")
+            ?.Value;
 
     private static string? CommandName(XElement element, XNamespace local) =>
         element.Attribute(local + "RibbonMetadata.CommandName")?.Value ??

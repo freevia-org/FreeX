@@ -77,9 +77,9 @@ public sealed class SubtotalDialog : Window
                 IsChecked = column.IsSelected,
                 Margin = new Thickness(0, 0, 0, 4)
             };
-            AutomationProperties.SetName(box, $"{column.Header} subtotal column");
+            AutomationProperties.SetName(box, UiText.Format("Subtotal_ColumnAutomationNameFormat", column.Header));
             AutomationProperties.SetAutomationId(box, $"SubtotalColumn{column.Offset}Box");
-            AutomationProperties.SetHelpText(box, "Select to add a subtotal calculation to this column.");
+            AutomationProperties.SetHelpText(box, UiText.Get("Subtotal_ColumnHelpText"));
             _subtotalColumnBoxes.Add(box);
             _subtotalColumnPanel.Children.Add(box);
         }
@@ -97,29 +97,29 @@ public sealed class SubtotalDialog : Window
 
     private void ApplyAutomationMetadata()
     {
-        AutomationProperties.SetName(_groupColumnBox, "At each change in");
+        AutomationProperties.SetName(_groupColumnBox, UiText.Get("Subtotal_AtEachChangeInAutomationName"));
         AutomationProperties.SetAutomationId(_groupColumnBox, "SubtotalGroupColumnBox");
-        AutomationProperties.SetHelpText(_groupColumnBox, "Choose the column that defines each subtotal group.");
+        AutomationProperties.SetHelpText(_groupColumnBox, UiText.Get("Subtotal_AtEachChangeInHelpText"));
 
-        AutomationProperties.SetName(_functionBox, "Use function");
+        AutomationProperties.SetName(_functionBox, UiText.Get("Subtotal_UseFunctionAutomationName"));
         AutomationProperties.SetAutomationId(_functionBox, "SubtotalFunctionBox");
-        AutomationProperties.SetHelpText(_functionBox, "Choose the function used to calculate each subtotal.");
+        AutomationProperties.SetHelpText(_functionBox, UiText.Get("Subtotal_UseFunctionHelpText"));
 
-        AutomationProperties.SetName(_subtotalColumnPanel, "Add subtotal to");
+        AutomationProperties.SetName(_subtotalColumnPanel, UiText.Get("Subtotal_AddSubtotalToAutomationName"));
         AutomationProperties.SetAutomationId(_subtotalColumnPanel, "SubtotalColumnsPanel");
-        AutomationProperties.SetHelpText(_subtotalColumnPanel, "Choose columns that receive subtotal calculations.");
+        AutomationProperties.SetHelpText(_subtotalColumnPanel, UiText.Get("Subtotal_AddSubtotalToHelpText"));
 
-        AutomationProperties.SetName(_replaceBox, "Replace current subtotals");
+        AutomationProperties.SetName(_replaceBox, UiText.Get("Subtotal_ReplaceCurrentSubtotalsAutomationName"));
         AutomationProperties.SetAutomationId(_replaceBox, "SubtotalReplaceCurrentBox");
-        AutomationProperties.SetHelpText(_replaceBox, "Replace existing subtotals with the new subtotal settings.");
+        AutomationProperties.SetHelpText(_replaceBox, UiText.Get("Subtotal_ReplaceCurrentSubtotalsHelpText"));
 
-        AutomationProperties.SetName(_pageBreakBox, "Page break between groups");
+        AutomationProperties.SetName(_pageBreakBox, UiText.Get("Subtotal_PageBreakBetweenGroupsAutomationName"));
         AutomationProperties.SetAutomationId(_pageBreakBox, "SubtotalPageBreakBox");
-        AutomationProperties.SetHelpText(_pageBreakBox, "Insert a page break after each subtotal group.");
+        AutomationProperties.SetHelpText(_pageBreakBox, UiText.Get("Subtotal_PageBreakBetweenGroupsHelpText"));
 
-        AutomationProperties.SetName(_summaryBelowBox, "Summary below data");
+        AutomationProperties.SetName(_summaryBelowBox, UiText.Get("Subtotal_SummaryBelowDataAutomationName"));
         AutomationProperties.SetAutomationId(_summaryBelowBox, "SubtotalSummaryBelowBox");
-        AutomationProperties.SetHelpText(_summaryBelowBox, "Place subtotal rows below each group.");
+        AutomationProperties.SetHelpText(_summaryBelowBox, UiText.Get("Subtotal_SummaryBelowDataHelpText"));
     }
 
     public static SubtotalDialogResult CreateResult(
@@ -251,9 +251,9 @@ public sealed class SubtotalDialog : Window
             Width = 92,
             Margin = new Thickness(0, 0, 8, 0)
         };
-        AutomationProperties.SetName(removeButton, "Remove all subtotals");
+        AutomationProperties.SetName(removeButton, UiText.Get("Subtotal_RemoveAllAutomationName"));
         AutomationProperties.SetAutomationId(removeButton, "SubtotalRemoveAllButton");
-        AutomationProperties.SetHelpText(removeButton, "Remove all subtotal rows from the selected data.");
+        AutomationProperties.SetHelpText(removeButton, UiText.Get("Subtotal_RemoveAllHelpText"));
         removeButton.Click += (_, _) => removeAll();
         grid.Children.Add(removeButton);
 

@@ -95,7 +95,7 @@ public static class StatusBarCalculator
     {
         var prompt = DataValidationService.GetInputPrompt(sheet, activeCell);
         if (prompt is null)
-            return "Ready";
+            return UiText.Get("MainWindow_Text_Ready");
 
         if (prompt.Title.Length == 0)
             return prompt.Message;

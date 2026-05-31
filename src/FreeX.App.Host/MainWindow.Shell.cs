@@ -27,7 +27,4 @@ public partial class MainWindow
         return new Thickness(inset);
     }
 
-    private void UndoQatBtn_Click(object sender, RoutedEventArgs e) => ExecuteUndo();
-
-    private void RedoQatBtn_Click(object sender, RoutedEventArgs e) => ExecuteRedo();
 }

@@ -15,7 +15,7 @@ public sealed class OptionsDialogSourceTests
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
 
-        xaml.Should().Contain("<ListBoxItem Content=\"_View\"/>");
+        xaml.Should().Contain("<ListBoxItem Content=\"View\"/>");
         xaml.Should().Contain("x:Name=\"PanelView\"");
         xaml.Should().Contain("x:Name=\"OptShowFormulaBar\"");
         xaml.Should().Contain("x:Name=\"OptFormulaBarExpanded\"");
@@ -34,7 +34,7 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
-    public void OptionsDialog_ExposesKeyboardAccessKeysForTabsFieldsAndButtons()
+    public void OptionsDialog_ExposesPlainCategoryLabelsAndKeyboardAccessKeysForFieldsAndButtons()
     {
         var document = XamlLocalizationTestHelper.LoadLocalizedXaml("OptionsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -43,17 +43,18 @@ public sealed class OptionsDialogSourceTests
             .Select(element => element.Attribute("Content")?.Value)
             .Should()
             .Contain([
-                "_General",
-                "_Formulas",
-                "_Proofing",
-                "_Save",
-                "_Language",
-                "_Ease of Access",
-                "_Advanced",
-                "_Customize Ribbon",
-                "_Quick Access Toolbar",
-                "_Add-ins",
-                "_Trust Center"
+                "General",
+                "Formulas",
+                "Proofing",
+                "Save",
+                "Language",
+                "Ease of Access",
+                "Advanced",
+                "Customize Ribbon",
+                "Quick Access Toolbar",
+                "Add-ins",
+                "Trust Center",
+                "View"
             ]);
 
         AssertLabelTargets(document, presentation, "Default _font:", "OptDefaultFont");
@@ -189,6 +190,10 @@ public sealed class OptionsDialogSourceTests
             "AutoCorrectOptionsButton_Click",
             "RibbonImportExportButton_Click",
             "QuickAccessResetButton_Click",
+            "QuickAccessAddButton_Click",
+            "QuickAccessRemoveButton_Click",
+            "QuickAccessMoveUpButton_Click",
+            "QuickAccessMoveDownButton_Click",
             "AddInsGoButton_Click",
             "TrustCenterSettingsButton_Click"
         })
@@ -204,33 +209,35 @@ public sealed class OptionsDialogSourceTests
         source.Should().Contain("ShowDeferredOptionsMessage");
         source.Should().Contain("DeferredCommandMessages.AutoCorrectOptions()");
         source.Should().Contain("DeferredCommandMessages.RibbonCustomizationImportExport()");
-        source.Should().Contain("DeferredCommandMessages.QuickAccessToolbarReset()");
         source.Should().Contain("DeferredCommandMessages.OfficeAddIns()");
         source.Should().Contain("DeferredCommandMessages.TrustCenterSettings()");
     }
 
     [Fact]
-    public void OptionsDialog_ExposesQuickAccessToolbarCustomizationAsDeferredAffordance()
+    public void OptionsDialog_ExposesPersistedQuickAccessToolbarCustomization()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
-        var deferredMessages = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DeferredCommandMessages.cs"));
 
-        xaml.Should().Contain("<ListBoxItem Content=\"_Quick Access Toolbar\"/>");
+        xaml.Should().Contain("<ListBoxItem Content=\"Quick Access Toolbar\"/>");
         xaml.Should().Contain("x:Name=\"PanelQuickAccessToolbar\"");
         xaml.Should().Contain("Customize the Quick Access Toolbar");
         xaml.Should().Contain("Show Quick Access Toolbar _below the Ribbon");
+        xaml.Should().Contain("x:Name=\"QuickAccessAvailableCommandsList\"");
+        xaml.Should().Contain("x:Name=\"QuickAccessSelectedCommandsList\"");
+        xaml.Should().Contain("x:Name=\"QuickAccessAddButton\"");
+        xaml.Should().Contain("x:Name=\"QuickAccessRemoveButton\"");
+        xaml.Should().Contain("x:Name=\"QuickAccessMoveUpButton\"");
+        xaml.Should().Contain("x:Name=\"QuickAccessMoveDownButton\"");
         xaml.Should().Contain("x:Name=\"QuickAccessResetButton\"");
         xaml.Should().Contain("Click=\"QuickAccessResetButton_Click\"");
 
         source.Should().Contain("PanelQuickAccessToolbar.Visibility = selectedIndex == 8 ? Visibility.Visible : Visibility.Collapsed;");
-        source.Should().Contain("DeferredCommandMessages.QuickAccessToolbarReset()");
-
-        deferredMessages.Should().Contain("DeferredCommand_QuickAccessToolbar_Body");
-        UiText.Get("DeferredCommand_QuickAccessToolbar_Body")
-            .Should().Contain("Quick Access Toolbar customization is not persisted in FreeX yet");
-        UiText.Get("DeferredCommand_QuickAccessToolbar_Body")
-            .Should().Contain("so there is no custom toolbar state to reset.");
+        source.Should().Contain("QuickAccessToolbarCatalog.NormalizeCommandIds(_opts.QuickAccessToolbarCommands)");
+        source.Should().Contain("QuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true");
+        source.Should().Contain("QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList()");
+        source.Should().Contain("QuickAccessToolbarCatalog.DefaultCommandIds");
+        source.Should().NotContain("DeferredCommandMessages.QuickAccessToolbarReset()");
     }
 
     [Fact]

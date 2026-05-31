@@ -5,8 +5,6 @@ using CellVAlign = FreeX.Core.Model.VerticalAlignment;
 namespace FreeX.App.Host;
 
 public sealed record ToolbarVisualState(
-    bool CanUndo,
-    bool CanRedo,
     bool Bold,
     bool Italic,
     bool Underline,
@@ -17,10 +15,8 @@ public sealed record ToolbarVisualState(
     string FontName,
     string FontSizeText)
 {
-    public static ToolbarVisualState From(CellStyle style, bool canUndo, bool canRedo) =>
+    public static ToolbarVisualState From(CellStyle style) =>
         new(
-            canUndo,
-            canRedo,
             style.Bold,
             style.Italic,
             style.Underline && !style.Strikethrough,

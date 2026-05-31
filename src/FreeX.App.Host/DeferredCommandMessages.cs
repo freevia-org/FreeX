@@ -44,11 +44,6 @@ public static class DeferredCommandMessages
             UiText.Get("DeferredCommand_RibbonCustomization_Title"),
             UiText.Get("DeferredCommand_RibbonCustomization_Body"));
 
-    public static DeferredCommandMessage QuickAccessToolbarReset() =>
-        new(
-            UiText.Get("DeferredCommand_QuickAccessToolbar_Title"),
-            UiText.Get("DeferredCommand_QuickAccessToolbar_Body"));
-
     public static DeferredCommandMessage OfficeAddIns() =>
         new(
             UiText.Get("DeferredCommand_OfficeAddIns_Title"),

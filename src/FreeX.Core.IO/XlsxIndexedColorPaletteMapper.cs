@@ -11,18 +11,21 @@ internal static class XlsxIndexedColorPaletteMapper
 
     public static WorkbookIndexedColorPalette Load(Stream xlsxStream)
     {
+        var stylesXml = XlsxStylesheetReader.Load(xlsxStream);
+        return Load(stylesXml);
+    }
+
+    public static WorkbookIndexedColorPalette Load(XDocument? stylesXml)
+    {
         var palette = new WorkbookIndexedColorPalette();
         try
         {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var stylesEntry = archive.GetEntry("xl/styles.xml");
-            if (stylesEntry is null)
+            if (stylesXml?.Root is null)
                 return palette;
 
-            var stylesXml = XlsxPackageXmlEditor.LoadXml(stylesEntry);
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             var index = 1;
-            foreach (var rgbColor in stylesXml.Root?
+            foreach (var rgbColor in stylesXml.Root
                          .Element(workbookNs + "colors")?
                          .Element(workbookNs + "indexedColors")?
                          .Elements(workbookNs + "rgbColor") ?? [])

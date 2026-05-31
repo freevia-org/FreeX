@@ -16,6 +16,10 @@ public partial class MainWindow
     private const string RibbonDropdownMainHoverPartName = "PART_RibbonDropdownMainHover";
     private const string RibbonDropdownMenuHoverPartName = "PART_RibbonDropdownMenuHover";
     private const string RibbonDropdownContentPartName = "PART_RibbonDropdownContent";
+    private const double RibbonSplitButtonIconColumnWidth = 24;
+    private const double RibbonSplitButtonDropdownColumnWidth = 14;
+    private const double RibbonSplitButtonIconOnlyContentWidth =
+        RibbonSplitButtonIconColumnWidth + RibbonSplitButtonDropdownColumnWidth;
 
     private void NormalizeRibbonCommandButtons(RibbonStaticSurfaceSnapshot surface)
     {
@@ -29,6 +33,8 @@ public partial class MainWindow
 
             var commandName = GetRibbonButtonCommandName(button);
             var layoutKind = GetRibbonCommandLayoutKind(button, commandName, label);
+            if (ShouldUsePlannedRibbonCommandWidth(button, commandName, layoutKind))
+                button.Width = 0;
             ApplyRibbonCommandSize(button, layoutKind);
             if (layoutKind is RibbonCommandLayoutKind.Small)
                 button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(label));
@@ -153,6 +159,7 @@ public partial class MainWindow
             return;
 
         var layout = GetRibbonDropdownZoneLayout(button);
+        EnsureRibbonDropdownButtonFootprint(button, layout);
         switch (contentRoot)
         {
             case Grid grid:
@@ -167,6 +174,30 @@ public partial class MainWindow
         }
     }
 
+    private static void EnsureRibbonDropdownButtonFootprint(ButtonBase button, RibbonCommandContentLayout layout)
+    {
+        if (layout is not (RibbonCommandContentLayout.Small or RibbonCommandContentLayout.IconOnly))
+            return;
+
+        var minimumWidth = GetRibbonSplitButtonMinimumWidth();
+        if (RibbonMetadata.TryGetCompactWidths(button, out var fullWidth, out var compactWidth))
+        {
+            SetRibbonCompactWidths(
+                button,
+                Math.Max(fullWidth, minimumWidth),
+                Math.Max(compactWidth, minimumWidth));
+        }
+
+        if (layout == RibbonCommandContentLayout.IconOnly &&
+            button is FrameworkElement element &&
+            element.Width is > 0)
+        {
+            element.Width = Math.Max(element.Width, minimumWidth);
+        }
+    }
+
+    private static double GetRibbonSplitButtonMinimumWidth() => RibbonSplitButtonIconOnlyContentWidth;
+
     private static DependencyObject? WrapRibbonDropdownTextContent(ButtonBase button)
     {
         if (button.Content is not string text)
@@ -174,6 +205,8 @@ public partial class MainWindow
 
         var commandName = GetRibbonButtonCommandName(button);
         var layoutKind = GetRibbonCommandLayoutKind(button, commandName, text);
+        if (ShouldUsePlannedRibbonCommandWidth(button, commandName, layoutKind))
+            button.Width = 0;
         ApplyRibbonCommandSize(button, layoutKind);
         if (layoutKind is RibbonCommandLayoutKind.Small)
             button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(text));
@@ -195,13 +228,115 @@ public partial class MainWindow
             .Distinct()
             .Any(RibbonMetadata.IsDropdownChevron);
 
-    private static RibbonCommandLayoutKind GetRibbonCommandLayoutKind(ButtonBase button, string commandName, string label) =>
-        ShouldPreserveExplicitCompactRibbonButtonHeight(button)
-            ? RibbonCommandLayoutKind.Small
-            : RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
+    private static RibbonCommandLayoutKind GetRibbonCommandLayoutKind(ButtonBase button, string commandName, string label)
+    {
+        var plannedLayout = RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
+        if (ShouldPreserveExplicitCompactRibbonButtonHeight(button) &&
+            !ShouldPromoteExplicitCompactRibbonButton(button, commandName, plannedLayout))
+        {
+            return RibbonCommandLayoutKind.Small;
+        }
+
+        return plannedLayout;
+    }
 
     private static bool ShouldPreserveExplicitCompactRibbonButtonHeight(ButtonBase button) =>
         button is FrameworkElement { Height: > 0 and <= 34 };
+
+    private static bool ShouldPromoteExplicitCompactRibbonButton(
+        ButtonBase button,
+        string commandName,
+        RibbonCommandLayoutKind plannedLayout)
+    {
+        if (plannedLayout != RibbonCommandLayoutKind.Large ||
+            !TryGetRibbonButtonGroupCatalogId(button, out var groupCatalogId))
+        {
+            return false;
+        }
+
+        var normalizedCommandName = NormalizeRibbonCommandName(commandName);
+        return groupCatalogId switch
+        {
+            "ReviewProofingGroup" =>
+                normalizedCommandName is "spelling" or "workbook statistics",
+            "ReviewAccessibilityGroup" =>
+                normalizedCommandName is "check accessibility",
+            "ReviewProtectGroup" =>
+                normalizedCommandName is "protect sheet" or
+                    "protect workbook" or
+                    "allow users to edit ranges" or
+                    "share workbook",
+            "ViewWorkbookViewsGroup" =>
+                normalizedCommandName is "normal" or
+                    "page break preview" or
+                    "page layout" or
+                    "custom views",
+            "ViewZoomGroup" =>
+                normalizedCommandName is "zoom" or "100%" or "zoom to selection",
+            "PageLayoutThemesGroup" =>
+                normalizedCommandName is "themes" or
+                    "theme colors" or
+                    "theme fonts" or
+                    "theme effects",
+            "PageLayoutScaleToFitGroup" =>
+                normalizedCommandName is "scale to fit",
+            "FormulasFunctionLibraryGroup" =>
+                normalizedCommandName is "insert function" or "autosum",
+            "FormulasDefinedNamesGroup" =>
+                normalizedCommandName is "name manager" or
+                    "define name" or
+                    "use in formula" or
+                    "create from selection",
+            "FormulasCalculationGroup" =>
+                normalizedCommandName is "calculate now" or
+                    "calculate sheet" or
+                    "calculation options",
+            _ => false
+        };
+    }
+
+    private static bool TryGetRibbonButtonGroupCatalogId(ButtonBase button, out string catalogId)
+    {
+        var current = button as DependencyObject;
+        while (current is not null)
+        {
+            if (RibbonMetadata.IsRibbonGroup(current) &&
+                RibbonMetadata.TryGetCatalogId(current, out catalogId))
+            {
+                return true;
+            }
+
+            current = GetRibbonTreeParent(current);
+        }
+
+        catalogId = "";
+        return false;
+    }
+
+    private static DependencyObject? GetRibbonTreeParent(DependencyObject element) =>
+        TryGetVisualParent(element) ?? LogicalTreeHelper.GetParent(element);
+
+    private static bool ShouldUsePlannedRibbonCommandWidth(
+        ButtonBase button,
+        string commandName,
+        RibbonCommandLayoutKind layoutKind) =>
+        ShouldPreserveExplicitCompactRibbonButtonHeight(button) &&
+        ShouldPromoteExplicitCompactRibbonButton(button, commandName, layoutKind);
+
+    private static DependencyObject? TryGetVisualParent(DependencyObject element)
+    {
+        try
+        {
+            return VisualTreeHelper.GetParent(element);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static string NormalizeRibbonCommandName(string? commandName) =>
+        commandName?.Trim().ToLowerInvariant() ?? "";
 
     private static void AddRibbonDropdownChevronToGrid(Grid grid, RibbonCommandContentLayout layout)
     {
@@ -209,15 +344,35 @@ public partial class MainWindow
         if (layout == RibbonCommandContentLayout.IconOnly ||
             grid.ColumnDefinitions.Count == 0)
         {
-            chevron.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
-            chevron.VerticalAlignment = System.Windows.VerticalAlignment.Bottom;
-            chevron.Margin = new Thickness(0, 0, -1, -1);
-            grid.Children.Add(chevron);
+            AddRibbonIconOnlyDropdownChevronToGrid(grid, chevron);
             return;
         }
 
-        var column = new ColumnDefinition { Width = new GridLength(12) };
+        var column = new ColumnDefinition { Width = new GridLength(RibbonSplitButtonDropdownColumnWidth) };
         grid.ColumnDefinitions.Add(column);
+        Grid.SetColumn(chevron, grid.ColumnDefinitions.Count - 1);
+        grid.Children.Add(chevron);
+    }
+
+    private static void AddRibbonIconOnlyDropdownChevronToGrid(Grid grid, FrameworkElement chevron)
+    {
+        if (grid.ColumnDefinitions.Count == 0)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(RibbonSplitButtonIconColumnWidth) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(RibbonSplitButtonDropdownColumnWidth) });
+            foreach (UIElement child in grid.Children)
+                Grid.SetColumn(child, 0);
+        }
+        else
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(RibbonSplitButtonDropdownColumnWidth) });
+        }
+
+        grid.Width = Math.Max(grid.Width is > 0 ? grid.Width : 0, RibbonSplitButtonIconOnlyContentWidth);
+        grid.MinWidth = Math.Max(grid.MinWidth, RibbonSplitButtonIconOnlyContentWidth);
+        chevron.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+        chevron.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+        chevron.Margin = new Thickness(0);
         Grid.SetColumn(chevron, grid.ColumnDefinitions.Count - 1);
         grid.Children.Add(chevron);
     }
@@ -237,9 +392,10 @@ public partial class MainWindow
 
     private static FrameworkElement CreateRibbonDropdownChevron(RibbonCommandContentLayout layout)
     {
+        var isCompactChevron = layout is RibbonCommandContentLayout.Small or RibbonCommandContentLayout.IconOnly;
         var chevron = CreateRibbonChevronGlyph(
-            width: 10,
-            height: 8,
+            width: isCompactChevron ? 8 : 10,
+            height: isCompactChevron ? 7 : 8,
             brush: BrushFromRgb(31, 31, 31),
             pointsUp: false);
         RibbonMetadata.SetRole(chevron, RibbonMetadataRole.DropdownChevron);
@@ -486,16 +642,18 @@ public partial class MainWindow
 
         var layout = GetRibbonDropdownZoneLayout(button);
         var horizontalZoneHeight = GetRibbonHorizontalDropdownZoneHeight(height);
+        var useIconAdjacentZone = ShouldUseIconAdjacentDropdownZone(button, layout);
         bounds = layout switch
         {
             RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium =>
                 GetRibbonHorizontalDropdownZoneBounds(button, width, height, horizontalZoneHeight),
-            RibbonCommandContentLayout.IconOnly =>
-                new Rect(Math.Max(0, width - 16), Math.Max(0, height - 16), Math.Min(16, width), Math.Min(16, height)),
+            _ when useIconAdjacentZone =>
+                GetRibbonIconAdjacentDropdownZoneBounds(button, width, height),
             _ => new Rect(Math.Max(0, width - 18), 0, Math.Min(18, width), height)
         };
 
-        if (layout is not (RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium) &&
+        if (!useIconAdjacentZone &&
+            layout is not (RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium) &&
             TryGetRibbonDropdownChevronBounds(button, out var chevronBounds))
         {
             bounds.Union(chevronBounds);
@@ -519,6 +677,32 @@ public partial class MainWindow
             zoneTop = Math.Max(zoneTop, Math.Min(height - 1, Math.Ceiling(labelBottom)));
 
         return new Rect(0, zoneTop, width, Math.Max(0, height - zoneTop));
+    }
+
+    private static bool ShouldUseIconAdjacentDropdownZone(ButtonBase button, RibbonCommandContentLayout layout) =>
+        layout == RibbonCommandContentLayout.IconOnly ||
+        layout == RibbonCommandContentLayout.Small && !HasVisibleRibbonCommandLabel(button);
+
+    private static Rect GetRibbonIconAdjacentDropdownZoneBounds(ButtonBase button, double width, double height)
+    {
+        var zoneLeft = Math.Max(0, width - RibbonSplitButtonDropdownColumnWidth);
+        if (TryGetRibbonCommandIconBounds(button, out var iconBounds))
+            zoneLeft = Math.Clamp(Math.Ceiling(iconBounds.Right), 0, width);
+
+        return new Rect(zoneLeft, 0, Math.Max(0, width - zoneLeft), height);
+    }
+
+    private static bool HasVisibleRibbonCommandLabel(ButtonBase button)
+    {
+        if (button.Content is not DependencyObject contentRoot)
+            return false;
+
+        return EnumerateVisualDescendants(contentRoot)
+            .Concat(EnumerateLogicalDescendants(contentRoot))
+            .OfType<TextBlock>()
+            .Distinct()
+            .Any(label => RibbonMetadata.IsCommandLabel(label) &&
+                          label.Visibility == Visibility.Visible);
     }
 
     private static double GetRibbonCommandLabelBottom(ButtonBase button)
@@ -616,6 +800,41 @@ public partial class MainWindow
                 bounds = chevron.TransformToAncestor(button)
                     .TransformBounds(new Rect(0, 0, chevron.ActualWidth, chevron.ActualHeight));
                 bounds.Inflate(7, 7);
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryGetRibbonCommandIconBounds(ButtonBase button, out Rect bounds)
+    {
+        bounds = Rect.Empty;
+        if (button.Content is not DependencyObject contentRoot)
+            return false;
+
+        foreach (var icon in EnumerateVisualDescendants(contentRoot)
+                     .Concat(EnumerateLogicalDescendants(contentRoot))
+                     .OfType<FrameworkElement>()
+                     .Distinct()
+                     .Where(element => RibbonMetadata.IsCommandIcon(element) &&
+                                       !RibbonMetadata.IsDropdownChevron(element)))
+        {
+            if (!icon.IsVisible ||
+                icon.ActualWidth <= 0 ||
+                icon.ActualHeight <= 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                bounds = icon.TransformToAncestor(button)
+                    .TransformBounds(new Rect(0, 0, icon.ActualWidth, icon.ActualHeight));
                 return true;
             }
             catch (InvalidOperationException)
@@ -1230,7 +1449,7 @@ public partial class MainWindow
             return false;
 
         var label = GetRibbonButtonDisplayLabel(button);
-        element.Width = GetSmallRibbonCommandWidth(label);
+        element.Width = Math.Max(element.Width is > 0 ? element.Width : 0, GetSmallRibbonCommandWidth(label));
         element.Height = 24;
         SetRibbonCompactWidths(button, element.Width, 24);
         if (button is Control control)
@@ -1852,8 +2071,24 @@ public partial class MainWindow
             Grid.SetColumnSpan(grid, columnSpan);
 
             foreach (var button in directButtons)
-            {
                 NormalizeDenseRibbonColumnButton(button);
+
+            var columnWidth = directButtons.Max(button => button.Width is > 0 ? button.Width : button.DesiredSize.Width);
+            foreach (var button in directButtons)
+            {
+                button.Width = columnWidth;
+                SetRibbonCompactWidths(button, columnWidth, 24);
+                if (button.Content is FrameworkElement content)
+                {
+                    content.Width = Math.Max(
+                        0,
+                        columnWidth -
+                        button.Padding.Left -
+                        button.Padding.Right -
+                        button.BorderThickness.Left -
+                        button.BorderThickness.Right);
+                }
+
                 grid.Children.Add(button);
             }
 

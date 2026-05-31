@@ -216,9 +216,13 @@ public sealed class RecalcEngine
 
         foreach (var sheet in workbook.Sheets)
         {
-            foreach (var (addr, cell) in sheet.EnumerateCells())
+            if (!sheet.HasFormulas)
+                continue;
+
+            foreach (var addr in sheet.EnumerateFormulaCells())
             {
-                if (!cell.HasFormula || cell.FormulaText is null)
+                var cell = sheet.GetCell(addr);
+                if (cell?.FormulaText is null)
                     continue;
 
                 try
@@ -293,11 +297,8 @@ public sealed class RecalcEngine
         if (!sheet.HasFormulas)
             return;
 
-        foreach (var (address, cell) in sheet.EnumerateCells())
-        {
-            if (cell.HasFormula)
-                formulaCells.Add(address);
-        }
+        foreach (var address in sheet.EnumerateFormulaCells())
+            formulaCells.Add(address);
     }
 
     private static RecalcReport FilterReportForSheet(RecalcReport report, SheetId sheetId)

@@ -193,7 +193,7 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void BackstageSaveAs_ForcesSaveDialogInsteadOfExistingPathSave()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("MainWindow.xaml");
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
 
         xaml.ShouldContainLocalizedAttribute("Text", "Save _As");
@@ -1373,19 +1373,74 @@ public sealed class MainWindowSourceHygieneTests
 
         shellSource.Should().Contain("private void UpdateMaximizedContentInset(");
         shellSource.Should().Contain("private static Thickness GetMaximizedSafeInset(");
-        shellSource.Should().Contain("private void UndoQatBtn_Click(");
-        shellSource.Should().Contain("private void RedoQatBtn_Click(");
+        shellSource.Should().NotContain("private void UndoQatBtn_Click(");
+        shellSource.Should().NotContain("private void RedoQatBtn_Click(");
     }
 
     [Fact]
     public void QuickAccessUndoRedoButtons_ReflectCommandStackState()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var qatSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAccessToolbar.cs"));
+        var toolbarSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ToolbarVisualState.cs"));
+        var cacheSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ToolbarVisualStateCache.cs"));
 
-        source.Should().Contain("var canUndo = _commandBus.CanUndo(_workbook.Id);");
-        source.Should().Contain("var canRedo = _commandBus.CanRedo(_workbook.Id);");
-        source.Should().Contain("UndoQatBtn.IsEnabled = state.CanUndo;");
-        source.Should().Contain("RedoQatBtn.IsEnabled = state.CanRedo;");
+        source.Should().Contain("RefreshQuickAccessToolbarCommandStates();");
+        qatSource.Should().Contain("private void RefreshQuickAccessToolbarCommandStates(bool force = false)");
+        qatSource.Should().Contain("var state = new QuickAccessCommandState(");
+        qatSource.Should().Contain("_commandBus.CanUndo(_workbook.Id)");
+        qatSource.Should().Contain("_commandBus.CanRedo(_workbook.Id)");
+        qatSource.Should().Contain("if (!force && _lastQuickAccessCommandState == state)");
+        qatSource.Should().Contain("\"Undo\" => state.CanUndo");
+        qatSource.Should().Contain("\"Redo\" => state.CanRedo");
+        toolbarSource.Should().NotContain("bool CanUndo");
+        toolbarSource.Should().NotContain("bool CanRedo");
+        cacheSource.Should().Contain("private readonly record struct Source(WorkbookId WorkbookId, StyleId StyleId);");
+    }
+
+    [Fact]
+    public void RefreshToolbar_AvoidsRepeatedDependencyPropertyWrites()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var refreshToolbar = ExtractMethodSource(source, "private void RefreshToolbar()");
+
+        source.Should().Contain("private static void SetToggleCheckedIfChanged(");
+        source.Should().Contain("private static void SetSelectedItemIfChanged(");
+        refreshToolbar.Should().Contain("SetToggleCheckedIfChanged(BoldButton, state.Bold)");
+        refreshToolbar.Should().Contain("SetSelectedItemIfChanged(FontNameBox, state.FontName)");
+        refreshToolbar.Should().NotContain("BoldButton.IsChecked = state.Bold");
+        refreshToolbar.Should().NotContain("FontNameBox.SelectedItem = state.FontName");
+    }
+
+    [Fact]
+    public void SetActiveCellCallers_AvoidDuplicateToolbarAndStatusRefresh()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var multiWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.MultiWindow.cs"));
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var scenarioSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ScenarioCommands.cs"));
+
+        var createNewWorkbook = ExtractMethodSource(backstageSource, "private void CreateNewWorkbook()");
+        createNewWorkbook.Should().Contain("SetActiveCell(new CellAddress(_currentSheetId, 1, 1));");
+        createNewWorkbook.Should().NotContain("RefreshToolbar();");
+
+        var adoptSharedWorkbook = ExtractMethodSource(multiWindowSource, "private void AdoptSharedWorkbook()");
+        adoptSharedWorkbook.Should().Contain("SetActiveCell(new CellAddress(_currentSheetId, 1, 1));");
+        adoptSharedWorkbook.Should().NotContain("RefreshToolbar();");
+        adoptSharedWorkbook.Should().NotContain("RefreshStatusBar();");
+
+        ExtractMethodSource(dataSource, "private void GetDataBtn_Click(")
+            .Should()
+            .NotContain("RefreshStatusBar();");
+        ExtractMethodSource(dataSource, "private void ForecastSheetBtn_Click(")
+            .Should()
+            .Contain("if (!refreshedSelectionUi)");
+        ExtractMethodSource(scenarioSource, "private void ShowScenarioByName(")
+            .Should()
+            .Contain("if (!refreshedSelectionUi)");
+        ExtractMethodSource(scenarioSource, "private void CreateScenarioSummaryReport(")
+            .Should()
+            .Contain("if (!refreshedSelectionUi)");
     }
 
     [Fact]
@@ -1565,15 +1620,15 @@ public sealed class MainWindowSourceHygieneTests
     [Fact]
     public void QuickAccessToolbar_UsesVectorIcons()
     {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAccessToolbar.cs"));
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
         var iconResources = File.ReadAllText(Path.Combine(appHostDirectory, "Resources", "IconResources.xaml"));
 
-        xaml.Should().Contain("x:Name=\"SaveQatBtn\"");
-        xaml.Should().Contain("<local:RibbonIcon Kind=\"Save\"");
-        xaml.Should().Contain("<local:RibbonIcon Kind=\"Undo\"");
-        xaml.Should().Contain("<local:RibbonIcon Kind=\"Redo\"");
-        xaml.Should().NotContain("FreeXQatOnAccentIcon");
+        source.Should().Contain("Content = new RibbonIcon");
+        source.Should().Contain("Kind = command.IconKind");
+        source.Should().NotContain("Content = \"");
+        source.Should().NotContain("FreeXQatOnAccentIcon");
         iconResources.Should().NotContain("FreeXQatIcon");
         xaml.Should().NotContain("Content=\"💾\"");
         xaml.Should().NotContain("Content=\"↩\"");
@@ -1591,13 +1646,16 @@ public sealed class MainWindowSourceHygieneTests
         titleBarEnd.Should().BeGreaterThan(titleBarStart);
 
         var titleBarCommands = xaml[titleBarStart..titleBarEnd];
-        foreach (var kind in new[] { "Save", "Undo", "Redo", "WindowClose", "WindowMaximize", "WindowMinimize" })
+        foreach (var kind in new[] { "WindowClose", "WindowMaximize", "WindowMinimize" })
         {
             titleBarCommands.Should().Contain($"Kind=\"{kind}\"");
         }
 
         titleBarCommands.Should().NotContain("Foreground=\"{Binding Foreground");
-        titleBarCommands.Split("Foreground=\"{StaticResource FreeXWhiteBrush}\"").Length.Should().BeGreaterThanOrEqualTo(7);
+        titleBarCommands.Split("Foreground=\"{StaticResource FreeXWhiteBrush}\"").Length.Should().BeGreaterThanOrEqualTo(4);
+        var qatSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAccessToolbar.cs"));
+        qatSource.Should().Contain("? \"FreeXTextBrush\"");
+        qatSource.Should().Contain(": \"FreeXWhiteBrush\"");
     }
 
     [Fact]
@@ -1922,7 +1980,7 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("x:Name=\"FontNameBox\"");
         xaml.Should().Contain("SelectionChanged=\"FontNameBox_SelectionChanged\"");
         formattingSource.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name))");
-        uiStateSource.Should().Contain("FontNameBox.SelectedItem = state.FontName");
+        uiStateSource.Should().Contain("SetSelectedItemIfChanged(FontNameBox, state.FontName)");
         renderSource.Should().Contain("var fontName = string.IsNullOrWhiteSpace(style?.FontName)");
         renderSource.Should().Contain("new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true)");
     }
@@ -2118,9 +2176,16 @@ public sealed class MainWindowSourceHygieneTests
         xaml.IndexOf("x:Name=\"StatusNumericalCountText\"", StringComparison.Ordinal)
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusSumText\"", StringComparison.Ordinal));
 
-        gridStatusSource.Should().Contain("StatusCountText.Text = $\"Count: {stats.Count}\"");
-        gridStatusSource.Should().Contain("StatusNumericalCountText.Text = $\"Numerical Count: {stats.NumericalCount}\"");
-        gridStatusSource.Should().Contain("StatusSumText.Text   = stats.NumericalCount > 0");
+        gridStatusSource.Should().Contain("ApplyStatusBarDisplayState(StatusBarDisplayState.Stats(stats))");
+        gridStatusSource.Should().Contain("SetTextIfChanged(StatusCountText, state.CountText)");
+        gridStatusSource.Should().Contain("SetTextIfChanged(StatusNumericalCountText, state.NumericalCountText)");
+        gridStatusSource.Should().Contain("SetTextIfChanged(StatusSumText, state.SumText)");
+        gridStatusSource.Should().Contain("StatusBarDisplayState.Ready(UiText.Get(\"MainWindow_Text_Ready\"))");
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "StatusBarDisplayState.cs"))
+            .Should()
+            .Contain("UiText.Format(\"StatusBar_CountFormat\", stats.Count)")
+            .And.Contain("UiText.Format(\"StatusBar_NumericalCountFormat\", stats.NumericalCount)")
+            .And.Contain("UiText.Format(\"StatusBar_SumFormat\", StatusBarCalculator.FormatNumber(stats.Sum))");
         gridStatusSource.Should().Contain("if (stats.Count == 0)");
     }
 
@@ -2306,6 +2371,22 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisPreviewAssignments_AvoidNoOpRenderInvalidations()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
+        var showPreview = ExtractMethodSource(source, "private void ShowQuickAnalysisPreview(");
+        var clearPreview = ExtractMethodSource(source, "private void ClearQuickAnalysisPreview(");
+        var applyPreview = ExtractMethodSource(source, "private void ApplyQuickAnalysisPreview(");
+
+        showPreview.Should().Contain("ApplyQuickAnalysisPreview(");
+        clearPreview.Should().Contain("ApplyQuickAnalysisPreview(null, GridQuickAnalysisPreviewVisualKind.None)");
+        showPreview.Should().NotContain("SheetGrid.QuickAnalysisPreviewRange = preview.Range");
+        clearPreview.Should().NotContain("SheetGrid.QuickAnalysisPreviewRange = null");
+        applyPreview.Should().Contain("if (SheetGrid.QuickAnalysisPreviewRange != range)");
+        applyPreview.Should().Contain("if (SheetGrid.QuickAnalysisPreviewVisual != visual)");
+    }
+
+    [Fact]
     public void QuickAnalysisMenu_RendersPlannerVisualPreviewIcons()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
@@ -2339,7 +2420,7 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("QuickAnalysisMenuItem_MouseLeave");
         source.Should().Contain("QuickAnalysisPlanner.BuildHoverPreview(range, option)");
         source.Should().Contain("StatusReadyText.Text = preview.StatusText");
-        source.Should().Contain("StatusReadyText.Text = \"Ready\"");
+        source.Should().Contain("StatusReadyText.Text = UiText.Get(\"MainWindow_Text_Ready\")");
     }
 
     [Fact]
