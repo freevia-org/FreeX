@@ -128,6 +128,45 @@ public static class PivotUiPlanner
         return $"PivotTable{Guid.NewGuid():N}"[..31];
     }
 
+    public static string NormalizePivotTableName(string? name) => name?.Trim() ?? string.Empty;
+
+    public static bool IsPivotTableNameAvailable(Workbook workbook, PivotTableModel targetPivotTable, string name)
+    {
+        var normalized = NormalizePivotTableName(name);
+        if (normalized.Length == 0)
+            return false;
+
+        return workbook.Sheets
+            .SelectMany(sheet => sheet.PivotTables)
+            .All(pivot => ReferenceEquals(pivot, targetPivotTable) ||
+                          !string.Equals(pivot.Name, normalized, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static GridRange ResolvePivotTableSelectionRange(PivotTableModel pivotTable) => pivotTable.TargetRange;
+
+    public static bool TryCreateMovedTargetRange(
+        PivotTableModel pivotTable,
+        CellAddress targetStart,
+        out GridRange targetRange)
+    {
+        var rowCount = pivotTable.TargetRange.RowCount;
+        var colCount = pivotTable.TargetRange.ColCount;
+        if (targetStart.Row > CellAddress.MaxRow - rowCount + 1 ||
+            targetStart.Col > CellAddress.MaxCol - colCount + 1)
+        {
+            targetRange = default;
+            return false;
+        }
+
+        targetRange = new GridRange(
+            targetStart,
+            new CellAddress(
+                targetStart.Sheet,
+                targetStart.Row + rowCount - 1,
+                targetStart.Col + colCount - 1));
+        return true;
+    }
+
     public static string UnquoteSheetName(string sheetName)
     {
         if (sheetName.Length >= 2 && sheetName[0] == '\'' && sheetName[^1] == '\'')

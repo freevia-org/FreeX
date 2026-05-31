@@ -2792,6 +2792,11 @@ public sealed class MainWindowXamlKeyTipTests
             .ToHashSet(StringComparer.Ordinal);
 
         clickHandlers.Should().Contain([
+            "PivotTableNameBtn_Click",
+            "PivotTableOptionsBtn_Click",
+            "PivotTableClearBtn_Click",
+            "PivotTableSelectBtn_Click",
+            "PivotTableMoveBtn_Click",
             "PivotFieldListBtn_Click",
             "RefreshPivotTableBtn_Click",
             "PivotTableShowDetailsBtn_Click",

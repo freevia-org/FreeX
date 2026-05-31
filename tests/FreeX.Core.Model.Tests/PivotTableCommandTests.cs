@@ -220,6 +220,134 @@ public sealed class PivotTableCommandTests
     }
 
     [Fact]
+    public void RenamePivotTableCommand_RenamesConnectedPivotArtifactsAndUndoRestores()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("RenamePivotCommandTest");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivot),
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            PivotCacheId = 1
+        });
+        ctx.Workbook.Slicers.Add(new SlicerModel
+        {
+            Name = "Category Slicer",
+            CacheName = "Slicer_Category",
+            SourcePivotTableName = "PivotTable1",
+            SourceFieldName = "Category"
+        });
+        ctx.Workbook.Timelines.Add(new TimelineModel
+        {
+            Name = "Date Timeline",
+            CacheName = "Timeline_Date",
+            SourcePivotTableName = "PivotTable1",
+            SourceFieldName = "Date"
+        });
+
+        var command = new RenamePivotTableCommand(sheet.Id, "PivotTable1", "SalesPivot");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.Name.Should().Be("SalesPivot");
+        sheet.Charts[0].PivotTableName.Should().Be("SalesPivot");
+        ctx.Workbook.Slicers[0].SourcePivotTableName.Should().Be("SalesPivot");
+        ctx.Workbook.Timelines[0].SourcePivotTableName.Should().Be("SalesPivot");
+
+        command.Revert(ctx);
+
+        pivot.Name.Should().Be("PivotTable1");
+        sheet.Charts[0].PivotTableName.Should().Be("PivotTable1");
+        ctx.Workbook.Slicers[0].SourcePivotTableName.Should().Be("PivotTable1");
+        ctx.Workbook.Timelines[0].SourcePivotTableName.Should().Be("PivotTable1");
+    }
+
+    [Fact]
+    public void RenamePivotTableCommand_RejectsDuplicateWorkbookName()
+    {
+        var workbook = new Workbook("RenamePivotDuplicateTest");
+        var firstSheet = workbook.AddSheet("Data");
+        var secondSheet = workbook.AddSheet("Pivot");
+        SeedData(firstSheet);
+        var pivot = CreateCategoryAmountPivot(firstSheet);
+        firstSheet.PivotTables.Add(pivot);
+        secondSheet.PivotTables.Add(new PivotTableModel
+        {
+            Name = "ExistingPivot",
+            CacheId = 2,
+            SourceRange = Range(firstSheet, "A1", "B3"),
+            TargetRange = Range(secondSheet, "D3", "F7")
+        });
+        var ctx = new SimpleCtx(workbook);
+
+        var outcome = new RenamePivotTableCommand(firstSheet.Id, "PivotTable1", "existingpivot").Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        pivot.Name.Should().Be("PivotTable1");
+    }
+
+    [Fact]
+    public void ClearPivotTableViewCommand_ClearsFiltersSortsAndSelectionsAndUndoRestores()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("ClearPivotCommandTest");
+        pivot.RowFields.Clear();
+        pivot.RowFields.Add(new PivotFieldModel(0, SelectedItem: "A", SelectedItems: ["A"]));
+        pivot.LabelFilters.Add(new PivotLabelFilterModel(0, PivotLabelFilterKind.Contains, "A"));
+        pivot.ValueFilters.Add(new PivotValueFilterModel(0, PivotValueFilterKind.GreaterThan, ComparisonValue: 5, SourceFieldIndex: 0));
+        pivot.Sorts.Add(new PivotSortModel(PivotSortTarget.Label, PivotSortDirection.Descending, FieldIndex: 0));
+        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivot);
+
+        var command = new ClearPivotTableViewCommand(sheet.Id, "PivotTable1");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.RowFields.Should().ContainSingle().Which.SelectedItems.Should().BeNull();
+        pivot.LabelFilters.Should().BeEmpty();
+        pivot.ValueFilters.Should().BeEmpty();
+        pivot.Sorts.Should().BeEmpty();
+        sheet.GetCell(Addr(sheet, "D5"))!.Value.Should().Be(new TextValue("B"));
+
+        command.Revert(ctx);
+
+        pivot.RowFields.Should().ContainSingle().Which.SelectedItems.Should().Equal("A");
+        pivot.LabelFilters.Should().ContainSingle();
+        pivot.ValueFilters.Should().ContainSingle();
+        pivot.Sorts.Should().ContainSingle();
+        sheet.GetCell(Addr(sheet, "D5"))!.Value.Should().Be(new TextValue("Grand Total"));
+    }
+
+    [Fact]
+    public void MovePivotTableCommand_MovesRenderedRangeAndUndoRestores()
+    {
+        var (sheet, ctx, pivot) = CreateBasicPivotReport("MovePivotCommandTest");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivot),
+            IsPivotChart = true,
+            PivotTableName = "PivotTable1",
+            PivotCacheId = 1
+        });
+
+        var command = new MovePivotTableCommand(sheet.Id, "PivotTable1", Addr(sheet, "H10"));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        pivot.TargetRange.Start.ToA1().Should().Be("H10");
+        sheet.GetCell(Addr(sheet, "D3")).Should().BeNull();
+        sheet.GetCell(Addr(sheet, "H10"))!.Value.Should().Be(new TextValue("Category"));
+        sheet.Charts[0].DataRange.Start.ToA1().Should().Be("H10");
+
+        command.Revert(ctx);
+
+        pivot.TargetRange.Start.ToA1().Should().Be("D3");
+        sheet.GetCell(Addr(sheet, "D3"))!.Value.Should().Be(new TextValue("Category"));
+        sheet.GetCell(Addr(sheet, "H10")).Should().BeNull();
+        sheet.Charts[0].DataRange.Start.ToA1().Should().Be("D3");
+    }
+
+    [Fact]
     public void AddPivotTableCommand_AllowsSourceRangeOnDifferentSheet()
     {
         var workbook = new Workbook("CrossSheetPivotCommandTest");

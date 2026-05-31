@@ -5233,7 +5233,7 @@
     <value>Choose whether formulas are recalculated automatically or manually.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ClearingPivotTableFieldsFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
-    <value>Clearing PivotTable fields from the ribbon is deferred in FreeX.</value>
+    <value>Clear filters, sort state, and item selections from the selected PivotTable.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ColorTheBackgroundOfTheSelectedCells" xml:space="preserve">
     <value>Color the background of the selected cells.</value>
@@ -5737,7 +5737,7 @@
     <value>Move the selected shape one step closer to the front.</value>
   </data>
   <data name="MainWindow_TooltipDescription_MovingPivotTablesFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
-    <value>Moving PivotTables from the ribbon is deferred in FreeX.</value>
+    <value>Move the selected PivotTable to another location on the current worksheet.</value>
   </data>
   <data name="MainWindow_TooltipDescription_NavigateToTheNextSimpleCellNoteInTheSheet" xml:space="preserve">
     <value>Navigate to the next simple cell note in the sheet.</value>
@@ -5809,7 +5809,7 @@
     <value>Pin or unpin this workbook in the recent files list.</value>
   </data>
   <data name="MainWindow_TooltipDescription_PivotTableSelectionShortcutsAreDeferredInFreeX" xml:space="preserve">
-    <value>PivotTable selection shortcuts are deferred in FreeX.</value>
+    <value>Select the selected PivotTable report range.</value>
   </data>
   <data name="MainWindow_TooltipDescription_PlotAdditionalSeriesOnASecondaryValueAxisForTheCurrentColumnOrLineChart" xml:space="preserve">
     <value>Plot additional series on a secondary value axis for the current column or line chart.</value>
@@ -5872,7 +5872,7 @@
     <value>Remove this workbook from the pinned files list.</value>
   </data>
   <data name="MainWindow_TooltipDescription_RenamingPivotTablesFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
-    <value>Renaming PivotTables from the ribbon is deferred in FreeX.</value>
+    <value>Rename the selected PivotTable.</value>
   </data>
   <data name="MainWindow_TooltipDescription_RenderAdditionalColumnOrAreaChartSeriesAsLines" xml:space="preserve">
     <value>Render additional column or area chart series as lines.</value>
@@ -11455,6 +11455,33 @@
   <data name="PivotTableDataSource_SelectPivotTableSourceRange" xml:space="preserve">
     <value>Select PivotTable source range</value>
   </data>
+  <data name="PivotTableName_Title" xml:space="preserve">
+    <value>PivotTable Name</value>
+  </data>
+  <data name="PivotTableName_NameAutomationName" xml:space="preserve">
+    <value>PivotTable name</value>
+  </data>
+  <data name="PivotTableName_NameLabel" xml:space="preserve">
+    <value>PivotTable _name:</value>
+  </data>
+  <data name="PivotTableName_EnterName" xml:space="preserve">
+    <value>Enter a PivotTable name.</value>
+  </data>
+  <data name="MovePivotTable_Title" xml:space="preserve">
+    <value>Move PivotTable</value>
+  </data>
+  <data name="MovePivotTable_DestinationAutomationName" xml:space="preserve">
+    <value>PivotTable destination</value>
+  </data>
+  <data name="MovePivotTable_DestinationLabel" xml:space="preserve">
+    <value>_Destination:</value>
+  </data>
+  <data name="MovePivotTable_SelectDestination" xml:space="preserve">
+    <value>Select PivotTable destination</value>
+  </data>
+  <data name="MovePivotTable_EnterValidDestination" xml:space="preserve">
+    <value>Enter a valid PivotTable destination cell.</value>
+  </data>
   <data name="UnhideSheet_UnhideSheet" xml:space="preserve">
     <value>Unhide Sheet</value>
   </data>
@@ -13829,6 +13856,9 @@ Changing cell value: {2}</value>
   <data name="MainWindowMessage_MoveChartTitle" xml:space="preserve">
     <value>Move Chart</value>
   </data>
+  <data name="MainWindowMessage_MovePivotTableTitle" xml:space="preserve">
+    <value>Move PivotTable</value>
+  </data>
   <data name="MainWindowMessage_NoCommentsOnSheet" xml:space="preserve">
     <value>No comments on this sheet.</value>
   </data>
@@ -13847,14 +13877,32 @@ Changing cell value: {2}</value>
   <data name="MainWindowMessage_PivotTableFieldsTitle" xml:space="preserve">
     <value>PivotTable Fields</value>
   </data>
+  <data name="MainWindowMessage_PivotTableClearTitle" xml:space="preserve">
+    <value>Clear PivotTable</value>
+  </data>
   <data name="MainWindowMessage_PivotTableInvalidDestinationCell" xml:space="preserve">
     <value>Enter a destination cell on the active worksheet.</value>
   </data>
   <data name="MainWindowMessage_PivotTableInvalidSourceRange" xml:space="preserve">
     <value>Enter a valid PivotTable source range.</value>
   </data>
+  <data name="MainWindowMessage_PivotTableMoveCurrentSheetOnly" xml:space="preserve">
+    <value>Move PivotTable currently supports destinations on the active worksheet.</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableNameAlreadyExists" xml:space="preserve">
+    <value>A PivotTable with that name already exists.</value>
+  </data>
   <data name="MainWindowMessage_PivotTableRequiresValueField" xml:space="preserve">
     <value>A PivotTable requires at least one value field.</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableRenameTitle" xml:space="preserve">
+    <value>Rename PivotTable</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableSelectCommandTitle" xml:space="preserve">
+    <value>Select PivotTable</value>
+  </data>
+  <data name="MainWindowMessage_PivotTableSelectExistingForAnalyzeAction" xml:space="preserve">
+    <value>Select a cell inside an existing PivotTable before using this command.</value>
   </data>
   <data name="MainWindowMessage_PivotTableSelectExistingForFieldList" xml:space="preserve">
     <value>Select a cell inside an existing PivotTable before showing the field list.</value>
