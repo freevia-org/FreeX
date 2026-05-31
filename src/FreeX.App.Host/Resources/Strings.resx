@@ -1806,6 +1806,18 @@
   <data name="Backstage_Info_MultipleIssuesFound" xml:space="preserve">
     <value>{0} issues found</value>
   </data>
+  <data name="Backstage_Info_ByteSingularFormat" xml:space="preserve">
+    <value>{0} byte</value>
+  </data>
+  <data name="Backstage_Info_BytePluralFormat" xml:space="preserve">
+    <value>{0} bytes</value>
+  </data>
+  <data name="Backstage_Info_ByteSizeWithUnitFormat" xml:space="preserve">
+    <value>{0} {1} ({2} bytes)</value>
+  </data>
+  <data name="Backstage_Info_FileMissing" xml:space="preserve">
+    <value>File not found</value>
+  </data>
   <data name="Backstage_Info_NoAccessibilityIssues" xml:space="preserve">
     <value>No accessibility issues found</value>
   </data>
@@ -4725,6 +4737,9 @@
   <data name="MainWindow_Text_Account" xml:space="preserve">
     <value>Account</value>
   </data>
+  <data name="MainWindow_Text_ActiveSheetProtection" xml:space="preserve">
+    <value>Active sheet protection</value>
+  </data>
   <data name="MainWindow_Text_Actions" xml:space="preserve">
     <value>Actions</value>
   </data>
@@ -4824,6 +4839,9 @@
   <data name="MainWindow_Text_FilePath" xml:space="preserve">
     <value>File path</value>
   </data>
+  <data name="MainWindow_Text_FileSize" xml:space="preserve">
+    <value>File size</value>
+  </data>
   <data name="MainWindow_Text_Fill" xml:space="preserve">
     <value>Fill</value>
   </data>
@@ -4892,6 +4910,9 @@
   </data>
   <data name="MainWindow_Text_Layout" xml:space="preserve">
     <value>Layout</value>
+  </data>
+  <data name="MainWindow_Text_LastModified" xml:space="preserve">
+    <value>Last modified</value>
   </data>
   <data name="MainWindow_Text_Links" xml:space="preserve">
     <value>Links</value>
@@ -5063,6 +5084,12 @@
   </data>
   <data name="MainWindow_Text_WorkbookName" xml:space="preserve">
     <value>Workbook name</value>
+  </data>
+  <data name="MainWindow_Text_WorkbookActions" xml:space="preserve">
+    <value>Workbook actions</value>
+  </data>
+  <data name="MainWindow_Text_WorkbookProtection" xml:space="preserve">
+    <value>Workbook protection</value>
   </data>
   <data name="MainWindow_Text_WorkbookStatistics" xml:space="preserve">
     <value>Workbook statistics</value>

@@ -244,12 +244,14 @@ public partial class MainWindow
 
     private void RefreshWorkbookProtectionUi()
     {
-        if (ProtectWorkbookButton is null)
-            return;
-
         var uiText = WorkbookProtectionWorkflow.GetUiText(_workbook);
-        ProtectWorkbookButton.Content = uiText.ButtonContent;
-        RibbonTooltip.SetTitle(ProtectWorkbookButton, uiText.TooltipTitle);
-        RibbonTooltip.SetDescription(ProtectWorkbookButton, uiText.TooltipDescription);
+        if (ProtectWorkbookButton is not null)
+        {
+            ProtectWorkbookButton.Content = uiText.ButtonContent;
+            RibbonTooltip.SetTitle(ProtectWorkbookButton, uiText.TooltipTitle);
+            RibbonTooltip.SetDescription(ProtectWorkbookButton, uiText.TooltipDescription);
+        }
+
+        RefreshBackstageInfoProtectionButton();
     }
 }

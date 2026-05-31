@@ -204,6 +204,7 @@ public partial class MainWindow : Window
 
         InitializeComponent();
         RibbonMenuIconSeeder.Register();
+        ConfigureBackstageInfoActionButtons();
         RegisterKeyboardCommandShortcuts();
 
         _currentSheetId = _workbook.Sheets[0].Id;
