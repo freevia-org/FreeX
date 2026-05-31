@@ -1801,7 +1801,7 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void AdvancedChartFamilies_RouteRenderableFamiliesToAuthoringAndKeepMapDeferred()
+    public void AdvancedChartFamilies_RouteRenderableFamiliesToAuthoringAndHideDeferredMap()
     {
         var source = ReadChartCommandSource();
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
@@ -1830,7 +1830,9 @@ public sealed class MainWindowSourceHygieneTests
         AssertChartButtonRoutesTo(xaml, "Box Plot", "ChartBoxAndWhiskerMenuItem_Click", isDeferred: false);
         AssertChartButtonRoutesTo(xaml, "Waterfall", "ChartWaterfallMenuItem_Click", isDeferred: false);
         AssertChartButtonRoutesTo(xaml, "Funnel", "ChartFunnelMenuItem_Click", isDeferred: false);
-        AssertChartButtonRoutesTo(xaml, "Map", "DeferredChartFamilyMenuItem_Click", isDeferred: true);
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Map Chart\"");
+        xaml.Should().NotContain("Click=\"DeferredChartFamilyMenuItem_Click\"");
+        xaml.Should().NotContain("local:RibbonTooltip.KeyTip=\"MP\"");
         xaml.Should().Contain("Click=\"Chart3DPieMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DLineMenuItem_Click\"");
         xaml.Should().Contain("Click=\"Chart3DAreaMenuItem_Click\"");
@@ -1848,7 +1850,6 @@ public sealed class MainWindowSourceHygieneTests
             "Box Plot",
             "Waterfall",
             "Funnel",
-            "Map",
             "3D Pie",
             "3D Line",
             "3D Area",

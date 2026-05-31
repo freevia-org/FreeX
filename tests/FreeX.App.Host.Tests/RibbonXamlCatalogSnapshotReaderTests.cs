@@ -103,9 +103,9 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             command => command.ClickHandler == "RecommendedPivotTablesMenuItem_Click" &&
                        command.KeyTip == "RP");
 
-        Command(catalog, "Insert", "Symbols", "Equation").Should().Match<RibbonCommandDefinition>(
-            command => command.IsExplicitlyDisabled &&
-                       command.KeyTip == "EQ");
+        Group(catalog, "Insert", "Symbols").Commands.Select(command => command.Title)
+            .Should()
+            .Equal("Symbol");
 
         Command(catalog, "Help", "Help", "Legal Notices").Should().Match<RibbonCommandDefinition>(
             command => command.Kind == RibbonCommandKind.Button &&

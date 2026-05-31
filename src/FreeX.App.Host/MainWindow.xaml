@@ -863,7 +863,6 @@
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_DataBars}"               local:RibbonTooltip.KeyTip="D" SubmenuOpened="CfDataBarsMenuItem_SubmenuOpened" local:RibbonMetadata.CommandName="Data Bars"/>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_ColorScales}"            local:RibbonTooltip.KeyTip="C" SubmenuOpened="CfColorScalesMenuItem_SubmenuOpened" local:RibbonMetadata.CommandName="Color Scales"/>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_IconSets}"                  local:RibbonTooltip.KeyTip="I" local:RibbonMetadata.CommandName="Icon Sets">
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Directional}" local:RibbonTooltip.KeyTip="ID" IsEnabled="False" local:RibbonMetadata.CommandName="Directional"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3Arrows}"               local:RibbonTooltip.KeyTip="I3" Tag="3Arrows" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Arrows"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3ArrowsGray}"        local:RibbonTooltip.KeyTip="IG" Tag="3ArrowsGray" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Arrows (Gray)"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_4Arrows}"               local:RibbonTooltip.KeyTip="I4" Tag="4Arrows" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="4 Arrows"/>
@@ -871,7 +870,6 @@
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_5Arrows}"               local:RibbonTooltip.KeyTip="I5" Tag="5Arrows" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="5 Arrows"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_5ArrowsGray}"        local:RibbonTooltip.KeyTip="IJ" Tag="5ArrowsGray" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="5 Arrows (Gray)"/>
                                                 <Separator/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Shapes}" local:RibbonTooltip.KeyTip="IK" IsEnabled="False" local:RibbonMetadata.CommandName="Shapes"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3TrafficLights}"       local:RibbonTooltip.KeyTip="IT" Tag="3TrafficLights1" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Traffic Lights"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3TrafficLightsRimmed}" local:RibbonTooltip.KeyTip="IR" Tag="3TrafficLights2" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Traffic Lights (Rimmed)"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3Signs}"                local:RibbonTooltip.KeyTip="IS" Tag="3Signs" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Signs"/>
@@ -879,11 +877,9 @@
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3SymbolsUncircled}"  local:RibbonTooltip.KeyTip="IU" Tag="3Symbols2" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Symbols (Uncircled)"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3Flags}"                local:RibbonTooltip.KeyTip="IF" Tag="3Flags" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Flags"/>
                                                 <Separator/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Indicators}" local:RibbonTooltip.KeyTip="IO" IsEnabled="False" local:RibbonMetadata.CommandName="Indicators"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_4TrafficLights}"       local:RibbonTooltip.KeyTip="IL" Tag="4TrafficLights" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="4 Traffic Lights"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_4RedToBlack}"         local:RibbonTooltip.KeyTip="IB" Tag="4RedToBlack" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="4 Red To Black"/>
                                                 <Separator/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Ratings}" local:RibbonTooltip.KeyTip="IZ" IsEnabled="False" local:RibbonMetadata.CommandName="Ratings"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_4Ratings}"              local:RibbonTooltip.KeyTip="I9" Tag="4Rating" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="4 Ratings"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_5Ratings}"              local:RibbonTooltip.KeyTip="IA" Tag="5Rating" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="5 Ratings"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_5Quarters}"             local:RibbonTooltip.KeyTip="IQ" Tag="5Quarters" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="5 Quarters"/>
@@ -1399,9 +1395,6 @@
                                     <Button Content="{local:Loc Key=MainWindow_Content_Funnel}"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartFunnelMenuItem_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FunnelChart}" local:RibbonTooltip.KeyTip="FU"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertAFunnelChartToCompareStagedValues}" local:RibbonMetadata.CommandName="Funnel Chart"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Map}"          Width="58"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_MapChart}" local:RibbonTooltip.KeyTip="MP"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRetainedFromXLSXFilesAuthoringAndRenderingNeedADedicatedDataMode_568CFF74}" local:RibbonMetadata.CommandName="Map Chart"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_3DColumn}"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Chart3DColumnMenuItem_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_3DColumnChart}" local:RibbonTooltip.KeyTip="3C"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertA3DClusteredColumnChartForTheSelectedData}" local:RibbonMetadata.CommandName="3D Column Chart"/>
@@ -1741,10 +1734,6 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertSymbolsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="{local:Loc Key=MainWindow_Content_Equation}" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Equation}"
-                                        local:RibbonTooltip.KeyTip="EQ"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_EquationAuthoringIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Equation"/>
                                 <Button Content="{local:Loc Key=MainWindow_Content_Symbol}" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SymbolPickerBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Symbol}"
                                         local:RibbonTooltip.KeyTip="SY"

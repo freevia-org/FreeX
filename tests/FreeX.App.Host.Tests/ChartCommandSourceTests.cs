@@ -39,7 +39,6 @@ public sealed class ChartCommandSourceTests
     [InlineData("Box and Whisker Chart", "Box Plot", "BW", "ChartBoxAndWhiskerMenuItem_Click")]
     [InlineData("Waterfall Chart", "Waterfall", "WF", "ChartWaterfallMenuItem_Click")]
     [InlineData("Funnel Chart", "Funnel", "FU", "ChartFunnelMenuItem_Click")]
-    [InlineData("Map Chart", "Map", "MP", "DeferredChartFamilyMenuItem_Click")]
     public void AdvancedChartCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string content,
@@ -66,7 +65,6 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("ChartAuthoringPlanner.CanAuthor(type)");
         source.Should().Contain("ShowDeferredChartFamilyMessage();");
         source.Should().Contain("new AddChartCommand(_currentSheetId, currentRange, type, \"Chart\")");
-        source.Should().Contain("private void DeferredChartFamilyMenuItem_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferred\")");
         source.Should().Contain("private void ChangeChartTypeBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("new ChangeChartTypeDialog(chart.Type)");
@@ -79,20 +77,15 @@ public sealed class ChartCommandSourceTests
     }
 
     [Fact]
-    public void DeferredChartFamilyCommand_StaysEnabledAndExplainsAuthoringGap()
+    public void MapChartCommand_IsNotSurfacedAsDeferredRibbonButton()
     {
         var xaml = ReadMainWindowXaml();
-        var button = ExtractButtonElementByTitle(xaml, "Map Chart");
         var source = ReadChartCommandSource();
 
-        button.Should().NotContain("IsEnabled=\"False\"", "deferred chart families should be clickable so users get an explicit explanation");
-        button.Should().Contain("Click=\"DeferredChartFamilyMenuItem_Click\"");
-        button.Should().Contain("local:RibbonTooltip.KeyTip=\"MP\"");
-        button.ShouldContainLocalizedAttribute("Content", "Map");
-        button.Should().Contain(
-            "MainWindow_TooltipDescription_DeferredRetainedFromXLSXFilesAuthoringAndRenderingNeedADedicatedDataMode_568CFF74");
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Map Chart\"");
+        xaml.Should().NotContain("Click=\"DeferredChartFamilyMenuItem_Click\"");
+        xaml.Should().NotContain("local:RibbonTooltip.KeyTip=\"MP\"");
 
-        source.Should().Contain("private void DeferredChartFamilyMenuItem_Click(object sender, RoutedEventArgs e) => ShowDeferredChartFamilyMessage();");
         source.Should().Contain("private void ShowDeferredChartFamilyMessage() =>");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferred\")");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferredTitle\")");

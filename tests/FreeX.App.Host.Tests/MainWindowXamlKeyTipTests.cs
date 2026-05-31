@@ -1299,7 +1299,13 @@ public sealed class MainWindowXamlKeyTipTests
         iconSetsMenu.Elements(presentation + "MenuItem")
             .Select(item => LocalizedAttribute(item, "Header"))
             .Should()
-            .Contain(["Directional", "Shapes", "Indicators", "Ratings", "More Rules..."]);
+            .Contain(["More Rules..."]);
+
+        iconSetsMenu.Elements(presentation + "MenuItem")
+            .Where(item => item.Attribute("Tag") is null)
+            .Select(item => LocalizedAttribute(item, "Header"))
+            .Should()
+            .NotContain(["Directional", "Shapes", "Indicators", "Ratings"]);
 
         iconSetsMenu.Descendants(presentation + "MenuItem")
             .Where(item => item.Attribute("Tag") is not null)

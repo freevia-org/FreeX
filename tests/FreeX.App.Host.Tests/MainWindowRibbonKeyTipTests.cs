@@ -915,33 +915,16 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
-    public void CollapsedInsertChartsKeyTip_DeferredMapChartShowsOwnedMessage()
+    public void CollapsedInsertChartsKeyTip_DoesNotSurfaceDeferredMapChart()
     {
         RunSta(() =>
         {
             using var harness = MainWindowHarness.Create();
-            harness.SetNumber(1, 1, 10);
-            harness.SetNumber(1, 2, 20);
-            harness.SetNumber(2, 1, 30);
-            harness.SetNumber(2, 2, 40);
-            harness.SelectRange(1, 1, 2, 2);
             harness.SelectRibbonTab("Insert", 800);
 
             harness.OpenRibbonMenu(Key.N, Key.C, Key.H);
-            harness.ActiveMenuItemGestureText("Map Chart").Should().Be("MP");
-
-            harness.HandleKeyTip(Key.M);
-            harness.KeyTipScope.Should().Be("Menu", "M is a shared collapsed chart-menu prefix before MP resolves");
-            harness.HandleKeyTip(Key.P);
-
-            harness.KeyTipScope.Should().Be("None");
-            harness.ActiveMenuIsOpen.Should().BeFalse();
-            harness.ChartCount.Should().Be(0, "deferred chart families should explain the gap without mutating the workbook");
-
-            var message = harness.LastInfoMessage;
-            message.Should().NotBeNull();
-            message!.Value.Title.Should().Be(UiText.Get("MainWindowMessage_ChartFamilyDeferredTitle"));
-            message.Value.Message.Should().Be(UiText.Get("MainWindowMessage_ChartFamilyDeferred"));
+            harness.ActiveMenuItemGestureText("Column Chart").Should().Be("CC");
+            harness.ActiveMenuItemGestureText("Map Chart").Should().BeNull();
         });
     }
 
