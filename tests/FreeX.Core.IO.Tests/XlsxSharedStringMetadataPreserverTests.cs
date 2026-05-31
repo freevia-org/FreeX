@@ -55,6 +55,27 @@ public sealed class XlsxSharedStringMetadataPreserverTests
         sharedString.Element(WorkbookNs + "phoneticPr").Should().NotBeNull();
     }
 
+    [Fact]
+    public void UniqueSharedStringLookup_AvoidsLinqGroupingAllocations()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "XlsxSharedStringMetadataPreserver.cs"));
+        var method = source[
+            source.IndexOf("private static Dictionary<string, XElement> GetUniqueSharedStringsByPlainText", StringComparison.Ordinal)..
+            source.IndexOf("private static bool HasRichSharedStringMetadata", StringComparison.Ordinal)];
+        var plainTextReader = source[
+            source.IndexOf("private static string ReadSharedStringPlainText", StringComparison.Ordinal)..];
+
+        method.Should().Contain("foreach (var element in sharedStrings)");
+        method.Should().Contain("HashSet<string>? duplicates");
+        method.Should().NotContain(".GroupBy(");
+        method.Should().NotContain(".Count()");
+        method.Should().NotContain(".Single()");
+        method.Should().NotContain(".ToDictionary(");
+        plainTextReader.Should().NotContain(".ToList()");
+        plainTextReader.Should().NotContain(".Select(");
+    }
+
     private static MemoryStream CreatePackage(params (string Path, string Xml)[] entries)
     {
         var package = new MemoryStream();
@@ -80,5 +101,19 @@ public sealed class XlsxSharedStringMetadataPreserverTests
             builder.Append("<si><t>plain ").Append(i).AppendLine("</t></si>");
         builder.AppendLine("</sst>");
         return builder.ToString();
+    }
+
+    private static string FindWorkspaceFile(params string[] relativeParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+            if (File.Exists(candidate))
+                return candidate;
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
     }
 }
