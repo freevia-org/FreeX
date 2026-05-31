@@ -114,7 +114,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private string? _ribbonAdaptiveLayoutPlanCacheKey;
     private readonly Dictionary<RibbonAdaptiveLayoutPlanCacheEntryKey, RibbonAdaptiveLayoutResult> _ribbonAdaptiveLayoutPlanCache = [];
     private readonly Dictionary<RibbonCorrectionCacheKey, IReadOnlyList<RibbonAdaptiveGroupState>> _ribbonCorrectedStateCache = [];
-    private readonly Dictionary<RibbonMeasuredOverflowCacheKey, bool> _ribbonMeasuredOverflowCache = [];
+    private readonly Dictionary<RibbonMeasuredOverflowCacheKey, double> _ribbonMeasuredOverflowCache = [];
     private bool _ribbonAdaptiveStateDiffInvalidated;
     private int _ribbonAdaptiveMeasurementInvalidationCount;
     private int _ribbonAdaptiveGroupMeasurementCount;

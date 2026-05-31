@@ -472,22 +472,25 @@ public partial class MainWindow
         IReadOnlyList<RibbonAdaptiveGroupState> states)
     {
         var overflowCacheKey = CreateRibbonMeasuredOverflowCacheKey(measurementCacheKey, availableWidth, states);
-        if (_ribbonMeasuredOverflowCache.TryGetValue(overflowCacheKey, out var overflows))
-            return overflows;
+        if (_ribbonMeasuredOverflowCache.TryGetValue(overflowCacheKey, out var desiredWidth))
+            return RibbonRowDesiredWidthOverflows(desiredWidth, availableWidth);
 
-        overflows = RibbonRowOverflowsMeasured(activePanel, availableWidth);
+        desiredWidth = MeasureRibbonRowDesiredWidth(activePanel);
         _ribbonMeasuredOverflowMeasurementCount++;
-        _ribbonMeasuredOverflowCache[overflowCacheKey] = overflows;
-        return overflows;
+        _ribbonMeasuredOverflowCache[overflowCacheKey] = desiredWidth;
+        return RibbonRowDesiredWidthOverflows(desiredWidth, availableWidth);
     }
 
-    private static bool RibbonRowOverflowsMeasured(StackPanel activePanel, double availableWidth)
+    private static double MeasureRibbonRowDesiredWidth(StackPanel activePanel)
     {
         activePanel.InvalidateMeasure();
         activePanel.UpdateLayout();
         activePanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        return activePanel.DesiredSize.Width > Math.Max(0, availableWidth - 4);
+        return activePanel.DesiredSize.Width;
     }
+
+    private static bool RibbonRowDesiredWidthOverflows(double desiredWidth, double availableWidth) =>
+        desiredWidth > Math.Max(0, availableWidth - 4);
 
     private static RibbonAppliedStateKey CreateRibbonAppliedStateKey(
         double availableWidth,
@@ -515,8 +518,8 @@ public partial class MainWindow
     {
         return new RibbonMeasuredOverflowCacheKey(
             measurementCacheKey,
-            RoundRibbonWidthToTenths(availableWidth),
             GetCollapsedRibbonFootprintMode(availableWidth),
+            availableWidth > 820,
             CreateRibbonStateSignature(states));
     }
 
@@ -1100,8 +1103,8 @@ public partial class MainWindow
 
     private readonly record struct RibbonMeasuredOverflowCacheKey(
         string MeasurementCacheKey,
-        int AvailableWidthTenths,
         RibbonCollapsedGroupFootprintMode FootprintMode,
+        bool KeepsTablesLabelsAtIconWidth,
         RibbonStateSignature States);
 
     internal sealed class RibbonCompactGroupSnapshot(
