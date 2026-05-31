@@ -167,6 +167,20 @@ public sealed class XlsxFileAdapterFormatTests
             "fresh saves should return before source-package replay work runs");
     }
 
+    [Fact]
+    public void SavePostProcessing_CapturesRefreshedSourcePackageWithoutIntermediateStreamCopy()
+    {
+        var savePostProcessingSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var snapshotSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
+
+        savePostProcessingSource.Should().Contain("XlsxSourcePackage.Capture(packageStream, workbook)");
+        savePostProcessingSource.Should().NotContain("refreshedPackageStream");
+        savePostProcessingSource.Should().NotContain("packageStream.CopyTo(refreshedPackageStream)");
+        snapshotSource.Should().Contain("public static XlsxSourcePackage Capture(Stream stream, Workbook workbook)");
+    }
+
     private static string FindWorkspaceFile(params string[] parts)
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);

@@ -9,6 +9,18 @@ public sealed partial class XlsxFileAdapter
     {
         private const int FingerprintCellLimit = 10_000;
 
+        public static XlsxSourcePackage Capture(Stream stream, Workbook workbook)
+        {
+            if (stream is MemoryStream memoryStream)
+                return Capture(memoryStream, workbook);
+
+            var fingerprint = ShouldCaptureModelFingerprint(workbook)
+                ? CreateModelFingerprint(workbook)
+                : null;
+            var bytes = ReadBytes(stream);
+            return new XlsxSourcePackage(bytes, 0, bytes.Length, fingerprint);
+        }
+
         public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook)
         {
             var fingerprint = ShouldCaptureModelFingerprint(workbook)
@@ -29,13 +41,27 @@ public sealed partial class XlsxFileAdapter
             return new XlsxSourcePackage(bytes, 0, bytes.Length, fingerprint);
         }
 
-        private static byte[] ReadBytes(MemoryStream stream)
+        private static byte[] ReadBytes(Stream stream)
         {
-            var bytes = new byte[stream.Length];
+            if (!stream.CanSeek)
+            {
+                using var memory = new MemoryStream();
+                stream.CopyTo(memory);
+                return memory.ToArray();
+            }
+
             var previousPosition = stream.Position;
-            stream.Position = 0;
-            stream.ReadExactly(bytes);
-            stream.Position = previousPosition;
+            var bytes = new byte[checked((int)stream.Length)];
+            try
+            {
+                stream.Position = 0;
+                stream.ReadExactly(bytes);
+            }
+            finally
+            {
+                stream.Position = previousPosition;
+            }
+
             return bytes;
         }
 

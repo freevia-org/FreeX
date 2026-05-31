@@ -366,12 +366,9 @@ public sealed partial class XlsxFileAdapter
             XlsxNumberFormatCatalogWriter.RemapPivotTableNumberFormats(packageStream, numberFormatIdMap);
         }
 
-        using var refreshedPackageStream = new MemoryStream();
         packageStream.Position = 0;
-        packageStream.CopyTo(refreshedPackageStream);
-        refreshedPackageStream.Position = 0;
         SourcePackages.Remove(workbook);
-        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(refreshedPackageStream, workbook));
+        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream, workbook));
 
         void SaveSourcePackageIndependentPostProcessingMetadata()
         {

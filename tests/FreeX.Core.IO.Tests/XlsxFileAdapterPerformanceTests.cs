@@ -149,6 +149,55 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void Benchmark_SaveLoadedDenseWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var package = CreateDenseXlsxPackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var loadStream = new MemoryStream(package, writable: false))
+            workbook = adapter.Load(loadStream);
+
+        var sheet = workbook.Sheets[0];
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(42));
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_DENSE " +
+            $"sheets={DenseSheetCount} rows={DenseRowsPerSheet} cols={DenseColumnsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Benchmark_StructuredTableWriterTrailingNumber_AvoidsReverseIteratorAllocation()
     {
         var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStructuredTableWriter.cs"));
