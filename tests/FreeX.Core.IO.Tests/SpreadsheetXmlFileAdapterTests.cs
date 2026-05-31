@@ -924,6 +924,48 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlScalarValueTypesAndIndexes()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row label="Ready" amount="42.25" active="1" timestamp="2026-05-31T08:15:30" error="#N/A"/>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Typed">
+                    <ss:Table>
+                      <ss:Row ss:Index="3">
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@label"/></ss:Data></ss:Cell>
+                        <ss:Cell ss:Index="3"><ss:Data ss:Type="Number"><xsl:value-of select="row/@amount"/></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Boolean"><xsl:value-of select="row/@active"/></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="DateTime"><xsl:value-of select="row/@timestamp"/></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Error"><xsl:value-of select="row/@error"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Typed");
+        sheet.GetCell(3, 1)!.Value.Should().Be(new TextValue("Ready"));
+        sheet.GetCell(3, 2).Should().BeNull();
+        sheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(42.25));
+        sheet.GetCell(3, 4)!.Value.Should().Be(new BoolValue(true));
+        sheet.GetCell(3, 5)!.Value.Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 31, 8, 15, 30)));
+        sheet.GetCell(3, 6)!.Value.Should().Be(new ErrorValue("#N/A"));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlHyperlinksAndComments()
     {
         using var source = StreamFromString("""
