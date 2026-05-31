@@ -223,10 +223,11 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .Single(RibbonMetadata.IsDropdownChevron);
             grid.ColumnDefinitions.Should().HaveCount(2);
             grid.ColumnDefinitions[0].Width.Value.Should().Be(24);
-            grid.ColumnDefinitions[1].Width.Value.Should().Be(12);
+            grid.ColumnDefinitions[1].Width.Value.Should().Be(14);
             Grid.GetColumn(icon).Should().Be(0);
             Grid.GetColumn(chevron).Should().Be(1);
-            grid.Width.Should().BeGreaterThanOrEqualTo(36);
+            chevron.Width.Should().Be(8);
+            grid.Width.Should().BeGreaterThanOrEqualTo(38);
         });
     }
 
@@ -256,8 +257,8 @@ public sealed class MainWindowAdaptiveRibbonTests
 
             RibbonMetadata.TryGetCompactWidths(button, out var fullWidth, out var compactWidth).Should().BeTrue();
             fullWidth.Should().Be(128);
-            compactWidth.Should().Be(36);
-            content.ColumnDefinitions[^1].Width.Value.Should().Be(12);
+            compactWidth.Should().Be(38);
+            content.ColumnDefinitions[^1].Width.Value.Should().Be(14);
         });
     }
 
@@ -284,15 +285,15 @@ public sealed class MainWindowAdaptiveRibbonTests
                 Content = content,
                 Padding = new Thickness(4, 0, 4, 0),
                 BorderThickness = new Thickness(0),
-                Width = 36,
+                Width = 38,
                 Height = 24
             };
-            RibbonMetadata.SetCompactWidths(button, 128, 36);
+            RibbonMetadata.SetCompactWidths(button, 128, 38);
 
             ensureChevron.Invoke(null, [button]);
             setCompact.Invoke(null, [button, iconOnly]);
-            content.ColumnDefinitions[^1].Width.Value.Should().Be(12);
-            var window = ShowStandaloneRibbonButton(button, 36, 24);
+            content.ColumnDefinitions[^1].Width.Value.Should().Be(14);
+            var window = ShowStandaloneRibbonButton(button, 38, 24);
             try
             {
                 var icon = EnumerateSelfAndVisualDescendants(button)
