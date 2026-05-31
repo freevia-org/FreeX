@@ -130,7 +130,7 @@
     <value>Записи в легенди (серия)</value>
   </data>
   <data name="SelectDataSource_SeriesListAutomationName" xml:space="preserve">
-    <value>Списък със сериали</value>
+    <value>Списък със серии</value>
   </data>
   <data name="SelectDataSource_SeriesListHelpText" xml:space="preserve">
     <value>Името и стойностите се извеждат от избрания диапазон на диаграмата.</value>
@@ -190,10 +190,10 @@
     <value>_Използвайте препоръчаното оформление</value>
   </data>
   <data name="InsertChart_RecommendedChartsTab" xml:space="preserve">
-    <value>_Препоръчани графики</value>
+    <value>_Препоръчани диаграми</value>
   </data>
   <data name="InsertChart_AllChartsTab" xml:space="preserve">
-    <value>_Всички класации</value>
+    <value>_Всички диаграми</value>
   </data>
   <data name="ChangeChartType_Title" xml:space="preserve">
     <value>Промяна на типа на диаграмата</value>
@@ -211,13 +211,13 @@
     <value>Преглед</value>
   </data>
   <data name="ChartTypePicker_RecommendedPreviewBody" xml:space="preserve">
-    <value>Препоръчителен преглед на диаграмата</value>
+    <value>Визуализация на препоръчана диаграма</value>
   </data>
   <data name="ChartTypePicker_CategoriesAutomationName" xml:space="preserve">
-    <value>Категории на графиката</value>
+    <value>Категории на диаграмата</value>
   </data>
   <data name="ChartTypePicker_AllChartsHeading" xml:space="preserve">
-    <value>Всички класации</value>
+    <value>Всички диаграми</value>
   </data>
   <data name="ChartTypePicker_AllChartsHelpText" xml:space="preserve">
     <value>Изберете подтип, за да видите как диаграмата ще представя категории и стойности.</value>
@@ -232,97 +232,97 @@
     <value>Визуализация: {0}</value>
   </data>
   <data name="ChartTypePicker_RecommendedCategory" xml:space="preserve">
-    <value>Препоръчани графики</value>
+    <value>Препоръчани диаграми</value>
   </data>
   <data name="ChartType_ClusteredColumn" xml:space="preserve">
-    <value>Групирана колона</value>
+    <value>Групирана колонна</value>
   </data>
   <data name="ChartType_StackedColumn" xml:space="preserve">
-    <value>Подредена колона</value>
+    <value>Колонна с наслагване</value>
   </data>
   <data name="ChartType_PercentStackedColumn" xml:space="preserve">
-    <value>100% подредена колона</value>
+    <value>100% колонна с наслагване</value>
   </data>
   <data name="ChartType_ThreeDColumn" xml:space="preserve">
-    <value>3D колона</value>
+    <value>3D колонна</value>
   </data>
   <data name="ChartType_Line" xml:space="preserve">
-    <value>Линия</value>
+    <value>Линейна</value>
   </data>
   <data name="ChartType_ThreeDLine" xml:space="preserve">
-    <value>3D линия</value>
+    <value>3D линейна</value>
   </data>
   <data name="ChartType_Pie" xml:space="preserve">
-    <value>пай</value>
+    <value>Кръгова</value>
   </data>
   <data name="ChartType_ThreeDPie" xml:space="preserve">
-    <value>3D пай</value>
+    <value>3D кръгова</value>
   </data>
   <data name="ChartType_Doughnut" xml:space="preserve">
-    <value>поничка</value>
+    <value>Пръстеновидна</value>
   </data>
   <data name="ChartType_ClusteredBar" xml:space="preserve">
-    <value>Групирана лента</value>
+    <value>Групирана стълбовидна</value>
   </data>
   <data name="ChartType_StackedBar" xml:space="preserve">
-    <value>Подредена лента</value>
+    <value>Стълбовидна с наслагване</value>
   </data>
   <data name="ChartType_PercentStackedBar" xml:space="preserve">
-    <value>100% подредена лента</value>
+    <value>100% стълбовидна с наслагване</value>
   </data>
   <data name="ChartType_ThreeDBar" xml:space="preserve">
-    <value>3D бар</value>
+    <value>3D стълбовидна</value>
   </data>
   <data name="ChartType_Scatter" xml:space="preserve">
-    <value>Скатер</value>
+    <value>XY (точкова)</value>
   </data>
   <data name="ChartType_Bubble" xml:space="preserve">
-    <value>Балон</value>
+    <value>Мехурчеста</value>
   </data>
   <data name="ChartType_Area" xml:space="preserve">
-    <value>Площ</value>
+    <value>Площна</value>
   </data>
   <data name="ChartType_ThreeDArea" xml:space="preserve">
-    <value>3D зона</value>
+    <value>3D площна</value>
   </data>
   <data name="ChartType_Radar" xml:space="preserve">
-    <value>Радар</value>
+    <value>Радарна</value>
   </data>
   <data name="ChartType_Stock" xml:space="preserve">
-    <value>Наличност</value>
+    <value>Борсова</value>
   </data>
   <data name="ChartType_Surface" xml:space="preserve">
-    <value>Повърхност</value>
+    <value>Повърхнинна</value>
   </data>
   <data name="ChartType_ThreeDSurface" xml:space="preserve">
-    <value>3D повърхност</value>
+    <value>3D повърхнинна</value>
   </data>
   <data name="ChartTypeCategory_Column" xml:space="preserve">
-    <value>Колона</value>
+    <value>Колонна</value>
   </data>
   <data name="ChartTypeCategory_Line" xml:space="preserve">
-    <value>Линия</value>
+    <value>Линейна</value>
   </data>
   <data name="ChartTypeCategory_Pie" xml:space="preserve">
-    <value>пай</value>
+    <value>Кръгова</value>
   </data>
   <data name="ChartTypeCategory_Bar" xml:space="preserve">
-    <value>Бар</value>
+    <value>Стълбовидна</value>
   </data>
   <data name="ChartTypeCategory_Area" xml:space="preserve">
-    <value>Площ</value>
+    <value>Площна</value>
   </data>
   <data name="ChartTypeCategory_Scatter" xml:space="preserve">
     <value>X Y (точкова)</value>
   </data>
   <data name="ChartTypeCategory_Stock" xml:space="preserve">
-    <value>Наличност</value>
+    <value>Борсова</value>
   </data>
   <data name="ChartTypeCategory_Radar" xml:space="preserve">
-    <value>Радар</value>
+    <value>Радарна</value>
   </data>
   <data name="ChartTypeCategory_Surface" xml:space="preserve">
-    <value>Повърхност</value>
+    <value>Повърхнинна</value>
   </data>
   <data name="ChartAreaLegend_Title" xml:space="preserve">
     <value>Форматиране на областта на диаграмата</value>
@@ -334,19 +334,19 @@
     <value>_Наслагване на легенда върху диаграма</value>
   </data>
   <data name="ChartAreaLegend_FillLineHelpText" xml:space="preserve">
-    <value>Задайте запълване, граници и дебелина на линията на диаграмата и площта на графиката.</value>
+    <value>Задайте запълване, граници и дебелина на линията на областта на диаграмата и областта на чертане.</value>
   </data>
   <data name="ChartAreaLegend_ChartAreaFillColorLabel" xml:space="preserve">
     <value>_Цвят на запълване на областта на диаграмата</value>
   </data>
   <data name="ChartAreaLegend_PlotAreaFillColorLabel" xml:space="preserve">
-    <value>_Цвят на запълване на площта на графиката</value>
+    <value>_Цвят на запълване на областта на чертане</value>
   </data>
   <data name="ChartAreaLegend_PlotAreaBorderColorLabel" xml:space="preserve">
-    <value>_Цвят на границата на площта на парцела</value>
+    <value>_Цвят на границата на областта на чертане</value>
   </data>
   <data name="ChartAreaLegend_PlotAreaBorderWidthLabel" xml:space="preserve">
-    <value>_Ширина на границата на парцела</value>
+    <value>_Ширина на границата на областта на чертане</value>
   </data>
   <data name="ChartAreaLegend_LegendPositionLabel" xml:space="preserve">
     <value>_Легенда позиция</value>
@@ -373,7 +373,7 @@
     <value>Легенда</value>
   </data>
   <data name="ChartAreaLegend_InvalidPlotAreaBorderWidthMessage" xml:space="preserve">
-    <value>Въведете ширина на границата на областта на графиката от 0 до 10 точки.</value>
+    <value>Въведете ширина на границата на областта на чертане от 0 до 10 точки.</value>
   </data>
   <data name="ChartAreaLegend_InvalidLegendBorderWidthMessage" xml:space="preserve">
     <value>Въведете ширина на границата на легендата от 0 до 10 точки.</value>
@@ -484,10 +484,10 @@
     <value>Въведете стойност на грешка от 0 до 1000.</value>
   </data>
   <data name="ChartTrendline_Title" xml:space="preserve">
-    <value>Формат Trendline</value>
+    <value>Форматиране на линия на тенденцията</value>
   </data>
   <data name="ChartTrendline_ShowTrendline" xml:space="preserve">
-    <value>_Показване на тренд линия</value>
+    <value>_Показване на линия на тенденцията</value>
   </data>
   <data name="ChartTrendline_DisplayEquation" xml:space="preserve">
     <value>_Показване на уравнение</value>
@@ -511,7 +511,7 @@
     <value>Въведете поръчка от 2 до 6.</value>
   </data>
   <data name="ChartTrendline_OptionsGroup" xml:space="preserve">
-    <value>Опции за линия на тенденция</value>
+    <value>Опции за линия на тенденцията</value>
   </data>
   <data name="ChartTrendline_LineColorLabel" xml:space="preserve">
     <value>_Цвят на линията</value>
@@ -520,7 +520,7 @@
     <value>_Ширина на линията</value>
   </data>
   <data name="ChartTrendline_LineWidthHelpText" xml:space="preserve">
-    <value>Въведете ширина на линията в точки.</value>
+    <value>Въведете ширина на линията на тенденцията от 0,5 до 10 точки.</value>
   </data>
   <data name="ChartTrendline_DashStyleLabel" xml:space="preserve">
     <value>_Стил тире</value>
@@ -532,7 +532,7 @@
     <value>Въведете ред на полином от 2 до 6.</value>
   </data>
   <data name="ChartTrendline_InvalidWidthMessage" xml:space="preserve">
-    <value>Въведете ширина на линията на тренда от 0,5 до 10 точки.</value>
+    <value>Въведете ширина на линията на тенденцията от 0,5 до 10 точки.</value>
   </data>
   <data name="ChartSeriesFormat_Title" xml:space="preserve">
     <value>Форматиране на серии от данни</value>
@@ -700,34 +700,34 @@
     <value>Въведете ширина на линията на оста от 0,5 до 10 точки.</value>
   </data>
   <data name="ChartBarFormat_Title" xml:space="preserve">
-    <value>Форматиране на лента/колона</value>
+    <value>Форматиране на стълбовидна/колонна диаграма</value>
   </data>
   <data name="ChartBarFormat_HelpText" xml:space="preserve">
-    <value>Ширина на междината: разстоянието между клъстерите от ленти като процент от ширината на лентата (0-500). Припокриване: колко съседни ленти се припокриват (-100 до 100).</value>
+    <value>Ширина на празнината: разстоянието между групите от стълбове или колони като процент от ширината на стълба/колоната (0-500). Припокриване: колко съседни серии се припокриват (-100 до 100).</value>
   </data>
   <data name="ChartBarFormat_GapWidthLabel" xml:space="preserve">
-    <value>_Ширина на междината %</value>
+    <value>_Ширина на празнината %</value>
   </data>
   <data name="ChartBarFormat_GapWidthHelpText" xml:space="preserve">
-    <value>Въведете ширина на интервала от 0 до 500.</value>
+    <value>Въведете ширина на празнината от 0 до 500.</value>
   </data>
   <data name="ChartBarFormat_OverlapLabel" xml:space="preserve">
     <value>_Припокриване на сериите %</value>
   </data>
   <data name="ChartBarFormat_OverlapHelpText" xml:space="preserve">
-    <value>Въведете припокриване на лента от -100 до 100.</value>
+    <value>Въведете припокриване на сериите от -100 до 100.</value>
   </data>
   <data name="ChartBarFormat_OptionsGroup" xml:space="preserve">
-    <value>Опции на лентата</value>
+    <value>Опции за стълбовидна/колонна диаграма</value>
   </data>
   <data name="ChartBarFormat_InvalidGapWidthMessage" xml:space="preserve">
-    <value>Въведете ширина на интервала от 0 до 500.</value>
+    <value>Въведете ширина на празнината от 0 до 500.</value>
   </data>
   <data name="ChartBarFormat_InvalidOverlapMessage" xml:space="preserve">
-    <value>Въведете припокриване на лента от -100 до 100.</value>
+    <value>Въведете припокриване на сериите от -100 до 100.</value>
   </data>
   <data name="ChartPieFormat_Title" xml:space="preserve">
-    <value>Форматиране на пай/поничка</value>
+    <value>Форматиране на кръгова/пръстеновидна диаграма</value>
   </data>
   <data name="ChartPieFormat_HelpText" xml:space="preserve">
     <value>Ъгъл на първия срез: въртене на първия срез в градуси (0-359). Explode: индекс на един разглобен срез (-1 = няма) и неговото разстояние (0-50%).</value>
@@ -757,7 +757,7 @@
     <value>Въведете размер на отвора от 10 до 90.</value>
   </data>
   <data name="ChartPieFormat_OptionsGroup" xml:space="preserve">
-    <value>Опции за пай / поничка</value>
+    <value>Опции за кръгова/пръстеновидна диаграма</value>
   </data>
   <data name="ChartPieFormat_InvalidFirstSliceAngleMessage" xml:space="preserve">
     <value>Въведете първи ъгъл на срез от 0 до 359.</value>
@@ -1399,7 +1399,7 @@
     <value>Въведете диапазон от таблица.</value>
   </data>
   <data name="CreateTable_RangeAutomationName" xml:space="preserve">
-    <value>Обхват на масата</value>
+    <value>Диапазон на таблицата</value>
   </data>
   <data name="CreateTable_RangeAutomationHelpText" xml:space="preserve">
     <value>Въведете диапазона от клетки на работния лист за преобразуване в таблица.</value>
@@ -2707,7 +2707,7 @@
     <value>Онлайн шаблони</value>
   </data>
   <data name="DeferredCommand_PivotTable_Body" xml:space="preserve">
-    <value>FreeX зарежда и записва PivotTable и pivot кешира метаданни, включително метаданни източник на външен/OLAP кеш, създава и опреснява PivotTables от диапазон от работни листове от източници на един и същи лист или кръстосани листове, поддържа редактиране на оформлението на списък с полета, GETPIVOTDATA, филтриране на бутони за полета на PivotChart и промени в типа диаграма, Insert Създаване на слайсер/времева линия, филтриране на слайсер/времева скала и запазва оригинални части от пакета PivotTable, където е възможно. Точната семантика на темата PivotStyle в пълната галерия, пълното редактиране на оформление/дизайн на PivotChart Tools и опресняване или изпълнение на външен/OLAP/модел на данни остават частични или изключени.</value>
+    <value>FreeX зарежда и записва обобщени таблици и кеширани метаданни за тях, включително метаданни за външен/OLAP източник на кеша, създава и опреснява обобщени таблици от диапазон в работен лист от източници в същия или в други листове, поддържа редактиране на оформлението в списъка с полета, GETPIVOTDATA, филтриране чрез бутоните за полета на обобщена диаграма и промени в типа диаграма, вмъкване/създаване на сегментатор/времева линия, филтриране със сегментатор/времева линия и запазва оригиналните части от пакета на обобщена таблица, където е възможно. Точната семантика на темата за стилове на обобщени таблици в пълната галерия, пълното редактиране на оформление/проектиране с инструментите за обобщени диаграми и опресняването или изпълнението на външен/OLAP/модел на данни остават частични или изключени.</value>
   </data>
   <data name="DeferredCommand_PivotTable_Title" xml:space="preserve">
     <value>обобщена таблица</value>
@@ -3012,7 +3012,7 @@
     <value>Затворете полетата на обобщената таблица</value>
   </data>
   <data name="MainWindow_AutomationName_CloseSlicersAndTimelines" xml:space="preserve">
-    <value>Затворете слайсерите и времевите линии</value>
+    <value>Затваряне на сегментатори и времеви линии</value>
   </data>
   <data name="MainWindow_AutomationName_CropPicture" xml:space="preserve">
     <value>Изрязване на снимка</value>
@@ -3171,7 +3171,7 @@
     <value>Градиент на формата</value>
   </data>
   <data name="MainWindow_AutomationName_SlicersAndTimelines" xml:space="preserve">
-    <value>Слайсери и времеви линии</value>
+    <value>Сегментатори и времеви линии</value>
   </data>
   <data name="MainWindow_AutomationName_SubtleThemeEffects" xml:space="preserve">
     <value>Фини ефекти на темата</value>
@@ -3201,7 +3201,7 @@
     <value>Вертикална лента за превъртане на работен лист</value>
   </data>
   <data name="MainWindow_AutomationName_WorkbookSlicers" xml:space="preserve">
-    <value>Слайсери за работни книги</value>
+    <value>Сегментатори на работна книга</value>
   </data>
   <data name="MainWindow_AutomationName_WorkbookTimelines" xml:space="preserve">
     <value>График на работната книга</value>
@@ -3222,7 +3222,7 @@
     <value>Плъзгач за мащабиране</value>
   </data>
   <data name="MainWindow_Content_100Bar" xml:space="preserve">
-    <value>100% Бар</value>
+    <value>100% стълбовидна</value>
   </data>
   <data name="MainWindow_Content_100Col" xml:space="preserve">
     <value>100% Кол</value>
@@ -3231,13 +3231,13 @@
     <value>2-ра ос</value>
   </data>
   <data name="MainWindow_Content_3DArea" xml:space="preserve">
-    <value>3D зона</value>
+    <value>3D площна</value>
   </data>
   <data name="MainWindow_Content_3DBar" xml:space="preserve">
-    <value>3D бар</value>
+    <value>3D стълбовидна</value>
   </data>
   <data name="MainWindow_Content_3DColumn" xml:space="preserve">
-    <value>3D колона</value>
+    <value>3D колонна</value>
   </data>
   <data name="MainWindow_Content_3DLine" xml:space="preserve">
     <value>3D линия</value>
@@ -3246,7 +3246,7 @@
     <value>3D карта</value>
   </data>
   <data name="MainWindow_Content_3DPie" xml:space="preserve">
-    <value>3D пай</value>
+    <value>3D кръгова</value>
   </data>
   <data name="MainWindow_Content_3DSurface" xml:space="preserve">
     <value>3D повърхност</value>
@@ -3276,7 +3276,7 @@
     <value>Кандидатствайте</value>
   </data>
   <data name="MainWindow_Content_Area" xml:space="preserve">
-    <value>Площ</value>
+    <value>Площна</value>
   </data>
   <data name="MainWindow_Content_ArrangeAll" xml:space="preserve">
     <value>Подредете всички</value>
@@ -3303,10 +3303,10 @@
     <value>Лентовидни редове</value>
   </data>
   <data name="MainWindow_Content_Bar" xml:space="preserve">
-    <value>Бар</value>
+    <value>Стълбовидна</value>
   </data>
   <data name="MainWindow_Content_BarFormat" xml:space="preserve">
-    <value>Бар формат</value>
+    <value>Формат на стълбовидна/колонна диаграма</value>
   </data>
   <data name="MainWindow_Content_BlankRows" xml:space="preserve">
     <value>Празни редове</value>
@@ -3348,13 +3348,13 @@
     <value>Етикет за котка</value>
   </data>
   <data name="MainWindow_Content_ChangeChart" xml:space="preserve">
-    <value>Промяна на графиката</value>
+    <value>Промяна на диаграма</value>
   </data>
   <data name="MainWindow_Content_ChangeDataSource" xml:space="preserve">
     <value>Промяна на източника на данни</value>
   </data>
   <data name="MainWindow_Content_ChartFill" xml:space="preserve">
-    <value>Попълване на диаграма</value>
+    <value>Запълване на диаграма</value>
   </data>
   <data name="MainWindow_Content_ChartOptions" xml:space="preserve">
     <value>Опции на диаграмата</value>
@@ -3378,7 +3378,7 @@
     <value>Цветове</value>
   </data>
   <data name="MainWindow_Content_Column" xml:space="preserve">
-    <value>Колона</value>
+    <value>Колонна</value>
   </data>
   <data name="MainWindow_Content_ColumnHeaders" xml:space="preserve">
     <value>Заглавки на колони</value>
@@ -3396,7 +3396,7 @@
     <value>Коментирайте</value>
   </data>
   <data name="MainWindow_Content_Copy" xml:space="preserve">
-    <value>копие</value>
+    <value>Копирай</value>
   </data>
   <data name="MainWindow_Content_CopyDiagnostics" xml:space="preserve">
     <value>Копиране на диагностика</value>
@@ -3411,7 +3411,7 @@
     <value>Персонализирани изгледи</value>
   </data>
   <data name="MainWindow_Content_Cut" xml:space="preserve">
-    <value>Изрежете</value>
+    <value>Изрежи</value>
   </data>
   <data name="MainWindow_Content_DataLabels" xml:space="preserve">
     <value>Етикети с данни</value>
@@ -3432,10 +3432,10 @@
     <value>Дел Гледайте</value>
   </data>
   <data name="MainWindow_Content_Doughnut" xml:space="preserve">
-    <value>поничка</value>
+    <value>Пръстеновидна</value>
   </data>
   <data name="MainWindow_Content_Draw" xml:space="preserve">
-    <value>Начертайте</value>
+    <value>Рисуване</value>
   </data>
   <data name="MainWindow_Content_Edit" xml:space="preserve">
     <value>Редактиране</value>
@@ -3474,7 +3474,7 @@
     <value>Настройки на полето</value>
   </data>
   <data name="MainWindow_Content_Fill" xml:space="preserve">
-    <value>Напълнете</value>
+    <value>Запълване</value>
   </data>
   <data name="MainWindow_Content_Filters" xml:space="preserve">
     <value>Филтри</value>
@@ -3495,7 +3495,7 @@
     <value>Форматиране на диаграма</value>
   </data>
   <data name="MainWindow_Content_FormatPainter" xml:space="preserve">
-    <value>Копиране на формат</value>
+    <value>Копиране на формати</value>
   </data>
   <data name="MainWindow_Content_FormulaBar" xml:space="preserve">
     <value>Лента с формули</value>
@@ -3567,7 +3567,7 @@
     <value>Вмъкване на функция</value>
   </data>
   <data name="MainWindow_Content_InsertSlicer" xml:space="preserve">
-    <value>Поставете слайсер</value>
+    <value>Вмъкване на сегментатор</value>
   </data>
   <data name="MainWindow_Content_InsertTimeline" xml:space="preserve">
     <value>Вмъкване на времева линия</value>
@@ -3579,7 +3579,7 @@
     <value>Граница на етикета</value>
   </data>
   <data name="MainWindow_Content_LabelFill" xml:space="preserve">
-    <value>Попълване на етикети</value>
+    <value>Запълване на етикети</value>
   </data>
   <data name="MainWindow_Content_LabelNum" xml:space="preserve">
     <value>Номер на етикета</value>
@@ -3600,7 +3600,7 @@
     <value>Рамка легенда</value>
   </data>
   <data name="MainWindow_Content_LegendFill" xml:space="preserve">
-    <value>Попълване на легенда</value>
+    <value>Запълване на легенда</value>
   </data>
   <data name="MainWindow_Content_LegendSize" xml:space="preserve">
     <value>Размер на легендата</value>
@@ -3708,10 +3708,10 @@
     <value>Снимки</value>
   </data>
   <data name="MainWindow_Content_Pie" xml:space="preserve">
-    <value>пай</value>
+    <value>Кръгова</value>
   </data>
   <data name="MainWindow_Content_PieFormat" xml:space="preserve">
-    <value>Формат на пай</value>
+    <value>Формат на кръгова диаграма</value>
   </data>
   <data name="MainWindow_Content_PivotChart" xml:space="preserve">
     <value>Обобщена диаграма</value>
@@ -3723,10 +3723,10 @@
     <value>Име на обобщена таблица</value>
   </data>
   <data name="MainWindow_Content_PlotBorder" xml:space="preserve">
-    <value>Граница на парцела</value>
+    <value>Граница на областта на чертане</value>
   </data>
   <data name="MainWindow_Content_PlotFill" xml:space="preserve">
-    <value>Запълване на сюжета</value>
+    <value>Запълване на областта на чертане</value>
   </data>
   <data name="MainWindow_Content_PointLabel" xml:space="preserve">
     <value>Етикет на точка</value>
@@ -3765,7 +3765,7 @@
     <value>Препоръчва се</value>
   </data>
   <data name="MainWindow_Content_RecommendedCharts" xml:space="preserve">
-    <value>Препоръчани графики</value>
+    <value>Препоръчани диаграми</value>
   </data>
   <data name="MainWindow_Content_Refresh" xml:space="preserve">
     <value>Опресняване</value>
@@ -3801,7 +3801,7 @@
     <value>Мащаб</value>
   </data>
   <data name="MainWindow_Content_Scatter" xml:space="preserve">
-    <value>Скатер</value>
+    <value>XY (точкова)</value>
   </data>
   <data name="MainWindow_Content_Select" xml:space="preserve">
     <value>Изберете</value>
@@ -3855,7 +3855,7 @@
     <value>Ъгъл на срязване</value>
   </data>
   <data name="MainWindow_Content_Slicer" xml:space="preserve">
-    <value>Слайсер</value>
+    <value>Сегментатор</value>
   </data>
   <data name="MainWindow_Content_Spelling" xml:space="preserve">
     <value>Правопис</value>
@@ -3864,13 +3864,13 @@
     <value>Сплит</value>
   </data>
   <data name="MainWindow_Content_StackBar" xml:space="preserve">
-    <value>Лента за стекове</value>
+    <value>Стълбовидна с наслагване</value>
   </data>
   <data name="MainWindow_Content_StackCol" xml:space="preserve">
-    <value>Подредена колона</value>
+    <value>Колонна с наслагване</value>
   </data>
   <data name="MainWindow_Content_Stock" xml:space="preserve">
-    <value>Наличност</value>
+    <value>Борсова</value>
   </data>
   <data name="MainWindow_Content_StockFmt" xml:space="preserve">
     <value>Борсов формат</value>
@@ -3936,25 +3936,25 @@
     <value>Дървовидна карта</value>
   </data>
   <data name="MainWindow_Content_TrendColor" xml:space="preserve">
-    <value>Цвят на тенденцията</value>
+    <value>Цвят на линия на тенденцията</value>
   </data>
   <data name="MainWindow_Content_TrendDash" xml:space="preserve">
-    <value>Тире на тенденцията</value>
+    <value>Тирета на линия на тенденцията</value>
   </data>
   <data name="MainWindow_Content_Trendline" xml:space="preserve">
-    <value>Линия на тенденция</value>
+    <value>Линия на тенденцията</value>
   </data>
   <data name="MainWindow_Content_TrendOrder" xml:space="preserve">
-    <value>Ред на тенденцията</value>
+    <value>Степен на линия на тенденцията</value>
   </data>
   <data name="MainWindow_Content_TrendPeriod" xml:space="preserve">
-    <value>Период на тенденция</value>
+    <value>Период на линия на тенденцията</value>
   </data>
   <data name="MainWindow_Content_TrendType" xml:space="preserve">
     <value>Тип тенденция</value>
   </data>
   <data name="MainWindow_Content_TrendWidth" xml:space="preserve">
-    <value>Ширина на тренда</value>
+    <value>Ширина на линия на тенденцията</value>
   </data>
   <data name="MainWindow_Content_Ungroup" xml:space="preserve">
     <value>Разгрупиране</value>
@@ -4311,10 +4311,10 @@
     <value>Надолу</value>
   </data>
   <data name="MainWindow_Header_Draw" xml:space="preserve">
-    <value>Начертайте</value>
+    <value>Рисуване</value>
   </data>
   <data name="MainWindow_Header_DrawBorderGrid" xml:space="preserve">
-    <value>Начертайте гранична мрежа</value>
+    <value>Начертаване на гранична мрежа</value>
   </data>
   <data name="MainWindow_Header_Duplicate" xml:space="preserve">
     <value>Дубликат</value>
@@ -4350,7 +4350,7 @@
     <value>намери...</value>
   </data>
   <data name="MainWindow_Header_FlashFill" xml:space="preserve">
-    <value>Светкавично попълване</value>
+    <value>Примерно запълване</value>
   </data>
   <data name="MainWindow_Header_FormatCells" xml:space="preserve">
     <value>Форматиране на клетки...</value>
@@ -4554,7 +4554,7 @@
     <value>Оформление на страницата</value>
   </data>
   <data name="MainWindow_Header_Paste" xml:space="preserve">
-    <value>Залепете</value>
+    <value>Постави</value>
   </data>
   <data name="MainWindow_Header_PasteSpecial" xml:space="preserve">
     <value>Специално поставяне...</value>
@@ -4578,7 +4578,7 @@
     <value>Кандидатствайте отново</value>
   </data>
   <data name="MainWindow_Header_RecommendedPivotTables" xml:space="preserve">
-    <value>Препоръчителни обобщени таблици</value>
+    <value>Препоръчани обобщени таблици</value>
   </data>
   <data name="MainWindow_Header_Rectangle" xml:space="preserve">
     <value>Правоъгълник</value>
@@ -4887,7 +4887,7 @@
     <value>Търсене и избор</value>
   </data>
   <data name="MainWindow_Text_FlashFill" xml:space="preserve">
-    <value>Светкавично попълване</value>
+    <value>Примерно запълване</value>
   </data>
   <data name="MainWindow_Text_Font" xml:space="preserve">
     <value>Шрифт</value>
@@ -4983,7 +4983,7 @@
     <value>Настройка на страницата</value>
   </data>
   <data name="MainWindow_Text_Paste" xml:space="preserve">
-    <value>Залепете</value>
+    <value>Постави</value>
   </data>
   <data name="MainWindow_Text_Pens" xml:space="preserve">
     <value>Химикалки</value>
@@ -5064,7 +5064,7 @@
     <value>Показване на обучение</value>
   </data>
   <data name="MainWindow_Text_SlicersAndTimelines" xml:space="preserve">
-    <value>Слайсери и времеви линии</value>
+    <value>Сегментатори и времеви линии</value>
   </data>
   <data name="MainWindow_Text_SortFilter" xml:space="preserve">
     <value>Сортиране и филтриране</value>
@@ -5127,7 +5127,7 @@
     <value>Изгледи на работна книга</value>
   </data>
   <data name="MainWindow_Text_Wrap" xml:space="preserve">
-    <value>Увийте</value>
+    <value>Текст на повече редове</value>
   </data>
   <data name="MainWindow_Text_Zoom" xml:space="preserve">
     <value>мащабиране</value>
@@ -5235,13 +5235,13 @@
     <value>Центрирайте съдържанието на избраните клетки (Ctrl+E).</value>
   </data>
   <data name="MainWindow_TooltipDescription_ChangePivotChartStyleAndFieldButtonVisibility" xml:space="preserve">
-    <value>Променете стила на PivotChart и видимостта на бутона на полето.</value>
+    <value>Променете стила на обобщената диаграма и видимостта на бутона на полето.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ChangeRowHeightColumnWidthVisibilityOrCellProtection" xml:space="preserve">
     <value>Променете височината на реда, ширината на колоната, видимостта или защитата на клетките.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ChangeTheBoundPivotChartTypeWhilePreservingItsPivotTableConnection" xml:space="preserve">
-    <value>Променете обвързания тип PivotChart, като същевременно запазите връзката му с PivotTable.</value>
+    <value>Променете типа на свързаната обобщена диаграма, като запазите връзката й с обобщената таблица.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ChangeTheColorOfTheText" xml:space="preserve">
     <value>Промяна на цвета на текста.</value>
@@ -5424,13 +5424,13 @@
     <value>Цикъл на цвета на текста на заглавието на текущата диаграма.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleTheCurrentChartTrendlineColor" xml:space="preserve">
-    <value>Цикъл на текущия цвят на тренд линията на диаграмата.</value>
+    <value>Сменя текущия цвят на линията на тенденцията на диаграмата.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleTheCurrentChartTrendlineDashStyle" xml:space="preserve">
-    <value>Цикъл на текущия стил на тире на тренд линията на графиката.</value>
+    <value>Сменя текущия стил на тирета на линията на тенденцията на диаграмата.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleTheCurrentChartTrendlineWidth" xml:space="preserve">
-    <value>Цикъл на текущата ширина на тренд линията на диаграмата.</value>
+    <value>Сменя текущата ширина на линията на тенденцията на диаграмата.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleTheCurrentChartXAxisNumberFormat" xml:space="preserve">
     <value>Цикъл на текущия формат на номера на ос X на диаграмата.</value>
@@ -5439,10 +5439,10 @@
     <value>Цикъл на текущия формат на номера на ос Y на диаграмата.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleTheCurrentDoughnutChartHoleSize" xml:space="preserve">
-    <value>Цикъл на текущия размер на отвора на поничковата диаграма.</value>
+    <value>Сменя текущия размер на отвора на пръстеновидната диаграма.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleTheExplodedSliceForPieAndDoughnutCharts" xml:space="preserve">
-    <value>Цикълирайте разглобения срез за пайови и кръгови диаграми.</value>
+    <value>Сменя извадения сектор за кръгови и пръстеновидни диаграми.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleTheFirstChartSeriesFillOrLineColor" xml:space="preserve">
     <value>Цикъл на първата поредица от диаграми, запълване или цвят на линията.</value>
@@ -5460,16 +5460,16 @@
     <value>Цикъл на контура на първата поредица от диаграми или ширината на линията.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleTheFirstSliceAngleForPieAndDoughnutCharts" xml:space="preserve">
-    <value>Цикълирайте ъгъла на първия срез за кръгови и кръгови диаграми.</value>
+    <value>Сменя ъгъла на първия сектор за кръгови и пръстеновидни диаграми.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleTheMovingAverageTrendlinePeriodForTheCurrentChart" xml:space="preserve">
-    <value>Цикъл на периода на тренд линията на подвижната средна за текущата графика.</value>
+    <value>Сменя периода на линията на тенденцията за подвижна средна за текущата диаграма.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleTheNumberFormatUsedByChartDataLabels" xml:space="preserve">
     <value>Цикъл на цифровия формат, използван от етикетите с данни на диаграмата.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleThePolynomialTrendlineOrderForTheCurrentChart" xml:space="preserve">
-    <value>Цикъл на реда на линията на тренда на полинома за текущата диаграма.</value>
+    <value>Сменя степента на полиномиалната линия на тенденцията за текущата диаграма.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleTheSeparatorUsedBetweenChartDataLabelFields" xml:space="preserve">
     <value>Цикъл на разделителя, използван между полетата за етикети с данни на диаграмата.</value>
@@ -5634,19 +5634,19 @@
     <value>Увеличете нивото на отстъп на съдържанието на клетката.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertA100StackedBarChartToComparePercentageContributionsByCategory" xml:space="preserve">
-    <value>Вмъкнете 100% подредена лентова диаграма, за да сравните процентните вноски по категория.</value>
+    <value>Вмъкнете 100% стълбовидна диаграма с наслагване, за да сравните процентния принос по категория.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertA100StackedColumnChartToComparePercentageContributionsByCategory" xml:space="preserve">
-    <value>Вмъкнете 100% подредена колонна диаграма, за да сравните процентния принос по категория.</value>
+    <value>Вмъкнете 100% колонна диаграма с наслагване, за да сравните процентния принос по категория.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertA3DAreaChartToShowTrendsWithFilledAreas" xml:space="preserve">
     <value>Вмъкнете 3D областна диаграма, за да покажете тенденциите със запълнени области.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertA3DClusteredBarChartForTheSelectedData" xml:space="preserve">
-    <value>Вмъкнете 3D групирана лентова диаграма за избраните данни.</value>
+    <value>Вмъкнете 3D групирана стълбовидна диаграма за избраните данни.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertA3DClusteredColumnChartForTheSelectedData" xml:space="preserve">
-    <value>Вмъкнете 3D клъстерна колонна диаграма за избраните данни.</value>
+    <value>Вмъкнете 3D групирана колонна диаграма за избраните данни.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertA3DLineChartToShowTrendsOverTime" xml:space="preserve">
     <value>Вмъкнете 3D линейна диаграма, за да покажете тенденциите във времето.</value>
@@ -5676,7 +5676,7 @@
     <value>Вмъкнете дефинирано име във формулата, която редактирате в момента.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertADoughnutChartToShowProportionsWithACenterHole" xml:space="preserve">
-    <value>Вмъкнете кръгла диаграма, за да покажете пропорциите с централен отвор.</value>
+    <value>Вмъкнете пръстеновидна диаграма, за да покажете пропорциите с централен отвор.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertADrawingShapeOnTheSheet" xml:space="preserve">
     <value>Вмъкнете фигура на чертеж върху листа.</value>
@@ -5691,7 +5691,7 @@
     <value>Вмъкнете хистограма, за да покажете разпределението на стойността.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertAHorizontalBarChartToCompareValuesAcrossCategories" xml:space="preserve">
-    <value>Вмъкнете хоризонтална лентова диаграма, за да сравните стойностите между категориите.</value>
+    <value>Вмъкнете хоризонтална стълбовидна диаграма, за да сравните стойностите между категориите.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertAHyperlinkToAWebPageFileOrLocationInTheWorkbook" xml:space="preserve">
     <value>Вмъкнете хипервръзка към уеб страница, файл или местоположение в работната книга.</value>
@@ -5700,7 +5700,7 @@
     <value>Вмъкнете линейна диаграма, за да покажете тенденциите във времето.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertALineSparklineATinyChartInASingleCellShowingATrend" xml:space="preserve">
-    <value>Вмъкнете искряща линия - малка диаграма в една клетка, показваща тенденция.</value>
+    <value>Вмъкнете блещукаща линия - малка диаграма в една клетка, показваща тенденция.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertAnAreaChartToShowTrendsWithFilledAreas" xml:space="preserve">
     <value>Вмъкнете областна диаграма, за да покажете тенденциите със запълнени области.</value>
@@ -5724,10 +5724,10 @@
     <value>Вмъкнете специален знак или символ в позицията на курсора.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertAStackedBarChartToShowPartsOfAWholeByCategory" xml:space="preserve">
-    <value>Вмъкнете подредена лентова диаграма, за да покажете части от цяло по категория.</value>
+    <value>Вмъкнете стълбовидна диаграма с наслагване, за да покажете части от цяло по категория.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertAStackedColumnChartToShowPartsOfAWholeByCategory" xml:space="preserve">
-    <value>Вмъкнете подредена колонна диаграма, за да покажете части от цяло по категория.</value>
+    <value>Вмъкнете колонна диаграма с наслагване, за да покажете части от цяло по категория.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertAStockChartFromHighLowCloseOrOpenHighLowCloseData" xml:space="preserve">
     <value>Вмъкнете борсова диаграма от високо-ниско-затварящо или отворено-високо-ниско-затварящо данни.</value>
@@ -5748,7 +5748,7 @@
     <value>Вмъкнете диаграма на каскада, за да покажете текущите промени в стойността.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertAWinLossSparklineShowingPositiveAndNegativeResults" xml:space="preserve">
-    <value>Вмъкнете искряща линия за победа/загуба, показваща положителни и отрицателни резултати.</value>
+    <value>Вмъкнете блещукаща линия печалба/загуба, показваща положителни и отрицателни резултати.</value>
   </data>
   <data name="MainWindow_TooltipDescription_InsertCellsRowsColumnsOrANewSheet" xml:space="preserve">
     <value>Вмъкване на клетки, редове, колони или нов лист.</value>
@@ -5835,7 +5835,7 @@
     <value>Отворете предварително попълнен проблем на GitHub с диагностика на безопасно приложение.</value>
   </data>
   <data name="MainWindow_TooltipDescription_OpenChartAreaPlotAreaAndLegendFormattingOptions" xml:space="preserve">
-    <value>Опции за форматиране на отворена област на диаграма, област на графика и легенда.</value>
+    <value>Отваря опциите за форматиране на областта на диаграмата, областта на чертане и легендата.</value>
   </data>
   <data name="MainWindow_TooltipDescription_OpenExcelLikeErrorBarOptionsForTheCurrentChart" xml:space="preserve">
     <value>Отворете подобни на Excel опции за лента за грешки за текущата диаграма.</value>
@@ -5988,10 +5988,10 @@
     <value>Задайте мащаб на балон, отрицателна видимост на балон и представяне на размера.</value>
   </data>
   <data name="MainWindow_TooltipDescription_SetFirstSliceAngleExplodedSliceAndDoughnutHoleSize" xml:space="preserve">
-    <value>Задайте ъгъл на първия срез, разглобен срез и размер на отвора за поничка.</value>
+    <value>Задайте ъгъл на първия сектор, изваден сектор и размер на отвора на пръстеновидната диаграма.</value>
   </data>
   <data name="MainWindow_TooltipDescription_SetGapWidthAndOverlapPercentageForBarAndColumnCharts" xml:space="preserve">
-    <value>Задайте ширина на празнина и процент на припокриване за лентови и колонни диаграми.</value>
+    <value>Задайте ширина на празнина и процент на припокриване за стълбовидни и колонни диаграми.</value>
   </data>
   <data name="MainWindow_TooltipDescription_SetOrClearThePrintAreaForTheCurrentSheet" xml:space="preserve">
     <value>Задайте или изчистете областта за печат за текущия лист.</value>
@@ -6021,7 +6021,7 @@
     <value>Показване на повече десетични знаци.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ShowOrHideATrendlineOnTheCurrentColumnOrLineChart" xml:space="preserve">
-    <value>Показване или скриване на тренд линия на текущата колонна или линейна диаграма.</value>
+    <value>Показване или скриване на линия на тенденцията на текущата колонна или линейна диаграма.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ShowOrHideBoxedCalloutStyleDataLabels" xml:space="preserve">
     <value>Показване или скриване на етикети с данни в стил на пояснения в кутия.</value>
@@ -6054,10 +6054,10 @@
     <value>Показване или скриване на прозореца на задачите с полета на обобщена таблица.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ShowOrHideTheTrendlineEquationOnTheCurrentChart" xml:space="preserve">
-    <value>Показване или скриване на уравнението на тренд линията на текущата диаграма.</value>
+    <value>Показване или скриване на уравнението на линията на тенденцията на текущата диаграма.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ShowOrHideTheTrendlineRSquaredValueOnTheCurrentChart" xml:space="preserve">
-    <value>Показване или скриване на R-квадратната стойност на тренд линията на текущата диаграма.</value>
+    <value>Показване или скриване на R-квадрат стойността на линията на тенденцията на текущата диаграма.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ShowOrHideValueLabelsOnTheCurrentChart" xml:space="preserve">
     <value>Показване или скриване на етикети със стойности на текущата диаграма.</value>
@@ -6108,7 +6108,7 @@
     <value>Съхранявайте подредбата на прозореца на работната книга, която да използвате, когато е наличен хостинг с множество прозорци.</value>
   </data>
   <data name="MainWindow_TooltipDescription_SwitchTheCurrentChartTrendlineBetweenSupportedExcelLikeTrendlineTypes" xml:space="preserve">
-    <value>Превключете текущата линия на тенденция на диаграмата между поддържаните типове линии на тенденция, подобни на Excel.</value>
+    <value>Превключва текущата линия на тенденцията на диаграмата между поддържаните типове тенденция/регресия, подобни на Excel.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
     <value>Изберете без ефект, сянка, блясък или меки ръбове за избраната форма.</value>
@@ -6141,7 +6141,7 @@
     <value>Превключване на стила на заглавката на реда за избраната обобщена таблица.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleWhetherTheLegendOverlaysThePlotArea" xml:space="preserve">
-    <value>Превключете дали легендата да се наслагва върху областта на графиката.</value>
+    <value>Превключва дали легендата да се наслагва върху областта на чертане.</value>
   </data>
   <data name="MainWindow_TooltipDescription_UnderlineTheSelectedTextCtrlU" xml:space="preserve">
     <value>Подчертайте избрания текст (Ctrl+U).</value>
@@ -6165,13 +6165,13 @@
     <value>Вижте правни бележки, бележки за поверителност и трети страни, пакетирани с FreeX.</value>
   </data>
   <data name="MainWindow_TooltipTitle_100StackedBarChart" xml:space="preserve">
-    <value>100% подредена стълбовидна диаграма</value>
+    <value>100% стълбовидна диаграма с наслагване</value>
   </data>
   <data name="MainWindow_TooltipTitle_100StackedColumnChart" xml:space="preserve">
-    <value>100% подредена колонна диаграма</value>
+    <value>100% колонна диаграма с наслагване</value>
   </data>
   <data name="MainWindow_TooltipTitle_3DAreaChart" xml:space="preserve">
-    <value>3D областна диаграма</value>
+    <value>3D площна диаграма</value>
   </data>
   <data name="MainWindow_TooltipTitle_3DBarChart" xml:space="preserve">
     <value>3D стълбовидна диаграма</value>
@@ -6309,7 +6309,7 @@
     <value>Промяна на източника на данни</value>
   </data>
   <data name="MainWindow_TooltipTitle_ChartAreaFill" xml:space="preserve">
-    <value>Попълване на областта на диаграмата</value>
+    <value>Запълване на областта на диаграмата</value>
   </data>
   <data name="MainWindow_TooltipTitle_ChartStyles" xml:space="preserve">
     <value>Стилове на диаграми</value>
@@ -6348,7 +6348,7 @@
     <value>Заглавки на колони</value>
   </data>
   <data name="MainWindow_TooltipTitle_ColumnSparkline" xml:space="preserve">
-    <value>Колона Sparkline</value>
+    <value>Колонна блещукаща линия</value>
   </data>
   <data name="MainWindow_TooltipTitle_ComboChart" xml:space="preserve">
     <value>Комбинирана диаграма</value>
@@ -6372,7 +6372,7 @@
     <value>Свържете се с поддръжката</value>
   </data>
   <data name="MainWindow_TooltipTitle_Copy" xml:space="preserve">
-    <value>копие</value>
+    <value>Копирай</value>
   </data>
   <data name="MainWindow_TooltipTitle_CopyDiagnostics" xml:space="preserve">
     <value>Копиране на диагностика</value>
@@ -6387,7 +6387,7 @@
     <value>Персонализирани изгледи</value>
   </data>
   <data name="MainWindow_TooltipTitle_Cut" xml:space="preserve">
-    <value>Изрежете</value>
+    <value>Изрежи</value>
   </data>
   <data name="MainWindow_TooltipTitle_DataCallout" xml:space="preserve">
     <value>Пояснение за данни</value>
@@ -6399,7 +6399,7 @@
     <value>Граница на етикета с данни</value>
   </data>
   <data name="MainWindow_TooltipTitle_DataLabelFill" xml:space="preserve">
-    <value>Попълване на етикет с данни</value>
+    <value>Запълване на етикет с данни</value>
   </data>
   <data name="MainWindow_TooltipTitle_DataLabelPosition" xml:space="preserve">
     <value>Позиция на етикета с данни</value>
@@ -6447,10 +6447,10 @@
     <value>Изтриване на часовник</value>
   </data>
   <data name="MainWindow_TooltipTitle_DoughnutChart" xml:space="preserve">
-    <value>Понична диаграма</value>
+    <value>Пръстеновидна диаграма</value>
   </data>
   <data name="MainWindow_TooltipTitle_DoughnutHoleSize" xml:space="preserve">
-    <value>Размер на отвора за поничка</value>
+    <value>Размер на отвора на пръстеновидна диаграма</value>
   </data>
   <data name="MainWindow_TooltipTitle_DrawWithTouch" xml:space="preserve">
     <value>Рисувайте с докосване</value>
@@ -6498,7 +6498,7 @@
     <value>Настройки на полето</value>
   </data>
   <data name="MainWindow_TooltipTitle_Fill" xml:space="preserve">
-    <value>Напълнете</value>
+    <value>Запълване</value>
   </data>
   <data name="MainWindow_TooltipTitle_FillColor" xml:space="preserve">
     <value>Цвят на запълване</value>
@@ -6516,7 +6516,7 @@
     <value>Ъгъл на първи срез</value>
   </data>
   <data name="MainWindow_TooltipTitle_FlashFill" xml:space="preserve">
-    <value>Светкавично попълване</value>
+    <value>Примерно запълване</value>
   </data>
   <data name="MainWindow_TooltipTitle_Font" xml:space="preserve">
     <value>Шрифт</value>
@@ -6537,7 +6537,7 @@
     <value>Форматиране като таблица</value>
   </data>
   <data name="MainWindow_TooltipTitle_FormatBarColumn" xml:space="preserve">
-    <value>Форматиране на лента/колона</value>
+    <value>Форматиране на стълбовидна/колонна диаграма</value>
   </data>
   <data name="MainWindow_TooltipTitle_FormatBubbleChart" xml:space="preserve">
     <value>Форматиране на балонна диаграма</value>
@@ -6549,10 +6549,10 @@
     <value>Форматиране на етикет на точка от данни</value>
   </data>
   <data name="MainWindow_TooltipTitle_FormatPainter" xml:space="preserve">
-    <value>Копиране на формат</value>
+    <value>Копиране на формати</value>
   </data>
   <data name="MainWindow_TooltipTitle_FormatPieDoughnut" xml:space="preserve">
-    <value>Форматиране на пай/поничка</value>
+    <value>Форматиране на кръгова/пръстеновидна диаграма</value>
   </data>
   <data name="MainWindow_TooltipTitle_FormatStockChart" xml:space="preserve">
     <value>Форматиране на борсова диаграма</value>
@@ -6639,7 +6639,7 @@
     <value>Вмъкване на лист</value>
   </data>
   <data name="MainWindow_TooltipTitle_InsertSlicer" xml:space="preserve">
-    <value>Поставете слайсер</value>
+    <value>Вмъкване на сегментатор</value>
   </data>
   <data name="MainWindow_TooltipTitle_InsertTimeline" xml:space="preserve">
     <value>Вмъкване на времева линия</value>
@@ -6660,7 +6660,7 @@
     <value>Легенда Граница</value>
   </data>
   <data name="MainWindow_TooltipTitle_LegendFill" xml:space="preserve">
-    <value>Попълване на легенда</value>
+    <value>Запълване на легенда</value>
   </data>
   <data name="MainWindow_TooltipTitle_LegendFontSize" xml:space="preserve">
     <value>Размер на шрифта на легендата</value>
@@ -6675,7 +6675,7 @@
     <value>Линейна диаграма</value>
   </data>
   <data name="MainWindow_TooltipTitle_LineSparkline" xml:space="preserve">
-    <value>Линия Sparkline</value>
+    <value>Линейна блещукаща линия</value>
   </data>
   <data name="MainWindow_TooltipTitle_LocalAccount" xml:space="preserve">
     <value>Локален акаунт</value>
@@ -6786,7 +6786,7 @@
     <value>Диаграма на Парето</value>
   </data>
   <data name="MainWindow_TooltipTitle_Paste" xml:space="preserve">
-    <value>Залепете</value>
+    <value>Постави</value>
   </data>
   <data name="MainWindow_TooltipTitle_Pen" xml:space="preserve">
     <value>Писалка</value>
@@ -6816,7 +6816,7 @@
     <value>Обобщена диаграма</value>
   </data>
   <data name="MainWindow_TooltipTitle_PivotChartOptions" xml:space="preserve">
-    <value>Опции на PivotChart</value>
+    <value>Опции на обобщена диаграма</value>
   </data>
   <data name="MainWindow_TooltipTitle_PivotTable" xml:space="preserve">
     <value>обобщена таблица</value>
@@ -6831,10 +6831,10 @@
     <value>Стилове на обобщена таблица</value>
   </data>
   <data name="MainWindow_TooltipTitle_PlotAreaBorder" xml:space="preserve">
-    <value>Граница на площта на парцела</value>
+    <value>Граница на областта на чертане</value>
   </data>
   <data name="MainWindow_TooltipTitle_PlotAreaFill" xml:space="preserve">
-    <value>Попълване на площта на парцела</value>
+    <value>Запълване на областта на чертане</value>
   </data>
   <data name="MainWindow_TooltipTitle_PolynomialOrder" xml:space="preserve">
     <value>Ред на полиномите</value>
@@ -6873,7 +6873,7 @@
     <value>Радарна диаграма</value>
   </data>
   <data name="MainWindow_TooltipTitle_Reapply" xml:space="preserve">
-    <value>Кандидатствайте отново</value>
+    <value>Приложи отново</value>
   </data>
   <data name="MainWindow_TooltipTitle_Recent" xml:space="preserve">
     <value>Скорошни</value>
@@ -6882,10 +6882,10 @@
     <value>Наскоро използван</value>
   </data>
   <data name="MainWindow_TooltipTitle_RecommendedCharts" xml:space="preserve">
-    <value>Препоръчани графики</value>
+    <value>Препоръчани диаграми</value>
   </data>
   <data name="MainWindow_TooltipTitle_RecommendedPivotTables" xml:space="preserve">
-    <value>Препоръчителни обобщени таблици</value>
+    <value>Препоръчани обобщени таблици</value>
   </data>
   <data name="MainWindow_TooltipTitle_Redo" xml:space="preserve">
     <value>Повторете</value>
@@ -7020,10 +7020,10 @@
     <value>Сплит</value>
   </data>
   <data name="MainWindow_TooltipTitle_StackedBarChart" xml:space="preserve">
-    <value>Подредена стълбовидна диаграма</value>
+    <value>Стълбовидна диаграма с наслагване</value>
   </data>
   <data name="MainWindow_TooltipTitle_StackedColumnChart" xml:space="preserve">
-    <value>Подредена колонна диаграма</value>
+    <value>Колонна диаграма с наслагване</value>
   </data>
   <data name="MainWindow_TooltipTitle_StockChart" xml:space="preserve">
     <value>Борсова диаграма</value>
@@ -7092,22 +7092,22 @@
     <value>Дървовидна карта</value>
   </data>
   <data name="MainWindow_TooltipTitle_Trendline" xml:space="preserve">
-    <value>Линия на тенденция</value>
-  </data>
-  <data name="MainWindow_TooltipTitle_TrendlineColor" xml:space="preserve">
-    <value>Trendline Цвят</value>
-  </data>
-  <data name="MainWindow_TooltipTitle_TrendlineDash" xml:space="preserve">
     <value>Линия на тенденцията</value>
   </data>
+  <data name="MainWindow_TooltipTitle_TrendlineColor" xml:space="preserve">
+    <value>Цвят на линия на тенденцията</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_TrendlineDash" xml:space="preserve">
+    <value>Тирета на линия на тенденцията</value>
+  </data>
   <data name="MainWindow_TooltipTitle_TrendlineEquation" xml:space="preserve">
-    <value>Уравнение на трендовата линия</value>
+    <value>Уравнение на линия на тенденцията</value>
   </data>
   <data name="MainWindow_TooltipTitle_TrendlineType" xml:space="preserve">
-    <value>Тип линия на тренда</value>
+    <value>Тип тенденция</value>
   </data>
   <data name="MainWindow_TooltipTitle_TrendlineWidth" xml:space="preserve">
-    <value>Ширина на линията на тренда</value>
+    <value>Ширина на линия на тенденцията</value>
   </data>
   <data name="MainWindow_TooltipTitle_Underline" xml:space="preserve">
     <value>Подчертайте</value>
@@ -7149,13 +7149,13 @@
     <value>Какво ново</value>
   </data>
   <data name="MainWindow_TooltipTitle_WinLossSparkline" xml:space="preserve">
-    <value>Спарлайн за победа/загуба</value>
+    <value>Блещукаща линия печалба/загуба</value>
   </data>
   <data name="MainWindow_TooltipTitle_WorkbookStatistics" xml:space="preserve">
     <value>Статистика на работната книга</value>
   </data>
   <data name="MainWindow_TooltipTitle_WrapText" xml:space="preserve">
-    <value>Обвиване на текст</value>
+    <value>Текст на повече редове</value>
   </data>
   <data name="MainWindow_TooltipTitle_XAxisBounds" xml:space="preserve">
     <value>Граници на оста X</value>
@@ -8916,7 +8916,7 @@
     <value>_търсене:</value>
   </data>
   <data name="PivotFieldFilter_SearchPivotTableFilterItems" xml:space="preserve">
-    <value>Търсене на елементи от филтъра PivotTable</value>
+    <value>Търсене на елементи от филтъра на обобщена таблица</value>
   </data>
   <data name="PivotFieldFilter_SelectAll" xml:space="preserve">
     <value>_Изберете Всички</value>
@@ -8943,7 +8943,7 @@
     <value>Отворете диалоговия прозорец за филтриране на пълна стойност, за да филтрирате елементи от обобщена таблица по обобщени стойности.</value>
   </data>
   <data name="PivotFieldFilter_AddAtLeastOnePivotTableValueFieldToUseValueFilters" xml:space="preserve">
-    <value>Добавете поне едно поле за стойност на PivotTable, за да използвате филтри за стойности.</value>
+    <value>Добавете поне едно поле за стойност на обобщена таблица, за да използвате филтри за стойности.</value>
   </data>
   <data name="PivotFieldFilter_ValueFilter" xml:space="preserve">
     <value>_Филтър за стойност...</value>
@@ -10326,58 +10326,58 @@
     <value>_Ширина на колоната:</value>
   </data>
   <data name="Sparkline_SelectDataRange" xml:space="preserve">
-    <value>_Изберете Обхват на данните</value>
+    <value>_Изберете диапазон на данните</value>
   </data>
   <data name="Sparkline_SelectDataRange2" xml:space="preserve">
-    <value>Изберете Обхват на данните</value>
+    <value>Изберете диапазон на данните</value>
   </data>
   <data name="Sparkline_SelectLocationRange" xml:space="preserve">
-    <value>_Изберете Обхват на местоположението</value>
+    <value>_Изберете диапазон на местоположението</value>
   </data>
   <data name="Sparkline_SelectLocationRange2" xml:space="preserve">
-    <value>Изберете Обхват на местоположението</value>
+    <value>Изберете диапазон на местоположението</value>
   </data>
   <data name="Sparkline_InsertSparkline" xml:space="preserve">
-    <value>Вмъкване на Sparkline</value>
+    <value>Вмъкване на блещукаща линия</value>
   </data>
   <data name="Sparkline_DataRange" xml:space="preserve">
-    <value>_Обхват на данните:</value>
+    <value>_Диапазон на данните:</value>
   </data>
   <data name="Sparkline_LocationRange" xml:space="preserve">
-    <value>_Обхват на местоположението:</value>
+    <value>_Диапазон на местоположението:</value>
   </data>
   <data name="Sparkline_SparklineType" xml:space="preserve">
-    <value>_Тип искряща линия:</value>
+    <value>_Тип блещукаща линия:</value>
   </data>
   <data name="Sparkline_SelectSparklineDataRange" xml:space="preserve">
-    <value>Изберете диапазон от данни на искряща линия</value>
+    <value>Изберете диапазон от данни за блещукаща линия</value>
   </data>
   <data name="Sparkline_SelectTheWorksheetDataRangeForTheSparkline" xml:space="preserve">
-    <value>Изберете диапазона от данни на работния лист за искрящата линия.</value>
+    <value>Изберете диапазона от данни на работния лист за блещукащата линия.</value>
   </data>
   <data name="Sparkline_SelectSparklineLocationRange" xml:space="preserve">
-    <value>Изберете диапазон на местоположението на искрящата линия</value>
+    <value>Изберете диапазон на местоположението на блещукащата линия</value>
   </data>
   <data name="Sparkline_SelectTheDestinationCellForTheSparkline" xml:space="preserve">
-    <value>Изберете целевата клетка за искрящата линия.</value>
+    <value>Изберете целевата клетка за блещукащата линия.</value>
   </data>
   <data name="Sparkline_SparklineDataRange" xml:space="preserve">
-    <value>Диапазон от данни на Sparkline</value>
+    <value>Диапазон от данни за блещукаща линия</value>
   </data>
   <data name="Sparkline_EnterTheWorksheetDataRangeForTheSparkline" xml:space="preserve">
-    <value>Въведете диапазона от данни на работния лист за искрящата линия.</value>
+    <value>Въведете диапазона от данни на работния лист за блещукащата линия.</value>
   </data>
   <data name="Sparkline_SparklineLocationRange" xml:space="preserve">
-    <value>Диапазон на местоположението на Sparkline</value>
+    <value>Диапазон на местоположението на блещукаща линия</value>
   </data>
   <data name="Sparkline_EnterTheDestinationCellForTheSparkline" xml:space="preserve">
-    <value>Въведете целевата клетка за искрящата линия.</value>
+    <value>Въведете целевата клетка за блещукащата линия.</value>
   </data>
   <data name="Sparkline_SparklineTypeAutomationName" xml:space="preserve">
-    <value>Тип искряща линия</value>
+    <value>Тип блещукаща линия</value>
   </data>
   <data name="Sparkline_ChooseWhetherTheSparklineIsLineColumnOrWinLoss" xml:space="preserve">
-    <value>Изберете дали искрящата линия да е линия, колона или печалба/загуба.</value>
+    <value>Изберете дали блещукащата линия да е линейна, колонна или печалба/загуба.</value>
   </data>
   <data name="Consolidate_Delete" xml:space="preserve">
     <value>_Изтриване</value>
@@ -10644,7 +10644,7 @@
     <value>_Показване на данни в скрити редове и колони</value>
   </data>
   <data name="PivotChartOptions_PivotChartOptions" xml:space="preserve">
-    <value>Опции на PivotChart</value>
+    <value>Опции на обобщена диаграма</value>
   </data>
   <data name="PivotChartOptions_ChartStyle" xml:space="preserve">
     <value>_Стил на диаграмата</value>
@@ -10653,7 +10653,7 @@
     <value>_Празни клетки</value>
   </data>
   <data name="PivotChartOptions_PivotChartStyleGallery" xml:space="preserve">
-    <value>Галерия в стил PivotChart</value>
+    <value>Галерия със стилове на обобщени диаграми</value>
   </data>
   <data name="WorkbookStatistics_WorkbookStatistics" xml:space="preserve">
     <value>Статистика на работната книга</value>
@@ -10848,13 +10848,13 @@
     <value>Промяна на типа обобщена диаграма</value>
   </data>
   <data name="PivotChartType_RecommendedPivotCharts" xml:space="preserve">
-    <value>_Препоръчителни обобщени диаграми</value>
+    <value>_Препоръчани обобщени диаграми</value>
   </data>
   <data name="PivotChartType_ChartCategoriesAndChartSubtypeGalleryMatchTheInsertChartPicker" xml:space="preserve">
     <value>Категориите на диаграмата и галерията с подтипове на диаграма съответстват на инструмента за избор на Вмъкване на диаграма.</value>
   </data>
   <data name="PivotChartType_AllCharts" xml:space="preserve">
-    <value>_Всички класации</value>
+    <value>_Всички диаграми</value>
   </data>
   <data name="Subtotal_Subtotal" xml:space="preserve">
     <value>Междинна сума</value>
@@ -11052,7 +11052,7 @@
     <value>Изброява наблюдаваните клетки с тяхната работна книга, лист, адрес, стойност и формула.</value>
   </data>
   <data name="PivotSlicerTimeline_InsertSlicer" xml:space="preserve">
-    <value>Поставете слайсер</value>
+    <value>Вмъкване на сегментатор</value>
   </data>
   <data name="PivotSlicerTimeline_InsertTimeline" xml:space="preserve">
     <value>Вмъкване на времева линия</value>
@@ -11391,7 +11391,7 @@
     <value>_Стил на обобщена таблица:</value>
   </data>
   <data name="PivotStyleGallery_PivotTableStyleGallery" xml:space="preserve">
-    <value>Галерия в стил PivotTable</value>
+    <value>Галерия със стилове на обобщени таблици</value>
   </data>
   <data name="ScenarioManager_PreventChanges" xml:space="preserve">
     <value>_Предотвратете промените</value>
@@ -12240,7 +12240,7 @@
     <value>Извадете копираните стойности от целевите стойности.</value>
   </data>
   <data name="PasteSpecial_PasteGroup" xml:space="preserve">
-    <value>Залепете</value>
+    <value>Постави</value>
   </data>
   <data name="PivotCalculated_AvailableFieldsLabel" xml:space="preserve">
     <value>_Налични полета</value>
@@ -12375,7 +12375,7 @@
     <value>Изберете поле за свързване.</value>
   </data>
   <data name="PivotSlicerTimeline_SlicerCaptionLabel" xml:space="preserve">
-    <value>_Надпис за слайсер</value>
+    <value>_Надпис на сегментатор</value>
   </data>
   <data name="PivotSlicerTimeline_TimelineCaptionLabel" xml:space="preserve">
     <value>_Надпис на времевата линия</value>
@@ -12816,10 +12816,10 @@
     <value>Наслагванията с комбинирани линии изискват поддържана диаграма с поне две серии от данни.</value>
   </data>
   <data name="MainWindowMessage_ChartDoughnutHoleSizeUnsupported" xml:space="preserve">
-    <value>Размерът на отвора за понички се отнася само за диаграми с понички.</value>
+    <value>Размерът на отвора се отнася само за пръстеновидни диаграми.</value>
   </data>
   <data name="MainWindowMessage_ChartExplodedSliceUnsupported" xml:space="preserve">
-    <value>Разглобените срезове изискват кръгова или кръгова диаграма с данни от диаграмата.</value>
+    <value>Извадените сектори изискват кръгова или пръстеновидна диаграма с данни от диаграмата.</value>
   </data>
   <data name="MainWindowMessage_ChartFamilyDeferred" xml:space="preserve">
     <value>Това семейство диаграми се запазва при отваряне на XLSX файлове, но авторството и изобразяването се отлагат, докато моделът на данните и изобразителят не бъдат внедрени.</value>
@@ -12828,10 +12828,10 @@
     <value>Семейство диаграми е отложено</value>
   </data>
   <data name="MainWindowMessage_ChartFirstSliceAngleUnsupported" xml:space="preserve">
-    <value>Ъгълът на първия срез се прилага само за кръгови и кръгови диаграми.</value>
+    <value>Ъгълът на първия сектор се прилага само за кръгови и пръстеновидни диаграми.</value>
   </data>
   <data name="MainWindowMessage_ChartGapWidthUnsupported" xml:space="preserve">
-    <value>Ширината на пропуска и припокриването се прилагат само за лентови и колонни диаграми.</value>
+    <value>Ширината на празнината и припокриването се прилагат само за стълбовидни и колонни диаграми.</value>
   </data>
   <data name="MainWindowMessage_ChartInvalidDataRange" xml:space="preserve">
     <value>Въведете валиден диапазон от данни на диаграмата.</value>
@@ -12897,7 +12897,7 @@
     <value>Вмъкнете или изберете балонна диаграма, преди да промените опциите за балончета.</value>
   </data>
   <data name="MainWindowMessage_ChartSelectDoughnutForHoleSize" xml:space="preserve">
-    <value>Вмъкнете или изберете кръгла диаграма, преди да промените размера на отвора.</value>
+    <value>Вмъкнете или изберете пръстеновидна диаграма, преди да промените размера на отвора.</value>
   </data>
   <data name="MainWindowMessage_ChartSelectForChartAreaFormatting" xml:space="preserve">
     <value>Вмъкнете или изберете диаграма, преди да промените форматирането на областта на диаграмата.</value>
@@ -12936,19 +12936,19 @@
     <value>Вмъкнете или изберете диаграма, преди да редактирате заглавията на диаграмата.</value>
   </data>
   <data name="MainWindowMessage_ChartSelectForTrendlineInformation" xml:space="preserve">
-    <value>Вмъкнете или изберете диаграма, преди да промените информацията за линията на тренда.</value>
+    <value>Вмъкнете или изберете диаграма, преди да промените информацията за линията на тенденцията.</value>
   </data>
   <data name="MainWindowMessage_ChartSelectForTrendlines" xml:space="preserve">
-    <value>Вмъкнете или изберете диаграма, преди да промените линиите на тренда.</value>
+    <value>Вмъкнете или изберете диаграма, преди да промените линиите на тенденцията.</value>
   </data>
   <data name="MainWindowMessage_ChartSelectPieDoughnutForExplode" xml:space="preserve">
-    <value>Вмъкнете или изберете кръгова или кръгла диаграма, преди да разглобите парче.</value>
+    <value>Вмъкнете или изберете кръгова или пръстеновидна диаграма, преди да извадите сектор.</value>
   </data>
   <data name="MainWindowMessage_ChartSelectPieDoughnutForFirstSliceAngle" xml:space="preserve">
-    <value>Вмъкнете или изберете кръгова или кръгова диаграма, преди да промените ъгъла на първия срез.</value>
+    <value>Вмъкнете или изберете кръгова или пръстеновидна диаграма, преди да промените ъгъла на първия сектор.</value>
   </data>
   <data name="MainWindowMessage_ChartSelectPieDoughnutForOptions" xml:space="preserve">
-    <value>Вмъкнете или изберете пай или кръгова диаграма, преди да промените опциите за пай.</value>
+    <value>Вмъкнете или изберете кръгова или пръстеновидна диаграма, преди да промените опциите за кръгова диаграма.</value>
   </data>
   <data name="MainWindowMessage_ChartSelectStockForOptions" xml:space="preserve">
     <value>Вмъкнете или изберете борсова диаграма, преди да промените опциите за акции.</value>
@@ -12966,10 +12966,10 @@
     <value>Целевият лист не е намерен.</value>
   </data>
   <data name="MainWindowMessage_ChartTrendlineInformationSupportedTypes" xml:space="preserve">
-    <value>Понастоящем информацията за линията на тренда се поддържа за колонни, линейни, лентови, точкови, балонни и площни диаграми.</value>
+    <value>Понастоящем информацията за линията на тенденцията се поддържа за колонни, линейни, стълбовидни, точкови, балонни и площни диаграми.</value>
   </data>
   <data name="MainWindowMessage_ChartTrendlinesSupportedTypes" xml:space="preserve">
-    <value>Понастоящем линиите на тренда се поддържат за колонни, линейни, лентови, точкови, балонни и площни диаграми.</value>
+    <value>Понастоящем линиите на тенденцията се поддържат за колонни, линейни, стълбовидни, точкови, балонни и площни диаграми.</value>
   </data>
   <data name="MainWindowMessage_ChartXAxisLogScaleSupportedTypes" xml:space="preserve">
     <value>Понастоящем се поддържа логаритмична скала по оста X за стълбовидни, точкови и балонови диаграми със стойности на X оси.</value>
@@ -13045,13 +13045,13 @@
     <value>Лист с прогнози</value>
   </data>
   <data name="MainWindowMessage_FormatBarColumnTitle" xml:space="preserve">
-    <value>Форматиране на лента/колона</value>
+    <value>Форматиране на стълбовидна/колонна диаграма</value>
   </data>
   <data name="MainWindowMessage_FormatBubbleChartTitle" xml:space="preserve">
     <value>Форматиране на балонна диаграма</value>
   </data>
   <data name="MainWindowMessage_FormatPieDoughnutTitle" xml:space="preserve">
-    <value>Форматиране на пай/поничка</value>
+    <value>Форматиране на кръгова/пръстеновидна диаграма</value>
   </data>
   <data name="MainWindowMessage_FormatStockChartTitle" xml:space="preserve">
     <value>Форматиране на борсова диаграма</value>
@@ -13102,7 +13102,7 @@
     <value>Въведете валиден изходен диапазон на обобщена таблица.</value>
   </data>
   <data name="MainWindowMessage_PivotTableMoveCurrentSheetOnly" xml:space="preserve">
-    <value>Move PivotTable понастоящем поддържа дестинации в активния работен лист.</value>
+    <value>Преместване на обобщена таблица понастоящем поддържа дестинации в активния работен лист.</value>
   </data>
   <data name="MainWindowMessage_PivotTableNameAlreadyExists" xml:space="preserve">
     <value>Вече съществува обобщена таблица с това име.</value>
@@ -13114,7 +13114,7 @@
     <value>Преименуване на обобщена таблица</value>
   </data>
   <data name="MainWindowMessage_PivotTableSelectCommandTitle" xml:space="preserve">
-    <value>Изберете PivotTable</value>
+    <value>Избор на обобщена таблица</value>
   </data>
   <data name="MainWindowMessage_PivotTableSelectExistingForAnalyzeAction" xml:space="preserve">
     <value>Изберете клетка в съществуваща обобщена таблица, преди да използвате тази команда.</value>
@@ -13132,7 +13132,7 @@
     <value>Изберете клетка със стойност в съществуваща обобщена таблица, преди да покажете редове с подробности.</value>
   </data>
   <data name="MainWindowMessage_PivotTableSourceMinimumShape" xml:space="preserve">
-    <value>Изходните данни на PivotTable трябва да включват поне две колони и заглавен ред.</value>
+    <value>Изходните данни на обобщената таблица трябва да включват поне две колони и заглавен ред.</value>
   </data>
   <data name="MainWindowMessage_ProtectSheetTitle" xml:space="preserve">
     <value>Защита на листа</value>
@@ -13178,7 +13178,7 @@
     <value>Тук вече има данни. Искате ли да го замените?</value>
   </data>
   <data name="MainWindowMessage_TextToColumnsSingleColumnRequired" xml:space="preserve">
-    <value>Text to Columns работи с една колона наведнъж. Изберете една колона от клетки и опитайте отново.</value>
+    <value>Текст в колони работи с една колона наведнъж. Изберете една колона от клетки и опитайте отново.</value>
   </data>
   <data name="MainWindowMessage_TextToColumnsTitle" xml:space="preserve">
     <value>Текст в колони</value>
@@ -13280,7 +13280,7 @@
     <value>Тази команда</value>
   </data>
   <data name="MainWindowMessage_DrawTitle" xml:space="preserve">
-    <value>Начертайте</value>
+    <value>Рисуване</value>
   </data>
   <data name="MainWindowMessage_ExportErrorTitle" xml:space="preserve">
     <value>Грешка при експортиране</value>
@@ -13344,7 +13344,7 @@
     <value>Невалидна клетка за местоположение.</value>
   </data>
   <data name="MainWindowMessage_InsertSparklineTitle" xml:space="preserve">
-    <value>Вмъкване на Sparkline</value>
+    <value>Вмъкване на блещукаща линия</value>
   </data>
   <data name="MainWindowMessage_NoDrawingObjectOnSheet" xml:space="preserve">
     <value>На този лист няма намерени чертожни обекти.</value>
@@ -13362,7 +13362,7 @@
     <value>Няма намерена снимка на този лист.</value>
   </data>
   <data name="MainWindowMessage_ObjectFillTitle" xml:space="preserve">
-    <value>Попълване на обект</value>
+    <value>Запълване на обект</value>
   </data>
   <data name="MainWindowMessage_ObjectOutlineTitle" xml:space="preserve">
     <value>Очертание на обекта</value>
@@ -13396,7 +13396,7 @@
     <value>Картината не беше намерена.</value>
   </data>
   <data name="MainWindowMessage_ReapplyFilterNoFilter" xml:space="preserve">
-    <value>Приложете филтър, преди да използвате Reapply.</value>
+    <value>Приложете филтър, преди да използвате „Приложи отново“.</value>
   </data>
   <data name="MainWindowMessage_ReapplyFilterTitle" xml:space="preserve">
     <value>Приложете отново филтъра</value>
@@ -13561,7 +13561,7 @@
     <value>Запазване на работна книга</value>
   </data>
   <data name="MainWindow_Header_TableDesign" xml:space="preserve">
-    <value>Дизайн на маса</value>
+    <value>Проектиране на таблица</value>
   </data>
   <data name="MainWindow_Content_TableName" xml:space="preserve">
     <value>Име на таблица</value>
@@ -13570,7 +13570,7 @@
     <value>Преоразмеряване на таблицата</value>
   </data>
   <data name="MainWindow_Content_SummarizeWithPivotTable" xml:space="preserve">
-    <value>Обобщаване с PivotTable</value>
+    <value>Обобщаване с обобщена таблица</value>
   </data>
   <data name="MainWindow_Content_ConvertToRange" xml:space="preserve">
     <value>Преобразуване в диапазон</value>
@@ -13603,7 +13603,7 @@
     <value>Преоразмеряване на таблицата</value>
   </data>
   <data name="MainWindow_TooltipTitle_SummarizeWithPivotTable" xml:space="preserve">
-    <value>Обобщаване с PivotTable</value>
+    <value>Обобщаване с обобщена таблица</value>
   </data>
   <data name="MainWindow_TooltipTitle_ConvertToRange" xml:space="preserve">
     <value>Преобразуване в диапазон</value>
@@ -13687,7 +13687,7 @@
     <value>_Име на таблицата:</value>
   </data>
   <data name="TableDesign_TableRangeLabel" xml:space="preserve">
-    <value>_Обхват на масата:</value>
+    <value>_Диапазон на таблицата:</value>
   </data>
 </root>
 
