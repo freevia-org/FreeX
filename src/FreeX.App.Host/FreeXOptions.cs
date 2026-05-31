@@ -51,6 +51,11 @@ public sealed class FreeXOptions
     // Save
     public string DefaultFormat { get; set; } = ".xlsx";
 
+    // Quick Access Toolbar
+    public bool QuickAccessToolbarBelowRibbon { get; set; }
+    public List<string> QuickAccessToolbarCommands { get; set; } =
+        QuickAccessToolbarCatalog.DefaultCommandIds.ToList();
+
     // Diagnostics
     public bool CrashAnalyticsEnabled { get; set; }
     public bool CrashAnalyticsPrompted { get; set; }

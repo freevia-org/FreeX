@@ -243,6 +243,65 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void CustomQuickAccessToolbar_RebuildsBelowRibbonAndRoutesCustomKeyTips()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.ConfigureQuickAccessToolbar(
+            [
+                QuickAccessToolbarCommandIds.Save,
+                QuickAccessToolbarCommandIds.Undo,
+                QuickAccessToolbarCommandIds.Redo,
+                QuickAccessToolbarCommandIds.Bold,
+                QuickAccessToolbarCommandIds.Italic,
+                QuickAccessToolbarCommandIds.Underline,
+                QuickAccessToolbarCommandIds.Print,
+                QuickAccessToolbarCommandIds.Open,
+                QuickAccessToolbarCommandIds.InsertFunction,
+                QuickAccessToolbarCommandIds.NameManager
+            ],
+            belowRibbon: true);
+
+            harness.TitleBarQatIsVisible.Should().BeFalse();
+            harness.BelowRibbonQatIsVisible.Should().BeTrue();
+            harness.ButtonIsInBelowRibbonQat("NameManagerQatBtn").Should().BeTrue();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.OverlayBadgeTexts.Should().Contain(["1", "4", "01"]);
+
+            harness.SelectActiveCell();
+            harness.HandleKeyTip(Key.D4);
+
+            harness.ActiveCellBold.Should().BeTrue();
+            harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
+    [Fact]
+    public void QuickAccessToolbarCatalogKeyTips_AreUniqueAndPrefixSafe()
+    {
+        var formatter = typeof(MainWindow).GetMethod(
+            "FormatQuickAccessToolbarKeyTip",
+            BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new MissingMethodException(nameof(MainWindow), "FormatQuickAccessToolbarKeyTip");
+
+        var keyTips = Enumerable.Range(1, QuickAccessToolbarCatalog.Commands.Count)
+            .Select(index => (string)formatter.Invoke(null, [index])!)
+            .ToList();
+
+        keyTips.Should().OnlyHaveUniqueItems();
+        keyTips
+            .SelectMany(first => keyTips
+                .Where(second => !string.Equals(first, second, StringComparison.OrdinalIgnoreCase) &&
+                    second.StartsWith(first, StringComparison.OrdinalIgnoreCase))
+                .Select(second => $"{first}->{second}"))
+            .Should()
+            .BeEmpty("top-level QAT keytips must not hold shorter commands hostage as prefixes");
+    }
+
+    [Fact]
     public void ContextualPivotKeyTips_WaitForJaBeforeSelectingAnalyzeTab()
     {
         RunSta(() =>
@@ -1256,11 +1315,13 @@ public sealed class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _updateSsRecentList;
         private readonly MethodInfo _refreshSheetProtectionUi;
         private readonly MethodInfo _hideStartScreen;
+        private readonly MethodInfo _rebuildQuickAccessToolbar;
         private readonly MethodInfo _zoomCustomMenuItemClick;
         private readonly Type _scopeType;
         private readonly FieldInfo _scopeField;
         private readonly FieldInfo _activeMenuField;
         private readonly FieldInfo _recentFilesField;
+        private readonly FieldInfo _optionsField;
         private readonly RecordingUserMessageService _messageService;
 
         private MainWindowHarness(
@@ -1293,6 +1354,8 @@ public sealed class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "RefreshSheetProtectionUi");
             _hideStartScreen = typeof(MainWindow).GetMethod("HideStartScreen", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "HideStartScreen");
+            _rebuildQuickAccessToolbar = typeof(MainWindow).GetMethod("RebuildQuickAccessToolbar", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "RebuildQuickAccessToolbar");
             _zoomCustomMenuItemClick = typeof(MainWindow).GetMethod("ZoomCustomMenuItem_Click", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ZoomCustomMenuItem_Click");
             _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
@@ -1303,6 +1366,8 @@ public sealed class MainWindowRibbonKeyTipTests
                 ?? throw new MissingFieldException(nameof(MainWindow), "_activeRibbonKeyTipMenu");
             _recentFilesField = typeof(MainWindow).GetField("_recentFiles", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_recentFiles");
+            _optionsField = typeof(MainWindow).GetField("_options", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_options");
         }
 
         public string? SelectedRibbonTabHeader =>
@@ -1349,6 +1414,12 @@ public sealed class MainWindowRibbonKeyTipTests
 
         public bool RedoQatIsEnabled =>
             (_window.FindName("RedoQatBtn") as Button)?.IsEnabled == true;
+
+        public bool TitleBarQatIsVisible =>
+            (_window.FindName("TitleBarQatPanel") as FrameworkElement)?.Visibility == Visibility.Visible;
+
+        public bool BelowRibbonQatIsVisible =>
+            (_window.FindName("BelowRibbonQatRoot") as FrameworkElement)?.Visibility == Visibility.Visible;
 
         public bool? NamedButtonIsEnabled(string name) =>
             (_window.FindName(name) as Button)?.IsEnabled;
@@ -1503,6 +1574,20 @@ public sealed class MainWindowRibbonKeyTipTests
             RibbonTooltip.SetKeyTip(button, keyTip);
             PumpDispatcher();
             return originalKeyTip;
+        }
+
+        public bool ButtonIsInBelowRibbonQat(string name) =>
+            _window.FindName(name) is Button button &&
+            ReferenceEquals(button.Parent, _window.FindName("BelowRibbonQatPanel"));
+
+        public void ConfigureQuickAccessToolbar(IReadOnlyList<string> commandIds, bool belowRibbon)
+        {
+            var options = (FreeXOptions)_optionsField.GetValue(_window)!;
+            options.QuickAccessToolbarCommands = commandIds.ToList();
+            options.QuickAccessToolbarBelowRibbon = belowRibbon;
+            _rebuildQuickAccessToolbar.Invoke(_window, null);
+            _window.UpdateLayout();
+            PumpDispatcher();
         }
 
         public IDisposable AddHomeRibbonCommandButton(string keyTip, string title)
@@ -1822,6 +1907,7 @@ public sealed class MainWindowRibbonKeyTipTests
             _window.Activate();
             _messageService.Clear();
             _hideStartScreen.Invoke(_window, null);
+            ConfigureQuickAccessToolbar(QuickAccessToolbarCatalog.DefaultCommandIds, belowRibbon: false);
             if (ActiveMenu is { } activeMenu)
                 activeMenu.IsOpen = false;
             _scopeField.SetValue(_window, Enum.Parse(_scopeType, "None"));
@@ -1845,6 +1931,7 @@ public sealed class MainWindowRibbonKeyTipTests
 
         public void Dispose()
         {
+            ConfigureQuickAccessToolbar(QuickAccessToolbarCatalog.DefaultCommandIds, belowRibbon: false);
             if (ActiveMenu is { } activeMenu)
                 activeMenu.IsOpen = false;
             if (_window.FindName("NumberFormatBox") is ComboBox numberFormatBox)

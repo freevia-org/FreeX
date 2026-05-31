@@ -2706,12 +2706,6 @@
   <data name="DeferredCommand_PivotTable_Title" xml:space="preserve">
     <value>PivotTable</value>
   </data>
-  <data name="DeferredCommand_QuickAccessToolbar_Body" xml:space="preserve">
-    <value>Quick Access Toolbar customization is not persisted in FreeX yet, so there is no custom toolbar state to reset.</value>
-  </data>
-  <data name="DeferredCommand_QuickAccessToolbar_Title" xml:space="preserve">
-    <value>Quick Access Toolbar</value>
-  </data>
   <data name="DeferredCommand_RibbonCustomization_Body" xml:space="preserve">
     <value>Custom ribbon import/export is not implemented in FreeX. Custom Ribbon UI package parts are retained as unsupported XLSX metadata where safe, but FreeX does not run or edit them.</value>
   </data>
@@ -5325,6 +5319,9 @@
   <data name="MainWindow_TooltipDescription_CopyFormattingFromOnePlaceAndApplyItToAnother" xml:space="preserve">
     <value>Copy formatting from one place and apply it to another.</value>
   </data>
+  <data name="MainWindow_TooltipDescription_CreateANewWorkbook" xml:space="preserve">
+    <value>Create a new workbook.</value>
+  </data>
   <data name="MainWindow_TooltipDescription_CopySafeAppVersionRuntimeOSAndSessionDiagnosticsForTesterReports" xml:space="preserve">
     <value>Copy safe app version, runtime, OS, and session diagnostics for tester reports.</value>
   </data>
@@ -5823,6 +5820,9 @@
   <data name="MainWindow_TooltipDescription_OpenAListOfThreadedCommentsOnTheActiveSheet" xml:space="preserve">
     <value>Open a list of threaded comments on the active sheet.</value>
   </data>
+  <data name="MainWindow_TooltipDescription_OpenAnExistingWorkbook" xml:space="preserve">
+    <value>Open an existing workbook.</value>
+  </data>
   <data name="MainWindow_TooltipDescription_OpenAPrefilledGitHubIssueWithSafeAppDiagnostics" xml:space="preserve">
     <value>Open a prefilled GitHub issue with safe app diagnostics.</value>
   </data>
@@ -5855,6 +5855,9 @@
   </data>
   <data name="MainWindow_TooltipDescription_OpenThePrintPreviewAndNativePrintDialogForTheRenderedWorksheet" xml:space="preserve">
     <value>Open the print preview and native print dialog for the rendered worksheet.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_OpenFormatCellsDialogForTheSelection" xml:space="preserve">
+    <value>Open Format Cells for the current selection.</value>
   </data>
   <data name="MainWindow_TooltipDescription_OpenValueFieldSettingsForTheSelectedPivotTableField" xml:space="preserve">
     <value>Open value field settings for the selected PivotTable field.</value>
@@ -5954,6 +5957,9 @@
   </data>
   <data name="MainWindow_TooltipDescription_SaveTheWorkbook" xml:space="preserve">
     <value>Save the workbook.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_SaveTheWorkbookWithANewNameOrFormat" xml:space="preserve">
+    <value>Save the workbook with a new name or format.</value>
   </data>
   <data name="MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile" xml:space="preserve">
     <value>Save the workbook if needed and open Windows Share for the file.</value>
@@ -6146,6 +6152,9 @@
   </data>
   <data name="MainWindow_TooltipDescription_ViewAddShowAndDeleteSavedWorkbookViews" xml:space="preserve">
     <value>View, add, show, and delete saved workbook views.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ZoomTheSelectedRangeToFitTheWindow" xml:space="preserve">
+    <value>Zoom the selected range to fit the window.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ViewCreateEditAndDeleteAllNamedRangesInTheWorkbook" xml:space="preserve">
     <value>View, create, edit, and delete all named ranges in the workbook.</value>
@@ -7211,6 +7220,9 @@
   </data>
   <data name="MainWindow_TooltipTitle_Zoom" xml:space="preserve">
     <value>Zoom</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_Zoom100" xml:space="preserve">
+    <value>100% Zoom</value>
   </data>
   <data name="MainWindow_TooltipTitle_ZoomIn" xml:space="preserve">
     <value>Zoom In</value>
@@ -8915,6 +8927,30 @@
 
 <data name="Options_ChooseCommandsFromPopularCommands" xml:space="preserve">
     <value>Choose commands from: Popular Commands</value>
+  </data>
+
+<data name="Options_AvailableCommands" xml:space="preserve">
+    <value>Available _commands:</value>
+  </data>
+
+<data name="Options_QuickAccessToolbarCommands" xml:space="preserve">
+    <value>Quick Access Toolbar _commands:</value>
+  </data>
+
+<data name="Options_Add" xml:space="preserve">
+    <value>_Add &gt;&gt;</value>
+  </data>
+
+<data name="Options_Remove" xml:space="preserve">
+    <value>&lt;&lt; _Remove</value>
+  </data>
+
+<data name="Options_MoveUp" xml:space="preserve">
+    <value>Move _Up</value>
+  </data>
+
+<data name="Options_MoveDown" xml:space="preserve">
+    <value>Move _Down</value>
   </data>
 
 <data name="Options_ImportExport" xml:space="preserve">
