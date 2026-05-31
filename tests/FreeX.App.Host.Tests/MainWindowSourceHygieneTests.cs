@@ -1395,7 +1395,9 @@ public sealed class MainWindowSourceHygieneTests
         var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
         var lifecycleSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookLifecycle.cs"));
 
-        editingSource.Should().Contain("WorkbookTitleFormatter.Format(_workbook.Name, _workbookDirty, IsWorkbookGrouped())");
+        // Multi-window slice 1 adds an Excel-style per-window number suffix to the shared formatter.
+        editingSource.Should().Contain("WorkbookTitleFormatter.Format(");
+        editingSource.Should().Contain("_workbook.Name, _workbookDirty, IsWorkbookGrouped(), _windowTitleSuffix)");
         lifecycleSource.Should().Contain("_workbookDirty = true;");
         lifecycleSource.Should().Contain("_workbookDirty = false;");
         lifecycleSource.Should().Contain("UpdateTitleBar();");
@@ -2922,6 +2924,37 @@ public sealed class MainWindowSourceHygieneTests
         {
             button.Should().NotContain("local:RibbonTooltip.Description=\"Deferred:");
         }
+    }
+
+    [Fact]
+    public void MultiWindow_RegistersFirstWindowBroadcastsEditsAndAdoptsSharedWorkbookForSecondaryWindows()
+    {
+        var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;
+        var multiWindowSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.MultiWindow.cs"));
+        var startupSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.Startup.cs"));
+        var commandExecutionSource = File.ReadAllText(Path.Combine(appHostDirectory, "MainWindow.CommandExecution.cs"));
+        var appSource = File.ReadAllText(Path.Combine(appHostDirectory, "App.xaml.cs"));
+
+        // Registry is a DI singleton and the live window contract is implemented by MainWindow.
+        appSource.Should().Contain("services.AddSingleton<WorkbookWindowRegistry>();");
+
+        // First window self-registers on load; secondary windows adopt the shared workbook
+        // instead of replacing it via CreateNewWorkbook().
+        startupSource.Should().Contain("if (ShouldAdoptSharedWorkbookOnLoad)");
+        startupSource.Should().Contain("AdoptSharedWorkbook();");
+        startupSource.Should().Contain("RegisterWithWindowRegistry();");
+
+        // New Window resolves a fresh MainWindow from DI; Switch Windows cycles via the registry.
+        multiWindowSource.Should().Contain("App.Services.GetRequiredService<MainWindow>()");
+        multiWindowSource.Should().Contain("_windowRegistry.SwitchToNextWindow(this)");
+        multiWindowSource.Should().Contain("_windowRegistry.Register(this)");
+        multiWindowSource.Should().Contain("_windowRegistry?.Unregister(this)");
+        multiWindowSource.Should().Contain("public void RefreshFromSharedWorkbook()");
+        multiWindowSource.Should().Contain("public void ApplyWindowTitleSuffix(string suffix)");
+
+        // Cross-window live refresh is broadcast from the central post-command paths.
+        commandExecutionSource.Should().Contain("NotifyOtherWindowsOfWorkbookChange();");
+        multiWindowSource.Should().Contain("_windowRegistry?.NotifyWorkbookChanged(this);");
     }
 
     private static string ExtractButtonElementByContent(string xaml, string content)

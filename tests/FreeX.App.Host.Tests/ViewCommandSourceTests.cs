@@ -66,7 +66,9 @@ public sealed class ViewCommandSourceTests
     }
 
     [Theory]
-    [InlineData("New Window", "NW", "ViewWindowCommandBtn_Click")]
+    // New Window and Switch Windows are now live (multi-window slice 1): they route to dedicated
+    // handlers backed by the WorkbookWindowRegistry instead of the deferred-stub planner handler.
+    [InlineData("New Window", "NW", "ViewNewWindowBtn_Click")]
     [InlineData("Arrange All", "A", "ArrangeAllPickerBtn_Click")]
     [InlineData("Freeze Panes", "FP", "FreezePanesPickerBtn_Click")]
     [InlineData("Split", "SP", "SplitViewBtn_Click")]
@@ -75,7 +77,7 @@ public sealed class ViewCommandSourceTests
     [InlineData("View Side by Side", "B", "ViewWindowCommandBtn_Click")]
     [InlineData("Synchronous Scrolling", "SS", "ViewWindowCommandBtn_Click")]
     [InlineData("Reset Window Position", "RP", "ViewWindowCommandBtn_Click")]
-    [InlineData("Switch Windows", "W", "ViewWindowCommandBtn_Click")]
+    [InlineData("Switch Windows", "W", "ViewSwitchWindowsBtn_Click")]
     public void ViewWindowCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string keyTip,

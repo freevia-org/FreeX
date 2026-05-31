@@ -128,6 +128,10 @@ public partial class App : Application
         // Message service
         services.AddSingleton<IUserMessageService, WpfUserMessageService>();
 
+        // Multi-window registry: tracks every live window viewing the single shared workbook
+        // (Excel "New Window"). Singleton so all windows coordinate through one registry.
+        services.AddSingleton<WorkbookWindowRegistry>();
+
         // UI
         services.AddTransient<MainWindow>();
     }
