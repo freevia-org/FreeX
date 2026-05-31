@@ -179,12 +179,18 @@ public sealed class GridViewRenderPerformanceTests
         renderSparklines.Should().Contain("var colLookup = lookups.Columns;");
         source.Should().Contain("private static readonly SolidColorBrush SparklinePositiveBrush");
         source.Should().Contain("private static readonly Pen SparklineLinePen");
+        renderSparklines.Should().Contain("DrawLineSparkline(dc, values, rect, SparklineLinePen)");
+        renderSparklines.Should().Contain("DrawColumnSparkline(dc, values, rect, sparkline.Kind == SparklineKind.WinLoss, SparklinePositiveBrush, SparklineNegativeBrush)");
+        source.Should().Contain("SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer)");
+        source.Should().Contain("SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer)");
         source.Should().NotContain("BuildSparklineRowMetricLookup");
         source.Should().NotContain("BuildSparklineColumnMetricLookup");
         renderSparklines.Should().NotContain(".ToDictionary(");
         renderSparklines.Should().NotContain(".Select(");
         renderSparklines.Should().NotContain("new SolidColorBrush");
         renderSparklines.Should().NotContain("new Pen");
+        source.Should().NotContain("CalculateLineLayout(values, rect)");
+        source.Should().NotContain("CalculateColumnLayout(values, rect, winLoss)");
     }
 
     [Fact]
