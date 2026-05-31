@@ -187,6 +187,20 @@ public sealed class RibbonAdaptivePriorityPlannerTests
     }
 
     [Fact]
+    public void SpaceFillingExpandableGroupIndexes_UseSpareWidthWithoutUndoingRuntimeOverrides()
+    {
+        var groupNames = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline" };
+
+        RibbonAdaptivePriorityPlanner.GetSpaceFillingExpandableGroupIndexes(groupNames, 1120)
+            .Should()
+            .Equal(
+                Array.IndexOf(groupNames, "Get & Transform Data"),
+                Array.IndexOf(groupNames, "Queries & Connections"),
+                Array.IndexOf(groupNames, "Forecast"),
+                Array.IndexOf(groupNames, "Outline"));
+    }
+
+    [Fact]
     public void RuntimeVisibilityProtectedGroupIndexes_ProtectOnlyVisibleRuntimeOverrides()
     {
         var dataGroups = new[] { "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast" };
@@ -219,6 +233,11 @@ public sealed class RibbonAdaptivePriorityPlannerTests
                 ["Arrange", "Format"])
             .Should()
             .BeFalse("Draw no longer surfaces the wide out-of-scope ink groups that needed measured correction");
+
+        RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
+                ["Properties", "Tools", "Table Style Options", "Table Styles"])
+            .Should()
+            .BeTrue("unknown contextual tabs need a measured overflow guard after the pure planner spends spare width");
 
         RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
                 ["Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing"])

@@ -52,15 +52,44 @@ internal static class RibbonAdaptivePriorityPlanner
         double availableWidth,
         string? selectedTabHeader = null)
     {
-        var runtimeOverrideIndexes = GetRuntimeStateOverrides(availableWidth, groupNames, selectedTabHeader)
-            .Concat(GetRuntimeVisibilityOverrides(availableWidth, groupNames, selectedTabHeader))
-            .Select(decision => decision.Index)
-            .ToHashSet();
+        var profileIndexes = RibbonAdaptiveTabProfiles.GetExpandableGroupIndexes(groupNames, availableWidth, selectedTabHeader);
+        var runtimeStateOverrides = GetRuntimeStateOverrides(availableWidth, groupNames, selectedTabHeader);
+        var runtimeVisibilityOverrides = GetRuntimeVisibilityOverrides(availableWidth, groupNames, selectedTabHeader);
+        var indexes = new List<int>(profileIndexes.Count);
+        for (var profileIndex = 0; profileIndex < profileIndexes.Count; profileIndex++)
+        {
+            var index = profileIndexes[profileIndex];
+            if (!ContainsDecisionIndex(runtimeStateOverrides, index) &&
+                !ContainsDecisionIndex(runtimeVisibilityOverrides, index))
+            {
+                indexes.Add(index);
+            }
+        }
 
-        return RibbonAdaptiveTabProfiles
-            .GetExpandableGroupIndexes(groupNames, availableWidth, selectedTabHeader)
-            .Where(index => !runtimeOverrideIndexes.Contains(index))
-            .ToList();
+        return indexes;
+    }
+
+    public static IReadOnlyList<int> GetSpaceFillingExpandableGroupIndexes(
+        IReadOnlyList<string> groupNames,
+        double availableWidth,
+        string? selectedTabHeader = null)
+    {
+        if (availableWidth <= 760)
+            return [];
+
+        var runtimeStateOverrides = GetRuntimeStateOverrides(availableWidth, groupNames, selectedTabHeader);
+        var runtimeVisibilityOverrides = GetRuntimeVisibilityOverrides(availableWidth, groupNames, selectedTabHeader);
+        var indexes = new List<int>(groupNames.Count);
+        for (var index = 0; index < groupNames.Count; index++)
+        {
+            if (!ContainsDecisionIndex(runtimeStateOverrides, index) &&
+                !ContainsDecisionIndex(runtimeVisibilityOverrides, index))
+            {
+                indexes.Add(index);
+            }
+        }
+
+        return indexes;
     }
 
     public static bool RequiresMeasuredCorrection(
@@ -86,6 +115,19 @@ internal static class RibbonAdaptivePriorityPlanner
         }
 
         return states;
+    }
+
+    private static bool ContainsDecisionIndex(
+        IReadOnlyList<RibbonAdaptiveRuntimeStateOverride> decisions,
+        int index)
+    {
+        for (var decisionIndex = 0; decisionIndex < decisions.Count; decisionIndex++)
+        {
+            if (decisions[decisionIndex].Index == index)
+                return true;
+        }
+
+        return false;
     }
 }
 

@@ -67,6 +67,12 @@ internal static class RibbonAdaptiveLayoutEngine
         string? selectedTabHeader = null) =>
         RibbonAdaptivePriorityPlanner.GetExpandableGroupIndexes(GetGroupProfileKeys(groups), availableWidth, selectedTabHeader);
 
+    public static IReadOnlyList<int> GetSpaceFillingExpandableGroupIndexes(
+        IReadOnlyList<RibbonAdaptiveGroup> groups,
+        double availableWidth,
+        string? selectedTabHeader = null) =>
+        RibbonAdaptivePriorityPlanner.GetSpaceFillingExpandableGroupIndexes(GetGroupProfileKeys(groups), availableWidth, selectedTabHeader);
+
     public static bool TryGetNextExpandedState(
         RibbonAdaptiveGroupState state,
         out RibbonAdaptiveGroupState expandedState)
@@ -250,6 +256,43 @@ internal static class RibbonAdaptiveLayoutEngine
                 RollbackStateChanges(states, rollbackIndexes, rollbackStates, rollbackCount);
             }
         }
+
+        var spaceFillingExpandableIndexes = RibbonAdaptivePriorityPlanner
+            .GetSpaceFillingExpandableGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader);
+        madeProgress = true;
+        while (madeProgress)
+        {
+            madeProgress = false;
+            for (var i = 0; i < states.Length; i++)
+            {
+                if (!ContainsIndex(spaceFillingExpandableIndexes, i))
+                    continue;
+
+                var currentState = states[i];
+                if (!TryGetNextExpandedState(currentState, out var expandedState))
+                    continue;
+
+                states[i] = expandedState;
+                if (StatesFit(groups, states, fixedChromeWidth, availableWidth))
+                {
+                    madeProgress = true;
+                    continue;
+                }
+
+                states[i] = currentState;
+            }
+        }
+    }
+
+    private static bool ContainsIndex(IReadOnlyList<int> indexes, int index)
+    {
+        for (var i = 0; i < indexes.Count; i++)
+        {
+            if (indexes[i] == index)
+                return true;
+        }
+
+        return false;
     }
 
     private static bool TryCollapseUnprotectedGroupsToFit(

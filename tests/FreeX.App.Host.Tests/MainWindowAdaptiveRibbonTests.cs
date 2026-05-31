@@ -333,6 +333,22 @@ public sealed class MainWindowAdaptiveRibbonTests
         });
     }
 
+    [Theory]
+    [InlineData(900)]
+    [InlineData(1100)]
+    public void ViewRibbon_WorkbookViewsCommandLabelsDoNotClipAtMediumWidths(double width)
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("View", width);
+
+            harness.ActiveRibbonGroupClippedCommandLabels("Workbook Views").Should().BeEmpty(
+                "Excel keeps the primary View commands readable instead of truncating short labels such as Normal");
+        });
+    }
+
     [Fact]
     public void RibbonTabs_RemainSingleRowAtNarrowWidths()
     {
@@ -570,8 +586,8 @@ public sealed class MainWindowAdaptiveRibbonTests
             {
                 new RibbonFallbackExpectation("Insert", 900, Expanded: ["Tables"], Collapsed: ["Charts"]),
                 new RibbonFallbackExpectation("Data", 1120, Expanded: ["Sort & Filter", "Data Tools", "Forecast"], Collapsed: ["Queries & Connections", "Outline"]),
-                new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Page Setup"], Collapsed: ["Themes", "Arrange"]),
-                new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show", "Zoom"], Collapsed: ["Window"]),
+                new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup"], Collapsed: ["Arrange"]),
+                new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show"], Collapsed: ["Zoom", "Window"]),
                 new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views"], Collapsed: ["Show", "Zoom", "Window"])
             };
 
@@ -584,9 +600,12 @@ public sealed class MainWindowAdaptiveRibbonTests
                 harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
                     expectation.Expanded,
                     $"{expectation.Tab} at {expectation.Width:0}px should keep Excel-style primary groups expanded before lower-priority groups; {harness.DebugActiveRibbonChildren}");
-                harness.CollapsedActiveRibbonGroupNames.Should().Contain(
-                    expectation.Collapsed,
-                    $"{expectation.Tab} at {expectation.Width:0}px should collapse lower-priority groups first; {harness.DebugActiveRibbonChildren}");
+                if (expectation.Collapsed.Count > 0)
+                {
+                    harness.CollapsedActiveRibbonGroupNames.Should().Contain(
+                        expectation.Collapsed,
+                        $"{expectation.Tab} at {expectation.Width:0}px should collapse lower-priority groups first; {harness.DebugActiveRibbonChildren}");
+                }
                 harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                     0.5,
                     $"{expectation.Tab} at {expectation.Width:0}px should fit without a hidden-scroll overflow after fallback ordering; {harness.DebugActiveRibbonChildren}");
@@ -1083,9 +1102,9 @@ public sealed class MainWindowAdaptiveRibbonTests
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.SelectRibbonTab("Formulas", 1465);
+            harness.SelectRibbonTab("Home", 1465);
 
-            harness.HorizontalDropdownZoneClearsCommandLabel("Calculation Options")
+            harness.HorizontalDropdownZoneClearsCommandLabel("Paste")
                 .Should()
                 .BeTrue("the split-button separator should sit below the visible label instead of slicing through it");
         });
