@@ -383,15 +383,45 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 new NumberValue(number),
             "Boolean" when ReadBoolean(text, out var boolean) =>
                 new BoolValue(boolean),
-            "DateTime" when DateTime.TryParse(
-                text,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeLocal,
-                out var dateTime) =>
+            "DateTime" when TryParseSpreadsheetDateTime(text, out var dateTime) =>
                 DateTimeValue.FromDateTime(dateTime),
             "Error" when text.Length > 0 => new ErrorValue(text),
             _ => new TextValue(text)
         };
+    }
+
+    private static bool TryParseSpreadsheetDateTime(string text, out DateTime dateTime)
+    {
+        if (HasExplicitTimeZoneOffset(text) &&
+            DateTimeOffset.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var offset))
+        {
+            dateTime = offset.UtcDateTime;
+            return true;
+        }
+
+        return DateTime.TryParse(
+            text,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out dateTime);
+    }
+
+    private static bool HasExplicitTimeZoneOffset(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.EndsWith('Z') || trimmed.EndsWith('z'))
+            return true;
+
+        var timeSeparator = Math.Max(trimmed.LastIndexOf('T'), trimmed.LastIndexOf(' '));
+        if (timeSeparator < 0)
+            return false;
+
+        var zoneStart = Math.Max(trimmed.LastIndexOf('+'), trimmed.LastIndexOf('-'));
+        return zoneStart > timeSeparator;
     }
 
     private static string? ReadComment(XElement cellElement)
