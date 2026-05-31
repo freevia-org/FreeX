@@ -216,6 +216,9 @@ public sealed class RecalcEngine
 
         foreach (var sheet in workbook.Sheets)
         {
+            if (!sheet.HasFormulas)
+                continue;
+
             foreach (var (addr, cell) in sheet.EnumerateCells())
             {
                 if (!cell.HasFormula || cell.FormulaText is null)

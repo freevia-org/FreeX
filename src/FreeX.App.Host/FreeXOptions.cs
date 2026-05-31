@@ -21,6 +21,8 @@ public enum FreeXObjectDisplay
 
 public sealed class FreeXOptions
 {
+    internal const string OptionsPathEnvironmentVariable = "FREEX_OPTIONS_PATH";
+
     private static readonly JsonSerializerOptions StoreJsonOptions = new()
     {
         WriteIndented = true
@@ -66,11 +68,19 @@ public sealed class FreeXOptions
     [JsonIgnore]
     public string? LastPersistenceError { get; private set; }
 
-    private static readonly string StorePath = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "FreeX", "options.json");
+    private static string StorePath => ResolveStorePath();
 
     public static FreeXOptions Load() => LoadFromPath(StorePath);
+
+    private static string ResolveStorePath()
+    {
+        var overridePath = Environment.GetEnvironmentVariable(OptionsPathEnvironmentVariable);
+        return string.IsNullOrWhiteSpace(overridePath)
+            ? System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "FreeX", "options.json")
+            : overridePath;
+    }
 
     internal static FreeXOptions LoadFromPath(string storePath)
     {

@@ -320,6 +320,7 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.SelectedRibbonTabHeader.Should().Be("PivotTable Analyze");
             harness.KeyTipScope.Should().Be("Commands");
 
+            harness.ShowPivotContextualTabs();
             harness.EnterKeyTipScope("TopLevel");
             harness.HandleKeyTip(Key.J);
             harness.HandleKeyTip(Key.D);

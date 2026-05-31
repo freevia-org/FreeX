@@ -12,24 +12,25 @@ public partial class GridView
         RebuildMergeLookup();
         var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
         var isLiveResizing = IsLiveResizing;
+        var skipHeavyLayers = isLiveResizing || _resizeTarget != ResizeTarget.None;
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, ActualWidth / zoom, ActualHeight / zoom)));
 
         RenderHeaders(dc);
-        if (!isLiveResizing)
+        if (!skipHeavyLayers)
             RenderWorksheetBackground(dc);
         RenderGridLines(dc);
         RenderCells(dc);
         RenderSplitPaneCells(dc);
         if (isLiveResizing)
             RenderLiveResizeContinuation(dc);
-        if (!isLiveResizing)
+        if (!skipHeavyLayers)
         {
             RenderWorksheetViewOverlay(dc);
             RenderSparklines(dc);
             RenderQuickAnalysisPreview(dc);
         }
         RenderSelection(dc);
-        if (!isLiveResizing)
+        if (!skipHeavyLayers)
         {
             RenderFormulaTraceArrows(dc);
             RenderAutofillPreview(dc);
@@ -39,7 +40,7 @@ public partial class GridView
         RenderSplitDivider(dc);
         RenderSplitPaneScrollbarChrome(dc);
         RenderResizeLine(dc);
-        if (!isLiveResizing)
+        if (!skipHeavyLayers)
         {
             if (ObjectDisplayMode == GridObjectDisplayMode.Placeholders)
             {

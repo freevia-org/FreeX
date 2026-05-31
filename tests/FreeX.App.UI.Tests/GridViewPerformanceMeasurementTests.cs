@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -96,7 +97,140 @@ public sealed class GridViewPerformanceMeasurementTests
         });
     }
 
+    [Fact]
+    public void Benchmark_RenderDefaultStyledTextHeavyViewport_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const int iterations = 12;
+            const int width = 1440;
+            const int height = 900;
+            var grid = CreateTextHeavyGrid(width, height, CellStyle.Default);
+
+            RenderOnce(grid, width, height);
+            RenderOnce(grid, width, height);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var timings = new List<double>(iterations);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            for (var i = 0; i < iterations; i++)
+            {
+                var step = Stopwatch.StartNew();
+                RenderOnce(grid, width, height);
+                step.Stop();
+                timings.Add(step.Elapsed.TotalMilliseconds);
+            }
+
+            total.Stop();
+            var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            var ordered = timings.OrderBy(value => value).ToArray();
+            var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+            Console.WriteLine(
+                "PERF GRID_RENDER_DEFAULT_STYLED_TEXT_HEAVY " +
+                $"steps={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+                $"mean_ms={timings.Average():F2} p95_ms={p95:F2} max_ms={ordered[^1]:F2} " +
+                $"allocated_bytes={allocatedBytes:N0}");
+
+            timings.Average().Should().BeGreaterThan(0);
+        });
+    }
+
+    [Fact]
+    public void Benchmark_RenderChartViewportDuringDimensionResize_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const int iterations = 8;
+            const int width = 1440;
+            const int height = 900;
+            var grid = CreateChartGrid(width, height);
+            SetResizeTarget(grid, "Column");
+
+            RenderOnce(grid, width, height);
+            RenderOnce(grid, width, height);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var timings = new List<double>(iterations);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            for (var i = 0; i < iterations; i++)
+            {
+                var step = Stopwatch.StartNew();
+                RenderOnce(grid, width, height);
+                step.Stop();
+                timings.Add(step.Elapsed.TotalMilliseconds);
+            }
+
+            total.Stop();
+            var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            var ordered = timings.OrderBy(value => value).ToArray();
+            var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+            Console.WriteLine(
+                "PERF GRID_RENDER_CHART_DIMENSION_RESIZE " +
+                $"steps={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+                $"mean_ms={timings.Average():F2} p95_ms={p95:F2} max_ms={ordered[^1]:F2} " +
+                $"allocated_bytes={allocatedBytes:N0}");
+
+            timings.Average().Should().BeGreaterThan(0);
+        });
+    }
+
+    [Fact]
+    public void Benchmark_RenderShrinkToFitViewport_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const int iterations = 12;
+            const int width = 1440;
+            const int height = 900;
+            var grid = CreateShrinkToFitGrid(width, height);
+
+            RenderOnce(grid, width, height);
+            RenderOnce(grid, width, height);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var timings = new List<double>(iterations);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            for (var i = 0; i < iterations; i++)
+            {
+                var step = Stopwatch.StartNew();
+                RenderOnce(grid, width, height);
+                step.Stop();
+                timings.Add(step.Elapsed.TotalMilliseconds);
+            }
+
+            total.Stop();
+            var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            var ordered = timings.OrderBy(value => value).ToArray();
+            var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+            Console.WriteLine(
+                "PERF GRID_RENDER_SHRINK_TEXT_HEAVY " +
+                $"steps={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+                $"mean_ms={timings.Average():F2} p95_ms={p95:F2} max_ms={ordered[^1]:F2} " +
+                $"allocated_bytes={allocatedBytes:N0}");
+
+            timings.Average().Should().BeGreaterThan(0);
+        });
+    }
+
     private static GridView CreateTextHeavyGrid(double width, double height)
+        => CreateTextHeavyGrid(width, height, null);
+
+    private static GridView CreateTextHeavyGrid(double width, double height, CellStyle? style)
     {
         const int rowCount = 80;
         const int columnCount = 26;
@@ -126,7 +260,7 @@ public sealed class GridViewPerformanceMeasurementTests
                     null,
                     StyleId.Default,
                     null,
-                    null));
+                    style));
             }
         }
 
@@ -229,12 +363,69 @@ public sealed class GridViewPerformanceMeasurementTests
         return grid;
     }
 
+    private static GridView CreateShrinkToFitGrid(double width, double height)
+    {
+        const int rowCount = 40;
+        const int columnCount = 12;
+        const double rowHeight = 20;
+        const double columnWidth = 56;
+
+        var sheetId = SheetId.New();
+        var rows = Enumerable
+            .Range(0, rowCount)
+            .Select(index => new RowMetric((uint)(index + 1), rowHeight, index * rowHeight))
+            .ToArray();
+        var columns = Enumerable
+            .Range(0, columnCount)
+            .Select(index => new ColMetric((uint)(index + 1), columnWidth, index * columnWidth))
+            .ToArray();
+        var cells = new List<DisplayCell>(rowCount * columnCount);
+        var style = new CellStyle { ShrinkToFit = true };
+        foreach (var row in rows)
+        {
+            foreach (var column in columns)
+            {
+                var text = $"Shrink text R{row.Row:D2} C{column.Col:D2} 1234567890";
+                cells.Add(new DisplayCell(
+                    row.Row,
+                    column.Col,
+                    new TextValue(text),
+                    text,
+                    null,
+                    StyleId.Default,
+                    null,
+                    style));
+            }
+        }
+
+        var grid = new GridView
+        {
+            Width = width,
+            Height = height,
+            Viewport = new ViewportModel(cells, rows, columns),
+            SelectedRange = new GridRange(
+                new CellAddress(sheetId, 1, 1),
+                new CellAddress(sheetId, 1, 1))
+        };
+        grid.Measure(new Size(width, height));
+        grid.Arrange(new Rect(0, 0, width, height));
+        grid.UpdateLayout();
+        return grid;
+    }
+
     private static void RenderOnce(GridView grid, int width, int height)
     {
         grid.InvalidateVisual();
         grid.UpdateLayout();
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(grid);
+    }
+
+    private static void SetResizeTarget(GridView grid, string target)
+    {
+        var field = typeof(GridView).GetField("_resizeTarget", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(nameof(GridView), "_resizeTarget");
+        field.SetValue(grid, Enum.Parse(field.FieldType, target));
     }
 
     private static class StaTestRunner

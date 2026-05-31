@@ -244,7 +244,8 @@ public partial class GridView
 
             var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
             var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
-            var typeface = CreateCellTypeface(style, _typefaceCache);
+            var typefaceKey = CreateCellTypefaceKey(style);
+            var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
             var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
             Brush textBrush = TextBrush;
             if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
@@ -257,27 +258,23 @@ public partial class GridView
                 fontSize = ResolveShrinkFontSize(
                     fontSize,
                     availableWidth,
-                    size => new FormattedText(
-                        cell.DisplayText,
-                        CultureInfo.CurrentCulture,
-                        FlowDirection.LeftToRight,
-                        typeface,
-                        size,
-                        textBrush,
-                        pixelsPerDip).Width,
+                    size => MeasureCellTextWidth(cell.DisplayText, typefaceKey, typeface, size, pixelsPerDip),
                     ToDisplayFontSize(6));
             }
 
-            var text = new FormattedText(
-                cell.DisplayText,
-                CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                typeface,
-                fontSize,
-                textBrush,
-                pixelsPerDip);
+            var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText: false);
+            var text = useDefaultTextLayout
+                ? GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)
+                : new FormattedText(
+                    cell.DisplayText,
+                    CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight,
+                    typeface,
+                    fontSize,
+                    textBrush,
+                    pixelsPerDip);
 
-            if (BuildTextDecorations(style) is { } decorations)
+            if (!useDefaultTextLayout && BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);
 
             var textX = hAlign switch
@@ -483,7 +480,8 @@ public partial class GridView
                 }
             }
 
-            var typeface = CreateCellTypeface(style, _typefaceCache);
+            var typefaceKey = CreateCellTypefaceKey(style);
+            var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
 
             // Excel font sizes are typographic points; WPF measures in DIPs (96 DPI).
             // Snap to whole display DIPs so ClearType does not soften 11pt as 14.667 DIP text.
@@ -500,18 +498,12 @@ public partial class GridView
                 fontSize = ResolveShrinkFontSize(
                     fontSize,
                     availableWidth,
-                    size => new FormattedText(
-                        cell.DisplayText,
-                        CultureInfo.CurrentCulture,
-                        FlowDirection.LeftToRight,
-                        typeface,
-                        size,
-                        textBrush,
-                        pixelsPerDip).Width,
+                    size => MeasureCellTextWidth(cell.DisplayText, typefaceKey, typeface, size, pixelsPerDip),
                     ToDisplayFontSize(6));
             }
 
-            var text = style is null
+            var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);
+            var text = useDefaultTextLayout
                 ? GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)
                 : new FormattedText(
                     cell.DisplayText,
@@ -520,7 +512,7 @@ public partial class GridView
                     typeface, fontSize, textBrush,
                     pixelsPerDip);
 
-            if (BuildTextDecorations(style) is { } decorations)
+            if (!useDefaultTextLayout && BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);
 
             if (wrapText)
