@@ -6,6 +6,8 @@ namespace FreeX.App.Host.Tests;
 public sealed class PivotAnalyzeCommandSourceTests
 {
     [Theory]
+    [InlineData("PivotTable Name", "PivotTable Name", "N", "PivotTableNameBtn_Click")]
+    [InlineData("PivotTable Options", "Options", "O", "PivotTableOptionsBtn_Click")]
     [InlineData("Show Details", "Show Details", "D", "PivotTableShowDetailsBtn_Click")]
     [InlineData("Field Settings", "Field Settings", "FS", "PivotFieldValueSettingsMenuItem_Click")]
     [InlineData("Group Field", "Group Field", "GF", "PivotGroupFieldBtn_Click")]
@@ -14,6 +16,9 @@ public sealed class PivotAnalyzeCommandSourceTests
     [InlineData("Insert Timeline", "Insert Timeline", "IT", "PivotInsertTimelineBtn_Click")]
     [InlineData("Refresh", "Refresh", "R", "RefreshPivotTableBtn_Click")]
     [InlineData("Change Data Source", "Change Data Source", "CD", "PivotChangeDataSourceBtn_Click")]
+    [InlineData("Clear", "Clear", "CL", "PivotTableClearBtn_Click")]
+    [InlineData("Select", "Select", "SE", "PivotTableSelectBtn_Click")]
+    [InlineData("Move PivotTable", "Move PivotTable", "M", "PivotTableMoveBtn_Click")]
     [InlineData("Calculated Field", "Calc Field", "CF", "PivotCalculatedFieldBtn_Click")]
     [InlineData("Calculated Item", "Calc Item", "CI", "PivotCalculatedItemBtn_Click")]
     [InlineData("PivotChart", "PivotChart", "PC", "PivotChartBtn_Click")]
@@ -34,24 +39,17 @@ public sealed class PivotAnalyzeCommandSourceTests
         button.Should().Contain($"Click=\"{handler}\"");
     }
 
-    [Theory]
-    [InlineData("PivotTable Name", "PivotTable Name", "N")]
-    [InlineData("PivotTable Options", "Options", "O")]
-    [InlineData("Clear", "Clear", "CL")]
-    [InlineData("Select", "Select", "SE")]
-    [InlineData("Move PivotTable", "Move PivotTable", "M")]
-    public void PivotAnalyzeDeferredCommands_RemainDisabledWithoutClickHandlers(
-        string title,
-        string content,
-        string keyTip)
+    [Fact]
+    public void PivotAnalyzeRequestedBreadthCommands_AreEnabledAndRouted()
     {
-        var button = ExtractButtonElementByTitle(ReadPivotAnalyzeTabXaml(), title);
+        var xaml = ReadPivotAnalyzeTabXaml();
 
-        button.ShouldContainLocalizedAttribute("Content", content);
-        button.Should().Contain("IsEnabled=\"False\"");
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().NotContain("Click=");
+        foreach (var title in new[] { "PivotTable Name", "PivotTable Options", "Clear", "Select", "Move PivotTable" })
+        {
+            var button = ExtractButtonElementByTitle(xaml, title);
+            button.Should().NotContain("IsEnabled=\"False\"");
+            button.Should().Contain("Click=");
+        }
     }
 
     [Fact]
@@ -66,6 +64,13 @@ public sealed class PivotAnalyzeCommandSourceTests
         pivotSource.Should().Contain("PivotFieldListPane.Visibility = PivotFieldListPane.Visibility == Visibility.Visible");
         pivotSource.Should().Contain("new PivotTableDataSourceDialog(");
         pivotSource.Should().Contain("new ChangePivotTableSourceCommand(_currentSheetId, pivotTable.Name, sourceRange)");
+        pivotSource.Should().Contain("new PivotTableNameDialog(pivotTable.Name)");
+        pivotSource.Should().Contain("new RenamePivotTableCommand(sheet.Id, pivotTable.Name, dialog.Result.Name)");
+        pivotSource.Should().Contain("ShowPivotTableOptionsDialog();");
+        pivotSource.Should().Contain("new ClearPivotTableViewCommand(sheet.Id, pivotTable.Name)");
+        pivotSource.Should().Contain("PivotUiPlanner.ResolvePivotTableSelectionRange(pivotTable)");
+        pivotSource.Should().Contain("new MovePivotTableDialog(");
+        pivotSource.Should().Contain("new MovePivotTableCommand(sheet.Id, pivotTable.Name, targetRange.Start)");
         pivotSource.Should().Contain("new InsertSlicerDialog(headers, fieldName)");
         pivotSource.Should().Contain("new AddSlicerCommand(dialog.Result.SlicerName, pivotTable.Name, dialog.Result.FieldName)");
         pivotSource.Should().Contain("new InsertTimelineDialog(headers, fieldName)");
