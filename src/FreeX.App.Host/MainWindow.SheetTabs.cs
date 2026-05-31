@@ -13,6 +13,12 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private static readonly Brush SheetTabNavigationHoverBrush = CreateFrozenSheetTabBrush(0xE6, 0xF6, 0xFA);
+    private static readonly Brush SheetTabNavigationPressedBrush = CreateFrozenSheetTabBrush(0xCC, 0xEA, 0xF2);
+
+    private bool _addSheetButtonHoverVisualActive;
+    private bool _suppressAddSheetHoverUntilLeave;
+
     private void RefreshSheetTabs()
     {
         var plan = SheetTabListPlanner.Build(_workbook, _currentSheetId, _groupedSheetIds);
@@ -111,7 +117,29 @@ public partial class MainWindow
 
     private void AddSheetButton_Click(object sender, RoutedEventArgs e)
     {
+        if (ReferenceEquals(sender, AddSheetButton))
+        {
+            _suppressAddSheetHoverUntilLeave = true;
+            _addSheetButtonHoverVisualActive = false;
+        }
+
         InsertNewSheet();
+    }
+
+    private void AddSheetButton_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (_suppressAddSheetHoverUntilLeave)
+            return;
+
+        _addSheetButtonHoverVisualActive = true;
+        UpdateSheetTabsChromeLayer();
+    }
+
+    private void AddSheetButton_MouseLeave(object sender, MouseEventArgs e)
+    {
+        _suppressAddSheetHoverUntilLeave = false;
+        _addSheetButtonHoverVisualActive = false;
+        UpdateSheetTabsChromeLayer();
     }
 
     private void InsertNewSheet()
@@ -344,10 +372,12 @@ public partial class MainWindow
         var inactiveStrokeBrush = (Brush)FindResource("FreeXBorderStrongBrush");
         var inactiveFillBrush = (Brush)FindResource("FreeXSheetSurfaceBrush");
         var groupedFillBrush = (Brush)FindResource("FreeXAccentSoftBrush");
-        var tentativeFillBrush = AddSheetButton.IsPressed
-            ? (Brush)FindResource("FreeXAccentPressedBrush")
-            : AddSheetButton.IsMouseOver
-                ? (Brush)FindResource("FreeXAccentSoftBrush")
+        var showAddSheetHover = _addSheetButtonHoverVisualActive && !_suppressAddSheetHoverUntilLeave;
+        var showAddSheetPressed = showAddSheetHover && AddSheetButton.IsPressed;
+        var tentativeFillBrush = showAddSheetPressed
+            ? SheetTabNavigationPressedBrush
+            : showAddSheetHover
+                ? SheetTabNavigationHoverBrush
                 : (Brush)FindResource("FreeXChromeSurfaceBrush");
         var tentativeStrokeBrush = inactiveStrokeBrush;
 
@@ -375,7 +405,7 @@ public partial class MainWindow
                 tentativeStrokeBrush,
                 1.25,
                 scrollableClipGeometry,
-                AddSheetButton.IsMouseOver ? 0.95 : 0.82));
+                showAddSheetHover ? 0.95 : 0.82));
         }
 
         var visibleTabs = _sheetTabs.ToList();
@@ -561,6 +591,13 @@ public partial class MainWindow
             BlendColorComponent(baseComponent, color.R, 0.2),
             BlendColorComponent(baseComponent, color.G, 0.2),
             BlendColorComponent(baseComponent, color.B, 0.2)));
+    }
+
+    private static SolidColorBrush CreateFrozenSheetTabBrush(byte red, byte green, byte blue)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(red, green, blue));
+        brush.Freeze();
+        return brush;
     }
 
     private static byte BlendColorComponent(byte background, byte foreground, double foregroundWeight)
