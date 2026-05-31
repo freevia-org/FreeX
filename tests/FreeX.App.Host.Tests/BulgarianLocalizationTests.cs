@@ -50,7 +50,7 @@ public sealed class BulgarianLocalizationTests
             ["MainWindow_Content_Copy"] = "Копирай",
             ["MainWindow_Content_Cut"] = "Изрежи",
             ["MainWindow_Header_FlashFill"] = "Примерно запълване",
-            ["MainWindow_Text_Wrap"] = "Текст на повече редове",
+            ["MainWindow_Text_Wrap"] = "Пренасяне",
             ["InsertChart_AllChartsTab"] = "_Всички диаграми",
             ["ChartType_Pie"] = "Кръгова",
             ["ChartType_Doughnut"] = "Пръстеновидна",

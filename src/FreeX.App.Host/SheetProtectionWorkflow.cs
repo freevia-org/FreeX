@@ -10,15 +10,15 @@ public static class SheetProtectionWorkflow
         if (sheet.IsProtected)
         {
             return new SheetProtectionUiText(
-                "Unprotect Sheet",
-                "Unprotect Sheet",
-                "Remove sheet protection so locked cells can be edited again.");
+                UiText.Get("Protection_UnprotectSheetButton"),
+                UiText.Get("Protection_UnprotectSheetTitle"),
+                UiText.Get("Protection_UnprotectSheetDescription"));
         }
 
         return new SheetProtectionUiText(
-            "Protect Sheet",
-            "Protect Sheet",
-            "Set sheet protection for locked cells with an optional password.");
+            UiText.Get("MainWindow_Content_ProtectSheet"),
+            UiText.Get("MainWindow_TooltipTitle_ProtectSheet"),
+            UiText.Get("MainWindow_TooltipDescription_SetSheetProtectionForLockedCellsWithAnOptionalPassword"));
     }
 
     public static SheetProtectionAction CreateCommand(Sheet sheet, string? password)
@@ -33,8 +33,8 @@ public static class SheetProtectionWorkflow
         {
             return new SheetProtectionAction(
                 new UnprotectSheetCommand(sheet.Id),
-                "Unprotect Sheet",
-                "Sheet is now unprotected.",
+                UiText.Get("Protection_UnprotectSheetTitle"),
+                UiText.Get("Protection_SheetUnprotectedMessage"),
                 []);
         }
 
@@ -43,8 +43,8 @@ public static class SheetProtectionWorkflow
                 sheet.Id,
                 result.Password,
                 ProtectionDialogPlanner.ParseSheetPermissions(result.SelectedSheetPermissions)),
-            "Protect Sheet",
-            "Sheet is now protected.",
+            UiText.Get("MainWindowMessage_ProtectSheetTitle"),
+            UiText.Get("Protection_SheetProtectedMessage"),
             result.SelectedSheetPermissions);
     }
 }

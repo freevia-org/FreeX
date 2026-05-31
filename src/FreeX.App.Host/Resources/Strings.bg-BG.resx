@@ -3261,7 +3261,10 @@
     <value>Добавете часовник</value>
   </data>
   <data name="MainWindow_Content_AllowUsersToEditRanges" xml:space="preserve">
-    <value>Позволете на потребителите да редактират диапазони</value>
+    <value>Диапазони</value>
+  </data>
+  <data name="MainWindow_Content_AllowUsersToEditRangesCompact" xml:space="preserve">
+    <value>Диапазони</value>
   </data>
   <data name="MainWindow_Content_AltText" xml:space="preserve">
     <value>Алтернативен текст</value>
@@ -3276,7 +3279,7 @@
     <value>Подредете всички</value>
   </data>
   <data name="MainWindow_Content_AutoSum" xml:space="preserve">
-    <value>Автосумиране</value>
+    <value>Автосума</value>
   </data>
   <data name="MainWindow_Content_AxisSeries" xml:space="preserve">
     <value>Серия оси</value>
@@ -3330,10 +3333,10 @@
     <value>Опции на Calc</value>
   </data>
   <data name="MainWindow_Content_CalculateNow" xml:space="preserve">
-    <value>Изчислете сега</value>
+    <value>Изчисли сега</value>
   </data>
   <data name="MainWindow_Content_CalculateSheet" xml:space="preserve">
-    <value>Изчислете лист</value>
+    <value>Изчисли лист</value>
   </data>
   <data name="MainWindow_Content_Callout" xml:space="preserve">
     <value>надпис</value>
@@ -3396,13 +3399,13 @@
     <value>Копиране на диагностика</value>
   </data>
   <data name="MainWindow_Content_CreateFromSelection" xml:space="preserve">
-    <value>Създаване от селекция</value>
+    <value>От селекция</value>
   </data>
   <data name="MainWindow_Content_Crop" xml:space="preserve">
     <value>Изрязване</value>
   </data>
   <data name="MainWindow_Content_CustomViews" xml:space="preserve">
-    <value>Персонализирани изгледи</value>
+    <value>Запазени изгледи</value>
   </data>
   <data name="MainWindow_Content_Cut" xml:space="preserve">
     <value>Изрежи</value>
@@ -3417,7 +3420,7 @@
     <value>Отлагане на актуализацията на оформлението</value>
   </data>
   <data name="MainWindow_Content_DefineName" xml:space="preserve">
-    <value>Определете име</value>
+    <value>Дефинирай име</value>
   </data>
   <data name="MainWindow_Content_Delete" xml:space="preserve">
     <value>Изтриване</value>
@@ -3558,7 +3561,7 @@
     <value>Поставете</value>
   </data>
   <data name="MainWindow_Content_InsertFunction" xml:space="preserve">
-    <value>Вмъкване на функция</value>
+    <value>Вмъкни функция</value>
   </data>
   <data name="MainWindow_Content_InsertSlicer" xml:space="preserve">
     <value>Вмъкване на сегментатор</value>
@@ -3651,7 +3654,7 @@
     <value>Моите добавки</value>
   </data>
   <data name="MainWindow_Content_NameManager" xml:space="preserve">
-    <value>Мениджър на имена</value>
+    <value>Мениджър имена</value>
   </data>
   <data name="MainWindow_Content_New" xml:space="preserve">
     <value>Нов</value>
@@ -3681,10 +3684,10 @@
     <value>Контур</value>
   </data>
   <data name="MainWindow_Content_PageBreakPreview" xml:space="preserve">
-    <value>Преглед на прекъсване на страницата</value>
+    <value>Прекъсвания</value>
   </data>
   <data name="MainWindow_Content_PageLayout" xml:space="preserve">
-    <value>Оформление на страницата</value>
+    <value>Оформление</value>
   </data>
   <data name="MainWindow_Content_Pareto" xml:space="preserve">
     <value>Парето</value>
@@ -3738,10 +3741,10 @@
     <value>Печат на заглавия</value>
   </data>
   <data name="MainWindow_Content_ProtectSheet" xml:space="preserve">
-    <value>Защита на листа</value>
+    <value>Защита лист</value>
   </data>
   <data name="MainWindow_Content_ProtectWorkbook" xml:space="preserve">
-    <value>Защита на работната книга</value>
+    <value>Защита книга</value>
   </data>
   <data name="MainWindow_Content_QueriesConnections" xml:space="preserve">
     <value>Запитвания и връзки</value>
@@ -3828,7 +3831,10 @@
     <value>Форми</value>
   </data>
   <data name="MainWindow_Content_ShareWorkbook" xml:space="preserve">
-    <value>Споделяне на работна книга</value>
+    <value>Сподели</value>
+  </data>
+  <data name="MainWindow_Content_ShareWorkbookCompact" xml:space="preserve">
+    <value>Сподели</value>
   </data>
   <data name="MainWindow_Content_ShowDetails" xml:space="preserve">
     <value>Показване на подробности</value>
@@ -3960,7 +3966,7 @@
     <value>Актуализация</value>
   </data>
   <data name="MainWindow_Content_UseInFormula" xml:space="preserve">
-    <value>Използвайте във Формула</value>
+    <value>Във формула</value>
   </data>
   <data name="MainWindow_Content_Values" xml:space="preserve">
     <value>Ценности</value>
@@ -3984,7 +3990,7 @@
     <value>Победа/Загуба</value>
   </data>
   <data name="MainWindow_Content_WorkbookStatistics" xml:space="preserve">
-    <value>Статистика на работната книга</value>
+    <value>Статистика</value>
   </data>
   <data name="MainWindow_Content_XAngle" xml:space="preserve">
     <value>Ъгъл X</value>
@@ -4800,7 +4806,7 @@
     <value>Графики</value>
   </data>
   <data name="MainWindow_Text_CheckAccessibility" xml:space="preserve">
-    <value>Проверете Достъпност</value>
+    <value>Проверка достъпност</value>
   </data>
   <data name="MainWindow_Text_ChooseFieldsToAddToReport" xml:space="preserve">
     <value>Изберете полета за добавяне към отчета:</value>
@@ -4854,7 +4860,7 @@
     <value>Дефинирани имена</value>
   </data>
   <data name="MainWindow_Text_Editing" xml:space="preserve">
-    <value>Редактиране</value>
+    <value>Редакция</value>
   </data>
   <data name="MainWindow_Text_Export" xml:space="preserve">
     <value>Експортиране</value>
@@ -4947,7 +4953,7 @@
     <value>Управление на работна книга</value>
   </data>
   <data name="MainWindow_Text_MergeCenter" xml:space="preserve">
-    <value>Обединяване и центриране</value>
+    <value>Обедини и центрирай</value>
   </data>
   <data name="MainWindow_Text_Name" xml:space="preserve">
     <value>Име</value>
@@ -5040,7 +5046,7 @@
     <value>_Запиши като</value>
   </data>
   <data name="MainWindow_Text_ScaleToFit" xml:space="preserve">
-    <value>Мащабиране, за да се побере</value>
+    <value>Мащабиране</value>
   </data>
   <data name="MainWindow_Text_Share" xml:space="preserve">
     <value>Споделете</value>
@@ -5115,13 +5121,13 @@
     <value>Защита на работната книга</value>
   </data>
   <data name="MainWindow_Text_WorkbookStatistics" xml:space="preserve">
-    <value>Статистика на работната книга</value>
+    <value>Статистика</value>
   </data>
   <data name="MainWindow_Text_WorkbookViews" xml:space="preserve">
     <value>Изгледи на работна книга</value>
   </data>
   <data name="MainWindow_Text_Wrap" xml:space="preserve">
-    <value>Текст на повече редове</value>
+    <value>Пренасяне</value>
   </data>
   <data name="MainWindow_Text_Zoom" xml:space="preserve">
     <value>мащабиране</value>
@@ -12556,6 +12562,36 @@
   </data>
   <data name="Protection_ProtectWorksheetContents" xml:space="preserve">
     <value>Защитете работния лист и съдържанието на заключените клетки</value>
+  </data>
+  <data name="Protection_SheetProtectedMessage" xml:space="preserve">
+    <value>Листът е защитен.</value>
+  </data>
+  <data name="Protection_SheetUnprotectedMessage" xml:space="preserve">
+    <value>Защитата на листа е премахната.</value>
+  </data>
+  <data name="Protection_UnprotectSheetButton" xml:space="preserve">
+    <value>Свали защита</value>
+  </data>
+  <data name="Protection_UnprotectSheetTitle" xml:space="preserve">
+    <value>Сваляне на защита на лист</value>
+  </data>
+  <data name="Protection_UnprotectSheetDescription" xml:space="preserve">
+    <value>Премахва защитата на листа, така че заключените клетки да могат да се редактират отново.</value>
+  </data>
+  <data name="Protection_WorkbookProtectedMessage" xml:space="preserve">
+    <value>Структурата на работната книга е защитена.</value>
+  </data>
+  <data name="Protection_WorkbookUnprotectedMessage" xml:space="preserve">
+    <value>Защитата на структурата на работната книга е премахната.</value>
+  </data>
+  <data name="Protection_UnprotectWorkbookButton" xml:space="preserve">
+    <value>Свали защита</value>
+  </data>
+  <data name="Protection_UnprotectWorkbookTitle" xml:space="preserve">
+    <value>Сваляне на защита на книга</value>
+  </data>
+  <data name="Protection_UnprotectWorkbookDescription" xml:space="preserve">
+    <value>Позволява структурни промени в работната книга, като добавяне, изтриване или преименуване на листове.</value>
   </data>
   <data name="Remaining_EnterColumnWidthFrom0To255" xml:space="preserve">
     <value>Въведете ширина на колона от 0 до 255.</value>

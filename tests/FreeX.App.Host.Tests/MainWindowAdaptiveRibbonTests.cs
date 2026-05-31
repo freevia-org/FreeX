@@ -760,8 +760,8 @@ public sealed class MainWindowAdaptiveRibbonTests
                 new RibbonFallbackExpectation("Insert", 900, Expanded: ["Tables"], Collapsed: ["Charts"]),
                 new RibbonFallbackExpectation("Data", 1120, Expanded: ["Sort & Filter", "Data Tools", "Forecast"], Collapsed: []),
                 new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup", "Arrange"], Collapsed: []),
-                new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show"], Collapsed: []),
-                new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views", "Show", "Window"], Collapsed: [])
+                new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show", "Zoom"], Collapsed: ["Window"]),
+                new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views", "Show", "Zoom"], Collapsed: ["Window"])
             };
 
             foreach (var expectation in expectations)
@@ -865,6 +865,10 @@ public sealed class MainWindowAdaptiveRibbonTests
                 harness.DirectVerticalButtonStackIconOffsets.Should().OnlyContain(
                     stack => stack.Offsets.Max() - stack.Offsets.Min() <= 1.0,
                     $"{tab} direct XAML vertical button stacks should align small command icons in a fixed column");
+
+                harness.StackedRibbonRowColumnIconOffsets.Should().OnlyContain(
+                    stack => stack.Offsets.Max() - stack.Offsets.Min() <= 1.0,
+                    $"{tab} stacked small-command rows should align each icon column across rows");
             }
         });
     }
@@ -1849,6 +1853,13 @@ public sealed class MainWindowAdaptiveRibbonTests
                 .SelectMany(GetDirectVerticalButtonStacks)
                 .ToList();
 
+        public IReadOnlyList<RibbonIconStackOffsets> StackedRibbonRowColumnIconOffsets =>
+            EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                .OfType<StackPanel>()
+                .Where(panel => panel.Orientation == Orientation.Vertical)
+                .SelectMany(GetStackedRowColumnIconOffsets)
+                .ToList();
+
         public IReadOnlyList<CheckBoxLabelOffset> ViewShowCheckBoxLabelOffsets =>
             ViewShowCheckBoxes
                 .Select(checkBox => new CheckBoxLabelOffset(
@@ -2128,7 +2139,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             }
         }
 
-        private static string GetButtonLabel(Button button)
+        private static string GetButtonLabel(ButtonBase button)
         {
             if (button.Content is string text)
                 return text;
@@ -2157,7 +2168,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             return "";
         }
 
-        private static double GetIconSlotOffset(Visual ancestor, Button button)
+        private static double GetIconSlotOffset(Visual ancestor, ButtonBase button)
         {
             if (!TryGetCommandIconSlot(button, out var iconSlot))
             {
@@ -2200,7 +2211,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         private static IEnumerable<RibbonIconStackOffsets> GetDirectVerticalButtonStacks(StackPanel panel)
         {
             var buttons = panel.Children
-                .OfType<Button>()
+                .OfType<ButtonBase>()
                 .Where(IsEffectivelyVisible)
                 .Where(button => TryGetCommandIconSlot(button, out _))
                 .ToArray();
@@ -2213,13 +2224,54 @@ public sealed class MainWindowAdaptiveRibbonTests
                 buttons.Select(button => GetDirectIconSlotCenterOffset(panel, button)).ToArray());
         }
 
-        private static IEnumerable<Button> GetSmallCommandButtons(Panel panel) =>
-            panel.Children.OfType<Button>()
+        private static IEnumerable<RibbonIconStackOffsets> GetStackedRowColumnIconOffsets(StackPanel panel)
+        {
+            var rows = panel.Children
+                .OfType<StackPanel>()
+                .Where(row => row.Orientation == Orientation.Horizontal)
+                .Select(row => row.Children
+                    .OfType<ButtonBase>()
+                    .Where(IsSmallLabeledCommandButton)
+                    .ToArray())
+                .Where(buttons => buttons.Length >= 2)
+                .ToArray();
+            if (rows.Length < 2)
+                yield break;
+
+            var columnCount = rows.Max(row => row.Length);
+            for (var column = 0; column < columnCount; column++)
+            {
+                var buttons = rows
+                    .Where(row => column < row.Length)
+                    .Select(row => row[column])
+                    .ToArray();
+                if (buttons.Length < 2)
+                    continue;
+
+                yield return new RibbonIconStackOffsets(
+                    buttons.Select(GetButtonLabel).ToArray(),
+                    buttons.Select(button => GetDirectIconSlotCenterOffset(panel, button)).ToArray());
+            }
+        }
+
+        private static IEnumerable<ButtonBase> GetSmallCommandButtons(Panel panel) =>
+            panel.Children.OfType<ButtonBase>()
                 .Where(IsEffectivelyVisible)
                 .Where(button => button.Content is FrameworkElement content &&
                                  RibbonMetadata.TryGetCommandContentLayout(content, out var layout) &&
                                  layout == RibbonCommandContentLayout.Small &&
                                  TryGetCommandIconSlot(button, out _));
+
+        private static bool IsSmallLabeledCommandButton(ButtonBase button) =>
+            IsEffectivelyVisible(button) &&
+            button.Content is FrameworkElement content &&
+            RibbonMetadata.TryGetCommandContentLayout(content, out var layout) &&
+            layout == RibbonCommandContentLayout.Small &&
+            TryGetCommandIconSlot(button, out _) &&
+            EnumerateSelfAndVisualDescendants(content)
+                .OfType<TextBlock>()
+                .Any(textBlock => RibbonMetadata.IsCommandLabel(textBlock) &&
+                                  IsEffectivelyVisible(textBlock));
 
         private static bool IsTallLargeRibbonCommand(Button button) =>
             button.Content is StackPanel { Orientation: Orientation.Vertical } content &&
@@ -2247,12 +2299,12 @@ public sealed class MainWindowAdaptiveRibbonTests
             }
         }
 
-        private static RibbonIconStackOffsets CreateIconStackOffsets(Visual ancestor, IReadOnlyList<Button> buttons) =>
+        private static RibbonIconStackOffsets CreateIconStackOffsets(Visual ancestor, IReadOnlyList<ButtonBase> buttons) =>
             new(
                 buttons.Select(GetButtonLabel).ToArray(),
                 buttons.Select(button => GetIconSlotOffset(ancestor, button)).ToArray());
 
-        private static double GetDirectIconSlotCenterOffset(Visual ancestor, Button button)
+        private static double GetDirectIconSlotCenterOffset(Visual ancestor, ButtonBase button)
         {
             if (!TryGetCommandIconSlot(button, out var iconSlot))
             {
@@ -2263,7 +2315,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             return point.X + iconSlot.ActualWidth / 2;
         }
 
-        private static bool TryGetCommandIconSlot(Button button, out FrameworkElement iconSlot)
+        private static bool TryGetCommandIconSlot(ButtonBase button, out FrameworkElement iconSlot)
         {
             iconSlot = null!;
             var contentRoot = button.Content as DependencyObject ?? button;

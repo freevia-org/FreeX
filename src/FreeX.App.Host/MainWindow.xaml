@@ -624,7 +624,7 @@
                                                   StrokeStartLineCap="Square" StrokeEndLineCap="Square" StrokeLineJoin="Miter"/>
                                         </Grid>
                                     </Button>
-                                    <ToggleButton x:Name="WrapTextBtn" Width="58" Height="22"
+                                    <ToggleButton x:Name="WrapTextBtn" Width="88" Height="22"
                                                   Style="{StaticResource RibbonToggleBtn}"
                                                   Click="WrapTextBtn_Click"
                                                   local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_WrapText}"
@@ -2647,19 +2647,19 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="ReviewProtectGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button x:Name="ProtectSheetButton" Content="{local:Loc Key=MainWindow_Content_ProtectSheet}"    Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ProtectSheetBtn_Click"
+                                <Button x:Name="ProtectSheetButton" Content="{local:Loc Key=MainWindow_Content_ProtectSheet}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ProtectSheetBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ProtectSheet}"
                                         local:RibbonTooltip.KeyTip="PS"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SetSheetProtectionForLockedCellsWithAnOptionalPassword}" local:RibbonMetadata.CommandName="Protect Sheet"/>
-                                <Button x:Name="ProtectWorkbookButton" Content="{local:Loc Key=MainWindow_Content_ProtectWorkbook}"  Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ProtectWorkbookBtn_Click"
+                                <Button x:Name="ProtectWorkbookButton" Content="{local:Loc Key=MainWindow_Content_ProtectWorkbook}" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ProtectWorkbookBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ProtectWorkbook}"
                                         local:RibbonTooltip.KeyTip="PW"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PreventStructuralChangesToTheWorkbookSuchAsAddingDeletingOrRenamingSheet_47267D4F}" local:RibbonMetadata.CommandName="Protect Workbook"/>
-                                <Button x:Name="AllowEditRangesButton" Content="{local:Loc Key=MainWindow_Content_AllowUsersToEditRanges}" Width="188" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AllowEditRangesBtn_Click"
+                                <Button x:Name="AllowEditRangesButton" Content="{local:Loc Key=MainWindow_Content_AllowUsersToEditRangesCompact}" Width="88" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AllowEditRangesBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AllowUsersToEditRanges}"
                                         local:RibbonTooltip.KeyTip="AR"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddDeleteOrClearRangesThatRemainEditableWhenTheSheetIsProtected}" local:RibbonMetadata.CommandName="Allow Users to Edit Ranges"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_ShareWorkbook}" Width="128" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShareWorkbookBtn_Click"
+                                <Button Content="{local:Loc Key=MainWindow_Content_ShareWorkbookCompact}" Width="76" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ShareWorkbookBtn_Click"
                                         AutomationProperties.AutomationId="ReviewShareWorkbookButton"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShareWorkbook}"
                                         local:RibbonTooltip.KeyTip="SH"

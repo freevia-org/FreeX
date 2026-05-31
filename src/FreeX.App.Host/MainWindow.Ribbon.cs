@@ -1379,12 +1379,19 @@ public partial class MainWindow
                 if (RibbonMetadata.IsCommandLabel(textBlock))
                 {
                     textBlock.FontSize = 12;
-                    textBlock.TextTrimming = TextTrimming.CharacterEllipsis;
                     textBlock.VerticalAlignment = System.Windows.VerticalAlignment.Center;
                     if (tall)
                     {
+                        textBlock.TextTrimming = TextTrimming.None;
+                        textBlock.TextWrapping = TextWrapping.Wrap;
+                        textBlock.MaxWidth = Math.Max(textBlock.MaxWidth, 124);
+                        textBlock.LineHeight = 14;
                         textBlock.TextAlignment = TextAlignment.Center;
                         textBlock.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+                    }
+                    else
+                    {
+                        textBlock.TextTrimming = TextTrimming.CharacterEllipsis;
                     }
 
                     continue;
@@ -1592,7 +1599,9 @@ public partial class MainWindow
             <= 6 => 66,
             <= 10 => 92,
             <= 14 => 126,
-            _ => Math.Min(150, 44 + label.Length * 6)
+            <= 20 => 164,
+            <= 28 => 198,
+            _ => Math.Min(220, 48 + label.Length * 6.4)
         };
 
         element.Width = Math.Max(element.Width is > 0 ? element.Width : 0, minWidth);
@@ -1894,7 +1903,7 @@ public partial class MainWindow
             FontSize = 12,
             FontWeight = FontWeights.Normal,
             TextWrapping = tall ? TextWrapping.Wrap : TextWrapping.NoWrap,
-            MaxWidth = tall ? 96 : double.PositiveInfinity,
+            MaxWidth = tall ? 124 : double.PositiveInfinity,
             TextTrimming = tall ? TextTrimming.None : TextTrimming.CharacterEllipsis,
             HorizontalAlignment = tall ? System.Windows.HorizontalAlignment.Center : System.Windows.HorizontalAlignment.Left,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
@@ -2035,9 +2044,23 @@ public partial class MainWindow
 
         foreach (var panel in panels)
         {
-            var directButtons = panel.Children.OfType<Button>().Where(button => button.Visibility == Visibility.Visible).ToList();
-            if (directButtons.Count <= 3)
+            NormalizeNestedRibbonRowColumns(panel);
+
+            var directButtons = panel.Children.OfType<ButtonBase>().Where(IsVisibleLabeledRibbonCommandButton).ToList();
+            if (directButtons.Count < 2)
                 continue;
+
+            foreach (var button in directButtons)
+                NormalizeDenseRibbonColumnButton(button);
+
+            var columnWidth = directButtons.Max(button => button.Width is > 0 ? button.Width : button.DesiredSize.Width);
+            if (directButtons.Count <= 3)
+            {
+                foreach (var button in directButtons)
+                    ApplyDenseRibbonColumnWidth(button, columnWidth);
+
+                continue;
+            }
 
             var parent = VisualTreeHelper.GetParent(panel) ?? LogicalTreeHelper.GetParent(panel);
             if (parent is not Panel parentPanel)
@@ -2071,24 +2094,8 @@ public partial class MainWindow
             Grid.SetColumnSpan(grid, columnSpan);
 
             foreach (var button in directButtons)
-                NormalizeDenseRibbonColumnButton(button);
-
-            var columnWidth = directButtons.Max(button => button.Width is > 0 ? button.Width : button.DesiredSize.Width);
-            foreach (var button in directButtons)
             {
-                button.Width = columnWidth;
-                SetRibbonCompactWidths(button, columnWidth, 24);
-                if (button.Content is FrameworkElement content)
-                {
-                    content.Width = Math.Max(
-                        0,
-                        columnWidth -
-                        button.Padding.Left -
-                        button.Padding.Right -
-                        button.BorderThickness.Left -
-                        button.BorderThickness.Right);
-                }
-
+                ApplyDenseRibbonColumnWidth(button, columnWidth);
                 grid.Children.Add(button);
             }
 
@@ -2097,7 +2104,63 @@ public partial class MainWindow
         }
     }
 
-    private static void NormalizeDenseRibbonColumnButton(Button button)
+    private static void NormalizeNestedRibbonRowColumns(StackPanel panel)
+    {
+        var rows = panel.Children
+            .OfType<StackPanel>()
+            .Where(row => row.Orientation == Orientation.Horizontal &&
+                          FindVisualAncestor<ButtonBase>(row) is null)
+            .Select(row => row.Children
+                .OfType<ButtonBase>()
+                .Where(IsVisibleLabeledRibbonCommandButton)
+                .ToList())
+            .Where(buttons => buttons.Count >= 2)
+            .ToList();
+        if (rows.Count < 2)
+            return;
+
+        var columnCount = rows.Max(row => row.Count);
+        var columnWidths = new double[columnCount];
+        foreach (var row in rows)
+        {
+            for (var column = 0; column < row.Count; column++)
+            {
+                var button = row[column];
+                NormalizeDenseRibbonColumnButton(button);
+                columnWidths[column] = Math.Max(
+                    columnWidths[column],
+                    button.Width is > 0 ? button.Width : button.DesiredSize.Width);
+            }
+        }
+
+        foreach (var row in rows)
+        {
+            for (var column = 0; column < row.Count; column++)
+                ApplyDenseRibbonColumnWidth(row[column], columnWidths[column]);
+        }
+    }
+
+    private static void ApplyDenseRibbonColumnWidth(ButtonBase button, double columnWidth)
+    {
+        button.Width = columnWidth;
+        SetRibbonCompactWidths(button, columnWidth, 24);
+        if (button.Content is FrameworkElement content)
+        {
+            content.Width = Math.Max(
+                0,
+                columnWidth -
+                button.Padding.Left -
+                button.Padding.Right -
+                button.BorderThickness.Left -
+                button.BorderThickness.Right);
+        }
+    }
+
+    private static bool IsVisibleLabeledRibbonCommandButton(ButtonBase button) =>
+        button.Visibility == Visibility.Visible &&
+        FindRibbonContentLabel(button.Content) is not null;
+
+    private static void NormalizeDenseRibbonColumnButton(ButtonBase button)
     {
         var commandName = GetRibbonButtonCommandName(button);
         if (string.IsNullOrWhiteSpace(commandName))
@@ -2123,14 +2186,16 @@ public partial class MainWindow
             <= 6 => 72,
             <= 10 => 98,
             <= 14 => 128,
-            _ => Math.Min(154, 48 + length * 6)
+            <= 20 => 164,
+            <= 28 => 198,
+            _ => Math.Min(220, 48 + length * 6.4)
         };
     }
 
     private static double GetIconLabelRowRibbonCommandWidth(string label)
     {
         var length = string.IsNullOrWhiteSpace(label) ? 0 : label.Trim().Length;
-        return Math.Min(156, 48 + length * 5.8);
+        return Math.Min(220, 48 + length * 6.2);
     }
 
     private static double GetLargeRibbonCommandWidth(string label)
@@ -2141,7 +2206,9 @@ public partial class MainWindow
             <= 5 => 62,
             <= 9 => 76,
             <= 14 => 88,
-            _ => 96
+            <= 20 => 96,
+            <= 28 => 112,
+            _ => 124
         };
     }
 }

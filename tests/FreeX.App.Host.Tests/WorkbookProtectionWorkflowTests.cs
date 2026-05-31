@@ -30,7 +30,7 @@ public sealed class WorkbookProtectionWorkflowTests
 
         var action = WorkbookProtectionWorkflow.CreateCommand(workbook, "new-password-should-be-ignored");
 
-        action.Title.Should().Be("Unprotect Workbook");
+        action.Title.Should().Be(UiText.Get("Protection_UnprotectWorkbookTitle"));
         action.SuccessMessage.Should().Contain("unprotected");
         action.Command.Should().BeOfType<UnprotectWorkbookCommand>();
     }
@@ -57,9 +57,9 @@ public sealed class WorkbookProtectionWorkflowTests
 
         var uiText = WorkbookProtectionWorkflow.GetUiText(workbook);
 
-        uiText.ButtonContent.Should().Be("Unprotect Workbook");
-        uiText.TooltipTitle.Should().Be("Unprotect Workbook");
-        uiText.TooltipDescription.Should().Contain("Allow");
+        uiText.ButtonContent.Should().Be(UiText.Get("Protection_UnprotectWorkbookButton"));
+        uiText.TooltipTitle.Should().Be(UiText.Get("Protection_UnprotectWorkbookTitle"));
+        uiText.TooltipDescription.Should().Be(UiText.Get("Protection_UnprotectWorkbookDescription"));
     }
 
     [Fact]

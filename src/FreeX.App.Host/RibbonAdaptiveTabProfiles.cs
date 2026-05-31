@@ -63,6 +63,10 @@ internal static class RibbonAdaptiveTabProfiles
                 Rule(1120, collapseFromIndex: 1),
                 Rule(1320, collapseFromIndex: 2)
             ],
+            ProtectedGroups:
+            [
+                Protected(double.PositiveInfinity, ["Function Library", "Calculation"])
+            ],
             RequiresMeasuredCorrection: true),
         new(
             Name: "Data",
@@ -142,7 +146,12 @@ internal static class RibbonAdaptiveTabProfiles
                 Rule(
                     760,
                     states: [State("Workbook Views", RibbonAdaptiveGroupState.IconOnly)],
-                    collapseGroups: ["Zoom"])
+                    collapseGroups: ["Zoom", "Window"]),
+                Rule(1120, collapseGroups: ["Window"])
+            ],
+            RuntimeVisibility:
+            [
+                Runtime(1120, "Window", RibbonAdaptiveGroupState.Collapsed)
             ],
             RequiresMeasuredCorrection: true),
         new(

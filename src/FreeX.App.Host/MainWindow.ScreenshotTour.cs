@@ -306,11 +306,15 @@ public partial class MainWindow
     {
         var tabItem = RibbonTabs.Items
             .OfType<System.Windows.Controls.TabItem>()
-            .FirstOrDefault(item => string.Equals(item.Header?.ToString(), tab.Header, StringComparison.Ordinal));
+            .FirstOrDefault(item => RibbonMetadata.TryGetCatalogId(item, out var catalogId) &&
+                                    string.Equals(catalogId, tab.CatalogId, StringComparison.Ordinal))
+            ?? RibbonTabs.Items
+                .OfType<System.Windows.Controls.TabItem>()
+                .FirstOrDefault(item => string.Equals(item.Header?.ToString(), tab.Header, StringComparison.Ordinal));
 
         if (tabItem is null)
             throw new InvalidOperationException(
-                $"Ribbon screenshot tour expected tab '{tab.Header}' but it was not found in the live ribbon.");
+                $"Ribbon screenshot tour expected tab '{tab.Header}' ({tab.CatalogId}) but it was not found in the live ribbon.");
 
         RibbonTabs.SelectedItem = tabItem;
     }
