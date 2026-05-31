@@ -103,6 +103,24 @@ internal static class RibbonAdaptiveLayoutEngine
         bool preserveFirstGroup,
         IReadOnlySet<int>? protectedGroupIndexes = null)
     {
+        var rollbackCount = 0;
+        return TryCollapseOneMoreGroupCore(
+            states,
+            preserveFirstGroup,
+            protectedGroupIndexes,
+            rollbackIndexes: null,
+            rollbackStates: null,
+            ref rollbackCount);
+    }
+
+    private static bool TryCollapseOneMoreGroupCore(
+        RibbonAdaptiveGroupState[] states,
+        bool preserveFirstGroup,
+        IReadOnlySet<int>? protectedGroupIndexes,
+        int[]? rollbackIndexes,
+        RibbonAdaptiveGroupState[]? rollbackStates,
+        ref int rollbackCount)
+    {
         var firstCollapsibleIndex = preserveFirstGroup ? 1 : 0;
         for (var i = states.Length - 1; i >= firstCollapsibleIndex; i--)
         {
@@ -112,11 +130,37 @@ internal static class RibbonAdaptiveLayoutEngine
             if (protectedGroupIndexes?.Contains(i) == true)
                 continue;
 
+            RecordStateChange(i, states[i], rollbackIndexes, rollbackStates, ref rollbackCount);
             states[i] = RibbonAdaptiveGroupState.Collapsed;
             return true;
         }
 
         return false;
+    }
+
+    private static void RecordStateChange(
+        int index,
+        RibbonAdaptiveGroupState previousState,
+        int[]? rollbackIndexes,
+        RibbonAdaptiveGroupState[]? rollbackStates,
+        ref int rollbackCount)
+    {
+        if (rollbackIndexes is null || rollbackStates is null)
+            return;
+
+        rollbackIndexes[rollbackCount] = index;
+        rollbackStates[rollbackCount] = previousState;
+        rollbackCount++;
+    }
+
+    private static void RollbackStateChanges(
+        RibbonAdaptiveGroupState[] states,
+        IReadOnlyList<int> rollbackIndexes,
+        IReadOnlyList<RibbonAdaptiveGroupState> rollbackStates,
+        int rollbackCount)
+    {
+        for (var rollbackIndex = rollbackCount - 1; rollbackIndex >= 0; rollbackIndex--)
+            states[rollbackIndexes[rollbackIndex]] = rollbackStates[rollbackIndex];
     }
 
     private static void FitStatesToWidth(
@@ -164,6 +208,8 @@ internal static class RibbonAdaptiveLayoutEngine
             .ToHashSet();
         protectedIndexes.UnionWith(
             RibbonAdaptivePriorityPlanner.GetRuntimeVisibilityProtectedGroupIndexes(groupProfileKeys, availableWidth, selectedTabHeader));
+        var rollbackIndexes = new int[states.Length];
+        var rollbackStates = new RibbonAdaptiveGroupState[states.Length];
         var madeProgress = true;
         while (madeProgress)
         {
@@ -177,7 +223,8 @@ internal static class RibbonAdaptiveLayoutEngine
                 if (!TryGetNextExpandedState(currentState, out var expandedState))
                     continue;
 
-                var previousStates = states.ToArray();
+                var rollbackCount = 0;
+                RecordStateChange(i, currentState, rollbackIndexes, rollbackStates, ref rollbackCount);
                 states[i] = expandedState;
                 if (StatesFit(groups, states, fixedChromeWidth, availableWidth))
                 {
@@ -186,13 +233,21 @@ internal static class RibbonAdaptiveLayoutEngine
                 }
 
                 protectedIndexes.Add(i);
-                if (TryCollapseUnprotectedGroupsToFit(states, groups, fixedChromeWidth, availableWidth, protectedIndexes))
+                if (TryCollapseUnprotectedGroupsToFit(
+                    states,
+                    groups,
+                    fixedChromeWidth,
+                    availableWidth,
+                    protectedIndexes,
+                    rollbackIndexes,
+                    rollbackStates,
+                    ref rollbackCount))
                 {
                     madeProgress = true;
                     continue;
                 }
 
-                Array.Copy(previousStates, states, previousStates.Length);
+                RollbackStateChanges(states, rollbackIndexes, rollbackStates, rollbackCount);
             }
         }
     }
@@ -202,10 +257,19 @@ internal static class RibbonAdaptiveLayoutEngine
         IReadOnlyList<RibbonAdaptiveGroup> groups,
         double fixedChromeWidth,
         double availableWidth,
-        IReadOnlySet<int> protectedGroupIndexes)
+        IReadOnlySet<int> protectedGroupIndexes,
+        int[] rollbackIndexes,
+        RibbonAdaptiveGroupState[] rollbackStates,
+        ref int rollbackCount)
     {
         while (!StatesFit(groups, states, fixedChromeWidth, availableWidth) &&
-               TryCollapseOneMoreGroup(states, preserveFirstGroup: false, protectedGroupIndexes))
+               TryCollapseOneMoreGroupCore(
+                   states,
+                   preserveFirstGroup: false,
+                   protectedGroupIndexes,
+                   rollbackIndexes,
+                   rollbackStates,
+                   ref rollbackCount))
         {
         }
 
