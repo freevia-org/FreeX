@@ -38,6 +38,19 @@ public sealed class NativeJsonSchemaDocumentationTests
         {
             doc.Should().Contain($"## {section}");
         }
+
+        foreach (var workbookThemeField in new[]
+        {
+            "NativeColorSchemeXml",
+            "NativeFontSchemeXml",
+            "NativeFormatSchemeXml",
+            "NativeThemeSupplementXml",
+            "AlternateColorSchemes",
+            "ObjectDefaults"
+        })
+        {
+            doc.Should().Contain(workbookThemeField);
+        }
     }
 
     [Fact]
