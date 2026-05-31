@@ -2688,24 +2688,6 @@
   <data name="DeferredCommand_MultiWindow_Body" xml:space="preserve">
     <value>{0} is deferred until FreeX has multi-window workbook hosting. It is tracked as a documented parity gap, not a silent partial implementation.</value>
   </data>
-  <data name="DeferredCommand_ViewWindowCannotHideOnlyVisibleWindow_Body" xml:space="preserve">
-    <value>{0} is unavailable because the current workbook has only one visible window. FreeX will not hide the only live workbook window in the single-window host.</value>
-  </data>
-  <data name="DeferredCommand_ViewWindowHostNotConnected_Body" xml:space="preserve">
-    <value>{0} has planner-backed state, but the live multi-window host is not connected yet. FreeX leaves the workbook window unchanged instead of simulating this command.</value>
-  </data>
-  <data name="DeferredCommand_ViewWindowMultiWindowHosting_Body" xml:space="preserve">
-    <value>{0} is deferred until FreeX can create additional live workbook windows over the same workbook session. The View ribbon now tracks the single-window state and disables unsafe dependent commands.</value>
-  </data>
-  <data name="DeferredCommand_ViewWindowNoHiddenWorkbookWindows_Body" xml:space="preserve">
-    <value>{0} is unavailable because there are no hidden workbook windows to restore in the current workbook session.</value>
-  </data>
-  <data name="DeferredCommand_ViewWindowRequiresSecondVisibleWindow_Body" xml:space="preserve">
-    <value>{0} requires at least two visible workbook windows. FreeX currently hosts this workbook in one live window, so the command is disabled until multi-window hosting exists.</value>
-  </data>
-  <data name="DeferredCommand_ViewWindowRequiresSideBySidePair_Body" xml:space="preserve">
-    <value>{0} requires an active side-by-side workbook window pair. FreeX currently hosts this workbook in one live window, so the command is disabled until paired window layout exists.</value>
-  </data>
   <data name="DeferredCommand_OfficeAddIns_Body" xml:space="preserve">
     <value>Office add-ins are excluded from FreeX. Add-in package metadata may be detected and retained, but add-ins are not installed, loaded, or executed.</value>
   </data>
@@ -5316,7 +5298,7 @@
   <data name="MainWindow_TooltipDescription_ChooseWhetherFormulasAreRecalculatedAutomaticallyOrManually" xml:space="preserve">
     <value>Choose whether formulas are recalculated automatically or manually.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_ClearingPivotTableFieldsFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
+  <data name="MainWindow_TooltipDescription_ClearFiltersSortStateAndItemSelectionsFromTheSelectedPivotTable" xml:space="preserve">
     <value>Clear filters, sort state, and item selections from the selected PivotTable.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ColorTheBackgroundOfTheSelectedCells" xml:space="preserve">
@@ -5532,59 +5514,14 @@
   <data name="MainWindow_TooltipDescription_DecreaseTheIndentLevelOfTheCellContents" xml:space="preserve">
     <value>Decrease the indent level of the cell contents.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_DeferredRequiresAMultiWindowWorkbookRegistry" xml:space="preserve">
-    <value>Deferred: requires a multi-window workbook registry.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_DeferredRequiresMultipleLiveWindowsOverTheSameWorkbookSession" xml:space="preserve">
-    <value>Deferred: requires multiple live windows over the same workbook session.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_DeferredRequiresMultiWindowWorkbookHostingAndSynchronizedScrollRouting" xml:space="preserve">
-    <value>Deferred: requires multi-window workbook hosting and synchronized scroll routing.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_DeferredRequiresPairedWorkbookWindowsAndSideBySideLayoutState" xml:space="preserve">
-    <value>Deferred: requires paired workbook windows and side-by-side layout state.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_DeferredRequiresPairedWorkbookWindowsWithSynchronizedViewportState" xml:space="preserve">
-    <value>Deferred: requires paired workbook windows with synchronized viewport state.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_DeferredRequiresWorkbookWindowVisibilityState" xml:space="preserve">
-    <value>Deferred: requires workbook-window visibility state.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_HideTheActiveWorkbookWindow" xml:space="preserve">
-    <value>Hide the active workbook window while another workbook window remains visible.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_ResetTheSideBySideWorkbookWindowLayout" xml:space="preserve">
-    <value>Reset the side-by-side workbook window layout.</value>
+  <data name="MainWindow_TooltipDescription_OpenAnotherLiveWindowForThisWorkbook" xml:space="preserve">
+    <value>Open another live window for this workbook.</value>
   </data>
   <data name="MainWindow_TooltipDescription_SwitchToAnotherVisibleWorkbookWindow" xml:space="preserve">
     <value>Switch to another visible workbook window.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_SynchronizeScrollingAcrossSideBySideWorkbookWindows" xml:space="preserve">
-    <value>Synchronize scrolling across side-by-side workbook windows.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_UnavailableCannotHideOnlyVisibleWorkbookWindow" xml:space="preserve">
-    <value>Unavailable: FreeX will not hide the only visible workbook window in the current single-window host.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_UnavailableNoHiddenWorkbookWindows" xml:space="preserve">
-    <value>Unavailable: there are no hidden workbook windows to restore.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_UnavailableRequiresSecondVisibleWorkbookWindow" xml:space="preserve">
-    <value>Unavailable: requires a second visible workbook window.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_UnavailableResetPositionRequiresSideBySidePair" xml:space="preserve">
-    <value>Unavailable: requires an active side-by-side workbook window pair.</value>
-  </data>
   <data name="MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow" xml:space="preserve">
     <value>Unavailable: requires more than one visible workbook window.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_UnavailableSynchronousScrollingRequiresSideBySidePair" xml:space="preserve">
-    <value>Unavailable: turn on View Side by Side with two visible workbook windows first.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_UnhideAHiddenWorkbookWindow" xml:space="preserve">
-    <value>Unhide a hidden workbook window.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_ViewTwoWorkbookWindowsSideBySide" xml:space="preserve">
-    <value>View two workbook windows side by side.</value>
   </data>
   <data name="MainWindow_TooltipDescription_DeferredRetainedFromXLSXFilesAuthoringAndRenderingNeedADedicatedDataMode_568CFF74" xml:space="preserve">
     <value>Deferred: retained from XLSX files; authoring and rendering need a dedicated data model.</value>
@@ -5856,7 +5793,7 @@
   <data name="MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheFront" xml:space="preserve">
     <value>Move the selected shape one step closer to the front.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_MovingPivotTablesFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
+  <data name="MainWindow_TooltipDescription_MoveTheSelectedPivotTableToAnotherLocationOnTheCurrentWorksheet" xml:space="preserve">
     <value>Move the selected PivotTable to another location on the current worksheet.</value>
   </data>
   <data name="MainWindow_TooltipDescription_NavigateToTheNextSimpleCellNoteInTheSheet" xml:space="preserve">
@@ -5928,7 +5865,7 @@
   <data name="MainWindow_TooltipDescription_PinOrUnpinThisWorkbookInTheRecentFilesList" xml:space="preserve">
     <value>Pin or unpin this workbook in the recent files list.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_PivotTableSelectionShortcutsAreDeferredInFreeX" xml:space="preserve">
+  <data name="MainWindow_TooltipDescription_SelectTheSelectedPivotTableReportRange" xml:space="preserve">
     <value>Select the selected PivotTable report range.</value>
   </data>
   <data name="MainWindow_TooltipDescription_PlotAdditionalSeriesOnASecondaryValueAxisForTheCurrentColumnOrLineChart" xml:space="preserve">
@@ -5991,7 +5928,7 @@
   <data name="MainWindow_TooltipDescription_RemoveThisWorkbookFromThePinnedFilesList" xml:space="preserve">
     <value>Remove this workbook from the pinned files list.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_RenamingPivotTablesFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
+  <data name="MainWindow_TooltipDescription_RenameTheSelectedPivotTable" xml:space="preserve">
     <value>Rename the selected PivotTable.</value>
   </data>
   <data name="MainWindow_TooltipDescription_RenderAdditionalColumnOrAreaChartSeriesAsLines" xml:space="preserve">

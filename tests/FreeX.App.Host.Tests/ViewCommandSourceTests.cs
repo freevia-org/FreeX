@@ -72,11 +72,6 @@ public sealed class ViewCommandSourceTests
     [InlineData("Arrange All", "A", "ArrangeAllPickerBtn_Click")]
     [InlineData("Freeze Panes", "FP", "FreezePanesPickerBtn_Click")]
     [InlineData("Split", "SP", "SplitViewBtn_Click")]
-    [InlineData("Hide", "H", "ViewWindowCommandBtn_Click")]
-    [InlineData("Unhide", "U", "ViewWindowCommandBtn_Click")]
-    [InlineData("View Side by Side", "B", "ViewWindowCommandBtn_Click")]
-    [InlineData("Synchronous Scrolling", "SS", "ViewWindowCommandBtn_Click")]
-    [InlineData("Reset Window Position", "RP", "ViewWindowCommandBtn_Click")]
     [InlineData("Switch Windows", "W", "ViewSwitchWindowsBtn_Click")]
     public void ViewWindowCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
@@ -89,6 +84,26 @@ public sealed class ViewCommandSourceTests
         button.ShouldContainInvariantCommandName(title);
         button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
         button.Should().Contain($"Click=\"{handler}\"");
+    }
+
+    [Fact]
+    public void ViewWindowUnsupportedCommands_AreNotExposedAsDeferredRibbonPlaceholders()
+    {
+        var xaml = ExtractViewWindowGroup(ReadMainWindowXaml());
+
+        foreach (var commandName in new[]
+                 {
+                     "Hide",
+                     "Unhide",
+                     "View Side by Side",
+                     "Synchronous Scrolling",
+                     "Reset Window Position"
+                 })
+        {
+            xaml.Should().NotContain($"local:RibbonMetadata.CommandName=\"{commandName}\"");
+        }
+
+        xaml.Should().NotContain("Click=\"ViewWindowCommandBtn_Click\"");
     }
 
     [Theory]
@@ -136,9 +151,11 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("ArrangeAllMenuPlanner.TryParseArrangement(");
         source.Should().Contain("new SetWorkbookWindowArrangementCommand(arrangement)");
         source.Should().Contain("RefreshViewWindowCommandState()");
-        source.Should().Contain("ViewWindowCommandPlanner.CreatePlan(command, state)");
-        source.Should().Contain("ViewWindowCommandPlanner.CreateMessage(commandName, plan)");
+        source.Should().Contain("ApplyLiveWindowCommandState()");
+        source.Should().Contain("MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow");
         source.Should().Contain("AutomationProperties.SetHelpText(button, description)");
+        source.Should().NotContain("ViewWindowCommandPlanner");
+        source.Should().NotContain("ViewWindowCommandBtn_Click");
         source.Should().Contain("new SetFreezePanesCommand(_currentSheetId, frozenRows, frozenCols)");
         source.Should().Contain("private void FreezeAtSelectionMenuItem_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("private void UnfreezeAllMenuItem_Click(object sender, RoutedEventArgs e)");
@@ -148,9 +165,18 @@ public sealed class ViewCommandSourceTests
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
+    private static string ExtractViewWindowGroup(string xaml)
+    {
+        var start = xaml.IndexOf("local:RibbonMetadata.CatalogId=\"ViewWindowGroup\"", StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, "the View Window group should be present");
+        var end = xaml.IndexOf("<!-- TABLE DESIGN -->", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start, "the View Window group should end before the Table Design tab");
+        return xaml[start..end];
+    }
+
     private static string ExtractButtonElementByTitle(string xaml, string title)
     {
-        if (title is "Split" or "View Side by Side" or "Synchronous Scrolling")
+        if (title is "Split")
             return xaml.ExtractElementByInvariantCommandName("ToggleButton", title);
 
         var button = xaml.ExtractElementByInvariantCommandName("Button", title);

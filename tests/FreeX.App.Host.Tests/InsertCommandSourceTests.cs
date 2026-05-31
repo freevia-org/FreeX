@@ -51,21 +51,10 @@ public sealed class InsertCommandSourceTests
     }
 
     [Theory]
-    [InlineData("Equation", "EQ")]
-    public void InsertDeferredTextAndSymbolCommands_RemainDisabledWithoutClickHandlers(string title, string keyTip)
-    {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
-
-        button.Should().Contain("IsEnabled=\"False\"");
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().NotContain("Click=");
-    }
-
-    [Theory]
     [InlineData("Get Add-ins")]
     [InlineData("My Add-ins")]
     [InlineData("3D Map")]
+    [InlineData("Equation")]
     [InlineData("Object")]
     public void InsertOutOfScopeCommands_AreNotSurfacedAsDisabledRibbonButtons(string title)
     {
