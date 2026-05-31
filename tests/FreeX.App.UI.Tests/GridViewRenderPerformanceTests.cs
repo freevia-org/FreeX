@@ -73,6 +73,19 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCells_DoesNotClipStyledTextUnlessItWrapsOrOverflows()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var shouldClipText = source[
+            source.IndexOf("private static bool ShouldClipText(", StringComparison.Ordinal)..
+            source.IndexOf("private static Pen UnderlinePenForTextBrush", StringComparison.Ordinal)];
+
+        shouldClipText.Should().Contain("if (wrapText)");
+        shouldClipText.Should().Contain("textPoint.X + text.Width > clipRect.Right + tolerance");
+        shouldClipText.Should().NotContain("style is not null || wrapText");
+    }
+
+    [Fact]
     public void RenderHeaders_ReusesPixelsPerDipAcrossFormattedTextCalls()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
@@ -161,16 +174,23 @@ public sealed class GridViewRenderPerformanceTests
 
         renderSparklines.Should().Contain("Sparklines is not { Count: > 0 }");
         renderSparklines.Should().Contain("SparklineValues is not { Count: > 0 }");
-        renderSparklines.Should().Contain("BuildSparklineRowMetricLookup(Viewport.RowMetrics)");
-        renderSparklines.Should().Contain("BuildSparklineColumnMetricLookup(Viewport.ColMetrics)");
+        renderSparklines.Should().Contain("GetRenderCellLookups(Viewport)");
+        renderSparklines.Should().Contain("var rowLookup = lookups.Rows;");
+        renderSparklines.Should().Contain("var colLookup = lookups.Columns;");
         source.Should().Contain("private static readonly SolidColorBrush SparklinePositiveBrush");
         source.Should().Contain("private static readonly Pen SparklineLinePen");
-        source.Should().Contain("lookup.Add(row.Row, row)");
-        source.Should().Contain("lookup.Add(column.Col, column)");
+        renderSparklines.Should().Contain("DrawLineSparkline(dc, values, rect, SparklineLinePen)");
+        renderSparklines.Should().Contain("DrawColumnSparkline(dc, values, rect, sparkline.Kind == SparklineKind.WinLoss, SparklinePositiveBrush, SparklineNegativeBrush)");
+        source.Should().Contain("SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer)");
+        source.Should().Contain("SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer)");
+        source.Should().NotContain("BuildSparklineRowMetricLookup");
+        source.Should().NotContain("BuildSparklineColumnMetricLookup");
         renderSparklines.Should().NotContain(".ToDictionary(");
         renderSparklines.Should().NotContain(".Select(");
         renderSparklines.Should().NotContain("new SolidColorBrush");
         renderSparklines.Should().NotContain("new Pen");
+        source.Should().NotContain("CalculateLineLayout(values, rect)");
+        source.Should().NotContain("CalculateColumnLayout(values, rect, winLoss)");
     }
 
     [Fact]
@@ -600,16 +620,23 @@ public sealed class GridViewRenderPerformanceTests
     public void RenderManualPageBreaks_ScansVisibleMetricsOnce()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
+        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
         var renderManualPageBreaks = source[
             source.IndexOf("private void RenderManualPageBreaks", StringComparison.Ordinal)..
             source.IndexOf("public enum FormulaTraceArrowLayoutKind", StringComparison.Ordinal)];
 
-        renderManualPageBreaks.Should().Contain("AsPageBreakLookup(rowPageBreaks)");
-        renderManualPageBreaks.Should().Contain("AsPageBreakLookup(columnPageBreaks)");
-        renderManualPageBreaks.Should().Contain("pageBreaks as IReadOnlySet<uint> ?? new HashSet<uint>(pageBreaks)");
+        renderManualPageBreaks.Should().Contain("GetPageBreakLookup(rowPageBreaks, ref _rowPageBreakLookupCache)");
+        renderManualPageBreaks.Should().Contain("GetPageBreakLookup(columnPageBreaks, ref _columnPageBreakLookupCache)");
+        renderManualPageBreaks.Should().Contain("pageBreaks is IReadOnlySet<uint> set");
+        renderManualPageBreaks.Should().Contain("CalculatePageBreakFingerprint(pageBreaks)");
+        renderManualPageBreaks.Should().Contain("cache.Fingerprint == fingerprint");
         renderManualPageBreaks.Should().Contain("foreach (var metric in Viewport.RowMetrics)");
         renderManualPageBreaks.Should().Contain("foreach (var metric in Viewport.ColMetrics)");
         renderManualPageBreaks.Should().NotContain("FirstOrDefault");
+        gridViewSource.Should().Contain("private PageBreakLookupCache? _rowPageBreakLookupCache;");
+        propertiesSource.Should().Contain("OnRowPageBreaksChanged");
+        propertiesSource.Should().Contain("OnColumnPageBreaksChanged");
     }
 
     [Fact]

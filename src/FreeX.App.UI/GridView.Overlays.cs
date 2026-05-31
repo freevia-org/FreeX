@@ -213,7 +213,7 @@ public partial class GridView
 
         if (RowPageBreaks is { Count: > 0 } rowPageBreaks)
         {
-            var rowBreakLookup = AsPageBreakLookup(rowPageBreaks);
+            var rowBreakLookup = GetPageBreakLookup(rowPageBreaks, ref _rowPageBreakLookupCache);
             foreach (var metric in Viewport.RowMetrics)
             {
                 if (!rowBreakLookup.Contains(metric.Row))
@@ -226,7 +226,7 @@ public partial class GridView
 
         if (ColumnPageBreaks is { Count: > 0 } columnPageBreaks)
         {
-            var columnBreakLookup = AsPageBreakLookup(columnPageBreaks);
+            var columnBreakLookup = GetPageBreakLookup(columnPageBreaks, ref _columnPageBreakLookupCache);
             foreach (var metric in Viewport.ColMetrics)
             {
                 if (!columnBreakLookup.Contains(metric.Col))
@@ -238,8 +238,44 @@ public partial class GridView
         }
     }
 
-    private static IReadOnlySet<uint> AsPageBreakLookup(IReadOnlyCollection<uint> pageBreaks) =>
-        pageBreaks as IReadOnlySet<uint> ?? new HashSet<uint>(pageBreaks);
+    private static IReadOnlySet<uint> GetPageBreakLookup(
+        IReadOnlyCollection<uint> pageBreaks,
+        ref PageBreakLookupCache? cache)
+    {
+        if (pageBreaks is IReadOnlySet<uint> set)
+            return set;
+
+        var fingerprint = CalculatePageBreakFingerprint(pageBreaks);
+        if (cache is not null &&
+            ReferenceEquals(cache.Source, pageBreaks) &&
+            cache.Count == pageBreaks.Count &&
+            cache.Fingerprint == fingerprint)
+        {
+            return cache.Lookup;
+        }
+
+        var lookup = new HashSet<uint>(pageBreaks);
+        cache = new PageBreakLookupCache(pageBreaks, pageBreaks.Count, fingerprint, lookup);
+        return lookup;
+    }
+
+    private static ulong CalculatePageBreakFingerprint(IReadOnlyCollection<uint> pageBreaks)
+    {
+        const ulong offsetBasis = 14695981039346656037UL;
+        const ulong prime = 1099511628211UL;
+        var hash = offsetBasis;
+        foreach (var pageBreak in pageBreaks)
+        {
+            hash ^= pageBreak;
+            hash *= prime;
+        }
+
+        return hash;
+    }
+
+    private void ClearRowPageBreakLookupCache() => _rowPageBreakLookupCache = null;
+
+    private void ClearColumnPageBreakLookupCache() => _columnPageBreakLookupCache = null;
 }
 
 public enum FormulaTraceArrowLayoutKind

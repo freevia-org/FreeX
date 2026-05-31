@@ -18,8 +18,10 @@ public sealed class QuickAnalysisHoverPreviewTests
         source.Should().Contain("private void QuickAnalysisMenuItem_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)");
         source.Should().Contain("ShowQuickAnalysisPreview(sender);");
         source.Should().Contain("ClearQuickAnalysisPreview();");
-        source.Should().Contain("SheetGrid.QuickAnalysisPreviewRange = preview.Range");
-        source.Should().Contain("SheetGrid.QuickAnalysisPreviewRange = null");
+        source.Should().Contain("ApplyQuickAnalysisPreview(");
+        source.Should().Contain("preview.Range");
+        source.Should().Contain("ApplyQuickAnalysisPreview(null, GridQuickAnalysisPreviewVisualKind.None)");
+        source.Should().Contain("if (SheetGrid.QuickAnalysisPreviewRange != range)");
     }
 
     [Fact]
@@ -27,8 +29,9 @@ public sealed class QuickAnalysisHoverPreviewTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
 
-        source.Should().Contain("SheetGrid.QuickAnalysisPreviewVisual = MapQuickAnalysisPreviewVisual(preview.PreviewVisual.Kind)");
-        source.Should().Contain("SheetGrid.QuickAnalysisPreviewVisual = GridQuickAnalysisPreviewVisualKind.None");
+        source.Should().Contain("MapQuickAnalysisPreviewVisual(preview.PreviewVisual.Kind)");
+        source.Should().Contain("ApplyQuickAnalysisPreview(null, GridQuickAnalysisPreviewVisualKind.None)");
+        source.Should().Contain("if (SheetGrid.QuickAnalysisPreviewVisual != visual)");
         source.Should().Contain("private static GridQuickAnalysisPreviewVisualKind MapQuickAnalysisPreviewVisual(");
         source.Should().Contain("QuickAnalysisPreviewVisualKind.ColorScale => GridQuickAnalysisPreviewVisualKind.ColorScale");
         source.Should().Contain("QuickAnalysisPreviewVisualKind.IconSet => GridQuickAnalysisPreviewVisualKind.IconSet");

@@ -66,13 +66,18 @@ public sealed class ViewCommandSourceTests
     }
 
     [Theory]
-    // New Window and Switch Windows are now live (multi-window slice 1): they route to dedicated
-    // handlers backed by the WorkbookWindowRegistry instead of the deferred-stub planner handler.
+    // Every View ▸ Window command is now live: each routes to a dedicated handler backed by the
+    // WorkbookWindowRegistry / window-layout planners instead of a deferred-stub planner handler.
     [InlineData("New Window", "NW", "ViewNewWindowBtn_Click")]
     [InlineData("Arrange All", "A", "ArrangeAllPickerBtn_Click")]
     [InlineData("Freeze Panes", "FP", "FreezePanesPickerBtn_Click")]
     [InlineData("Split", "SP", "SplitViewBtn_Click")]
     [InlineData("Switch Windows", "W", "ViewSwitchWindowsBtn_Click")]
+    [InlineData("Hide", "H", "ViewHideWindowBtn_Click")]
+    [InlineData("Unhide", "U", "ViewUnhideWindowBtn_Click")]
+    [InlineData("Reset Window Position", "RP", "ViewResetWindowPositionBtn_Click")]
+    [InlineData("View Side by Side", "B", "ViewSideBySideBtn_Click")]
+    [InlineData("Synchronous Scrolling", "SS", "ViewSynchronousScrollingBtn_Click")]
     public void ViewWindowCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string keyTip,
@@ -87,23 +92,29 @@ public sealed class ViewCommandSourceTests
     }
 
     [Fact]
-    public void ViewWindowUnsupportedCommands_AreNotExposedAsDeferredRibbonPlaceholders()
+    public void ViewWindowCommands_AreAllLiveAndNeverDeferredRibbonPlaceholders()
     {
         var xaml = ExtractViewWindowGroup(ReadMainWindowXaml());
 
-        foreach (var commandName in new[]
-                 {
-                     "Hide",
-                     "Unhide",
-                     "View Side by Side",
-                     "Synchronous Scrolling",
-                     "Reset Window Position"
-                 })
+        // Hide / Unhide / Reset Window Position / View Side by Side / Synchronous Scrolling are now
+        // live commands with dedicated handlers — present in the ribbon, never deferred stubs.
+        var expected = new (string CommandName, string Handler)[]
         {
-            xaml.Should().NotContain($"local:RibbonMetadata.CommandName=\"{commandName}\"");
+            ("Hide", "ViewHideWindowBtn_Click"),
+            ("Unhide", "ViewUnhideWindowBtn_Click"),
+            ("Reset Window Position", "ViewResetWindowPositionBtn_Click"),
+            ("View Side by Side", "ViewSideBySideBtn_Click"),
+            ("Synchronous Scrolling", "ViewSynchronousScrollingBtn_Click"),
+        };
+
+        foreach (var (commandName, handler) in expected)
+        {
+            xaml.Should().Contain($"local:RibbonMetadata.CommandName=\"{commandName}\"");
+            xaml.Should().Contain($"Click=\"{handler}\"");
         }
 
         xaml.Should().NotContain("Click=\"ViewWindowCommandBtn_Click\"");
+        xaml.Should().NotContain("Deferred:");
     }
 
     [Theory]
@@ -162,6 +173,36 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("new SetSplitPanesCommand(sheetId, splitRow, splitColumn)");
     }
 
+    [Fact]
+    public void ViewWindowLiveHandlers_RouteThroughRegistryAndWindowLayoutPlanners()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.MultiWindow.cs"));
+
+        // Hide / Unhide are registry-driven, with owned IUserMessageService messages on refusal.
+        source.Should().Contain("private void ViewHideWindowBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("_windowRegistry.Hide(this)");
+        source.Should().Contain("private void ViewUnhideWindowBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("_windowRegistry.Unhide(hidden[0])");
+        source.Should().Contain("_messageService.ShowWarning(");
+        source.Should().Contain("_messageService.ShowInfo(");
+
+        // Reset Window Position runs through the pure WindowResetPositionPlanner.
+        source.Should().Contain("private void ViewResetWindowPositionBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("WindowResetPositionPlanner.Compute(workArea.Width, workArea.Height, index)");
+        source.Should().Contain("SystemParameters.WorkArea");
+
+        // View Side by Side toggles registry state and tiles via the registry/SideBySideLayoutPlanner.
+        source.Should().Contain("private void ViewSideBySideBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("_windowRegistry.IsSideBySideActive");
+        source.Should().Contain("_windowRegistry.EnableSideBySide(this, workArea.Width, workArea.Height)");
+        source.Should().Contain("_windowRegistry.DisableSideBySide()");
+
+        // Synchronous Scrolling toggles registry sync state and broadcasts offsets through the registry.
+        source.Should().Contain("private void ViewSynchronousScrollingBtn_Click(object sender, RoutedEventArgs e)");
+        source.Should().Contain("_windowRegistry.SetSynchronousScroll(");
+        source.Should().Contain("_windowRegistry?.BroadcastScrollOffset(this, GetScrollOffset())");
+    }
+
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
@@ -176,7 +217,7 @@ public sealed class ViewCommandSourceTests
 
     private static string ExtractButtonElementByTitle(string xaml, string title)
     {
-        if (title is "Split")
+        if (title is "Split" or "View Side by Side" or "Synchronous Scrolling")
             return xaml.ExtractElementByInvariantCommandName("ToggleButton", title);
 
         var button = xaml.ExtractElementByInvariantCommandName("Button", title);

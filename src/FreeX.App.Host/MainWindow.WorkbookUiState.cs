@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
@@ -144,63 +146,72 @@ public partial class MainWindow
     private string FormatFormulaBarText(Cell? cell, CellAddress address) =>
         SpreadsheetDisplayFormatter.FormatFormulaBarText(cell, address, _options.UseR1C1ReferenceStyle);
 
+    private void InvalidateToolbarVisualState()
+    {
+        _toolbarVisualStateCache.Clear();
+        _lastToolbarVisualState = null;
+    }
+
     private void RefreshToolbar()
     {
-        var canUndo = _commandBus.CanUndo(_workbook.Id);
-        var canRedo = _commandBus.CanRedo(_workbook.Id);
+        RefreshQuickAccessToolbarCommandStates();
 
         if (SheetGrid.SelectedRange is not { } range)
         {
-            _toolbarVisualStateCache.Clear();
-            _lastToolbarVisualState = null;
-            RefreshQuickAccessToolbarCommandStates();
+            InvalidateToolbarVisualState();
             return;
         }
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
         {
-            _toolbarVisualStateCache.Clear();
-            _lastToolbarVisualState = null;
-            RefreshQuickAccessToolbarCommandStates();
+            InvalidateToolbarVisualState();
             return;
         }
         var styleId = sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default;
-        if (_toolbarVisualStateCache.TryGetCurrent(styleId, canUndo, canRedo, out _))
+        if (_toolbarVisualStateCache.TryGetCurrent(_workbook.Id, styleId, out _))
             return;
 
         var state = _toolbarVisualStateCache.GetOrCreate(
+            _workbook.Id,
             styleId,
-            canUndo,
-            canRedo,
-            () => ToolbarVisualState.From(_workbook.GetStyle(styleId), canUndo, canRedo));
+            () => ToolbarVisualState.From(_workbook.GetStyle(styleId)));
         if (state == _lastToolbarVisualState)
             return;
 
         _suppressToolbarSync = true;
         try
         {
-            RefreshQuickAccessToolbarCommandStates();
-            BoldButton.IsChecked = state.Bold;
-            ItalicButton.IsChecked = state.Italic;
-            UnderlineButton.IsChecked = state.Underline;
-            StrikeButton.IsChecked = state.Strikethrough;
-            AlignTopBtn.IsChecked = state.VerticalAlignment == CellVAlign.Top;
-            AlignMiddleBtn.IsChecked = state.VerticalAlignment == CellVAlign.Center;
-            AlignBottomBtn.IsChecked = state.VerticalAlignment == CellVAlign.Bottom;
-            AlignLeftBtn.IsChecked = state.HorizontalAlignment == CellHAlign.Left;
-            AlignCenterBtn.IsChecked = state.HorizontalAlignment == CellHAlign.Center;
-            AlignRightBtn.IsChecked = state.HorizontalAlignment == CellHAlign.Right;
-            WrapTextBtn.IsChecked = state.WrapText;
-            if (FontNameBox.Items.Contains(state.FontName))
-                FontNameBox.SelectedItem = state.FontName;
-            if (FontSizeBox.Items.Contains(state.FontSizeText))
-                FontSizeBox.SelectedItem = state.FontSizeText;
+            SetToggleCheckedIfChanged(BoldButton, state.Bold);
+            SetToggleCheckedIfChanged(ItalicButton, state.Italic);
+            SetToggleCheckedIfChanged(UnderlineButton, state.Underline);
+            SetToggleCheckedIfChanged(StrikeButton, state.Strikethrough);
+            SetToggleCheckedIfChanged(AlignTopBtn, state.VerticalAlignment == CellVAlign.Top);
+            SetToggleCheckedIfChanged(AlignMiddleBtn, state.VerticalAlignment == CellVAlign.Center);
+            SetToggleCheckedIfChanged(AlignBottomBtn, state.VerticalAlignment == CellVAlign.Bottom);
+            SetToggleCheckedIfChanged(AlignLeftBtn, state.HorizontalAlignment == CellHAlign.Left);
+            SetToggleCheckedIfChanged(AlignCenterBtn, state.HorizontalAlignment == CellHAlign.Center);
+            SetToggleCheckedIfChanged(AlignRightBtn, state.HorizontalAlignment == CellHAlign.Right);
+            SetToggleCheckedIfChanged(WrapTextBtn, state.WrapText);
+            SetSelectedItemIfChanged(FontNameBox, state.FontName);
+            SetSelectedItemIfChanged(FontSizeBox, state.FontSizeText);
             _lastToolbarVisualState = state;
         }
         finally
         {
             _suppressToolbarSync = false;
         }
+    }
+
+    private static void SetToggleCheckedIfChanged(ToggleButton button, bool? value)
+    {
+        if (button.IsChecked != value)
+            button.IsChecked = value;
+    }
+
+    private static void SetSelectedItemIfChanged(ComboBox comboBox, object value)
+    {
+        if (comboBox.Items.Contains(value) && !Equals(comboBox.SelectedItem, value))
+            comboBox.SelectedItem = value;
     }
 
     private void ApplyStyleDiff(StyleDiff diff)

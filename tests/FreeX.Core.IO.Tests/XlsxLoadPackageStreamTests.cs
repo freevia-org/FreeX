@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.IO.Compression;
+using System.Text;
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
@@ -34,6 +35,27 @@ public sealed class XlsxLoadPackageStreamTests
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeAllocatedBytes;
         stripped.Should().BeSameAs(package);
         allocatedBytes.Should().BeLessThan(1_000_000);
+    }
+
+    [Fact]
+    public void StyleOnlyCellStripper_NoDuplicateStyleOnlyCellsUsesStreamingPreScan()
+    {
+        using var package = CreatePackageWithWorksheet(
+            CreateUniqueStyleOnlyWorksheetXml(rows: 120, columns: 40),
+            includeLargePayload: false);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var beforeAllocatedBytes = GC.GetAllocatedBytesForCurrentThread();
+
+        using var stripped = CreateStyleOnlyStrippedPackage(package);
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeAllocatedBytes;
+        stripped.Should().BeSameAs(package);
+        allocatedBytes.Should().BeLessThan(
+            1_500_000,
+            "clean worksheets should be rejected by the streaming pre-scan instead of DOM-loading every cell");
     }
 
     [Fact]
@@ -157,6 +179,47 @@ public sealed class XlsxLoadPackageStreamTests
 
         package.Position = 0;
         return package;
+    }
+
+    private static string CreateUniqueStyleOnlyWorksheetXml(int rows, int columns)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">""");
+        builder.AppendLine("<sheetData>");
+        var styleIndex = 1;
+        for (var row = 1; row <= rows; row++)
+        {
+            builder.Append("<row r=\"").Append(row).AppendLine("\">");
+            for (var column = 1; column <= columns; column++)
+            {
+                builder
+                    .Append("<c r=\"")
+                    .Append(ColumnName(column))
+                    .Append(row)
+                    .Append("\" s=\"")
+                    .Append(styleIndex++)
+                    .AppendLine("\"/>");
+            }
+
+            builder.AppendLine("</row>");
+        }
+
+        builder.AppendLine("</sheetData>");
+        builder.AppendLine("</worksheet>");
+        return builder.ToString();
+    }
+
+    private static string ColumnName(int column)
+    {
+        var builder = new StringBuilder();
+        while (column > 0)
+        {
+            column--;
+            builder.Insert(0, (char)('A' + column % 26));
+            column /= 26;
+        }
+
+        return builder.ToString();
     }
 
     private static IReadOnlyList<string> ReadWorksheetCellReferences(MemoryStream package)

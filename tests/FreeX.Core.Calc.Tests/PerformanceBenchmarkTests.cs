@@ -347,7 +347,8 @@ public class PerformanceBenchmarkTests
 
         rebuild.Should().Contain("if (!sheet.HasFormulas)");
         rebuild.IndexOf("if (!sheet.HasFormulas)", StringComparison.Ordinal)
-            .Should().BeLessThan(rebuild.IndexOf("foreach (var (addr, cell) in sheet.EnumerateCells())", StringComparison.Ordinal));
+            .Should().BeLessThan(rebuild.IndexOf("foreach (var addr in sheet.EnumerateFormulaCells())", StringComparison.Ordinal));
+        rebuild.Should().NotContain("foreach (var (addr, cell) in sheet.EnumerateCells())");
     }
 
     [Fact]

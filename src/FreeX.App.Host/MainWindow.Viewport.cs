@@ -12,6 +12,7 @@ public partial class MainWindow
     private void Scroll_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         UpdateViewport();
+        BroadcastScrollOffsetToSideBySidePartner();
     }
 
     private void VerticalScroll_Scroll(object sender, ScrollEventArgs e)
@@ -356,12 +357,11 @@ public partial class MainWindow
         SheetGrid.DrawingShapes = keepObjectData ? sheet?.DrawingShapes : null;
         SheetGrid.WorkbookTheme = _workbook.Theme;
         SheetGrid.Pictures = keepObjectData ? sheet?.Pictures : null;
-        SheetGrid.NativeSlicers = keepObjectData && sheet is not null
-            ? SlicerTimelinePlanner.GetNativeVisualSlicers(_workbook, sheet)
+        var nativeVisualFilters = keepObjectData && sheet is not null
+            ? SlicerTimelinePlanner.GetNativeVisualFilters(_workbook, sheet)
             : null;
-        SheetGrid.NativeTimelines = keepObjectData && sheet is not null
-            ? SlicerTimelinePlanner.GetNativeVisualTimelines(_workbook, sheet)
-            : null;
+        SheetGrid.NativeSlicers = nativeVisualFilters?.Slicers;
+        SheetGrid.NativeTimelines = nativeVisualFilters?.Timelines;
         SheetGrid.WorksheetBackground = sheet?.BackgroundImage;
         SheetGrid.Sparklines = sheet?.Sparklines;
         SheetGrid.SparklineValues = sheet is null

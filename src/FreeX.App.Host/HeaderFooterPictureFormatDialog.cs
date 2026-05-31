@@ -30,15 +30,15 @@ public sealed class HeaderFooterPictureFormatDialog : Window
         ShowInTaskbar = false;
         _widthBox.Text = picture.Width.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _heightBox.Text = picture.Height.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        AutomationProperties.SetName(_widthBox, "Header/footer picture width");
+        AutomationProperties.SetName(_widthBox, UiText.Get("HeaderFooterPicture_WidthAutomationName"));
         AutomationProperties.SetAutomationId(_widthBox, "HeaderFooterPictureWidthBox");
-        AutomationProperties.SetHelpText(_widthBox, "Enter the header or footer picture width.");
-        AutomationProperties.SetName(_heightBox, "Header/footer picture height");
+        AutomationProperties.SetHelpText(_widthBox, UiText.Get("HeaderFooterPicture_WidthHelpText"));
+        AutomationProperties.SetName(_heightBox, UiText.Get("HeaderFooterPicture_HeightAutomationName"));
         AutomationProperties.SetAutomationId(_heightBox, "HeaderFooterPictureHeightBox");
-        AutomationProperties.SetHelpText(_heightBox, "Enter the header or footer picture height.");
-        AutomationProperties.SetName(_lockAspectRatioBox, "Lock aspect ratio");
+        AutomationProperties.SetHelpText(_heightBox, UiText.Get("HeaderFooterPicture_HeightHelpText"));
+        AutomationProperties.SetName(_lockAspectRatioBox, UiText.Get("HeaderFooterPicture_LockAspectRatioAutomationName"));
         AutomationProperties.SetAutomationId(_lockAspectRatioBox, "HeaderFooterPictureLockAspectRatioCheckBox");
-        AutomationProperties.SetHelpText(_lockAspectRatioBox, "Keep the header or footer picture width and height proportional.");
+        AutomationProperties.SetHelpText(_lockAspectRatioBox, UiText.Get("HeaderFooterPicture_LockAspectRatioHelpText"));
         _widthBox.TextChanged += WidthBox_TextChanged;
         _heightBox.TextChanged += HeightBox_TextChanged;
         Content = CreateContent(picture.FileName ?? UiText.Get("HeaderFooterPicture_DefaultFileName"));
@@ -59,9 +59,9 @@ public sealed class HeaderFooterPictureFormatDialog : Window
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             Margin = new Thickness(0, 8, 0, 12)
         };
-        AutomationProperties.SetName(resetButton, "Reset picture size");
+        AutomationProperties.SetName(resetButton, UiText.Get("HeaderFooterPicture_ResetSizeAutomationName"));
         AutomationProperties.SetAutomationId(resetButton, "HeaderFooterPictureResetSizeButton");
-        AutomationProperties.SetHelpText(resetButton, "Reset the picture width and height to the original size.");
+        AutomationProperties.SetHelpText(resetButton, UiText.Get("HeaderFooterPicture_ResetSizeHelpText"));
         resetButton.Click += (_, _) => ResetSize();
         stack.Children.Add(resetButton);
         stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));

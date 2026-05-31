@@ -110,27 +110,23 @@ public partial class GridView
         dc.DrawLine(HandlePen, topCenter, new Point(gripCenter.X, gripCenter.Y + RotationGripDiameter / 2));
         dc.DrawEllipse(RotationGripFill, RotationGripPen, gripCenter, RotationGripDiameter / 2, RotationGripDiameter / 2);
 
-        var handles = GetHandleRects(r);
-        foreach (var h in handles)
-            dc.DrawRectangle(HandleFill, HandlePen, h);
-    }
-
-    private static Rect[] GetHandleRects(Rect r)
-    {
         double hs = HandleSize;
         double hh = hs / 2;
-        return
-        [
-            new Rect(r.Left - hh,              r.Top - hh,               hs, hs), // NW
-            new Rect(r.Left + r.Width / 2 - hh, r.Top - hh,              hs, hs), // N
-            new Rect(r.Right - hh,              r.Top - hh,               hs, hs), // NE
-            new Rect(r.Right - hh,              r.Top + r.Height / 2 - hh, hs, hs), // E
-            new Rect(r.Right - hh,              r.Bottom - hh,            hs, hs), // SE
-            new Rect(r.Left + r.Width / 2 - hh, r.Bottom - hh,           hs, hs), // S
-            new Rect(r.Left - hh,              r.Bottom - hh,             hs, hs), // SW
-            new Rect(r.Left - hh,              r.Top + r.Height / 2 - hh, hs, hs), // W
-        ];
+        var centerX = r.Left + r.Width / 2;
+        var centerY = r.Top + r.Height / 2;
+
+        DrawObjectSelectionHandle(dc, r.Left - hh, r.Top - hh, hs);
+        DrawObjectSelectionHandle(dc, centerX - hh, r.Top - hh, hs);
+        DrawObjectSelectionHandle(dc, r.Right - hh, r.Top - hh, hs);
+        DrawObjectSelectionHandle(dc, r.Right - hh, centerY - hh, hs);
+        DrawObjectSelectionHandle(dc, r.Right - hh, r.Bottom - hh, hs);
+        DrawObjectSelectionHandle(dc, centerX - hh, r.Bottom - hh, hs);
+        DrawObjectSelectionHandle(dc, r.Left - hh, r.Bottom - hh, hs);
+        DrawObjectSelectionHandle(dc, r.Left - hh, centerY - hh, hs);
     }
+
+    private static void DrawObjectSelectionHandle(DrawingContext dc, double x, double y, double size) =>
+        dc.DrawRectangle(HandleFill, HandlePen, new Rect(x, y, size, size));
 
     private ObjectDragKind HitTestObjectHandle(Point pos, Rect objRect)
         => GridObjectDragPlanner.HitTestHandle(pos, objRect, HandleSize, HandleHitPad);

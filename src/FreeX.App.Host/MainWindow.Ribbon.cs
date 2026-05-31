@@ -17,7 +17,7 @@ public partial class MainWindow
     private const string RibbonDropdownMenuHoverPartName = "PART_RibbonDropdownMenuHover";
     private const string RibbonDropdownContentPartName = "PART_RibbonDropdownContent";
     private const double RibbonSplitButtonIconColumnWidth = 24;
-    private const double RibbonSplitButtonDropdownColumnWidth = 12;
+    private const double RibbonSplitButtonDropdownColumnWidth = 14;
     private const double RibbonSplitButtonIconOnlyContentWidth =
         RibbonSplitButtonIconColumnWidth + RibbonSplitButtonDropdownColumnWidth;
 
@@ -392,9 +392,10 @@ public partial class MainWindow
 
     private static FrameworkElement CreateRibbonDropdownChevron(RibbonCommandContentLayout layout)
     {
+        var isCompactChevron = layout is RibbonCommandContentLayout.Small or RibbonCommandContentLayout.IconOnly;
         var chevron = CreateRibbonChevronGlyph(
-            width: 10,
-            height: 8,
+            width: isCompactChevron ? 8 : 10,
+            height: isCompactChevron ? 7 : 8,
             brush: BrushFromRgb(31, 31, 31),
             pointsUp: false);
         RibbonMetadata.SetRole(chevron, RibbonMetadataRole.DropdownChevron);

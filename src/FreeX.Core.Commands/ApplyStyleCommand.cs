@@ -36,6 +36,7 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
             return validationOutcome;
 
         _snapshot = [];
+        var styleCache = new Dictionary<StyleId, StyleId>();
 
         foreach (var addr in _range.AllCells())
         {
@@ -45,18 +46,14 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
             {
                 _snapshot.Add((addr, null, sheet.GetStyleOnly(addr.Row, addr.Col)));
 
-                var baseStyle  = ctx.Workbook.GetStyle(StyleId.Default);
-                var newStyle   = _diff.ApplyTo(baseStyle);
-                var newStyleId = ctx.Workbook.RegisterStyle(newStyle);
+                var newStyleId = StyleDiffStyleCache.GetOrRegister(ctx.Workbook, _diff, StyleId.Default, styleCache);
                 sheet.SetStyleOnly(addr.Row, addr.Col, newStyleId);
             }
             else
             {
                 _snapshot.Add((addr, cell.Clone(), null));
 
-                var baseStyle = ctx.Workbook.GetStyle(cell.StyleId);
-                var newStyle  = _diff.ApplyTo(baseStyle);
-                cell.StyleId  = ctx.Workbook.RegisterStyle(newStyle);
+                cell.StyleId = StyleDiffStyleCache.GetOrRegister(ctx.Workbook, _diff, cell.StyleId, styleCache);
             }
         }
 
@@ -115,4 +112,22 @@ internal static class StyleDiffValidator
 
     private static bool HasInvalidBorderStyle(CellBorder? border) =>
         border is { } value && !Enum.IsDefined(value.Style);
+}
+
+internal static class StyleDiffStyleCache
+{
+    public static StyleId GetOrRegister(
+        Workbook workbook,
+        StyleDiff diff,
+        StyleId baseStyleId,
+        Dictionary<StyleId, StyleId> cache)
+    {
+        if (cache.TryGetValue(baseStyleId, out var cachedStyleId))
+            return cachedStyleId;
+
+        var newStyle = diff.ApplyTo(workbook.GetStyle(baseStyleId));
+        var newStyleId = workbook.RegisterStyle(newStyle);
+        cache[baseStyleId] = newStyleId;
+        return newStyleId;
+    }
 }

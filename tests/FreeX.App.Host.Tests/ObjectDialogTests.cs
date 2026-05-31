@@ -824,7 +824,7 @@ public sealed class ObjectDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextEntryDialogs.cs"));
 
-        source.Should().Contain("AutomationProperties.SetName(_textBox, CreateAutomationName(label));");
+        source.Should().Contain("AutomationProperties.SetName(_textBox, automationName ?? CreateAutomationName(label));");
         source.Should().Contain("label.Replace(\"_\", string.Empty, StringComparison.Ordinal)");
         source.Should().Contain(".Replace(\":\", string.Empty, StringComparison.Ordinal)");
     }
@@ -834,8 +834,12 @@ public sealed class ObjectDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextEntryDialogs.cs"));
 
-        source.Should().Contain("AutomationProperties.SetAutomationId(_textBox, CreateAutomationId(title));");
-        source.Should().Contain("AutomationProperties.SetHelpText(_textBox, CreateHelpText(label));");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_textBox, automationId ?? CreateAutomationId(title));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_textBox, helpText ?? CreateHelpText(label));");
+        source.Should().Contain("\"SetHyperlinkScreenTipTextBox\"");
+        source.Should().Contain("\"SelectPlaceinDocumentTextBox\"");
+        source.Should().Contain("UiText.Get(\"Hyperlink_ScreenTipTextAutomationName\")");
+        source.Should().Contain("UiText.Get(\"Hyperlink_BookmarkOrCellReferenceAutomationName\")");
         source.Should().Contain("string.Concat(title.Where(char.IsLetterOrDigit)) + \"TextBox\"");
         source.Should().Contain("$\"Enter {CreateAutomationName(label).ToLowerInvariant()}.\"");
     }
@@ -897,7 +901,7 @@ public sealed class ObjectDialogTests
             .Should()
             .BeFalse();
 
-        error.Should().Be("Enter a comment.");
+        error.Should().Be(UiText.Get("ThreadedComment_EnterCommentMessage"));
     }
 
     [Fact]
@@ -923,7 +927,7 @@ public sealed class ObjectDialogTests
             .Should()
             .BeFalse();
 
-        error.Should().Be("Enter a comment.");
+        error.Should().Be(UiText.Get("ThreadedComment_EnterCommentMessage"));
     }
 
     [Fact]
@@ -932,7 +936,7 @@ public sealed class ObjectDialogTests
         var source = ReadClassSource("ThreadedCommentDialog.cs", "public sealed class ThreadedCommentDialog", "");
 
         source.Should().Contain("if (!TryCreateResult(existing, _rootBox.Text, _replyBox.Text, _resolveBox.IsChecked == true, out var result, out var error))");
-        source.Should().Contain("ShowInvalidThreadedCommentWarning(error ?? \"Enter a comment.\", _rootBox);");
+        source.Should().Contain("ShowInvalidThreadedCommentWarning(error ?? UiText.Get(\"ThreadedComment_EnterCommentMessage\"), _rootBox);");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, message, Title);");
         source.Should().Contain("target.Focus();");
         source.Should().Contain("target.SelectAll();");

@@ -3657,6 +3657,12 @@
   <data name="MainWindow_Content_NewWindow" xml:space="preserve">
     <value>New Window</value>
   </data>
+  <data name="MainWindow_Content_HideWindow" xml:space="preserve">
+    <value>Hide</value>
+  </data>
+  <data name="MainWindow_Content_UnhideWindow" xml:space="preserve">
+    <value>Unhide</value>
+  </data>
   <data name="MainWindow_Content_Next" xml:space="preserve">
     <value>Next</value>
   </data>
@@ -5526,6 +5532,33 @@
   <data name="MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow" xml:space="preserve">
     <value>Unavailable: requires more than one visible workbook window.</value>
   </data>
+  <data name="MainWindow_TooltipDescription_HideThisWorkbookWindowFromView" xml:space="preserve">
+    <value>Hide this workbook window from view.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_UnavailableHideRequiresSecondVisibleWindow" xml:space="preserve">
+    <value>Unavailable: at least one other window must stay visible.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_RestoreAHiddenWorkbookWindow" xml:space="preserve">
+    <value>Restore a hidden workbook window.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_UnavailableUnhideRequiresAHiddenWindow" xml:space="preserve">
+    <value>Unavailable: no workbook window is currently hidden.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ResetThisWindowToAStandardSizeAndPosition" xml:space="preserve">
+    <value>Reset this window to a standard size and position.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_TileThisWindowAndAnotherSideBySideToCompareThem" xml:space="preserve">
+    <value>Tile this window and another side by side to compare them.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_UnavailableViewSideBySideRequiresSecondVisibleWindow" xml:space="preserve">
+    <value>Unavailable: requires a second visible workbook window.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ScrollBothSideBySideWindowsTogether" xml:space="preserve">
+    <value>Scroll both side-by-side windows together.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_UnavailableSynchronousScrollingRequiresViewSideBySide" xml:space="preserve">
+    <value>Unavailable: turn on View Side by Side first.</value>
+  </data>
   <data name="MainWindow_TooltipDescription_DeferredRetainedFromXLSXFilesAuthoringAndRenderingNeedADedicatedDataMode_568CFF74" xml:space="preserve">
     <value>Deferred: retained from XLSX files; authoring and rendering need a dedicated data model.</value>
   </data>
@@ -7055,6 +7088,12 @@
   </data>
   <data name="MainWindow_TooltipTitle_SwitchWindows" xml:space="preserve">
     <value>Switch Windows</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_HideWindow" xml:space="preserve">
+    <value>Hide</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_UnhideWindow" xml:space="preserve">
+    <value>Unhide</value>
   </data>
   <data name="MainWindow_TooltipTitle_Symbol" xml:space="preserve">
     <value>Symbol</value>
@@ -14604,5 +14643,533 @@ and {0} more.</value>
   </data>
   <data name="TableDesign_TableRangeLabel" xml:space="preserve">
     <value>_Table range:</value>
+  </data>
+  <data name="DialogReferencePicker_ToolTip" xml:space="preserve">
+    <value>Collapse dialog and select range</value>
+  </data>
+  <data name="DialogReferencePicker_HelpText" xml:space="preserve">
+    <value>Collapse dialog and select a worksheet range for this field.</value>
+  </data>
+  <data name="HeaderFooterPicture_WidthAutomationName" xml:space="preserve">
+    <value>Header/footer picture width</value>
+  </data>
+  <data name="HeaderFooterPicture_WidthHelpText" xml:space="preserve">
+    <value>Enter the header or footer picture width.</value>
+  </data>
+  <data name="HeaderFooterPicture_HeightAutomationName" xml:space="preserve">
+    <value>Header/footer picture height</value>
+  </data>
+  <data name="HeaderFooterPicture_HeightHelpText" xml:space="preserve">
+    <value>Enter the header or footer picture height.</value>
+  </data>
+  <data name="HeaderFooterPicture_LockAspectRatioAutomationName" xml:space="preserve">
+    <value>Lock aspect ratio</value>
+  </data>
+  <data name="HeaderFooterPicture_LockAspectRatioHelpText" xml:space="preserve">
+    <value>Keep the header or footer picture width and height proportional.</value>
+  </data>
+  <data name="HeaderFooterPicture_ResetSizeAutomationName" xml:space="preserve">
+    <value>Reset picture size</value>
+  </data>
+  <data name="HeaderFooterPicture_ResetSizeHelpText" xml:space="preserve">
+    <value>Reset the picture width and height to the original size.</value>
+  </data>
+  <data name="ShapeGradient_StartColorAutomationName" xml:space="preserve">
+    <value>Start gradient color</value>
+  </data>
+  <data name="ShapeGradient_StartColorHelpText" xml:space="preserve">
+    <value>Enter the first gradient stop color as R,G,B.</value>
+  </data>
+  <data name="ShapeGradient_EndColorAutomationName" xml:space="preserve">
+    <value>End gradient color</value>
+  </data>
+  <data name="ShapeGradient_EndColorHelpText" xml:space="preserve">
+    <value>Enter the second gradient stop color as R,G,B.</value>
+  </data>
+  <data name="ShapeGradient_ChooseStartColorAutomationName" xml:space="preserve">
+    <value>Choose start gradient color</value>
+  </data>
+  <data name="ShapeGradient_ChooseStartColorHelpText" xml:space="preserve">
+    <value>Open the color picker for the first gradient stop.</value>
+  </data>
+  <data name="ShapeGradient_ChooseEndColorAutomationName" xml:space="preserve">
+    <value>Choose end gradient color</value>
+  </data>
+  <data name="ShapeGradient_ChooseEndColorHelpText" xml:space="preserve">
+    <value>Open the color picker for the second gradient stop.</value>
+  </data>
+  <data name="RemoveDuplicates_MyDataHasHeadersAutomationName" xml:space="preserve">
+    <value>My data has headers</value>
+  </data>
+  <data name="RemoveDuplicates_MyDataHasHeadersHelpText" xml:space="preserve">
+    <value>Select when the first row contains column headers.</value>
+  </data>
+  <data name="RemoveDuplicates_ColumnsAutomationName" xml:space="preserve">
+    <value>Columns</value>
+  </data>
+  <data name="RemoveDuplicates_ColumnsHelpText" xml:space="preserve">
+    <value>Choose the columns used to identify duplicate rows.</value>
+  </data>
+  <data name="RemoveDuplicates_SelectAllAutomationName" xml:space="preserve">
+    <value>Select all columns</value>
+  </data>
+  <data name="RemoveDuplicates_SelectAllHelpText" xml:space="preserve">
+    <value>Select every column for duplicate detection.</value>
+  </data>
+  <data name="RemoveDuplicates_UnselectAllAutomationName" xml:space="preserve">
+    <value>Unselect all columns</value>
+  </data>
+  <data name="RemoveDuplicates_UnselectAllHelpText" xml:space="preserve">
+    <value>Clear every column selection.</value>
+  </data>
+  <data name="RemoveDuplicates_ColumnHelpText" xml:space="preserve">
+    <value>Select to include this column when identifying duplicate rows.</value>
+  </data>
+  <data name="RemoveDuplicates_ColumnAutomationNameFormat" xml:space="preserve">
+    <value>{0} column</value>
+  </data>
+  <data name="Subtotal_ColumnAutomationNameFormat" xml:space="preserve">
+    <value>{0} subtotal column</value>
+  </data>
+  <data name="Subtotal_ColumnHelpText" xml:space="preserve">
+    <value>Select to add a subtotal calculation to this column.</value>
+  </data>
+  <data name="Subtotal_AtEachChangeInAutomationName" xml:space="preserve">
+    <value>At each change in</value>
+  </data>
+  <data name="Subtotal_AtEachChangeInHelpText" xml:space="preserve">
+    <value>Choose the column that defines each subtotal group.</value>
+  </data>
+  <data name="Subtotal_UseFunctionAutomationName" xml:space="preserve">
+    <value>Use function</value>
+  </data>
+  <data name="Subtotal_UseFunctionHelpText" xml:space="preserve">
+    <value>Choose the function used to calculate each subtotal.</value>
+  </data>
+  <data name="Subtotal_AddSubtotalToAutomationName" xml:space="preserve">
+    <value>Add subtotal to</value>
+  </data>
+  <data name="Subtotal_AddSubtotalToHelpText" xml:space="preserve">
+    <value>Choose columns that receive subtotal calculations.</value>
+  </data>
+  <data name="Subtotal_ReplaceCurrentSubtotalsAutomationName" xml:space="preserve">
+    <value>Replace current subtotals</value>
+  </data>
+  <data name="Subtotal_ReplaceCurrentSubtotalsHelpText" xml:space="preserve">
+    <value>Replace existing subtotals with the new subtotal settings.</value>
+  </data>
+  <data name="Subtotal_PageBreakBetweenGroupsAutomationName" xml:space="preserve">
+    <value>Page break between groups</value>
+  </data>
+  <data name="Subtotal_PageBreakBetweenGroupsHelpText" xml:space="preserve">
+    <value>Insert a page break after each subtotal group.</value>
+  </data>
+  <data name="Subtotal_SummaryBelowDataAutomationName" xml:space="preserve">
+    <value>Summary below data</value>
+  </data>
+  <data name="Subtotal_SummaryBelowDataHelpText" xml:space="preserve">
+    <value>Place subtotal rows below each group.</value>
+  </data>
+  <data name="Subtotal_RemoveAllAutomationName" xml:space="preserve">
+    <value>Remove all subtotals</value>
+  </data>
+  <data name="Subtotal_RemoveAllHelpText" xml:space="preserve">
+    <value>Remove all subtotal rows from the selected data.</value>
+  </data>
+  <data name="Subtotal_EnterValidGroupColumnOffset" xml:space="preserve">
+    <value>Enter a valid group column offset.</value>
+  </data>
+  <data name="Subtotal_EnterValidSubtotalColumnOffsets" xml:space="preserve">
+    <value>Enter one or more valid subtotal column offsets.</value>
+  </data>
+  <data name="PrintPreview_OrientationLabel" xml:space="preserve">
+    <value>_Orientation:</value>
+  </data>
+  <data name="PrintPreview_ScalingLabel" xml:space="preserve">
+    <value>_Scaling:</value>
+  </data>
+  <data name="PrintPreview_Scale100Percent" xml:space="preserve">
+    <value>100%</value>
+  </data>
+  <data name="PrintPreview_FitToOnePage" xml:space="preserve">
+    <value>Fit to 1 Page</value>
+  </data>
+  <data name="PrintPreview_FitToOnePageWide" xml:space="preserve">
+    <value>Fit to 1 Page Wide</value>
+  </data>
+  <data name="PrintPreview_IgnorePrintArea" xml:space="preserve">
+    <value>_Ignore print area</value>
+  </data>
+  <data name="PrintPreview_IgnorePrintAreaToolTip" xml:space="preserve">
+    <value>Preview and print the active sheet instead of the stored print area.</value>
+  </data>
+  <data name="PrintPreview_IgnorePrintAreaAutomationName" xml:space="preserve">
+    <value>Ignore print area</value>
+  </data>
+  <data name="PrintPreview_IgnorePrintAreaHelpText" xml:space="preserve">
+    <value>When checked, the preview prints the active sheet instead of the stored print area.</value>
+  </data>
+  <data name="PrintPreview_PrintOptionsSection" xml:space="preserve">
+    <value>Print Options</value>
+  </data>
+  <data name="PrintSettings_OrientationFormat" xml:space="preserve">
+    <value>Orientation: {0}</value>
+  </data>
+  <data name="PrintSettings_PaperSizeFormat" xml:space="preserve">
+    <value>Paper size: {0}</value>
+  </data>
+  <data name="PrintSettings_ScalingFormat" xml:space="preserve">
+    <value>Scaling: {0}</value>
+  </data>
+  <data name="PrintSettings_GridlinesFormat" xml:space="preserve">
+    <value>Gridlines: {0}</value>
+  </data>
+  <data name="PrintSettings_HeadingsFormat" xml:space="preserve">
+    <value>Headings: {0}</value>
+  </data>
+  <data name="PrintSettings_PrintActiveSheet" xml:space="preserve">
+    <value>Print active sheet</value>
+  </data>
+  <data name="PrintSettings_PrintActiveSheetIgnorePrintArea" xml:space="preserve">
+    <value>Print active sheet (ignore print area)</value>
+  </data>
+  <data name="PrintSettings_PrintSelectedPrintArea" xml:space="preserve">
+    <value>Print selected print area</value>
+  </data>
+  <data name="PrintSettings_FitPagesWideByTall" xml:space="preserve">
+    <value>fit {0} page wide by {1} tall</value>
+  </data>
+  <data name="PrintSettings_Auto" xml:space="preserve">
+    <value>auto</value>
+  </data>
+  <data name="PrintSettings_Automatic" xml:space="preserve">
+    <value>Automatic</value>
+  </data>
+  <data name="PrintSettings_On" xml:space="preserve">
+    <value>on</value>
+  </data>
+  <data name="PrintSettings_Off" xml:space="preserve">
+    <value>off</value>
+  </data>
+  <data name="Protection_PasswordAutomationName" xml:space="preserve">
+    <value>Protection password</value>
+  </data>
+  <data name="Protection_PasswordHelpText" xml:space="preserve">
+    <value>Enter the optional password for protecting the sheet or workbook.</value>
+  </data>
+  <data name="Protection_ConfirmPasswordAutomationName" xml:space="preserve">
+    <value>Confirm protection password</value>
+  </data>
+  <data name="Protection_ConfirmPasswordHelpText" xml:space="preserve">
+    <value>Reenter the password to confirm protection.</value>
+  </data>
+  <data name="WorkbookTheme_ColorAutomationNameFormat" xml:space="preserve">
+    <value>{0} theme color</value>
+  </data>
+  <data name="WorkbookTheme_ColorHelpText" xml:space="preserve">
+    <value>Enter a theme color as a #RRGGBB value.</value>
+  </data>
+  <data name="WorkbookTheme_PickColorHelpTextFormat" xml:space="preserve">
+    <value>Pick the {0} theme color.</value>
+  </data>
+  <data name="NameDefinition_NewNameTitle" xml:space="preserve">
+    <value>New Name</value>
+  </data>
+  <data name="NameDefinition_EditNameTitle" xml:space="preserve">
+    <value>Edit Name</value>
+  </data>
+  <data name="NameDefinition_NameAutomationName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="NameDefinition_ScopeAutomationName" xml:space="preserve">
+    <value>Scope</value>
+  </data>
+  <data name="NameDefinition_CommentAutomationName" xml:space="preserve">
+    <value>Comment</value>
+  </data>
+  <data name="NameDefinition_RefersToAutomationName" xml:space="preserve">
+    <value>Refers to</value>
+  </data>
+  <data name="NameDefinition_RangePickerToolTip" xml:space="preserve">
+    <value>Collapse dialog and select the referenced range from the worksheet</value>
+  </data>
+  <data name="NameDefinition_RangePickerAutomationName" xml:space="preserve">
+    <value>Select referenced range</value>
+  </data>
+  <data name="NameDefinition_RangePickerHelpText" xml:space="preserve">
+    <value>Collapse dialog and select the referenced range from the worksheet.</value>
+  </data>
+  <data name="NameDefinition_NameLabel" xml:space="preserve">
+    <value>_Name:</value>
+  </data>
+  <data name="NameDefinition_ScopeLabel" xml:space="preserve">
+    <value>_Scope:</value>
+  </data>
+  <data name="NameDefinition_CommentLabel" xml:space="preserve">
+    <value>_Comment:</value>
+  </data>
+  <data name="NameDefinition_RefersToLabel" xml:space="preserve">
+    <value>_Refers to:</value>
+  </data>
+  <data name="NameDefinition_InvalidRangeFormatMessage" xml:space="preserve">
+    <value>Invalid range format. Use: SheetName!A1:B10 or A1:B10</value>
+  </data>
+  <data name="NameDefinition_PleaseEnterNameMessage" xml:space="preserve">
+    <value>Please enter a name.</value>
+  </data>
+  <data name="Hyperlink_SetHyperlinkScreenTipTitle" xml:space="preserve">
+    <value>Set Hyperlink ScreenTip</value>
+  </data>
+  <data name="Hyperlink_ScreenTipTextLabel" xml:space="preserve">
+    <value>_ScreenTip text:</value>
+  </data>
+  <data name="Hyperlink_ScreenTipTextAutomationName" xml:space="preserve">
+    <value>ScreenTip text</value>
+  </data>
+  <data name="Hyperlink_ScreenTipTextHelpText" xml:space="preserve">
+    <value>Enter ScreenTip text.</value>
+  </data>
+  <data name="Hyperlink_BookmarkOrCellReferenceLabel" xml:space="preserve">
+    <value>_Bookmark or cell reference:</value>
+  </data>
+  <data name="Hyperlink_BookmarkOrCellReferenceAutomationName" xml:space="preserve">
+    <value>Bookmark or cell reference</value>
+  </data>
+  <data name="Hyperlink_BookmarkOrCellReferenceHelpText" xml:space="preserve">
+    <value>Enter a bookmark, defined name, or cell reference.</value>
+  </data>
+  <data name="ThreadedComment_TitleFormat" xml:space="preserve">
+    <value>Comment - {0}</value>
+  </data>
+  <data name="ThreadedComment_MarkAsResolved" xml:space="preserve">
+    <value>_Mark as Resolved</value>
+  </data>
+  <data name="ThreadedComment_AddButton" xml:space="preserve">
+    <value>_Add</value>
+  </data>
+  <data name="ThreadedComment_ReplyButton" xml:space="preserve">
+    <value>_Reply</value>
+  </data>
+  <data name="ThreadedComment_CancelButton" xml:space="preserve">
+    <value>Ca_ncel</value>
+  </data>
+  <data name="ThreadedComment_AddCommentAutomationName" xml:space="preserve">
+    <value>Add comment</value>
+  </data>
+  <data name="ThreadedComment_ReplyToCommentAutomationName" xml:space="preserve">
+    <value>Reply to comment</value>
+  </data>
+  <data name="ThreadedComment_AddCommentHelpText" xml:space="preserve">
+    <value>Add the threaded comment.</value>
+  </data>
+  <data name="ThreadedComment_ReplyToCommentHelpText" xml:space="preserve">
+    <value>Add a reply to the threaded comment.</value>
+  </data>
+  <data name="ThreadedComment_CancelHelpText" xml:space="preserve">
+    <value>Close the comment dialog without applying changes.</value>
+  </data>
+  <data name="ThreadedComment_CommentAutomationName" xml:space="preserve">
+    <value>Comment</value>
+  </data>
+  <data name="ThreadedComment_EditCommentAutomationName" xml:space="preserve">
+    <value>Edit comment</value>
+  </data>
+  <data name="ThreadedComment_CommentHelpText" xml:space="preserve">
+    <value>Enter the threaded comment text.</value>
+  </data>
+  <data name="ThreadedComment_EditCommentHelpText" xml:space="preserve">
+    <value>Edit the root comment text.</value>
+  </data>
+  <data name="ThreadedComment_CommentLabel" xml:space="preserve">
+    <value>_Comment:</value>
+  </data>
+  <data name="ThreadedComment_EditCommentLabel" xml:space="preserve">
+    <value>Edit _comment:</value>
+  </data>
+  <data name="ThreadedComment_ReplyLabel" xml:space="preserve">
+    <value>Repl_y:</value>
+  </data>
+  <data name="ThreadedComment_ReplyAutomationName" xml:space="preserve">
+    <value>Reply</value>
+  </data>
+  <data name="ThreadedComment_ReplyHelpText" xml:space="preserve">
+    <value>Enter an optional reply to the threaded comment. Press Ctrl+Enter to reply.</value>
+  </data>
+  <data name="ThreadedComment_MarkAsResolvedAutomationName" xml:space="preserve">
+    <value>Mark as resolved</value>
+  </data>
+  <data name="ThreadedComment_MarkAsResolvedHelpText" xml:space="preserve">
+    <value>Mark the threaded comment as resolved.</value>
+  </data>
+  <data name="ThreadedComment_EnterCommentMessage" xml:space="preserve">
+    <value>Enter a comment.</value>
+  </data>
+  <data name="ThreadedComment_NoThreadedCommentAvailableMessage" xml:space="preserve">
+    <value>No threaded comment is available.</value>
+  </data>
+  <data name="ThreadedComment_SelectReplyMessage" xml:space="preserve">
+    <value>Select a reply.</value>
+  </data>
+  <data name="ThreadedComment_EnterReplyMessage" xml:space="preserve">
+    <value>Enter a reply.</value>
+  </data>
+  <data name="ThreadedComment_ReplyToEditOrDeleteAutomationName" xml:space="preserve">
+    <value>Reply to edit or delete</value>
+  </data>
+  <data name="ThreadedComment_ReplySelectorHelpText" xml:space="preserve">
+    <value>Select a threaded comment reply to edit or delete.</value>
+  </data>
+  <data name="ThreadedComment_SelectReplyLabel" xml:space="preserve">
+    <value>Select re_ply:</value>
+  </data>
+  <data name="ThreadedComment_SelectedReplyTextAutomationName" xml:space="preserve">
+    <value>Selected reply text</value>
+  </data>
+  <data name="ThreadedComment_SelectedReplyTextHelpText" xml:space="preserve">
+    <value>Edit the selected reply text before choosing Update Reply.</value>
+  </data>
+  <data name="ThreadedComment_SelectedReplyTextLabel" xml:space="preserve">
+    <value>Selected reply te_xt:</value>
+  </data>
+  <data name="ThreadedComment_UpdateReplyButton" xml:space="preserve">
+    <value>_Update Reply</value>
+  </data>
+  <data name="ThreadedComment_DeleteReplyButton" xml:space="preserve">
+    <value>_Delete Reply</value>
+  </data>
+  <data name="ThreadedComment_UpdateSelectedReplyAutomationName" xml:space="preserve">
+    <value>Update selected reply</value>
+  </data>
+  <data name="ThreadedComment_DeleteSelectedReplyAutomationName" xml:space="preserve">
+    <value>Delete selected reply</value>
+  </data>
+  <data name="ThreadedComment_UpdateSelectedReplyHelpText" xml:space="preserve">
+    <value>Update the selected threaded comment reply.</value>
+  </data>
+  <data name="ThreadedComment_DeleteSelectedReplyHelpText" xml:space="preserve">
+    <value>Delete the selected threaded comment reply.</value>
+  </data>
+  <data name="ThreadedComment_ReplyAutomationNameFormat" xml:space="preserve">
+    <value>Reply {0} by {1}: {2}</value>
+  </data>
+  <data name="SymbolPicker_FontAutomationName" xml:space="preserve">
+    <value>Symbol font</value>
+  </data>
+  <data name="SymbolPicker_FontHelpText" xml:space="preserve">
+    <value>Choose the font used to preview and insert symbols.</value>
+  </data>
+  <data name="SymbolPicker_SubsetAutomationName" xml:space="preserve">
+    <value>Symbol subset</value>
+  </data>
+  <data name="SymbolPicker_SubsetHelpText" xml:space="preserve">
+    <value>Choose the Unicode subset shown in the symbol grid.</value>
+  </data>
+  <data name="SymbolPicker_CharacterCodeAutomationName" xml:space="preserve">
+    <value>Character code</value>
+  </data>
+  <data name="SymbolPicker_CharacterCodeHelpText" xml:space="preserve">
+    <value>Enter a Unicode hexadecimal character code.</value>
+  </data>
+  <data name="SymbolPicker_SelectedSymbolPreviewAutomationName" xml:space="preserve">
+    <value>Selected symbol preview</value>
+  </data>
+  <data name="SymbolPicker_SelectedSymbolPreviewHelpText" xml:space="preserve">
+    <value>Shows the currently selected symbol.</value>
+  </data>
+  <data name="SymbolPicker_FontLabel" xml:space="preserve">
+    <value>_Font:</value>
+  </data>
+  <data name="SymbolPicker_SubsetLabel" xml:space="preserve">
+    <value>_Subset:</value>
+  </data>
+  <data name="SymbolPicker_SymbolsAutomationName" xml:space="preserve">
+    <value>Symbols</value>
+  </data>
+  <data name="SymbolPicker_RecentlyUsedSymbols" xml:space="preserve">
+    <value>Recently used symbols</value>
+  </data>
+  <data name="SymbolPicker_SymbolsTab" xml:space="preserve">
+    <value>_Symbols</value>
+  </data>
+  <data name="SymbolPicker_SpecialCharactersTab" xml:space="preserve">
+    <value>Special _Characters</value>
+  </data>
+  <data name="SymbolPicker_SpecialCharactersAutomationName" xml:space="preserve">
+    <value>Special characters</value>
+  </data>
+  <data name="SymbolPicker_SpecialCharacterAutomationNameFormat" xml:space="preserve">
+    <value>{0}, {1}</value>
+  </data>
+  <data name="SymbolPicker_CharacterCodeLabel" xml:space="preserve">
+    <value>Character _code:</value>
+  </data>
+  <data name="SymbolPicker_FromUnicodeHex" xml:space="preserve">
+    <value>from: Unicode (hex)</value>
+  </data>
+  <data name="SymbolPicker_GoButton" xml:space="preserve">
+    <value>_Go</value>
+  </data>
+  <data name="SymbolPicker_GoToCharacterCodeAutomationName" xml:space="preserve">
+    <value>Go to character code</value>
+  </data>
+  <data name="SymbolPicker_GoToCharacterCodeHelpText" xml:space="preserve">
+    <value>Select the symbol for the entered Unicode character code.</value>
+  </data>
+  <data name="SymbolPicker_InsertButton" xml:space="preserve">
+    <value>_Insert</value>
+  </data>
+  <data name="SymbolPicker_InsertSelectedSymbolAutomationName" xml:space="preserve">
+    <value>Insert selected symbol</value>
+  </data>
+  <data name="SymbolPicker_InsertSelectedSymbolHelpText" xml:space="preserve">
+    <value>Insert the selected symbol or special character.</value>
+  </data>
+  <data name="SymbolPicker_CancelAutomationName" xml:space="preserve">
+    <value>Cancel symbol insertion</value>
+  </data>
+  <data name="SymbolPicker_CancelHelpText" xml:space="preserve">
+    <value>Close the Symbol dialog without inserting a symbol.</value>
+  </data>
+  <data name="SymbolPicker_InvalidCharacterCodeMessage" xml:space="preserve">
+    <value>Enter a valid Unicode character code.</value>
+  </data>
+  <data name="SymbolPicker_SymbolAutomationName" xml:space="preserve">
+    <value>Symbol</value>
+  </data>
+  <data name="SymbolPicker_SymbolCodeAutomationNameFormat" xml:space="preserve">
+    <value>Symbol U+{0:X4}</value>
+  </data>
+  <data name="StatusBar_AverageFormat" xml:space="preserve">
+    <value>Average: {0}</value>
+  </data>
+  <data name="StatusBar_CountFormat" xml:space="preserve">
+    <value>Count: {0}</value>
+  </data>
+  <data name="StatusBar_NumericalCountFormat" xml:space="preserve">
+    <value>Numerical Count: {0}</value>
+  </data>
+  <data name="StatusBar_SumFormat" xml:space="preserve">
+    <value>Sum: {0}</value>
+  </data>
+  <data name="StatusBar_MinFormat" xml:space="preserve">
+    <value>Min: {0}</value>
+  </data>
+  <data name="StatusBar_MaxFormat" xml:space="preserve">
+    <value>Max: {0}</value>
+  </data>
+  <data name="StatusBar_EditMode" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="StatusBar_ExtendSelectionMode" xml:space="preserve">
+    <value>Extend Selection</value>
+  </data>
+  <data name="StatusBar_AddToSelectionMode" xml:space="preserve">
+    <value>Add to Selection</value>
+  </data>
+  <data name="StatusBar_EndMode" xml:space="preserve">
+    <value>End Mode</value>
+  </data>
+  <data name="QuickAnalysis_SelectRangeStatus" xml:space="preserve">
+    <value>Select a range to use Quick Analysis.</value>
   </data>
 </root>

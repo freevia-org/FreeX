@@ -54,33 +54,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
         var workbookTheme = XlsxWorkbookThemeReader.Load(packageStream);
         packageStream.Position = 0;
-        var uses1904DateSystem = XlsxWorkbookMetadataReader.LoadUses1904DateSystem(packageStream);
+        var workbookMetadata = XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageStream);
         packageStream.Position = 0;
-        var workbookProperties = XlsxWorkbookMetadataReader.LoadWorkbookProperties(packageStream);
-        packageStream.Position = 0;
-        var workbookViewProperties = XlsxWorkbookMetadataReader.LoadWorkbookViewProperties(packageStream);
-        packageStream.Position = 0;
-        var fileSharing = XlsxWorkbookMetadataReader.LoadFileSharing(packageStream);
-        packageStream.Position = 0;
-        var fileRecoveryProperties = XlsxWorkbookMetadataReader.LoadFileRecoveryProperties(packageStream);
-        packageStream.Position = 0;
-        var fileVersion = XlsxWorkbookMetadataReader.LoadFileVersion(packageStream);
-        packageStream.Position = 0;
-        var functionGroups = XlsxWorkbookMetadataReader.LoadFunctionGroups(packageStream);
-        packageStream.Position = 0;
-        var smartTags = XlsxWorkbookMetadataReader.LoadSmartTags(packageStream);
-        packageStream.Position = 0;
-        var additionalViews = XlsxWorkbookAdditionalViewMapper.Read(packageStream);
-        packageStream.Position = 0;
-        var workbookProtection = XlsxWorkbookMetadataReader.LoadProtection(packageStream);
-        packageStream.Position = 0;
-        var workbookProtectionMetadata = XlsxWorkbookMetadataReader.LoadProtectionMetadata(packageStream);
-        packageStream.Position = 0;
-        var calculationProperties = XlsxWorkbookMetadataReader.LoadCalculationProperties(packageStream);
-        packageStream.Position = 0;
-        var numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(packageStream);
-        packageStream.Position = 0;
-        var indexedColors = XlsxIndexedColorPaletteMapper.Load(packageStream);
+        var stylesXml = XlsxStylesheetReader.Load(packageStream);
+        var numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(stylesXml);
+        var indexedColors = XlsxIndexedColorPaletteMapper.Load(stylesXml);
         packageStream.Position = 0;
         var pivotMetadata = XlsxPivotTableReader.Load(packageStream, numberFormatCatalog);
         packageStream.Position = 0;
@@ -90,20 +68,20 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var structuredTableMetadata = XlsxStructuredTableMetadataReader.Load(packageStream);
         packageStream.Position = 0;
-        var pivotTableStyleMetadata = XlsxPivotTableStyleMetadataReader.Load(packageStream);
-        packageStream.Position = 0;
-        var xlsxCustomViews = XlsxWorkbookMetadataReader.LoadCustomViews(packageStream);
+        var pivotTableStyleMetadata = XlsxPivotTableStyleMetadataReader.Load(stylesXml);
+        var xlsxCustomViews = workbookMetadata.CustomViews;
 
         packageStream.Position = 0;
         var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(packageStream);
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
         packageStream.Position = 0;
-        var sheetXmlLayout = LoadSheetXmlLayout(packageStream);
+        var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml);
         var workbook = new Workbook("Untitled");
         workbook.Theme = workbookTheme;
-        workbook.Uses1904DateSystem = uses1904DateSystem;
-        workbook.Properties = workbookProperties;
+        workbook.Uses1904DateSystem = workbookMetadata.Uses1904DateSystem;
+        workbook.Properties = workbookMetadata.WorkbookProperties;
+        var workbookViewProperties = workbookMetadata.WorkbookViewProperties;
         workbook.ShowSheetTabs = workbookViewProperties.ShowSheetTabs;
         workbook.SheetTabRatio = workbookViewProperties.SheetTabRatio is { } tabRatio ? Math.Clamp(tabRatio, 0, 1000) : null;
         workbook.FirstVisibleSheetIndex = workbookViewProperties.FirstVisibleSheetIndex is { } firstSheet
@@ -112,18 +90,19 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         workbook.ActiveSheetIndex = workbookViewProperties.ActiveSheetIndex is { } activeTab
             ? Math.Clamp(activeTab, 0, Math.Max(0, xlWorkbook.Worksheets.Count - 1))
             : null;
-        workbook.FileSharing = fileSharing;
-        workbook.FileRecoveryProperties.AddRange(fileRecoveryProperties);
-        workbook.FileVersion = fileVersion;
-        workbook.FunctionGroups = functionGroups;
-        workbook.SmartTags = smartTags;
-        workbook.AdditionalViews = additionalViews;
-        workbook.IsStructureProtected = workbookProtection.IsStructureProtected;
-        workbook.StructureProtectionPassword = workbookProtection.PasswordHash;
-        workbook.ProtectionMetadata = workbookProtectionMetadata;
+        workbook.FileSharing = workbookMetadata.FileSharing;
+        workbook.FileRecoveryProperties.AddRange(workbookMetadata.FileRecoveryProperties);
+        workbook.FileVersion = workbookMetadata.FileVersion;
+        workbook.FunctionGroups = workbookMetadata.FunctionGroups;
+        workbook.SmartTags = workbookMetadata.SmartTags;
+        workbook.AdditionalViews = workbookMetadata.AdditionalViews;
+        workbook.IsStructureProtected = workbookMetadata.Protection.IsStructureProtected;
+        workbook.StructureProtectionPassword = workbookMetadata.Protection.PasswordHash;
+        workbook.ProtectionMetadata = workbookMetadata.ProtectionMetadata;
         workbook.CalculationMode = xlWorkbook.CalculateMode == XLCalculateMode.Manual
             ? WorkbookCalculationMode.Manual
             : WorkbookCalculationMode.Automatic;
+        var calculationProperties = workbookMetadata.CalculationProperties;
         if (calculationProperties.Mode is { } calculationMode)
             workbook.CalculationMode = calculationMode;
         workbook.FullCalculationOnLoad = calculationProperties.FullCalculationOnLoad;

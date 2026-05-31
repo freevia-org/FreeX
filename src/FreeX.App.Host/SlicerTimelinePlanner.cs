@@ -14,6 +14,10 @@ public sealed class TimelinePaneItem
     public string SelectedEndDate { get; set; } = "";
 }
 
+public sealed record NativeVisualFilters(
+    IReadOnlyList<SlicerModel> Slicers,
+    IReadOnlyList<TimelineModel> Timelines);
+
 public static class SlicerTimelinePlanner
 {
     public static IReadOnlyList<SlicerTileItem> BuildSlicerTiles(SlicerModel slicer, IEnumerable<string> sourceItems)
@@ -64,38 +68,74 @@ public static class SlicerTimelinePlanner
     public static string? NormalizeTimelineDateInput(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    public static IReadOnlyList<SlicerModel> GetNativeVisualSlicers(Workbook workbook, Sheet activeSheet) =>
-        GetNativeVisualSlicers(workbook.Slicers, BuildActivePivotNameSet(activeSheet));
+    public static IReadOnlyList<SlicerModel> GetNativeVisualSlicers(Workbook workbook, Sheet activeSheet)
+    {
+        if (workbook.Slicers.Count == 0 || activeSheet.PivotTables.Count == 0)
+            return Array.Empty<SlicerModel>();
 
-    public static IReadOnlyList<TimelineModel> GetNativeVisualTimelines(Workbook workbook, Sheet activeSheet) =>
-        GetNativeVisualTimelines(workbook.Timelines, BuildActivePivotNameSet(activeSheet));
+        return GetNativeVisualSlicers(workbook.Slicers, BuildActivePivotNameSet(activeSheet));
+    }
+
+    public static IReadOnlyList<TimelineModel> GetNativeVisualTimelines(Workbook workbook, Sheet activeSheet)
+    {
+        if (workbook.Timelines.Count == 0 || activeSheet.PivotTables.Count == 0)
+            return Array.Empty<TimelineModel>();
+
+        return GetNativeVisualTimelines(workbook.Timelines, BuildActivePivotNameSet(activeSheet));
+    }
+
+    public static NativeVisualFilters GetNativeVisualFilters(Workbook workbook, Sheet activeSheet)
+    {
+        if (activeSheet.PivotTables.Count == 0)
+        {
+            return new NativeVisualFilters(
+                Array.Empty<SlicerModel>(),
+                Array.Empty<TimelineModel>());
+        }
+
+        var activePivotNames = BuildActivePivotNameSet(activeSheet);
+        var slicers = workbook.Slicers.Count == 0
+            ? Array.Empty<SlicerModel>()
+            : GetNativeVisualSlicers(workbook.Slicers, activePivotNames);
+        var timelines = workbook.Timelines.Count == 0
+            ? Array.Empty<TimelineModel>()
+            : GetNativeVisualTimelines(workbook.Timelines, activePivotNames);
+
+        return new NativeVisualFilters(slicers, timelines);
+    }
 
     private static IReadOnlyList<SlicerModel> GetNativeVisualSlicers(
         IReadOnlyList<SlicerModel> slicers,
         IReadOnlySet<string> activePivotNames)
     {
-        var visible = new List<SlicerModel>();
+        List<SlicerModel>? visible = null;
         foreach (var slicer in slicers)
         {
             if (slicer.DrawingAnchor is not null && IsConnectedToPivotOnSheet(slicer.SourcePivotTableName, activePivotNames))
+            {
+                visible ??= new List<SlicerModel>();
                 visible.Add(slicer);
+            }
         }
 
-        return visible;
+        return visible is null ? Array.Empty<SlicerModel>() : visible;
     }
 
     private static IReadOnlyList<TimelineModel> GetNativeVisualTimelines(
         IReadOnlyList<TimelineModel> timelines,
         IReadOnlySet<string> activePivotNames)
     {
-        var visible = new List<TimelineModel>();
+        List<TimelineModel>? visible = null;
         foreach (var timeline in timelines)
         {
             if (timeline.DrawingAnchor is not null && IsConnectedToPivotOnSheet(timeline.SourcePivotTableName, activePivotNames))
+            {
+                visible ??= new List<TimelineModel>();
                 visible.Add(timeline);
+            }
         }
 
-        return visible;
+        return visible is null ? Array.Empty<TimelineModel>() : visible;
     }
 
     private static HashSet<string> BuildActivePivotNameSet(Sheet activeSheet)

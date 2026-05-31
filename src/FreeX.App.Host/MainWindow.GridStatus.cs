@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -21,9 +22,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            StatusStatsPanel.Visibility = Visibility.Collapsed;
-            StatusReadyText.Visibility  = Visibility.Visible;
-            StatusReadyText.Text = "Ready";
+            ApplyStatusBarDisplayState(StatusBarDisplayState.Ready(UiText.Get("MainWindow_Text_Ready")));
             return;
         }
 
@@ -34,20 +33,52 @@ public partial class MainWindow
 
         if (stats.Count == 0)
         {
-            StatusStatsPanel.Visibility = Visibility.Collapsed;
-            StatusReadyText.Visibility  = Visibility.Visible;
-            StatusReadyText.Text = StatusBarCalculator.GetReadyStatusText(sheet, range.Start);
+            ApplyStatusBarDisplayState(StatusBarDisplayState.Ready(
+                StatusBarCalculator.GetReadyStatusText(sheet, range.Start)));
             return;
         }
 
-        StatusReadyText.Visibility  = Visibility.Collapsed;
-        StatusStatsPanel.Visibility = Visibility.Visible;
-        StatusAvgText.Text   = stats.Average.HasValue ? $"Average: {StatusBarCalculator.FormatNumber(stats.Average.Value)}" : "";
-        StatusCountText.Text = $"Count: {stats.Count}";
-        StatusNumericalCountText.Text = $"Numerical Count: {stats.NumericalCount}";
-        StatusSumText.Text   = stats.NumericalCount > 0 ? $"Sum: {StatusBarCalculator.FormatNumber(stats.Sum)}" : "";
-        StatusMinText.Text   = stats.Min.HasValue ? $"Min: {StatusBarCalculator.FormatNumber(stats.Min.Value)}" : "";
-        StatusMaxText.Text   = stats.Max.HasValue ? $"Max: {StatusBarCalculator.FormatNumber(stats.Max.Value)}" : "";
+        ApplyStatusBarDisplayState(StatusBarDisplayState.Stats(stats));
+    }
+
+    private void ApplyStatusBarDisplayState(StatusBarDisplayState state)
+    {
+        if (_lastStatusBarDisplayState == state && IsStatusBarDisplayStateApplied(state))
+            return;
+
+        SetVisibilityIfChanged(StatusReadyText, state.ReadyVisibility);
+        SetVisibilityIfChanged(StatusStatsPanel, state.StatsVisibility);
+        SetTextIfChanged(StatusReadyText, state.ReadyText);
+        SetTextIfChanged(StatusAvgText, state.AverageText);
+        SetTextIfChanged(StatusCountText, state.CountText);
+        SetTextIfChanged(StatusNumericalCountText, state.NumericalCountText);
+        SetTextIfChanged(StatusSumText, state.SumText);
+        SetTextIfChanged(StatusMinText, state.MinText);
+        SetTextIfChanged(StatusMaxText, state.MaxText);
+        _lastStatusBarDisplayState = state;
+    }
+
+    private bool IsStatusBarDisplayStateApplied(StatusBarDisplayState state) =>
+        StatusReadyText.Visibility == state.ReadyVisibility &&
+        StatusStatsPanel.Visibility == state.StatsVisibility &&
+        StatusReadyText.Text == state.ReadyText &&
+        StatusAvgText.Text == state.AverageText &&
+        StatusCountText.Text == state.CountText &&
+        StatusNumericalCountText.Text == state.NumericalCountText &&
+        StatusSumText.Text == state.SumText &&
+        StatusMinText.Text == state.MinText &&
+        StatusMaxText.Text == state.MaxText;
+
+    private static void SetVisibilityIfChanged(UIElement element, Visibility visibility)
+    {
+        if (element.Visibility != visibility)
+            element.Visibility = visibility;
+    }
+
+    private static void SetTextIfChanged(TextBlock textBlock, string text)
+    {
+        if (textBlock.Text != text)
+            textBlock.Text = text;
     }
 
     private (uint start, uint end) GetSelectedColRange(uint col)

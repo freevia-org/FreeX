@@ -270,7 +270,7 @@ public partial class GridView
 
     public static readonly DependencyProperty RowPageBreaksProperty =
         DependencyProperty.Register(nameof(RowPageBreaks), typeof(IReadOnlyCollection<uint>), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnRowPageBreaksChanged));
     public IReadOnlyCollection<uint>? RowPageBreaks
     {
         get => (IReadOnlyCollection<uint>?)GetValue(RowPageBreaksProperty);
@@ -279,7 +279,7 @@ public partial class GridView
 
     public static readonly DependencyProperty ColumnPageBreaksProperty =
         DependencyProperty.Register(nameof(ColumnPageBreaks), typeof(IReadOnlyCollection<uint>), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnColumnPageBreaksChanged));
     public IReadOnlyCollection<uint>? ColumnPageBreaks
     {
         get => (IReadOnlyCollection<uint>?)GetValue(ColumnPageBreaksProperty);
@@ -372,6 +372,18 @@ public partial class GridView
     {
         if (d is GridView grid)
             grid.ClearChartRenderCache();
+    }
+
+    private static void OnRowPageBreaksChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GridView grid)
+            grid.ClearRowPageBreakLookupCache();
+    }
+
+    private static void OnColumnPageBreaksChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GridView grid)
+            grid.ClearColumnPageBreakLookupCache();
     }
 
     private static void OnViewportChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)

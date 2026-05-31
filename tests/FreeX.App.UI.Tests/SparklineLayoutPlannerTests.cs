@@ -82,6 +82,8 @@ public sealed class SparklineLayoutPlannerTests
 
         source.Should().Contain("for (var i = 1; i < values.Count; i++)");
         source.Should().Contain("foreach (var value in values)");
+        source.Should().Contain("internal static void VisitLineLayout");
+        source.Should().Contain("internal static void VisitColumnLayout");
         source.Should().NotContain("values.Min(");
         source.Should().NotContain("values.Max(");
         source.Should().NotContain(".Select(");

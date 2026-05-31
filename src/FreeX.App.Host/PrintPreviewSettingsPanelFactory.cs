@@ -58,8 +58,8 @@ internal static class PrintPreviewSettingsPanelFactory
         }
 
         var orientIndex = sheet?.PageOrientation == WorksheetPageOrientation.Landscape ? 1 : 0;
-        var orientBox = MakeComboBox(["Portrait", "Landscape"], orientIndex);
-        AddLabel("_Orientation", orientBox);
+        var orientBox = MakeComboBox([UiText.Get("PageSetup_Portrait"), UiText.Get("PageSetup_Landscape")], orientIndex);
+        AddLabel(UiText.Get("PrintPreview_OrientationLabel"), orientBox);
         orientBox.SelectionChanged += (_, _) =>
         {
             if (orientBox.SelectedIndex < 0 || executeCommand is null)
@@ -79,8 +79,14 @@ internal static class PrintPreviewSettingsPanelFactory
             WorksheetPaperSize.Legal => 2,
             _ => 0
         };
-        var paperBox = MakeComboBox(["A4", "Letter", "Legal"], paperIndex);
-        AddLabel("_Paper Size", paperBox);
+        var paperBox = MakeComboBox(
+            [
+                UiText.Get("MainWindow_Header_A4"),
+                UiText.Get("MainWindow_Header_Letter"),
+                UiText.Get("MainWindow_Header_Legal")
+            ],
+            paperIndex);
+        AddLabel(UiText.Get("PageSetup_PaperSize"), paperBox);
         paperBox.SelectionChanged += (_, _) =>
         {
             if (paperBox.SelectedIndex < 0 || executeCommand is null)
@@ -102,8 +108,14 @@ internal static class PrintPreviewSettingsPanelFactory
             : sheet?.PageMargins == WorksheetPageMargins.Wide
                 ? 2
                 : 0;
-        var marginsBox = MakeComboBox(["Narrow", "Normal", "Wide"], marginsIndex);
-        AddLabel("_Margins", marginsBox);
+        var marginsBox = MakeComboBox(
+            [
+                UiText.Get("MainWindow_Header_Narrow"),
+                UiText.Get("MainWindow_Header_Normal"),
+                UiText.Get("MainWindow_Header_Wide")
+            ],
+            marginsIndex);
+        AddLabel(UiText.Get("PageSetup_Margins"), marginsBox);
         marginsBox.SelectionChanged += (_, _) =>
         {
             if (marginsBox.SelectedIndex < 0 || executeCommand is null)
@@ -127,8 +139,14 @@ internal static class PrintPreviewSettingsPanelFactory
             { FitToPagesWide: 1, FitToPagesTall: null } => 2,
             _ => 0
         };
-        var scaleBox = MakeComboBox(["100%", "Fit to 1 Page", "Fit to 1 Page Wide"], scaleIndex);
-        AddLabel("_Scaling", scaleBox);
+        var scaleBox = MakeComboBox(
+            [
+                UiText.Get("PrintPreview_Scale100Percent"),
+                UiText.Get("PrintPreview_FitToOnePage"),
+                UiText.Get("PrintPreview_FitToOnePageWide")
+            ],
+            scaleIndex);
+        AddLabel(UiText.Get("PrintPreview_ScalingLabel"), scaleBox);
         scaleBox.SelectionChanged += (_, _) =>
         {
             if (scaleBox.SelectedIndex < 0 || executeCommand is null)
@@ -147,14 +165,14 @@ internal static class PrintPreviewSettingsPanelFactory
 
         var ignorePrintAreaBox = new CheckBox
         {
-            Content = "_Ignore print area",
+            Content = UiText.Get("PrintPreview_IgnorePrintArea"),
             IsChecked = false,
             IsEnabled = sheet?.PrintArea is not null && setPrintPreviewSettings is not null,
             Margin = new Thickness(0, 6, 0, 4),
-            ToolTip = "Preview and print the active sheet instead of the stored print area."
+            ToolTip = UiText.Get("PrintPreview_IgnorePrintAreaToolTip")
         };
-        AutomationProperties.SetName(ignorePrintAreaBox, "Ignore print area");
-        AutomationProperties.SetHelpText(ignorePrintAreaBox, "When checked, the preview prints the active sheet instead of the stored print area.");
+        AutomationProperties.SetName(ignorePrintAreaBox, UiText.Get("PrintPreview_IgnorePrintAreaAutomationName"));
+        AutomationProperties.SetHelpText(ignorePrintAreaBox, UiText.Get("PrintPreview_IgnorePrintAreaHelpText"));
 
         void ApplyPrintPreviewSettings()
         {
@@ -169,16 +187,16 @@ internal static class PrintPreviewSettingsPanelFactory
         ignorePrintAreaBox.Unchecked += (_, _) => ApplyPrintPreviewSettings();
         panel.Children.Add(ignorePrintAreaBox);
 
-        AddSectionLabel("Print Options");
+        AddSectionLabel(UiText.Get("PrintPreview_PrintOptionsSection"));
         var gridlinesBox = new CheckBox
         {
-            Content = "_Print gridlines",
+            Content = UiText.Get("PageSetup_PrintGridlines"),
             IsChecked = sheet?.PrintGridlines ?? false,
             Margin = new Thickness(0, 0, 0, 4)
         };
         var headingsBox = new CheckBox
         {
-            Content = "Print row and column _headings",
+            Content = UiText.Get("PageSetup_PrintRowAndColumnHeadings"),
             IsChecked = sheet?.PrintHeadings ?? false,
             Margin = new Thickness(0, 0, 0, 4)
         };

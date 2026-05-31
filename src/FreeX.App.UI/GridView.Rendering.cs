@@ -547,7 +547,7 @@ public partial class GridView
 
             var clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);
             var textPoint = new Point(Math.Round(textX), Math.Round(textY));
-            var shouldClipText = ShouldClipText(style, wrapText, clipRect, text, textPoint);
+            var shouldClipText = ShouldClipText(wrapText, clipRect, text, textPoint);
             if (shouldClipText)
                 dc.PushClip(new RectangleGeometry(clipRect));
 
@@ -686,13 +686,12 @@ public partial class GridView
     }
 
     private static bool ShouldClipText(
-        CellStyle? style,
         bool wrapText,
         Rect clipRect,
         FormattedText text,
         Point textPoint)
     {
-        if (style is not null || wrapText)
+        if (wrapText)
             return true;
 
         const double tolerance = 0.5;

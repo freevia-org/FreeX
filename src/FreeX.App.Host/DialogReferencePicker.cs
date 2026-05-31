@@ -37,10 +37,10 @@ internal static class DialogReferencePicker
             Width = 28,
             Margin = margin ?? new Thickness(0, 0, 6, 0),
             Tag = new DialogReferencePickerRequest(textBox, automationName, textBox.Text),
-            ToolTip = "Collapse dialog and select range"
+            ToolTip = UiText.Get("DialogReferencePicker_ToolTip")
         };
         AutomationProperties.SetName(pickerButton, automationName);
-        AutomationProperties.SetHelpText(pickerButton, "Collapse dialog and select a worksheet range for this field.");
+        AutomationProperties.SetHelpText(pickerButton, UiText.Get("DialogReferencePicker_HelpText"));
         pickerButton.Click += (_, _) => RequestSelection(textBox, automationName, requestSelection);
         return pickerButton;
     }

@@ -307,6 +307,7 @@ public partial class MainWindow
         wb.AddSheet("Sheet1");
         _workbook = wb;
         _workbookRef.Current = wb;
+        InvalidateToolbarVisualState();
         _currentSheetId = wb.Sheets[0].Id;
         InvalidateNavigationCaches();
         _currentFilePath = null;
@@ -315,7 +316,6 @@ public partial class MainWindow
         RecalculateWorkbook();
         SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
         RefreshSheetTabs();
-        RefreshToolbar();
         UpdateViewport();
         MarkWorkbookSaved();
         RecordDiagnosticEvent("workbook_new");
@@ -353,6 +353,7 @@ public partial class MainWindow
             _currentXlsxFeatureReport = result.FeatureReport;
             _workbook = result.Workbook;
             _workbookRef.Current = result.Workbook;
+            InvalidateToolbarVisualState();
             _workbook.Name = result.DisplayName;
             _currentSheetId = _workbook.Sheets[0].Id;
             InvalidateNavigationCaches();

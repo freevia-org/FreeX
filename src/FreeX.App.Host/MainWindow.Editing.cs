@@ -41,7 +41,7 @@ public partial class MainWindow
     {
         FormulaBar.Focus();
         FormulaBar.CaretIndex = FormulaBar.Text.Length;
-        SetStatusBarModeText("Edit");
+        SetStatusBarModeText(UiText.Get("StatusBar_EditMode"));
     }
 
     private void ShowInlineEditor(CellAddress addr)
@@ -147,7 +147,7 @@ public partial class MainWindow
         _inlineEditor.Focus();
         _inlineEditor.CaretIndex = _inlineEditor.Text.Length;
         _inlineEditor.SelectionLength = 0;
-        SetStatusBarModeText("Edit");
+        SetStatusBarModeText(UiText.Get("StatusBar_EditMode"));
     }
 
     private void SyncFormulaBarTextFromInlineEditor()
@@ -430,18 +430,29 @@ public partial class MainWindow
 
     private void InlineEditor_LostFocus(object sender, RoutedEventArgs e)
     {
-        if (_inlineEditor?.IsVisible == true)
-        {
-            if (ReferenceEquals(Keyboard.FocusedElement, FormulaBar))
-                return;
+        if (_inlineEditor?.IsVisible != true)
+            return;
 
-            if (IsFormulaRangeEntryActive(_inlineEditor))
-                return;
+        Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Input,
+            new Action(CommitInlineEditorLostFocusIfNeeded));
+    }
 
-            FormulaBar.Text = _inlineEditor.Text;
-            HideInlineEditor(commit: true);
-            CommitEdit();
-        }
+    private void CommitInlineEditorLostFocusIfNeeded()
+    {
+        if (_inlineEditor?.IsVisible != true)
+            return;
+
+        if (ReferenceEquals(Keyboard.FocusedElement, FormulaBar) ||
+            ReferenceEquals(FocusManager.GetFocusedElement(this), FormulaBar))
+            return;
+
+        if (IsFormulaRangeEntryActive(_inlineEditor))
+            return;
+
+        FormulaBar.Text = _inlineEditor.Text;
+        HideInlineEditor(commit: true);
+        CommitEdit();
     }
 
     private void FocusSheetGridIfNeeded()
@@ -458,9 +469,9 @@ public partial class MainWindow
             _endMode = false;
         SetStatusBarModeText(mode switch
         {
-            ExcelSelectionMode.Extend => "Extend Selection",
-            ExcelSelectionMode.Add => "Add to Selection",
-            _ => "Ready"
+            ExcelSelectionMode.Extend => UiText.Get("StatusBar_ExtendSelectionMode"),
+            ExcelSelectionMode.Add => UiText.Get("StatusBar_AddToSelectionMode"),
+            _ => UiText.Get("MainWindow_Text_Ready")
         });
     }
 
@@ -469,18 +480,15 @@ public partial class MainWindow
         _endMode = enabled;
         if (enabled)
             _selectionMode = ExcelSelectionMode.Normal;
-        SetStatusBarModeText(enabled ? "End Mode" : "Ready");
+        SetStatusBarModeText(enabled ? UiText.Get("StatusBar_EndMode") : UiText.Get("MainWindow_Text_Ready"));
     }
 
     private void SetStatusBarModeText(string text)
     {
-        if (StatusStatsPanel is not null)
-            StatusStatsPanel.Visibility = Visibility.Collapsed;
-        if (StatusReadyText is null)
+        if (StatusStatsPanel is null || StatusReadyText is null)
             return;
 
-        StatusReadyText.Visibility = Visibility.Visible;
-        StatusReadyText.Text = text;
+        ApplyStatusBarDisplayState(StatusBarDisplayState.Ready(text));
     }
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)

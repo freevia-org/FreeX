@@ -57,7 +57,9 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _suppressToolbarSync;
     private readonly ToolbarVisualStateCache _toolbarVisualStateCache = new();
     private ToolbarVisualState? _lastToolbarVisualState;
+    private QuickAccessCommandState? _lastQuickAccessCommandState;
     private readonly StatusBarStatsCache _statusBarStatsCache = new();
+    private StatusBarDisplayState? _lastStatusBarDisplayState;
     private readonly SparklineValueCache _sparklineValueCache = new();
     private ulong _navigationCacheRevision;
     private bool _suppressViewOptionSync;
@@ -177,6 +179,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private readonly WorkbookWindowRegistry? _windowRegistry;
     private string _windowTitleSuffix = string.Empty;
     private bool _adoptSharedWorkbookOnLoad;
+    private bool _suppressScrollBroadcast;
 
     public MainWindow(
         ILogger<MainWindow> logger,

@@ -46,6 +46,54 @@ public sealed class GroupedApplyStyleCommandTests
     }
 
     [Fact]
+    public void EstimatedBytes_ScalesWithGroupedRangeSize()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var range = new GridRange(
+            new CellAddress(sheet1.Id, 1, 1),
+            new CellAddress(sheet1.Id, 3, 4));
+        var command = new GroupedApplyStyleCommand(
+            [sheet1.Id, sheet2.Id],
+            range,
+            new StyleDiff(Bold: true));
+
+        command.Should().BeAssignableTo<IEstimatesMemory>();
+        ((IEstimatesMemory)command).EstimatedBytes.Should().Be(4_800);
+    }
+
+    [Fact]
+    public void Apply_ReusesRegisteredStyleForRepeatedBaseStyle()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new SimpleCtx(wb);
+        var command = new GroupedApplyStyleCommand(
+            [sheet1.Id, sheet2.Id],
+            new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 10, 10)),
+            new StyleDiff(Bold: true));
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        wb.StyleCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void Apply_UsesStyleDiffRegistrationCache()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "GroupedApplyStyleCommand.cs"));
+        var apply = source[
+            source.IndexOf("public CommandOutcome Apply", StringComparison.Ordinal)..
+            source.IndexOf("public void Revert", StringComparison.Ordinal)];
+
+        source.Should().Contain("IEstimatesMemory");
+        apply.Should().Contain("new Dictionary<StyleId, StyleId>()");
+        apply.Should().Contain("StyleDiffStyleCache.GetOrRegister");
+    }
+
+    [Fact]
     public void Apply_RejectsProtectedGroupedSheetBeforeChangingAnySheet()
     {
         var wb = new Workbook("test");
@@ -103,5 +151,20 @@ public sealed class GroupedApplyStyleCommandTests
     {
         public Workbook Workbook { get; } = wb;
         public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine([dir, .. parts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new FileNotFoundException($"Could not find workspace file: {Path.Combine(parts)}");
     }
 }

@@ -38,9 +38,9 @@ public sealed class PasswordProtectionDialog : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
-        AutomationProperties.SetName(_passwordBox, "Protection password");
+        AutomationProperties.SetName(_passwordBox, UiText.Get("Protection_PasswordAutomationName"));
         AutomationProperties.SetAutomationId(_passwordBox, "ProtectionPasswordBox");
-        AutomationProperties.SetHelpText(_passwordBox, "Enter the optional password for protecting the sheet or workbook.");
+        AutomationProperties.SetHelpText(_passwordBox, UiText.Get("Protection_PasswordHelpText"));
 
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new TextBlock
@@ -150,9 +150,9 @@ public sealed class ConfirmPasswordDialog : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
-        AutomationProperties.SetName(_confirmationBox, "Confirm protection password");
+        AutomationProperties.SetName(_confirmationBox, UiText.Get("Protection_ConfirmPasswordAutomationName"));
         AutomationProperties.SetAutomationId(_confirmationBox, "ConfirmProtectionPasswordBox");
-        AutomationProperties.SetHelpText(_confirmationBox, "Reenter the password to confirm protection.");
+        AutomationProperties.SetHelpText(_confirmationBox, UiText.Get("Protection_ConfirmPasswordHelpText"));
 
         var root = new StackPanel { Margin = new Thickness(12) };
         root.Children.Add(new TextBlock

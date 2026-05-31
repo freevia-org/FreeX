@@ -114,6 +114,31 @@ public sealed class SlicerTimelinePlannerTests
             .Select(timeline => timeline.Name)
             .Should()
             .Equal("Date Timeline");
+
+        var filters = SlicerTimelinePlanner.GetNativeVisualFilters(workbook, activeSheet);
+        filters.Slicers.Select(slicer => slicer.Name).Should().Equal("Region Slicer");
+        filters.Timelines.Select(timeline => timeline.Name).Should().Equal("Date Timeline");
+    }
+
+    [Fact]
+    public void NativeVisualFilters_ReturnSharedEmptyCollectionsForFastPaths()
+    {
+        var workbook = new Workbook("NativeVisualFiltersEmpty");
+        var activeSheet = workbook.AddSheet("Sheet1");
+
+        var firstSlicers = SlicerTimelinePlanner.GetNativeVisualSlicers(workbook, activeSheet);
+        var secondSlicers = SlicerTimelinePlanner.GetNativeVisualSlicers(workbook, activeSheet);
+        var firstTimelines = SlicerTimelinePlanner.GetNativeVisualTimelines(workbook, activeSheet);
+        var secondTimelines = SlicerTimelinePlanner.GetNativeVisualTimelines(workbook, activeSheet);
+
+        firstSlicers.Should().BeEmpty();
+        secondSlicers.Should().BeSameAs(firstSlicers);
+        firstTimelines.Should().BeEmpty();
+        secondTimelines.Should().BeSameAs(firstTimelines);
+
+        var filters = SlicerTimelinePlanner.GetNativeVisualFilters(workbook, activeSheet);
+        filters.Slicers.Should().BeEmpty();
+        filters.Timelines.Should().BeEmpty();
     }
 
     [Fact]
@@ -153,11 +178,98 @@ public sealed class SlicerTimelinePlannerTests
     }
 
     [Fact]
+    public void Benchmark_NativeVisualFiltersEmptyWorkbookFastPath_ReportsTiming()
+    {
+        const int iterations = 20_000;
+        var workbook = new Workbook("NativeVisualFiltersEmpty");
+        var activeSheet = workbook.AddSheet("Sheet1");
+
+        for (var i = 0; i < 100; i++)
+        {
+            SlicerTimelinePlanner.GetNativeVisualSlicers(workbook, activeSheet).Should().BeEmpty();
+            SlicerTimelinePlanner.GetNativeVisualTimelines(workbook, activeSheet).Should().BeEmpty();
+        }
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        IReadOnlyList<SlicerModel>? slicers = null;
+        IReadOnlyList<TimelineModel>? timelines = null;
+        for (var i = 0; i < iterations; i++)
+        {
+            slicers = SlicerTimelinePlanner.GetNativeVisualSlicers(workbook, activeSheet);
+            timelines = SlicerTimelinePlanner.GetNativeVisualTimelines(workbook, activeSheet);
+        }
+
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        Console.WriteLine(
+            "PERF NATIVE_VISUAL_FILTERS_EMPTY " +
+            $"steps={iterations} total_ms={stopwatch.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_us={stopwatch.Elapsed.TotalMicroseconds / iterations:F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        slicers.Should().BeEmpty();
+        timelines.Should().BeEmpty();
+        stopwatch.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_NativeVisualFiltersLargeWorkbookPairedCalls_ReportsTiming()
+    {
+        const int iterations = 100;
+        var (workbook, activeSheet) = CreateLargeNativeVisualFilterWorkbook(visibleControlCount: 6000);
+
+        for (var i = 0; i < 5; i++)
+        {
+            SlicerTimelinePlanner.GetNativeVisualFilters(workbook, activeSheet).Slicers.Should().HaveCount(6000);
+            SlicerTimelinePlanner.GetNativeVisualFilters(workbook, activeSheet).Timelines.Should().HaveCount(6000);
+        }
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        IReadOnlyList<SlicerModel>? slicers = null;
+        IReadOnlyList<TimelineModel>? timelines = null;
+        for (var i = 0; i < iterations; i++)
+        {
+            var filters = SlicerTimelinePlanner.GetNativeVisualFilters(workbook, activeSheet);
+            slicers = filters.Slicers;
+            timelines = filters.Timelines;
+        }
+
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        Console.WriteLine(
+            "PERF NATIVE_VISUAL_FILTERS_LARGE_PAIRED " +
+            $"steps={iterations} controls=6000 total_ms={stopwatch.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={stopwatch.Elapsed.TotalMilliseconds / iterations:F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        slicers.Should().HaveCount(6000);
+        timelines.Should().HaveCount(6000);
+        stopwatch.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void NativeVisualFilters_AvoidNestedPivotScans()
     {
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SlicerTimelinePlanner.cs"));
 
         source.Should().Contain("BuildActivePivotNameSet(activeSheet)");
+        source.Should().Contain("public static NativeVisualFilters GetNativeVisualFilters(Workbook workbook, Sheet activeSheet)");
+        source.Should().Contain("return Array.Empty<SlicerModel>();");
+        source.Should().Contain("return Array.Empty<TimelineModel>();");
+        source.Should().Contain("List<SlicerModel>? visible = null;");
+        source.Should().Contain("List<TimelineModel>? visible = null;");
+        source.Should().Contain("visible ??= new List<SlicerModel>();");
+        source.Should().Contain("visible ??= new List<TimelineModel>();");
         source.Should().Contain("activePivotNames.Contains(pivotTableName)");
         source.Should().NotContain("activeSheet.PivotTables.Any");
     }
@@ -176,5 +288,33 @@ public sealed class SlicerTimelinePlannerTests
         buildSlicerTiles.Should().NotContain(".Distinct(");
         buildSlicerTiles.Should().NotContain(".OrderBy(");
         buildSlicerTiles.Should().NotContain(".Select(");
+    }
+
+    private static (Workbook Workbook, Sheet ActiveSheet) CreateLargeNativeVisualFilterWorkbook(int visibleControlCount)
+    {
+        var workbook = new Workbook("NativeVisualFiltersLarge");
+        var activeSheet = workbook.AddSheet("Pivot");
+        var anchor = new DrawingAnchorRange(
+            new DrawingAnchorPoint(1, 0, 1, 0),
+            new DrawingAnchorPoint(4, 0, 8, 0));
+
+        for (var index = 0; index < visibleControlCount; index++)
+        {
+            activeSheet.PivotTables.Add(new PivotTableModel { Name = $"Pivot{index}" });
+            workbook.Slicers.Add(new SlicerModel
+            {
+                Name = $"Slicer{index}",
+                SourcePivotTableName = $"Pivot{index}",
+                DrawingAnchor = anchor
+            });
+            workbook.Timelines.Add(new TimelineModel
+            {
+                Name = $"Timeline{index}",
+                SourcePivotTableName = $"Pivot{index}",
+                DrawingAnchor = anchor
+            });
+        }
+
+        return (workbook, activeSheet);
     }
 }

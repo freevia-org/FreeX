@@ -5,14 +5,19 @@ namespace FreeX.Core.Commands;
 /// <summary>
 /// Applies a style diff to the same row/column range across multiple grouped sheets.
 /// </summary>
-public sealed class GroupedApplyStyleCommand : IWorkbookCommand
+public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
 {
     private readonly IReadOnlyList<SheetId> _sheetIds;
     private readonly GridRange _sourceRange;
     private readonly StyleDiff _diff;
     private List<(SheetId SheetId, CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
+    private const int BytesPerCell = 200;
+
     public string Label => "Apply Style to Grouped Sheets";
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => (int)Math.Min(_sourceRange.CellCount * _sheetIds.Count * BytesPerCell, int.MaxValue);
 
     public GroupedApplyStyleCommand(
         IReadOnlyCollection<SheetId> sheetIds,
@@ -36,6 +41,7 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand
             return validationOutcome;
 
         _snapshot = [];
+        var styleCache = new Dictionary<StyleId, StyleId>();
 
         foreach (var sheetId in _sheetIds)
         {
@@ -49,18 +55,22 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand
                 {
                     _snapshot.Add((sheetId, address, null, sheet.GetStyleOnly(address.Row, address.Col)));
 
-                    var baseStyle  = ctx.Workbook.GetStyle(StyleId.Default);
-                    var newStyle   = _diff.ApplyTo(baseStyle);
-                    var newStyleId = ctx.Workbook.RegisterStyle(newStyle);
+                    var newStyleId = StyleDiffStyleCache.GetOrRegister(
+                        ctx.Workbook,
+                        _diff,
+                        StyleId.Default,
+                        styleCache);
                     sheet.SetStyleOnly(address.Row, address.Col, newStyleId);
                 }
                 else
                 {
                     _snapshot.Add((sheetId, address, cell.Clone(), null));
 
-                    var baseStyle = ctx.Workbook.GetStyle(cell.StyleId);
-                    var newStyle  = _diff.ApplyTo(baseStyle);
-                    cell.StyleId  = ctx.Workbook.RegisterStyle(newStyle);
+                    cell.StyleId = StyleDiffStyleCache.GetOrRegister(
+                        ctx.Workbook,
+                        _diff,
+                        cell.StyleId,
+                        styleCache);
                 }
             }
         }

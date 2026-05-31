@@ -1,7 +1,14 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Windows;
 
 namespace FreeX.App.Host;
+
+/// <summary>
+/// A scroll position shared between side-by-side workbook windows during synchronous scrolling.
+/// Expressed in the same units as the worksheet scroll bars (row/column scroll values).
+/// </summary>
+public readonly record struct WorkbookScrollOffset(double Row, double Column);
 
 /// <summary>
 /// The operations the <see cref="WorkbookWindowRegistry"/> drives on a live workbook window.
@@ -18,24 +25,88 @@ public interface IWorkbookWindow
 
     /// <summary>Brings this window to the foreground (Switch Windows / New Window activation).</summary>
     void ActivateWindow();
+
+    /// <summary>Shows or hides this window (Hide Window / Unhide Window).</summary>
+    void SetWindowVisible(bool visible);
+
+    /// <summary>Current worksheet scroll position (for synchronous scrolling).</summary>
+    WorkbookScrollOffset GetScrollOffset();
+
+    /// <summary>Applies a worksheet scroll position pushed from the paired window.</summary>
+    void SetScrollOffset(WorkbookScrollOffset offset);
+
+    /// <summary>Restores this window to Normal state and positions it at the given work-area bounds (View Side by Side tiling).</summary>
+    void TileToWorkArea(Rect bounds);
 }
 
 /// <summary>
 /// Tracks the live workbook windows that all view the single shared workbook (Excel-style
 /// "New Window"). The registry is a thin coordinator: every ordering decision (which window to
 /// switch to, how to number titles, which windows to refresh) is delegated to the pure, unit-tested
-/// <see cref="WorkbookWindowOrdering"/> helper.
+/// <see cref="WorkbookWindowOrdering"/> helper; geometry decisions are delegated to
+/// <see cref="WindowResetPositionPlanner"/> and <see cref="SideBySideLayoutPlanner"/>.
 ///
 /// Registered as a DI singleton so all windows over the shared workbook see the same registry.
 /// </summary>
 public sealed class WorkbookWindowRegistry
 {
     private readonly List<IWorkbookWindow> _windows = [];
+    private readonly HashSet<IWorkbookWindow> _hidden = [];
+
+    // Side-by-side / synchronous-scroll state. The pair is the two windows that were tiled together.
+    private IWorkbookWindow? _sideBySidePrimary;
+    private IWorkbookWindow? _sideBySidePartner;
+    private bool _synchronousScroll;
+    private bool _applyingBroadcast;
 
     /// <summary>Live windows in registration order.</summary>
     public IReadOnlyList<IWorkbookWindow> Windows => _windows;
 
     public int Count => _windows.Count;
+
+    /// <summary>Number of registered windows that are currently visible (not hidden).</summary>
+    public int VisibleCount => _windows.Count(w => !_hidden.Contains(w));
+
+    /// <summary>Currently-hidden windows, in registration order.</summary>
+    public IReadOnlyList<IWorkbookWindow> HiddenWindows => _windows.Where(_hidden.Contains).ToList();
+
+    /// <summary>True when View Side by Side is currently tiling a pair of windows.</summary>
+    public bool IsSideBySideActive => _sideBySidePrimary is not null && _sideBySidePartner is not null;
+
+    /// <summary>True when scrolling one side-by-side window mirrors into its partner.</summary>
+    public bool IsSynchronousScrollActive => IsSideBySideActive && _synchronousScroll;
+
+    /// <summary>True when the window is registered and not hidden.</summary>
+    public bool IsVisible(IWorkbookWindow window) => _windows.Contains(window) && !_hidden.Contains(window);
+
+    /// <summary>
+    /// A window can be hidden only when it is registered, currently visible, and at least one
+    /// other window would remain visible (you cannot hide the last visible window).
+    /// </summary>
+    public bool CanHide(IWorkbookWindow window) =>
+        window is not null && IsVisible(window) && VisibleCount > 1;
+
+    /// <summary>Hides the window if <see cref="CanHide"/> allows. Returns true if it was hidden.</summary>
+    public bool Hide(IWorkbookWindow window)
+    {
+        if (!CanHide(window))
+            return false;
+
+        _hidden.Add(window);
+        window.SetWindowVisible(false);
+        return true;
+    }
+
+    /// <summary>Restores a hidden window and activates it. Returns true if it was unhidden.</summary>
+    public bool Unhide(IWorkbookWindow window)
+    {
+        if (window is null || !_hidden.Remove(window))
+            return false;
+
+        window.SetWindowVisible(true);
+        window.ActivateWindow();
+        return true;
+    }
 
     /// <summary>
     /// True once at least one window exists; lets a window decide whether it is the first window
@@ -58,6 +129,9 @@ public sealed class WorkbookWindowRegistry
     public void Unregister(IWorkbookWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);
+        _hidden.Remove(window);
+        if (ReferenceEquals(window, _sideBySidePrimary) || ReferenceEquals(window, _sideBySidePartner))
+            DisableSideBySide();
         if (_windows.Remove(window))
             RenumberTitles();
     }
@@ -108,6 +182,108 @@ public sealed class WorkbookWindowRegistry
         var originIndex = _windows.IndexOf(origin);
         foreach (var index in WorkbookWindowOrdering.IndicesToNotify(originIndex, _windows.Count))
             _windows[index].RefreshFromSharedWorkbook();
+    }
+
+    // ── View Side by Side / Synchronous Scrolling ─────────────────────────────
+
+    /// <summary>
+    /// Tiles <paramref name="primary"/> and the next visible window into the two halves of the work
+    /// area (via <see cref="SideBySideLayoutPlanner"/>) and marks side-by-side active. Returns false
+    /// (and tiles nothing) when there is no other visible window to pair with.
+    /// </summary>
+    public bool EnableSideBySide(IWorkbookWindow primary, double workAreaWidth, double workAreaHeight)
+    {
+        ArgumentNullException.ThrowIfNull(primary);
+        if (!IsVisible(primary))
+            return false;
+
+        var partner = NextVisibleWindow(primary);
+        if (partner is null)
+            return false;
+
+        var (primaryBounds, partnerBounds) = SideBySideLayoutPlanner.Tile(workAreaWidth, workAreaHeight);
+        primary.TileToWorkArea(primaryBounds);
+        partner.TileToWorkArea(partnerBounds);
+
+        _sideBySidePrimary = primary;
+        _sideBySidePartner = partner;
+        return true;
+    }
+
+    /// <summary>Stops side-by-side mode. Layout is left as-is; synchronous scrolling is also turned off.</summary>
+    public void DisableSideBySide()
+    {
+        _sideBySidePrimary = null;
+        _sideBySidePartner = null;
+        _synchronousScroll = false;
+    }
+
+    /// <summary>
+    /// Enables or disables synchronous scrolling. Synchronous scrolling is only meaningful while
+    /// side-by-side is active; enabling it without an active pair is refused.
+    /// </summary>
+    public bool SetSynchronousScroll(bool active)
+    {
+        if (active && !IsSideBySideActive)
+            return false;
+
+        _synchronousScroll = active;
+        return true;
+    }
+
+    /// <summary>
+    /// When side-by-side + synchronous scrolling are active, pushes <paramref name="offset"/> from the
+    /// originating window into its paired window. Guarded so the partner applying the offset cannot
+    /// loop the broadcast back into the origin.
+    /// </summary>
+    public void BroadcastScrollOffset(IWorkbookWindow origin, WorkbookScrollOffset offset)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        if (!IsSynchronousScrollActive || _applyingBroadcast)
+            return;
+
+        var target = SideBySidePartnerOf(origin);
+        if (target is null)
+            return;
+
+        _applyingBroadcast = true;
+        try
+        {
+            target.SetScrollOffset(offset);
+        }
+        finally
+        {
+            _applyingBroadcast = false;
+        }
+    }
+
+    /// <summary>The side-by-side partner of <paramref name="window"/>, or null if it is not part of the pair.</summary>
+    private IWorkbookWindow? SideBySidePartnerOf(IWorkbookWindow window)
+    {
+        if (!IsSideBySideActive)
+            return null;
+        if (ReferenceEquals(window, _sideBySidePrimary))
+            return _sideBySidePartner;
+        if (ReferenceEquals(window, _sideBySidePartner))
+            return _sideBySidePrimary;
+        return null;
+    }
+
+    /// <summary>The next visible window after <paramref name="window"/> in the switch cycle, skipping hidden windows.</summary>
+    private IWorkbookWindow? NextVisibleWindow(IWorkbookWindow window)
+    {
+        if (_windows.Count <= 1)
+            return null;
+
+        var startIndex = _windows.IndexOf(window);
+        for (var step = 1; step < _windows.Count; step++)
+        {
+            var candidate = _windows[(startIndex + step) % _windows.Count];
+            if (!ReferenceEquals(candidate, window) && !_hidden.Contains(candidate))
+                return candidate;
+        }
+
+        return null;
     }
 
     private void RenumberTitles()

@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -10,6 +12,9 @@ internal static class XlsxSharedStringMetadataPreserver
         var sourceEntry = sourceArchive.GetEntry("xl/sharedStrings.xml");
         var targetEntry = targetArchive.GetEntry("xl/sharedStrings.xml");
         if (sourceEntry is null || targetEntry is null)
+            return;
+
+        if (!ContainsRichSharedStringMetadata(sourceEntry))
             return;
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -45,23 +50,55 @@ internal static class XlsxSharedStringMetadataPreserver
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/sharedStrings.xml", targetXml);
     }
 
+    private static bool ContainsRichSharedStringMetadata(ZipArchiveEntry sharedStringsEntry)
+    {
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            IgnoreComments = true,
+            IgnoreProcessingInstructions = true
+        };
+
+        using var stream = sharedStringsEntry.Open();
+        using var reader = XmlReader.Create(stream, settings);
+        while (reader.Read())
+        {
+            if (reader.NodeType == XmlNodeType.Element &&
+                reader.NamespaceURI == "http://schemas.openxmlformats.org/spreadsheetml/2006/main" &&
+                reader.LocalName is "r" or "rPh" or "phoneticPr")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static Dictionary<string, XElement> GetUniqueSharedStringsByPlainText(
         IEnumerable<XElement> sharedStrings,
         XNamespace workbookNs)
     {
-        return sharedStrings
-            .Select(element => new
+        var unique = new Dictionary<string, XElement>(StringComparer.Ordinal);
+        HashSet<string>? duplicates = null;
+        foreach (var element in sharedStrings)
+        {
+            var text = ReadSharedStringPlainText(element, workbookNs);
+            if (string.IsNullOrEmpty(text) || duplicates?.Contains(text) == true)
+                continue;
+
+            if (unique.ContainsKey(text))
             {
-                Text = ReadSharedStringPlainText(element, workbookNs),
-                Element = element
-            })
-            .Where(item => !string.IsNullOrEmpty(item.Text))
-            .GroupBy(item => item.Text, StringComparer.Ordinal)
-            .Where(group => group.Count() == 1)
-            .ToDictionary(
-                group => group.Key,
-                group => group.Single().Element,
-                StringComparer.Ordinal);
+                unique.Remove(text);
+                duplicates ??= new HashSet<string>(StringComparer.Ordinal);
+                duplicates.Add(text);
+                continue;
+            }
+
+            unique.Add(text, element);
+        }
+
+        return unique;
     }
 
     private static bool HasRichSharedStringMetadata(XElement sharedString, XNamespace workbookNs) =>
@@ -71,10 +108,33 @@ internal static class XlsxSharedStringMetadataPreserver
 
     private static string ReadSharedStringPlainText(XElement sharedString, XNamespace workbookNs)
     {
-        var runs = sharedString.Elements(workbookNs + "r").ToList();
-        if (runs.Count > 0)
-            return string.Concat(runs.Select(run => run.Element(workbookNs + "t")?.Value ?? string.Empty));
+        var textName = workbookNs + "t";
+        string? singleRunText = null;
+        StringBuilder? builder = null;
+        var hasRuns = false;
+        foreach (var run in sharedString.Elements(workbookNs + "r"))
+        {
+            hasRuns = true;
+            var text = run.Element(textName)?.Value ?? string.Empty;
+            if (builder is not null)
+            {
+                builder.Append(text);
+            }
+            else if (singleRunText is null)
+            {
+                singleRunText = text;
+            }
+            else
+            {
+                builder = new StringBuilder(singleRunText.Length + text.Length);
+                builder.Append(singleRunText);
+                builder.Append(text);
+            }
+        }
 
-        return sharedString.Element(workbookNs + "t")?.Value ?? string.Empty;
+        if (hasRuns)
+            return builder?.ToString() ?? singleRunText ?? string.Empty;
+
+        return sharedString.Element(textName)?.Value ?? string.Empty;
     }
 }

@@ -2097,25 +2097,29 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void ViewWindowUnsupportedCommands_AreRemovedFromTheRibbon()
+    public void ViewWindowCommands_AreAllLiveWithDedicatedHandlersOnTheRibbon()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
-        var windowCommandNames = document
+        var windowGroup = document
+            .Descendants(presentation + "Grid")
+            .Single(grid => grid.Attribute(local + "RibbonMetadata.CatalogId")?.Value == "ViewWindowGroup");
+
+        var windowCommands = windowGroup
             .Descendants()
             .Where(element => element.Name == presentation + "Button" || element.Name == presentation + "ToggleButton")
             .Where(button => CommandName(button, local) is not null)
-            .Select(button => CommandName(button, local))
-            .ToArray();
+            .ToDictionary(button => CommandName(button, local)!, button => button.Attribute("Click")?.Value);
 
-        windowCommandNames.Should().NotContain([
-            "Hide",
-            "Unhide",
-            "View Side by Side",
-            "Synchronous Scrolling",
-            "Reset Window Position"]);
+        // The previously-removed commands are now live: each must be present with its dedicated handler.
+        windowCommands.Should().Contain(new KeyValuePair<string, string?>("Hide", "ViewHideWindowBtn_Click"));
+        windowCommands.Should().Contain(new KeyValuePair<string, string?>("Unhide", "ViewUnhideWindowBtn_Click"));
+        windowCommands.Should().Contain(new KeyValuePair<string, string?>("Reset Window Position", "ViewResetWindowPositionBtn_Click"));
+        windowCommands.Should().Contain(new KeyValuePair<string, string?>("View Side by Side", "ViewSideBySideBtn_Click"));
+        windowCommands.Should().Contain(new KeyValuePair<string, string?>("Synchronous Scrolling", "ViewSynchronousScrollingBtn_Click"));
+
         document.Descendants()
             .Select(element => element.Attribute("Click")?.Value)
             .Should()
@@ -2123,15 +2127,27 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void ViewWindowLiveCommands_RouteNewAndSwitchWindowsToRegistryBackedHandlers()
+    public void ViewWindowLiveCommands_RouteEveryWindowCommandToRegistryAndPlannerBackedHandlers()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
+        var registryHandlers = new[]
+        {
+            "ViewNewWindowBtn_Click",
+            "ViewSwitchWindowsBtn_Click",
+            "ViewHideWindowBtn_Click",
+            "ViewUnhideWindowBtn_Click",
+            "ViewResetWindowPositionBtn_Click",
+            "ViewSideBySideBtn_Click",
+            "ViewSynchronousScrollingBtn_Click",
+        };
+
         var liveWindowCommands = document
-            .Descendants(presentation + "Button")
-            .Where(button => button.Attribute("Click")?.Value is "ViewNewWindowBtn_Click" or "ViewSwitchWindowsBtn_Click")
+            .Descendants()
+            .Where(element => element.Name == presentation + "Button" || element.Name == presentation + "ToggleButton")
+            .Where(button => registryHandlers.Contains(button.Attribute("Click")?.Value))
             .Select(button => new
             {
                 Title = LocalizedAttribute(button, local + "RibbonTooltip.Title"),
@@ -2156,6 +2172,41 @@ public sealed class MainWindowXamlKeyTipTests
                 KeyTip = (string?)"W",
                 Click = (string?)"ViewSwitchWindowsBtn_Click",
                 Description = (string?)"Switch to another visible workbook window."
+            },
+            new
+            {
+                Title = (string?)"Hide",
+                KeyTip = (string?)"H",
+                Click = (string?)"ViewHideWindowBtn_Click",
+                Description = (string?)"Hide this workbook window from view."
+            },
+            new
+            {
+                Title = (string?)"Unhide",
+                KeyTip = (string?)"U",
+                Click = (string?)"ViewUnhideWindowBtn_Click",
+                Description = (string?)"Restore a hidden workbook window."
+            },
+            new
+            {
+                Title = (string?)"Reset Window Position",
+                KeyTip = (string?)"RP",
+                Click = (string?)"ViewResetWindowPositionBtn_Click",
+                Description = (string?)"Reset this window to a standard size and position."
+            },
+            new
+            {
+                Title = (string?)"View Side by Side",
+                KeyTip = (string?)"B",
+                Click = (string?)"ViewSideBySideBtn_Click",
+                Description = (string?)"Tile this window and another side by side to compare them."
+            },
+            new
+            {
+                Title = (string?)"Synchronous Scrolling",
+                KeyTip = (string?)"SS",
+                Click = (string?)"ViewSynchronousScrollingBtn_Click",
+                Description = (string?)"Scroll both side-by-side windows together."
             }
         });
     }
@@ -2169,6 +2220,18 @@ public sealed class MainWindowXamlKeyTipTests
         source.Should().Contain("UiText.Get(canSwitchWindows");
         source.Should().Contain("MainWindow_TooltipDescription_SwitchToAnotherVisibleWorkbookWindow");
         source.Should().Contain("MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow");
+
+        // Hide / Unhide / Reset / Side by Side / Synchronous Scrolling state uses localized live tooltips too.
+        source.Should().Contain("MainWindow_TooltipDescription_HideThisWorkbookWindowFromView");
+        source.Should().Contain("MainWindow_TooltipDescription_UnavailableHideRequiresSecondVisibleWindow");
+        source.Should().Contain("MainWindow_TooltipDescription_RestoreAHiddenWorkbookWindow");
+        source.Should().Contain("MainWindow_TooltipDescription_UnavailableUnhideRequiresAHiddenWindow");
+        source.Should().Contain("MainWindow_TooltipDescription_ResetThisWindowToAStandardSizeAndPosition");
+        source.Should().Contain("MainWindow_TooltipDescription_TileThisWindowAndAnotherSideBySideToCompareThem");
+        source.Should().Contain("MainWindow_TooltipDescription_UnavailableViewSideBySideRequiresSecondVisibleWindow");
+        source.Should().Contain("MainWindow_TooltipDescription_ScrollBothSideBySideWindowsTogether");
+        source.Should().Contain("MainWindow_TooltipDescription_UnavailableSynchronousScrollingRequiresViewSideBySide");
+
         source.Should().NotContain("ViewWindowCommandPlanner");
         source.Should().NotContain("ViewWindowCommandBtn_Click");
     }

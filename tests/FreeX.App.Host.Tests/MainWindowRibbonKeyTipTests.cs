@@ -601,13 +601,19 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.ActiveSheetViewOptions.Should().Be((false, false, true));
             harness.KeyTipScope.Should().Be("None");
 
+            // Outside Page Layout, Ruler (RU) is disabled, but Reset Window Position (RP) is always
+            // live and shares the "R" prefix, so pressing R now enters the pending command scope.
             harness.EnterKeyTipScope("TopLevel");
             harness.HandleKeyTip(Key.W);
             harness.HandleKeyTip(Key.R);
 
-            harness.KeyTipScope.Should().Be("None", "Ruler is disabled outside Page Layout view and Reset Window Position is disabled in the single-window host state");
+            harness.KeyTipScope.Should().Be("Commands", "R is now a live prefix for the Reset Window Position keytip RP");
             harness.ActiveSheetViewOptions.Should().Be((false, false, true));
 
+            // Completing RP resets this window's geometry; it never touches the worksheet view options.
+            harness.HandleKeyTip(Key.P);
+
+            harness.KeyTipScope.Should().Be("None");
             harness.ActiveSheetViewOptions.Should().Be((false, false, true), "Excel leaves Ruler unavailable outside Page Layout view");
 
             harness.EnterKeyTipScope("TopLevel");
@@ -780,7 +786,7 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
-    public void ViewWindowSingleHostState_ShowsOnlyLiveWindowKeyTips()
+    public void ViewWindowSingleHostState_DisablesMultiWindowCommandsButKeepsResetLive()
     {
         RunSta(() =>
         {
@@ -789,23 +795,33 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.EnterKeyTipScope("TopLevel");
             harness.HandleKeyTip(Key.W);
 
+            // New Window is always live; Reset Window Position is always available (re-centers this window).
             harness.CommandButtonIsEnabled("ViewNewWindowBtn").Should().BeTrue();
             harness.VisibleCommandKeyTips("NW").Should().ContainSingle("New Window");
+            harness.CommandButtonIsEnabled("ViewResetWindowPositionBtn").Should().BeTrue();
+            harness.VisibleCommandKeyTips("RP").Should().ContainSingle("Reset Window Position");
 
+            // The remaining multi-window commands exist but are disabled in a lone-window host, with
+            // owned help text explaining why, so they expose no command key tip while disabled.
             harness.CommandButtonIsEnabled("ViewSwitchWindowsBtn").Should().BeFalse();
             harness.CommandButtonHelpText("ViewSwitchWindowsBtn").Should().Contain("more than one visible workbook window");
 
-            harness.CommandButtonIsEnabled("ViewHideWindowBtn").Should().BeNull();
-            harness.CommandButtonIsEnabled("ViewUnhideWindowBtn").Should().BeNull();
-            harness.CommandButtonIsEnabled("ViewSideBySideBtn").Should().BeNull();
-            harness.CommandButtonIsEnabled("ViewSynchronousScrollingBtn").Should().BeNull();
-            harness.CommandButtonIsEnabled("ViewResetWindowPositionBtn").Should().BeNull();
+            harness.CommandButtonIsEnabled("ViewHideWindowBtn").Should().BeFalse();
+            harness.CommandButtonHelpText("ViewHideWindowBtn").Should().Contain("at least one other window");
+
+            harness.CommandButtonIsEnabled("ViewUnhideWindowBtn").Should().BeFalse();
+            harness.CommandButtonHelpText("ViewUnhideWindowBtn").Should().Contain("no workbook window is currently hidden");
+
+            harness.CommandButtonIsEnabled("ViewSideBySideBtn").Should().BeFalse();
+            harness.CommandButtonHelpText("ViewSideBySideBtn").Should().Contain("requires a second visible workbook window");
+
+            harness.CommandButtonIsEnabled("ViewSynchronousScrollingBtn").Should().BeFalse();
+            harness.CommandButtonHelpText("ViewSynchronousScrollingBtn").Should().Contain("View Side by Side");
 
             harness.VisibleCommandKeyTips("H").Should().NotContain("Hide");
             harness.VisibleCommandKeyTips("U").Should().NotContain("Unhide");
             harness.VisibleCommandKeyTips("B").Should().NotContain("View Side by Side");
             harness.VisibleCommandKeyTips("SS").Should().BeEmpty();
-            harness.VisibleCommandKeyTips("RP").Should().BeEmpty();
         });
     }
 

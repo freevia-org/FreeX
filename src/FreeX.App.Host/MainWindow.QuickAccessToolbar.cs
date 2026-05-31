@@ -37,7 +37,7 @@ public partial class MainWindow
             _registeredQuickAccessToolbarNames.Add(command.AutomationId);
         }
 
-        RefreshQuickAccessToolbarCommandStates();
+        RefreshQuickAccessToolbarCommandStates(force: true);
     }
 
     private Button CreateQuickAccessToolbarButton(
@@ -105,20 +105,30 @@ public partial class MainWindow
     private bool IsQuickAccessToolbarButton(FrameworkElement element) =>
         element is Button button && _quickAccessToolbarButtons.Contains(button);
 
-    private void RefreshQuickAccessToolbarCommandStates()
+    private void RefreshQuickAccessToolbarCommandStates(bool force = false)
     {
+        var state = new QuickAccessCommandState(
+            _commandBus.CanUndo(_workbook.Id),
+            _commandBus.CanRedo(_workbook.Id));
+        if (!force && _lastQuickAccessCommandState == state)
+            return;
+
         foreach (var button in _quickAccessToolbarButtons)
         {
             if (!RibbonMetadata.TryGetCommandName(button, out var commandName))
                 continue;
 
-            button.IsEnabled = commandName switch
+            var isEnabled = commandName switch
             {
-                "Undo" => _commandBus.CanUndo(_workbook.Id),
-                "Redo" => _commandBus.CanRedo(_workbook.Id),
+                "Undo" => state.CanUndo,
+                "Redo" => state.CanRedo,
                 _ => true
             };
+            if (button.IsEnabled != isEnabled)
+                button.IsEnabled = isEnabled;
         }
+
+        _lastQuickAccessCommandState = state;
     }
 
     private Button? GetQuickAccessToolbarButton(string commandId)

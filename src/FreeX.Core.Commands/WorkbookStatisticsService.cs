@@ -48,7 +48,7 @@ public static class WorkbookStatisticsService
     private static SheetStatistics GetSheetStatistics(Sheet sheet) =>
         new(
             CellCount: sheet.CellCount,
-            FormulaCount: sheet.EnumerateCells().Count(cell => cell.Cell.HasFormula),
+            FormulaCount: sheet.FormulaCellCount,
             CommentCount: sheet.Comments.Count + sheet.ThreadedComments.Count,
             ChartCount: sheet.Charts.Count,
             PictureCount: sheet.Pictures.Count,

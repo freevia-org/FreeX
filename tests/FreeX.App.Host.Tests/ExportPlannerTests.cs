@@ -3555,8 +3555,8 @@ public class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = \"_Print gridlines\"");
-        source.Should().Contain("Content = \"Print row and column _headings\"");
+        source.Should().Contain("Content = UiText.Get(\"PageSetup_PrintGridlines\")");
+        source.Should().Contain("Content = UiText.Get(\"PageSetup_PrintRowAndColumnHeadings\")");
         source.Should().Contain("gridlinesBox.Checked +=");
         source.Should().Contain("gridlinesBox.Unchecked +=");
         source.Should().Contain("headingsBox.Checked +=");
@@ -3570,12 +3570,13 @@ public class ExportPlannerTests
     {
         var source = ReadPrintPreviewDialogSources();
 
-        source.Should().Contain("Content = \"_Ignore print area\"");
+        source.Should().Contain("Content = UiText.Get(\"PrintPreview_IgnorePrintArea\")");
         source.Should().Contain("new PrintPreviewSettings(ignorePrintAreaBox.IsChecked == true)");
         source.Should().Contain("ignorePrintAreaBox.Checked +=");
         source.Should().Contain("ignorePrintAreaBox.Unchecked +=");
-        source.Should().Contain("ToolTip = \"Preview and print the active sheet instead of the stored print area.\"");
-        source.Should().Contain("AutomationProperties.SetName(ignorePrintAreaBox, \"Ignore print area\");");
+        source.Should().Contain("ToolTip = UiText.Get(\"PrintPreview_IgnorePrintAreaToolTip\")");
+        source.Should().Contain("AutomationProperties.SetName(ignorePrintAreaBox, UiText.Get(\"PrintPreview_IgnorePrintAreaAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(ignorePrintAreaBox, UiText.Get(\"PrintPreview_IgnorePrintAreaHelpText\"));");
     }
 
     [Fact]
@@ -3586,10 +3587,10 @@ public class ExportPlannerTests
         source.Should().Contain("void AddLabel(string text, Control target)");
         source.Should().Contain("Content = text");
         source.Should().Contain("Target = target");
-        source.Should().Contain("AddLabel(\"_Orientation\", orientBox);");
-        source.Should().Contain("AddLabel(\"_Paper Size\", paperBox);");
-        source.Should().Contain("AddLabel(\"_Margins\", marginsBox);");
-        source.Should().Contain("AddLabel(\"_Scaling\", scaleBox);");
+        source.Should().Contain("AddLabel(UiText.Get(\"PrintPreview_OrientationLabel\"), orientBox);");
+        source.Should().Contain("AddLabel(UiText.Get(\"PageSetup_PaperSize\"), paperBox);");
+        source.Should().Contain("AddLabel(UiText.Get(\"PageSetup_Margins\"), marginsBox);");
+        source.Should().Contain("AddLabel(UiText.Get(\"PrintPreview_ScalingLabel\"), scaleBox);");
     }
 
     [Fact]

@@ -34,7 +34,9 @@ internal sealed class NameDefinitionDialog : Window
         _requestRangeSelection = requestRangeSelection;
         _isValidRange = isValidRange ?? (rangeText => !string.IsNullOrWhiteSpace(rangeText));
         _validateName = validateName ?? (_ => null);
-        Title = string.IsNullOrWhiteSpace(initial.Name) ? "New Name" : "Edit Name";
+        Title = string.IsNullOrWhiteSpace(initial.Name)
+            ? UiText.Get("NameDefinition_NewNameTitle")
+            : UiText.Get("NameDefinition_EditNameTitle");
         Width = 460;
         Height = 300;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -42,19 +44,19 @@ internal sealed class NameDefinitionDialog : Window
         ShowInTaskbar = false;
 
         _nameBox.Text = initial.Name;
-        AutomationProperties.SetName(_nameBox, "Name");
+        AutomationProperties.SetName(_nameBox, UiText.Get("NameDefinition_NameAutomationName"));
         foreach (var scope in _scopeOptions)
             _scopeBox.Items.Add(scope);
         _scopeBox.SelectedItem = _scopeOptions.FirstOrDefault(scope =>
             string.Equals(scope, initial.Scope, StringComparison.OrdinalIgnoreCase)) ?? _scopeOptions[0];
-        AutomationProperties.SetName(_scopeBox, "Scope");
+        AutomationProperties.SetName(_scopeBox, UiText.Get("NameDefinition_ScopeAutomationName"));
         _commentBox.Text = initial.Comment;
-        AutomationProperties.SetName(_commentBox, "Comment");
+        AutomationProperties.SetName(_commentBox, UiText.Get("NameDefinition_CommentAutomationName"));
         _refersToBox.Text = initial.RefersTo;
-        AutomationProperties.SetName(_refersToBox, "Refers to");
-        _rangePickerButton.ToolTip = "Collapse dialog and select the referenced range from the worksheet";
-        AutomationProperties.SetName(_rangePickerButton, "Select referenced range");
-        AutomationProperties.SetHelpText(_rangePickerButton, "Collapse dialog and select the referenced range from the worksheet.");
+        AutomationProperties.SetName(_refersToBox, UiText.Get("NameDefinition_RefersToAutomationName"));
+        _rangePickerButton.ToolTip = UiText.Get("NameDefinition_RangePickerToolTip");
+        AutomationProperties.SetName(_rangePickerButton, UiText.Get("NameDefinition_RangePickerAutomationName"));
+        AutomationProperties.SetHelpText(_rangePickerButton, UiText.Get("NameDefinition_RangePickerHelpText"));
         _rangePickerButton.Click += (_, _) =>
         {
             RangeSelectionRequest = NamedRangeDialog.CreateRangeSelectionRequest(
@@ -79,9 +81,9 @@ internal sealed class NameDefinitionDialog : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        AddTextRow(grid, 0, "_Name:", _nameBox);
-        AddComboRow(grid, 1, "_Scope:", _scopeBox);
-        AddTextRow(grid, 2, "_Comment:", _commentBox);
+        AddTextRow(grid, 0, UiText.Get("NameDefinition_NameLabel"), _nameBox);
+        AddComboRow(grid, 1, UiText.Get("NameDefinition_ScopeLabel"), _scopeBox);
+        AddTextRow(grid, 2, UiText.Get("NameDefinition_CommentLabel"), _commentBox);
         AddRefersToRow(grid, 3);
 
         var buttons = DialogButtonRowFactory.Create(Accept, 72);
@@ -118,7 +120,7 @@ internal sealed class NameDefinitionDialog : Window
 
     private void AddRefersToRow(Grid grid, int row)
     {
-        grid.Children.Add(new Label { Content = "_Refers to:", Target = _refersToBox, Padding = new Thickness(0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 8) });
+        grid.Children.Add(new Label { Content = UiText.Get("NameDefinition_RefersToLabel"), Target = _refersToBox, Padding = new Thickness(0), VerticalAlignment = System.Windows.VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 8) });
         Grid.SetRow(grid.Children[^1], row);
         Grid.SetColumn(grid.Children[^1], 0);
         _refersToBox.Margin = new Thickness(0, 0, 4, 8);
@@ -144,7 +146,7 @@ internal sealed class NameDefinitionDialog : Window
 
         if (!_isValidRange(_refersToBox.Text.Trim()))
         {
-            DialogMessageHelper.ShowWarning(this, "Invalid range format. Use: SheetName!A1:B10 or A1:B10", Title);
+            DialogMessageHelper.ShowWarning(this, UiText.Get("NameDefinition_InvalidRangeFormatMessage"), Title);
             FocusRefersToInput();
             return;
         }
@@ -160,7 +162,7 @@ internal sealed class NameDefinitionDialog : Window
     internal static string? ValidateNameInput(string name, Func<string, string?> validateName)
     {
         if (string.IsNullOrWhiteSpace(name))
-            return "Please enter a name.";
+            return UiText.Get("NameDefinition_PleaseEnterNameMessage");
 
         return validateName(name.Trim());
     }

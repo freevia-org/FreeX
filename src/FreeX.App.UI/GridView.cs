@@ -108,6 +108,7 @@ public partial class GridView : FrameworkElement
     private static readonly Pen GridPen = MakeGridPen();
     private static readonly Brush SelectionBrush = MakeBrushAlpha(32, 33, 115, 70);
     private static readonly Pen SelectionPen = MakePen(MakeBrush(33, 115, 70), 2);
+    private static readonly Brush SelectionHandleBrush = MakeBrush(33, 115, 70);
     private static readonly Brush QuickAnalysisPreviewBrush = MakeBrushAlpha(38, 91, 155, 213);
     private static readonly Pen QuickAnalysisPreviewPen = MakePen(MakeBrush(47, 117, 181), 2);
     private static readonly Brush QuickAnalysisDataBarPreviewBrush = MakeBrushAlpha(156, 91, 155, 213);
@@ -139,6 +140,31 @@ public partial class GridView : FrameworkElement
     private static readonly Brush QuickAnalysisAreaChartPreviewBrush = MakeBrushAlpha(96, 68, 114, 196);
     private static readonly Brush QuickAnalysisScatterChartPreviewBrush = MakeBrushAlpha(190, 112, 173, 71);
     private static readonly Pen QuickAnalysisColumnChartAxisPen = MakePen(MakeBrush(89, 89, 89), 1);
+    private static readonly double[] QuickAnalysisColumnChartHeights = [0.42, 0.76, 0.58, 0.9];
+    private static readonly double[] QuickAnalysisStackedColumnChartHeights = [0.68, 0.84, 0.58, 0.92];
+    private static readonly double[] QuickAnalysisStackedColumnChartTopSegments = [0.36, 0.48, 0.42, 0.31];
+    private static readonly double[] QuickAnalysisBarChartWidths = [0.48, 0.86, 0.64, 0.72];
+    private static readonly (double X, double Y)[] QuickAnalysisLineChartPointFactors =
+    [
+        (0.0, 0.74),
+        (0.32, 0.32),
+        (0.66, 0.56),
+        (1.0, 0.18)
+    ];
+    private static readonly (double X, double Y)[] QuickAnalysisAreaChartPointFactors =
+    [
+        (0.0, 0.78),
+        (0.28, 0.36),
+        (0.62, 0.52),
+        (1.0, 0.2)
+    ];
+    private static readonly (double X, double Y)[] QuickAnalysisScatterChartPointFactors =
+    [
+        (0.18, 0.72),
+        (0.35, 0.42),
+        (0.55, 0.62),
+        (0.78, 0.28)
+    ];
     private static readonly Pen ResizeLinePen = MakeResizeLinePen();
     private static readonly Pen AutofillPreviewPen = MakeAutofillPreviewPen();
     private static readonly Pen FreezePen = MakeFreezePen();
@@ -172,6 +198,8 @@ public partial class GridView : FrameworkElement
     private readonly Dictionary<ChartRenderCacheKey, ImageSource> _chartRenderCache = new();
     private RenderCellLookupCache? _renderCellLookupCache;
     private OccupiedCellLookupCache? _occupiedCellLookupCache;
+    private PageBreakLookupCache? _rowPageBreakLookupCache;
+    private PageBreakLookupCache? _columnPageBreakLookupCache;
 
     private static double ToDisplayFontSize(double pointSize) =>
         Math.Max(1.0, Math.Round(pointSize * (96.0 / 72.0), MidpointRounding.AwayFromZero));

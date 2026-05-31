@@ -21,51 +21,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         packageStream.Position = 0;
-        XlsxWorkbookMetadataWriter.SaveWorkbookProperties(packageStream, workbook);
-
-        packageStream.Position = 0;
-        XlsxWorkbookMetadataWriter.SaveWorkbookViewProperties(packageStream, workbook);
-        packageStream.Position = 0;
-        XlsxWorkbookAdditionalViewMapper.Save(packageStream, workbook);
-
-        if (workbook.FileVersion is not null)
-        {
-            packageStream.Position = 0;
-            XlsxWorkbookMetadataWriter.SaveFileVersion(packageStream, workbook);
-        }
-
-        if (workbook.FunctionGroups is not null)
-        {
-            packageStream.Position = 0;
-            XlsxWorkbookMetadataWriter.SaveFunctionGroups(packageStream, workbook);
-        }
-
-        if (workbook.SmartTags is not null)
-        {
-            packageStream.Position = 0;
-            XlsxWorkbookMetadataWriter.SaveSmartTags(packageStream, workbook);
-        }
-
-        if (workbook.FileSharing is not null)
-        {
-            packageStream.Position = 0;
-            XlsxWorkbookMetadataWriter.SaveFileSharing(packageStream, workbook);
-        }
-
-        if (workbook.FileRecoveryProperties.Count > 0)
-        {
-            packageStream.Position = 0;
-            XlsxWorkbookMetadataWriter.SaveFileRecoveryProperties(packageStream, workbook);
-        }
-
-        if (workbook.IsStructureProtected || workbook.ProtectionMetadata is not null)
-        {
-            packageStream.Position = 0;
-            XlsxWorkbookMetadataWriter.SaveProtection(packageStream, workbook);
-        }
-
-        packageStream.Position = 0;
-        XlsxWorkbookMetadataWriter.SaveCalculationProperties(packageStream, workbook);
+        XlsxWorkbookMetadataWriter.SavePostProcessingMetadata(packageStream, workbook);
 
         if (workbook.Sheets.Any(XlsxWorksheetDimensionDefaultsWriter.HasNonDefaultDimensions))
         {
@@ -296,37 +252,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         packageStream.Position = 0;
-        XlsxWorkbookAdditionalViewMapper.Save(packageStream, workbook);
-
-        if (workbook.FileVersion is not null)
-        {
-            packageStream.Position = 0;
-            XlsxWorkbookMetadataWriter.SaveFileVersion(packageStream, workbook);
-        }
-
-        if (workbook.FunctionGroups is not null)
-        {
-            packageStream.Position = 0;
-            XlsxWorkbookMetadataWriter.SaveFunctionGroups(packageStream, workbook);
-        }
-
-        if (workbook.SmartTags is not null)
-        {
-            packageStream.Position = 0;
-            XlsxWorkbookMetadataWriter.SaveSmartTags(packageStream, workbook);
-        }
-
-        if (workbook.FileSharing is not null)
-        {
-            packageStream.Position = 0;
-            XlsxWorkbookMetadataWriter.SaveFileSharing(packageStream, workbook);
-        }
-
-        if (workbook.FileRecoveryProperties.Count > 0)
-        {
-            packageStream.Position = 0;
-            XlsxWorkbookMetadataWriter.SaveFileRecoveryProperties(packageStream, workbook);
-        }
+        XlsxWorkbookMetadataWriter.SaveSourcePackageReplayMetadata(packageStream, workbook);
 
         SaveSourcePackageIndependentPostProcessingMetadata();
 
@@ -366,12 +292,9 @@ public sealed partial class XlsxFileAdapter
             XlsxNumberFormatCatalogWriter.RemapPivotTableNumberFormats(packageStream, numberFormatIdMap);
         }
 
-        using var refreshedPackageStream = new MemoryStream();
         packageStream.Position = 0;
-        packageStream.CopyTo(refreshedPackageStream);
-        refreshedPackageStream.Position = 0;
         SourcePackages.Remove(workbook);
-        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(refreshedPackageStream, workbook));
+        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream, workbook));
 
         void SaveSourcePackageIndependentPostProcessingMetadata()
         {

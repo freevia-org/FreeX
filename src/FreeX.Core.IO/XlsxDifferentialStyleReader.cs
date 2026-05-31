@@ -16,7 +16,19 @@ internal static class XlsxDifferentialStyleReader
         try
         {
             var stylesXml = LoadXml(stylesEntry);
-            return stylesXml.Root?
+            return ReadAll(stylesXml, workbookNs);
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    public static IReadOnlyList<CellStyle> ReadAll(XDocument? stylesXml, XNamespace workbookNs)
+    {
+        try
+        {
+            return stylesXml?.Root?
                 .Element(workbookNs + "dxfs")?
                 .Elements(workbookNs + "dxf")
                 .Select(dxf => Read(dxf, workbookNs))

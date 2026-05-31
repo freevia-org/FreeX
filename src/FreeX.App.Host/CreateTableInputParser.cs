@@ -16,7 +16,7 @@ public static class CreateTableInputParser
         error = null;
         if (string.IsNullOrWhiteSpace(rangeText))
         {
-            error = "Enter a table range.";
+            error = UiText.Get("CreateTable_MissingRangeMessage");
             return false;
         }
 
@@ -29,7 +29,7 @@ public static class CreateTableInputParser
 
             if (range.End.Row <= range.Start.Row)
             {
-                error = "Table range must include at least two rows.";
+                error = UiText.Get("CreateTable_MinimumRowsMessage");
                 return false;
             }
 
@@ -38,7 +38,7 @@ public static class CreateTableInputParser
         }
         catch (FormatException)
         {
-            error = "Enter a valid table range.";
+            error = UiText.Get("CreateTable_InvalidRangeMessage");
             return false;
         }
     }
