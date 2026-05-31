@@ -104,6 +104,38 @@ public sealed class RibbonKeyTipOverlayPlacementTests
     }
 
     [Fact]
+    public void PlaceBadge_CommandKindPlacesCompactTitleBarCommandsBelowControl()
+    {
+        // QAT buttons live in the title bar and should show keytips below the
+        // icon, matching Excel's top-level Alt overlay.
+        var elementBounds = new Rect(36, 3, 26, 22);
+        var overlaySize = new Size(1280, 720);
+        var badgeSize = new Size(18, 16);
+
+        var point = RibbonKeyTipOverlayPlacement.PlaceBadge(
+            elementBounds, overlaySize, badgeSize, RibbonKeyTipBadgeKind.Command);
+
+        point.X.Should().Be(40);
+        point.Y.Should().Be(27);
+    }
+
+    [Fact]
+    public void PlaceBadge_CommandKindKeepsCompactRibbonCommandsOnBottomEdge()
+    {
+        // Compact ribbon-row commands outside the title bar keep the command
+        // bottom-edge straddle anchor; only QAT-like title-bar commands move below.
+        var elementBounds = new Rect(100, 64, 28, 22);
+        var overlaySize = new Size(1280, 720);
+        var badgeSize = new Size(18, 16);
+
+        var point = RibbonKeyTipOverlayPlacement.PlaceBadge(
+            elementBounds, overlaySize, badgeSize, RibbonKeyTipBadgeKind.Command);
+
+        point.X.Should().Be(105);
+        point.Y.Should().Be(78);
+    }
+
+    [Fact]
     public void PlaceBadge_TabKindCentersBadgeBelowTabWithGap()
     {
         // Tab keytips sit centered just below the tab label rather than straddling
@@ -123,9 +155,9 @@ public sealed class RibbonKeyTipOverlayPlacementTests
     [Fact]
     public void PlaceBadge_TabKindDiffersFromCommandKindVertically()
     {
-        // The Tab anchor (below the edge + gap) must sit lower than the Command
-        // straddle (bottom edge - half the badge height) for the same element.
-        var elementBounds = new Rect(120, 30, 80, 24);
+        // The Tab anchor (below the edge + gap) must sit lower than the regular
+        // ribbon Command straddle (bottom edge - half the badge height) for the same element.
+        var elementBounds = new Rect(120, 40, 80, 24);
         var overlaySize = new Size(1280, 720);
         var badgeSize = new Size(24, 16);
 
