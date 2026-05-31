@@ -237,7 +237,7 @@
 
             <!-- HOME -->
             <TabItem Header="{local:Loc Key=MainWindow_Header_Home}" local:RibbonTooltip.KeyTip="H" local:RibbonMetadata.CatalogId="HomeTab">
-                <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
+                <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="0,4,0,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
