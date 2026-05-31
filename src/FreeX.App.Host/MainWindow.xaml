@@ -4705,7 +4705,7 @@
                                                     AutomationProperties.Name="{Binding PinAutomationName}"
                                                     AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="{local:Loc Key=MainWindow_ToolTip_PinToList}" local:RibbonMetadata.CommandName="Pin File">
-                                                <local:RibbonIcon Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
+                                                <local:RibbonIcon CommandName="Pin to list" Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
                                             </Button>
                                         </Grid>
                                     </Button>
@@ -4789,7 +4789,7 @@
                                                     AutomationProperties.Name="{Binding PinAutomationName}"
                                                     AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="{local:Loc Key=MainWindow_ToolTip_UnpinFromList}" local:RibbonMetadata.CommandName="Unpin File">
-                                                <local:RibbonIcon Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
+                                                <local:RibbonIcon CommandName="Unpin from list" Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
                                             </Button>
                                         </Grid>
                                     </Button>
