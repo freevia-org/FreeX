@@ -413,6 +413,33 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsSpreadsheetMlInheritedNumberFormatStyles()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Styles>
+                <ss:Style ss:ID="currency">
+                  <ss:NumberFormat ss:Format="$#,##0.00"/>
+                </ss:Style>
+                <ss:Style ss:ID="currencyChild" ss:Parent="currency"/>
+              </ss:Styles>
+              <ss:Worksheet ss:Name="Styles">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell ss:StyleID="currencyChild"><ss:Data ss:Type="Number">12.5</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsSpreadsheetMlNumberFormatStyles()
     {
         var workbook = new Workbook("XmlStyles");
@@ -1051,6 +1078,46 @@ public sealed class SpreadsheetXmlFileAdapterTests
         workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
         sheet.GetCell(1, 3).Should().BeNull();
         workbook.GetStyle(sheet.GetStyleOnly(1, 3)!.Value).NumberFormat.Should().Be("$#,##0.00");
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlInheritedNumberFormatStyles()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row amount="12.5"/>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <ss:Style ss:ID="money">
+                      <ss:NumberFormat ss:Format="$#,##0.00"/>
+                    </ss:Style>
+                    <ss:Style ss:ID="moneyGenerated" ss:Parent="money"/>
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Generated">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell ss:StyleID="moneyGenerated">
+                          <ss:Data ss:Type="Number"><xsl:value-of select="row/@amount"/></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
     }
 
     [Fact]
