@@ -2868,7 +2868,7 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Vertical">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_NewWindow}" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                    <Button x:Name="ViewNewWindowBtn" Content="{local:Loc Key=MainWindow_Content_NewWindow}" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowCommandBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_NewWindow}"
                                             local:RibbonTooltip.KeyTip="NW"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresMultipleLiveWindowsOverTheSameWorkbookSession}" local:RibbonMetadata.CommandName="New Window"/>
@@ -2905,29 +2905,29 @@
                                                   local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Split}"
                                                   local:RibbonTooltip.KeyTip="SP"
                                                   local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SplitTheWorksheetAtTheSelectedCellOrRemoveTheCurrentSplitCreatingASplitC_2DAD6EB5}" local:RibbonMetadata.CommandName="Split"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Hide}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                    <Button x:Name="ViewHideWindowBtn" Content="{local:Loc Key=MainWindow_Content_Hide}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowCommandBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Hide}"
                                             local:RibbonTooltip.KeyTip="H"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresWorkbookWindowVisibilityState}" local:RibbonMetadata.CommandName="Hide"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Unhide}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                    <Button x:Name="ViewUnhideWindowBtn" Content="{local:Loc Key=MainWindow_Content_Unhide}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowCommandBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Unhide}"
                                             local:RibbonTooltip.KeyTip="U"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresWorkbookWindowVisibilityState}" local:RibbonMetadata.CommandName="Unhide"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Vertical">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_ViewSideBySide}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ViewSideBySide}"
-                                            local:RibbonTooltip.KeyTip="B"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresMultiWindowWorkbookHostingAndSynchronizedScrollRouting}" local:RibbonMetadata.CommandName="View Side by Side"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_SynchronousScrolling}" Width="176" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SynchronousScrolling}"
-                                            local:RibbonTooltip.KeyTip="SS"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresPairedWorkbookWindowsWithSynchronizedViewportState}" local:RibbonMetadata.CommandName="Synchronous Scrolling"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_ResetWindowPosition}" Width="176" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                    <ToggleButton x:Name="ViewSideBySideBtn" Content="{local:Loc Key=MainWindow_Content_ViewSideBySide}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="ViewWindowCommandBtn_Click"
+                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ViewSideBySide}"
+                                                  local:RibbonTooltip.KeyTip="B"
+                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresMultiWindowWorkbookHostingAndSynchronizedScrollRouting}" local:RibbonMetadata.CommandName="View Side by Side"/>
+                                    <ToggleButton x:Name="ViewSynchronousScrollingBtn" Content="{local:Loc Key=MainWindow_Content_SynchronousScrolling}" Width="176" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="ViewWindowCommandBtn_Click"
+                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SynchronousScrolling}"
+                                                  local:RibbonTooltip.KeyTip="SS"
+                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresPairedWorkbookWindowsWithSynchronizedViewportState}" local:RibbonMetadata.CommandName="Synchronous Scrolling"/>
+                                    <Button x:Name="ViewResetWindowPositionBtn" Content="{local:Loc Key=MainWindow_Content_ResetWindowPosition}" Width="176" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowCommandBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ResetWindowPosition}"
                                             local:RibbonTooltip.KeyTip="RP"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresPairedWorkbookWindowsAndSideBySideLayoutState}" local:RibbonMetadata.CommandName="Reset Window Position"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_SwitchWindows}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowDeferredBtn_Click"
+                                    <Button x:Name="ViewSwitchWindowsBtn" Content="{local:Loc Key=MainWindow_Content_SwitchWindows}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowCommandBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SwitchWindows}"
                                             local:RibbonTooltip.KeyTip="W"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresAMultiWindowWorkbookRegistry}" local:RibbonMetadata.CommandName="Switch Windows"/>

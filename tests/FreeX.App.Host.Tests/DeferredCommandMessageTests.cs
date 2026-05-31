@@ -34,6 +34,21 @@ public sealed class DeferredCommandMessageTests
     }
 
     [Fact]
+    public void ViewWindowPlannerMessage_NamesSingleWindowStateBoundary()
+    {
+        var plan = ViewWindowCommandPlanner.CreatePlan(
+            ViewWindowCommandKind.NewWindow,
+            ViewWorkbookWindowState.SingleVisibleWorkbook);
+
+        var message = ViewWindowCommandPlanner.CreateMessage("New Window", plan);
+
+        message.Title.Should().Be("New Window");
+        message.Body.Should().Contain("deferred");
+        message.Body.Should().Contain("additional live workbook windows");
+        message.Body.Should().Contain("disables unsafe dependent commands");
+    }
+
+    [Fact]
     public void OnlineTemplatesMessage_NamesExternalMicrosoftServiceExclusion()
     {
         var message = DeferredCommandMessages.OnlineTemplatesExcluded();

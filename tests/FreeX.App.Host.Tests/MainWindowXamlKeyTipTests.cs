@@ -2029,9 +2029,10 @@ public sealed class MainWindowXamlKeyTipTests
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         var missing = document
-            .Descendants(presentation + "Button")
+            .Descendants()
+            .Where(element => element.Name == presentation + "Button" || element.Name == presentation + "ToggleButton")
             .Where(button =>
-                button.Attribute("Click")?.Value is "PageLayoutDeferredBtn_Click" or "ViewWindowDeferredBtn_Click")
+                button.Attribute("Click")?.Value is "PageLayoutDeferredBtn_Click" or "ViewWindowCommandBtn_Click")
             .Where(button =>
                 LocalizedAttribute(button, local + "RibbonTooltip.Description")?.Contains("Deferred:", StringComparison.OrdinalIgnoreCase) != true)
             .Select(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") ?? LocalizedAttribute(button, "Content") ?? "Button")
@@ -2048,8 +2049,9 @@ public sealed class MainWindowXamlKeyTipTests
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
         document
-            .Descendants(presentation + "Button")
-            .Where(button => button.Attribute("Click")?.Value == "ViewWindowDeferredBtn_Click")
+            .Descendants()
+            .Where(element => element.Name == presentation + "Button" || element.Name == presentation + "ToggleButton")
+            .Where(button => button.Attribute("Click")?.Value == "ViewWindowCommandBtn_Click")
             .Select(button => new
             {
                 Title = LocalizedAttribute(button, local + "RibbonTooltip.Title"),
@@ -2072,14 +2074,16 @@ public sealed class MainWindowXamlKeyTipTests
     public void ViewWindowDeferredCommands_UseOwnedDeferredMessage()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
-        var handlerStart = source.IndexOf("private void ViewWindowDeferredBtn_Click(", StringComparison.Ordinal);
+        var handlerStart = source.IndexOf("private void ViewWindowCommandBtn_Click(", StringComparison.Ordinal);
         handlerStart.Should().BeGreaterThanOrEqualTo(0);
         var handlerEnd = source.IndexOf("private void FreezePanesPickerBtn_Click(", handlerStart, StringComparison.Ordinal);
         handlerEnd.Should().BeGreaterThan(handlerStart);
         var handler = source[handlerStart..handlerEnd];
 
-        handler.Should().Contain("DeferredCommandMessages.MultiWindow(commandName)");
+        handler.Should().Contain("ViewWindowCommandPlanner.CreatePlan(command, GetViewWindowCommandState())");
+        handler.Should().Contain("ViewWindowCommandPlanner.CreateMessage(commandName, plan)");
         handler.Should().Contain("ShowOwnedMessage(message.Body, message.Title, MessageBoxButton.OK, MessageBoxImage.Information);");
+        handler.Should().Contain("FocusSheetGridIfNeeded();");
         handler.Should().NotContain("MessageBox.Show(");
     }
 

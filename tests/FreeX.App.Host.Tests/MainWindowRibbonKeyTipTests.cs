@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -544,13 +545,10 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.HandleKeyTip(Key.W);
             harness.HandleKeyTip(Key.R);
 
-            harness.KeyTipScope.Should().Be("Commands", "R is the prefix for the Ruler keytip RU");
+            harness.KeyTipScope.Should().Be("None", "Ruler is disabled outside Page Layout view and Reset Window Position is disabled in the single-window host state");
             harness.ActiveSheetViewOptions.Should().Be((false, false, true));
 
-            harness.HandleKeyTip(Key.U);
-
             harness.ActiveSheetViewOptions.Should().Be((false, false, true), "Excel leaves Ruler unavailable outside Page Layout view");
-            harness.KeyTipScope.Should().Be("None");
 
             harness.EnterKeyTipScope("TopLevel");
             harness.HandleKeyTip(Key.W);
@@ -702,7 +700,7 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.HandleKeyTip(Key.W);
             harness.HandleKeyTip(Key.S);
 
-            harness.KeyTipScope.Should().Be("Commands", "S is a visible prefix for Split and Synchronous Scrolling on the View tab");
+            harness.KeyTipScope.Should().Be("Commands", "S is a visible prefix for the Split keytip on the View tab");
             harness.ActiveSheetSplitPanes.Should().Be((null, null));
 
             harness.HandleKeyTip(Key.P);
@@ -718,6 +716,33 @@ public sealed class MainWindowRibbonKeyTipTests
 
             harness.ActiveSheetSplitPanes.Should().Be((null, null));
             harness.KeyTipScope.Should().Be("None");
+        });
+    }
+
+    [Fact]
+    public void ViewWindowSingleHostState_DisablesUnsafeWindowKeyTips()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.W);
+
+            harness.CommandButtonIsEnabled("ViewNewWindowBtn").Should().BeTrue();
+            harness.VisibleCommandKeyTips("NW").Should().ContainSingle("New Window");
+
+            harness.CommandButtonIsEnabled("ViewHideWindowBtn").Should().BeFalse();
+            harness.CommandButtonIsEnabled("ViewUnhideWindowBtn").Should().BeFalse();
+            harness.CommandButtonIsEnabled("ViewSideBySideBtn").Should().BeFalse();
+            harness.CommandButtonIsEnabled("ViewSynchronousScrollingBtn").Should().BeFalse();
+            harness.CommandButtonIsEnabled("ViewResetWindowPositionBtn").Should().BeFalse();
+            harness.CommandButtonIsEnabled("ViewSwitchWindowsBtn").Should().BeFalse();
+
+            harness.VisibleCommandKeyTips("H").Should().NotContain("Hide");
+            harness.VisibleCommandKeyTips("B").Should().NotContain("View Side by Side");
+            harness.VisibleCommandKeyTips("SS").Should().BeEmpty();
+            harness.CommandButtonHelpText("ViewHideWindowBtn").Should().Contain("only visible workbook window");
         });
     }
 
@@ -1448,6 +1473,14 @@ public sealed class MainWindowRibbonKeyTipTests
                 .ToList();
             return elements;
         }
+
+        public bool? CommandButtonIsEnabled(string name) =>
+            (_window.FindName(name) as ButtonBase)?.IsEnabled;
+
+        public string? CommandButtonHelpText(string name) =>
+            _window.FindName(name) is DependencyObject element
+                ? AutomationProperties.GetHelpText(element)
+                : null;
 
         public void ShowPivotContextualTabs()
         {

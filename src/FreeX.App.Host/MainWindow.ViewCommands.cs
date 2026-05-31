@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -148,12 +150,68 @@ public partial class MainWindow
         TryExecuteCommand(new SetWorkbookWindowArrangementCommand(arrangement), "Arrange Windows");
     }
 
-    private void ViewWindowDeferredBtn_Click(object sender, RoutedEventArgs e)
+    private void RefreshViewWindowCommandState()
     {
-        var commandName = (sender as System.Windows.Controls.Button)?.Content?.ToString() ?? "This command";
-        var message = DeferredCommandMessages.MultiWindow(commandName);
-        ShowOwnedMessage(message.Body, message.Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        var state = GetViewWindowCommandState();
+        ApplyViewWindowCommandState(ViewNewWindowBtn, ViewWindowCommandKind.NewWindow, state);
+        ApplyViewWindowCommandState(ViewHideWindowBtn, ViewWindowCommandKind.Hide, state);
+        ApplyViewWindowCommandState(ViewUnhideWindowBtn, ViewWindowCommandKind.Unhide, state);
+        ApplyViewWindowCommandState(ViewSideBySideBtn, ViewWindowCommandKind.ViewSideBySide, state);
+        ApplyViewWindowCommandState(ViewSynchronousScrollingBtn, ViewWindowCommandKind.SynchronousScrolling, state);
+        ApplyViewWindowCommandState(ViewResetWindowPositionBtn, ViewWindowCommandKind.ResetWindowPosition, state);
+        ApplyViewWindowCommandState(ViewSwitchWindowsBtn, ViewWindowCommandKind.SwitchWindows, state);
+        InvalidateVisibleKeyTipElementCache();
     }
+
+    private static ViewWorkbookWindowState GetViewWindowCommandState() =>
+        ViewWorkbookWindowState.SingleVisibleWorkbook;
+
+    private static void ApplyViewWindowCommandState(
+        ButtonBase? button,
+        ViewWindowCommandKind command,
+        ViewWorkbookWindowState state)
+    {
+        if (button is null)
+            return;
+
+        var plan = ViewWindowCommandPlanner.CreatePlan(command, state);
+        var description = UiText.Get(plan.TooltipDescriptionResourceKey);
+        button.IsEnabled = plan.IsEnabled;
+        RibbonTooltip.SetDescription(button, description);
+        AutomationProperties.SetHelpText(button, description);
+
+        if (button is ToggleButton toggleButton)
+            toggleButton.IsChecked = plan.IsChecked;
+    }
+
+    private void ViewWindowCommandBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ButtonBase button)
+            return;
+
+        var commandName = GetViewWindowCommandName(button);
+        if (!ViewWindowCommandPlanner.TryParseCommandName(commandName, out var command))
+            return;
+
+        var plan = ViewWindowCommandPlanner.CreatePlan(command, GetViewWindowCommandState());
+        if (!plan.IsEnabled)
+        {
+            RefreshViewWindowCommandState();
+            return;
+        }
+
+        var message = ViewWindowCommandPlanner.CreateMessage(commandName, plan);
+        ShowOwnedMessage(message.Body, message.Title, MessageBoxButton.OK, MessageBoxImage.Information);
+        RefreshViewWindowCommandState();
+        FocusSheetGridIfNeeded();
+    }
+
+    private static string GetViewWindowCommandName(ButtonBase button) =>
+        RibbonMetadata.TryGetCommandName(button, out var commandName)
+            ? commandName
+            : button is ContentControl contentControl
+                ? contentControl.Content?.ToString() ?? "This command"
+                : "This command";
 
     private void FreezePanesPickerBtn_Click(object sender, RoutedEventArgs e)
     {

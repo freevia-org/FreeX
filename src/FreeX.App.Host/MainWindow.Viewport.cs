@@ -393,6 +393,7 @@ public partial class MainWindow
             }
             if (SplitViewBtn is not null)
                 SplitViewBtn.IsChecked = sheet?.SplitRow is not null || sheet?.SplitColumn is not null;
+            RefreshViewWindowCommandState();
         }
         finally
         {

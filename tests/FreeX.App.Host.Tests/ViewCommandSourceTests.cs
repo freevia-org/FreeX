@@ -66,16 +66,16 @@ public sealed class ViewCommandSourceTests
     }
 
     [Theory]
-    [InlineData("New Window", "NW", "ViewWindowDeferredBtn_Click")]
+    [InlineData("New Window", "NW", "ViewWindowCommandBtn_Click")]
     [InlineData("Arrange All", "A", "ArrangeAllPickerBtn_Click")]
     [InlineData("Freeze Panes", "FP", "FreezePanesPickerBtn_Click")]
     [InlineData("Split", "SP", "SplitViewBtn_Click")]
-    [InlineData("Hide", "H", "ViewWindowDeferredBtn_Click")]
-    [InlineData("Unhide", "U", "ViewWindowDeferredBtn_Click")]
-    [InlineData("View Side by Side", "B", "ViewWindowDeferredBtn_Click")]
-    [InlineData("Synchronous Scrolling", "SS", "ViewWindowDeferredBtn_Click")]
-    [InlineData("Reset Window Position", "RP", "ViewWindowDeferredBtn_Click")]
-    [InlineData("Switch Windows", "W", "ViewWindowDeferredBtn_Click")]
+    [InlineData("Hide", "H", "ViewWindowCommandBtn_Click")]
+    [InlineData("Unhide", "U", "ViewWindowCommandBtn_Click")]
+    [InlineData("View Side by Side", "B", "ViewWindowCommandBtn_Click")]
+    [InlineData("Synchronous Scrolling", "SS", "ViewWindowCommandBtn_Click")]
+    [InlineData("Reset Window Position", "RP", "ViewWindowCommandBtn_Click")]
+    [InlineData("Switch Windows", "W", "ViewWindowCommandBtn_Click")]
     public void ViewWindowCommands_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string keyTip,
@@ -133,7 +133,10 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("ArrangeAllMenuPlanner.IsChecked(item.Tag, _workbook.WindowArrangement)");
         source.Should().Contain("ArrangeAllMenuPlanner.TryParseArrangement(");
         source.Should().Contain("new SetWorkbookWindowArrangementCommand(arrangement)");
-        source.Should().Contain("DeferredCommandMessages.MultiWindow(commandName)");
+        source.Should().Contain("RefreshViewWindowCommandState()");
+        source.Should().Contain("ViewWindowCommandPlanner.CreatePlan(command, state)");
+        source.Should().Contain("ViewWindowCommandPlanner.CreateMessage(commandName, plan)");
+        source.Should().Contain("AutomationProperties.SetHelpText(button, description)");
         source.Should().Contain("new SetFreezePanesCommand(_currentSheetId, frozenRows, frozenCols)");
         source.Should().Contain("private void FreezeAtSelectionMenuItem_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("private void UnfreezeAllMenuItem_Click(object sender, RoutedEventArgs e)");
@@ -145,7 +148,7 @@ public sealed class ViewCommandSourceTests
 
     private static string ExtractButtonElementByTitle(string xaml, string title)
     {
-        if (title == "Split")
+        if (title is "Split" or "View Side by Side" or "Synchronous Scrolling")
             return xaml.ExtractElementByInvariantCommandName("ToggleButton", title);
 
         var button = xaml.ExtractElementByInvariantCommandName("Button", title);
