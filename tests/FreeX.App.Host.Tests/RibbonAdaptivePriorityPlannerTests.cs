@@ -216,9 +216,9 @@ public sealed class RibbonAdaptivePriorityPlannerTests
             .BeTrue("Insert needs measured correction to avoid clipping at common Excel widths");
 
         RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
-                ["Tools", "Pens", "Convert", "Arrange", "Format"])
+                ["Arrange", "Format"])
             .Should()
-            .BeTrue("Draw needs measured correction to avoid clipping at common Excel widths");
+            .BeFalse("Draw no longer surfaces the wide out-of-scope ink groups that needed measured correction");
 
         RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
                 ["Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing"])

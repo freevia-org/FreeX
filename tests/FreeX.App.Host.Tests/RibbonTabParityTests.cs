@@ -58,31 +58,19 @@ public sealed class RibbonTabParityTests
     }
 
     [Fact]
-    public void DrawTab_ExposesExcelLikeInkConversionGroup()
+    public void DrawTab_HidesOutOfScopeInkCommandsAndExposesObjectCommands()
     {
         var catalog = RibbonXamlCatalogSnapshotReader.ReadMainWindow();
         var drawTab = Tab(catalog, "Draw");
 
         GroupNames(drawTab).Should().Equal(
-            "Tools",
-            "Pens",
-            "Convert",
             "Arrange",
             "Format");
 
-        CommandTitles(Group(drawTab, "Tools")).Should().ContainInOrder(
-            "Draw with Touch",
-            "Eraser",
-            "Lasso Select");
-        CommandTitles(Group(drawTab, "Pens")).Should().ContainInOrder(
-            "Pen",
-            "Pencil",
-            "Highlighter",
-            "Add Pen");
         drawTab.Groups.SelectMany(group => group.Commands).Select(command => command.Title)
             .Should()
-            .NotContain(["Rectangle", "Ellipse", "Line"]);
-        CommandTitles(Group(drawTab, "Convert")).Should().Contain(["Ink to Shape", "Ink to Math"]);
+            .NotContain(["Rectangle", "Ellipse", "Line", "Draw with Touch", "Eraser", "Lasso Select", "Pen", "Pencil", "Highlighter", "Add Pen", "Ink to Shape", "Ink to Math"]);
+        CommandTitles(Group(drawTab, "Arrange")).Should().Contain(["Bring Forward", "Send Backward", "Selection Pane"]);
         CommandTitles(Group(drawTab, "Format")).Should().Contain("Shape Fill");
     }
 

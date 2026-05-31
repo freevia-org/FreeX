@@ -144,15 +144,12 @@ internal static class RibbonAdaptiveTabProfiles
         new(
             Name: "Draw",
             CatalogId: "DrawTab",
-            RequiredGroups: ["Tools", "Pens", "Convert"],
+            RequiredGroups: ["Arrange", "Format"],
             Defaults: [],
             Breakpoints:
             [
-                Rule(760, collapseFromIndex: 0),
-                Rule(1120, collapseFromIndex: 2),
-                Rule(1320, collapseFromIndex: 3)
-            ],
-            RequiresMeasuredCorrection: true),
+                Rule(760, collapseFromIndex: 0)
+            ]),
         new(
             Name: "Tiny",
             CatalogId: "HelpTab",
@@ -476,9 +473,7 @@ internal static class RibbonAdaptiveTabProfiles
             ["Comments"] = ["InsertCommentsGroup", "ReviewCommentsGroup"],
             ["Text"] = ["InsertTextGroup"],
             ["Symbols"] = ["InsertSymbolsGroup"],
-            ["Tools"] = ["DrawToolsGroup", "PivotTableAnalyzeToolsGroup"],
-            ["Pens"] = ["DrawPensGroup"],
-            ["Convert"] = ["DrawConvertGroup"],
+            ["Tools"] = ["PivotTableAnalyzeToolsGroup"],
             ["Arrange"] = ["DrawArrangeGroup", "PageLayoutArrangeGroup"],
             ["Format"] = ["DrawFormatGroup"],
             ["Themes"] = ["PageLayoutThemesGroup"],

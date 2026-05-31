@@ -46,7 +46,7 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
 
         AssertGroups(catalog, "Home", "Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing");
         AssertGroups(catalog, "Insert", "Tables", "Illustrations", "Charts", "Sparklines", "Filters", "Links", "Comments", "Text", "Symbols");
-        AssertGroups(catalog, "Draw", "Tools", "Pens", "Convert", "Arrange", "Format");
+        AssertGroups(catalog, "Draw", "Arrange", "Format");
         AssertGroups(catalog, "Page Layout", "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange");
         AssertGroups(catalog, "Formulas", "Function Library", "Defined Names", "Formula Auditing", "Calculation");
         AssertGroups(catalog, "Data", "Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline");
@@ -67,7 +67,7 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             ["File"] = ("FileTab", []),
             ["Home"] = ("HomeTab", ["HomeClipboardGroup", "HomeFontGroup", "HomeAlignmentGroup", "HomeNumberGroup", "HomeStylesGroup", "HomeCellsGroup", "HomeEditingGroup"]),
             ["Insert"] = ("InsertTab", ["InsertTablesGroup", "InsertIllustrationsGroup", "InsertChartsGroup", "InsertSparklinesGroup", "InsertFiltersGroup", "InsertLinksGroup", "InsertCommentsGroup", "InsertTextGroup", "InsertSymbolsGroup"]),
-            ["Draw"] = ("DrawTab", ["DrawToolsGroup", "DrawPensGroup", "DrawConvertGroup", "DrawArrangeGroup", "DrawFormatGroup"]),
+            ["Draw"] = ("DrawTab", ["DrawArrangeGroup", "DrawFormatGroup"]),
             ["Page Layout"] = ("PageLayoutTab", ["PageLayoutThemesGroup", "PageLayoutPageSetupGroup", "PageLayoutScaleToFitGroup", "PageLayoutSheetOptionsGroup", "PageLayoutArrangeGroup"]),
             ["Formulas"] = ("FormulasTab", ["FormulasFunctionLibraryGroup", "FormulasDefinedNamesGroup", "FormulasFormulaAuditingGroup", "FormulasCalculationGroup"]),
             ["Data"] = ("DataTab", ["DataGetTransformGroup", "DataQueriesConnectionsGroup", "DataSortFilterGroup", "DataToolsGroup", "DataForecastGroup", "DataOutlineGroup"]),
@@ -408,15 +408,6 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         new("Insert", "Comment", "Comment/Note"),
         new("Insert", "Symbol", "Symbols"),
 
-        new("Draw", "Draw with Touch", "Freehand Ink"),
-        new("Draw", "Eraser", "Freehand Ink"),
-        new("Draw", "Lasso Select", "Freehand Ink"),
-        new("Draw", "Pen", "Freehand Ink"),
-        new("Draw", "Pencil", "Freehand Ink"),
-        new("Draw", "Highlighter", "Freehand Ink"),
-        new("Draw", "Add Pen", "Freehand Ink"),
-        new("Draw", "Ink to Shape", "Freehand Ink"),
-        new("Draw", "Ink to Math", "Freehand Ink"),
         new("Draw", "Bring Forward", "Bring Forward"),
         new("Draw", "Send Backward", "Send Backward"),
         new("Draw", "Selection Pane", "Selection Pane"),
