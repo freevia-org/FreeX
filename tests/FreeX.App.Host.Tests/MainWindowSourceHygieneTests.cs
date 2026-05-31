@@ -167,6 +167,18 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void UpdateViewport_UsesCombinedNativeSlicerTimelinePlanning()
+    {
+        var viewportSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));
+
+        viewportSource.Should().Contain("SlicerTimelinePlanner.GetNativeVisualFilters(_workbook, sheet)");
+        viewportSource.Should().Contain("SheetGrid.NativeSlicers = nativeVisualFilters?.Slicers;");
+        viewportSource.Should().Contain("SheetGrid.NativeTimelines = nativeVisualFilters?.Timelines;");
+        viewportSource.Should().NotContain("SlicerTimelinePlanner.GetNativeVisualSlicers(_workbook, sheet)");
+        viewportSource.Should().NotContain("SlicerTimelinePlanner.GetNativeVisualTimelines(_workbook, sheet)");
+    }
+
+    [Fact]
     public void BackstageAndFileController_LivesOutsideMainWindowCodeBehind()
     {
         var appHostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"))!;

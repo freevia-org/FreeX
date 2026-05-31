@@ -14,6 +14,10 @@ public sealed class TimelinePaneItem
     public string SelectedEndDate { get; set; } = "";
 }
 
+public sealed record NativeVisualFilters(
+    IReadOnlyList<SlicerModel> Slicers,
+    IReadOnlyList<TimelineModel> Timelines);
+
 public static class SlicerTimelinePlanner
 {
     public static IReadOnlyList<SlicerTileItem> BuildSlicerTiles(SlicerModel slicer, IEnumerable<string> sourceItems)
@@ -78,6 +82,26 @@ public static class SlicerTimelinePlanner
             return Array.Empty<TimelineModel>();
 
         return GetNativeVisualTimelines(workbook.Timelines, BuildActivePivotNameSet(activeSheet));
+    }
+
+    public static NativeVisualFilters GetNativeVisualFilters(Workbook workbook, Sheet activeSheet)
+    {
+        if (activeSheet.PivotTables.Count == 0)
+        {
+            return new NativeVisualFilters(
+                Array.Empty<SlicerModel>(),
+                Array.Empty<TimelineModel>());
+        }
+
+        var activePivotNames = BuildActivePivotNameSet(activeSheet);
+        var slicers = workbook.Slicers.Count == 0
+            ? Array.Empty<SlicerModel>()
+            : GetNativeVisualSlicers(workbook.Slicers, activePivotNames);
+        var timelines = workbook.Timelines.Count == 0
+            ? Array.Empty<TimelineModel>()
+            : GetNativeVisualTimelines(workbook.Timelines, activePivotNames);
+
+        return new NativeVisualFilters(slicers, timelines);
     }
 
     private static IReadOnlyList<SlicerModel> GetNativeVisualSlicers(
