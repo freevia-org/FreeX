@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -15,7 +14,12 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
         if (worksheetPathMap is null)
             return;
 
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
+        Save(session, workbook);
+    }
+
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
         foreach (var sheet in workbook.Sheets)
         {
             if (sheet.RowPageBreaksMetadata is null &&
@@ -24,23 +28,15 @@ internal static class XlsxWorksheetPageBreaksMetadataWriter
                 continue;
             }
 
-            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+            if (!session.TryGetWorksheet(sheet, out var worksheetEdit))
                 continue;
 
-            var entry = archive.GetEntry(worksheetPath);
-            if (entry is null)
-                continue;
-
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
+            var root = worksheetEdit.Root;
             var changed = false;
             changed |= ApplyMetadata(root, "rowBreaks", sheet.RowPageBreaks, sheet.RowPageBreaksMetadata);
             changed |= ApplyMetadata(root, "colBreaks", sheet.ColumnPageBreaks, sheet.ColumnPageBreaksMetadata);
             if (changed)
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+                session.MarkDirty(worksheetEdit);
         }
     }
 

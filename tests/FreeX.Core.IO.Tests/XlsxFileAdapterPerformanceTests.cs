@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Xml.Linq;
 using ClosedXML.Excel;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -198,6 +199,49 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void Benchmark_SaveWorksheetNativeMetadataWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var workbook = CreateWorksheetNativeMetadataWorkbook();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_WORKSHEET_NATIVE_METADATA " +
+            $"sheets={WorksheetNativeMetadataSheetCount} rows={WorksheetNativeMetadataRowsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Benchmark_StructuredTableWriterTrailingNumber_AvoidsReverseIteratorAllocation()
     {
         var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStructuredTableWriter.cs"));
@@ -305,9 +349,42 @@ public sealed class XlsxFileAdapterPerformanceTests
         writerSource.Should().Contain("private static void SaveWorkbookXml(Stream xlsxStream, Workbook workbook");
     }
 
+    [Fact]
+    public void SavePostProcessing_BatchesWorksheetNativeMetadataXmlWrites()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var batchSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetNativeMetadataBatchWriter.cs"));
+        var sessionSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorksheetXmlEditSession.cs"));
+
+        adapterSource.Should().Contain("XlsxWorksheetNativeMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());");
+        adapterSource.Should().Contain("HasSourcePackageIndependentWorksheetNativeMetadata");
+        foreach (var legacyCall in new[]
+        {
+            "XlsxWorksheetProtectionMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetPrintOptionsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetDimensionMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetSheetPropertiesMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetPrimaryViewMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetPageMarginsMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetPageBreaksMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());",
+            "XlsxWorksheetHeaderFooterMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());"
+        })
+        {
+            adapterSource.Should().NotContain(legacyCall);
+        }
+
+        batchSource.Should().Contain("using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);");
+        batchSource.Should().Contain("XlsxWorksheetProtectionMetadataWriter.Save(session, workbook);");
+        batchSource.Should().Contain("XlsxWorksheetHeaderFooterMetadataWriter.Save(session, workbook);");
+        sessionSource.Should().Contain("private readonly Dictionary<string, XDocument> _documents");
+        sessionSource.Should().Contain("XlsxPackageXmlEditor.ReplaceXml(_archive, path, _documents[path]);");
+    }
+
     private const int DenseSheetCount = 8;
     private const int DenseRowsPerSheet = 80;
     private const int DenseColumnsPerSheet = 24;
+    private const int WorksheetNativeMetadataSheetCount = 8;
+    private const int WorksheetNativeMetadataRowsPerSheet = 40;
 
     private static byte[] CreateDenseXlsxPackage()
     {
@@ -353,6 +430,133 @@ public sealed class XlsxFileAdapterPerformanceTests
         }
 
         return workbook;
+    }
+
+    private static Workbook CreateWorksheetNativeMetadataWorkbook()
+    {
+        var workbook = new Workbook("Worksheet native metadata IO");
+        for (var sheetIndex = 1; sheetIndex <= WorksheetNativeMetadataSheetCount; sheetIndex++)
+        {
+            var sheet = workbook.AddSheet($"Metadata {sheetIndex}");
+            for (uint row = 1; row <= WorksheetNativeMetadataRowsPerSheet; row++)
+            {
+                sheet.SetCell(
+                    new CellAddress(sheet.Id, row, 1),
+                    new TextValue($"R{row}"));
+            }
+
+            sheet.IsProtected = true;
+            sheet.ProtectionMetadata = MakeBag(
+                "sheetProtection",
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["algorithmName"] = "SHA-512",
+                    ["hashValue"] = $"hash{sheetIndex}",
+                    ["saltValue"] = $"salt{sheetIndex}",
+                    ["spinCount"] = "100000",
+                    ["objects"] = "1",
+                    ["scenarios"] = "1"
+                },
+                [$"<fx:sheetProtectionNative xmlns:fx=\"urn:freex:test\" id=\"{sheetIndex}\" />"]);
+            sheet.PrintOptionsMetadata = MakeBag(
+                "printOptions",
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["gridLinesSet"] = "1",
+                    ["customAttr"] = $"print-{sheetIndex}"
+                },
+                [$"<fx:printOptionsNative xmlns:fx=\"urn:freex:test\" id=\"{sheetIndex}\" />"]);
+            sheet.DimensionMetadata = MakeBag(
+                "dimension",
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["nativeDimensionAttr"] = $"dimension-{sheetIndex}"
+                });
+            sheet.SheetPropertiesMetadata = MakeBag(
+                "sheetPr",
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["filterMode"] = "1",
+                    ["customSheetPrAttr"] = $"sheetPr-{sheetIndex}"
+                },
+                [$"<fx:sheetPrNative xmlns:fx=\"urn:freex:test\" id=\"{sheetIndex}\" />"]);
+            sheet.PrimaryViewMetadata = MakeBag(
+                "sheetView",
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["showZeros"] = "0",
+                    ["rightToLeft"] = "1",
+                    ["customViewAttr"] = $"view-{sheetIndex}"
+                },
+                [$"<pivotSelection xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" pane=\"topLeft\" />"]);
+            sheet.PageMargins = new WorksheetPageMargins(0.7, 0.75, 0.8, 0.85);
+            sheet.PageMarginsMetadata = MakeBag(
+                "pageMargins",
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["customAttr"] = $"margins-{sheetIndex}"
+                },
+                [$"<fx:pageMarginsNative xmlns:fx=\"urn:freex:test\" id=\"{sheetIndex}\" />"]);
+            sheet.RowPageBreaks.Add(20);
+            sheet.RowPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+            {
+                NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["manualBreakCount"] = "1"
+                },
+                BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+                {
+                    [20] = new(StringComparer.Ordinal)
+                    {
+                        ["pt"] = "1",
+                        ["customAttr"] = $"row-break-{sheetIndex}"
+                    }
+                }
+            };
+            sheet.ColumnPageBreaks.Add(5);
+            sheet.ColumnPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+            {
+                NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["manualBreakCount"] = "1"
+                },
+                BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+                {
+                    [5] = new(StringComparer.Ordinal)
+                    {
+                        ["pt"] = "1",
+                        ["customAttr"] = $"column-break-{sheetIndex}"
+                    }
+                }
+            };
+            sheet.PageHeader = new WorksheetHeaderFooter("L", "C", "R");
+            sheet.PageFooter = new WorksheetHeaderFooter("FL", "FC", "FR");
+            sheet.HeaderFooterMetadata = MakeBag(
+                "headerFooter",
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["nativeHeaderFooterAttr"] = $"header-footer-{sheetIndex}"
+                },
+                [$"<fx:headerFooterNative xmlns:fx=\"urn:freex:test\" id=\"{sheetIndex}\" />"]);
+        }
+
+        return workbook;
+    }
+
+    private static NativeXmlPreserveBag MakeBag(
+        string key,
+        Dictionary<string, string>? attrs = null,
+        IReadOnlyList<string>? children = null)
+    {
+        var wrapper = new XElement("e");
+        foreach (var (name, value) in attrs ?? [])
+            wrapper.SetAttributeValue(XName.Get(name), value);
+        foreach (var childXml in children ?? [])
+            wrapper.Add(XElement.Parse(childXml, System.Xml.Linq.LoadOptions.PreserveWhitespace));
+
+        var bag = new NativeXmlPreserveBag();
+        bag.Set(key, wrapper.ToString(System.Xml.Linq.SaveOptions.DisableFormatting));
+        return bag;
     }
 
     private static string[] ResolveExternalWorkbookPaths()
