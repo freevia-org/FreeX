@@ -237,6 +237,25 @@ public sealed class GridViewAutofillTests
     }
 
     [Fact]
+    public void CalculateDragTarget_IncludesCellWhoseMidpointIsExactlyOnPointerBoundary()
+    {
+        var sheet = SheetId.New();
+        var viewport = CreateViewport();
+        var source = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+
+        GridAutofillPlanner.CalculateDragTarget(
+                viewport,
+                source,
+                new System.Windows.Point(170, 88),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .Be(new CellAddress(default, 4, 4));
+    }
+
+    [Fact]
     public void CalculateDragTarget_ReturnsFarthestVisibleCellWhenDraggingAboveOrLeft()
     {
         var sheet = SheetId.New();
