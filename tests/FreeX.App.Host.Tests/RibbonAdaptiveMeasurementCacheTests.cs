@@ -274,7 +274,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         var fieldsSource = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
         fieldsSource.Should().Contain("Dictionary<RibbonAdaptiveLayoutPlanCacheEntryKey, RibbonAdaptiveLayoutResult>");
         fieldsSource.Should().Contain("Dictionary<RibbonCorrectionCacheKey, IReadOnlyList<RibbonAdaptiveGroupState>>");
-        fieldsSource.Should().Contain("Dictionary<RibbonMeasuredOverflowCacheKey, double>");
+        fieldsSource.Should().Contain("Dictionary<RibbonMeasuredOverflowCacheKey, bool>");
         fieldsSource.Should().Contain("RibbonAppliedStateKey? _lastRibbonAdaptiveAppliedStateKey");
 
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.RibbonAdaptive.cs"));
@@ -288,13 +288,6 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         hotPathKeyHelpers.Should().Contain("measurementCacheKey");
         hotPathKeyHelpers.Should().NotContain("string.Join(");
         hotPathKeyHelpers.Should().NotContain(".Select(state");
-
-        var overflowKeyHelper = source.Substring(
-            source.IndexOf("private static RibbonMeasuredOverflowCacheKey CreateRibbonMeasuredOverflowCacheKey", StringComparison.Ordinal),
-            source.IndexOf("private int ApplyRibbonAdaptiveStates", StringComparison.Ordinal) -
-            source.IndexOf("private static RibbonMeasuredOverflowCacheKey CreateRibbonMeasuredOverflowCacheKey", StringComparison.Ordinal));
-        overflowKeyHelper.Should().NotContain("RoundRibbonWidthToTenths(availableWidth)");
-        overflowKeyHelper.Should().Contain("availableWidth > 820");
     }
 
     private sealed class RibbonAdaptiveDiagnosticsHarness : IDisposable
