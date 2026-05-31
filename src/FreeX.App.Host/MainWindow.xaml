@@ -3696,7 +3696,11 @@
                                 <ContentPresenter Margin="{TemplateBinding Padding}"
                                                   HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                                  RecognizesAccessKey="True"/>
+                                                  RecognizesAccessKey="True">
+                                    <ContentPresenter.RenderTransform>
+                                        <TranslateTransform Y="-2"/>
+                                    </ContentPresenter.RenderTransform>
+                                </ContentPresenter>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
@@ -3929,6 +3933,8 @@
                                 AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_InsertSheet}"
                                 AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_AddANewSheetToTheWorkbook}"
                                 Click="AddSheetButton_Click"
+                                MouseEnter="AddSheetButton_MouseEnter"
+                                MouseLeave="AddSheetButton_MouseLeave"
                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InsertSheet}"
                                 local:RibbonTooltip.KeyTip="IS"
                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddANewSheetToTheWorkbook}" local:RibbonMetadata.CommandName="Insert Sheet">
@@ -4007,7 +4013,11 @@
                                 <ContentPresenter Margin="{TemplateBinding Padding}"
                                                   HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                                  RecognizesAccessKey="True"/>
+                                                  RecognizesAccessKey="True">
+                                    <ContentPresenter.RenderTransform>
+                                        <TranslateTransform Y="-2"/>
+                                    </ContentPresenter.RenderTransform>
+                                </ContentPresenter>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">

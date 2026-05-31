@@ -273,13 +273,35 @@ internal static class RibbonAdaptiveStateApplicator
         if (level == MainWindow.RibbonCompactLevel.IconOnly)
         {
             snapshot.SmallGrid!.HorizontalAlignment = HorizontalAlignment.Center;
+            // Keep the command icon aligned with 24px icon-only peers while the menu lane extends to the right.
+            snapshot.SmallGrid.Margin = GetSmallButtonDropdownColumn(snapshot.SmallGrid) is { } dropdownColumn
+                ? new Thickness(-dropdownColumn.Width.Value, 0, 0, 0)
+                : new Thickness(0);
             snapshot.Button.HorizontalContentAlignment = HorizontalAlignment.Center;
         }
         else
         {
             snapshot.SmallGrid!.HorizontalAlignment = HorizontalAlignment.Left;
+            snapshot.SmallGrid.Margin = new Thickness(0);
             snapshot.Button.HorizontalContentAlignment = HorizontalAlignment.Left;
         }
+    }
+
+    private static ColumnDefinition? GetSmallButtonDropdownColumn(Grid? contentGrid)
+    {
+        if (contentGrid is null)
+            return null;
+
+        foreach (var chevron in contentGrid.Children
+                     .OfType<FrameworkElement>()
+                     .Where(RibbonMetadata.IsDropdownChevron))
+        {
+            var columnIndex = Grid.GetColumn(chevron);
+            if (columnIndex >= 0 && columnIndex < contentGrid.ColumnDefinitions.Count)
+                return contentGrid.ColumnDefinitions[columnIndex];
+        }
+
+        return null;
     }
 
     private static void ApplyLargeButtonLayout(

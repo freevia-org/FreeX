@@ -46,6 +46,29 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_NormalizesSpreadsheetMlDateTimesWithOffsetsToUtc()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Dates">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="DateTime">2026-05-31T11:15:30+03:00</ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="DateTime">2026-05-31T08:15:30Z</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
+        var expectedUtc = DateTimeValue.FromDateTime(new DateTime(2026, 5, 31, 8, 15, 30));
+
+        sheet.GetCell(1, 1)!.Value.Should().Be(expectedUtc);
+        sheet.GetCell(1, 2)!.Value.Should().Be(expectedUtc);
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsMultipleSheetsAndValueTypes()
     {
         var workbook = new Workbook("XmlRoundTrip");
