@@ -165,9 +165,10 @@ public sealed class SolutionProjectsPreflightTests
 
             var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{solutionRoot}\" -SolutionPath \"{Path.Combine(solutionRoot, "FreeX.slnx")}\"");
 
+            var combinedOutput = NormalizeWhitespace(result.Output + result.Error);
             result.ExitCode.Should().NotBe(0);
-            (result.Output + result.Error).Should().Contain("escapes solution root");
-            (result.Output + result.Error).Should().Contain("../external/Outside.csproj");
+            combinedOutput.Should().Contain("escapes solution root");
+            combinedOutput.Should().Contain("../external/Outside.csproj");
         }
         finally
         {
