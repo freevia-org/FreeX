@@ -13,6 +13,9 @@ public static class RibbonKeyTipOverlayPlacement
     // Excel shows tab keytips a few pixels beneath the tab label rather than
     // straddling the bottom edge as command keytips do.
     private const double TabBelowGap = 2;
+    private const double TitleBarCommandBelowGap = 2;
+    private const double TitleBarCommandMaxTop = 34;
+    private const double TitleBarCommandMaxHeight = 30;
 
     public static Point PlaceBadge(Rect elementBounds, Size overlaySize, Size badgeSize) =>
         PlaceBadge(elementBounds, overlaySize, badgeSize, RibbonKeyTipBadgeKind.Command);
@@ -24,6 +27,9 @@ public static class RibbonKeyTipOverlayPlacement
         {
             // Tab: center horizontally, anchored just below the tab with a small gap.
             RibbonKeyTipBadgeKind.Tab => elementBounds.Bottom + TabBelowGap,
+            // Compact title-bar commands are QAT buttons; Excel places those badges below the icons.
+            RibbonKeyTipBadgeKind.Command when IsCompactTitleBarCommand(elementBounds) =>
+                elementBounds.Bottom + TitleBarCommandBelowGap,
             // Command: straddle the element's bottom edge (lower-center of the control).
             _ => elementBounds.Bottom - (badgeSize.Height / 2)
         };
@@ -36,4 +42,9 @@ public static class RibbonKeyTipOverlayPlacement
 
     private static double Clamp(double value, double min, double max) =>
         Math.Min(max, Math.Max(min, value));
+
+    private static bool IsCompactTitleBarCommand(Rect elementBounds) =>
+        elementBounds.Top >= 0 &&
+        elementBounds.Top < TitleBarCommandMaxTop &&
+        elementBounds.Height <= TitleBarCommandMaxHeight;
 }
