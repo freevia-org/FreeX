@@ -1399,6 +1399,20 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void RefreshToolbar_AvoidsRepeatedDependencyPropertyWrites()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookUiState.cs"));
+        var refreshToolbar = ExtractMethodSource(source, "private void RefreshToolbar()");
+
+        source.Should().Contain("private static void SetToggleCheckedIfChanged(");
+        source.Should().Contain("private static void SetSelectedItemIfChanged(");
+        refreshToolbar.Should().Contain("SetToggleCheckedIfChanged(BoldButton, state.Bold)");
+        refreshToolbar.Should().Contain("SetSelectedItemIfChanged(FontNameBox, state.FontName)");
+        refreshToolbar.Should().NotContain("BoldButton.IsChecked = state.Bold");
+        refreshToolbar.Should().NotContain("FontNameBox.SelectedItem = state.FontName");
+    }
+
+    [Fact]
     public void TitleBar_UsesSharedFormatterForDirtyGroupedAndSavedFileState()
     {
         var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Editing.cs"));
@@ -1935,7 +1949,7 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("x:Name=\"FontNameBox\"");
         xaml.Should().Contain("SelectionChanged=\"FontNameBox_SelectionChanged\"");
         formattingSource.Should().Contain("ApplyStyleDiff(new StyleDiff(FontName: name))");
-        uiStateSource.Should().Contain("FontNameBox.SelectedItem = state.FontName");
+        uiStateSource.Should().Contain("SetSelectedItemIfChanged(FontNameBox, state.FontName)");
         renderSource.Should().Contain("var fontName = string.IsNullOrWhiteSpace(style?.FontName)");
         renderSource.Should().Contain("new CellTypefaceKey(fontName, style?.Italic == true, style?.Bold == true)");
     }
