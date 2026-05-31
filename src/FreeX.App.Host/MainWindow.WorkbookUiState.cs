@@ -210,7 +210,10 @@ public partial class MainWindow
 
     private static void SetSelectedItemIfChanged(ComboBox comboBox, object value)
     {
-        if (comboBox.Items.Contains(value) && !Equals(comboBox.SelectedItem, value))
+        if (Equals(comboBox.SelectedItem, value))
+            return;
+
+        if (comboBox.Items.Contains(value))
             comboBox.SelectedItem = value;
     }
 
