@@ -350,6 +350,37 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void ReviewAndViewRibbon_PromotePrimaryCommandsToTallIconLabelsAtWideTourWidth()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Review", 1100);
+            if (harness.CanUseRequestedRibbonWidth(1100))
+            {
+                harness.TallLargeRibbonCommandLabels.Should().Contain(
+                    ["Spelling", "Workbook Statistics", "Accessibility"],
+                    $"Review at 1100px should spend available width on primary Excel-style tall commands; {harness.DebugActiveRibbonChildren}");
+                harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                    0.5,
+                    $"Review at 1100px should promote primary commands without hidden overflow; {harness.DebugActiveRibbonChildren}");
+            }
+
+            harness.SelectRibbonTab("View", 1100);
+            if (harness.CanUseRequestedRibbonWidth(1100))
+            {
+                harness.TallLargeRibbonCommandLabels.Should().Contain(
+                    ["Normal", "Page Break Preview", "Page Layout", "Custom Views", "Zoom", "100%", "Zoom to Selection"],
+                    $"View at 1100px should use tall icon-label commands when the row has room; {harness.DebugActiveRibbonChildren}");
+                harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                    0.5,
+                    $"View at 1100px should promote commands without hidden overflow; {harness.DebugActiveRibbonChildren}");
+            }
+        });
+    }
+
+    [Fact]
     public void RibbonTabs_RemainSingleRowAtNarrowWidths()
     {
         StaTestRunner.Run(() =>
@@ -588,7 +619,7 @@ public sealed class MainWindowAdaptiveRibbonTests
                 new RibbonFallbackExpectation("Data", 1120, Expanded: ["Sort & Filter", "Data Tools", "Forecast"], Collapsed: []),
                 new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup"], Collapsed: ["Arrange"]),
                 new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show"], Collapsed: []),
-                new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views", "Show", "Window"], Collapsed: ["Zoom"])
+                new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views", "Show", "Window"], Collapsed: [])
             };
 
             foreach (var expectation in expectations)
@@ -1496,6 +1527,20 @@ public sealed class MainWindowAdaptiveRibbonTests
                     .Where(label => !string.IsNullOrWhiteSpace(label)))
             .ToList();
 
+        public IReadOnlyList<string> TallLargeRibbonCommandLabels =>
+            (SelectedRibbonTab is null
+                ? []
+                : EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
+                    .Concat(EnumerateLogicalDescendants(SelectedRibbonContentRoot))
+                    .OfType<Button>()
+                    .Distinct()
+                    .Where(IsEffectivelyVisible)
+                    .Where(button => !RibbonMetadata.IsCollapsedGroupButton(button))
+                    .Where(IsTallLargeRibbonCommand)
+                    .Select(GetButtonLabel)
+                    .Where(label => !string.IsNullOrWhiteSpace(label)))
+            .ToList();
+
         public IReadOnlyList<int> VisibleRibbonButtonContentIdentityHashCodes =>
             (SelectedRibbonTab is null
                 ? []
@@ -1984,6 +2029,16 @@ public sealed class MainWindowAdaptiveRibbonTests
                                  RibbonMetadata.TryGetCommandContentLayout(content, out var layout) &&
                                  layout == RibbonCommandContentLayout.Small &&
                                  TryGetCommandIconSlot(button, out _));
+
+        private static bool IsTallLargeRibbonCommand(Button button) =>
+            button.Content is StackPanel { Orientation: Orientation.Vertical } content &&
+            RibbonMetadata.TryGetCommandContentLayout(content, out var layout) &&
+            layout == RibbonCommandContentLayout.Large &&
+            (button.ActualHeight >= 64 || button.Height >= 64) &&
+            EnumerateSelfAndVisualDescendants(content)
+                .OfType<TextBlock>()
+                .Any(textBlock => RibbonMetadata.IsCommandLabel(textBlock) &&
+                                  IsEffectivelyVisible(textBlock));
 
         private static IEnumerable<DenseCommandPlacement> GetDenseCommandPlacements(UniformGrid grid)
         {

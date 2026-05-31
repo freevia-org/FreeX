@@ -29,6 +29,8 @@ public partial class MainWindow
 
             var commandName = GetRibbonButtonCommandName(button);
             var layoutKind = GetRibbonCommandLayoutKind(button, commandName, label);
+            if (ShouldUsePlannedRibbonCommandWidth(button, commandName, layoutKind))
+                button.Width = 0;
             ApplyRibbonCommandSize(button, layoutKind);
             if (layoutKind is RibbonCommandLayoutKind.Small)
                 button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(label));
@@ -174,6 +176,8 @@ public partial class MainWindow
 
         var commandName = GetRibbonButtonCommandName(button);
         var layoutKind = GetRibbonCommandLayoutKind(button, commandName, text);
+        if (ShouldUsePlannedRibbonCommandWidth(button, commandName, layoutKind))
+            button.Width = 0;
         ApplyRibbonCommandSize(button, layoutKind);
         if (layoutKind is RibbonCommandLayoutKind.Small)
             button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(text));
@@ -195,13 +199,97 @@ public partial class MainWindow
             .Distinct()
             .Any(RibbonMetadata.IsDropdownChevron);
 
-    private static RibbonCommandLayoutKind GetRibbonCommandLayoutKind(ButtonBase button, string commandName, string label) =>
-        ShouldPreserveExplicitCompactRibbonButtonHeight(button)
-            ? RibbonCommandLayoutKind.Small
-            : RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
+    private static RibbonCommandLayoutKind GetRibbonCommandLayoutKind(ButtonBase button, string commandName, string label)
+    {
+        var plannedLayout = RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
+        if (ShouldPreserveExplicitCompactRibbonButtonHeight(button) &&
+            !ShouldPromoteExplicitCompactRibbonButton(button, commandName, plannedLayout))
+        {
+            return RibbonCommandLayoutKind.Small;
+        }
+
+        return plannedLayout;
+    }
 
     private static bool ShouldPreserveExplicitCompactRibbonButtonHeight(ButtonBase button) =>
         button is FrameworkElement { Height: > 0 and <= 34 };
+
+    private static bool ShouldPromoteExplicitCompactRibbonButton(
+        ButtonBase button,
+        string commandName,
+        RibbonCommandLayoutKind plannedLayout)
+    {
+        if (plannedLayout != RibbonCommandLayoutKind.Large ||
+            !TryGetRibbonButtonGroupCatalogId(button, out var groupCatalogId))
+        {
+            return false;
+        }
+
+        var normalizedCommandName = NormalizeRibbonCommandName(commandName);
+        return groupCatalogId switch
+        {
+            "ReviewProofingGroup" =>
+                normalizedCommandName is "spelling" or "workbook statistics",
+            "ReviewAccessibilityGroup" =>
+                normalizedCommandName is "check accessibility",
+            "ReviewProtectGroup" =>
+                normalizedCommandName is "protect sheet" or
+                    "protect workbook" or
+                    "allow users to edit ranges" or
+                    "share workbook",
+            "ViewWorkbookViewsGroup" =>
+                normalizedCommandName is "normal" or
+                    "page break preview" or
+                    "page layout" or
+                    "custom views",
+            "ViewZoomGroup" =>
+                normalizedCommandName is "zoom" or "100%" or "zoom to selection",
+            _ => false
+        };
+    }
+
+    private static bool TryGetRibbonButtonGroupCatalogId(ButtonBase button, out string catalogId)
+    {
+        var current = button as DependencyObject;
+        while (current is not null)
+        {
+            if (RibbonMetadata.IsRibbonGroup(current) &&
+                RibbonMetadata.TryGetCatalogId(current, out catalogId))
+            {
+                return true;
+            }
+
+            current = GetRibbonTreeParent(current);
+        }
+
+        catalogId = "";
+        return false;
+    }
+
+    private static DependencyObject? GetRibbonTreeParent(DependencyObject element) =>
+        TryGetVisualParent(element) ?? LogicalTreeHelper.GetParent(element);
+
+    private static bool ShouldUsePlannedRibbonCommandWidth(
+        ButtonBase button,
+        string commandName,
+        RibbonCommandLayoutKind layoutKind) =>
+        ShouldPreserveExplicitCompactRibbonButtonHeight(button) &&
+        ShouldPromoteExplicitCompactRibbonButton(button, commandName, layoutKind);
+
+    private static DependencyObject? TryGetVisualParent(DependencyObject element)
+    {
+        try
+        {
+            return VisualTreeHelper.GetParent(element);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static string NormalizeRibbonCommandName(string? commandName) =>
+        commandName?.Trim().ToLowerInvariant() ?? "";
 
     private static void AddRibbonDropdownChevronToGrid(Grid grid, RibbonCommandContentLayout layout)
     {
