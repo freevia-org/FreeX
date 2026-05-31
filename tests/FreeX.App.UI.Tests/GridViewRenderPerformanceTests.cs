@@ -614,16 +614,23 @@ public sealed class GridViewRenderPerformanceTests
     public void RenderManualPageBreaks_ScansVisibleMetricsOnce()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
+        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
         var renderManualPageBreaks = source[
             source.IndexOf("private void RenderManualPageBreaks", StringComparison.Ordinal)..
             source.IndexOf("public enum FormulaTraceArrowLayoutKind", StringComparison.Ordinal)];
 
-        renderManualPageBreaks.Should().Contain("AsPageBreakLookup(rowPageBreaks)");
-        renderManualPageBreaks.Should().Contain("AsPageBreakLookup(columnPageBreaks)");
-        renderManualPageBreaks.Should().Contain("pageBreaks as IReadOnlySet<uint> ?? new HashSet<uint>(pageBreaks)");
+        renderManualPageBreaks.Should().Contain("GetPageBreakLookup(rowPageBreaks, ref _rowPageBreakLookupCache)");
+        renderManualPageBreaks.Should().Contain("GetPageBreakLookup(columnPageBreaks, ref _columnPageBreakLookupCache)");
+        renderManualPageBreaks.Should().Contain("pageBreaks is IReadOnlySet<uint> set");
+        renderManualPageBreaks.Should().Contain("CalculatePageBreakFingerprint(pageBreaks)");
+        renderManualPageBreaks.Should().Contain("cache.Fingerprint == fingerprint");
         renderManualPageBreaks.Should().Contain("foreach (var metric in Viewport.RowMetrics)");
         renderManualPageBreaks.Should().Contain("foreach (var metric in Viewport.ColMetrics)");
         renderManualPageBreaks.Should().NotContain("FirstOrDefault");
+        gridViewSource.Should().Contain("private PageBreakLookupCache? _rowPageBreakLookupCache;");
+        propertiesSource.Should().Contain("OnRowPageBreaksChanged");
+        propertiesSource.Should().Contain("OnColumnPageBreaksChanged");
     }
 
     [Fact]

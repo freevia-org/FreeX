@@ -198,6 +198,8 @@ public partial class GridView : FrameworkElement
     private readonly Dictionary<ChartRenderCacheKey, ImageSource> _chartRenderCache = new();
     private RenderCellLookupCache? _renderCellLookupCache;
     private OccupiedCellLookupCache? _occupiedCellLookupCache;
+    private PageBreakLookupCache? _rowPageBreakLookupCache;
+    private PageBreakLookupCache? _columnPageBreakLookupCache;
 
     private static double ToDisplayFontSize(double pointSize) =>
         Math.Max(1.0, Math.Round(pointSize * (96.0 / 72.0), MidpointRounding.AwayFromZero));
