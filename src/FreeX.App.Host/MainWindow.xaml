@@ -237,7 +237,7 @@
 
             <!-- HOME -->
             <TabItem Header="{local:Loc Key=MainWindow_Header_Home}" local:RibbonTooltip.KeyTip="H" local:RibbonMetadata.CatalogId="HomeTab">
-                <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="6,4,6,0">
+                <Border Background="{StaticResource FreeXRibbonSurfaceBrush}" Padding="0,4,0,0">
                     <ScrollViewer HorizontalScrollBarVisibility="Hidden"
                                   VerticalScrollBarVisibility="Disabled"
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
@@ -1778,7 +1778,7 @@
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Eraser}"
                                         local:RibbonTooltip.KeyTip="E"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_EraseInkStrokesInkAuthoringIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Eraser"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_LassoSelect}" Width="92" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                <Button Content="{local:Loc Key=MainWindow_Content_LassoSelect}" Width="84" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_LassoSelect}"
                                         local:RibbonTooltip.KeyTip="LS"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SelectInkStrokesWithAFreeformLassoInkAuthoringIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Lasso Select"/>
@@ -1816,11 +1816,11 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DrawConvertGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="{local:Loc Key=MainWindow_Content_InkToShape}" Width="96" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                <Button Content="{local:Loc Key=MainWindow_Content_InkToShape}" Width="92" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InkToShape}"
                                         local:RibbonTooltip.KeyTip="IS"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ConvertDrawnInkIntoAnOfficeShapeInkConversionIsNotYetImplementedInFreeX}" local:RibbonMetadata.CommandName="Ink to Shape"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_InkToMath}" Width="88" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                <Button Content="{local:Loc Key=MainWindow_Content_InkToMath}" Width="84" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InkToMath}"
                                         local:RibbonTooltip.KeyTip="IM"
                                         local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ConvertHandwrittenMathIntoTypedNotationInkConversionIsNotYetImplementedI_0362D0DF}" local:RibbonMetadata.CommandName="Ink to Math"/>
