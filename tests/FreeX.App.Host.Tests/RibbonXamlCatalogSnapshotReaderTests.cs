@@ -489,8 +489,6 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         new("View", "Ruler", "Show Ruler"),
         new("View", "Formula Bar", "Show Formula Bar"),
         new("View", "100%", "100% Zoom"),
-        new("View", "Hide", "Hide Window"),
-        new("View", "Unhide", "Unhide Window"),
 
         new("Help", "Help Online", "Help (opens project repo)"),
         new("Help", "Feedback", "Send Feedback (opens issue form)")

@@ -237,12 +237,13 @@ public sealed class RibbonTabParityTests
             "Arrange All",
             "Freeze Panes",
             "Split",
+            "Switch Windows");
+        CommandTitles(windowGroup).Should().NotContain([
             "Hide",
             "Unhide",
             "View Side by Side",
             "Synchronous Scrolling",
-            "Reset Window Position",
-            "Switch Windows");
+            "Reset Window Position"]);
     }
 
     [Fact]

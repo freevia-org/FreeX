@@ -720,7 +720,7 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
-    public void ViewWindowSingleHostState_DisablesUnsafeWindowKeyTips()
+    public void ViewWindowSingleHostState_ShowsOnlyLiveWindowKeyTips()
     {
         RunSta(() =>
         {
@@ -732,17 +732,20 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.CommandButtonIsEnabled("ViewNewWindowBtn").Should().BeTrue();
             harness.VisibleCommandKeyTips("NW").Should().ContainSingle("New Window");
 
-            harness.CommandButtonIsEnabled("ViewHideWindowBtn").Should().BeFalse();
-            harness.CommandButtonIsEnabled("ViewUnhideWindowBtn").Should().BeFalse();
-            harness.CommandButtonIsEnabled("ViewSideBySideBtn").Should().BeFalse();
-            harness.CommandButtonIsEnabled("ViewSynchronousScrollingBtn").Should().BeFalse();
-            harness.CommandButtonIsEnabled("ViewResetWindowPositionBtn").Should().BeFalse();
             harness.CommandButtonIsEnabled("ViewSwitchWindowsBtn").Should().BeFalse();
+            harness.CommandButtonHelpText("ViewSwitchWindowsBtn").Should().Contain("more than one visible workbook window");
+
+            harness.CommandButtonIsEnabled("ViewHideWindowBtn").Should().BeNull();
+            harness.CommandButtonIsEnabled("ViewUnhideWindowBtn").Should().BeNull();
+            harness.CommandButtonIsEnabled("ViewSideBySideBtn").Should().BeNull();
+            harness.CommandButtonIsEnabled("ViewSynchronousScrollingBtn").Should().BeNull();
+            harness.CommandButtonIsEnabled("ViewResetWindowPositionBtn").Should().BeNull();
 
             harness.VisibleCommandKeyTips("H").Should().NotContain("Hide");
+            harness.VisibleCommandKeyTips("U").Should().NotContain("Unhide");
             harness.VisibleCommandKeyTips("B").Should().NotContain("View Side by Side");
             harness.VisibleCommandKeyTips("SS").Should().BeEmpty();
-            harness.CommandButtonHelpText("ViewHideWindowBtn").Should().Contain("only visible workbook window");
+            harness.VisibleCommandKeyTips("RP").Should().BeEmpty();
         });
     }
 
