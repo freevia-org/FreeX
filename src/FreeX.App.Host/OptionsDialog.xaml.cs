@@ -11,8 +11,11 @@ public partial class OptionsDialog : Window
     private readonly FreeXOptions _opts;
     private readonly HashSet<string> _disabledFormulaErrorCodes;
     private readonly Dictionary<string, CheckBox> _errorRuleBoxes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<string> _quickAccessCommandIds = [];
     public FreeXOptions Result { get; private set; }
     public IReadOnlySet<string> DisabledFormulaErrorCodesResult { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    private sealed record QuickAccessCommandChoice(string Id, string DisplayName);
 
     private static readonly string[] Fonts =
         ["Calibri", "Arial", "Times New Roman", "Courier New", "Segoe UI", "Verdana", "Georgia"];
@@ -111,6 +114,8 @@ public partial class OptionsDialog : Window
         OptAppLanguage.SelectedValue = AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage);
         if (OptAppLanguage.SelectedIndex < 0)
             OptAppLanguage.SelectedIndex = 0;
+
+        PopulateQuickAccessToolbarOptions();
     }
 
     private void TabList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -159,6 +164,116 @@ public partial class OptionsDialog : Window
         OptFormulaBarExpanded.IsEnabled = OptShowFormulaBar.IsChecked == true;
     }
 
+    private void PopulateQuickAccessToolbarOptions()
+    {
+        QuickAccessBelowRibbonCheckBox.IsChecked = _opts.QuickAccessToolbarBelowRibbon;
+        _quickAccessCommandIds.Clear();
+        _quickAccessCommandIds.AddRange(QuickAccessToolbarCatalog.NormalizeCommandIds(_opts.QuickAccessToolbarCommands));
+        RefreshQuickAccessToolbarCommandLists();
+    }
+
+    private void RefreshQuickAccessToolbarCommandLists(string? selectedAvailableId = null, string? selectedQatId = null)
+    {
+        var selectedSet = new HashSet<string>(_quickAccessCommandIds, StringComparer.OrdinalIgnoreCase);
+        QuickAccessAvailableCommandsList.ItemsSource = QuickAccessToolbarCatalog.Commands
+            .Where(command => !selectedSet.Contains(command.Id))
+            .Select(CreateQuickAccessCommandChoice)
+            .ToList();
+        QuickAccessSelectedCommandsList.ItemsSource = _quickAccessCommandIds
+            .Select(id => QuickAccessToolbarCatalog.TryGet(id, out var command) ? command : null)
+            .Where(command => command is not null)
+            .Select(command => CreateQuickAccessCommandChoice(command!))
+            .ToList();
+
+        SelectQuickAccessCommand(QuickAccessAvailableCommandsList, selectedAvailableId);
+        SelectQuickAccessCommand(QuickAccessSelectedCommandsList, selectedQatId);
+        UpdateQuickAccessToolbarCustomizationButtons();
+    }
+
+    private static QuickAccessCommandChoice CreateQuickAccessCommandChoice(QuickAccessToolbarCommandDefinition command) =>
+        new(command.Id, UiText.Get(command.TitleResourceKey));
+
+    private static void SelectQuickAccessCommand(ListBox listBox, string? commandId)
+    {
+        if (string.IsNullOrWhiteSpace(commandId))
+            return;
+
+        listBox.SelectedItem = listBox.Items
+            .OfType<QuickAccessCommandChoice>()
+            .FirstOrDefault(choice => string.Equals(choice.Id, commandId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void UpdateQuickAccessToolbarCustomizationButtons()
+    {
+        QuickAccessAddButton.IsEnabled = QuickAccessAvailableCommandsList.SelectedItem is QuickAccessCommandChoice;
+        QuickAccessRemoveButton.IsEnabled =
+            QuickAccessSelectedCommandsList.SelectedItem is QuickAccessCommandChoice &&
+            _quickAccessCommandIds.Count > 1;
+        QuickAccessMoveUpButton.IsEnabled = QuickAccessSelectedCommandsList.SelectedIndex > 0;
+        QuickAccessMoveDownButton.IsEnabled =
+            QuickAccessSelectedCommandsList.SelectedIndex >= 0 &&
+            QuickAccessSelectedCommandsList.SelectedIndex < _quickAccessCommandIds.Count - 1;
+    }
+
+    private void QuickAccessCommandLists_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        UpdateQuickAccessToolbarCustomizationButtons();
+
+    private void QuickAccessAddButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (QuickAccessAvailableCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
+            return;
+
+        _quickAccessCommandIds.Add(choice.Id);
+        RefreshQuickAccessToolbarCommandLists(selectedQatId: choice.Id);
+    }
+
+    private void QuickAccessRemoveButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice ||
+            _quickAccessCommandIds.Count <= 1)
+        {
+            return;
+        }
+
+        var removedIndex = _quickAccessCommandIds.FindIndex(id => string.Equals(id, choice.Id, StringComparison.OrdinalIgnoreCase));
+        if (removedIndex < 0)
+            return;
+
+        _quickAccessCommandIds.RemoveAt(removedIndex);
+        var nextIndex = Math.Clamp(removedIndex, 0, _quickAccessCommandIds.Count - 1);
+        RefreshQuickAccessToolbarCommandLists(
+            selectedAvailableId: choice.Id,
+            selectedQatId: _quickAccessCommandIds.ElementAtOrDefault(nextIndex));
+    }
+
+    private void QuickAccessMoveUpButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
+            return;
+
+        var index = _quickAccessCommandIds.FindIndex(id => string.Equals(id, choice.Id, StringComparison.OrdinalIgnoreCase));
+        if (index <= 0)
+            return;
+
+        (_quickAccessCommandIds[index - 1], _quickAccessCommandIds[index]) =
+            (_quickAccessCommandIds[index], _quickAccessCommandIds[index - 1]);
+        RefreshQuickAccessToolbarCommandLists(selectedQatId: choice.Id);
+    }
+
+    private void QuickAccessMoveDownButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
+            return;
+
+        var index = _quickAccessCommandIds.FindIndex(id => string.Equals(id, choice.Id, StringComparison.OrdinalIgnoreCase));
+        if (index < 0 || index >= _quickAccessCommandIds.Count - 1)
+            return;
+
+        (_quickAccessCommandIds[index + 1], _quickAccessCommandIds[index]) =
+            (_quickAccessCommandIds[index], _quickAccessCommandIds[index + 1]);
+        RefreshQuickAccessToolbarCommandLists(selectedQatId: choice.Id);
+    }
+
     private void OkBtn_Click(object sender, RoutedEventArgs e)
     {
         if (!OptionsInputParser.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize))
@@ -200,6 +315,8 @@ public partial class OptionsDialog : Window
                 _ => FreeXObjectDisplay.All
             },
             DefaultFormat     = OptDefaultFormat.SelectedIndex == 1 ? ".json" : ".xlsx",
+            QuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true,
+            QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList(),
             AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string),
             CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true,
             CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
@@ -231,8 +348,12 @@ public partial class OptionsDialog : Window
     private void RibbonImportExportButton_Click(object sender, RoutedEventArgs e) =>
         ShowDeferredOptionsMessage(DeferredCommandMessages.RibbonCustomizationImportExport());
 
-    private void QuickAccessResetButton_Click(object sender, RoutedEventArgs e) =>
-        ShowDeferredOptionsMessage(DeferredCommandMessages.QuickAccessToolbarReset());
+    private void QuickAccessResetButton_Click(object sender, RoutedEventArgs e)
+    {
+        _quickAccessCommandIds.Clear();
+        _quickAccessCommandIds.AddRange(QuickAccessToolbarCatalog.DefaultCommandIds);
+        RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessCommandIds[0]);
+    }
 
     private void AddInsGoButton_Click(object sender, RoutedEventArgs e) =>
         ShowDeferredOptionsMessage(DeferredCommandMessages.OfficeAddIns());

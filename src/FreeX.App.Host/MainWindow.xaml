@@ -34,6 +34,8 @@
             <RowDefinition Height="Auto"/>
             <!-- Ribbon (tab strip + tab content) -->
             <RowDefinition Height="Auto"/>
+            <!-- Optional Quick Access Toolbar below the ribbon -->
+            <RowDefinition Height="Auto"/>
             <!-- Formula bar -->
             <RowDefinition Height="Auto"/>
             <!-- Spreadsheet grid -->
@@ -155,39 +157,11 @@
                     </Grid>
                 </Border>
                 <!-- QAT buttons -->
-                <Button x:Name="SaveQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,2,0"
-                        Style="{StaticResource TitleBarQatButton}" FontSize="13"
-                        WindowChrome.IsHitTestVisibleInChrome="True"
-                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Save}"
-                        Click="SaveButton_Click"
-                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Save}"
-                        local:RibbonTooltip.KeyTip="1"
-                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SaveTheWorkbook}" local:RibbonMetadata.CommandName="Save">
-                    <local:RibbonIcon Kind="Save" IconSize="16"
-                                      Foreground="{StaticResource FreeXWhiteBrush}"/>
-                </Button>
-                <Button x:Name="UndoQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,2,0"
-                        Style="{StaticResource TitleBarQatButton}" FontSize="14"
-                        WindowChrome.IsHitTestVisibleInChrome="True"
-                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Undo}"
-                        Click="UndoQatBtn_Click"
-                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Undo}"
-                        local:RibbonTooltip.KeyTip="2"
-                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_UndoTheLastAction}" local:RibbonMetadata.CommandName="Undo">
-                    <local:RibbonIcon Kind="Undo" IconSize="16"
-                                      Foreground="{StaticResource FreeXWhiteBrush}"/>
-                </Button>
-                <Button x:Name="RedoQatBtn" DockPanel.Dock="Left" Width="26" Height="22" Margin="0,0,8,0"
-                        Style="{StaticResource TitleBarQatButton}" FontSize="14"
-                        WindowChrome.IsHitTestVisibleInChrome="True"
-                        AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Redo}"
-                        Click="RedoQatBtn_Click"
-                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Redo}"
-                        local:RibbonTooltip.KeyTip="3"
-                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RedoTheLastUndoneAction}" local:RibbonMetadata.CommandName="Redo">
-                    <local:RibbonIcon Kind="Redo" IconSize="16"
-                                      Foreground="{StaticResource FreeXWhiteBrush}"/>
-                </Button>
+                <StackPanel x:Name="TitleBarQatPanel"
+                            DockPanel.Dock="Left"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Margin="0,0,8,0"/>
                 <!-- System buttons — must be docked Right before the fill element -->
                 <!-- Order in XAML (Right-docked) is right-to-left, so Close first -->
                 <Button x:Name="CloseSysBtn"    DockPanel.Dock="Right"
@@ -3237,10 +3211,23 @@
 
         </TabControl>
 
+        <Border x:Name="BelowRibbonQatRoot"
+                Grid.Row="2"
+                Visibility="Collapsed"
+                Background="{StaticResource FreeXRibbonSurfaceBrush}"
+                BorderBrush="{StaticResource FreeXBorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="8,2">
+            <StackPanel x:Name="BelowRibbonQatPanel"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"/>
+        </Border>
+
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 2  Formula bar
              ═══════════════════════════════════════════════════════════════ -->
-        <Border x:Name="FormulaBarBorder" Grid.Row="2" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Background="White" Padding="4,5">
+        <Border x:Name="FormulaBarBorder" Grid.Row="3" BorderBrush="#D0D0D0" BorderThickness="0,0,0,1" Background="White" Padding="4,5">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="80"/>
@@ -3327,7 +3314,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 3  Spreadsheet grid
              ═══════════════════════════════════════════════════════════════ -->
-        <Grid Grid.Row="3" ClipToBounds="True">
+        <Grid Grid.Row="4" ClipToBounds="True">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -3656,7 +3643,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 4  Sheet tabs
              ═══════════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="4" Panel.ZIndex="5" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="{StaticResource FreeXBorderBrush}"
+        <Border Grid.Row="5" Panel.ZIndex="5" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="{StaticResource FreeXBorderBrush}"
                 BorderThickness="0" Padding="0">
             <Grid x:Name="SheetTabsRowGrid"
                   Background="{StaticResource FreeXSheetSurfaceBrush}"
@@ -4047,7 +4034,7 @@
         <!-- ═══════════════════════════════════════════════════════════════
              ROW 5  Status bar
              ═══════════════════════════════════════════════════════════════ -->
-        <Border x:Name="StatusBarRoot" Grid.Row="5" Panel.ZIndex="6" Background="{StaticResource FreeXStatusSurfaceBrush}" Padding="8,3"
+        <Border x:Name="StatusBarRoot" Grid.Row="6" Panel.ZIndex="6" Background="{StaticResource FreeXStatusSurfaceBrush}" Padding="8,3"
                 ClipToBounds="True">
             <Grid x:Name="StatusBarGrid" ClipToBounds="True">
                 <Grid.ColumnDefinitions>

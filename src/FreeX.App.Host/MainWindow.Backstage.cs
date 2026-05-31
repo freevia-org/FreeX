@@ -540,6 +540,7 @@ public partial class MainWindow
                 AppLocalization.ApplyAppLanguage(_options.AppLanguage);
 
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
+            RebuildQuickAccessToolbar();
             ApplyOptionsWorksheetViewSettings();
             ApplyOptionsToView();
             UpdateViewport();
