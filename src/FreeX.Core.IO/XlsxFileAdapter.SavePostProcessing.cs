@@ -140,34 +140,19 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetCustomPropertyMapper.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.SmartTags is not null))
+        if (workbook.Sheets.Any(XlsxWorksheetPostProcessingMetadataBatchWriter.HasWorksheetElementMetadata))
         {
             packageStream.Position = 0;
-            XlsxWorksheetSmartTagMapper.Save(packageStream, workbook, GetWorksheetPathMap());
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.SortState is not null))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetSortStateMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+            XlsxWorksheetPostProcessingMetadataBatchWriter.SaveWorksheetElementMetadata(
+                packageStream,
+                workbook,
+                GetWorksheetPathMap());
         }
 
         if (workbook.Sheets.Any(sheet => sheet.SingleXmlCells is not null))
         {
             packageStream.Position = 0;
             XlsxWorksheetSingleXmlCellMapper.Save(packageStream, workbook, GetWorksheetPathMap());
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.AdditionalViews is not null))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetAdditionalViewMapper.Save(packageStream, workbook, GetWorksheetPathMap());
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.DataConsolidation is not null))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetDataConsolidationMapper.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         packageStream.Position = 0;
@@ -256,34 +241,10 @@ public sealed partial class XlsxFileAdapter
 
         SaveSourcePackageIndependentPostProcessingMetadata();
 
-        if (workbook.Sheets.Any(sheet => sheet.SmartTags is not null))
+        if (workbook.Sheets.Any(XlsxWorksheetPostProcessingMetadataBatchWriter.HasReplayMetadata))
         {
             packageStream.Position = 0;
-            XlsxWorksheetSmartTagMapper.Save(packageStream, workbook, GetWorksheetPathMap());
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.SortState is not null))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetSortStateMapper.Save(packageStream, workbook, GetWorksheetPathMap());
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.AdditionalViews is not null))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetAdditionalViewMapper.Save(packageStream, workbook, GetWorksheetPathMap());
-        }
-
-        if (workbook.Sheets.Any(sheet => sheet.DataConsolidation is not null))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetDataConsolidationMapper.Save(packageStream, workbook, GetWorksheetPathMap());
-        }
-
-        if (workbook.Sheets.Any(XlsxWorksheetPageSetupMetadataWriter.HasModeledPrinterAttributes))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetPageSetupMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+            XlsxWorksheetPostProcessingMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         if (numberFormatIdMap.Any(pair => pair.Key != pair.Value))

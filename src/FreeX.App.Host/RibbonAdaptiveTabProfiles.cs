@@ -15,7 +15,7 @@ internal static class RibbonAdaptiveTabProfiles
             [
                 Rule(900, collapseFromGroup: "Alignment"),
                 Rule(1300, collapseFromGroup: "Styles"),
-                Rule(1500, collapseFromGroup: "Editing")
+                Rule(1366, collapseFromGroup: "Editing")
             ]),
         new(
             Name: "Insert",
@@ -65,7 +65,8 @@ internal static class RibbonAdaptiveTabProfiles
             ],
             ProtectedGroups:
             [
-                Protected(double.PositiveInfinity, ["Function Library", "Calculation"])
+                Protected(1320, ["Function Library", "Calculation"]),
+                Protected(double.PositiveInfinity, ["Function Library", "Formula Auditing", "Calculation"])
             ],
             RequiresMeasuredCorrection: true),
         new(
@@ -107,16 +108,17 @@ internal static class RibbonAdaptiveTabProfiles
             RequiredGroups: ["Themes", "Page Setup"],
             Defaults:
             [
-                State("Page Setup", RibbonAdaptiveGroupState.Full)
+                State("Page Setup", RibbonAdaptiveGroupState.Full),
+                State("Arrange", RibbonAdaptiveGroupState.Full)
             ],
             Breakpoints:
             [
-                Rule(1120, collapseGroups: ["Themes", "Arrange"]),
-                Rule(1320, collapseGroups: ["Arrange"])
+                Rule(1120, collapseGroups: ["Themes", "Arrange"])
             ],
             ProtectedGroups:
             [
-                Protected(double.PositiveInfinity, ["Page Setup"])
+                Protected(1120, ["Page Setup"]),
+                Protected(double.PositiveInfinity, ["Page Setup", "Arrange"])
             ],
             RequiresMeasuredCorrection: true),
         new(
