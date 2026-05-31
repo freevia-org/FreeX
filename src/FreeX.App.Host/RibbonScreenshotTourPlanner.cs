@@ -1,6 +1,6 @@
 namespace FreeX.App.Host;
 
-internal sealed record RibbonScreenshotTourTab(string Header, string FileName);
+internal sealed record RibbonScreenshotTourTab(string Header, string FileName, string CatalogId);
 
 internal sealed record RibbonScreenshotTourWidth(string Label, double? WindowWidth);
 
@@ -63,28 +63,28 @@ internal static class RibbonScreenshotTourPlanner
 {
     public static IReadOnlyList<RibbonScreenshotTourTab> DefaultTabs { get; } =
     [
-        new("Home", "Home"),
-        new("Insert", "Insert"),
-        new("Draw", "Draw"),
-        new("Page Layout", "Page_Layout"),
-        new("Formulas", "Formulas"),
-        new("Data", "Data"),
-        new("Review", "Review"),
-        new("View", "View"),
-        new("Help", "Help")
+        new("Home", "Home", "HomeTab"),
+        new("Insert", "Insert", "InsertTab"),
+        new("Draw", "Draw", "DrawTab"),
+        new("Page Layout", "Page_Layout", "PageLayoutTab"),
+        new("Formulas", "Formulas", "FormulasTab"),
+        new("Data", "Data", "DataTab"),
+        new("Review", "Review", "ReviewTab"),
+        new("View", "View", "ViewTab"),
+        new("Help", "Help", "HelpTab")
     ];
 
     public static IReadOnlyList<RibbonScreenshotTourTab> TableContextTabs { get; } =
     [
         .. DefaultTabs,
-        new("Table Design", "Table_Design")
+        new("Table Design", "Table_Design", "TableDesignTab")
     ];
 
     public static IReadOnlyList<RibbonScreenshotTourTab> PivotContextTabs { get; } =
     [
         .. DefaultTabs,
-        new("PivotTable Analyze", "PivotTable_Analyze"),
-        new("Design", "PivotTable_Design")
+        new("PivotTable Analyze", "PivotTable_Analyze", "PivotTableAnalyzeTab"),
+        new("Design", "PivotTable_Design", "PivotTableDesignTab")
     ];
 
     public static IReadOnlyList<RibbonScreenshotTourWidth> DefaultWidths { get; } =
@@ -222,7 +222,8 @@ internal static class RibbonScreenshotTourPlanner
 
     private static bool MatchesTab(RibbonScreenshotTourTab tab, string value) =>
         string.Equals(tab.Header, value, StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(tab.FileName, value, StringComparison.OrdinalIgnoreCase);
+        string.Equals(tab.FileName, value, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(tab.CatalogId, value, StringComparison.OrdinalIgnoreCase);
 
     private static IReadOnlyList<string> SplitConfiguredList(string value, string settingName)
     {

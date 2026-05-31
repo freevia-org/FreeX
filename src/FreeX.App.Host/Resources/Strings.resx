@@ -3255,6 +3255,9 @@
   <data name="MainWindow_Content_AllowUsersToEditRanges" xml:space="preserve">
     <value>Allow Users to Edit Ranges</value>
   </data>
+  <data name="MainWindow_Content_AllowUsersToEditRangesCompact" xml:space="preserve">
+    <value>Ranges</value>
+  </data>
   <data name="MainWindow_Content_AltText" xml:space="preserve">
     <value>Alt Text</value>
   </data>
@@ -3821,6 +3824,9 @@
   </data>
   <data name="MainWindow_Content_ShareWorkbook" xml:space="preserve">
     <value>Share Workbook</value>
+  </data>
+  <data name="MainWindow_Content_ShareWorkbookCompact" xml:space="preserve">
+    <value>Share</value>
   </data>
   <data name="MainWindow_Content_ShowDetails" xml:space="preserve">
     <value>Show Details</value>
@@ -13404,6 +13410,36 @@ Changing cell value: {2}</value>
   </data>
   <data name="Protection_ProtectWorksheetContents" xml:space="preserve">
     <value>Protect worksheet and contents of locked cells</value>
+  </data>
+  <data name="Protection_SheetProtectedMessage" xml:space="preserve">
+    <value>Sheet is now protected.</value>
+  </data>
+  <data name="Protection_SheetUnprotectedMessage" xml:space="preserve">
+    <value>Sheet is now unprotected.</value>
+  </data>
+  <data name="Protection_UnprotectSheetButton" xml:space="preserve">
+    <value>Unprotect Sheet</value>
+  </data>
+  <data name="Protection_UnprotectSheetTitle" xml:space="preserve">
+    <value>Unprotect Sheet</value>
+  </data>
+  <data name="Protection_UnprotectSheetDescription" xml:space="preserve">
+    <value>Remove sheet protection so locked cells can be edited again.</value>
+  </data>
+  <data name="Protection_WorkbookProtectedMessage" xml:space="preserve">
+    <value>Workbook structure is now protected.</value>
+  </data>
+  <data name="Protection_WorkbookUnprotectedMessage" xml:space="preserve">
+    <value>Workbook structure is now unprotected.</value>
+  </data>
+  <data name="Protection_UnprotectWorkbookButton" xml:space="preserve">
+    <value>Unprotect Workbook</value>
+  </data>
+  <data name="Protection_UnprotectWorkbookTitle" xml:space="preserve">
+    <value>Unprotect Workbook</value>
+  </data>
+  <data name="Protection_UnprotectWorkbookDescription" xml:space="preserve">
+    <value>Allow structural changes to the workbook such as adding, deleting, or renaming sheets.</value>
   </data>
   <data name="Remaining_EnterColumnWidthFrom0To255" xml:space="preserve">
     <value>Enter a column width from 0 to 255.</value>

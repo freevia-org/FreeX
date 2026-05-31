@@ -10,15 +10,15 @@ public static class WorkbookProtectionWorkflow
         if (workbook.IsStructureProtected)
         {
             return new WorkbookProtectionUiText(
-                "Unprotect Workbook",
-                "Unprotect Workbook",
-                "Allow structural changes to the workbook such as adding, deleting, or renaming sheets.");
+                UiText.Get("Protection_UnprotectWorkbookButton"),
+                UiText.Get("Protection_UnprotectWorkbookTitle"),
+                UiText.Get("Protection_UnprotectWorkbookDescription"));
         }
 
         return new WorkbookProtectionUiText(
-            "Protect Workbook",
-            "Protect Workbook",
-            "Prevent structural changes to the workbook such as adding, deleting, or renaming sheets.");
+            UiText.Get("MainWindow_Content_ProtectWorkbook"),
+            UiText.Get("MainWindow_TooltipTitle_ProtectWorkbook"),
+            UiText.Get("MainWindow_TooltipDescription_PreventStructuralChangesToTheWorkbookSuchAsAddingDeletingOrRenamingSheet_47267D4F"));
     }
 
     public static WorkbookProtectionAction CreateCommand(Workbook workbook, string? password)
@@ -27,14 +27,14 @@ public static class WorkbookProtectionWorkflow
         {
             return new WorkbookProtectionAction(
                 new UnprotectWorkbookCommand(),
-                "Unprotect Workbook",
-                "Workbook structure is now unprotected.");
+                UiText.Get("Protection_UnprotectWorkbookTitle"),
+                UiText.Get("Protection_WorkbookUnprotectedMessage"));
         }
 
         return new WorkbookProtectionAction(
             new ProtectWorkbookCommand(password),
-            "Protect Workbook",
-            "Workbook structure is now protected.");
+            UiText.Get("MainWindowMessage_ProtectWorkbookTitle"),
+            UiText.Get("Protection_WorkbookProtectedMessage"));
     }
 }
 

@@ -8,11 +8,11 @@ public sealed class RibbonScreenshotTourPlannerTests
 {
     private static readonly RibbonScreenshotTourTab[] Tabs =
     [
-        new("Home", "Home"),
-        new("Insert", "Insert"),
-        new("Page Layout", "Page_Layout"),
-        new("Data", "Data"),
-        new("Help", "Help")
+        new("Home", "Home", "HomeTab"),
+        new("Insert", "Insert", "InsertTab"),
+        new("Page Layout", "Page_Layout", "PageLayoutTab"),
+        new("Data", "Data", "DataTab"),
+        new("Help", "Help", "HelpTab")
     ];
 
     [Fact]
@@ -22,15 +22,15 @@ public sealed class RibbonScreenshotTourPlannerTests
             .Should()
             .Equal(
             [
-                new("Home", "Home"),
-                new("Insert", "Insert"),
-                new("Draw", "Draw"),
-                new("Page Layout", "Page_Layout"),
-                new("Formulas", "Formulas"),
-                new("Data", "Data"),
-                new("Review", "Review"),
-                new("View", "View"),
-                new("Help", "Help")
+                new("Home", "Home", "HomeTab"),
+                new("Insert", "Insert", "InsertTab"),
+                new("Draw", "Draw", "DrawTab"),
+                new("Page Layout", "Page_Layout", "PageLayoutTab"),
+                new("Formulas", "Formulas", "FormulasTab"),
+                new("Data", "Data", "DataTab"),
+                new("Review", "Review", "ReviewTab"),
+                new("View", "View", "ViewTab"),
+                new("Help", "Help", "HelpTab")
             ]);
     }
 
@@ -56,7 +56,7 @@ public sealed class RibbonScreenshotTourPlannerTests
             .Equal(
             [
                 .. RibbonScreenshotTourPlanner.DefaultTabs,
-                new("Table Design", "Table_Design")
+                new("Table Design", "Table_Design", "TableDesignTab")
             ]);
     }
 
@@ -68,8 +68,8 @@ public sealed class RibbonScreenshotTourPlannerTests
             .Equal(
             [
                 .. RibbonScreenshotTourPlanner.DefaultTabs,
-                new("PivotTable Analyze", "PivotTable_Analyze"),
-                new("Design", "PivotTable_Design")
+                new("PivotTable Analyze", "PivotTable_Analyze", "PivotTableAnalyzeTab"),
+                new("Design", "PivotTable_Design", "PivotTableDesignTab")
             ]);
     }
 
@@ -177,7 +177,7 @@ public sealed class RibbonScreenshotTourPlannerTests
     {
         RibbonScreenshotTourPlanner.FilterTabs(Tabs, " data, page_layout ")
             .Should()
-            .Equal([new("Page Layout", "Page_Layout"), new("Data", "Data")]);
+            .Equal([new("Page Layout", "Page_Layout", "PageLayoutTab"), new("Data", "Data", "DataTab")]);
     }
 
     [Fact]
@@ -325,7 +325,7 @@ public sealed class RibbonScreenshotTourPlannerTests
     {
         var plan = RibbonScreenshotTourPlanner.CreatePlan("Home,Data", "900", burstMode: true);
 
-        plan.Tabs.Should().Equal([new("Home", "Home"), new("Data", "Data")]);
+        plan.Tabs.Should().Equal([new("Home", "Home", "HomeTab"), new("Data", "Data", "DataTab")]);
         plan.Widths.Should().Equal([new("900", 900)]);
         plan.Phases.Should().Equal(RibbonScreenshotTourPlanner.BurstPhases);
         plan.IsBurst.Should().BeTrue();
@@ -393,7 +393,7 @@ public sealed class RibbonScreenshotTourPlannerTests
         var plan = RibbonScreenshotTourPlanner.CreatePlan("Table Design", "900", burstMode: false, context: "table");
 
         plan.Context.Should().Be("table");
-        plan.Tabs.Should().Equal([new("Table Design", "Table_Design")]);
+        plan.Tabs.Should().Equal([new("Table Design", "Table_Design", "TableDesignTab")]);
         plan.Captures
             .Select(capture => capture.OutputFileName)
             .Should()
@@ -408,8 +408,8 @@ public sealed class RibbonScreenshotTourPlannerTests
         plan.Context.Should().Be("pivot");
         plan.Tabs.Should().Equal(
         [
-            new("PivotTable Analyze", "PivotTable_Analyze"),
-            new("Design", "PivotTable_Design")
+            new("PivotTable Analyze", "PivotTable_Analyze", "PivotTableAnalyzeTab"),
+            new("Design", "PivotTable_Design", "PivotTableDesignTab")
         ]);
         plan.Captures
             .Select(capture => capture.OutputFileName)

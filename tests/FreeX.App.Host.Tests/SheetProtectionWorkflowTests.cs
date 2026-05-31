@@ -50,7 +50,7 @@ public sealed class SheetProtectionWorkflowTests
 
         var action = SheetProtectionWorkflow.CreateCommand(sheet, "new-password-should-be-ignored");
 
-        action.Title.Should().Be("Unprotect Sheet");
+        action.Title.Should().Be(UiText.Get("Protection_UnprotectSheetTitle"));
         action.SuccessMessage.Should().Contain("unprotected");
         action.Command.Should().BeOfType<UnprotectSheetCommand>();
     }
@@ -77,9 +77,9 @@ public sealed class SheetProtectionWorkflowTests
 
         var uiText = SheetProtectionWorkflow.GetUiText(sheet);
 
-        uiText.ButtonContent.Should().Be("Unprotect Sheet");
-        uiText.TooltipTitle.Should().Be("Unprotect Sheet");
-        uiText.TooltipDescription.Should().Contain("Remove");
+        uiText.ButtonContent.Should().Be(UiText.Get("Protection_UnprotectSheetButton"));
+        uiText.TooltipTitle.Should().Be(UiText.Get("Protection_UnprotectSheetTitle"));
+        uiText.TooltipDescription.Should().Be(UiText.Get("Protection_UnprotectSheetDescription"));
     }
 
     [Fact]
