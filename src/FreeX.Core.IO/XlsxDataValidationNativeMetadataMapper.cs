@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -7,6 +8,8 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxDataValidationNativeMetadataMapper
 {
+    private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
     public static IReadOnlyList<DataValidationNativeMetadata> Read(XDocument worksheetXml, XNamespace worksheetNs)
     {
         var dataValidations = worksheetXml.Root?.Element(worksheetNs + "dataValidations");
@@ -88,80 +91,89 @@ internal static class XlsxDataValidationNativeMetadataMapper
         (validation.NativeContainerAttributes?.Count ?? 0) > 0 ||
         (validation.NativeContainerChildXmls?.Count ?? 0) > 0;
 
+    public static bool HasNativeMetadata(Sheet sheet)
+    {
+        foreach (var validation in sheet.DataValidations)
+        {
+            if (HasNativeMetadata(validation))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasNativeContainerMetadata(DataValidation validation) =>
+        (validation.NativeContainerAttributes?.Count ?? 0) > 0 ||
+        (validation.NativeContainerChildXmls?.Count ?? 0) > 0;
+
     public static void Save(Stream xlsxStream, Workbook workbook)
     {
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        var workbookEntry = archive.GetEntry("xl/workbook.xml");
-        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (workbookEntry is null || relsEntry is null)
+        XlsxWorkbookWorksheetPathMap? worksheetPathMap;
+        using (var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true))
+            worksheetPathMap = XlsxWorkbookWorksheetPathMap.TryCreate(archive);
+
+        if (worksheetPathMap is null)
             return;
 
-        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
-        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+        if (xlsxStream.CanSeek)
+            xlsxStream.Position = 0;
 
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
+        Save(session, workbook);
+    }
 
-        var relTargets = relsXml.Root?
-            .Elements(packageRelNs + "Relationship")
-            .Where(e => e.Attribute("Id") is not null && e.Attribute("Target") is not null)
-            .ToDictionary(
-                e => e.Attribute("Id")!.Value,
-                e => XlsxPackagePath.NormalizeWorkbookTarget(e.Attribute("Target")!.Value),
-                StringComparer.OrdinalIgnoreCase)
-            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
         {
-            var name = sheetElement.Attribute("name")?.Value;
-            var relId = sheetElement.Attribute(relNs + "id")?.Value;
-            if (string.IsNullOrWhiteSpace(name) ||
-                string.IsNullOrWhiteSpace(relId) ||
-                !sheetsByName.TryGetValue(name, out var sheet) ||
-                !relTargets.TryGetValue(relId, out var worksheetPath) ||
-                !sheet.DataValidations.Any(HasNativeMetadata))
+            var hasNativeMetadata = false;
+            DataValidation? containerSource = null;
+            foreach (var validation in sheet.DataValidations)
             {
-                continue;
+                if (!HasNativeMetadata(validation))
+                    continue;
+
+                hasNativeMetadata = true;
+                if (containerSource is null && HasNativeContainerMetadata(validation))
+                    containerSource = validation;
             }
 
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
+            if (!hasNativeMetadata)
                 continue;
 
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
+            if (!session.TryGetWorksheet(sheet, out var edit))
                 continue;
 
-            var dataValidations = root.Element(workbookNs + "dataValidations");
+            var dataValidations = edit.Root.Element(WorksheetNs + "dataValidations");
             if (dataValidations is null)
                 continue;
 
             var changed = false;
-            var containerSource = sheet.DataValidations.FirstOrDefault(validation =>
-                (validation.NativeContainerAttributes?.Count ?? 0) > 0 ||
-                (validation.NativeContainerChildXmls?.Count ?? 0) > 0);
             if (containerSource is not null)
-                changed |= ApplyContainerNativeMetadata(dataValidations, containerSource, workbookNs);
+                changed |= ApplyContainerNativeMetadata(dataValidations, containerSource, WorksheetNs);
 
-            var validationsByRange = dataValidations
-                .Elements(workbookNs + "dataValidation")
-                .Where(element => !string.IsNullOrWhiteSpace(element.Attribute("sqref")?.Value))
-                .ToDictionary(element => element.Attribute("sqref")!.Value, element => element, StringComparer.Ordinal);
-
-            foreach (var validation in sheet.DataValidations.Where(HasNativeMetadata))
+            var validationsByRange = new Dictionary<string, XElement>(StringComparer.Ordinal);
+            foreach (var element in dataValidations.Elements(WorksheetNs + "dataValidation"))
             {
+                var sqref = element.Attribute("sqref")?.Value;
+                if (!string.IsNullOrWhiteSpace(sqref))
+                    validationsByRange[sqref] = element;
+            }
+
+            foreach (var validation in sheet.DataValidations)
+            {
+                if (!HasNativeMetadata(validation))
+                    continue;
+
                 if (validationsByRange.TryGetValue(ToSqref(validation), out var validationElement) ||
                     validationsByRange.TryGetValue(validation.AppliesTo.ToString(), out validationElement))
                 {
-                    changed |= ApplyValidationNativeMetadata(validationElement, validation, workbookNs);
+                    changed |= ApplyValidationNativeMetadata(validationElement, validation, WorksheetNs);
                 }
             }
 
             if (changed)
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+                session.MarkDirty(edit);
         }
     }
 
@@ -222,8 +234,17 @@ internal static class XlsxDataValidationNativeMetadataMapper
         return ranges;
     }
 
-    private static string ToSqref(DataValidation validation) =>
-        string.Join(' ', new[] { validation.AppliesTo }.Concat(validation.AdditionalRanges).Select(range => range.ToString()));
+    private static string ToSqref(DataValidation validation)
+    {
+        if (validation.AdditionalRanges.Count == 0)
+            return validation.AppliesTo.ToString();
+
+        var builder = new StringBuilder(validation.AppliesTo.ToString());
+        foreach (var range in validation.AdditionalRanges)
+            builder.Append(' ').Append(range);
+
+        return builder.ToString();
+    }
 
     private static void RemoveDuplicateMultiAreaValidations(
         Sheet sheet,

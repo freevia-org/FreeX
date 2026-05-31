@@ -52,6 +52,7 @@ public sealed class MainWindowMouseSelectionSourceTests
         mouseMove.Should().Contain("_dragSelectActive = false;");
         mouseMove.Should().Contain("_dragSelectAddsAdditionalRange = false;");
         mouseMove.Should().Contain("SheetGrid.ReleaseMouseCapture();");
+        mouseMove.Should().Contain("CompleteDragSelectionToolbarRefresh();");
         mouseMove.Should().Contain("CompleteDragSelectionStatusRefresh();");
         mouseMove.Should().Contain("if (hitAddr.HasValue)");
         mouseMove.Should().Contain("UpdateCommentPreview(hitAddr.Value);");
@@ -67,6 +68,9 @@ public sealed class MainWindowMouseSelectionSourceTests
         mouseMove.IndexOf("e.Handled = true;", StringComparison.Ordinal)
             .Should()
             .BeLessThan(mouseMove.IndexOf("RequestSelectionDragAutoScroll(pos);", StringComparison.Ordinal));
+        cancelBlock.IndexOf("CompleteDragSelectionToolbarRefresh();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(cancelBlock.IndexOf("CompleteDragSelectionStatusRefresh();", StringComparison.Ordinal));
         cancelBlock.IndexOf("CompleteDragSelectionStatusRefresh();", StringComparison.Ordinal)
             .Should()
             .BeLessThan(cancelBlock.IndexOf("UpdateCommentPreview(hitAddr.Value);", StringComparison.Ordinal));
@@ -409,12 +413,16 @@ public sealed class MainWindowMouseSelectionSourceTests
             mouseUp.IndexOf("if (!_dragSelectActive) return;", StringComparison.Ordinal)..];
 
         completedDrag.Should().Contain("SheetGrid.ReleaseMouseCapture();");
+        completedDrag.Should().Contain("CompleteDragSelectionToolbarRefresh();");
         completedDrag.Should().Contain("CompleteDragSelectionStatusRefresh();");
         completedDrag.Should().Contain("if (hitAddr.HasValue)");
         completedDrag.Should().Contain("UpdateCommentPreview(hitAddr.Value);");
         completedDrag.Should().Contain("ClearCommentPreview();");
         completedDrag.Should().Contain("GetFormulaRangeEntryEditor()?.Focus();");
         completedDrag.Should().Contain("e.Handled = true;");
+        completedDrag.IndexOf("CompleteDragSelectionToolbarRefresh();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(completedDrag.IndexOf("CompleteDragSelectionStatusRefresh();", StringComparison.Ordinal));
         completedDrag.IndexOf("CompleteDragSelectionStatusRefresh();", StringComparison.Ordinal)
             .Should()
             .BeLessThan(completedDrag.IndexOf("UpdateCommentPreview(hitAddr.Value);", StringComparison.Ordinal));
@@ -514,5 +522,32 @@ public sealed class MainWindowMouseSelectionSourceTests
         refreshHelper.Should().Contain("CompleteDragSelectionStatusRefresh");
         refreshHelper.Should().Contain("RefreshStatusBar();");
         mouseUp.Should().Contain("CompleteDragSelectionStatusRefresh();");
+    }
+
+    [Fact]
+    public void AdditionalDragSelectionDefersToolbarRefreshUntilMouseUp()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var windowSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+
+        var addSelection = selectionSource[
+            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void RefreshToolbarAfterDragSelectionChange", StringComparison.Ordinal)];
+        var refreshHelper = selectionSource[
+            selectionSource.IndexOf("private void RefreshToolbarAfterDragSelectionChange", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void RefreshStatusBarAfterDragSelectionChange", StringComparison.Ordinal)];
+        var mouseUp = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseUp", StringComparison.Ordinal)..];
+
+        windowSource.Should().Contain("private bool _dragSelectToolbarRefreshPending;");
+        addSelection.Should().Contain("RefreshToolbarAfterDragSelectionChange();");
+        addSelection.Should().NotContain("RefreshToolbar();");
+        refreshHelper.Should().Contain("if (_dragSelectActive)");
+        refreshHelper.Should().Contain("_dragSelectToolbarRefreshPending = true;");
+        refreshHelper.Should().Contain("CompleteDragSelectionToolbarRefresh");
+        refreshHelper.Should().Contain("RefreshToolbar();");
+        mouseUp.Should().Contain("CompleteDragSelectionToolbarRefresh();");
     }
 }

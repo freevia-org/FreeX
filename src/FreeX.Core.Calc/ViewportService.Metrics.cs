@@ -91,15 +91,15 @@ public sealed partial class ViewportService
 
     private static List<RowMetric> BuildRowMetrics(Sheet sheet, uint startRow, uint endRow, double availableHeight)
     {
-        var rowMetrics = new List<RowMetric>();
         if (startRow < 1 || endRow < startRow)
-            return rowMetrics;
+            return [];
 
         var maxRow = Math.Min(endRow, CellAddress.MaxRow);
         var terminalRows = BuildTerminalRowMetrics(sheet, startRow, maxRow, availableHeight);
         if (terminalRows is not null)
             return terminalRows;
 
+        var rowMetrics = new List<RowMetric>(EstimateMetricCapacity(sheet.DefaultRowHeight, availableHeight));
         double topOffset = 0;
         for (uint row = startRow; row <= maxRow; row++)
         {
@@ -115,15 +115,16 @@ public sealed partial class ViewportService
 
     private static List<ColMetric> BuildColMetrics(Sheet sheet, uint startCol, uint endCol, double availableWidth)
     {
-        var colMetrics = new List<ColMetric>();
         if (startCol < 1 || endCol < startCol)
-            return colMetrics;
+            return [];
 
         var maxCol = Math.Min(endCol, CellAddress.MaxCol);
         var terminalColumns = BuildTerminalColMetrics(sheet, startCol, maxCol, availableWidth);
         if (terminalColumns is not null)
             return terminalColumns;
 
+        var defaultColumnWidth = Math.Max(1, sheet.DefaultColumnWidth * 8);
+        var colMetrics = new List<ColMetric>(EstimateMetricCapacity(defaultColumnWidth, availableWidth));
         double leftOffset = 0;
         for (uint col = startCol; col <= maxCol; col++)
         {
@@ -135,6 +136,18 @@ public sealed partial class ViewportService
         }
 
         return colMetrics;
+    }
+
+    private static int EstimateMetricCapacity(double defaultExtent, double availableExtent)
+    {
+        if (availableExtent <= 0 || defaultExtent <= 0)
+            return 0;
+
+        var estimate = Math.Ceiling(availableExtent / defaultExtent) + 1;
+        if (!double.IsFinite(estimate) || estimate >= MaxViewportListCapacityHint)
+            return MaxViewportListCapacityHint;
+
+        return estimate <= 0 ? 0 : (int)estimate;
     }
 
     private static List<RowMetric>? BuildTerminalRowMetrics(

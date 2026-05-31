@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -28,26 +27,34 @@ internal static class XlsxWorksheetSmartTagMapper
         if (worksheetPathMap is null)
             return;
 
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.SmartTags is not null))
+        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
+        Save(session, workbook);
+    }
+
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
         {
-            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+            var smartTagsModel = sheet.SmartTags;
+            if (smartTagsModel is null)
                 continue;
 
-            var entry = archive.GetEntry(worksheetPath);
-            if (entry is null)
+            if (!session.TryGetWorksheet(sheet, out var edit))
                 continue;
 
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
+            var root = edit.Root;
+            var existingSmartTags = root.Element(WorksheetNs + "smartTags");
+            var changed = existingSmartTags is not null;
+            existingSmartTags?.Remove();
 
-            root.Element(WorksheetNs + "smartTags")?.Remove();
-            if (ToXml(sheet.SmartTags!) is { } smartTags)
+            if (ToXml(smartTagsModel) is { } smartTags)
+            {
                 InsertSmartTags(root, smartTags);
+                changed = true;
+            }
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            if (changed)
+                session.MarkDirty(edit);
         }
     }
 
