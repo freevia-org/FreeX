@@ -46,9 +46,7 @@ public partial class MainWindow
         UpdateTitleBar();
         SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
         RefreshSheetTabs();
-        RefreshToolbar();
         UpdateViewport();
-        RefreshStatusBar();
         MarkWorkbookSaved();
     }
 

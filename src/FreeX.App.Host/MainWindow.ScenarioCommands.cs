@@ -114,14 +114,17 @@ public partial class MainWindow
         }
 
         RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        var refreshedSelectionUi = false;
         if (outcome.AffectedCells?.FirstOrDefault() is { } first)
         {
             SetActiveCell(first);
             EnsureCellVisible(first);
+            refreshedSelectionUi = true;
         }
 
         UpdateViewport();
-        RefreshStatusBar();
+        if (!refreshedSelectionUi)
+            RefreshStatusBar();
     }
 
     private void DeleteScenarioByName(string? scenarioName)
@@ -175,16 +178,19 @@ public partial class MainWindow
             return;
 
         var report = _workbook.Sheets.LastOrDefault();
+        var refreshedSelectionUi = false;
         if (report is not null)
         {
             _currentSheetId = report.Id;
             _groupedSheetIds.Clear();
             _groupedSheetIds.Add(_currentSheetId);
             SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
+            refreshedSelectionUi = true;
         }
 
         UpdateViewport();
         RefreshSheetTabs();
-        RefreshStatusBar();
+        if (!refreshedSelectionUi)
+            RefreshStatusBar();
     }
 }

@@ -1413,6 +1413,37 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void SetActiveCellCallers_AvoidDuplicateToolbarAndStatusRefresh()
+    {
+        var backstageSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
+        var multiWindowSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.MultiWindow.cs"));
+        var dataSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
+        var scenarioSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ScenarioCommands.cs"));
+
+        var createNewWorkbook = ExtractMethodSource(backstageSource, "private void CreateNewWorkbook()");
+        createNewWorkbook.Should().Contain("SetActiveCell(new CellAddress(_currentSheetId, 1, 1));");
+        createNewWorkbook.Should().NotContain("RefreshToolbar();");
+
+        var adoptSharedWorkbook = ExtractMethodSource(multiWindowSource, "private void AdoptSharedWorkbook()");
+        adoptSharedWorkbook.Should().Contain("SetActiveCell(new CellAddress(_currentSheetId, 1, 1));");
+        adoptSharedWorkbook.Should().NotContain("RefreshToolbar();");
+        adoptSharedWorkbook.Should().NotContain("RefreshStatusBar();");
+
+        ExtractMethodSource(dataSource, "private void GetDataBtn_Click(")
+            .Should()
+            .NotContain("RefreshStatusBar();");
+        ExtractMethodSource(dataSource, "private void ForecastSheetBtn_Click(")
+            .Should()
+            .Contain("if (!refreshedSelectionUi)");
+        ExtractMethodSource(scenarioSource, "private void ShowScenarioByName(")
+            .Should()
+            .Contain("if (!refreshedSelectionUi)");
+        ExtractMethodSource(scenarioSource, "private void CreateScenarioSummaryReport(")
+            .Should()
+            .Contain("if (!refreshedSelectionUi)");
+    }
+
+    [Fact]
     public void TitleBar_UsesSharedFormatterForDirtyGroupedAndSavedFileState()
     {
         var editingSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Editing.cs"));

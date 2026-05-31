@@ -316,7 +316,6 @@ public partial class MainWindow
         RecalculateWorkbook();
         SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
         RefreshSheetTabs();
-        RefreshToolbar();
         UpdateViewport();
         MarkWorkbookSaved();
         RecordDiagnosticEvent("workbook_new");
