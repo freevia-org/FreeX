@@ -347,6 +347,24 @@ public sealed class GridViewAutofillTests
     }
 
     [Fact]
+    public void IsOnHandle_IncludesBottomRightPaddedBoundary()
+    {
+        var sheet = SheetId.New();
+        var selectedRange = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+
+        GridAutofillPlanner.IsOnHandle(
+                CreateViewport(),
+                selectedRange,
+                new System.Windows.Point(30 + 120 + 3, 18 + 60 + 3),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeTrue("the rendered 6px handle includes the 3px padded bottom-right edge");
+    }
+
+    [Fact]
     public void IsOnHandle_UsesRenderedHandleWhenEndMetricsAreDuplicated()
     {
         var sheet = SheetId.New();
