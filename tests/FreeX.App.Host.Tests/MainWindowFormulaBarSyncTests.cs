@@ -198,6 +198,28 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void NameBoxEnter_WithRangeReference_SelectsRangeAndRefreshesFormulaBarFromStartCell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(2, 2, "range start");
+            harness.SetCellText(3, 3, "range end");
+            harness.SetCellAddressBoxText("B2:C3");
+
+            harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
+
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 2, 2),
+                new CellAddress(harness.CurrentSheetId, 3, 3)));
+            harness.CellAddressBoxText.Should().Be("B2:C3");
+            harness.FormulaBarText.Should().Be("range start");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void NameBoxEnter_WithInvalidReference_DoesNotChangeSelectionOrFormulaBar()
     {
         StaTestRunner.Run(() =>
