@@ -19,6 +19,15 @@ public class FormulaRewriteCommandTests
         public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 
+    [Fact]
+    public void RewriteAllFormulas_UsesTrackedFormulaAddresses()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "RowColumnShiftHelpers.Formulas.cs"));
+
+        source.Should().Contain("sheet.EnumerateFormulaCells()");
+        source.Should().NotContain("foreach (var (addr, cell) in sheet.EnumerateCells())");
+    }
+
     // ── InsertRows ────────────────────────────────────────────────────────────
 
     [Fact]
@@ -366,5 +375,20 @@ public class FormulaRewriteCommandTests
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("index");
         wb.Sheets.Select(s => s.Name).Should().Equal("First", "Second");
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine([dir, .. parts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new FileNotFoundException($"Could not find workspace file: {Path.Combine(parts)}");
     }
 }

@@ -10,9 +10,10 @@ internal static partial class RowColumnShiftHelpers
     {
         foreach (var sheet in workbook.Sheets)
         {
-            foreach (var (addr, cell) in sheet.EnumerateCells())
+            foreach (var addr in sheet.EnumerateFormulaCells())
             {
-                if (cell.FormulaText is null) continue;
+                var cell = sheet.GetCell(addr);
+                if (cell?.FormulaText is null) continue;
                 var rewritten = FormulaRewriter.Rewrite(cell.FormulaText, op, sheet.Name);
                 if (rewritten is null) continue;
                 snapshot[addr] = cell.FormulaText;
