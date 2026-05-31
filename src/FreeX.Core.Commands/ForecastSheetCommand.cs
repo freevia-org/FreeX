@@ -68,6 +68,12 @@ public sealed class ForecastSheetCommand : IWorkbookCommand
             forecastSheet.SetCell(new CellAddress(forecastSheet.Id, row, 5), Cell.FromFormula($"C{row}+{confidence}"));
         }
 
+        // Insert the accompanying forecast chart (Excel parity). Reverting removes the whole
+        // generated sheet, so the chart is torn down with it.
+        var lastRow = dataRowCount + 1 + _forecastPeriods;
+        forecastSheet.Charts.Add(ForecastChartPlanner.Plan(
+            new ForecastChartLayout(forecastSheet.Id, HeaderRow: 1, LastRow: lastRow)));
+
         return new CommandOutcome(true);
     }
 

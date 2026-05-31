@@ -50,6 +50,43 @@ public sealed class ForecastSheetCommandTests
     }
 
     [Fact]
+    public void ForecastSheetCommand_InsertsForecastChartOnGeneratedSheetAndUndoRemovesIt()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sales");
+        var ctx = new SimpleCtx(workbook);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Month"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Revenue"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+
+        var command = new ForecastSheetCommand(
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)),
+            forecastPeriods: 2);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var forecast = workbook.GetSheetAt(1);
+        forecast.Charts.Should().HaveCount(1);
+        var chart = forecast.Charts[0];
+        chart.Type.Should().Be(ChartType.Line);
+        // Full layout: A..E across all data rows (3 historical + 2 forecast => rows 1..6).
+        chart.DataRange.Start.Should().Be(new CellAddress(forecast.Id, 1, 1));
+        chart.DataRange.End.Should().Be(new CellAddress(forecast.Id, 6, 5));
+        ChartTypeSupport.GetDataSeriesCount(chart).Should().Be(4);
+        chart.SeriesFormats.Should().Contain(f => f.SeriesIndex == 2 && f.DashStyle == ChartLineDashStyle.Dash);
+        chart.SeriesFormats.Should().Contain(f => f.SeriesIndex == 3 && f.DashStyle == ChartLineDashStyle.Dash);
+
+        command.Revert(ctx);
+
+        workbook.SheetCount.Should().Be(1);
+    }
+
+    [Fact]
     public void ForecastSheetCommand_RejectsSourceRangeOutsideWorkbook()
     {
         var workbook = new Workbook("test");
