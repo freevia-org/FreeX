@@ -16,6 +16,11 @@ internal static class XlsxWorkbookAdditionalViewMapper
             return null;
 
         var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        return Read(workbookXml);
+    }
+
+    public static WorkbookAdditionalViewsModel? Read(XDocument workbookXml)
+    {
         var bookViews = workbookXml.Root?.Element(WorkbookNs + "bookViews");
         if (bookViews is null)
             return null;

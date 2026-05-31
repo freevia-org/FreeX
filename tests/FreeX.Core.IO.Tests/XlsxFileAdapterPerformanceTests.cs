@@ -241,6 +241,37 @@ public sealed class XlsxFileAdapterPerformanceTests
             "catalog seeding should avoid a temporary LINQ filtered dictionary projection");
     }
 
+    [Fact]
+    public void LoadCore_ReadsWorkbookMetadataInSinglePackagePass()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var metadataSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookMetadataReader.cs"));
+
+        adapterSource.Should().Contain("var workbookMetadata = XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageStream);");
+        foreach (var legacyCall in new[]
+        {
+            "LoadUses1904DateSystem(packageStream)",
+            "LoadWorkbookProperties(packageStream)",
+            "LoadWorkbookViewProperties(packageStream)",
+            "LoadFileSharing(packageStream)",
+            "LoadFileRecoveryProperties(packageStream)",
+            "LoadFileVersion(packageStream)",
+            "LoadFunctionGroups(packageStream)",
+            "LoadSmartTags(packageStream)",
+            "LoadProtection(packageStream)",
+            "LoadProtectionMetadata(packageStream)",
+            "LoadCalculationProperties(packageStream)",
+            "LoadCustomViews(packageStream)"
+        })
+        {
+            adapterSource.Should().NotContain(legacyCall);
+        }
+
+        metadataSource.Should().Contain("public static XlsxWorkbookMetadataSnapshot LoadWorkbookMetadata(Stream xlsxStream)");
+        metadataSource.Should().Contain("var workbookEntry = archive.GetEntry(\"xl/workbook.xml\");");
+        metadataSource.Should().Contain("return LoadWorkbookMetadata(workbookXml);");
+    }
+
     private const int DenseSheetCount = 8;
     private const int DenseRowsPerSheet = 80;
     private const int DenseColumnsPerSheet = 24;

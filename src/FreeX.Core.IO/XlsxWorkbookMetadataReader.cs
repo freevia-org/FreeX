@@ -6,6 +6,54 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorkbookMetadataReader
 {
+    private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+    public static XlsxWorkbookMetadataSnapshot LoadWorkbookMetadata(Stream xlsxStream)
+    {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            var workbookEntry = archive.GetEntry("xl/workbook.xml");
+            if (workbookEntry is null)
+                return XlsxWorkbookMetadataSnapshot.Default;
+
+            var workbookXml = LoadXml(workbookEntry);
+            return LoadWorkbookMetadata(workbookXml);
+        }
+        catch
+        {
+            return XlsxWorkbookMetadataSnapshot.Default;
+        }
+    }
+
+    private static XlsxWorkbookMetadataSnapshot LoadWorkbookMetadata(XDocument workbookXml) =>
+        new(
+            ReadOrDefault(() => LoadUses1904DateSystem(workbookXml), false),
+            ReadOrDefault(() => LoadWorkbookProperties(workbookXml), (NativeXmlPreserveBag?)null),
+            ReadOrDefault(() => LoadWorkbookViewProperties(workbookXml), WorkbookViewProperties.Empty),
+            ReadOrDefault(() => LoadFileSharing(workbookXml), (WorkbookFileSharingModel?)null),
+            ReadOrDefault(() => LoadFileRecoveryProperties(workbookXml), []),
+            ReadOrDefault(() => LoadFileVersion(workbookXml), (WorkbookFileVersionModel?)null),
+            ReadOrDefault(() => LoadFunctionGroups(workbookXml), (WorkbookFunctionGroupsModel?)null),
+            ReadOrDefault(() => LoadSmartTags(workbookXml), (WorkbookSmartTagMetadataModel?)null),
+            ReadOrDefault(() => XlsxWorkbookAdditionalViewMapper.Read(workbookXml), (WorkbookAdditionalViewsModel?)null),
+            ReadOrDefault(() => LoadProtection(workbookXml), WorkbookProtectionState.None),
+            ReadOrDefault(() => LoadProtectionMetadata(workbookXml), (NativeXmlPreserveBag?)null),
+            ReadOrDefault(() => LoadCalculationProperties(workbookXml), WorkbookCalculationProperties.Default),
+            ReadOrDefault(() => LoadCustomViews(workbookXml), []));
+
+    private static T ReadOrDefault<T>(Func<T> read, T fallback)
+    {
+        try
+        {
+            return read();
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
     public static Dictionary<int, string> LoadNumberFormatCatalog(Stream xlsxStream)
     {
         try
@@ -398,6 +446,195 @@ internal static class XlsxWorkbookMetadataReader
         return views;
     }
 
+    private static WorkbookProtectionState LoadProtection(XDocument workbookXml)
+    {
+        var protection = workbookXml.Root?.Element(WorkbookNs + "workbookProtection");
+        if (protection is null)
+            return WorkbookProtectionState.None;
+
+        var isStructureProtected =
+            XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockStructure") ||
+            XlsxXmlAttributeReader.ReadBoolAttribute(protection, "lockWindows");
+
+        if (!isStructureProtected)
+            return WorkbookProtectionState.None;
+
+        var passwordHash =
+            protection.Attribute("workbookPassword")?.Value ??
+            protection.Attribute("revisionsPassword")?.Value;
+
+        return new WorkbookProtectionState(true, passwordHash);
+    }
+
+    private static NativeXmlPreserveBag? LoadProtectionMetadata(XDocument workbookXml)
+    {
+        var protection = workbookXml.Root?.Element(WorkbookNs + "workbookProtection");
+        if (protection is null)
+            return null;
+
+        var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var attribute in protection.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                string.Equals(attribute.Name.LocalName, "lockStructure", StringComparison.Ordinal) ||
+                string.Equals(attribute.Name.LocalName, "workbookPassword", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            attrs[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        var children = protection.Elements()
+            .Select(element => element.ToString(SaveOptions.DisableFormatting))
+            .ToList();
+
+        var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
+        if (serialized is null)
+            return null;
+
+        var bag = new NativeXmlPreserveBag();
+        bag.Set("workbookProtection", serialized);
+        return bag;
+    }
+
+    private static bool LoadUses1904DateSystem(XDocument workbookXml) =>
+        XlsxXmlAttributeReader.ReadBoolAttribute(
+            workbookXml.Root?.Element(WorkbookNs + "workbookPr"),
+            "date1904");
+
+    private static NativeXmlPreserveBag? LoadWorkbookProperties(XDocument workbookXml)
+    {
+        var workbookProperties = workbookXml.Root?.Element(WorkbookNs + "workbookPr");
+        if (workbookProperties is null)
+            return null;
+
+        var attrs = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var attribute in workbookProperties.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                string.Equals(attribute.Name.LocalName, "date1904", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            attrs[attribute.Name.ToString()] = attribute.Value;
+        }
+
+        var children = workbookProperties.Elements()
+            .Select(element => element.ToString(SaveOptions.DisableFormatting))
+            .ToList();
+
+        var serialized = XmlNativeBagSerializer.Serialize(attrs, children);
+        if (serialized is null)
+            return null;
+
+        var bag = new NativeXmlPreserveBag();
+        bag.Set("workbookPr", serialized);
+        return bag;
+    }
+
+    private static WorkbookViewProperties LoadWorkbookViewProperties(XDocument workbookXml)
+    {
+        var primaryView = workbookXml.Root?
+            .Element(WorkbookNs + "bookViews")?
+            .Elements(WorkbookNs + "workbookView")
+            .FirstOrDefault(view =>
+                XlsxXmlAttributeReader.ReadIntAttribute(view, "firstSheet") is null or 0 &&
+                XlsxXmlAttributeReader.ReadIntAttribute(view, "activeTab") is null or 0);
+        primaryView ??= workbookXml.Root?
+            .Element(WorkbookNs + "bookViews")?
+            .Element(WorkbookNs + "workbookView");
+
+        if (primaryView is null)
+            return WorkbookViewProperties.Empty;
+
+        return new WorkbookViewProperties(
+            XlsxXmlAttributeReader.ReadNullableBoolAttribute(primaryView, "showSheetTabs"),
+            XlsxXmlAttributeReader.ReadIntAttribute(primaryView, "tabRatio"),
+            XlsxXmlAttributeReader.ReadIntAttribute(primaryView, "firstSheet"),
+            XlsxXmlAttributeReader.ReadIntAttribute(primaryView, "activeTab"));
+    }
+
+    private static WorkbookFileSharingModel? LoadFileSharing(XDocument workbookXml)
+    {
+        var fileSharing = workbookXml.Root?.Element(WorkbookNs + "fileSharing");
+        if (fileSharing is null)
+            return null;
+
+        return new WorkbookFileSharingModel
+        {
+            ReadOnlyRecommended = XlsxXmlAttributeReader.ReadNullableBoolAttribute(fileSharing, "readOnlyRecommended"),
+            UserName = fileSharing.Attribute("userName")?.Value,
+            ReservationPassword = fileSharing.Attribute("reservationPassword")?.Value
+        };
+    }
+
+    private static List<WorkbookFileRecoveryPropertiesModel> LoadFileRecoveryProperties(XDocument workbookXml) =>
+        workbookXml.Root?
+            .Elements(WorkbookNs + "fileRecoveryPr")
+            .Select(XlsxWorkbookMetadataMapper.ToFileRecoveryProperties)
+            .ToList() ?? [];
+
+    private static WorkbookFileVersionModel? LoadFileVersion(XDocument workbookXml)
+    {
+        var fileVersion = workbookXml.Root?.Element(WorkbookNs + "fileVersion");
+        return fileVersion is null ? null : XlsxWorkbookMetadataMapper.ToFileVersion(fileVersion);
+    }
+
+    private static WorkbookFunctionGroupsModel? LoadFunctionGroups(XDocument workbookXml)
+    {
+        var functionGroups = workbookXml.Root?.Element(WorkbookNs + "functionGroups");
+        return functionGroups is null ? null : XlsxWorkbookMetadataMapper.ToFunctionGroups(functionGroups, WorkbookNs);
+    }
+
+    private static WorkbookSmartTagMetadataModel? LoadSmartTags(XDocument workbookXml)
+    {
+        var smartTagProperties = workbookXml.Root?.Element(WorkbookNs + "smartTagPr");
+        var smartTagTypes = workbookXml.Root?.Element(WorkbookNs + "smartTagTypes");
+        if (smartTagProperties is null && smartTagTypes is null)
+            return null;
+
+        return XlsxWorkbookMetadataMapper.ToSmartTags(smartTagProperties, smartTagTypes, WorkbookNs);
+    }
+
+    private static WorkbookCalculationProperties LoadCalculationProperties(XDocument workbookXml)
+    {
+        var calcPr = workbookXml.Root?.Element(WorkbookNs + "calcPr");
+        if (calcPr is null)
+            return WorkbookCalculationProperties.Default;
+
+        var mode = string.Equals(calcPr.Attribute("calcMode")?.Value, "manual", StringComparison.OrdinalIgnoreCase)
+            ? WorkbookCalculationMode.Manual
+            : string.Equals(calcPr.Attribute("calcMode")?.Value, "auto", StringComparison.OrdinalIgnoreCase) ||
+              string.Equals(calcPr.Attribute("calcMode")?.Value, "autoNoTable", StringComparison.OrdinalIgnoreCase)
+                ? WorkbookCalculationMode.Automatic
+                : (WorkbookCalculationMode?)null;
+
+        return new WorkbookCalculationProperties(
+            mode,
+            XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "fullCalcOnLoad"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "forceFullCalc"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(calcPr, "iterate"),
+            XlsxXmlAttributeReader.ReadIntAttribute(calcPr, "iterateCount"),
+            XlsxXmlAttributeReader.ReadDoubleAttribute(calcPr, "iterateDelta"));
+    }
+
+    private static IReadOnlyList<XlsxWorkbookCustomView> LoadCustomViews(XDocument workbookXml)
+    {
+        var views = new List<XlsxWorkbookCustomView>();
+        foreach (var view in workbookXml.Root?
+                     .Element(WorkbookNs + "customWorkbookViews")?
+                     .Elements(WorkbookNs + "customWorkbookView") ?? [])
+        {
+            var customView = XlsxWorkbookMetadataMapper.ToCustomView(view);
+            if (!string.IsNullOrWhiteSpace(customView.Id) && !string.IsNullOrWhiteSpace(customView.Name))
+                views.Add(customView);
+        }
+
+        return views;
+    }
+
     private static XDocument LoadXml(ZipArchiveEntry entry)
     {
         using var stream = entry.Open();
@@ -429,6 +666,37 @@ internal sealed record WorkbookViewProperties(
     int? ActiveSheetIndex)
 {
     public static WorkbookViewProperties Empty { get; } = new(null, null, null, null);
+}
+
+internal sealed record XlsxWorkbookMetadataSnapshot(
+    bool Uses1904DateSystem,
+    NativeXmlPreserveBag? WorkbookProperties,
+    WorkbookViewProperties WorkbookViewProperties,
+    WorkbookFileSharingModel? FileSharing,
+    IReadOnlyList<WorkbookFileRecoveryPropertiesModel> FileRecoveryProperties,
+    WorkbookFileVersionModel? FileVersion,
+    WorkbookFunctionGroupsModel? FunctionGroups,
+    WorkbookSmartTagMetadataModel? SmartTags,
+    WorkbookAdditionalViewsModel? AdditionalViews,
+    WorkbookProtectionState Protection,
+    NativeXmlPreserveBag? ProtectionMetadata,
+    WorkbookCalculationProperties CalculationProperties,
+    IReadOnlyList<XlsxWorkbookCustomView> CustomViews)
+{
+    public static XlsxWorkbookMetadataSnapshot Default { get; } = new(
+        false,
+        null,
+        WorkbookViewProperties.Empty,
+        null,
+        [],
+        null,
+        null,
+        null,
+        null,
+        WorkbookProtectionState.None,
+        null,
+        WorkbookCalculationProperties.Default,
+        []);
 }
 
 internal sealed record XlsxWorkbookCustomView(
