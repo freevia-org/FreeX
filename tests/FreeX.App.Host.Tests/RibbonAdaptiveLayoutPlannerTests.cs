@@ -79,18 +79,14 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     public void Plan_SourceAvoidsLinqScaffoldingOnRepeatedFitChecks()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutPlanner.cs"));
-        var planAndFit = source[
-            source.IndexOf("public static RibbonAdaptiveGroupState[] Plan", StringComparison.Ordinal)..
-            source.IndexOf("private static double WidthFor", StringComparison.Ordinal)];
-
-        planAndFit.Should().Contain("Array.Fill(states, RibbonAdaptiveGroupState.Full)");
-        planAndFit.Should().Contain("for (var index = groups.Count - 1; index >= 0; index--)");
-        planAndFit.Should().Contain("for (var index = 0; index < groups.Count; index++)");
-        planAndFit.Should().Contain("ReplaceWidth(width, group");
-        planAndFit.Should().NotContain("Enumerable.Repeat");
-        planAndFit.Should().NotContain(".Select(");
-        planAndFit.Should().NotContain(".Sum()");
-        planAndFit.Should().NotContain("yield return");
+        source.Should().Contain("Array.Fill(states, RibbonAdaptiveGroupState.Full)");
+        source.Should().Contain("for (var index = groups.Count - 1; index >= 0; index--)");
+        source.Should().Contain("for (var index = 0; index < groups.Count; index++)");
+        source.Should().Contain("ReplaceWidth(width, group");
+        source.Should().NotContain("Enumerable.Repeat");
+        source.Should().NotContain(".Select(");
+        source.Should().NotContain(".Sum()");
+        source.Should().NotContain("yield return");
     }
 
     [Fact]

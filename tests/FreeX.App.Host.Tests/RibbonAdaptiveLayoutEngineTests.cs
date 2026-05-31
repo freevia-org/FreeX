@@ -268,6 +268,21 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
+    public void Plan_SourceUsesRollbackBuffersInsteadOfPerAttemptStateSnapshots()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));
+        var method = source.Substring(
+            source.IndexOf("private static void ExpandStatesIntoAvailableWidth", StringComparison.Ordinal),
+            source.IndexOf("private static bool TryCollapseUnprotectedGroupsToFit", StringComparison.Ordinal) -
+            source.IndexOf("private static void ExpandStatesIntoAvailableWidth", StringComparison.Ordinal));
+
+        method.Should().Contain("rollbackIndexes");
+        method.Should().Contain("RollbackStateChanges");
+        method.Should().NotContain("states.ToArray()");
+        method.Should().NotContain("Array.Copy(");
+    }
+
+    [Fact]
     public void Plan_SourceStaysFreeOfWpfVisualTreeMeasurementWork()
     {
         var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "RibbonAdaptiveLayoutEngine.cs"));
