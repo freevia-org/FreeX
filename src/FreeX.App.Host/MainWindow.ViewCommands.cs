@@ -160,7 +160,23 @@ public partial class MainWindow
         ApplyViewWindowCommandState(ViewSynchronousScrollingBtn, ViewWindowCommandKind.SynchronousScrolling, state);
         ApplyViewWindowCommandState(ViewResetWindowPositionBtn, ViewWindowCommandKind.ResetWindowPosition, state);
         ApplyViewWindowCommandState(ViewSwitchWindowsBtn, ViewWindowCommandKind.SwitchWindows, state);
+        ApplyLiveWindowCommandEnabledState();
         InvalidateVisibleKeyTipElementCache();
+    }
+
+    /// <summary>
+    /// New Window and Switch Windows are now backed by the live <see cref="WorkbookWindowRegistry"/>
+    /// rather than the deferred-stub planner. New Window is always available; Switch Windows enables
+    /// once a second window exists over the shared workbook. (Hide/Unhide/Side-by-Side/Synchronous
+    /// Scrolling/Reset Window Position remain deferred and keep their planner-driven disabled state.)
+    /// </summary>
+    private void ApplyLiveWindowCommandEnabledState()
+    {
+        if (ViewNewWindowBtn is not null)
+            ViewNewWindowBtn.IsEnabled = true;
+
+        if (ViewSwitchWindowsBtn is not null)
+            ViewSwitchWindowsBtn.IsEnabled = (_windowRegistry?.Count ?? 1) > 1;
     }
 
     private static ViewWorkbookWindowState GetViewWindowCommandState() =>

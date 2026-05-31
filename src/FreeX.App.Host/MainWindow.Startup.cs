@@ -27,10 +27,20 @@ public partial class MainWindow
         PopulateFormatTableGalleryMenu();
         ApplyOptionsToView();
         NormalizeRibbonSurface(forceCompact: true);
-        CreateNewWorkbook();
+        if (ShouldAdoptSharedWorkbookOnLoad)
+        {
+            // Secondary window (Excel "New Window"): share the existing workbook rather than
+            // replacing it. The first window keeps its CreateNewWorkbook() startup behavior.
+            AdoptSharedWorkbook();
+        }
+        else
+        {
+            CreateNewWorkbook();
+        }
         UpdateViewport();
         RefreshSheetTabs();
         UpdateTitleBar();
+        RegisterWithWindowRegistry();
         TryStartScreenshotTour();
         TryStartSheetTabVisualTour();
         TryStartAccentBarVisualTour();

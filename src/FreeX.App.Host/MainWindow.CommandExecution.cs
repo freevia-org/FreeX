@@ -38,6 +38,7 @@ public partial class MainWindow
         {
             MarkWorkbookDirty();
             InvalidateNavigationCaches();
+            NotifyOtherWindowsOfWorkbookChange();
             return true;
         }
 
@@ -105,6 +106,7 @@ public partial class MainWindow
             MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
+            NotifyOtherWindowsOfWorkbookChange();
             return true;
         }
 
@@ -131,6 +133,7 @@ public partial class MainWindow
             MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
+            NotifyOtherWindowsOfWorkbookChange();
             return true;
         }
 
@@ -161,6 +164,7 @@ public partial class MainWindow
             MarkWorkbookDirty();
             _repeatPostAction = null;
             InvalidateNavigationCaches();
+            NotifyOtherWindowsOfWorkbookChange();
             return true;
         }
 
@@ -197,6 +201,7 @@ public partial class MainWindow
         {
             MarkWorkbookDirty();
             _repeatPostAction = null;
+            NotifyOtherWindowsOfWorkbookChange();
             return true;
         }
 
@@ -251,6 +256,7 @@ public partial class MainWindow
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
+        NotifyOtherWindowsOfWorkbookChange();
     }
 
     private void ExecuteRedo()
@@ -263,6 +269,7 @@ public partial class MainWindow
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
+        NotifyOtherWindowsOfWorkbookChange();
     }
 
     private void ExecuteRepeatLast()
@@ -277,6 +284,7 @@ public partial class MainWindow
         UpdateViewport();
         RefreshToolbar();
         RefreshStatusBar();
+        NotifyOtherWindowsOfWorkbookChange();
     }
 
     private IWorkbookCommand CreateSingleCellEditCommand(CellAddress address, Cell cell)

@@ -2805,7 +2805,7 @@
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                 <StackPanel Orientation="Vertical">
-                                    <Button x:Name="ViewNewWindowBtn" Content="{local:Loc Key=MainWindow_Content_NewWindow}" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowCommandBtn_Click"
+                                    <Button x:Name="ViewNewWindowBtn" Content="{local:Loc Key=MainWindow_Content_NewWindow}" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewNewWindowBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_NewWindow}"
                                             local:RibbonTooltip.KeyTip="NW"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresMultipleLiveWindowsOverTheSameWorkbookSession}" local:RibbonMetadata.CommandName="New Window"/>
@@ -2864,7 +2864,7 @@
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ResetWindowPosition}"
                                             local:RibbonTooltip.KeyTip="RP"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresPairedWorkbookWindowsAndSideBySideLayoutState}" local:RibbonMetadata.CommandName="Reset Window Position"/>
-                                    <Button x:Name="ViewSwitchWindowsBtn" Content="{local:Loc Key=MainWindow_Content_SwitchWindows}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowCommandBtn_Click"
+                                    <Button x:Name="ViewSwitchWindowsBtn" Content="{local:Loc Key=MainWindow_Content_SwitchWindows}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewSwitchWindowsBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SwitchWindows}"
                                             local:RibbonTooltip.KeyTip="W"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresAMultiWindowWorkbookRegistry}" local:RibbonMetadata.CommandName="Switch Windows"/>

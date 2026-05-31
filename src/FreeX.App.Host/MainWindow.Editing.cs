@@ -808,7 +808,8 @@ public partial class MainWindow
 
     private void UpdateTitleBar()
     {
-        var displayName = WorkbookTitleFormatter.Format(_workbook.Name, _workbookDirty, IsWorkbookGrouped());
+        var displayName = WorkbookTitleFormatter.Format(
+            _workbook.Name, _workbookDirty, IsWorkbookGrouped(), _windowTitleSuffix);
         WorkbookNameText.Text = displayName;
         this.Title = displayName;
     }

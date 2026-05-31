@@ -2044,6 +2044,10 @@ public sealed class MainWindowXamlKeyTipTests
     [Fact]
     public void ViewWindowDeferredCommands_ExposeStableKeyTipsAndDeferredTooltips()
     {
+        // Multi-window slice 1 wired New Window and Switch Windows to live, registry-backed handlers
+        // (ViewNewWindowBtn_Click / ViewSwitchWindowsBtn_Click), so they no longer route through the
+        // deferred-stub ViewWindowCommandBtn_Click handler. Only the still-deferred window commands
+        // (Hide/Unhide/View Side by Side/Synchronous Scrolling/Reset Window Position) remain here.
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -2060,14 +2064,37 @@ public sealed class MainWindowXamlKeyTipTests
             })
             .Should()
             .Equal([
-                new { Title = (string?)"New Window", KeyTip = (string?)"NW", Description = (string?)"Deferred: requires multiple live windows over the same workbook session." },
                 new { Title = (string?)"Hide", KeyTip = (string?)"H", Description = (string?)"Deferred: requires workbook-window visibility state." },
                 new { Title = (string?)"Unhide", KeyTip = (string?)"U", Description = (string?)"Deferred: requires workbook-window visibility state." },
                 new { Title = (string?)"View Side by Side", KeyTip = (string?)"B", Description = (string?)"Deferred: requires multi-window workbook hosting and synchronized scroll routing." },
                 new { Title = (string?)"Synchronous Scrolling", KeyTip = (string?)"SS", Description = (string?)"Deferred: requires paired workbook windows with synchronized viewport state." },
-                new { Title = (string?)"Reset Window Position", KeyTip = (string?)"RP", Description = (string?)"Deferred: requires paired workbook windows and side-by-side layout state." },
-                new { Title = (string?)"Switch Windows", KeyTip = (string?)"W", Description = (string?)"Deferred: requires a multi-window workbook registry." }
+                new { Title = (string?)"Reset Window Position", KeyTip = (string?)"RP", Description = (string?)"Deferred: requires paired workbook windows and side-by-side layout state." }
             ]);
+    }
+
+    [Fact]
+    public void ViewWindowLiveCommands_RouteNewAndSwitchWindowsToRegistryBackedHandlers()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+
+        var liveWindowCommands = document
+            .Descendants(presentation + "Button")
+            .Where(button => button.Attribute("Click")?.Value is "ViewNewWindowBtn_Click" or "ViewSwitchWindowsBtn_Click")
+            .Select(button => new
+            {
+                Title = LocalizedAttribute(button, local + "RibbonTooltip.Title"),
+                KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
+                Click = button.Attribute("Click")?.Value
+            })
+            .ToList();
+
+        liveWindowCommands.Should().BeEquivalentTo(new[]
+        {
+            new { Title = (string?)"New Window", KeyTip = (string?)"NW", Click = (string?)"ViewNewWindowBtn_Click" },
+            new { Title = (string?)"Switch Windows", KeyTip = (string?)"W", Click = (string?)"ViewSwitchWindowsBtn_Click" }
+        });
     }
 
     [Fact]

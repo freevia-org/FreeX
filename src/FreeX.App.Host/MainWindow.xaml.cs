@@ -15,7 +15,7 @@ namespace FreeX.App.Host;
 /// Main application window — the spreadsheet shell.
 /// Coordinates between the engine and the UI components.
 /// </summary>
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IWorkbookWindow
 {
     private const double MaximizedSafeInsetDip = 8.0;
     private const double SheetTabNavScrollAmount = 140.0;
@@ -174,6 +174,9 @@ public partial class MainWindow : Window
     private Action<CommandOutcome>? _repeatPostAction;
     private string? _pivotChartContextFieldCaption;
     private bool _slicerTimelinePaneDismissed;
+    private readonly WorkbookWindowRegistry? _windowRegistry;
+    private string _windowTitleSuffix = string.Empty;
+    private bool _adoptSharedWorkbookOnLoad;
 
     public MainWindow(
         ILogger<MainWindow> logger,
@@ -187,7 +190,8 @@ public partial class MainWindow : Window
         IAppDiagnostics? diagnostics = null,
         AppDiagnosticsMetadata? diagnosticsMetadata = null,
         AppDiagnosticsOptions? diagnosticsOptions = null,
-        FreeXOptions? options = null)
+        FreeXOptions? options = null,
+        WorkbookWindowRegistry? windowRegistry = null)
     {
         _logger = logger;
         _viewportService = viewportService;
@@ -201,6 +205,10 @@ public partial class MainWindow : Window
         _workbookRef = workbookRef;
         _workbook = workbook;
         _options = options ?? FreeXOptions.Load();
+        _windowRegistry = windowRegistry;
+        // A window created while others already exist over the shared workbook is a secondary
+        // view (Excel "New Window"); it must adopt the existing workbook instead of replacing it.
+        _adoptSharedWorkbookOnLoad = windowRegistry?.HasWindows == true;
         _recentFiles = RecentFilesStore.Load();
 
         InitializeComponent();
