@@ -40,6 +40,27 @@ public sealed class GridViewContextMenuTests
     }
 
     [Fact]
+    public void GridViewRightClick_RoutesDrawingObjectContextMenuBeforeCellFallback()
+    {
+        var inputSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Input.cs"));
+        var rightClickBlock = inputSource[
+            inputSource.IndexOf("protected override void OnMouseRightButtonDown", StringComparison.Ordinal)..
+            inputSource.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal)];
+
+        rightClickBlock.Should().Contain("var objectHit = HitTestDrawingObject(pos);");
+        rightClickBlock.Should().Contain("SelectedObjectId = objectHit.Id;");
+        rightClickBlock.Should().Contain("SelectedObjectKind = objectHit.Kind;");
+        rightClickBlock.Should().Contain("ContextMenuRequested?.Invoke(objectHit.Anchor, pos);");
+        rightClickBlock.IndexOf("var objectHit = HitTestDrawingObject(pos);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(rightClickBlock.IndexOf("if (HitTestViewportCell(Viewport, default, pos) is { } contextCell)", StringComparison.Ordinal));
+        rightClickBlock.IndexOf("ContextMenuRequested?.Invoke(objectHit.Anchor, pos);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(rightClickBlock.IndexOf("ContextMenuRequested?.Invoke(contextCell, pos);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void GridViewRightClick_IgnoresContextMenuWhileCapturedDragIsActive()
     {
         var inputSource = File.ReadAllText(FindWorkspaceFile(

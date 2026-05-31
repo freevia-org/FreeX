@@ -175,6 +175,27 @@ public sealed class StatusBarLayoutTests
     }
 
     [Fact]
+    public void StatusZoomControls_TabNavigationCyclesWithinZoomCluster()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.CycleShellFocus(reverse: true);
+            harness.FocusedElementName.Should().Be("StatusZoomOutButton");
+
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
+            harness.FocusedElementName.Should().Be("StatusZoomText");
+
+            harness.HandleFocusedStatusBarTab().Should().BeTrue();
+
+            harness.FocusedElementName.Should().Be("StatusZoomOutButton");
+        });
+    }
+
+    [Fact]
     public void EscapeFromStatusBarFocus_ReturnsFocusToWorksheet()
     {
         StaTestRunner.Run(() =>

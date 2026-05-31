@@ -1607,6 +1607,8 @@ public sealed class MainWindowXamlKeyTipTests
         zoomControls.Attribute("Height")?.Value.Should().Be("24");
         zoomControls.Attribute("Background")?.Value.Should().Be("{StaticResource FreeXStatusSurfaceBrush}");
         zoomControls.Attribute("Panel.ZIndex")?.Value.Should().Be("1");
+        zoomControls.Attribute("KeyboardNavigation.TabNavigation")?.Value.Should().Be("Cycle");
+        zoomControls.Attribute("KeyboardNavigation.ControlTabNavigation")?.Value.Should().Be("Cycle");
     }
 
     [Theory]
@@ -2790,6 +2792,11 @@ public sealed class MainWindowXamlKeyTipTests
             .ToHashSet(StringComparer.Ordinal);
 
         clickHandlers.Should().Contain([
+            "PivotTableNameBtn_Click",
+            "PivotTableOptionsBtn_Click",
+            "PivotTableClearBtn_Click",
+            "PivotTableSelectBtn_Click",
+            "PivotTableMoveBtn_Click",
             "PivotFieldListBtn_Click",
             "RefreshPivotTableBtn_Click",
             "PivotTableShowDetailsBtn_Click",

@@ -67,6 +67,68 @@ public sealed class RibbonIconFactorySvgTests
     }
 
     [Theory]
+    [InlineData("Home")]
+    [InlineData("Account")]
+    [InlineData("Options")]
+    [InlineData("New")]
+    [InlineData("Open")]
+    [InlineData("Share")]
+    [InlineData("Info")]
+    [InlineData("Save")]
+    [InlineData("Save As")]
+    [InlineData("Print")]
+    [InlineData("Export")]
+    [InlineData("Close")]
+    public void BackstageSidebarCommands_LoadDedicatedSvgArtworkAsWhiteVectorImages(string commandName)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var icon = RibbonIconFactory.CreateCommandIcon(
+                commandName,
+                new RibbonCommandIcon(RibbonCommandIconKind.Generic),
+                size: 15,
+                Brushes.White);
+
+            var image = icon.Should().BeOfType<Image>().Subject;
+            image.Source.Should().BeOfType<DrawingImage>();
+            image.Width.Should().Be(15);
+            image.Height.Should().Be(15);
+        });
+    }
+
+    [Theory]
+    [InlineData("Pin to list")]
+    [InlineData("Unpin from list")]
+    public void BackstageRecentPinCommands_LoadDedicatedSvgArtworkAsVectorImages(string commandName)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var icon = RibbonIconFactory.CreateCommandIcon(
+                commandName,
+                new RibbonCommandIcon(RibbonCommandIconKind.Pin),
+                size: 16,
+                Brushes.Black);
+
+            var image = icon.Should().BeOfType<Image>().Subject;
+            image.Source.Should().BeOfType<DrawingImage>();
+            image.Width.Should().Be(16);
+            image.Height.Should().Be(16);
+        });
+    }
+
+    [Fact]
+    public void BackstageRecentPinButtons_RequestDistinctPinAndUnpinSvgArtwork()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.xaml"));
+
+        xaml.Should().Contain("CommandName=\"Pin to list\" Kind=\"Pin\"");
+        xaml.Should().Contain("CommandName=\"Unpin from list\" Kind=\"Pin\"");
+    }
+
+    [Theory]
     [InlineData("Recommended PivotTables")]
     [InlineData("Recommended Charts")]
     [InlineData("What-If Analysis")]

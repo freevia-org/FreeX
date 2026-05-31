@@ -2950,14 +2950,14 @@
                             <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="TableDesignPropertiesGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_TableName}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_TableName}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableDesignTableNameBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_TableName}"
                                             local:RibbonTooltip.KeyTip="N"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RenamingTablesFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Table Name"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_ResizeTable}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RenameTheActiveTable}" local:RibbonMetadata.CommandName="Table Name"/>
+                                    <Button Content="{local:Loc Key=MainWindow_Content_ResizeTable}" Width="104" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableDesignResizeTableBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ResizeTable}"
                                             local:RibbonTooltip.KeyTip="Z"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ResizingStructuredTablesFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Resize Table"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ResizeTheActiveTableRange}" local:RibbonMetadata.CommandName="Resize Table"/>
                                 </StackPanel>
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Properties}" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
@@ -2965,20 +2965,20 @@
                             <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="TableDesignToolsGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_SummarizeWithPivotTable}" Width="148" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_SummarizeWithPivotTable}" Width="148" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableDesignSummarizeWithPivotTableBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SummarizeWithPivotTable}"
                                             local:RibbonTooltip.KeyTip="S"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_TablePivotSummaryShortcutIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Summarize with PivotTable"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CreateAPivotTableFromTheActiveTable}" local:RibbonMetadata.CommandName="Summarize with PivotTable"/>
                                     <Button Width="124" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableDesignRemoveDuplicatesBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RemoveDuplicates}"
                                             local:RibbonTooltip.KeyTip="D"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeleteDuplicateRowsFromTheActiveTable}" local:RibbonMetadata.CommandName="Remove Duplicates">
                                         <TextBlock Text="{local:Loc Key=MainWindow_Text_RemoveDuplicates}" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
                                     </Button>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_ConvertToRange}" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_ConvertToRange}" Width="118" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TableDesignConvertToRangeBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ConvertToRange}"
                                             local:RibbonTooltip.KeyTip="V"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ConvertingTablesToPlainRangesIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Convert to Range"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ConvertTheActiveTableToAPlainRange}" local:RibbonMetadata.CommandName="Convert to Range"/>
                                 </StackPanel>
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Tools}" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
@@ -3055,14 +3055,14 @@
                             <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableAnalyzePivotTableGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_PivotTableName}" Width="116" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_PivotTableName}" Width="116" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableNameBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PivotTableName}"
                                             local:RibbonTooltip.KeyTip="N"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RenamingPivotTablesFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="PivotTable Name"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Options}" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_Options}" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableOptionsBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PivotTableOptions}"
                                             local:RibbonTooltip.KeyTip="O"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AdvancedPivotTableOptionsAreEditedThroughSupportedPivotTableCommands}" local:RibbonMetadata.CommandName="PivotTable Options"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenPivotTableLayoutAndStyleOptions}" local:RibbonMetadata.CommandName="PivotTable Options"/>
                                 </StackPanel>
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_PivotTable}" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>
@@ -3130,15 +3130,15 @@
                             <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="PivotTableAnalyzeActionsGroup">
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Clear}" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_Clear}" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableClearBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Clear}"
                                             local:RibbonTooltip.KeyTip="CL"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ClearingPivotTableFieldsFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Clear"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Select}" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_Select}" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableSelectBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Select}"
                                             local:RibbonTooltip.KeyTip="SE"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PivotTableSelectionShortcutsAreDeferredInFreeX}" local:RibbonMetadata.CommandName="Select"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_MovePivotTable}" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_MovePivotTable}" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableMoveBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_MovePivotTable}"
                                             local:RibbonTooltip.KeyTip="M"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MovingPivotTablesFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Move PivotTable"/>
@@ -4210,6 +4210,8 @@
                       MinWidth="214" Height="24"
                       Background="{StaticResource FreeXStatusSurfaceBrush}"
                       Panel.ZIndex="1"
+                      KeyboardNavigation.TabNavigation="Cycle"
+                      KeyboardNavigation.ControlTabNavigation="Cycle"
                       SnapsToDevicePixels="True"
                       UseLayoutRounding="True">
                     <Grid.ColumnDefinitions>
@@ -4703,7 +4705,7 @@
                                                     AutomationProperties.Name="{Binding PinAutomationName}"
                                                     AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="{local:Loc Key=MainWindow_ToolTip_PinToList}" local:RibbonMetadata.CommandName="Pin File">
-                                                <local:RibbonIcon Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
+                                                <local:RibbonIcon CommandName="Pin to list" Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
                                             </Button>
                                         </Grid>
                                     </Button>
@@ -4787,7 +4789,7 @@
                                                     AutomationProperties.Name="{Binding PinAutomationName}"
                                                     AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="{local:Loc Key=MainWindow_ToolTip_UnpinFromList}" local:RibbonMetadata.CommandName="Unpin File">
-                                                <local:RibbonIcon Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
+                                                <local:RibbonIcon CommandName="Unpin from list" Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
                                             </Button>
                                         </Grid>
                                     </Button>

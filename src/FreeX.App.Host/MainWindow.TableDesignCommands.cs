@@ -57,12 +57,187 @@ public partial class MainWindow
         return table is not null;
     }
 
+    private void TableDesignTableNameBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActiveStructuredTable(out _, out var table))
+            return;
+
+        var initialName = string.IsNullOrWhiteSpace(table.DisplayName) ? table.Name : table.DisplayName;
+        var dialog = new TextEntryDialog(
+            UiText.Get("MainWindow_TooltipTitle_TableName"),
+            UiText.Get("TableDesign_TableNameLabel"),
+            initialName)
+        { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!TryExecuteCommand(
+                new RenameStructuredTableCommand(_currentSheetId, table.Id, dialog.Result.Text),
+                "Table Name"))
+            return;
+
+        RefreshTableContextualTab();
+        UpdateViewport();
+    }
+
+    private void TableDesignResizeTableBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActiveStructuredTable(out _, out var table))
+            return;
+
+        var dialog = new TextEntryDialog(
+            UiText.Get("MainWindow_TooltipTitle_ResizeTable"),
+            UiText.Get("TableDesign_TableRangeLabel"),
+            FormatWorkbookRange(table.Range))
+        { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!TryParseWorkbookRange(_currentSheetId, dialog.Result.Text, out var newRange))
+        {
+            _messageService.ShowWarning(
+                UiText.Get("TableDesign_InvalidResizeRange"),
+                UiText.Get("MainWindow_TooltipTitle_ResizeTable"));
+            return;
+        }
+
+        var commands = new List<IWorkbookCommand>
+        {
+            new ResizeStructuredTableCommand(_currentSheetId, table.Id, newRange)
+        };
+        if (TableStyleGalleryPlanner.TryGetOption(table.StyleName, out var option))
+        {
+            commands.Add(new ApplyStructuredTableStyleCommand(
+                _currentSheetId,
+                table.Id,
+                option.Banding));
+        }
+
+        var command = commands.Count == 1
+            ? commands[0]
+            : new CompositeWorkbookCommand("Resize Table", commands);
+
+        if (!TryExecuteCommand(command, "Resize Table"))
+            return;
+
+        RefreshTableContextualTab();
+        UpdateViewport();
+    }
+
+    private void TableDesignSummarizeWithPivotTableBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActiveStructuredTable(out var sheet, out var table))
+            return;
+
+        if (table.Range.RowCount < 2 || table.Range.ColCount < 2)
+        {
+            _messageService.ShowInfo(
+                UiText.Get("MainWindowMessage_PivotTableSourceMinimumShape"),
+                UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
+            return;
+        }
+
+        PivotTableDialog? dialog = null;
+        dialog = new PivotTableDialog(
+            _workbook,
+            _currentSheetId,
+            table.Range,
+            request => ApplyPivotTableRangeSelection(dialog, request))
+        { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!TryParseWorkbookRange(_currentSheetId, dialog.Result.SourceRangeText, out var dialogSourceRange))
+        {
+            _messageService.ShowWarning(
+                UiText.Get("MainWindowMessage_PivotTableInvalidSourceRange"),
+                UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
+            return;
+        }
+
+        var sourceSheet = _workbook.GetSheet(dialogSourceRange.Start.Sheet) ?? sheet;
+        var dataFieldIndex = PivotUiPlanner.ChooseDefaultDataField(sourceSheet, dialogSourceRange);
+        var rowFieldIndex = dataFieldIndex == 0 ? 1 : 0;
+        if (dialog.Result.DestinationKind == PivotTableDestinationKind.NewWorksheet)
+        {
+            var command = new AddPivotTableToNewWorksheetCommand(
+                dialogSourceRange,
+                PivotUiPlanner.GenerateUniquePivotTableName(sheet),
+                rowFieldIndexes: [rowFieldIndex],
+                dataFieldIndexes: [dataFieldIndex]);
+
+            if (!TryExecuteCommand(command, "Summarize with PivotTable"))
+                return;
+
+            if (command.CreatedSheetId is { } createdSheetId)
+            {
+                _currentSheetId = createdSheetId;
+                _groupedSheetIds.Clear();
+                _groupedSheetIds.Add(_currentSheetId);
+                SetActiveCell(new CellAddress(
+                    _currentSheetId,
+                    AddPivotTableToNewWorksheetCommand.InitialTargetRow,
+                    AddPivotTableToNewWorksheetCommand.InitialTargetColumn));
+            }
+
+            RefreshSheetTabs();
+            UpdateViewport();
+            RefreshStatusBar();
+            if (dialog.Result.OpenFieldList)
+                RefreshPivotFieldListPane();
+            return;
+        }
+
+        if (!TryParseWorkbookRange(_currentSheetId, dialog.Result.DestinationRangeText, out var targetRange) ||
+            targetRange.Start.Sheet != _currentSheetId)
+        {
+            _messageService.ShowWarning(
+                UiText.Get("MainWindowMessage_PivotTableInvalidDestinationCell"),
+                UiText.Get("MainWindowMessage_InsertPivotTableTitle"));
+            return;
+        }
+
+        if (!TryExecuteCommand(
+                new AddPivotTableCommand(
+                    _currentSheetId,
+                    dialogSourceRange,
+                    targetRange,
+                    PivotUiPlanner.GenerateUniquePivotTableName(sheet),
+                    rowFieldIndexes: [rowFieldIndex],
+                    dataFieldIndexes: [dataFieldIndex]),
+                "Summarize with PivotTable"))
+            return;
+
+        UpdateViewport();
+        if (dialog.Result.OpenFieldList)
+            RefreshPivotFieldListPane();
+    }
+
     private void TableDesignRemoveDuplicatesBtn_Click(object sender, RoutedEventArgs e)
     {
         if (!TryGetActiveStructuredTable(out _, out var table))
             return;
 
         ShowRemoveDuplicatesDialog(table.Range);
+    }
+
+    private void TableDesignConvertToRangeBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetActiveStructuredTable(out _, out var table))
+            return;
+
+        if (!_messageService.AskYesNo(
+                UiText.Get("TableDesign_ConvertToRangeConfirmation"),
+                UiText.Get("MainWindow_TooltipTitle_ConvertToRange")))
+            return;
+
+        if (!TryExecuteCommand(
+                new ConvertStructuredTableToRangeCommand(_currentSheetId, table.Id),
+                "Convert to Range"))
+            return;
+
+        RefreshTableContextualTab();
+        UpdateViewport();
     }
 
     private void TableDesignFilterButtonBtn_Click(object sender, RoutedEventArgs e)

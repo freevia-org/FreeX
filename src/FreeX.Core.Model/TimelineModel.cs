@@ -5,7 +5,7 @@ public sealed class TimelineModel
     public string Name { get; init; } = "";
     public string? Caption { get; init; }
     public string CacheName { get; init; } = "";
-    public string? SourcePivotTableName { get; init; }
+    public string? SourcePivotTableName { get; set; }
     public string? SourceFieldName { get; init; }
     public string? StyleName { get; init; }
     public string? StartDate { get; init; }
