@@ -1766,69 +1766,6 @@
                                   PreviewMouseWheel="RibbonScroll_PreviewMouseWheel">
                     <StackPanel Orientation="Horizontal" MinHeight="88">
 
-                        <!-- ▌Tools ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DrawToolsGroup">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="{local:Loc Key=MainWindow_Content_Draw}" Width="78" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DrawWithTouch}"
-                                        local:RibbonTooltip.KeyTip="DT"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DrawInkWithTouchOrAPenInkAuthoringIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Draw with Touch"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_Eraser}" Width="78" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Eraser}"
-                                        local:RibbonTooltip.KeyTip="E"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_EraseInkStrokesInkAuthoringIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Eraser"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_LassoSelect}" Width="84" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_LassoSelect}"
-                                        local:RibbonTooltip.KeyTip="LS"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SelectInkStrokesWithAFreeformLassoInkAuthoringIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Lasso Select"/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Tools}" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="2,4,4,16"/>
-
-                        <!-- ▌Pens ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DrawPensGroup">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="{local:Loc Key=MainWindow_Content_Pen}" Width="62" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Pen}"
-                                        local:RibbonTooltip.KeyTip="P"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DrawWithAPenInkAuthoringIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Pen"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_Pencil}" Width="62" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Pencil}"
-                                        local:RibbonTooltip.KeyTip="N"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DrawWithAPencilInkAuthoringIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Pencil"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_Highlighter}" Width="82" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Highlighter}"
-                                        local:RibbonTooltip.KeyTip="H"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_HighlightWithTranslucentInkInkAuthoringIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Highlighter"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_AddPen}" Width="70" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AddPen}"
-                                        local:RibbonTooltip.KeyTip="AP"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddAnotherPenToTheGalleryInkAuthoringIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Add Pen"/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Pens}" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="2,4,4,16"/>
-
-                        <!-- ▌Convert ▌ -->
-                        <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DrawConvertGroup">
-                            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="{local:Loc Key=MainWindow_Content_InkToShape}" Width="92" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InkToShape}"
-                                        local:RibbonTooltip.KeyTip="IS"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ConvertDrawnInkIntoAnOfficeShapeInkConversionIsNotYetImplementedInFreeX}" local:RibbonMetadata.CommandName="Ink to Shape"/>
-                                <Button Content="{local:Loc Key=MainWindow_Content_InkToMath}" Width="84" Height="46" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InkToMath}"
-                                        local:RibbonTooltip.KeyTip="IM"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ConvertHandwrittenMathIntoTypedNotationInkConversionIsNotYetImplementedI_0362D0DF}" local:RibbonMetadata.CommandName="Ink to Math"/>
-                            </StackPanel>
-                            <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Convert}" Style="{StaticResource GroupLbl}"/></Border>
-                        </Grid>
-                        <Rectangle Width="1" Fill="#CCCCCC" Margin="2,4,4,16"/>
-
                         <!-- ▌Arrange ▌ -->
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DrawArrangeGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>

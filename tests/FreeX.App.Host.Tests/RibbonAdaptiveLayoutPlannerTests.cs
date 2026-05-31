@@ -313,7 +313,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Theory]
-    [InlineData(1120, new[] { "Tools", "Pens", "Convert", "Arrange", "Format" }, 2)]
+    [InlineData(760, new[] { "Arrange", "Format" }, 0)]
     public void ApplyBreakpointOverrides_AppliesExcelLikeTabSpecificCollapseOrder(
         double availableWidth,
         string[] groupNames,
@@ -381,7 +381,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     [InlineData("Themes|Page Setup|Scale to Fit|Sheet Options|Arrange", "Page Layout")]
     [InlineData("Proofing|Accessibility|Comments|Notes|Protect", "Review")]
     [InlineData("Workbook Views|Show|Zoom|Window", "View")]
-    [InlineData("Tools|Pens|Convert|Arrange|Format", "Draw")]
+    [InlineData("Arrange|Format", "Draw")]
     [InlineData("Help", "Tiny")]
     public void Profiles_ResolveKnownRibbonTabGroupSets(string groupNameList, string expectedProfile)
     {

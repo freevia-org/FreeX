@@ -5,28 +5,23 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class DrawCommandSourceTests
 {
-    [Theory]
-    [InlineData("Draw with Touch", "Draw", "DT")]
-    [InlineData("Eraser", "Eraser", "E")]
-    [InlineData("Lasso Select", "Lasso Select", "LS")]
-    [InlineData("Pen", "Pen", "P")]
-    [InlineData("Pencil", "Pencil", "N")]
-    [InlineData("Highlighter", "Highlighter", "H")]
-    [InlineData("Add Pen", "Add Pen", "AP")]
-    [InlineData("Ink to Shape", "Ink to Shape", "IS")]
-    [InlineData("Ink to Math", "Ink to Math", "IM")]
-    public void DrawInkCommands_RemainDisabledWithoutClickHandlers(
-        string title,
-        string content,
-        string keyTip)
+    [Fact]
+    public void DrawTab_DoesNotSurfaceOutOfScopeInkCommands()
     {
-        var button = ExtractElementByTitle(ReadMainWindowXaml(), title, "Button");
+        var xaml = ReadMainWindowXaml();
 
-        button.ShouldContainLocalizedAttribute("Content", content);
-        button.Should().Contain("IsEnabled=\"False\"");
-        button.ShouldContainInvariantCommandName(title);
-        button.Should().Contain($"local:RibbonTooltip.KeyTip=\"{keyTip}\"");
-        button.Should().NotContain("Click=");
+        xaml.Should().NotContain("DrawToolsGroup");
+        xaml.Should().NotContain("DrawPensGroup");
+        xaml.Should().NotContain("DrawConvertGroup");
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Draw with Touch\"");
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Eraser\"");
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Lasso Select\"");
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Pen\"");
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Pencil\"");
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Highlighter\"");
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Add Pen\"");
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Ink to Shape\"");
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Ink to Math\"");
     }
 
     [Theory]
