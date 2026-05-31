@@ -13,4 +13,7 @@ internal static class XlsxWorksheetAutoFilterMapper
 
     public static void Save(Stream xlsxStream, Workbook workbook, XlsxWorkbookWorksheetPathMap? worksheetPathMap) =>
         XlsxWorksheetAutoFilterXmlMapper.Save(xlsxStream, workbook, worksheetPathMap);
+
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook) =>
+        XlsxWorksheetAutoFilterXmlMapper.Save(session, workbook);
 }
