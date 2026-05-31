@@ -21,7 +21,7 @@ public sealed class PivotDesignCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ExtractPivotTableDesignTab(ReadMainWindowXaml()), title);
+        var button = ExtractButtonElementByTitle(ReadPivotTableDesignTabXaml(), title);
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -56,13 +56,17 @@ public sealed class PivotDesignCommandSourceTests
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 
-    private static string ExtractPivotTableDesignTab(string xaml)
+    private static string ReadPivotTableDesignTabXaml()
     {
-        var start = xaml.IndexOf("x:Name=\"PivotTableDesignTab\"", StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, "the PivotTable Design contextual tab should be present");
+        var xaml = ReadMainWindowXaml();
+        var tabNameIndex = xaml.IndexOf("x:Name=\"PivotTableDesignTab\"", StringComparison.Ordinal);
+        tabNameIndex.Should().BeGreaterThanOrEqualTo(0, "the PivotTable Design contextual tab should be present");
 
-        var end = xaml.IndexOf("MainWindow_Header_Help", start, StringComparison.Ordinal);
-        end.Should().BeGreaterThan(start, "the Help tab should follow the PivotTable Design contextual tab");
+        var start = xaml.LastIndexOf("<TabItem", tabNameIndex, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, "the PivotTable Design contextual tab should have a TabItem start");
+
+        var end = xaml.IndexOf("<TabItem Header=\"{local:Loc Key=MainWindow_Header_Help}\"", tabNameIndex, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(tabNameIndex, "the PivotTable Design contextual tab should end before the Help tab");
 
         return xaml[start..end];
     }

@@ -889,6 +889,123 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void InsertChartKeyTip_InsertsRenderableChartFromVisibleRibbonCommand()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SetNumber(1, 1, 10);
+            harness.SetNumber(1, 2, 20);
+            harness.SetNumber(2, 1, 30);
+            harness.SetNumber(2, 2, 40);
+            harness.SelectRange(1, 1, 2, 2);
+
+            harness.HandleDirectTopLevelKeyTip(Key.N).Should().BeTrue();
+            harness.SelectedRibbonTabHeader.Should().Be("Insert");
+            harness.VisibleCommandKeyTips("CC").Should().ContainSingle("Column Chart");
+
+            harness.HandleKeyTip(Key.C);
+            harness.KeyTipScope.Should().Be("Commands", "C is a shared Insert command prefix before CC resolves");
+            harness.HandleKeyTip(Key.C);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.ChartCount.Should().Be(1);
+            harness.LastChartType.Should().Be(ChartType.Column);
+        });
+    }
+
+    [Fact]
+    public void CollapsedInsertChartsKeyTip_DeferredMapChartShowsOwnedMessage()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SetNumber(1, 1, 10);
+            harness.SetNumber(1, 2, 20);
+            harness.SetNumber(2, 1, 30);
+            harness.SetNumber(2, 2, 40);
+            harness.SelectRange(1, 1, 2, 2);
+            harness.SelectRibbonTab("Insert", 800);
+
+            harness.OpenRibbonMenu(Key.N, Key.C, Key.H);
+            harness.ActiveMenuItemGestureText("Map Chart").Should().Be("MP");
+
+            harness.HandleKeyTip(Key.M);
+            harness.KeyTipScope.Should().Be("Menu", "M is a shared collapsed chart-menu prefix before MP resolves");
+            harness.HandleKeyTip(Key.P);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.ActiveMenuIsOpen.Should().BeFalse();
+            harness.ChartCount.Should().Be(0, "deferred chart families should explain the gap without mutating the workbook");
+
+            var message = harness.LastInfoMessage;
+            message.Should().NotBeNull();
+            message!.Value.Title.Should().Be(UiText.Get("MainWindowMessage_ChartFamilyDeferredTitle"));
+            message.Value.Message.Should().Be(UiText.Get("MainWindowMessage_ChartFamilyDeferred"));
+        });
+    }
+
+    [Theory]
+    [InlineData(Key.E, DrawingShapeKind.Ellipse)]
+    [InlineData(Key.L, DrawingShapeKind.Line)]
+    public void InsertShapesMenuKeyTips_InsertVisibleDrawingCommands(Key shapeKeyTip, DrawingShapeKind expectedKind)
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectRange(4, 3, 4, 3);
+
+            harness.OpenRibbonMenu(Key.N, Key.S, Key.H);
+            harness.HandleKeyTip(shapeKeyTip);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.DrawingShapeCount.Should().Be(1);
+            harness.LastDrawingShapeKind.Should().Be(expectedKind);
+            harness.LastDrawingShapeAnchor.Should().Be((4u, 3u));
+        });
+    }
+
+    [Fact]
+    public void PivotContextualTabs_AppearDisappearWithPivotSelectionAndExposeJaJdKeyTips()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create(ConfigureWorkbookWithPivotTable);
+            harness.RefreshViewport();
+
+            harness.ContextualTabIsVisible("PivotTableAnalyzeTab").Should().BeFalse();
+            harness.ContextualTabIsVisible("PivotTableDesignTab").Should().BeFalse();
+            harness.PivotFieldListPaneIsVisible.Should().BeFalse();
+
+            harness.SelectRange(6, 5, 6, 5);
+            harness.RefreshViewport();
+
+            harness.ContextualTabIsVisible("PivotTableAnalyzeTab").Should().BeTrue();
+            harness.ContextualTabIsVisible("PivotTableDesignTab").Should().BeTrue();
+            harness.PivotFieldListPaneIsVisible.Should().BeTrue();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.OverlayBadgeTexts.Should().Contain(["JA", "JD"]);
+            harness.HandleKeyTip(Key.J);
+            harness.HandleKeyTip(Key.A);
+
+            harness.SelectedRibbonTabHeader.Should().Be("PivotTable Analyze");
+            harness.KeyTipScope.Should().Be("Commands");
+            harness.VisibleCommandKeyTips("R").Should().ContainSingle("Refresh");
+
+            harness.SelectRange(20, 1, 20, 1);
+            harness.RefreshViewport();
+
+            harness.ContextualTabIsVisible("PivotTableAnalyzeTab").Should().BeFalse();
+            harness.ContextualTabIsVisible("PivotTableDesignTab").Should().BeFalse();
+            harness.PivotFieldListPaneIsVisible.Should().BeFalse();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.OverlayBadgeTexts.Should().NotContain(["JA", "JD"]);
+        });
+    }
+
+    [Fact]
     public void HomePasteKeyTip_OpensExcelStylePasteMenu()
     {
         RunSta(() =>
@@ -1149,6 +1266,7 @@ public sealed class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _isInsideRibbonSurface;
         private readonly MethodInfo _getVisibleKeyTipElements;
         private readonly MethodInfo _updateRibbonCompactMode;
+        private readonly MethodInfo _updateViewport;
         private readonly MethodInfo _updateSsRecentList;
         private readonly MethodInfo _refreshSheetProtectionUi;
         private readonly MethodInfo _hideStartScreen;
@@ -1157,11 +1275,16 @@ public sealed class MainWindowRibbonKeyTipTests
         private readonly FieldInfo _scopeField;
         private readonly FieldInfo _activeMenuField;
         private readonly FieldInfo _recentFilesField;
+        private readonly RecordingUserMessageService _messageService;
 
-        private MainWindowHarness(MainWindow window, Workbook workbook)
+        private MainWindowHarness(
+            MainWindow window,
+            Workbook workbook,
+            RecordingUserMessageService messageService)
         {
             _window = window;
             _workbook = workbook;
+            _messageService = messageService;
             _enterKeyTipMode = typeof(MainWindow).GetMethod("EnterRibbonKeyTipMode", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "EnterRibbonKeyTipMode");
             _handleActiveRibbonKeyTip = typeof(MainWindow).GetMethod("HandleActiveRibbonKeyTip", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -1176,6 +1299,8 @@ public sealed class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "GetVisibleKeyTipElements");
             _updateRibbonCompactMode = typeof(MainWindow).GetMethod("UpdateRibbonCompactMode", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateRibbonCompactMode");
+            _updateViewport = typeof(MainWindow).GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
             _updateSsRecentList = typeof(MainWindow).GetMethod("UpdateSsRecentList", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "UpdateSsRecentList");
             _refreshSheetProtectionUi = typeof(MainWindow).GetMethod("RefreshSheetProtectionUi", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -1213,6 +1338,8 @@ public sealed class MainWindowRibbonKeyTipTests
                 .ToList() ?? [];
 
         public bool ActiveMenuIsOpen => ActiveMenu?.IsOpen == true;
+
+        public (string Title, string Message)? LastInfoMessage => _messageService.LastInfo;
 
         public bool FocusedElementIsInsideRibbon =>
             Keyboard.FocusedElement is DependencyObject focusedElement &&
@@ -1451,6 +1578,10 @@ public sealed class MainWindowRibbonKeyTipTests
             }
         }
 
+        public int ChartCount => _workbook.Sheets[0].Charts.Count;
+
+        public ChartType? LastChartType => _workbook.Sheets[0].Charts.LastOrDefault()?.Type;
+
         public string? ActiveMenuItemGestureText(string header) =>
             FindActiveMenuItem(header)?.InputGestureText;
 
@@ -1493,6 +1624,19 @@ public sealed class MainWindowRibbonKeyTipTests
             PumpDispatcher();
         }
 
+        public void RefreshViewport()
+        {
+            _updateViewport.Invoke(_window, null);
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
+        public bool ContextualTabIsVisible(string name) =>
+            (_window.FindName(name) as TabItem)?.Visibility == Visibility.Visible;
+
+        public bool PivotFieldListPaneIsVisible =>
+            (_window.FindName("PivotFieldListPane") as FrameworkElement)?.Visibility == Visibility.Visible;
+
         private ContextMenu? ActiveMenu => _activeMenuField.GetValue(_window) as ContextMenu;
 
         private MenuItem? FindActiveMenuItem(string header) =>
@@ -1521,7 +1665,7 @@ public sealed class MainWindowRibbonKeyTipTests
             createNewWorkbook.Invoke(window, null);
             configureWorkbook?.Invoke(session.WorkbookRef.Current);
 
-            var harness = new MainWindowHarness(window, session.WorkbookRef.Current);
+            var harness = new MainWindowHarness(window, session.WorkbookRef.Current, session.MessageService);
             harness.ResetUiState();
             return harness;
         }
@@ -1533,6 +1677,7 @@ public sealed class MainWindowRibbonKeyTipTests
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();
+            var messageService = new RecordingUserMessageService();
             var window = new MainWindow(
                 NullLogger<MainWindow>.Instance,
                 new ViewportService(),
@@ -1541,7 +1686,7 @@ public sealed class MainWindowRibbonKeyTipTests
                 [],
                 workbookRef,
                 workbook,
-                NullUserMessageService.Instance);
+                messageService);
 
             window.WindowState = WindowState.Normal;
             window.Width = 2400;
@@ -1552,7 +1697,7 @@ public sealed class MainWindowRibbonKeyTipTests
                 ribbonTabs.Width = 2400;
             window.UpdateLayout();
             PumpDispatcher();
-            return new SharedMainWindowSession(window, workbookRef);
+            return new SharedMainWindowSession(window, workbookRef, messageService);
         }
 
         public void SetRibbonWidth(double width)
@@ -1689,6 +1834,7 @@ public sealed class MainWindowRibbonKeyTipTests
         private void ResetUiState()
         {
             _window.Activate();
+            _messageService.Clear();
             _hideStartScreen.Invoke(_window, null);
             if (ActiveMenu is { } activeMenu)
                 activeMenu.IsOpen = false;
@@ -1721,7 +1867,47 @@ public sealed class MainWindowRibbonKeyTipTests
             PumpDispatcher();
         }
 
-        private sealed record SharedMainWindowSession(MainWindow Window, WorkbookRef WorkbookRef);
+        private sealed record SharedMainWindowSession(
+            MainWindow Window,
+            WorkbookRef WorkbookRef,
+            RecordingUserMessageService MessageService);
+
+        private sealed class RecordingUserMessageService : FreeX.App.UI.IUserMessageService
+        {
+            private readonly List<(string Kind, string Title, string Message)> _messages = [];
+
+            public (string Title, string Message)? LastInfo
+            {
+                get
+                {
+                    for (var index = _messages.Count - 1; index >= 0; index--)
+                    {
+                        var message = _messages[index];
+                        if (message.Kind == "Info")
+                            return (message.Title, message.Message);
+                    }
+
+                    return null;
+                }
+            }
+
+            public void Clear() => _messages.Clear();
+
+            public void ShowError(string message, string title = "Error") =>
+                _messages.Add(("Error", title, message));
+
+            public void ShowWarning(string message, string title = "Warning") =>
+                _messages.Add(("Warning", title, message));
+
+            public void ShowInfo(string message, string title = "Information") =>
+                _messages.Add(("Info", title, message));
+
+            public bool AskYesNo(string message, string title = "Confirm")
+            {
+                _messages.Add(("Question", title, message));
+                return false;
+            }
+        }
 
         private sealed class DisposableAction(Action dispose) : IDisposable
         {
@@ -1751,6 +1937,46 @@ public sealed class MainWindowRibbonKeyTipTests
                     yield return child;
             }
         }
+    }
+
+    private static void ConfigureWorkbookWithPivotTable(Workbook workbook)
+    {
+        var sheet = workbook.Sheets[0];
+        var sheetId = sheet.Id;
+        sheet.SetCell(new CellAddress(sheetId, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheetId, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheetId, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheetId, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheetId, 3, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheetId, 3, 2), new NumberValue(20));
+
+        var sourceRange = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 3, 2));
+        var targetRange = new GridRange(
+            new CellAddress(sheetId, 6, 5),
+            new CellAddress(sheetId, 9, 6));
+
+        workbook.PivotCaches.Add(new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = sourceRange.ToString()
+        });
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Region"));
+        workbook.PivotCaches[0].Fields.Add(new PivotCacheFieldModel("Amount", ContainsNumber: true));
+
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = sourceRange,
+            TargetRange = targetRange
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
     }
 
     private static void PumpDispatcher()

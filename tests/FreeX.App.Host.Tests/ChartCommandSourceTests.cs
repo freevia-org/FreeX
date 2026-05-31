@@ -78,6 +78,26 @@ public sealed class ChartCommandSourceTests
         source.Should().Contain("new MoveChartDialog(currentSheet.Name)");
     }
 
+    [Fact]
+    public void DeferredChartFamilyCommand_StaysEnabledAndExplainsAuthoringGap()
+    {
+        var xaml = ReadMainWindowXaml();
+        var button = ExtractButtonElementByTitle(xaml, "Map Chart");
+        var source = ReadChartCommandSource();
+
+        button.Should().NotContain("IsEnabled=\"False\"", "deferred chart families should be clickable so users get an explicit explanation");
+        button.Should().Contain("Click=\"DeferredChartFamilyMenuItem_Click\"");
+        button.Should().Contain("local:RibbonTooltip.KeyTip=\"MP\"");
+        button.ShouldContainLocalizedAttribute("Content", "Map");
+        button.Should().Contain(
+            "MainWindow_TooltipDescription_DeferredRetainedFromXLSXFilesAuthoringAndRenderingNeedADedicatedDataMode_568CFF74");
+
+        source.Should().Contain("private void DeferredChartFamilyMenuItem_Click(object sender, RoutedEventArgs e) => ShowDeferredChartFamilyMessage();");
+        source.Should().Contain("private void ShowDeferredChartFamilyMessage() =>");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferred\")");
+        source.Should().Contain("UiText.Get(\"MainWindowMessage_ChartFamilyDeferredTitle\")");
+    }
+
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
 

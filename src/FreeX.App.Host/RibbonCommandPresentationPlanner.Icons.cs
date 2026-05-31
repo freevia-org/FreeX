@@ -195,6 +195,7 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("recommended pivottable")) return new(RibbonCommandIconKind.PivotTable, RibbonCommandIconAccent.Green);
         if (name.Contains("pivottable")) return new(RibbonCommandIconKind.PivotTable, RibbonCommandIconAccent.Green);
         if (name == "table") return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
+        if (name.Contains("table")) return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
         if (name.Contains("add-ins")) return new(RibbonCommandIconKind.Insert, RibbonCommandIconAccent.Data);
         if (name.Contains("recommended chart")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Chart);
         if (name.Contains("3d map")) return new(RibbonCommandIconKind.ChartColumn, RibbonCommandIconAccent.Data);
