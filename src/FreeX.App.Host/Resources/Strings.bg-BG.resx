@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <resheader name="resmimetype">
     <value>text/microsoft-resx</value>
@@ -799,7 +799,7 @@
     <value>Форматиране на борсова диаграма</value>
   </data>
   <data name="ChartStockFormat_HelpText" xml:space="preserve">
-    <value>Ширина на лентата нагоре/надолу (0-500%). Цветовете приемат #RRGGBB шестнадесетичен или "няма". Висока-ниска дебелина на линията (0,5-10 pt).</value>
+    <value>Ширина на лентата нагоре/надолу (0-500%). Цветовете приемат #RRGGBB шестнадесетичен или &quot;няма&quot;. Висока-ниска дебелина на линията (0,5-10 pt).</value>
   </data>
   <data name="ChartStockFormat_GapWidthLabel" xml:space="preserve">
     <value>_Ширина на междината %</value>
@@ -1724,7 +1724,7 @@
     <value>(Празни места)</value>
   </data>
   <data name="AutoFilter_ClearFilterFrom" xml:space="preserve">
-    <value>Изчистване на филтъра от "{0}"</value>
+    <value>Изчистване на филтъра от &quot;{0}&quot;</value>
   </data>
   <data name="AutoFilter_ColumnHeader" xml:space="preserve">
     <value>Колона {0}</value>
@@ -2693,24 +2693,6 @@
   </data>
   <data name="DeferredCommand_MultiWindow_Body" xml:space="preserve">
     <value>{0} се отлага, докато FreeX има хостинг на работна книга с много прозорци. Проследява се като документиран пропуск в паритета, а не като тихо частично внедряване.</value>
-  </data>
-  <data name="DeferredCommand_ViewWindowCannotHideOnlyVisibleWindow_Body" xml:space="preserve">
-    <value>{0} не е наличен, защото текущата работна книга има само един видим прозорец. FreeX няма да скрие единствения прозорец на работната книга на живо в хоста с един прозорец.</value>
-  </data>
-  <data name="DeferredCommand_ViewWindowHostNotConnected_Body" xml:space="preserve">
-    <value>{0} има състояние, поддържано от планиране, но живият хост с множество прозорци все още не е свързан. FreeX оставя прозореца на работната книга непроменен, вместо да симулира тази команда.</value>
-  </data>
-  <data name="DeferredCommand_ViewWindowMultiWindowHosting_Body" xml:space="preserve">
-    <value>{0} се отлага, докато FreeX не може да създаде допълнителни прозорци на работна книга на живо през същата сесия на работна книга. Лентата View вече проследява състоянието на един прозорец и деактивира опасните зависими команди.</value>
-  </data>
-  <data name="DeferredCommand_ViewWindowNoHiddenWorkbookWindows_Body" xml:space="preserve">
-    <value>{0} не е наличен, защото няма скрити прозорци на работна книга за възстановяване в текущата сесия на работна книга.</value>
-  </data>
-  <data name="DeferredCommand_ViewWindowRequiresSecondVisibleWindow_Body" xml:space="preserve">
-    <value>{0} изисква поне два видими прозореца на работна книга. FreeX понастоящем хоства тази работна книга в един жив прозорец, така че командата е деактивирана, докато съществува хостинг с множество прозорци.</value>
-  </data>
-  <data name="DeferredCommand_ViewWindowRequiresSideBySidePair_Body" xml:space="preserve">
-    <value>{0} изисква активна двойка прозорец на работна книга един до друг. FreeX понастоящем хоства тази работна книга в един жив прозорец, така че командата е деактивирана, докато не съществува оформление на двоен прозорец.</value>
   </data>
   <data name="DeferredCommand_OfficeAddIns_Body" xml:space="preserve">
     <value>Добавките на Office са изключени от FreeX. Метаданните на пакета с добавки може да бъдат открити и запазени, но добавките не се инсталират, зареждат или изпълняват.</value>
@@ -5324,8 +5306,8 @@
   <data name="MainWindow_TooltipDescription_ChooseWhetherFormulasAreRecalculatedAutomaticallyOrManually" xml:space="preserve">
     <value>Изберете дали формулите да се преизчисляват автоматично или ръчно.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_ClearingPivotTableFieldsFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
-    <value>Изчистване на филтри, състояние на сортиране и избор на елементи от избраната обобщена таблица.</value>
+  <data name="MainWindow_TooltipDescription_ClearFiltersSortStateAndItemSelectionsFromTheSelectedPivotTable" xml:space="preserve">
+    <value>Изчистете филтрите, състоянието на сортиране и избора на елементи от избраната обобщена таблица.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ColorTheBackgroundOfTheSelectedCells" xml:space="preserve">
     <value>Оцветете фона на избраните клетки.</value>
@@ -5540,59 +5522,14 @@
   <data name="MainWindow_TooltipDescription_DecreaseTheIndentLevelOfTheCellContents" xml:space="preserve">
     <value>Намалете нивото на отстъп на съдържанието на клетката.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_DeferredRequiresAMultiWindowWorkbookRegistry" xml:space="preserve">
-    <value>Отложено: изисква регистър на работна книга с няколко прозореца.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_DeferredRequiresMultipleLiveWindowsOverTheSameWorkbookSession" xml:space="preserve">
-    <value>Отложено: изисква множество прозорци на живо през една и съща сесия на работна книга.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_DeferredRequiresMultiWindowWorkbookHostingAndSynchronizedScrollRouting" xml:space="preserve">
-    <value>Отложено: изисква хостинг на работна книга с няколко прозореца и синхронизирано маршрутизиране на превъртане.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_DeferredRequiresPairedWorkbookWindowsAndSideBySideLayoutState" xml:space="preserve">
-    <value>Отложено: изисква сдвоени прозорци на работна книга и състояние на оформление едно до друго.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_DeferredRequiresPairedWorkbookWindowsWithSynchronizedViewportState" xml:space="preserve">
-    <value>Отложено: изисква сдвоени прозорци на работна книга със синхронизирано състояние на прозореца за изглед.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_DeferredRequiresWorkbookWindowVisibilityState" xml:space="preserve">
-    <value>Отложено: изисква състояние на видимост на прозореца на работната книга.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_HideTheActiveWorkbookWindow" xml:space="preserve">
-    <value>Скрийте прозореца на активната работна книга, докато друг прозорец на работна книга остава видим.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_ResetTheSideBySideWorkbookWindowLayout" xml:space="preserve">
-    <value>Нулирайте оформлението на прозореца на работната книга един до друг.</value>
+  <data name="MainWindow_TooltipDescription_OpenAnotherLiveWindowForThisWorkbook" xml:space="preserve">
+    <value>Отворете друг активен прозорец за тази работна книга.</value>
   </data>
   <data name="MainWindow_TooltipDescription_SwitchToAnotherVisibleWorkbookWindow" xml:space="preserve">
     <value>Превключете към друг видим прозорец на работна книга.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_SynchronizeScrollingAcrossSideBySideWorkbookWindows" xml:space="preserve">
-    <value>Синхронизирайте превъртането през прозорци на работна книга един до друг.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_UnavailableCannotHideOnlyVisibleWorkbookWindow" xml:space="preserve">
-    <value>Недостъпно: FreeX няма да скрие единствения видим прозорец на работната книга в текущия хост с един прозорец.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_UnavailableNoHiddenWorkbookWindows" xml:space="preserve">
-    <value>Недостъпно: няма скрити прозорци на работна книга за възстановяване.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_UnavailableRequiresSecondVisibleWorkbookWindow" xml:space="preserve">
-    <value>Недостъпно: изисква втори видим прозорец на работната книга.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_UnavailableResetPositionRequiresSideBySidePair" xml:space="preserve">
-    <value>Недостъпно: изисква активна двойка прозорци на работна книга един до друг.</value>
-  </data>
   <data name="MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow" xml:space="preserve">
     <value>Недостъпно: изисква повече от един видим прозорец на работна книга.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_UnavailableSynchronousScrollingRequiresSideBySidePair" xml:space="preserve">
-    <value>Недостъпно: включете Преглед един до друг с два видими прозореца на работна книга първо.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_UnhideAHiddenWorkbookWindow" xml:space="preserve">
-    <value>Показване на скрит прозорец на работна книга.</value>
-  </data>
-  <data name="MainWindow_TooltipDescription_ViewTwoWorkbookWindowsSideBySide" xml:space="preserve">
-    <value>Вижте два прозореца на работна книга един до друг.</value>
   </data>
   <data name="MainWindow_TooltipDescription_DeferredRetainedFromXLSXFilesAuthoringAndRenderingNeedADedicatedDataMode_568CFF74" xml:space="preserve">
     <value>Отложено: задържано от XLSX файлове; авторството и изобразяването се нуждаят от специален модел на данни.</value>
@@ -5864,7 +5801,7 @@
   <data name="MainWindow_TooltipDescription_MoveTheSelectedShapeOneStepCloserToTheFront" xml:space="preserve">
     <value>Преместете избраната фигура една стъпка по-близо до предната част.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_MovingPivotTablesFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
+  <data name="MainWindow_TooltipDescription_MoveTheSelectedPivotTableToAnotherLocationOnTheCurrentWorksheet" xml:space="preserve">
     <value>Преместете избраната обобщена таблица на друго място в текущия работен лист.</value>
   </data>
   <data name="MainWindow_TooltipDescription_NavigateToTheNextSimpleCellNoteInTheSheet" xml:space="preserve">
@@ -5936,8 +5873,8 @@
   <data name="MainWindow_TooltipDescription_PinOrUnpinThisWorkbookInTheRecentFilesList" xml:space="preserve">
     <value>Фиксирайте или откачете тази работна книга в списъка със скорошни файлове.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_PivotTableSelectionShortcutsAreDeferredInFreeX" xml:space="preserve">
-    <value>Изберете избрания диапазон на отчета на обобщената таблица.</value>
+  <data name="MainWindow_TooltipDescription_SelectTheSelectedPivotTableReportRange" xml:space="preserve">
+    <value>Изберете диапазона на отчета на избраната обобщена таблица.</value>
   </data>
   <data name="MainWindow_TooltipDescription_PlotAdditionalSeriesOnASecondaryValueAxisForTheCurrentColumnOrLineChart" xml:space="preserve">
     <value>Начертайте допълнителни серии върху вторична ос на стойността за текущата колонна или линейна диаграма.</value>
@@ -5999,7 +5936,7 @@
   <data name="MainWindow_TooltipDescription_RemoveThisWorkbookFromThePinnedFilesList" xml:space="preserve">
     <value>Премахнете тази работна книга от списъка с фиксирани файлове.</value>
   </data>
-  <data name="MainWindow_TooltipDescription_RenamingPivotTablesFromTheRibbonIsDeferredInFreeX" xml:space="preserve">
+  <data name="MainWindow_TooltipDescription_RenameTheSelectedPivotTable" xml:space="preserve">
     <value>Преименувайте избраната обобщена таблица.</value>
   </data>
   <data name="MainWindow_TooltipDescription_RenderAdditionalColumnOrAreaChartSeriesAsLines" xml:space="preserve">
@@ -11847,7 +11784,7 @@
     <value>Цвят на клетката</value>
   </data>
   <data name="AutoFilter_ClearFilterFromHeader" xml:space="preserve">
-    <value>_Изчистване на филтъра от "{0}"</value>
+    <value>_Изчистване на филтъра от &quot;{0}&quot;</value>
   </data>
   <data name="AutoFilter_ConnectorAnd" xml:space="preserve">
     <value>И</value>
@@ -12180,16 +12117,16 @@
     <value>Набор от икони: {0} ({1})</value>
   </data>
   <data name="ManageConditionalFormats_RuleTextBeginsWith" xml:space="preserve">
-    <value>Текстът започва с "{0}"</value>
+    <value>Текстът започва с &quot;{0}&quot;</value>
   </data>
   <data name="ManageConditionalFormats_RuleTextContains" xml:space="preserve">
-    <value>Текстът съдържа "{0}"</value>
+    <value>Текстът съдържа &quot;{0}&quot;</value>
   </data>
   <data name="ManageConditionalFormats_RuleTextDoesNotContain" xml:space="preserve">
-    <value>Текстът не съдържа "{0}"</value>
+    <value>Текстът не съдържа &quot;{0}&quot;</value>
   </data>
   <data name="ManageConditionalFormats_RuleTextEndsWith" xml:space="preserve">
-    <value>Текстът завършва с "{0}"</value>
+    <value>Текстът завършва с &quot;{0}&quot;</value>
   </data>
   <data name="ManageConditionalFormats_RuleThreeColorScale" xml:space="preserve">
     <value>3-цветна скала</value>
@@ -13074,7 +13011,7 @@
     <value>Не може да се изтрие единственият видим лист.</value>
   </data>
   <data name="MainWindowMessage_DeleteSheetPrompt" xml:space="preserve">
-    <value>Изтриване на лист "{0}"?</value>
+    <value>Изтриване на лист &quot;{0}&quot;?</value>
   </data>
   <data name="MainWindowMessage_DeleteSheetTitle" xml:space="preserve">
     <value>Изтриване на лист</value>
@@ -13753,3 +13690,4 @@
     <value>_Обхват на масата:</value>
   </data>
 </root>
+
