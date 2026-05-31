@@ -4204,7 +4204,7 @@
 	                        ToolTip="{local:Loc Key=MainWindow_ToolTip_BackToWorkbook}"
 	                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Back}"
 	                        local:RibbonTooltip.KeyTip="B" local:RibbonMetadata.CommandName="Back">
-                    <local:RibbonIcon Kind="Previous" IconSize="18" Foreground="{StaticResource FreeXWhiteBrush}"/>
+                    <local:RibbonIcon Kind="Previous" Style="{StaticResource BackstageSidebarBackIcon}"/>
                 </Button>
 
                 <!-- Home (active/selected when showing home view) -->
@@ -4215,7 +4215,7 @@
                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Home}"
                         local:RibbonTooltip.KeyTip="H" local:RibbonMetadata.CommandName="Home">
                     <StackPanel Orientation="Horizontal">
-                        <local:RibbonIcon CommandName="Home" Kind="Grid" IconSize="15" Foreground="{StaticResource FreeXWhiteBrush}" Margin="0,0,10,0"/>
+                        <local:RibbonIcon CommandName="Home" Kind="Grid" Style="{StaticResource BackstageSidebarIcon}"/>
                         <AccessText Text="{local:Loc Key=MainWindow_Text_Home}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
@@ -4235,7 +4235,7 @@
                                                   local:RibbonTooltip.KeyTip="AC"
                                                   local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MicrosoftAccountIntegrationIsNotImplementedFreeXUsesLocalFilesAndLocalOp_EC989658}" local:RibbonMetadata.CommandName="Local Account">
                         <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Account" Kind="Info" IconSize="15" Foreground="{StaticResource FreeXWhiteBrush}" Margin="0,0,10,0"/>
+                            <local:RibbonIcon CommandName="Account" Kind="Info" Style="{StaticResource BackstageSidebarIcon}"/>
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Account}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </local:AutomationInvokeButton>
@@ -4250,7 +4250,7 @@
                                                   local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Options}"
                                                   local:RibbonTooltip.KeyTip="T" local:RibbonMetadata.CommandName="Options">
                         <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Options" Kind="View" IconSize="15" Foreground="{StaticResource FreeXWhiteBrush}" Margin="0,0,10,0"/>
+                            <local:RibbonIcon CommandName="Options" Kind="View" Style="{StaticResource BackstageSidebarIcon}"/>
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Options}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </local:AutomationInvokeButton>
@@ -4264,7 +4264,7 @@
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_New}"
                             local:RibbonTooltip.KeyTip="N" local:RibbonMetadata.CommandName="New">
                         <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="New" Kind="Insert" IconSize="15" Foreground="{StaticResource FreeXWhiteBrush}" Margin="0,0,10,0"/>
+                            <local:RibbonIcon CommandName="New" Kind="Insert" Style="{StaticResource BackstageSidebarIcon}"/>
                             <AccessText Text="{local:Loc Key=MainWindow_Text_New}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -4274,7 +4274,7 @@
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Open}"
                             local:RibbonTooltip.KeyTip="O" local:RibbonMetadata.CommandName="Open">
                         <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Open" Kind="GetData" IconSize="15" Foreground="{StaticResource FreeXWhiteBrush}" Margin="0,0,10,0"/>
+                            <local:RibbonIcon CommandName="Open" Kind="GetData" Style="{StaticResource BackstageSidebarIcon}"/>
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Open}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -4285,7 +4285,7 @@
                             local:RibbonTooltip.KeyTip="SH"
                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile}" local:RibbonMetadata.CommandName="Share">
                         <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Share" Kind="Share" IconSize="15" Foreground="{StaticResource FreeXWhiteBrush}" Margin="0,0,10,0"/>
+                            <local:RibbonIcon CommandName="Share" Kind="Share" Style="{StaticResource BackstageSidebarIcon}"/>
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Share}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -4299,7 +4299,7 @@
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Info}"
                             local:RibbonTooltip.KeyTip="I" local:RibbonMetadata.CommandName="Info">
                         <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Info" Kind="Info" IconSize="15" Foreground="{StaticResource FreeXWhiteBrush}" Margin="0,0,10,0"/>
+                            <local:RibbonIcon CommandName="Info" Kind="Info" Style="{StaticResource BackstageSidebarIcon}"/>
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Info}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -4309,7 +4309,7 @@
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Save}"
                             local:RibbonTooltip.KeyTip="S" local:RibbonMetadata.CommandName="Save">
                         <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Save" Kind="Save" IconSize="15" Foreground="{StaticResource FreeXWhiteBrush}" Margin="0,0,10,0"/>
+                            <local:RibbonIcon CommandName="Save" Kind="Save" Style="{StaticResource BackstageSidebarIcon}"/>
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Save}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -4319,7 +4319,7 @@
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SaveAs}"
                             local:RibbonTooltip.KeyTip="A" local:RibbonMetadata.CommandName="Save As">
                         <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Save As" Kind="Save" IconSize="15" Foreground="{StaticResource FreeXWhiteBrush}" Margin="0,0,10,0"/>
+                            <local:RibbonIcon CommandName="Save As" Kind="Save" Style="{StaticResource BackstageSidebarIcon}"/>
                             <AccessText Text="{local:Loc Key=MainWindow_Text_SaveAs}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -4333,7 +4333,7 @@
                             local:RibbonTooltip.KeyTip="P"
                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenThePrintPreviewAndNativePrintDialogForTheRenderedWorksheet}" local:RibbonMetadata.CommandName="Print">
                         <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Print" Kind="Print" IconSize="15" Foreground="{StaticResource FreeXWhiteBrush}" Margin="0,0,10,0"/>
+                            <local:RibbonIcon CommandName="Print" Kind="Print" Style="{StaticResource BackstageSidebarIcon}"/>
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Print}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -4344,7 +4344,7 @@
                             local:RibbonTooltip.KeyTip="E"
                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SaveSheetsTheCurrentSelectionOrTheWorkbookAsAPDFFileOrAnXPSPackage}" local:RibbonMetadata.CommandName="Export PDF/XPS">
                         <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Export" Kind="Share" IconSize="15" Foreground="{StaticResource FreeXWhiteBrush}" Margin="0,0,10,0"/>
+                            <local:RibbonIcon CommandName="Export" Kind="Share" Style="{StaticResource BackstageSidebarIcon}"/>
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Export}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -4354,7 +4354,7 @@
                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Close}"
                             local:RibbonTooltip.KeyTip="C" local:RibbonMetadata.CommandName="Close">
                         <StackPanel Orientation="Horizontal">
-                            <local:RibbonIcon CommandName="Close" Kind="WindowClose" IconSize="15" Foreground="{StaticResource FreeXWhiteBrush}" Margin="0,0,10,0"/>
+                            <local:RibbonIcon CommandName="Close" Kind="WindowClose" Style="{StaticResource BackstageSidebarIcon}"/>
                             <AccessText Text="{local:Loc Key=MainWindow_Text_Close}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
@@ -4583,8 +4583,8 @@
                                                        Text="{Binding LastOpenedText}"
                                                        FontSize="12" Foreground="#666"
                                                        VerticalAlignment="Center"/>
-                                            <Button Grid.Column="2" Width="24" Height="24"
-                                                    Style="{StaticResource RibbonBtn}"
+                                            <Button Grid.Column="2"
+                                                    Style="{StaticResource BackstageRecentPinCommandButton}"
                                                     Click="SsPinItem_Click"
                                                     local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PinFile}"
                                                     local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PinOrUnpinThisWorkbookInTheRecentFilesList}"
@@ -4592,7 +4592,7 @@
                                                     AutomationProperties.Name="{Binding PinAutomationName}"
                                                     AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="{local:Loc Key=MainWindow_ToolTip_PinToList}" local:RibbonMetadata.CommandName="Pin File">
-                                                <local:RibbonIcon CommandName="Pin to list" Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
+                                                <local:RibbonIcon CommandName="Pin to list" Kind="Pin" Style="{StaticResource BackstageRecentPinCommandIcon}"/>
                                             </Button>
                                         </Grid>
                                     </Button>
@@ -4667,8 +4667,8 @@
                                                        Text="{Binding LastOpenedText}"
                                                        FontSize="12" Foreground="#666"
                                                        VerticalAlignment="Center"/>
-                                            <Button Grid.Column="2" Width="24" Height="24"
-                                                    Style="{StaticResource RibbonBtn}"
+                                            <Button Grid.Column="2"
+                                                    Style="{StaticResource BackstageRecentPinCommandButton}"
                                                     Click="SsUnpinItem_Click"
                                                     local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_UnpinFile}"
                                                     local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RemoveThisWorkbookFromThePinnedFilesList}"
@@ -4676,7 +4676,7 @@
                                                     AutomationProperties.Name="{Binding PinAutomationName}"
                                                     AutomationProperties.HelpText="{Binding PinAutomationHelpText}"
                                                     ToolTip="{local:Loc Key=MainWindow_ToolTip_UnpinFromList}" local:RibbonMetadata.CommandName="Unpin File">
-                                                <local:RibbonIcon CommandName="Unpin from list" Kind="Pin" IconSize="16" HorizontalAlignment="Center"/>
+                                                <local:RibbonIcon CommandName="Unpin from list" Kind="Pin" Style="{StaticResource BackstageRecentPinCommandIcon}"/>
                                             </Button>
                                         </Grid>
                                     </Button>
