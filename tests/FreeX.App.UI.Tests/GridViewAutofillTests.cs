@@ -457,6 +457,14 @@ public sealed class GridViewAutofillTests
                 columnHeaderHeight: 18)
             .Should()
             .BeFalse();
+        GridAutofillPlanner.IsOnHandle(
+                CreateViewport(),
+                new GridRange(new CellAddress(sheet, 2, 99), new CellAddress(sheet, 3, 99)),
+                new System.Windows.Point(30 + 120, 18 + 60),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeFalse();
     }
 
     [Fact]
