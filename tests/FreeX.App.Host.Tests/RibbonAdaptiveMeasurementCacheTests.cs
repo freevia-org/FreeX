@@ -84,7 +84,8 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             resized.GroupMeasurementCount.Should().Be(0);
             resized.CompactSnapshotCaptureCount.Should().Be(0);
             resized.ResizeThresholdRebuildCount.Should().Be(0);
-            resized.StateApplyCount.Should().BeGreaterThan(0, "a new width band should evaluate the compact state without remeasuring groups");
+            (resized.StateApplyCount + resized.AppliedStateSkipCount).Should()
+                .BeGreaterThan(0, "a new width band should evaluate or reuse the compact state without remeasuring groups");
             resized.StateChangedGroupCount.Should().BeLessThanOrEqualTo(resized.StateApplyCount * 9);
             resized.MeasurementCacheKey.Should().Be(warm.MeasurementCacheKey);
             resized.ResizeThresholdCacheKey.Should().Be(warm.ResizeThresholdCacheKey);

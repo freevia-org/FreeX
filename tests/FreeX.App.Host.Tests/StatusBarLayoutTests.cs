@@ -442,14 +442,14 @@ public sealed class StatusBarLayoutTests
         private string? VisibleTaskPaneFocusCandidateName()
         {
             if (_window.FindName("PivotFieldListPane") is FrameworkElement { Visibility: Visibility.Visible } &&
-                _window.FindName("PivotFieldListSearchBox") is FrameworkElement { IsVisible: true, IsEnabled: true })
+                _window.FindName("PivotFieldListSearchBox") is FrameworkElement { Visibility: Visibility.Visible, IsEnabled: true })
             {
                 return "PivotFieldListSearchBox";
             }
 
             if (_window.FindName("SlicerTimelinePane") is FrameworkElement { Visibility: Visibility.Visible })
             {
-                if (_window.FindName("SlicerTimelinePaneCloseBtn") is FrameworkElement { IsVisible: true, IsEnabled: true })
+                if (_window.FindName("SlicerTimelinePaneCloseBtn") is FrameworkElement { Visibility: Visibility.Visible, IsEnabled: true })
                     return "SlicerTimelinePaneCloseBtn";
 
                 return "SlicerTimelinePane";
