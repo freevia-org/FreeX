@@ -205,6 +205,33 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void ObjectRotationDragUpdatesPreviewAndCommitsPreviewAngle()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Input.cs"));
+        var rotationMouseMoveBlock = source[
+            source.IndexOf("if (_objectDragKind == ObjectDragKind.Rotate)", StringComparison.Ordinal)..
+            source.IndexOf("if (_objectDragKind != ObjectDragKind.None)", StringComparison.Ordinal)];
+        var mouseUpStart = source.IndexOf("protected override void OnMouseLeftButtonUp", StringComparison.Ordinal);
+        var objectMouseUpBlock = source[
+            source.IndexOf("if (_objectDragKind != ObjectDragKind.None)", mouseUpStart, StringComparison.Ordinal)..
+            source.IndexOf("if (_marginDragEdge.HasValue)", mouseUpStart, StringComparison.Ordinal)];
+
+        rotationMouseMoveBlock.Should().Contain("_objectDragStartRect.Left + _objectDragStartRect.Width / 2");
+        rotationMouseMoveBlock.Should().Contain("_objectDragStartRect.Top + _objectDragStartRect.Height / 2");
+        rotationMouseMoveBlock.Should().Contain("_objectRotationPreviewDegrees = GridObjectDragPlanner.CalculateRotationDegrees(center, pos);");
+        rotationMouseMoveBlock.Should().Contain("Cursor = ObjectDragCursor(_objectDragKind);");
+        rotationMouseMoveBlock.Should().Contain("InvalidateVisual();");
+        objectMouseUpBlock.Should().Contain("var rotationDegrees = _objectRotationPreviewDegrees;");
+        objectMouseUpBlock.Should().Contain("if (dragKind == ObjectDragKind.Rotate)");
+        objectMouseUpBlock.Should().Contain("ObjectRotated?.Invoke(id, kind, rotationDegrees);");
+        objectMouseUpBlock.IndexOf("var rotationDegrees = _objectRotationPreviewDegrees;", StringComparison.Ordinal)
+            .Should().BeLessThan(objectMouseUpBlock.IndexOf("_objectRotationPreviewDegrees = 0;", StringComparison.Ordinal));
+        objectMouseUpBlock.IndexOf("ObjectRotated?.Invoke(id, kind, rotationDegrees);", StringComparison.Ordinal)
+            .Should().BeLessThan(objectMouseUpBlock.IndexOf("InvalidateVisual();", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SplitPaneDividerMouseDownCapturesDragBeforeAutofillAndResize()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
