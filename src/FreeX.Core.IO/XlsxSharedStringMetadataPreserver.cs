@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -10,6 +11,9 @@ internal static class XlsxSharedStringMetadataPreserver
         var sourceEntry = sourceArchive.GetEntry("xl/sharedStrings.xml");
         var targetEntry = targetArchive.GetEntry("xl/sharedStrings.xml");
         if (sourceEntry is null || targetEntry is null)
+            return;
+
+        if (!ContainsRichSharedStringMetadata(sourceEntry))
             return;
 
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -43,6 +47,31 @@ internal static class XlsxSharedStringMetadataPreserver
 
         if (changed)
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/sharedStrings.xml", targetXml);
+    }
+
+    private static bool ContainsRichSharedStringMetadata(ZipArchiveEntry sharedStringsEntry)
+    {
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            IgnoreComments = true,
+            IgnoreProcessingInstructions = true
+        };
+
+        using var stream = sharedStringsEntry.Open();
+        using var reader = XmlReader.Create(stream, settings);
+        while (reader.Read())
+        {
+            if (reader.NodeType == XmlNodeType.Element &&
+                reader.NamespaceURI == "http://schemas.openxmlformats.org/spreadsheetml/2006/main" &&
+                reader.LocalName is "r" or "rPh" or "phoneticPr")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static Dictionary<string, XElement> GetUniqueSharedStringsByPlainText(
