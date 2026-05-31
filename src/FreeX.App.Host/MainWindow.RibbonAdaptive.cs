@@ -404,6 +404,14 @@ public partial class MainWindow
             measurementCacheKey,
             availableWidth,
             RibbonAdaptiveLayoutEngine.GetExpandableGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader));
+        appliedCorrection |= ApplyRibbonMeasuredExpansionPass(
+            activePanel,
+            groupSnapshots,
+            collapsedButtons,
+            plannedStates,
+            measurementCacheKey,
+            availableWidth,
+            RibbonAdaptiveLayoutEngine.GetSpaceFillingExpandableGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader));
 
         return appliedCorrection;
     }

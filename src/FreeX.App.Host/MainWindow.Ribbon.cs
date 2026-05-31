@@ -1230,7 +1230,7 @@ public partial class MainWindow
             return false;
 
         var label = GetRibbonButtonDisplayLabel(button);
-        element.Width = GetSmallRibbonCommandWidth(label);
+        element.Width = Math.Max(element.Width is > 0 ? element.Width : 0, GetSmallRibbonCommandWidth(label));
         element.Height = 24;
         SetRibbonCompactWidths(button, element.Width, 24);
         if (button is Control control)
@@ -1852,8 +1852,24 @@ public partial class MainWindow
             Grid.SetColumnSpan(grid, columnSpan);
 
             foreach (var button in directButtons)
-            {
                 NormalizeDenseRibbonColumnButton(button);
+
+            var columnWidth = directButtons.Max(button => button.Width is > 0 ? button.Width : button.DesiredSize.Width);
+            foreach (var button in directButtons)
+            {
+                button.Width = columnWidth;
+                SetRibbonCompactWidths(button, columnWidth, 24);
+                if (button.Content is FrameworkElement content)
+                {
+                    content.Width = Math.Max(
+                        0,
+                        columnWidth -
+                        button.Padding.Left -
+                        button.Padding.Right -
+                        button.BorderThickness.Left -
+                        button.BorderThickness.Right);
+                }
+
                 grid.Children.Add(button);
             }
 
