@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -79,9 +80,9 @@ public sealed class ThreadedCommentDialog : Window
         var threadPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
         if (existing is not null)
         {
-            threadPanel.Children.Add(BuildMessage(existing.Author, existing.Text, isRoot: true));
+            threadPanel.Children.Add(BuildMessage(existing.Author, existing.Text, existing.CreatedAtUtc, isRoot: true));
             foreach (var reply in existing.Replies)
-                threadPanel.Children.Add(BuildMessage(reply.Author, reply.Text, isRoot: false));
+                threadPanel.Children.Add(BuildMessage(reply.Author, reply.Text, reply.CreatedAtUtc, isRoot: false));
         }
         scroll.Content = threadPanel;
 
@@ -333,10 +334,10 @@ public sealed class ThreadedCommentDialog : Window
         replyIndex >= 0 && replyIndex < comment.Replies.Count;
 
     private static string FormatReplyChoice(int index, CommentReply reply) =>
-        $"{index + 1}. {reply.Author}: {SummarizeReplyText(reply.Text)}";
+        $"{index + 1}. {FormatMessageHeading(reply.Author, reply.CreatedAtUtc)}: {SummarizeReplyText(reply.Text)}";
 
     private static string FormatReplyAutomationName(int index, CommentReply reply) =>
-        $"Reply {index + 1} by {reply.Author}: {SummarizeReplyText(reply.Text)}";
+        $"Reply {index + 1} by {FormatMessageHeading(reply.Author, reply.CreatedAtUtc)}: {SummarizeReplyText(reply.Text)}";
 
     private static string SummarizeReplyText(string text)
     {
@@ -344,12 +345,12 @@ public sealed class ThreadedCommentDialog : Window
         return normalized.Length <= 60 ? normalized : normalized[..57] + "...";
     }
 
-    private static Border BuildMessage(string author, string text, bool isRoot)
+    private static Border BuildMessage(string author, string text, DateTimeOffset? createdAtUtc, bool isRoot)
     {
         var panel = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
         panel.Children.Add(new TextBlock
         {
-            Text = author,
+            Text = FormatMessageHeading(author, createdAtUtc),
             FontWeight = FontWeights.SemiBold,
             FontSize = 11,
             Foreground = new SolidColorBrush(isRoot ? Color.FromRgb(0x1F, 0x49, 0x7D) : Color.FromRgb(0x40, 0x40, 0x40))
@@ -370,6 +371,20 @@ public sealed class ThreadedCommentDialog : Window
             Padding = new Thickness(8, 6, 8, 6),
             Margin = new Thickness(0, 0, 0, 4)
         };
+    }
+
+    private static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc)
+    {
+        var label = author.Trim();
+        if (createdAtUtc is null)
+            return label;
+
+        var formatted = createdAtUtc.Value
+            .ToUniversalTime()
+            .ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(label)
+            ? formatted
+            : $"{label} - {formatted}";
     }
 
     private void ShowInvalidThreadedCommentWarning(string message, TextBox target)

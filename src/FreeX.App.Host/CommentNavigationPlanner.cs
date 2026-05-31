@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -46,8 +47,8 @@ public static class CommentNavigationPlanner
 
     public static string FormatThreadedComment(ThreadedComment thread)
     {
-        var parts = new List<string> { FormatCommentPart(thread.Author, thread.Text) };
-        parts.AddRange(thread.Replies.Select(reply => FormatCommentPart(reply.Author, reply.Text)));
+        var parts = new List<string> { FormatCommentPart(thread.Author, thread.Text, thread.CreatedAtUtc) };
+        parts.AddRange(thread.Replies.Select(reply => FormatCommentPart(reply.Author, reply.Text, reply.CreatedAtUtc)));
         if (thread.IsResolved)
             parts.Add("Resolved");
 
@@ -93,10 +94,21 @@ public static class CommentNavigationPlanner
             yield return $"{prefix}: {FormatThreadedComment(thread)}";
     }
 
-    private static string FormatCommentPart(string author, string text) =>
-        string.IsNullOrWhiteSpace(author)
+    private static string FormatCommentPart(string author, string text, DateTimeOffset? createdAtUtc = null)
+    {
+        var label = author.Trim();
+        if (createdAtUtc is { } timestamp)
+        {
+            var formatted = timestamp.ToUniversalTime().ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
+            label = string.IsNullOrWhiteSpace(label)
+                ? formatted
+                : $"{label} ({formatted})";
+        }
+
+        return string.IsNullOrWhiteSpace(label)
             ? text
-            : $"{author.Trim()}: {text}";
+            : $"{label}: {text}";
+    }
 
     private static List<CellAddress> OrderAddresses(IEnumerable<CellAddress> addresses) =>
         addresses
