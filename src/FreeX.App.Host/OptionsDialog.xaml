@@ -390,10 +390,68 @@
                         <TextBlock Text="{local:Loc Key=Options_CustomizeTheQuickAccessToolbar}"
                                    FontWeight="SemiBold" FontSize="13" Margin="0,0,0,5"/>
                         <Rectangle Height="1" Fill="#D4D4D4" Margin="0,0,0,12"/>
-                        <CheckBox Content="{local:Loc Key=Options_ShowQuickAccessToolbarBelowTheRibbon}"
-                                  FontSize="12" Margin="0,0,0,8"/>
-                        <Button x:Name="QuickAccessResetButton" Content="{local:Loc Key=Options_Reset}" Width="90" Height="26"
-                                HorizontalAlignment="Left" Click="QuickAccessResetButton_Click"/>
+                        <CheckBox x:Name="QuickAccessBelowRibbonCheckBox"
+                                  Content="{local:Loc Key=Options_ShowQuickAccessToolbarBelowTheRibbon}"
+                                  FontSize="12" Margin="0,0,0,10"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="180"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Label Grid.Row="0" Grid.Column="0"
+                                   Content="{local:Loc Key=Options_AvailableCommands}"
+                                   Target="{Binding ElementName=QuickAccessAvailableCommandsList}"
+                                   Padding="0,0,0,4"/>
+                            <ListBox x:Name="QuickAccessAvailableCommandsList"
+                                     Grid.Row="1" Grid.Column="0"
+                                     DisplayMemberPath="DisplayName"
+                                     SelectionChanged="QuickAccessCommandLists_SelectionChanged"
+                                     MouseDoubleClick="QuickAccessAddButton_Click"/>
+
+                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="10,22" VerticalAlignment="Top">
+                                <Button x:Name="QuickAccessAddButton"
+                                        Content="{local:Loc Key=Options_Add}"
+                                        Width="92" Height="26" Margin="0,0,0,6"
+                                        Click="QuickAccessAddButton_Click"/>
+                                <Button x:Name="QuickAccessRemoveButton"
+                                        Content="{local:Loc Key=Options_Remove}"
+                                        Width="92" Height="26"
+                                        Click="QuickAccessRemoveButton_Click"/>
+                            </StackPanel>
+
+                            <Label Grid.Row="0" Grid.Column="2"
+                                   Content="{local:Loc Key=Options_QuickAccessToolbarCommands}"
+                                   Target="{Binding ElementName=QuickAccessSelectedCommandsList}"
+                                   Padding="0,0,0,4"/>
+                            <ListBox x:Name="QuickAccessSelectedCommandsList"
+                                     Grid.Row="1" Grid.Column="2"
+                                     DisplayMemberPath="DisplayName"
+                                     SelectionChanged="QuickAccessCommandLists_SelectionChanged"
+                                     MouseDoubleClick="QuickAccessRemoveButton_Click"/>
+
+                            <StackPanel Grid.Row="1" Grid.Column="3" Margin="10,22,0,0" VerticalAlignment="Top">
+                                <Button x:Name="QuickAccessMoveUpButton"
+                                        Content="{local:Loc Key=Options_MoveUp}"
+                                        Width="92" Height="26" Margin="0,0,0,6"
+                                        Click="QuickAccessMoveUpButton_Click"/>
+                                <Button x:Name="QuickAccessMoveDownButton"
+                                        Content="{local:Loc Key=Options_MoveDown}"
+                                        Width="92" Height="26" Margin="0,0,0,6"
+                                        Click="QuickAccessMoveDownButton_Click"/>
+                                <Button x:Name="QuickAccessResetButton"
+                                        Content="{local:Loc Key=Options_Reset}"
+                                        Width="92" Height="26"
+                                        Click="QuickAccessResetButton_Click"/>
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
 
                     <!-- ADD-INS -->

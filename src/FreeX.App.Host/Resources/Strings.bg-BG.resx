@@ -2712,12 +2712,6 @@
   <data name="DeferredCommand_PivotTable_Title" xml:space="preserve">
     <value>обобщена таблица</value>
   </data>
-  <data name="DeferredCommand_QuickAccessToolbar_Body" xml:space="preserve">
-    <value>Персонализирането на лентата с инструменти за бърз достъп все още не е запазено в FreeX, така че няма персонализирано състояние на лентата с инструменти за нулиране.</value>
-  </data>
-  <data name="DeferredCommand_QuickAccessToolbar_Title" xml:space="preserve">
-    <value>Лента с инструменти за бърз достъп</value>
-  </data>
   <data name="DeferredCommand_RibbonCustomization_Body" xml:space="preserve">
     <value>Персонализирано импортиране/експортиране на лента не е внедрено в FreeX. Персонализираните части на потребителския интерфейс на лентата се запазват като неподдържани XLSX метаданни, където е безопасно, но FreeX не ги изпълнява или редактира.</value>
   </data>
@@ -5333,6 +5327,9 @@
   <data name="MainWindow_TooltipDescription_CopyFormattingFromOnePlaceAndApplyItToAnother" xml:space="preserve">
     <value>Копирайте форматирането от едно място и го приложете на друго.</value>
   </data>
+  <data name="MainWindow_TooltipDescription_CreateANewWorkbook" xml:space="preserve">
+    <value>Създайте нова работна книга.</value>
+  </data>
   <data name="MainWindow_TooltipDescription_CopySafeAppVersionRuntimeOSAndSessionDiagnosticsForTesterReports" xml:space="preserve">
     <value>Копирайте безопасна версия на приложението, време на изпълнение, операционна система и диагностика на сесия за отчети на тестери.</value>
   </data>
@@ -5831,6 +5828,9 @@
   <data name="MainWindow_TooltipDescription_OpenAListOfThreadedCommentsOnTheActiveSheet" xml:space="preserve">
     <value>Отворете списък с резбовани коментари на активния лист.</value>
   </data>
+  <data name="MainWindow_TooltipDescription_OpenAnExistingWorkbook" xml:space="preserve">
+    <value>Отворете съществуваща работна книга.</value>
+  </data>
   <data name="MainWindow_TooltipDescription_OpenAPrefilledGitHubIssueWithSafeAppDiagnostics" xml:space="preserve">
     <value>Отворете предварително попълнен проблем на GitHub с диагностика на безопасно приложение.</value>
   </data>
@@ -5863,6 +5863,9 @@
   </data>
   <data name="MainWindow_TooltipDescription_OpenThePrintPreviewAndNativePrintDialogForTheRenderedWorksheet" xml:space="preserve">
     <value>Отворете предварителния преглед на печата и диалоговия прозорец за естествен печат за изобразения работен лист.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_OpenFormatCellsDialogForTheSelection" xml:space="preserve">
+    <value>Отворете форматиране на клетки за текущата селекция.</value>
   </data>
   <data name="MainWindow_TooltipDescription_OpenValueFieldSettingsForTheSelectedPivotTableField" xml:space="preserve">
     <value>Отворете настройките на полето за стойност за избраното поле на обобщена таблица.</value>
@@ -5962,6 +5965,9 @@
   </data>
   <data name="MainWindow_TooltipDescription_SaveTheWorkbook" xml:space="preserve">
     <value>Запазете работната книга.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_SaveTheWorkbookWithANewNameOrFormat" xml:space="preserve">
+    <value>Запазете работната книга с ново име или формат.</value>
   </data>
   <data name="MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile" xml:space="preserve">
     <value>Запазете работната книга, ако е необходимо, и отворете Windows Share за файла.</value>
@@ -6154,6 +6160,9 @@
   </data>
   <data name="MainWindow_TooltipDescription_ViewAddShowAndDeleteSavedWorkbookViews" xml:space="preserve">
     <value>Преглеждайте, добавяйте, показвайте и изтривайте запазени изгледи на работна книга.</value>
+  </data>
+  <data name="MainWindow_TooltipDescription_ZoomTheSelectedRangeToFitTheWindow" xml:space="preserve">
+    <value>Мащабирайте избрания диапазон, за да се побере в прозореца.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ViewCreateEditAndDeleteAllNamedRangesInTheWorkbook" xml:space="preserve">
     <value>Преглеждайте, създавайте, редактирайте и изтривайте всички наименувани диапазони в работната книга.</value>
@@ -7219,6 +7228,9 @@
   </data>
   <data name="MainWindow_TooltipTitle_Zoom" xml:space="preserve">
     <value>мащабиране</value>
+  </data>
+  <data name="MainWindow_TooltipTitle_Zoom100" xml:space="preserve">
+    <value>100% мащабиране</value>
   </data>
   <data name="MainWindow_TooltipTitle_ZoomIn" xml:space="preserve">
     <value>Увеличете</value>
@@ -8298,40 +8310,40 @@
     <value>Изберете категория с опции на FreeX.</value>
   </data>
   <data name="Options_General" xml:space="preserve">
-    <value>_Общи</value>
+    <value>Общи</value>
   </data>
   <data name="Options_Formulas" xml:space="preserve">
-    <value>_Формули</value>
+    <value>Формули</value>
   </data>
   <data name="Options_Proofing" xml:space="preserve">
-    <value>_Проверка</value>
+    <value>Проверка</value>
   </data>
   <data name="Options_Save" xml:space="preserve">
-    <value>_Записване</value>
+    <value>Записване</value>
   </data>
   <data name="Options_Language" xml:space="preserve">
-    <value>_Език</value>
+    <value>Език</value>
   </data>
   <data name="Options_EaseOfAccess" xml:space="preserve">
-    <value>_Достъпност</value>
+    <value>Достъпност</value>
   </data>
   <data name="Options_Advanced" xml:space="preserve">
-    <value>_Разширени</value>
+    <value>Разширени</value>
   </data>
   <data name="Options_CustomizeRibbon" xml:space="preserve">
-    <value>_Персонализиране на лентата</value>
+    <value>Персонализиране на лентата</value>
   </data>
   <data name="Options_QuickAccessToolbar" xml:space="preserve">
-    <value>_Лента с бърз достъп</value>
+    <value>Лента с бърз достъп</value>
   </data>
   <data name="Options_AddIns" xml:space="preserve">
-    <value>_Добавки</value>
+    <value>Добавки</value>
   </data>
   <data name="Options_TrustCenter" xml:space="preserve">
-    <value>_Център за надеждност</value>
+    <value>Център за надеждност</value>
   </data>
   <data name="Options_View" xml:space="preserve">
-    <value>_Изглед</value>
+    <value>Изглед</value>
   </data>
   <data name="Options_GeneralOptionsForWorkingWithFreeX" xml:space="preserve">
     <value>Общи опции за работа с FreeX.</value>
@@ -8500,6 +8512,24 @@
   </data>
   <data name="Options_ChooseCommandsFromPopularCommands" xml:space="preserve">
     <value>Изберете команди от: Популярни команди</value>
+  </data>
+  <data name="Options_AvailableCommands" xml:space="preserve">
+    <value>Налични _команди:</value>
+  </data>
+  <data name="Options_QuickAccessToolbarCommands" xml:space="preserve">
+    <value>_Команди на лентата с инструменти за бърз достъп:</value>
+  </data>
+  <data name="Options_Add" xml:space="preserve">
+    <value>_Добавяне &gt;&gt;</value>
+  </data>
+  <data name="Options_Remove" xml:space="preserve">
+    <value>&lt;&lt; _Премахване</value>
+  </data>
+  <data name="Options_MoveUp" xml:space="preserve">
+    <value>Преместване _нагоре</value>
+  </data>
+  <data name="Options_MoveDown" xml:space="preserve">
+    <value>Преместване на_долу</value>
   </data>
   <data name="Options_ImportExport" xml:space="preserve">
     <value>_Импорт/Експорт...</value>

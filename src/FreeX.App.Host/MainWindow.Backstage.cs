@@ -307,6 +307,7 @@ public partial class MainWindow
         wb.AddSheet("Sheet1");
         _workbook = wb;
         _workbookRef.Current = wb;
+        InvalidateToolbarVisualState();
         _currentSheetId = wb.Sheets[0].Id;
         InvalidateNavigationCaches();
         _currentFilePath = null;
@@ -353,6 +354,7 @@ public partial class MainWindow
             _currentXlsxFeatureReport = result.FeatureReport;
             _workbook = result.Workbook;
             _workbookRef.Current = result.Workbook;
+            InvalidateToolbarVisualState();
             _workbook.Name = result.DisplayName;
             _currentSheetId = _workbook.Sheets[0].Id;
             InvalidateNavigationCaches();
@@ -540,6 +542,7 @@ public partial class MainWindow
                 AppLocalization.ApplyAppLanguage(_options.AppLanguage);
 
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
+            RebuildQuickAccessToolbar();
             ApplyOptionsWorksheetViewSettings();
             ApplyOptionsToView();
             UpdateViewport();

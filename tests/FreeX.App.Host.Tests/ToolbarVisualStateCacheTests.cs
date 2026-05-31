@@ -9,11 +9,12 @@ public sealed class ToolbarVisualStateCacheTests
     public void GetOrCreate_ReusesStateWhenStyleSourceIsUnchanged()
     {
         var cache = new ToolbarVisualStateCache();
+        var workbookId = WorkbookId.New();
         var styleId = new StyleId(4);
         var calls = 0;
 
-        cache.GetOrCreate(styleId, CreateState);
-        var second = cache.GetOrCreate(styleId, CreateState);
+        cache.GetOrCreate(workbookId, styleId, CreateState);
+        var second = cache.GetOrCreate(workbookId, styleId, CreateState);
 
         calls.Should().Be(1);
         second.Should().Be(new ToolbarVisualState(
@@ -39,13 +40,14 @@ public sealed class ToolbarVisualStateCacheTests
     public void GetOrCreate_DoesNotRebuildFormattingStateWhenUndoAvailabilityChanges()
     {
         var cache = new ToolbarVisualStateCache();
+        var workbookId = WorkbookId.New();
         var styleId = new StyleId(4);
         var calls = 0;
         var canUndo = false;
 
-        cache.GetOrCreate(styleId, CreateState);
+        cache.GetOrCreate(workbookId, styleId, CreateState);
         canUndo = true;
-        var second = cache.GetOrCreate(styleId, CreateState);
+        var second = cache.GetOrCreate(workbookId, styleId, CreateState);
 
         calls.Should().Be(1);
         second.Bold.Should().BeFalse();
@@ -62,10 +64,31 @@ public sealed class ToolbarVisualStateCacheTests
     public void GetOrCreate_RebuildsStateWhenStyleChanges()
     {
         var cache = new ToolbarVisualStateCache();
+        var workbookId = WorkbookId.New();
         var calls = 0;
 
-        cache.GetOrCreate(new StyleId(4), CreateState);
-        cache.GetOrCreate(new StyleId(5), CreateState);
+        cache.GetOrCreate(workbookId, new StyleId(4), CreateState);
+        cache.GetOrCreate(workbookId, new StyleId(5), CreateState);
+
+        calls.Should().Be(2);
+        return;
+
+        ToolbarVisualState CreateState()
+        {
+            calls++;
+            return ToolbarVisualState.From(CellStyle.Default);
+        }
+    }
+
+    [Fact]
+    public void GetOrCreate_RebuildsStateWhenWorkbookChanges()
+    {
+        var cache = new ToolbarVisualStateCache();
+        var styleId = new StyleId(4);
+        var calls = 0;
+
+        cache.GetOrCreate(WorkbookId.New(), styleId, CreateState);
+        cache.GetOrCreate(WorkbookId.New(), styleId, CreateState);
 
         calls.Should().Be(2);
         return;

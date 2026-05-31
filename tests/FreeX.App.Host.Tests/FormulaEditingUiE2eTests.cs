@@ -169,12 +169,14 @@ internal sealed class FreeXUiRun : IDisposable
     {
         var appExe = ResolveAppExecutable();
         var artifacts = CreateArtifactDirectory();
+        var optionsPath = SeedDeterministicOptions(artifacts);
         var startInfo = new ProcessStartInfo(appExe)
         {
             WorkingDirectory = Path.GetDirectoryName(appExe)!,
             UseShellExecute = false
         };
         startInfo.Environment["APPDATA"] = artifacts.FullName;
+        startInfo.Environment[FreeXOptions.OptionsPathEnvironmentVariable] = optionsPath;
 
         var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to launch FreeX.");
 
@@ -185,6 +187,20 @@ internal sealed class FreeXUiRun : IDisposable
         Thread.Sleep(600);
 
         return new FreeXUiRun(process, window, artifacts);
+    }
+
+    private static string SeedDeterministicOptions(DirectoryInfo artifacts)
+    {
+        var optionsPath = Path.Combine(artifacts.FullName, "FreeX", "options.json");
+        var saved = new FreeXOptions
+        {
+            AppLanguage = AppLanguageCatalog.EnglishUnitedStatesCultureName
+        }.SaveToPath(optionsPath);
+
+        if (!saved)
+            throw new InvalidOperationException($"Failed to seed deterministic FreeX UIE2E options at {optionsPath}.");
+
+        return optionsPath;
     }
 
     public void ClickCell(int col, int row)

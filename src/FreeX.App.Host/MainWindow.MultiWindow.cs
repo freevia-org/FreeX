@@ -40,6 +40,7 @@ public partial class MainWindow
     private void AdoptSharedWorkbook()
     {
         _workbook = _workbookRef.Current;
+        InvalidateToolbarVisualState();
         _currentSheetId = _workbook.Sheets[0].Id;
         InvalidateNavigationCaches();
         UpdateTitleBar();
@@ -63,7 +64,10 @@ public partial class MainWindow
     /// <summary>Re-reads the shared workbook into this window's viewport/status after an edit elsewhere.</summary>
     public void RefreshFromSharedWorkbook()
     {
-        _workbook = _workbookRef.Current;
+        var workbook = _workbookRef.Current;
+        if (_workbook.Id != workbook.Id)
+            InvalidateToolbarVisualState();
+        _workbook = workbook;
         if (_workbook.GetSheet(_currentSheetId) is null && _workbook.Sheets.Count > 0)
             _currentSheetId = _workbook.Sheets[0].Id;
 

@@ -98,11 +98,13 @@ public sealed class UiAutomationCatalogSnapshotTests
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-        var expected = new[]
+        var dynamicQuickAccessToolbarIds = QuickAccessToolbarCatalog.DefaultCommandIds
+            .Select(id => QuickAccessToolbarCatalog.TryGet(id, out var command) ? command.AutomationId : null)
+            .Where(id => id is not null)
+            .Cast<string>()
+            .ToArray();
+        var expectedDeclaredNames = new[]
         {
-            "SaveQatBtn",
-            "UndoQatBtn",
-            "RedoQatBtn",
             "CloseSysBtn",
             "VerticalScroll",
             "HorizontalScroll",
@@ -118,8 +120,8 @@ public sealed class UiAutomationCatalogSnapshotTests
             .Where(name => name is not null)
             .ToHashSet(StringComparer.Ordinal);
 
-        declaredNames.Should().Contain(expected);
-        return expected;
+        declaredNames.Should().Contain(expectedDeclaredNames);
+        return dynamicQuickAccessToolbarIds.Concat(expectedDeclaredNames).ToArray();
     }
 
     private static void AssertVisibleButtonExposesInvokePattern(
