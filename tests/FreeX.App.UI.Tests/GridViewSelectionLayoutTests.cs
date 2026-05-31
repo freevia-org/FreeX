@@ -63,6 +63,24 @@ public sealed class GridViewSelectionLayoutTests
     }
 
     [Fact]
+    public void CalculateVisibleSelectionRect_UsesVisibleIntersectionForWholeColumnSelection()
+    {
+        var sheetId = SheetId.New();
+        var viewport = Viewport();
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 2),
+            new CellAddress(sheetId, CellAddress.MaxRow, 2));
+
+        var rect = GridView.CalculateVisibleSelectionRect(
+            viewport,
+            range,
+            GridView.RowHeaderWidth,
+            GridView.ColHeaderHeight);
+
+        rect.Should().Be(new Rect(90, 18, 80, 60));
+    }
+
+    [Fact]
     public void CalculateVisibleSelectionRect_DoesNotTreatNonContiguousFrozenMetricsAsContinuous()
     {
         var sheetId = SheetId.New();
