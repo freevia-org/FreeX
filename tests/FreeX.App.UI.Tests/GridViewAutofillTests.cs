@@ -180,6 +180,20 @@ public sealed class GridViewAutofillTests
     }
 
     [Fact]
+    public void CalculateAutofillEdgeScrollIntent_IgnoresCollapsedContentArea()
+    {
+        GridAutofillPlanner.CalculateEdgeScrollIntent(
+                pointerX: 48,
+                pointerY: 24,
+                width: 48,
+                height: 24,
+                rowHeaderWidth: 48,
+                columnHeaderHeight: 24)
+            .Should()
+            .Be(new GridAutoScrollRequest(0, 0));
+    }
+
+    [Fact]
     public void CalculateAutofillEdgeScrollIntent_ChoosesNearestEdgeWhenHotZonesOverlap()
     {
         GridAutofillPlanner.CalculateEdgeScrollIntent(
@@ -438,6 +452,14 @@ public sealed class GridViewAutofillTests
         GridAutofillPlanner.IsOnHandle(
                 CreateViewport(),
                 new GridRange(new CellAddress(sheet, 99, 2), new CellAddress(sheet, 99, 3)),
+                new System.Windows.Point(30 + 120, 18 + 60),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeFalse();
+        GridAutofillPlanner.IsOnHandle(
+                CreateViewport(),
+                new GridRange(new CellAddress(sheet, 2, 99), new CellAddress(sheet, 3, 99)),
                 new System.Windows.Point(30 + 120, 18 + 60),
                 rowHeaderWidth: 30,
                 columnHeaderHeight: 18)

@@ -308,6 +308,20 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_ReadsQuotedFieldsWithEmbeddedCrLfAndEscapedQuotes()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"line 1\r\n\"\"quoted\"\"\r\nline 3\",tail\r\n"));
+
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(new TextValue("line 1\r\n\"quoted\"\r\nline 3"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("tail"));
+        sheet.GetCell(new CellAddress(sheet.Id, 2, 1)).Should().BeNull();
+    }
+
+    [Fact]
     public void Load_ReadsFinalQuotedEmptyFieldWithoutTrailingNewline()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("\"\""));
@@ -646,6 +660,27 @@ public sealed class CsvFileAdapterTests
 
         loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 1)).Should().Be(new TextValue(""));
         loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 2)).Should().Be(new TextValue("tail"));
+    }
+
+    [Fact]
+    public void Save_RoundTripsTrailingExplicitEmptyTextField()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("head"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue(""));
+
+        var adapter = new CsvFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("head,\"\"\r\n");
+        stream.Position = 0;
+
+        var roundTripped = adapter.Load(stream);
+        var loadedSheet = roundTripped.Sheets.Single();
+
+        loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 1)).Should().Be(new TextValue("head"));
+        loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 2)).Should().Be(new TextValue(""));
     }
 
     [Fact]

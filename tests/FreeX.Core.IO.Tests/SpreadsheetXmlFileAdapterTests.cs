@@ -924,6 +924,48 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlScalarValueTypesAndIndexes()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row label="Ready" amount="42.25" active="1" timestamp="2026-05-31T08:15:30" error="#N/A"/>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Typed">
+                    <ss:Table>
+                      <ss:Row ss:Index="3">
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@label"/></ss:Data></ss:Cell>
+                        <ss:Cell ss:Index="3"><ss:Data ss:Type="Number"><xsl:value-of select="row/@amount"/></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Boolean"><xsl:value-of select="row/@active"/></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="DateTime"><xsl:value-of select="row/@timestamp"/></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Error"><xsl:value-of select="row/@error"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Typed");
+        sheet.GetCell(3, 1)!.Value.Should().Be(new TextValue("Ready"));
+        sheet.GetCell(3, 2).Should().BeNull();
+        sheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(42.25));
+        sheet.GetCell(3, 4)!.Value.Should().Be(new BoolValue(true));
+        sheet.GetCell(3, 5)!.Value.Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 31, 8, 15, 30)));
+        sheet.GetCell(3, 6)!.Value.Should().Be(new ErrorValue("#N/A"));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlHyperlinksAndComments()
     {
         using var source = StreamFromString("""
@@ -1052,6 +1094,82 @@ public sealed class SpreadsheetXmlFileAdapterTests
         formulaCell.Should().NotBeNull();
         formulaCell!.FormulaText.Should().Be("SUM(RC[-2]:RC[-1])");
         formulaCell.Value.Should().Be(new NumberValue(19.75));
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlWorkbookAndSheetMetadata()
+    {
+        using var source = StreamFromString("""
+            <report sheet="Generated">
+              <row name="Alpha" amount="12.5"/>
+              <row name="Beta" amount="7.25"/>
+            </report>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+                xmlns:x="urn:schemas-microsoft-com:office:excel">
+              <xsl:template match="/report">
+                <ss:Workbook>
+                  <ss:Names>
+                    <ss:NamedRange ss:Name="GeneratedData" ss:RefersTo="=Generated!A1:B3"/>
+                  </ss:Names>
+                  <ss:Worksheet ss:Name="{@sheet}" ss:Visible="SheetHidden">
+                    <ss:Table>
+                      <ss:Column ss:Width="18.5"/>
+                      <ss:Column ss:Index="3" ss:Hidden="1"/>
+                      <ss:Row ss:Height="27.5">
+                        <ss:Cell><ss:Data ss:Type="String">Name</ss:Data></ss:Cell>
+                        <ss:Cell ss:Index="3"><ss:Data ss:Type="String">Amount</ss:Data></ss:Cell>
+                      </ss:Row>
+                      <xsl:for-each select="row">
+                        <ss:Row ss:Index="{position() + 1}">
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@name"/></ss:Data></ss:Cell>
+                          <ss:Cell ss:Index="3"><ss:Data ss:Type="Number"><xsl:value-of select="@amount"/></ss:Data></ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                      <ss:Row ss:Index="4" ss:Hidden="1">
+                        <ss:Cell><ss:Data ss:Type="String">Hidden footer</ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                    <x:WorksheetOptions>
+                      <x:DoNotDisplayGridlines/>
+                      <x:Print>
+                        <x:Gridlines/>
+                      </x:Print>
+                      <x:FreezePanes/>
+                      <x:FrozenNoSplit/>
+                      <x:SplitHorizontal>1</x:SplitHorizontal>
+                      <x:TopRowBottomPane>1</x:TopRowBottomPane>
+                      <x:SplitVertical>2</x:SplitVertical>
+                      <x:LeftColumnRightPane>2</x:LeftColumnRightPane>
+                    </x:WorksheetOptions>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Generated");
+        sheet.IsHidden.Should().BeTrue();
+        sheet.IsVeryHidden.Should().BeFalse();
+        sheet.ShowGridlines.Should().BeFalse();
+        sheet.PrintGridlines.Should().BeTrue();
+        sheet.FrozenRows.Should().Be(1);
+        sheet.FrozenCols.Should().Be(2);
+        sheet.RowHeights[1].Should().Be(27.5);
+        sheet.HiddenRows.Should().Contain(4u);
+        sheet.ColumnWidths[1].Should().Be(18.5);
+        sheet.HiddenCols.Should().Contain(3u);
+        sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("Alpha"));
+        sheet.GetCell(3, 3)!.Value.Should().Be(new NumberValue(7.25));
+        workbook.NamedRanges["GeneratedData"].Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 2)));
     }
 
     [Fact]

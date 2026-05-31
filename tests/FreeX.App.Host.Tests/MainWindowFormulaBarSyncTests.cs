@@ -157,6 +157,28 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarEscape_WhileInlineEditorVisible_CancelsInlineEditAndReturnsFocusToGrid()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.ShowInlineEditor(1, 1);
+            harness.SetInlineEditorText("draft inline edit");
+            harness.FocusFormulaBar();
+
+            harness.PressFormulaBarKey(Key.Escape).Should().BeTrue();
+
+            harness.InlineEditorVisible.Should().BeFalse();
+            harness.FormulaBarText.Should().Be("original");
+            harness.CellText(1, 1).Should().Be("original");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void CtrlEnterFormulaBarEdit_FillsSelectedRangeWhenNotChoosingFormulaReferences()
     {
         StaTestRunner.Run(() =>
@@ -258,6 +280,27 @@ public sealed class MainWindowFormulaBarSyncTests
                 new CellAddress(harness.CurrentSheetId, 1, 1)));
             harness.CellAddressBoxText.Should().Be("not a reference");
             harness.FormulaBarText.Should().Be("active cell");
+        });
+    }
+
+    [Fact]
+    public void NameBoxEscape_RestoresSelectedRangeReferenceAndReturnsFocusToGrid()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var expectedRange = new GridRange(
+                new CellAddress(harness.CurrentSheetId, 2, 2),
+                new CellAddress(harness.CurrentSheetId, 3, 3));
+
+            harness.SelectRange(2, 2, 3, 3);
+            harness.SetCellAddressBoxText("Z99");
+
+            harness.PressCellAddressBoxKey(Key.Escape).Should().BeTrue();
+
+            harness.SelectedRange.Should().Be(expectedRange);
+            harness.CellAddressBoxText.Should().Be("B2:C3");
+            harness.SheetGridFocused.Should().BeTrue();
         });
     }
 
