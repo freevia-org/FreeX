@@ -1009,6 +1009,52 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlFormulasAndMergedCells()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row label="Projected total" first="12.5" second="7.25"/>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Formulas">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell ss:MergeAcross="2">
+                          <ss:Data ss:Type="String"><xsl:value-of select="row/@label"/></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@first"/></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@second"/></ss:Data></ss:Cell>
+                        <ss:Cell ss:Formula="=SUM(RC[-2]:RC[-1])"><ss:Data ss:Type="Number">19.75</ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Formulas");
+        sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 1, 3)));
+        var formulaCell = sheet.GetCell(2, 3);
+        formulaCell.Should().NotBeNull();
+        formulaCell!.FormulaText.Should().Be("SUM(RC[-2]:RC[-1])");
+        formulaCell.Value.Should().Be(new NumberValue(19.75));
+    }
+
+    [Fact]
     public void LoadTransformed_UsesCurrentStreamPositionsAndLeavesInputStreamsOpen()
     {
         using var source = PositionedStreamFromString("ignored", "<rows><row name=\"Gamma\"/></rows>");
