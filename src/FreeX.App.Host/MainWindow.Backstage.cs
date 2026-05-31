@@ -32,6 +32,65 @@ public partial class MainWindow
         Keyboard.Focus(SsHomeNavBtn);
     }
 
+    private void ConfigureBackstageInfoActionButtons()
+    {
+        InfoProtectWorkbookButton.Click += InfoProtectWorkbookBtn_Click;
+        System.Windows.Automation.AutomationProperties.SetAutomationId(
+            InfoProtectWorkbookButton,
+            "BackstageInfoProtectWorkbookButton");
+        RibbonTooltip.SetKeyTip(InfoProtectWorkbookButton, "PW");
+        RefreshBackstageInfoProtectionButton();
+
+        ConfigureBackstageInfoActionButton(
+            InfoCheckAccessibilityButton,
+            UiText.Get("MainWindow_Text_CheckAccessibility"),
+            UiText.Get("MainWindow_AutomationHelpText_FindMergedCellsBlankTableHeadersObjectsMissingAlternateTextAndChartsWith_AD813E90"),
+            UiText.Get("MainWindow_TooltipTitle_CheckAccessibility"),
+            UiText.Get("MainWindow_TooltipDescription_FindMergedCellsBlankTableHeadersObjectsMissingAlternateTextAndChartsWith_4FECDB20"),
+            "BackstageInfoCheckAccessibilityButton",
+            "CA",
+            InfoAccessibilityCheckerBtn_Click);
+
+        ConfigureBackstageInfoActionButton(
+            InfoWorkbookStatisticsButton,
+            UiText.Get("MainWindow_Content_WorkbookStatistics"),
+            UiText.Get("MainWindow_AutomationHelpText_ShowWorkbookCountsForSheetsCellsFormulasCommentsAndObjects"),
+            UiText.Get("MainWindow_TooltipTitle_WorkbookStatistics"),
+            UiText.Get("MainWindow_TooltipDescription_ShowWorkbookCountsForSheetsCellsFormulasCommentsAndObjects"),
+            "BackstageInfoWorkbookStatisticsButton",
+            "W",
+            InfoWorkbookStatisticsBtn_Click);
+
+        ConfigureBackstageInfoActionButton(
+            InfoErrorCheckingButton,
+            UiText.Get("MainWindow_Content_ErrorChecking"),
+            UiText.Get("MainWindow_TooltipDescription_CheckForCommonErrorsInTheFormulasOnThisSheetOrOpenErrorCheckingOptions"),
+            UiText.Get("MainWindow_TooltipTitle_ErrorChecking"),
+            UiText.Get("MainWindow_TooltipDescription_CheckForCommonErrorsInTheFormulasOnThisSheetOrOpenErrorCheckingOptions"),
+            "BackstageInfoErrorCheckingButton",
+            "EC",
+            InfoErrorCheckingBtn_Click);
+    }
+
+    private static void ConfigureBackstageInfoActionButton(
+        Button button,
+        string automationName,
+        string automationHelpText,
+        string tooltipTitle,
+        string tooltipDescription,
+        string automationId,
+        string keyTip,
+        RoutedEventHandler clickHandler)
+    {
+        button.Click += clickHandler;
+        System.Windows.Automation.AutomationProperties.SetAutomationId(button, automationId);
+        System.Windows.Automation.AutomationProperties.SetName(button, automationName);
+        System.Windows.Automation.AutomationProperties.SetHelpText(button, automationHelpText);
+        RibbonTooltip.SetTitle(button, tooltipTitle);
+        RibbonTooltip.SetDescription(button, tooltipDescription);
+        RibbonTooltip.SetKeyTip(button, keyTip);
+    }
+
     private bool TryHandleBackstageShellFocusCycle(bool reverse)
     {
         if (Keyboard.FocusedElement is not DependencyObject focusedElement ||
@@ -131,14 +190,33 @@ public partial class MainWindow
 
     private void UpdateInfoView()
     {
-        var plan = BackstageInfoPlanner.Build(_workbook, _currentFilePath);
+        var activeSheet = _workbook.GetSheet(_currentSheetId);
+        var plan = BackstageInfoPlanner.Build(_workbook, _currentFilePath, activeSheet);
         InfoWorkbookName.Text = plan.WorkbookName;
         InfoFilePath.Text = plan.FilePath;
         InfoSheetCount.Text = plan.SheetCount;
         InfoFormat.Text = plan.Format;
+        InfoFileSize.Text = plan.FileSize;
+        InfoLastModified.Text = plan.LastModified;
+        InfoWorkbookProtectionSummary.Text = plan.Summary.WorkbookProtectionSummary;
+        InfoActiveSheetProtectionSummary.Text = plan.Summary.ActiveSheetProtectionSummary;
         InfoStatisticsSummary.Text = plan.StatisticsSummary;
         InfoAccessibilitySummary.Text = plan.AccessibilitySummary;
         InfoFormulaErrorSummary.Text = plan.FormulaErrorSummary;
+        RefreshBackstageInfoProtectionButton();
+    }
+
+    private void RefreshBackstageInfoProtectionButton()
+    {
+        if (InfoProtectWorkbookButton is null)
+            return;
+
+        var uiText = WorkbookProtectionWorkflow.GetUiText(_workbook);
+        InfoProtectWorkbookButton.Content = uiText.ButtonContent;
+        System.Windows.Automation.AutomationProperties.SetName(InfoProtectWorkbookButton, uiText.ButtonContent);
+        System.Windows.Automation.AutomationProperties.SetHelpText(InfoProtectWorkbookButton, uiText.TooltipDescription);
+        RibbonTooltip.SetTitle(InfoProtectWorkbookButton, uiText.TooltipTitle);
+        RibbonTooltip.SetDescription(InfoProtectWorkbookButton, uiText.TooltipDescription);
     }
 
     private void UpdateSsGreeting()
@@ -396,6 +474,28 @@ public partial class MainWindow
     private async void SsShareBtn_Click(object sender, RoutedEventArgs e)
     {
         await ShareWorkbookAsync();
+    }
+
+    private void InfoProtectWorkbookBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ProtectWorkbookBtn_Click(sender, e);
+        if (SsInfoView.Visibility == Visibility.Visible)
+            UpdateInfoView();
+    }
+
+    private void InfoAccessibilityCheckerBtn_Click(object sender, RoutedEventArgs e)
+    {
+        HideStartScreen();
+        AccessibilityCheckerBtn_Click(sender, e);
+    }
+
+    private void InfoWorkbookStatisticsBtn_Click(object sender, RoutedEventArgs e) =>
+        WorkbookStatisticsBtn_Click(sender, e);
+
+    private void InfoErrorCheckingBtn_Click(object sender, RoutedEventArgs e)
+    {
+        HideStartScreen();
+        ErrorCheckBtn_Click(sender, e);
     }
 
     private void SsAccountBtn_Click(object sender, RoutedEventArgs e)

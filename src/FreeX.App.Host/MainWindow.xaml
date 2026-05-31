@@ -4820,18 +4820,38 @@
 
                             <!-- Workbook actions (left) -->
                             <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                <TextBlock Text="{local:Loc Key=MainWindow_Text_ProtectWorkbook}"
-                                           FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                <TextBlock Text="{local:Loc Key=MainWindow_Text_WorkbookActions}"
+                                           FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+
+                                <Button x:Name="InfoProtectWorkbookButton"
+                                        Content="{local:Loc Key=MainWindow_Content_ProtectWorkbook}"
+                                        Width="220" Height="30"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,0,0,6"/>
                                 <TextBlock Text="{local:Loc Key=MainWindow_Text_ControlWhatTypesOfChangesOthersCanMake}"
                                            FontSize="12" Foreground="#555" TextWrapping="Wrap"
                                            Margin="0,0,0,20"/>
-                                <TextBlock Text="{local:Loc Key=MainWindow_Text_CheckAccessibility}"
-                                           FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4"/>
+
+                                <Button x:Name="InfoCheckAccessibilityButton"
+                                        Content="{local:Loc Key=MainWindow_Text_CheckAccessibility}"
+                                        Width="220" Height="30"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,0,0,6"/>
                                 <TextBlock Text="{local:Loc Key=MainWindow_Text_FindMergedCellsAndObjectsMissingAltText}"
                                            FontSize="12" Foreground="#555" TextWrapping="Wrap"
                                            Margin="0,0,0,20"/>
-                                <TextBlock Text="{local:Loc Key=MainWindow_Text_ManageWorkbook}"
-                                           FontSize="14" FontWeight="SemiBold" Margin="0,0,0,4"/>
+
+                                <Button x:Name="InfoWorkbookStatisticsButton"
+                                        Content="{local:Loc Key=MainWindow_Content_WorkbookStatistics}"
+                                        Width="220" Height="30"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,0,0,6"/>
+
+                                <Button x:Name="InfoErrorCheckingButton"
+                                        Content="{local:Loc Key=MainWindow_Content_ErrorChecking}"
+                                        Width="220" Height="30"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,0,0,6"/>
                                 <TextBlock Text="{local:Loc Key=MainWindow_Text_ReviewLocalFileStatusAndUnsupportedWorkbookFeatureWarnings}"
                                            FontSize="12" Foreground="#555" TextWrapping="Wrap"/>
                             </StackPanel>
@@ -4857,6 +4877,20 @@
 
                                     <TextBlock Text="{local:Loc Key=MainWindow_Text_Format}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
                                     <TextBlock x:Name="InfoFormat" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,20"/>
+
+                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_FileSize}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoFileSize" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,12"/>
+
+                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_LastModified}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoLastModified" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,20"/>
+
+                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_WorkbookProtection}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoWorkbookProtectionSummary" FontSize="13" Foreground="#1F1F1F"
+                                               TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_ActiveSheetProtection}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoActiveSheetProtectionSummary" FontSize="13" Foreground="#1F1F1F"
+                                               TextWrapping="Wrap" Margin="0,0,0,20"/>
 
                                     <TextBlock Text="{local:Loc Key=MainWindow_Text_WorkbookStatistics}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
                                     <TextBlock x:Name="InfoStatisticsSummary" FontSize="12" Foreground="#555"

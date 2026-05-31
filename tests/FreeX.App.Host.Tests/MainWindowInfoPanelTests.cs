@@ -22,7 +22,11 @@ public sealed class MainWindowInfoPanelTests
         names.Should().Contain([
             "InfoStatisticsSummary",
             "InfoAccessibilitySummary",
-            "InfoFormulaErrorSummary"
+            "InfoFormulaErrorSummary",
+            "InfoFileSize",
+            "InfoLastModified",
+            "InfoWorkbookProtectionSummary",
+            "InfoActiveSheetProtectionSummary"
         ]);
 
         document.Descendants(presentation + "TextBlock")
@@ -36,9 +40,12 @@ public sealed class MainWindowInfoPanelTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
 
-        source.Should().Contain("BackstageInfoPlanner.Build(_workbook, _currentFilePath)");
+        source.Should().Contain("var activeSheet = _workbook.GetSheet(_currentSheetId);");
+        source.Should().Contain("BackstageInfoPlanner.Build(_workbook, _currentFilePath, activeSheet)");
         source.Should().Contain("InfoStatisticsSummary.Text");
         source.Should().Contain("InfoAccessibilitySummary.Text");
         source.Should().Contain("InfoFormulaErrorSummary.Text");
+        source.Should().Contain("InfoWorkbookProtectionSummary.Text");
+        source.Should().Contain("InfoActiveSheetProtectionSummary.Text");
     }
 }
