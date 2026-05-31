@@ -396,21 +396,62 @@ public partial class MainWindow
         string? selectedTabHeader)
     {
         var appliedCorrection = false;
-        foreach (var index in RibbonAdaptiveLayoutEngine.GetExpandableGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader))
+        appliedCorrection |= ApplyRibbonMeasuredExpansionPass(
+            activePanel,
+            groupSnapshots,
+            collapsedButtons,
+            plannedStates,
+            measurementCacheKey,
+            availableWidth,
+            RibbonAdaptiveLayoutEngine.GetExpandableGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader));
+
+        return appliedCorrection;
+    }
+
+    private bool ApplyRibbonMeasuredExpansionPass(
+        StackPanel activePanel,
+        IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
+        IReadOnlyList<Button> collapsedButtons,
+        RibbonAdaptiveGroupState[] plannedStates,
+        string measurementCacheKey,
+        double availableWidth,
+        IEnumerable<int> expandableIndexes)
+    {
+        var appliedCorrection = false;
+        var indexes = new List<int>();
+        foreach (var index in expandableIndexes)
         {
-            var currentState = plannedStates[index];
-            if (!RibbonAdaptiveLayoutEngine.TryGetNextExpandedState(currentState, out var expandedState))
-                continue;
+            if (index >= 0 &&
+                index < plannedStates.Length &&
+                !indexes.Contains(index))
+            {
+                indexes.Add(index);
+            }
+        }
 
-            var previousStates = plannedStates.ToArray();
-            plannedStates[index] = expandedState;
-            appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
-            if (!RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
-                continue;
+        var madeProgress = true;
+        while (madeProgress)
+        {
+            madeProgress = false;
+            foreach (var index in indexes)
+            {
+                var currentState = plannedStates[index];
+                if (!RibbonAdaptiveLayoutEngine.TryGetNextExpandedState(currentState, out var expandedState))
+                    continue;
 
-            var expandedStates = plannedStates.ToArray();
-            plannedStates[index] = currentState;
-            appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, expandedStates, availableWidth) > 0;
+                var previousStates = plannedStates.ToArray();
+                plannedStates[index] = expandedState;
+                appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
+                if (!RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
+                {
+                    madeProgress = true;
+                    continue;
+                }
+
+                var expandedStates = plannedStates.ToArray();
+                plannedStates[index] = currentState;
+                appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, expandedStates, availableWidth) > 0;
+            }
         }
 
         return appliedCorrection;
@@ -434,6 +475,8 @@ public partial class MainWindow
 
     private static bool RibbonRowOverflowsMeasured(StackPanel activePanel, double availableWidth)
     {
+        activePanel.InvalidateMeasure();
+        activePanel.UpdateLayout();
         activePanel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         return activePanel.DesiredSize.Width > Math.Max(0, availableWidth - 4);
     }

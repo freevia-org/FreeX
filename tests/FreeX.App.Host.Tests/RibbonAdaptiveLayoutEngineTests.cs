@@ -31,7 +31,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
 
         layout.States[Array.IndexOf(groups.Select(group => group.Name).ToArray(), "Queries & Connections")]
             .Should()
-            .Be(RibbonAdaptiveGroupState.Collapsed);
+            .Be(RibbonAdaptiveGroupState.Full, "the planner should spend spare horizontal space after applying Data tab priority fallbacks");
         layout.States[Array.IndexOf(groups.Select(group => group.Name).ToArray(), "Data Tools")]
             .Should()
             .Be(RibbonAdaptiveGroupState.IconOnly);
@@ -59,12 +59,12 @@ public sealed class RibbonAdaptiveLayoutEngineTests
 
         layout.States.Should().Equal(
             RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Collapsed,
+            RibbonAdaptiveGroupState.Full,
             RibbonAdaptiveGroupState.IconOnly,
             RibbonAdaptiveGroupState.IconOnly,
             RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Collapsed);
-        layout.PlannedWidth.Should().Be(430);
+            RibbonAdaptiveGroupState.Full);
+        layout.PlannedWidth.Should().Be(550);
         layout.RequiresMeasuredCorrection.Should().BeTrue();
     }
 
@@ -83,8 +83,8 @@ public sealed class RibbonAdaptiveLayoutEngineTests
             .Should()
             .Equal(
                 RibbonAdaptiveGroupState.Full,
-                RibbonAdaptiveGroupState.Collapsed,
-                RibbonAdaptiveGroupState.Collapsed);
+                RibbonAdaptiveGroupState.Full,
+                RibbonAdaptiveGroupState.Full);
 
         var layout = RibbonAdaptiveLayoutEngine.Plan(900, groups, fixedChromeWidth: 20, selectedTabHeader: "Data");
 
@@ -129,10 +129,10 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         var layout = RibbonAdaptiveLayoutEngine.Plan(1120, groups, fixedChromeWidth: 0, selectedTabHeader: "PageLayoutTab");
 
         layout.States.Should().Equal(
-            RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Collapsed);
-        layout.PlannedWidth.Should().Be(180);
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Full);
+        layout.PlannedWidth.Should().Be(300);
     }
 
     [Fact]

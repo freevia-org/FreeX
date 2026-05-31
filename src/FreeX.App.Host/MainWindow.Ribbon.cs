@@ -28,7 +28,7 @@ public partial class MainWindow
                 continue;
 
             var commandName = GetRibbonButtonCommandName(button);
-            var layoutKind = RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
+            var layoutKind = GetRibbonCommandLayoutKind(button, commandName, label);
             ApplyRibbonCommandSize(button, layoutKind);
             if (layoutKind is RibbonCommandLayoutKind.Small)
                 button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(label));
@@ -173,7 +173,7 @@ public partial class MainWindow
             return null;
 
         var commandName = GetRibbonButtonCommandName(button);
-        var layoutKind = RibbonCommandPresentationPlanner.GetLayoutKind(commandName, text);
+        var layoutKind = GetRibbonCommandLayoutKind(button, commandName, text);
         ApplyRibbonCommandSize(button, layoutKind);
         if (layoutKind is RibbonCommandLayoutKind.Small)
             button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(text));
@@ -194,6 +194,14 @@ public partial class MainWindow
             .Concat(EnumerateLogicalDescendants(root))
             .Distinct()
             .Any(RibbonMetadata.IsDropdownChevron);
+
+    private static RibbonCommandLayoutKind GetRibbonCommandLayoutKind(ButtonBase button, string commandName, string label) =>
+        ShouldPreserveExplicitCompactRibbonButtonHeight(button)
+            ? RibbonCommandLayoutKind.Small
+            : RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
+
+    private static bool ShouldPreserveExplicitCompactRibbonButtonHeight(ButtonBase button) =>
+        button is FrameworkElement { Height: > 0 and <= 34 };
 
     private static void AddRibbonDropdownChevronToGrid(Grid grid, RibbonCommandContentLayout layout)
     {
@@ -481,7 +489,7 @@ public partial class MainWindow
         bounds = layout switch
         {
             RibbonCommandContentLayout.Large or RibbonCommandContentLayout.Medium =>
-                new Rect(0, Math.Max(0, height - horizontalZoneHeight), width, Math.Min(horizontalZoneHeight, height)),
+                GetRibbonHorizontalDropdownZoneBounds(button, width, height, horizontalZoneHeight),
             RibbonCommandContentLayout.IconOnly =>
                 new Rect(Math.Max(0, width - 16), Math.Max(0, height - 16), Math.Min(16, width), Math.Min(16, height)),
             _ => new Rect(Math.Max(0, width - 18), 0, Math.Min(18, width), height)
@@ -498,6 +506,53 @@ public partial class MainWindow
 
     private static double GetRibbonHorizontalDropdownZoneHeight(double buttonHeight) =>
         buttonHeight <= 66 ? 12 : 16;
+
+    private static Rect GetRibbonHorizontalDropdownZoneBounds(
+        ButtonBase button,
+        double width,
+        double height,
+        double preferredZoneHeight)
+    {
+        var zoneTop = Math.Max(0, height - preferredZoneHeight);
+        var labelBottom = GetRibbonCommandLabelBottom(button);
+        if (labelBottom > 0 && labelBottom < height)
+            zoneTop = Math.Max(zoneTop, Math.Min(height - 1, Math.Ceiling(labelBottom)));
+
+        return new Rect(0, zoneTop, width, Math.Max(0, height - zoneTop));
+    }
+
+    private static double GetRibbonCommandLabelBottom(ButtonBase button)
+    {
+        if (button.Content is not DependencyObject contentRoot)
+            return 0;
+
+        var bottom = 0.0;
+        foreach (var label in EnumerateVisualDescendants(contentRoot)
+                     .Concat(EnumerateLogicalDescendants(contentRoot))
+                     .OfType<TextBlock>()
+                     .Distinct()
+                     .Where(RibbonMetadata.IsCommandLabel))
+        {
+            if (!label.IsVisible ||
+                label.ActualWidth <= 0 ||
+                label.ActualHeight <= 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                var bounds = label.TransformToAncestor(button)
+                    .TransformBounds(new Rect(0, 0, label.ActualWidth, label.ActualHeight));
+                bottom = Math.Max(bottom, bounds.Bottom);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        return bottom;
+    }
 
     private static RibbonCommandContentLayout GetRibbonDropdownZoneLayout(ButtonBase button)
     {
@@ -1830,10 +1885,10 @@ public partial class MainWindow
         return length switch
         {
             <= 3 => 58,
-            <= 6 => 66,
-            <= 10 => 92,
-            <= 14 => 126,
-            _ => Math.Min(150, 44 + length * 6)
+            <= 6 => 72,
+            <= 10 => 98,
+            <= 14 => 128,
+            _ => Math.Min(154, 48 + length * 6)
         };
     }
 

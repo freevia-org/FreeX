@@ -113,7 +113,8 @@ internal static class RibbonAdaptiveTabProfiles
             ProtectedGroups:
             [
                 Protected(double.PositiveInfinity, ["Page Setup"])
-            ]),
+            ],
+            RequiresMeasuredCorrection: true),
         new(
             Name: "Review",
             CatalogId: "ReviewTab",
@@ -289,8 +290,14 @@ internal static class RibbonAdaptiveTabProfiles
 
     public static bool RequiresMeasuredCorrection(
         IReadOnlyList<string> groupNames,
-        string? selectedTabHeader = null) =>
-        FindProfile(groupNames, selectedTabHeader)?.RequiresMeasuredCorrection == true;
+        string? selectedTabHeader = null)
+    {
+        if (groupNames.Count == 0)
+            return false;
+
+        var profile = FindProfile(groupNames, selectedTabHeader);
+        return profile is null || profile.RequiresMeasuredCorrection;
+    }
 
     public static IReadOnlyList<string> GetPriorityProtectedGroupNames(
         IReadOnlyList<string> groupNames,
