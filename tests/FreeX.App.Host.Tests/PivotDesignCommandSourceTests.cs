@@ -21,7 +21,7 @@ public sealed class PivotDesignCommandSourceTests
         string keyTip,
         string handler)
     {
-        var button = ExtractButtonElementByTitle(ReadMainWindowXaml(), title);
+        var button = ExtractButtonElementByTitle(ExtractPivotTableDesignTab(ReadMainWindowXaml()), title);
 
         button.ShouldContainLocalizedAttribute("Content", content);
         button.ShouldContainInvariantCommandName(title);
@@ -55,6 +55,17 @@ public sealed class PivotDesignCommandSourceTests
 
     private static string ReadMainWindowXaml() =>
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+
+    private static string ExtractPivotTableDesignTab(string xaml)
+    {
+        var start = xaml.IndexOf("x:Name=\"PivotTableDesignTab\"", StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, "the PivotTable Design contextual tab should be present");
+
+        var end = xaml.IndexOf("MainWindow_Header_Help", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start, "the Help tab should follow the PivotTable Design contextual tab");
+
+        return xaml[start..end];
+    }
 
     private static string ExtractButtonElementByTitle(string xaml, string title)
     {

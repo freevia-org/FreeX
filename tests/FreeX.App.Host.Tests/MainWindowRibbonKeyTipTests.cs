@@ -1506,6 +1506,7 @@ public sealed class MainWindowRibbonKeyTipTests
             var window = session.Window;
             if (!window.IsVisible)
                 window.Show();
+            window.Activate();
 
             window.WindowState = WindowState.Normal;
             window.Width = 2400;
@@ -1546,6 +1547,7 @@ public sealed class MainWindowRibbonKeyTipTests
             window.Width = 2400;
             window.Height = 720;
             window.Show();
+            window.Activate();
             if (window.FindName("RibbonTabs") is TabControl ribbonTabs)
                 ribbonTabs.Width = 2400;
             window.UpdateLayout();
@@ -1686,6 +1688,7 @@ public sealed class MainWindowRibbonKeyTipTests
 
         private void ResetUiState()
         {
+            _window.Activate();
             _hideStartScreen.Invoke(_window, null);
             if (ActiveMenu is { } activeMenu)
                 activeMenu.IsOpen = false;

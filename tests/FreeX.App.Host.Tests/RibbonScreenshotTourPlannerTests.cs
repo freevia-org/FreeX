@@ -61,6 +61,19 @@ public sealed class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void PivotContextTabs_ExtendDefaultTourWithPivotAnalyzeAndDesignContextualTabs()
+    {
+        RibbonScreenshotTourPlanner.PivotContextTabs
+            .Should()
+            .Equal(
+            [
+                .. RibbonScreenshotTourPlanner.DefaultTabs,
+                new("PivotTable Analyze", "PivotTable_Analyze"),
+                new("Design", "PivotTable_Design")
+            ]);
+    }
+
+    [Fact]
     public void DefaultWidths_CoverRepresentativeRibbonWidths()
     {
         RibbonScreenshotTourPlanner.DefaultWidths
@@ -193,6 +206,9 @@ public sealed class RibbonScreenshotTourPlannerTests
     [InlineData(" table ", "table")]
     [InlineData("table-design", "table")]
     [InlineData("structured_table", "table")]
+    [InlineData("pivot", "pivot")]
+    [InlineData("pivot-table", "pivot")]
+    [InlineData("pivottable", "pivot")]
     public void NormalizeContext_AcceptsExcelContextAliases(string? context, string? expected)
     {
         RibbonScreenshotTourPlanner.NormalizeContext(context)
@@ -207,7 +223,7 @@ public sealed class RibbonScreenshotTourPlannerTests
 
         act.Should()
             .Throw<InvalidOperationException>()
-            .WithMessage("*context 'chart' is not supported*Valid contexts: table*");
+            .WithMessage("*context 'chart' is not supported*Valid contexts: table, pivot*");
     }
 
     [Fact]
@@ -385,6 +401,27 @@ public sealed class RibbonScreenshotTourPlannerTests
     }
 
     [Fact]
+    public void CreatePlan_WithPivotContext_AllowsContextualPivotTabCaptures()
+    {
+        var plan = RibbonScreenshotTourPlanner.CreatePlan("PivotTable Analyze,PivotTable_Design", "900", burstMode: false, context: "pivot");
+
+        plan.Context.Should().Be("pivot");
+        plan.Tabs.Should().Equal(
+        [
+            new("PivotTable Analyze", "PivotTable_Analyze"),
+            new("Design", "PivotTable_Design")
+        ]);
+        plan.Captures
+            .Select(capture => capture.OutputFileName)
+            .Should()
+            .Equal(
+            [
+                "900_PivotTable_Analyze.png",
+                "900_PivotTable_Design.png"
+            ]);
+    }
+
+    [Fact]
     public void CreatePlan_RejectsContextualTableTabWithoutSeedContext()
     {
         var act = () => RibbonScreenshotTourPlanner.CreatePlan("Table Design", "900");
@@ -392,6 +429,16 @@ public sealed class RibbonScreenshotTourPlannerTests
         act.Should()
             .Throw<InvalidOperationException>()
             .WithMessage("*unknown tab(s): Table Design*");
+    }
+
+    [Fact]
+    public void CreatePlan_RejectsContextualPivotTabsWithoutSeedContext()
+    {
+        var act = () => RibbonScreenshotTourPlanner.CreatePlan("PivotTable Analyze", "900");
+
+        act.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*unknown tab(s): PivotTable Analyze*");
     }
 
     [Fact]
@@ -407,12 +454,14 @@ public sealed class RibbonScreenshotTourPlannerTests
         source.Should().Contain("RibbonScreenshotTourPlan?");
         source.Should().Contain("PrepareRibbonScreenshotTourContextAsync");
         source.Should().Contain("EnsureTableDesignScreenshotTourContext");
+        source.Should().Contain("EnsurePivotTableScreenshotTourContext");
         source.Should().Contain("PrepareRibbonBurstCapturePhaseAsync");
         source.Should().Contain("WaitForRibbonScreenshotRenderPassAsync");
         source.Should().Contain("DeleteStaleRibbonScreenshotTourCaptures");
         source.Should().Contain("WriteRibbonScreenshotTourManifestAsync");
         source.Should().Contain("ribbon_screenshot_tour_manifest.json");
         source.Should().Contain("EvidencePurpose()");
+        source.Should().Contain("_suppressClosePrompt = true;");
         source.Should().Contain("throw new InvalidOperationException");
     }
 

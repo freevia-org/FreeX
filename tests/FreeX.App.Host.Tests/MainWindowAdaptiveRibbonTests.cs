@@ -973,6 +973,36 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void ContextualRibbonTabs_FitWithoutVisibleScrollBarsAtScreenshotTourWidths()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.ShowTableDesignContextualTab();
+            harness.ShowPivotContextualTabs();
+
+            foreach (var tab in new[] { "Table Design", "PivotTable Analyze", "Design" })
+            {
+                foreach (var width in new[] { 1100.0, 900.0, 750.0 })
+                {
+                    harness.SelectRibbonTab(tab, width);
+                    if (!harness.CanUseRequestedRibbonWidth(width))
+                        continue;
+
+                    harness.ActiveRibbonHorizontalScrollBarMode.Should().Be(
+                        ScrollBarVisibility.Hidden,
+                        $"{tab} should preserve the hidden ribbon scroller at the screenshot-tour width {width:0}px");
+                    harness.ActiveRibbonVisibleHorizontalScrollBars.Should().BeEmpty(
+                        $"{tab} should not expose a horizontal scrollbar at the screenshot-tour width {width:0}px");
+                    harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                        0.5,
+                        $"{tab} at {width:0}px should collapse contextual groups before visible commands clip; {harness.DebugActiveRibbonChildren}");
+                }
+            }
+        });
+    }
+
+    [Fact]
     public void CollapsedRibbonGroupButtons_ShowDropdownGlyph()
     {
         StaTestRunner.Run(() =>
@@ -1618,6 +1648,15 @@ public sealed class MainWindowAdaptiveRibbonTests
             PumpDispatcher();
         }
 
+        public void ShowTableDesignContextualTab()
+        {
+            if (_window.FindName("TableDesignTab") is TabItem tableTab)
+                tableTab.Visibility = Visibility.Visible;
+
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
         public void ClickActiveRibbonButton(string title)
         {
             var button = EnumerateSelfAndVisualDescendants(SelectedRibbonContentRoot)
@@ -1685,6 +1724,12 @@ public sealed class MainWindowAdaptiveRibbonTests
                 menu.IsOpen = false;
             if (VisibleOrCollapsedRibbonButton("Find & Select") is { } findSelect)
                 findSelect.IsEnabled = true;
+            if (_window.FindName("TableDesignTab") is TabItem tableDesignTab)
+                tableDesignTab.Visibility = Visibility.Collapsed;
+            if (_window.FindName("PivotTableAnalyzeTab") is TabItem pivotAnalyzeTab)
+                pivotAnalyzeTab.Visibility = Visibility.Collapsed;
+            if (_window.FindName("PivotTableDesignTab") is TabItem pivotDesignTab)
+                pivotDesignTab.Visibility = Visibility.Collapsed;
             if (_window.FindName("RibbonTabs") is TabControl tabs)
                 tabs.SelectedIndex = 1;
             _window.UpdateLayout();

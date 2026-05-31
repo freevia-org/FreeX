@@ -80,6 +80,13 @@ internal static class RibbonScreenshotTourPlanner
         new("Table Design", "Table_Design")
     ];
 
+    public static IReadOnlyList<RibbonScreenshotTourTab> PivotContextTabs { get; } =
+    [
+        .. DefaultTabs,
+        new("PivotTable Analyze", "PivotTable_Analyze"),
+        new("Design", "PivotTable_Design")
+    ];
+
     public static IReadOnlyList<RibbonScreenshotTourWidth> DefaultWidths { get; } =
     [
         new("max", null),
@@ -131,8 +138,9 @@ internal static class RibbonScreenshotTourPlanner
         {
             null => DefaultTabs,
             "table" => TableContextTabs,
+            "pivot" => PivotContextTabs,
             var unknown => throw new InvalidOperationException(
-                $"Ribbon screenshot tour context '{unknown}' is not supported. Valid contexts: table.")
+                $"Ribbon screenshot tour context '{unknown}' is not supported. Valid contexts: table, pivot.")
         };
 
     public static string? NormalizeContext(string? context)
@@ -144,6 +152,7 @@ internal static class RibbonScreenshotTourPlanner
         return normalized switch
         {
             "table" or "table-design" or "structured-table" => "table",
+            "pivot" or "pivot-table" or "pivottable" => "pivot",
             _ => normalized
         };
     }

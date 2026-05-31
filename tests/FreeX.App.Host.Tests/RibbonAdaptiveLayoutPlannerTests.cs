@@ -93,6 +93,36 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Fact]
+    public void Plan_RepeatedResizeChecksStayAllocationLight()
+    {
+        var groups = new[]
+        {
+            new RibbonAdaptiveGroup("Clipboard", 100, 86, 62, 50),
+            new RibbonAdaptiveGroup("Font", 200, 150, 96, 52),
+            new RibbonAdaptiveGroup("Alignment", 180, 132, 88, 56),
+            new RibbonAdaptiveGroup("Number", 150, 112, 76, 54),
+            new RibbonAdaptiveGroup("Styles", 130, 94, 70, 52),
+            new RibbonAdaptiveGroup("Editing", 120, 88, 64, 50)
+        };
+
+        for (var iteration = 0; iteration < 100; iteration++)
+            RibbonAdaptiveLayoutPlanner.Plan(820 + iteration % 360, groups);
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var iteration = 0; iteration < 2_000; iteration++)
+        {
+            var states = RibbonAdaptiveLayoutPlanner.Plan(820 + iteration % 360, groups);
+            if (states.Count != groups.Length)
+                throw new InvalidOperationException("Ribbon adaptive planner returned an unexpected state count.");
+        }
+
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        allocated.Should().BeLessThan(
+            500_000,
+            "repeated layout planning runs during tab switches and resizes and should not add per-fit LINQ allocations");
+    }
+
+    [Fact]
     public void ApplyBreakpointOverrides_CollapsesAllGroupsAtVeryNarrowWidths()
     {
         var states = RibbonAdaptiveLayoutPlanner.ApplyBreakpointOverrides(
@@ -146,7 +176,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
 
         states.Should().Equal(
             RibbonAdaptiveGroupState.Full,
-            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed,
             RibbonAdaptiveGroupState.Collapsed);
     }
@@ -400,7 +430,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
             ["Get & Transform Data", "Sort & Filter", "Data Tools"],
             selectedTabHeader: "Data");
 
-        thresholds.Should().Contain([700, 760, 900, 1120, 1320]);
+        thresholds.Should().Contain([700, 760, 900, 1120, 1465]);
         thresholds.Should().BeInAscendingOrder();
         thresholds.Should().OnlyHaveUniqueItems();
     }
@@ -411,7 +441,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
         var thresholds = RibbonAdaptiveTabProfiles.GetBreakpointThresholds(
             ["Get & Transform Data", "Queries & Connections", "Sort & Filter", "Data Tools", "Forecast", "Outline"]);
 
-        thresholds.Should().Contain([700, 760, 900, 920, 1120, 1320]);
+        thresholds.Should().Contain([700, 760, 900, 920, 1120, 1465]);
         thresholds.Should().BeInAscendingOrder();
         thresholds.Should().OnlyHaveUniqueItems();
     }

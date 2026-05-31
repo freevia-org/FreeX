@@ -10,6 +10,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -52,6 +53,7 @@ public partial class MainWindow
         if (backstageTour)
             await CaptureBackstageAsync(outputDir);
 
+        _suppressClosePrompt = true;
         Application.Current.Shutdown();
     }
 
@@ -140,6 +142,9 @@ public partial class MainWindow
             case "table":
                 EnsureTableDesignScreenshotTourContext();
                 break;
+            case "pivot":
+                EnsurePivotTableScreenshotTourContext();
+                break;
             default:
                 throw new InvalidOperationException($"Unknown ribbon screenshot tour context '{context}'.");
         }
@@ -203,6 +208,65 @@ public partial class MainWindow
 
         if (SheetGrid is not null)
             SheetGrid.SelectedRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 2, 2));
+    }
+
+    private void EnsurePivotTableScreenshotTourContext()
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId) ?? _workbook.Sheets.FirstOrDefault();
+        if (sheet is null)
+            return;
+
+        _currentSheetId = sheet.Id;
+        var headers = new[] { "Region", "Product", "Sales" };
+        var rows = new[]
+        {
+            new object[] { "North", "Coffee", 1280d },
+            new object[] { "North", "Tea", 760d },
+            new object[] { "South", "Coffee", 960d },
+            new object[] { "West", "Cocoa", 1140d }
+        };
+
+        for (var col = 0; col < headers.Length; col++)
+            sheet.SetCell(new CellAddress(sheet.Id, 1, (uint)(col + 1)), new TextValue(headers[col]));
+
+        for (var row = 0; row < rows.Length; row++)
+        {
+            for (var col = 0; col < headers.Length; col++)
+            {
+                var address = new CellAddress(sheet.Id, (uint)(row + 2), (uint)(col + 1));
+                if (rows[row][col] is double number)
+                    sheet.SetCell(address, new NumberValue(number));
+                else
+                    sheet.SetCell(address, new TextValue(rows[row][col].ToString() ?? ""));
+            }
+        }
+
+        var sourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 3));
+        var pivotTable = sheet.PivotTables
+            .FirstOrDefault(candidate => string.Equals(candidate.Name, "TourPivotTable", StringComparison.OrdinalIgnoreCase));
+        if (pivotTable is null)
+        {
+            var targetRange = new GridRange(new CellAddress(sheet.Id, 2, 5), new CellAddress(sheet.Id, 8, 8));
+            var command = new AddPivotTableCommand(
+                sheet.Id,
+                sourceRange,
+                targetRange,
+                "TourPivotTable",
+                rowFieldIndexes: [0],
+                dataFieldIndexes: [2]);
+
+            if (!TryExecuteCommand(command, "Insert PivotTable", out var outcome))
+                throw new InvalidOperationException(outcome.ErrorMessage ?? "PivotTable screenshot tour setup failed.");
+
+            pivotTable = sheet.PivotTables
+                .FirstOrDefault(candidate => string.Equals(candidate.Name, "TourPivotTable", StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (pivotTable is not null && SheetGrid is not null)
+        {
+            SheetGrid.SelectedRange = new GridRange(pivotTable.TargetRange.Start, pivotTable.TargetRange.Start);
+            RefreshPivotFieldListPane();
+        }
     }
 
     private async Task CaptureRibbonBurstTourAsync(string outputDir, RibbonScreenshotTourPlan plan)

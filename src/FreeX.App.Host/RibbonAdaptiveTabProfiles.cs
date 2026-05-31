@@ -149,7 +149,7 @@ internal static class RibbonAdaptiveTabProfiles
             Breakpoints:
             [
                 Rule(760, collapseFromIndex: 0),
-                Rule(1120, collapseFromIndex: 2),
+                Rule(1120, collapseFromIndex: 3),
                 Rule(1320, collapseFromIndex: 3)
             ],
             RequiresMeasuredCorrection: true),
