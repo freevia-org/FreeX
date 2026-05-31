@@ -2371,6 +2371,22 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void QuickAnalysisPreviewAssignments_AvoidNoOpRenderInvalidations()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
+        var showPreview = ExtractMethodSource(source, "private void ShowQuickAnalysisPreview(");
+        var clearPreview = ExtractMethodSource(source, "private void ClearQuickAnalysisPreview(");
+        var applyPreview = ExtractMethodSource(source, "private void ApplyQuickAnalysisPreview(");
+
+        showPreview.Should().Contain("ApplyQuickAnalysisPreview(");
+        clearPreview.Should().Contain("ApplyQuickAnalysisPreview(null, GridQuickAnalysisPreviewVisualKind.None)");
+        showPreview.Should().NotContain("SheetGrid.QuickAnalysisPreviewRange = preview.Range");
+        clearPreview.Should().NotContain("SheetGrid.QuickAnalysisPreviewRange = null");
+        applyPreview.Should().Contain("if (SheetGrid.QuickAnalysisPreviewRange != range)");
+        applyPreview.Should().Contain("if (SheetGrid.QuickAnalysisPreviewVisual != visual)");
+    }
+
+    [Fact]
     public void QuickAnalysisMenu_RendersPlannerVisualPreviewIcons()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAnalysis.cs"));
