@@ -87,7 +87,7 @@ public static partial class FormulaAuditingService
         (!cell.HasFormula && cell.Value is TextValue dateText && IsTextDateWithTwoDigitYear(dateText.Value)) ||
         FormulaRefersToBlankCells(workbook, sheetId, cell) ||
         IsInconsistentFormula(workbook, sheetId, address) ||
-        FormulaOmitsAdjacentCells(workbook, sheetId, address, cell) ||
+        FormulaOmitsAdjacentCells(workbook, sheetId, cell) ||
         IsUnlockedFormulaCell(workbook, cell);
 
     private static bool HasIgnorableLiteralIssue(Cell cell) =>
@@ -263,7 +263,7 @@ public static partial class FormulaAuditingService
 
             foreach (var (address, cell) in sheet.EnumerateCells())
             {
-                if (cell.IgnoreFormulaError || !FormulaOmitsAdjacentCells(workbook, sheet.Id, address, cell))
+                if (cell.IgnoreFormulaError || !FormulaOmitsAdjacentCells(workbook, sheet.Id, cell))
                     continue;
 
                 yield return new FormulaErrorIssue(
@@ -305,50 +305,165 @@ public static partial class FormulaAuditingService
     private static bool IsUnlockedFormulaCell(Workbook workbook, Cell cell) =>
         cell.HasFormula && !workbook.GetStyle(cell.StyleId).Locked;
 
-    private static bool FormulaOmitsAdjacentCells(Workbook workbook, SheetId sheetId, CellAddress formulaAddress, Cell cell)
+    private static bool FormulaOmitsAdjacentCells(Workbook workbook, SheetId sheetId, Cell cell)
     {
         if (!cell.HasFormula || string.IsNullOrWhiteSpace(cell.FormulaText))
             return false;
 
-        foreach (var range in ExtractSumRanges(sheetId, cell.FormulaText))
+        foreach (var ranges in ExtractSumRangeGroups(sheetId, cell.FormulaText))
         {
-            if (range.Start.Sheet != range.End.Sheet)
-                continue;
+            var sameSheetRanges = ranges
+                .Where(range => range.Start.Sheet == range.End.Sheet)
+                .ToList();
 
-            if (IsVerticalRange(range) && HasIncludedValues(workbook, range))
+            foreach (var range in sameSheetRanges)
             {
-                if (range.Start.Row > 1 &&
-                    HasValueAt(workbook, new CellAddress(range.Start.Sheet, range.Start.Row - 1, range.Start.Col)))
-                    return true;
+                if (IsVerticalRange(range) && HasIncludedValues(workbook, range))
+                {
+                    if (range.Start.Row > 1 &&
+                        HasValueAt(workbook, new CellAddress(range.Start.Sheet, range.Start.Row - 1, range.Start.Col)))
+                        return true;
 
-                if (HasValueAt(workbook, new CellAddress(range.End.Sheet, range.End.Row + 1, range.End.Col)))
-                    return true;
+                    if (HasValueAt(workbook, new CellAddress(range.End.Sheet, range.End.Row + 1, range.End.Col)))
+                        return true;
+                }
+
+                if (IsHorizontalRange(range) && HasIncludedValues(workbook, range))
+                {
+                    if (range.Start.Col > 1 && HasValueAt(workbook, new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col - 1)))
+                        return true;
+
+                    if (HasValueAt(workbook, new CellAddress(range.End.Sheet, range.End.Row, range.End.Col + 1)))
+                        return true;
+                }
             }
 
-            if (IsHorizontalRange(range) && HasIncludedValues(workbook, range))
+            if (HasOmittedValuesBetweenSumArguments(workbook, sameSheetRanges))
             {
-                if (range.Start.Col > 1 && HasValueAt(workbook, new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col - 1)))
-                    return true;
-
-                if (HasValueAt(workbook, new CellAddress(range.End.Sheet, range.End.Row, range.End.Col + 1)))
-                    return true;
+                return true;
             }
         }
 
         return false;
     }
 
-    private static IEnumerable<GridRange> ExtractSumRanges(SheetId sheetId, string formulaText)
+    private static bool HasOmittedValuesBetweenSumArguments(Workbook workbook, IReadOnlyList<GridRange> ranges)
     {
-        foreach (Match match in Regex.Matches(
+        foreach (var group in ranges.GroupBy(range => (range.Start.Sheet, range.Start.Col)))
+        {
+            var verticalRanges = group
+                .Where(IsSingleColumnRange)
+                .OrderBy(range => range.Start.Row)
+                .ToList();
+            if (HasOmittedValuesInLine(
+                    workbook,
+                    verticalRanges,
+                    valueSelector: row => new CellAddress(group.Key.Sheet, row, group.Key.Col),
+                    startSelector: range => range.Start.Row,
+                    endSelector: range => range.End.Row))
+            {
+                return true;
+            }
+        }
+
+        foreach (var group in ranges.GroupBy(range => (range.Start.Sheet, range.Start.Row)))
+        {
+            var horizontalRanges = group
+                .Where(IsSingleRowRange)
+                .OrderBy(range => range.Start.Col)
+                .ToList();
+            if (HasOmittedValuesInLine(
+                    workbook,
+                    horizontalRanges,
+                    valueSelector: col => new CellAddress(group.Key.Sheet, group.Key.Row, col),
+                    startSelector: range => range.Start.Col,
+                    endSelector: range => range.End.Col))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasOmittedValuesInLine(
+        Workbook workbook,
+        IReadOnlyList<GridRange> ranges,
+        Func<uint, CellAddress> valueSelector,
+        Func<GridRange, uint> startSelector,
+        Func<GridRange, uint> endSelector)
+    {
+        if (ranges.Count < 2)
+            return false;
+
+        var min = ranges.Min(startSelector);
+        var max = ranges.Max(endSelector);
+        for (var index = min; index <= max; index++)
+        {
+            if (ranges.Any(range => startSelector(range) <= index && index <= endSelector(range)))
+                continue;
+
+            if (HasValueAt(workbook, valueSelector(index)))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsSingleColumnRange(GridRange range) =>
+        range.Start.Col == range.End.Col;
+
+    private static bool IsSingleRowRange(GridRange range) =>
+        range.Start.Row == range.End.Row;
+
+    private static IEnumerable<IReadOnlyList<GridRange>> ExtractSumRangeGroups(SheetId sheetId, string formulaText)
+    {
+        foreach (Match sumMatch in Regex.Matches(
                      formulaText,
-                     @"\bSUM\s*\(\s*(\$?[A-Za-z]{1,3}\$?[0-9]{1,7})\s*:\s*(\$?[A-Za-z]{1,3}\$?[0-9]{1,7})\s*\)",
+                     @"\bSUM\s*\((?<args>[^)]*)\)",
                      RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
         {
-            yield return new GridRange(
-                ParseLocalAddress(sheetId, match.Groups[1].Value),
-                ParseLocalAddress(sheetId, match.Groups[2].Value));
+            var ranges = new List<GridRange>();
+            foreach (var token in sumMatch.Groups["args"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (TryParseLocalRange(sheetId, token, out var range))
+                    ranges.Add(range);
+            }
+
+            if (ranges.Count > 0)
+                yield return ranges;
         }
+    }
+
+    private static bool TryParseLocalRange(SheetId sheetId, string token, out GridRange range)
+    {
+        range = default;
+        var match = Regex.Match(
+            token,
+            @"^(?<start>\$?[A-Za-z]{1,3}\$?[0-9]{1,7})(?::(?<end>\$?[A-Za-z]{1,3}\$?[0-9]{1,7}))?$",
+            RegexOptions.CultureInvariant);
+        if (!match.Success)
+            return false;
+
+        var start = ParseLocalAddress(sheetId, match.Groups["start"].Value);
+        var end = match.Groups["end"].Success
+            ? ParseLocalAddress(sheetId, match.Groups["end"].Value)
+            : start;
+        range = NormalizeRange(start, end);
+        return true;
+    }
+
+    private static GridRange NormalizeRange(CellAddress start, CellAddress end)
+    {
+        var normalizedStart = new CellAddress(
+            start.Sheet,
+            Math.Min(start.Row, end.Row),
+            Math.Min(start.Col, end.Col));
+        var normalizedEnd = new CellAddress(
+            start.Sheet,
+            Math.Max(start.Row, end.Row),
+            Math.Max(start.Col, end.Col));
+        return new GridRange(normalizedStart, normalizedEnd);
     }
 
     private static bool IsVerticalRange(GridRange range) =>

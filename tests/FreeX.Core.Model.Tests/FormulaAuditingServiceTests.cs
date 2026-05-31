@@ -294,6 +294,53 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_ReturnsFormulaOmitsAdjacentCellsBetweenSumArgumentsInColumn()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromFormula("SUM(A1,A3)"));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode).Subject;
+
+        issue.Cell.Should().Be("A4");
+        issue.FormulaText.Should().Be("=SUM(A1,A3)");
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_ReturnsFormulaOmitsAdjacentCellsBetweenSumArgumentsInRow()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), Cell.FromFormula("SUM(A1,C1)"));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode).Subject;
+
+        issue.Cell.Should().Be("D1");
+        issue.FormulaText.Should().Be("=SUM(A1,C1)");
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_DoesNotFlagSeparatedSumArgumentsWhenGapIsBlank()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromFormula("SUM(A1,A3)"));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode);
+    }
+
+    [Fact]
     public void FindFormulaErrorIssues_ReturnsUnlockedFormulaCells()
     {
         var wb = new Workbook("test");
