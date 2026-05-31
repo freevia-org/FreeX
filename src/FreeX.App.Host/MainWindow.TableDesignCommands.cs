@@ -14,8 +14,6 @@ public partial class MainWindow
         var visible = TryGetActiveStructuredTable(out _, out var table);
         if (visible)
         {
-            if (TableDesignHeaderRowBtn is not null)
-                TableDesignHeaderRowBtn.IsChecked = table.HeaderRowCount is null or > 0;
             if (TableDesignTotalRowBtn is not null)
                 TableDesignTotalRowBtn.IsChecked = table.TotalsRowShown;
             if (TableDesignFilterButtonBtn is not null)

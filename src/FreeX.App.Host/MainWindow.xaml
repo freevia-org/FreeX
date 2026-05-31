@@ -2891,10 +2891,6 @@
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
-                                        <CheckBox x:Name="TableDesignHeaderRowBtn" Content="{local:Loc Key=MainWindow_Content_HeaderRow}" Width="102" Margin="4,1" IsChecked="True" IsEnabled="False"
-                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_HeaderRow}"
-                                                  local:RibbonTooltip.KeyTip="H"
-                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_HeaderRowsRemainVisibleForStructuredTablesInFreeX}" local:RibbonMetadata.CommandName="Header Row"/>
                                         <CheckBox x:Name="TableDesignTotalRowBtn" Content="{local:Loc Key=MainWindow_Content_TotalRow}" Width="102" Margin="4,1" Click="TableDesignTotalRowBtn_Click"
                                                   local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_TotalRow}"
                                                   local:RibbonTooltip.KeyTip="T"
@@ -2962,7 +2958,7 @@
                                     <Button Content="{local:Loc Key=MainWindow_Content_PivotTableName}" Width="116" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableNameBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PivotTableName}"
                                             local:RibbonTooltip.KeyTip="N"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RenamingPivotTablesFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="PivotTable Name"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RenameTheSelectedPivotTable}" local:RibbonMetadata.CommandName="PivotTable Name"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_Options}" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableOptionsBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PivotTableOptions}"
                                             local:RibbonTooltip.KeyTip="O"
@@ -3037,15 +3033,15 @@
                                     <Button Content="{local:Loc Key=MainWindow_Content_Clear}" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableClearBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Clear}"
                                             local:RibbonTooltip.KeyTip="CL"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ClearingPivotTableFieldsFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Clear"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ClearFiltersSortStateAndItemSelectionsFromTheSelectedPivotTable}" local:RibbonMetadata.CommandName="Clear"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_Select}" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableSelectBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Select}"
                                             local:RibbonTooltip.KeyTip="SE"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PivotTableSelectionShortcutsAreDeferredInFreeX}" local:RibbonMetadata.CommandName="Select"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SelectTheSelectedPivotTableReportRange}" local:RibbonMetadata.CommandName="Select"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_MovePivotTable}" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableMoveBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_MovePivotTable}"
                                             local:RibbonTooltip.KeyTip="M"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MovingPivotTablesFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Move PivotTable"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedPivotTableToAnotherLocationOnTheCurrentWorksheet}" local:RibbonMetadata.CommandName="Move PivotTable"/>
                                 </StackPanel>
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Actions}" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>

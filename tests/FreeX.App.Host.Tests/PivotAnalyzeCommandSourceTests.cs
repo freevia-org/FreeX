@@ -48,8 +48,26 @@ public sealed class PivotAnalyzeCommandSourceTests
         {
             var button = ExtractButtonElementByTitle(xaml, title);
             button.Should().NotContain("IsEnabled=\"False\"");
+            button.Should().NotContain("Deferred");
             button.Should().Contain("Click=");
         }
+    }
+
+    [Theory]
+    [InlineData("PivotTable Name", "MainWindow_TooltipDescription_RenameTheSelectedPivotTable")]
+    [InlineData("Clear", "MainWindow_TooltipDescription_ClearFiltersSortStateAndItemSelectionsFromTheSelectedPivotTable")]
+    [InlineData("Select", "MainWindow_TooltipDescription_SelectTheSelectedPivotTableReportRange")]
+    [InlineData("Move PivotTable", "MainWindow_TooltipDescription_MoveTheSelectedPivotTableToAnotherLocationOnTheCurrentWorksheet")]
+    public void PivotAnalyzeSupportedActionCommands_UseNonDeferredTooltipDescriptions(
+        string title,
+        string descriptionKey)
+    {
+        var button = ExtractButtonElementByTitle(ReadPivotAnalyzeTabXaml(), title);
+        var resources = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "Strings.resx"));
+
+        button.Should().Contain($"local:RibbonTooltip.Description=\"{{local:Loc Key={descriptionKey}}}\"");
+        descriptionKey.Should().NotContain("Deferred");
+        resources.Should().Contain($"<data name=\"{descriptionKey}\"");
     }
 
     [Fact]

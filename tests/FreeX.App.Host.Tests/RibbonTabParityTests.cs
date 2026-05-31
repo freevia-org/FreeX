@@ -292,7 +292,6 @@ public sealed class RibbonTabParityTests
             "Remove Duplicates",
             "Convert to Range"]);
         CommandTitles(Group(tableTab, "Table Style Options")).Should().Contain([
-            "Header Row",
             "Total Row",
             "First Column",
             "Last Column",
