@@ -268,6 +268,16 @@ public sealed class ShortcutParityBehaviorTests
     }
 
     [Fact]
+    public void SystemAltDown_IsRegisteredAsOpenActiveDropdownCommand()
+    {
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+            Key.System, Key.Down, ModifierKeys.Alt, out var shortcut)
+            .Should().BeTrue();
+
+        shortcut.Should().Be(KeyboardCommandShortcut.OpenActiveDropdown);
+    }
+
+    [Fact]
     public void AutoFilterDropdown_UsesExcelStyleMenuPlannerWithInitialKeyboardFocus()
     {
         var source = File.ReadAllText(
