@@ -90,25 +90,34 @@ public partial class GridView
         switch (QuickAnalysisPreviewVisual)
         {
             case GridQuickAnalysisPreviewVisualKind.DataBars:
-                foreach (var bar in CalculateQuickAnalysisDataBarPreviewRects(Viewport, range, rowHeaderWidth, columnHeaderHeight))
-                    dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, bar);
+                var lookups = GetRenderCellLookups(Viewport);
+                var dataBarConsumer = new FillRectConsumer(dc, QuickAnalysisDataBarPreviewBrush);
+                QuickAnalysisPreviewLayoutPlanner.VisitDataBarPreviewRects(
+                    Viewport,
+                    range,
+                    rowHeaderWidth,
+                    columnHeaderHeight,
+                    lookups.Rows,
+                    lookups.Columns,
+                    ref dataBarConsumer);
                 break;
             case GridQuickAnalysisPreviewVisualKind.ColorScale:
-                var index = 0;
-                foreach (var cell in CalculateQuickAnalysisCellPreviewRects(Viewport, range, rowHeaderWidth, columnHeaderHeight))
-                    dc.DrawRectangle(QuickAnalysisColorScalePreviewBrushes[index++ % QuickAnalysisColorScalePreviewBrushes.Length], null, cell);
+                var colorScaleConsumer = new ColorScaleRectConsumer(dc);
+                QuickAnalysisPreviewLayoutPlanner.VisitCellPreviewRects(
+                    Viewport,
+                    range,
+                    rowHeaderWidth,
+                    columnHeaderHeight,
+                    ref colorScaleConsumer);
                 break;
             case GridQuickAnalysisPreviewVisualKind.IconSet:
-                var iconIndex = 0;
-                foreach (var cell in CalculateQuickAnalysisCellPreviewRects(Viewport, range, rowHeaderWidth, columnHeaderHeight))
-                {
-                    var radius = Math.Min(cell.Width, cell.Height) / 4;
-                    if (radius <= 0)
-                        continue;
-
-                    var center = new Point(cell.Left + radius + 2, cell.Top + cell.Height / 2);
-                    dc.DrawEllipse(QuickAnalysisIconSetPreviewBrushes[iconIndex++ % QuickAnalysisIconSetPreviewBrushes.Length], null, center, radius, radius);
-                }
+                var iconSetConsumer = new IconSetRectConsumer(dc);
+                QuickAnalysisPreviewLayoutPlanner.VisitCellPreviewRects(
+                    Viewport,
+                    range,
+                    rowHeaderWidth,
+                    columnHeaderHeight,
+                    ref iconSetConsumer);
                 break;
             case GridQuickAnalysisPreviewVisualKind.Highlight:
                 DrawQuickAnalysisCellOverlays(dc, QuickAnalysisHighlightPreviewBrush, QuickAnalysisHighlightPreviewPen);
@@ -160,8 +169,13 @@ public partial class GridView
         if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
             return;
 
-        foreach (var cell in CalculateQuickAnalysisCellPreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
-            dc.DrawRectangle(brush, pen, cell);
+        var consumer = new FillStrokeRectConsumer(dc, brush, pen);
+        QuickAnalysisPreviewLayoutPlanner.VisitCellPreviewRects(
+            Viewport,
+            range,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
+            ref consumer);
     }
 
     private void DrawQuickAnalysisLineSparklinePreview(DrawingContext dc)
@@ -169,14 +183,13 @@ public partial class GridView
         if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
             return;
 
-        foreach (var sparkline in CalculateQuickAnalysisSparklinePreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
-        {
-            var y1 = sparkline.Bottom;
-            var y2 = sparkline.Top;
-            var y3 = sparkline.Top + sparkline.Height * 0.65;
-            dc.DrawLine(QuickAnalysisSparklinePreviewPen, new Point(sparkline.Left, y1), new Point(sparkline.Left + sparkline.Width * 0.45, y2));
-            dc.DrawLine(QuickAnalysisSparklinePreviewPen, new Point(sparkline.Left + sparkline.Width * 0.45, y2), new Point(sparkline.Right, y3));
-        }
+        var consumer = new LineSparklineRectConsumer(dc);
+        QuickAnalysisPreviewLayoutPlanner.VisitSparklinePreviewRects(
+            Viewport,
+            range,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
+            ref consumer);
     }
 
     private void DrawQuickAnalysisColumnSparklinePreview(DrawingContext dc)
@@ -184,15 +197,13 @@ public partial class GridView
         if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
             return;
 
-        foreach (var sparkline in CalculateQuickAnalysisSparklinePreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
-        {
-            var gap = Math.Min(2.0, sparkline.Width / 8);
-            var barWidth = Math.Max(1, (sparkline.Width - (2 * gap)) / 3);
-            var x = sparkline.Left;
-            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, new Rect(x, sparkline.Top + sparkline.Height * 0.35, barWidth, sparkline.Height * 0.65));
-            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, new Rect(x + barWidth + gap, sparkline.Top, barWidth, sparkline.Height));
-            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, new Rect(x + 2 * (barWidth + gap), sparkline.Top + sparkline.Height * 0.55, barWidth, sparkline.Height * 0.45));
-        }
+        var consumer = new ColumnSparklineRectConsumer(dc);
+        QuickAnalysisPreviewLayoutPlanner.VisitSparklinePreviewRects(
+            Viewport,
+            range,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
+            ref consumer);
     }
 
     private void DrawQuickAnalysisWinLossSparklinePreview(DrawingContext dc)
@@ -200,15 +211,92 @@ public partial class GridView
         if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
             return;
 
-        foreach (var sparkline in CalculateQuickAnalysisSparklinePreviewRects(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight))
+        var consumer = new WinLossSparklineRectConsumer(dc);
+        QuickAnalysisPreviewLayoutPlanner.VisitSparklinePreviewRects(
+            Viewport,
+            range,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
+            ref consumer);
+    }
+
+    private readonly struct FillRectConsumer(DrawingContext dc, Brush brush) : IQuickAnalysisPreviewRectConsumer
+    {
+        public void Accept(Rect rect) => dc.DrawRectangle(brush, null, rect);
+    }
+
+    private readonly struct FillStrokeRectConsumer(DrawingContext dc, Brush brush, Pen pen) : IQuickAnalysisPreviewRectConsumer
+    {
+        public void Accept(Rect rect) => dc.DrawRectangle(brush, pen, rect);
+    }
+
+    private struct ColorScaleRectConsumer(DrawingContext dc) : IQuickAnalysisPreviewRectConsumer
+    {
+        private int _index;
+
+        public void Accept(Rect rect) =>
+            dc.DrawRectangle(
+                QuickAnalysisColorScalePreviewBrushes[_index++ % QuickAnalysisColorScalePreviewBrushes.Length],
+                null,
+                rect);
+    }
+
+    private struct IconSetRectConsumer(DrawingContext dc) : IQuickAnalysisPreviewRectConsumer
+    {
+        private int _index;
+
+        public void Accept(Rect rect)
         {
-            var gap = Math.Min(2.0, sparkline.Width / 8);
-            var barWidth = Math.Max(1, (sparkline.Width - (2 * gap)) / 3);
-            var halfHeight = Math.Max(2, sparkline.Height / 2);
-            var mid = sparkline.Top + sparkline.Height / 2;
-            dc.DrawRectangle(QuickAnalysisWinLossPositiveBrush, null, new Rect(sparkline.Left, sparkline.Top, barWidth, halfHeight));
-            dc.DrawRectangle(QuickAnalysisWinLossNegativeBrush, null, new Rect(sparkline.Left + barWidth + gap, mid, barWidth, halfHeight));
-            dc.DrawRectangle(QuickAnalysisWinLossPositiveBrush, null, new Rect(sparkline.Left + (2 * (barWidth + gap)), sparkline.Top, barWidth, halfHeight));
+            var radius = Math.Min(rect.Width, rect.Height) / 4;
+            if (radius <= 0)
+                return;
+
+            var center = new Point(rect.Left + radius + 2, rect.Top + rect.Height / 2);
+            dc.DrawEllipse(
+                QuickAnalysisIconSetPreviewBrushes[_index++ % QuickAnalysisIconSetPreviewBrushes.Length],
+                null,
+                center,
+                radius,
+                radius);
+        }
+    }
+
+    private readonly struct LineSparklineRectConsumer(DrawingContext dc) : IQuickAnalysisPreviewRectConsumer
+    {
+        public void Accept(Rect rect)
+        {
+            var y1 = rect.Bottom;
+            var y2 = rect.Top;
+            var y3 = rect.Top + rect.Height * 0.65;
+            dc.DrawLine(QuickAnalysisSparklinePreviewPen, new Point(rect.Left, y1), new Point(rect.Left + rect.Width * 0.45, y2));
+            dc.DrawLine(QuickAnalysisSparklinePreviewPen, new Point(rect.Left + rect.Width * 0.45, y2), new Point(rect.Right, y3));
+        }
+    }
+
+    private readonly struct ColumnSparklineRectConsumer(DrawingContext dc) : IQuickAnalysisPreviewRectConsumer
+    {
+        public void Accept(Rect rect)
+        {
+            var gap = Math.Min(2.0, rect.Width / 8);
+            var barWidth = Math.Max(1, (rect.Width - (2 * gap)) / 3);
+            var x = rect.Left;
+            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, new Rect(x, rect.Top + rect.Height * 0.35, barWidth, rect.Height * 0.65));
+            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, new Rect(x + barWidth + gap, rect.Top, barWidth, rect.Height));
+            dc.DrawRectangle(QuickAnalysisDataBarPreviewBrush, null, new Rect(x + 2 * (barWidth + gap), rect.Top + rect.Height * 0.55, barWidth, rect.Height * 0.45));
+        }
+    }
+
+    private readonly struct WinLossSparklineRectConsumer(DrawingContext dc) : IQuickAnalysisPreviewRectConsumer
+    {
+        public void Accept(Rect rect)
+        {
+            var gap = Math.Min(2.0, rect.Width / 8);
+            var barWidth = Math.Max(1, (rect.Width - (2 * gap)) / 3);
+            var halfHeight = Math.Max(2, rect.Height / 2);
+            var mid = rect.Top + rect.Height / 2;
+            dc.DrawRectangle(QuickAnalysisWinLossPositiveBrush, null, new Rect(rect.Left, rect.Top, barWidth, halfHeight));
+            dc.DrawRectangle(QuickAnalysisWinLossNegativeBrush, null, new Rect(rect.Left + barWidth + gap, mid, barWidth, halfHeight));
+            dc.DrawRectangle(QuickAnalysisWinLossPositiveBrush, null, new Rect(rect.Left + (2 * (barWidth + gap)), rect.Top, barWidth, halfHeight));
         }
     }
 

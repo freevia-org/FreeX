@@ -196,17 +196,21 @@ public sealed class GridViewSelectionLayoutTests
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "QuickAnalysisPreviewLayoutPlanner.cs"));
-        var dataBars = source[
+        var publicDataBars = source[
             source.IndexOf("public static IReadOnlyList<Rect> CalculateDataBarPreviewRects", StringComparison.Ordinal)..
-            source.IndexOf("public static IReadOnlyList<Rect> CalculateCellPreviewRects", StringComparison.Ordinal)];
+            source.IndexOf("internal static void VisitDataBarPreviewRects", StringComparison.Ordinal)];
+        var dataBars = source[
+            source.IndexOf("internal static void VisitDataBarPreviewRects", StringComparison.Ordinal)..
+            source.IndexOf("private static bool IsCellInRange", StringComparison.Ordinal)];
 
         dataBars.Should().Contain("var hasNumericCell = false;");
         dataBars.Should().Contain("hasNumericCell = true;");
         dataBars.Should().Contain("if (positiveValue > max)");
         dataBars.Should().Contain("foreach (var cell in viewport.Cells)");
         dataBars.Should().Contain("IsCellInRange(cell, range)");
-        dataBars.Should().Contain("BuildRowMetricLookup(viewport.RowMetrics)");
-        dataBars.Should().Contain("BuildColMetricLookup(viewport.ColMetrics)");
+        publicDataBars.Should().Contain("BuildRowMetricLookup(viewport.RowMetrics)");
+        publicDataBars.Should().Contain("BuildColMetricLookup(viewport.ColMetrics)");
+        publicDataBars.Should().Contain("VisitDataBarPreviewRects(");
         dataBars.Should().NotContain("numericCells");
         dataBars.Should().NotContain(".Where(");
         dataBars.Should().NotContain(".Select(");
@@ -222,11 +226,11 @@ public sealed class GridViewSelectionLayoutTests
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "QuickAnalysisPreviewLayoutPlanner.cs"));
         var cellPreview = source[
-            source.IndexOf("public static IReadOnlyList<Rect> CalculateCellPreviewRects", StringComparison.Ordinal)..
+            source.IndexOf("internal static void VisitCellPreviewRects", StringComparison.Ordinal)..
             source.IndexOf("public static IReadOnlyList<Rect> CalculateSparklinePreviewRects", StringComparison.Ordinal)];
         var sparklinePreview = source[
-            source.IndexOf("public static IReadOnlyList<Rect> CalculateSparklinePreviewRects", StringComparison.Ordinal)..
-            source.IndexOf("private static bool TryGetPreviewNumber", StringComparison.Ordinal)];
+            source.IndexOf("internal static void VisitSparklinePreviewRects", StringComparison.Ordinal)..
+            source.IndexOf("private static ColMetric? FirstVisibleColumnInRange", StringComparison.Ordinal)];
 
         cellPreview.Should().Contain("foreach (var row in viewport.RowMetrics)");
         cellPreview.Should().Contain("foreach (var col in viewport.ColMetrics)");
@@ -237,6 +241,24 @@ public sealed class GridViewSelectionLayoutTests
         sparklinePreview.Should().NotContain("FirstOrDefault");
         sparklinePreview.Should().NotContain(".Where(");
         sparklinePreview.Should().NotContain(".ToList()");
+    }
+
+    [Fact]
+    public void QuickAnalysisRendering_StreamsPreviewRectsWithoutMaterializingLists()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
+        var renderPreview = source[
+            source.IndexOf("private void RenderQuickAnalysisPreview", StringComparison.Ordinal)..
+            source.IndexOf("private static void DrawQuickAnalysisColumnChartPreview", StringComparison.Ordinal)];
+
+        renderPreview.Should().Contain("GetRenderCellLookups(Viewport)");
+        renderPreview.Should().Contain("VisitDataBarPreviewRects(");
+        renderPreview.Should().Contain("VisitCellPreviewRects(");
+        renderPreview.Should().Contain("VisitSparklinePreviewRects(");
+        renderPreview.Should().NotContain("CalculateQuickAnalysisDataBarPreviewRects(");
+        renderPreview.Should().NotContain("CalculateQuickAnalysisCellPreviewRects(");
+        renderPreview.Should().NotContain("CalculateQuickAnalysisSparklinePreviewRects(");
     }
 
     [Fact]
