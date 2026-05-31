@@ -197,6 +197,27 @@ public sealed class MainWindowFormulaBarSyncTests
         });
     }
 
+    [Fact]
+    public void NameBoxEnter_WithInvalidReference_DoesNotChangeSelectionOrFormulaBar()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "active cell");
+            harness.SelectActiveCell(1, 1);
+            harness.SetCellAddressBoxText("not a reference");
+
+            harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
+
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 1),
+                new CellAddress(harness.CurrentSheetId, 1, 1)));
+            harness.CellAddressBoxText.Should().Be("not a reference");
+            harness.FormulaBarText.Should().Be("active cell");
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
