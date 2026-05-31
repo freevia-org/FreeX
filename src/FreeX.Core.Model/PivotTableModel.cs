@@ -58,10 +58,10 @@ public sealed class PivotTableModel
     private bool _showRowGrandTotals = true;
     private bool _showColumnGrandTotals = true;
 
-    public string Name { get; init; } = "";
+    public string Name { get; set; } = "";
     public int CacheId { get; init; }
     public GridRange SourceRange { get; set; }
-    public GridRange TargetRange { get; init; }
+    public GridRange TargetRange { get; set; }
     public string PackagePart { get; init; } = "";
     public int? CreatedVersion { get; set; }
     public int? UpdatedVersion { get; set; }

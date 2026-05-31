@@ -150,6 +150,146 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void PivotTableNameBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetSelectedPivotTable(
+                UiText.Get("MainWindowMessage_PivotTableRenameTitle"),
+                out var sheet,
+                out var pivotTable))
+            return;
+
+        var dialog = new PivotTableNameDialog(pivotTable.Name) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (!PivotUiPlanner.IsPivotTableNameAvailable(_workbook, pivotTable, dialog.Result.Name))
+        {
+            _messageService.ShowWarning(
+                UiText.Get("MainWindowMessage_PivotTableNameAlreadyExists"),
+                UiText.Get("MainWindowMessage_PivotTableRenameTitle"));
+            return;
+        }
+
+        if (!TryExecuteCommand(
+                new RenamePivotTableCommand(sheet.Id, pivotTable.Name, dialog.Result.Name),
+                "Rename PivotTable"))
+            return;
+
+        RefreshPivotFieldListPane();
+        RefreshSlicerTimelinePane();
+    }
+
+    private void PivotTableOptionsBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ShowPivotTableOptionsDialog();
+    }
+
+    private void PivotTableClearBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetSelectedPivotTable(
+                UiText.Get("MainWindowMessage_PivotTableClearTitle"),
+                out var sheet,
+                out var pivotTable))
+            return;
+
+        if (!TryExecuteCommand(
+                new ClearPivotTableViewCommand(sheet.Id, pivotTable.Name),
+                "Clear PivotTable"))
+            return;
+
+        UpdateViewport();
+        RefreshPivotFieldListPane();
+    }
+
+    private void PivotTableSelectBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetSelectedPivotTable(
+                UiText.Get("MainWindowMessage_PivotTableSelectCommandTitle"),
+                out _,
+                out var pivotTable))
+            return;
+
+        var range = PivotUiPlanner.ResolvePivotTableSelectionRange(pivotTable);
+        SetSelectionRange(range, range.Start);
+        EnsureCellVisible(range.Start);
+        RefreshPivotFieldListPane();
+    }
+
+    private void PivotTableMoveBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetSelectedPivotTable(
+                UiText.Get("MainWindowMessage_MovePivotTableTitle"),
+                out var sheet,
+                out var pivotTable))
+            return;
+
+        var destination = new GridRange(pivotTable.TargetRange.Start, pivotTable.TargetRange.Start);
+        MovePivotTableDialog? dialog = null;
+        dialog = new MovePivotTableDialog(
+            FormatWorkbookRange(destination),
+            request => ApplyMovePivotTableRangeSelection(dialog, request),
+            sheetId: sheet.Id,
+            resolveSheetId: sheetName => _workbook.Sheets.FirstOrDefault(item =>
+                string.Equals(item.Name, sheetName, StringComparison.CurrentCultureIgnoreCase))?.Id)
+        { Owner = this };
+        if (dialog.ShowDialog() != true ||
+            string.IsNullOrWhiteSpace(dialog.Result.DestinationRangeText) ||
+            !TryParseWorkbookRange(sheet.Id, dialog.Result.DestinationRangeText, out var targetRange))
+            return;
+
+        if (targetRange.Start.Sheet != _currentSheetId)
+        {
+            _messageService.ShowWarning(
+                UiText.Get("MainWindowMessage_PivotTableMoveCurrentSheetOnly"),
+                UiText.Get("MainWindowMessage_MovePivotTableTitle"));
+            return;
+        }
+
+        if (!PivotUiPlanner.TryCreateMovedTargetRange(pivotTable, targetRange.Start, out var movedRange))
+        {
+            _messageService.ShowWarning(
+                UiText.Get("MovePivotTable_EnterValidDestination"),
+                UiText.Get("MainWindowMessage_MovePivotTableTitle"));
+            return;
+        }
+
+        if (!TryExecuteCommand(
+                new MovePivotTableCommand(sheet.Id, pivotTable.Name, targetRange.Start),
+                "Move PivotTable"))
+            return;
+
+        SetSelectionRange(movedRange, movedRange.Start);
+        EnsureCellVisible(movedRange.Start);
+        UpdateViewport();
+        RefreshPivotFieldListPane();
+    }
+
+    private void ApplyMovePivotTableRangeSelection(
+        MovePivotTableDialog? dialog,
+        MovePivotTableRangeSelectionRequest request)
+    {
+        if (dialog is null || SheetGrid.SelectedRange is not { } selectedRange)
+            return;
+
+        var destination = new GridRange(selectedRange.Start, selectedRange.Start);
+        var rangeText = FormatWorkbookRange(destination);
+        if (request.CollapseDialog)
+            dialog.Hide();
+
+        try
+        {
+            dialog.ApplyRangeSelection(rangeText);
+        }
+        finally
+        {
+            if (request.CollapseDialog)
+            {
+                dialog.Show();
+                dialog.Activate();
+            }
+        }
+    }
+
     private void PivotTableShowDetailsBtn_Click(object sender, RoutedEventArgs e)
     {
         _ = TryShowPivotTableDetails(showMessage: true);
@@ -376,6 +516,19 @@ public partial class MainWindow
         sheet = _workbook.GetSheet(_currentSheetId)!;
         pivotTable = sheet is null ? null! : PivotUiPlanner.FindPivotTableForSelection(sheet, SheetGrid.SelectedRange)!;
         return sheet is not null && pivotTable is not null;
+    }
+
+    private bool TryGetSelectedPivotTable(string title, out Sheet sheet, out PivotTableModel pivotTable)
+    {
+        sheet = _workbook.GetSheet(_currentSheetId)!;
+        pivotTable = sheet is null ? null! : PivotUiPlanner.FindPivotTableContainingSelection(sheet, SheetGrid.SelectedRange)!;
+        if (sheet is not null && pivotTable is not null)
+            return true;
+
+        _messageService.ShowInfo(
+            UiText.Get("MainWindowMessage_PivotTableSelectExistingForAnalyzeAction"),
+            title);
+        return false;
     }
 
     private void PivotFieldListCloseBtn_Click(object sender, RoutedEventArgs e)
