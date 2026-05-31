@@ -8658,51 +8658,51 @@
   </data>
 
 <data name="Options_General" xml:space="preserve">
-    <value>_General</value>
+    <value>General</value>
   </data>
 
 <data name="Options_Formulas" xml:space="preserve">
-    <value>_Formulas</value>
+    <value>Formulas</value>
   </data>
 
 <data name="Options_Proofing" xml:space="preserve">
-    <value>_Proofing</value>
+    <value>Proofing</value>
   </data>
 
 <data name="Options_Save" xml:space="preserve">
-    <value>_Save</value>
+    <value>Save</value>
   </data>
 
 <data name="Options_Language" xml:space="preserve">
-    <value>_Language</value>
+    <value>Language</value>
   </data>
 
 <data name="Options_EaseOfAccess" xml:space="preserve">
-    <value>_Ease of Access</value>
+    <value>Ease of Access</value>
   </data>
 
 <data name="Options_Advanced" xml:space="preserve">
-    <value>_Advanced</value>
+    <value>Advanced</value>
   </data>
 
 <data name="Options_CustomizeRibbon" xml:space="preserve">
-    <value>_Customize Ribbon</value>
+    <value>Customize Ribbon</value>
   </data>
 
 <data name="Options_QuickAccessToolbar" xml:space="preserve">
-    <value>_Quick Access Toolbar</value>
+    <value>Quick Access Toolbar</value>
   </data>
 
 <data name="Options_AddIns" xml:space="preserve">
-    <value>_Add-ins</value>
+    <value>Add-ins</value>
   </data>
 
 <data name="Options_TrustCenter" xml:space="preserve">
-    <value>_Trust Center</value>
+    <value>Trust Center</value>
   </data>
 
 <data name="Options_View" xml:space="preserve">
-    <value>_View</value>
+    <value>View</value>
   </data>
 
 <data name="Options_GeneralOptionsForWorkingWithFreeX" xml:space="preserve">

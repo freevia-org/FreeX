@@ -8310,40 +8310,40 @@
     <value>Изберете категория с опции на FreeX.</value>
   </data>
   <data name="Options_General" xml:space="preserve">
-    <value>_Общи</value>
+    <value>Общи</value>
   </data>
   <data name="Options_Formulas" xml:space="preserve">
-    <value>_Формули</value>
+    <value>Формули</value>
   </data>
   <data name="Options_Proofing" xml:space="preserve">
-    <value>_Проверка</value>
+    <value>Проверка</value>
   </data>
   <data name="Options_Save" xml:space="preserve">
-    <value>_Записване</value>
+    <value>Записване</value>
   </data>
   <data name="Options_Language" xml:space="preserve">
-    <value>_Език</value>
+    <value>Език</value>
   </data>
   <data name="Options_EaseOfAccess" xml:space="preserve">
-    <value>_Достъпност</value>
+    <value>Достъпност</value>
   </data>
   <data name="Options_Advanced" xml:space="preserve">
-    <value>_Разширени</value>
+    <value>Разширени</value>
   </data>
   <data name="Options_CustomizeRibbon" xml:space="preserve">
-    <value>_Персонализиране на лентата</value>
+    <value>Персонализиране на лентата</value>
   </data>
   <data name="Options_QuickAccessToolbar" xml:space="preserve">
-    <value>_Лента с бърз достъп</value>
+    <value>Лента с бърз достъп</value>
   </data>
   <data name="Options_AddIns" xml:space="preserve">
-    <value>_Добавки</value>
+    <value>Добавки</value>
   </data>
   <data name="Options_TrustCenter" xml:space="preserve">
-    <value>_Център за надеждност</value>
+    <value>Център за надеждност</value>
   </data>
   <data name="Options_View" xml:space="preserve">
-    <value>_Изглед</value>
+    <value>Изглед</value>
   </data>
   <data name="Options_GeneralOptionsForWorkingWithFreeX" xml:space="preserve">
     <value>Общи опции за работа с FreeX.</value>

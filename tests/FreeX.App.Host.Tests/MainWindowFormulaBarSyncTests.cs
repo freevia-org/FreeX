@@ -129,6 +129,7 @@ public sealed class MainWindowFormulaBarSyncTests
 
             harness.FocusFormulaBar();
 
+            harness.FormulaBarFocused.Should().BeTrue();
             harness.InlineEditorVisible.Should().BeTrue();
             harness.CellText(1, 1).Should().Be("original");
             harness.FormulaBarText.Should().Be("draft edit");
@@ -396,6 +397,8 @@ public sealed class MainWindowFormulaBarSyncTests
         public string? InlineEditorText => InlineEditor?.Text;
 
         public bool InlineEditorVisible => InlineEditor?.IsVisible == true;
+
+        public bool FormulaBarFocused => ReferenceEquals(Keyboard.FocusedElement, (TextBox)_window.FindName("FormulaBar"));
 
         public bool SheetGridFocused => ReferenceEquals(Keyboard.FocusedElement, (SheetGridView)_window.FindName("SheetGrid"));
 

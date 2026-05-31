@@ -15,7 +15,7 @@ public sealed class OptionsDialogSourceTests
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
 
-        xaml.Should().Contain("<ListBoxItem Content=\"_View\"/>");
+        xaml.Should().Contain("<ListBoxItem Content=\"View\"/>");
         xaml.Should().Contain("x:Name=\"PanelView\"");
         xaml.Should().Contain("x:Name=\"OptShowFormulaBar\"");
         xaml.Should().Contain("x:Name=\"OptFormulaBarExpanded\"");
@@ -34,7 +34,7 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
-    public void OptionsDialog_ExposesKeyboardAccessKeysForTabsFieldsAndButtons()
+    public void OptionsDialog_ExposesPlainCategoryLabelsAndKeyboardAccessKeysForFieldsAndButtons()
     {
         var document = XamlLocalizationTestHelper.LoadLocalizedXaml("OptionsDialog.xaml");
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -43,17 +43,18 @@ public sealed class OptionsDialogSourceTests
             .Select(element => element.Attribute("Content")?.Value)
             .Should()
             .Contain([
-                "_General",
-                "_Formulas",
-                "_Proofing",
-                "_Save",
-                "_Language",
-                "_Ease of Access",
-                "_Advanced",
-                "_Customize Ribbon",
-                "_Quick Access Toolbar",
-                "_Add-ins",
-                "_Trust Center"
+                "General",
+                "Formulas",
+                "Proofing",
+                "Save",
+                "Language",
+                "Ease of Access",
+                "Advanced",
+                "Customize Ribbon",
+                "Quick Access Toolbar",
+                "Add-ins",
+                "Trust Center",
+                "View"
             ]);
 
         AssertLabelTargets(document, presentation, "Default _font:", "OptDefaultFont");
@@ -218,7 +219,7 @@ public sealed class OptionsDialogSourceTests
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
 
-        xaml.Should().Contain("<ListBoxItem Content=\"_Quick Access Toolbar\"/>");
+        xaml.Should().Contain("<ListBoxItem Content=\"Quick Access Toolbar\"/>");
         xaml.Should().Contain("x:Name=\"PanelQuickAccessToolbar\"");
         xaml.Should().Contain("Customize the Quick Access Toolbar");
         xaml.Should().Contain("Show Quick Access Toolbar _below the Ribbon");
