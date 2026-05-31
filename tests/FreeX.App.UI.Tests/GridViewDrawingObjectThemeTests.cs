@@ -295,6 +295,22 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void ObjectSelectionHandles_DrawWithoutMaterializingRectArray()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
+        var drawHandles = source[
+            source.IndexOf("internal void DrawObjectSelectionHandles", StringComparison.Ordinal)..
+            source.IndexOf("private ObjectDragKind HitTestObjectHandle", StringComparison.Ordinal)];
+
+        drawHandles.Should().Contain("DrawObjectSelectionHandle(dc,");
+        drawHandles.Should().Contain("private static void DrawObjectSelectionHandle");
+        drawHandles.Should().NotContain("GetHandleRects");
+        drawHandles.Should().NotContain("Rect[]");
+        drawHandles.Should().NotContain("new[]");
+        drawHandles.Should().NotContain("foreach");
+    }
+
+    [Fact]
     public void PictureRenderer_ReusesFrozenStaticResources()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));

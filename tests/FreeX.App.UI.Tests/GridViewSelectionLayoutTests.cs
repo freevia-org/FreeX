@@ -240,6 +240,28 @@ public sealed class GridViewSelectionLayoutTests
     }
 
     [Fact]
+    public void QuickAnalysisChartPreviewRendering_ReusesCoefficientTables()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
+        var chartPreviewRendering = source[
+            source.IndexOf("private static void DrawQuickAnalysisColumnChartPreview", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderSelection", StringComparison.Ordinal)];
+        var selectionHandleRendering = source[
+            source.IndexOf("private static void DrawSelectionHandle", StringComparison.Ordinal)..];
+
+        chartPreviewRendering.Should().Contain("QuickAnalysisColumnChartHeights");
+        chartPreviewRendering.Should().Contain("QuickAnalysisStackedColumnChartHeights");
+        chartPreviewRendering.Should().Contain("QuickAnalysisLineChartPointFactors");
+        chartPreviewRendering.Should().Contain("QuickAnalysisBarChartWidths");
+        chartPreviewRendering.Should().Contain("QuickAnalysisAreaChartPointFactors");
+        chartPreviewRendering.Should().Contain("QuickAnalysisScatterChartPointFactors");
+        chartPreviewRendering.Should().NotContain("new[]");
+        selectionHandleRendering.Should().Contain("SelectionHandleBrush");
+        selectionHandleRendering.Should().NotContain("new SolidColorBrush");
+    }
+
+    [Fact]
     public void CalculateQuickAnalysisCellPreviewRects_ReturnsInsetCellsForColorScalePreview()
     {
         var sheetId = SheetId.New();
