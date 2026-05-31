@@ -158,6 +158,21 @@ public sealed class ExcelEditKeyPlannerTests
         intent.Target.Should().BeNull();
     }
 
+    [Fact]
+    public void GetIntent_LetsInlineEditorHandleShiftArrowTextSelection()
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            Key.Right,
+            ModifierKeys.Shift,
+            Current,
+            pageSize: 20,
+            allowFormulaBarNavigationKeys: false,
+            inlineEditorCommitsOnArrow: true);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.None);
+        intent.Target.Should().BeNull();
+    }
+
     [Theory]
     [InlineData(Key.Up, 9, 5)]
     [InlineData(Key.Down, 11, 5)]
