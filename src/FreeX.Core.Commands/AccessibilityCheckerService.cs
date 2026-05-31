@@ -330,9 +330,8 @@ public static class AccessibilityCheckerService
                 continue;
 
             var style = GetEffectiveContrastStyle(workbook, sheet, address, cell);
-            var background = style.FillColor ?? CellColor.White;
             var minimumContrastRatio = MinimumTextContrastRatio(style);
-            if (ContrastRatio(style.FontColor, background) >= minimumContrastRatio)
+            if (EffectiveCellTextBackgrounds(style).All(background => ContrastRatio(style.FontColor, background) >= minimumContrastRatio))
                 continue;
 
             issues.Add(new AccessibilityIssue(
@@ -607,6 +606,46 @@ public static class AccessibilityCheckerService
         fontSize >= 18 || (bold && fontSize >= 14)
             ? 3.0
             : 4.5;
+
+    private static IEnumerable<CellColor> EffectiveCellTextBackgrounds(CellStyle style)
+    {
+        var baseFill = style.FillColor ?? CellColor.White;
+        yield return baseFill;
+
+        if (style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
+            yield break;
+
+        var patternColor = style.FillPatternColor ?? CellColor.Black;
+        if (TryGetGrayPatternOpacity(style.FillPatternStyle, out var opacity))
+        {
+            yield return Blend(patternColor, baseFill, opacity);
+            yield break;
+        }
+
+        yield return patternColor;
+    }
+
+    private static bool TryGetGrayPatternOpacity(CellFillPatternStyle patternStyle, out double opacity)
+    {
+        opacity = patternStyle switch
+        {
+            CellFillPatternStyle.Gray0625 => 0.12,
+            CellFillPatternStyle.Gray125 => 0.18,
+            CellFillPatternStyle.LightGray => 0.28,
+            CellFillPatternStyle.MediumGray => 0.45,
+            CellFillPatternStyle.DarkGray => 0.62,
+            _ => double.NaN
+        };
+        return !double.IsNaN(opacity);
+    }
+
+    private static CellColor Blend(CellColor foreground, CellColor background, double opacity) => new(
+        BlendChannel(foreground.R, background.R, opacity),
+        BlendChannel(foreground.G, background.G, opacity),
+        BlendChannel(foreground.B, background.B, opacity));
+
+    private static byte BlendChannel(byte foreground, byte background, double opacity) =>
+        (byte)Math.Round(foreground * opacity + background * (1 - opacity));
 
     private static double RelativeLuminance(CellColor color) =>
         0.2126 * LinearRgb(color.R) +
