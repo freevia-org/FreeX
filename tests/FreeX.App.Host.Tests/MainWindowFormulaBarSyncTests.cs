@@ -224,6 +224,26 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void CtrlEnterFormulaBarEdit_ClearsFormulaEditCellAfterFillingSelectedRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRange(3, 3, 4, 4);
+            harness.SetFormulaEditCell(1, 1);
+            harness.SetFormulaBarText("filled range");
+
+            harness.CommitEditAcrossSelection(fillFormulaEditCellOnly: false).Should().BeTrue();
+            harness.SetFormulaBarText("next edit");
+            harness.CommitEdit().Should().BeTrue();
+
+            harness.CellText(1, 1).Should().BeNull();
+            harness.CellText(3, 3).Should().Be("next edit");
+        });
+    }
+
+    [Fact]
     public void CtrlEnterFormulaReferenceEntry_CommitsOnlyOriginalEditCell()
     {
         StaTestRunner.Run(() =>
