@@ -1097,6 +1097,50 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlFormulaCellNumberFormatStyle()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row first="12.5" second="7.25"/>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <ss:Style ss:ID="total">
+                      <ss:NumberFormat ss:Format="$#,##0.00"/>
+                    </ss:Style>
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Formulas">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@first"/></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@second"/></ss:Data></ss:Cell>
+                        <ss:Cell ss:Formula="=SUM(RC[-2]:RC[-1])" ss:StyleID="total">
+                          <ss:Data ss:Type="Number">19.75</ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var formulaCell = workbook.GetSheetAt(0).GetCell(1, 3);
+        formulaCell.Should().NotBeNull();
+        formulaCell!.FormulaText.Should().Be("SUM(RC[-2]:RC[-1])");
+        formulaCell.Value.Should().Be(new NumberValue(19.75));
+        workbook.GetStyle(formulaCell.StyleId).NumberFormat.Should().Be("$#,##0.00");
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlWorkbookAndSheetMetadata()
     {
         using var source = StreamFromString("""
