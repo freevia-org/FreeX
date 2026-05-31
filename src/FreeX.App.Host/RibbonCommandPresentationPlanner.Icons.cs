@@ -192,8 +192,6 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("table style")) return new(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme);
         if (name.Contains("convert to range")) return new(RibbonCommandIconKind.Table);
         if (name.Contains("format as table")) return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
-        if (name.Contains("convert to range")) return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
-        if (name == "table name") return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
         if (name.Contains("recommended pivottable")) return new(RibbonCommandIconKind.PivotTable, RibbonCommandIconAccent.Green);
         if (name.Contains("pivottable")) return new(RibbonCommandIconKind.PivotTable, RibbonCommandIconAccent.Green);
         if (name == "table") return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);

@@ -64,7 +64,6 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("PivotTable", RibbonCommandIconKind.PivotTable)]
     [InlineData("Recommended PivotTables", RibbonCommandIconKind.PivotTable)]
     [InlineData("Table", RibbonCommandIconKind.Table)]
-    [InlineData("Table Name", RibbonCommandIconKind.Table)]
     [InlineData("Convert to Range", RibbonCommandIconKind.Table)]
     [InlineData("Column Chart", RibbonCommandIconKind.ChartColumn)]
     [InlineData("Recommended Charts", RibbonCommandIconKind.ChartColumn)]
