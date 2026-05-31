@@ -59,4 +59,31 @@ public sealed class WorkbookStatisticsServiceTests
         statistics.ShapeCount.Should().Be(2);
         statistics.NamedRangeCount.Should().Be(1);
     }
+
+    [Fact]
+    public void GetStatistics_UsesTrackedFormulaCount()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "WorkbookStatisticsService.cs"));
+        var getSheetStatistics = source[
+            source.IndexOf("private static SheetStatistics GetSheetStatistics", StringComparison.Ordinal)..
+            source.IndexOf("private readonly record struct SheetStatistics", StringComparison.Ordinal)];
+
+        getSheetStatistics.Should().Contain("FormulaCount: sheet.FormulaCellCount");
+        getSheetStatistics.Should().NotContain("EnumerateCells().Count");
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine([dir, .. parts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new FileNotFoundException($"Could not find workspace file: {Path.Combine(parts)}");
+    }
 }

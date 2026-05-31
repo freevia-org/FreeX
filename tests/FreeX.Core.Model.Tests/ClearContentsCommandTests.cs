@@ -111,6 +111,38 @@ public sealed class ClearContentsCommandTests
     }
 
     [Fact]
+    public void ClearContents_SkipsUntouchedBlankCells()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 50, 50));
+        var context = new SimpleCommandContext(workbook);
+        var command = new ClearContentsCommand(sheet.Id, range);
+
+        var outcome = command.Apply(context);
+        command.Revert(context);
+
+        outcome.Success.Should().BeTrue();
+        outcome.AffectedCells.Should().BeEmpty();
+        sheet.CellCount.Should().Be(0);
+        sheet.GetUsedRange().Should().BeNull();
+    }
+
+    [Fact]
+    public void ClearContents_DoesNotMaterializeRangeForProtectionPreflight()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "ClearContentsCommand.cs"));
+        var apply = source[
+            source.IndexOf("public CommandOutcome Apply", StringComparison.Ordinal)..
+            source.IndexOf("public void Revert", StringComparison.Ordinal)];
+
+        apply.Should().Contain("if (sheet.IsProtected)");
+        apply.Should().NotContain("_range.AllCells().ToList()");
+    }
+
+    [Fact]
     public void ClearContents_RejectsLockedCellsOnProtectedSheet()
     {
         var workbook = new Workbook("test");
@@ -151,5 +183,20 @@ public sealed class ClearContentsCommandTests
     {
         public Workbook Workbook => workbook;
         public Sheet GetSheet(SheetId sheetId) => workbook.GetSheet(sheetId)!;
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine([dir, .. parts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new FileNotFoundException($"Could not find workspace file: {Path.Combine(parts)}");
     }
 }

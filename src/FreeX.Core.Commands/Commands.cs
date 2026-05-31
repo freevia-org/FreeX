@@ -10,16 +10,21 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private readonly SheetId _sheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _edits;
+    private readonly IReadOnlyList<CellAddress> _affectedCells;
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
     public string Label => _edits.Count == 1 ? "Edit Cell" : $"Edit {_edits.Count} Cells";
 
-    public IReadOnlyList<CellAddress> AffectedCells => _edits.Select(edit => edit.Address).ToArray();
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     public EditCellsCommand(SheetId sheetId, IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)
     {
         _sheetId = sheetId;
         _edits = edits;
+        var affectedCells = new CellAddress[edits.Count];
+        for (var i = 0; i < edits.Count; i++)
+            affectedCells[i] = edits[i].Address;
+        _affectedCells = affectedCells;
     }
 
     /// <summary>Convenience constructor for editing a single cell value.</summary>
@@ -52,8 +57,6 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
         _snapshot = [];
 
-        var affected = new List<CellAddress>();
-
         foreach (var (addr, newCell) in _edits)
         {
             // Save old state for undo
@@ -65,10 +68,9 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             if (oldCell is not null)
                 appliedCell.StyleId = oldCell.StyleId;
             sheet.SetCell(addr, appliedCell);
-            affected.Add(addr);
         }
 
-        return new CommandOutcome(true, AffectedCells: affected);
+        return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
     public void Revert(ICommandContext ctx)

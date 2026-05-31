@@ -21,9 +21,14 @@ public sealed class ClearContentsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        var cells = _range.AllCells().ToList();
-        if (cells.Any(address => !CommandGuards.CanEditCell(ctx.Workbook, sheet, address)))
-            return new CommandOutcome(false, "The sheet is protected.");
+        if (sheet.IsProtected)
+        {
+            foreach (var address in _range.AllCells())
+            {
+                if (!CommandGuards.CanEditCell(ctx.Workbook, sheet, address))
+                    return new CommandOutcome(false, "The sheet is protected.");
+            }
+        }
 
         _snapshot = [];
         _hyperlinkSnapshot = sheet.Hyperlinks
@@ -33,10 +38,20 @@ public sealed class ClearContentsCommand : IWorkbookCommand
             .Where(pair => _range.Contains(pair.Key))
             .ToDictionary(pair => pair.Key, pair => pair.Value);
         var affected = new List<CellAddress>();
-        foreach (var address in cells)
+        foreach (var address in _range.AllCells())
         {
             var oldCell = sheet.GetCell(address)?.Clone();
             var oldStyleOnly = sheet.GetStyleOnly(address.Row, address.Col);
+            var hasHyperlink = sheet.Hyperlinks.ContainsKey(address);
+            var hasHyperlinkMetadata = sheet.HyperlinkMetadata.ContainsKey(address);
+            if (oldCell is null &&
+                !oldStyleOnly.HasValue &&
+                !hasHyperlink &&
+                !hasHyperlinkMetadata)
+            {
+                continue;
+            }
+
             _snapshot.Add((address, oldCell, oldStyleOnly));
 
             var cleared = Cell.FromValue(BlankValue.Instance);
