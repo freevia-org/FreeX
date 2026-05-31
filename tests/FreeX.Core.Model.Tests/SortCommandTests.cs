@@ -228,6 +228,92 @@ public sealed class SortCommandTests
         sheet.GetValue(2, 1).Should().Be(new NumberValue(2));
     }
 
+    [Fact]
+    public void SortCommand_AppliesCustomListOrderToFirstKeyAndUndoRestores()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        // Rows out of calendar order; alphabetical would give Apr, Feb, Jan, Mar.
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Mar"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Apr"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(4));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(2));
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2));
+
+        CustomSortOrder.TryParse("Jan, Feb, Mar, Apr", out var order).Should().BeTrue();
+        var command = new SortCommand(
+            sheet.Id,
+            range,
+            [new SortKey(0, true, CustomOrder: order)]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Jan"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Feb"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Mar"));
+        sheet.GetValue(4, 1).Should().Be(new TextValue("Apr"));
+
+        command.Revert(ctx);
+
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Mar"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Jan"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Apr"));
+        sheet.GetValue(4, 1).Should().Be(new TextValue("Feb"));
+    }
+
+    [Fact]
+    public void SortCommand_CustomListOrderRespectsDescendingDirection()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Jan"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Mar"));
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1));
+
+        CustomSortOrder.TryParse("Jan, Feb, Mar", out var order).Should().BeTrue();
+        var command = new SortCommand(
+            sheet.Id,
+            range,
+            [new SortKey(0, false, CustomOrder: order)]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Mar"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Feb"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Jan"));
+    }
+
+    [Fact]
+    public void SortCommand_CustomListOrder_PlacesNonListValuesLast()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(workbook);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Zebra"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Feb"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Jan"));
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1));
+
+        CustomSortOrder.TryParse("Jan, Feb, Mar", out var order).Should().BeTrue();
+        var command = new SortCommand(
+            sheet.Id,
+            range,
+            [new SortKey(0, true, CustomOrder: order)]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Jan"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Feb"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Zebra"));
+    }
+
     private static void SetStyledRow(Sheet sheet, uint row, string label, StyleId styleId)
     {
         var keyCell = Cell.FromValue(new TextValue(label));

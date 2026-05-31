@@ -478,6 +478,17 @@ public sealed class SortDialogTests
     }
 
     [Fact]
+    public void MainWindowCustomSort_ThreadsFirstKeySortOrderIntoFirstSortKey()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataFilterCommands.cs"));
+
+        // The custom-list "First key sort order" chosen in Sort Options must reach the
+        // command. It is applied to the first (primary) sort key, matching Excel.
+        source.Should().Contain("CustomSortOrder.TryParse(dialog.ResultOptions.FirstKeySortOrder, out var customOrder)");
+        source.Should().Contain("SortDialog.ApplyCustomOrderToFirstKey(keys, customOrder)");
+    }
+
+    [Fact]
     public void SortOptionsDialog_ExposesExcelOptionsAsRealChoices()
     {
         var source = ReadSortDialogSource();
