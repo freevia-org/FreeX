@@ -77,6 +77,25 @@ public sealed class ExcelEditKeyPlannerTests
         intent.Target.Should().Be(Current);
     }
 
+    [Theory]
+    [InlineData(Key.Enter, ModifierKeys.Shift, 1, 1)]
+    [InlineData(Key.Tab, ModifierKeys.Shift, 1, 1)]
+    [InlineData(Key.Enter, ModifierKeys.None, CellAddress.MaxRow, CellAddress.MaxCol)]
+    [InlineData(Key.Tab, ModifierKeys.None, CellAddress.MaxRow, CellAddress.MaxCol)]
+    public void GetIntent_CommitMovementClampsAtWorksheetEdges(
+        Key key,
+        ModifierKeys modifiers,
+        uint currentRow,
+        uint currentCol)
+    {
+        var edgeCell = new CellAddress(SheetId, currentRow, currentCol);
+
+        var intent = ExcelEditKeyPlanner.GetIntent(key, modifiers, edgeCell, pageSize: 20, allowFormulaBarNavigationKeys: false);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.CommitAndMove);
+        intent.Target.Should().Be(edgeCell);
+    }
+
     [Fact]
     public void GetIntent_DoesNotCommitInlineEditorOnPlainArrowKeys()
     {
@@ -174,6 +193,32 @@ public sealed class ExcelEditKeyPlannerTests
 
         intent.Action.Should().Be(ExcelEditKeyAction.SelectFormulaReference);
         intent.Target.Should().Be(new CellAddress(SheetId, expectedRow, expectedCol));
+    }
+
+    [Theory]
+    [InlineData(Key.Up, 1, 1)]
+    [InlineData(Key.Left, 1, 1)]
+    [InlineData(Key.PageUp, 1, 1)]
+    [InlineData(Key.Down, CellAddress.MaxRow, CellAddress.MaxCol)]
+    [InlineData(Key.Right, CellAddress.MaxRow, CellAddress.MaxCol)]
+    [InlineData(Key.PageDown, CellAddress.MaxRow, CellAddress.MaxCol)]
+    public void GetIntent_FormulaReferenceMovementClampsAtWorksheetEdges(
+        Key key,
+        uint currentRow,
+        uint currentCol)
+    {
+        var edgeCell = new CellAddress(SheetId, currentRow, currentCol);
+
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            key,
+            ModifierKeys.None,
+            edgeCell,
+            pageSize: 20,
+            allowFormulaBarNavigationKeys: false,
+            formulaRangeEntryActive: true);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.SelectFormulaReference);
+        intent.Target.Should().Be(edgeCell);
     }
 
     [Theory]
