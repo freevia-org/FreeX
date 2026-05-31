@@ -56,19 +56,21 @@ internal static class XlsxWorkbookMetadataReader
 
     public static Dictionary<int, string> LoadNumberFormatCatalog(Stream xlsxStream)
     {
+        var stylesXml = XlsxStylesheetReader.Load(xlsxStream);
+        return LoadNumberFormatCatalog(stylesXml);
+    }
+
+    public static Dictionary<int, string> LoadNumberFormatCatalog(XDocument? stylesXml)
+    {
         try
         {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
-            var stylesEntry = archive.GetEntry("xl/styles.xml");
-            if (stylesEntry is null)
+            if (stylesXml?.Root is null)
                 return [];
 
-            var stylesXml = LoadXml(stylesEntry);
-            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             var result = new Dictionary<int, string>();
-            foreach (var format in stylesXml.Root?
-                         .Element(workbookNs + "numFmts")?
-                         .Elements(workbookNs + "numFmt") ?? [])
+            foreach (var format in stylesXml.Root
+                         .Element(WorkbookNs + "numFmts")?
+                         .Elements(WorkbookNs + "numFmt") ?? [])
             {
                 var id = XlsxXmlAttributeReader.ReadIntAttribute(format, "numFmtId");
                 var code = format.Attribute("formatCode")?.Value;

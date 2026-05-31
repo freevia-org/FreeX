@@ -86,7 +86,7 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
         string? CodeName);
 
-    private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(Stream xlsxStream)
+    private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(Stream xlsxStream, XDocument? stylesXml)
     {
         var result = new Dictionary<string, SheetXmlLayout>(StringComparer.OrdinalIgnoreCase);
 
@@ -110,7 +110,7 @@ public sealed partial class XlsxFileAdapter
                 packageRelNs,
                 XlsxPackagePath.NormalizeWorkbookTarget);
 
-            var differentialStyles = XlsxDifferentialStyleReader.ReadAll(archive, workbookNs);
+            var differentialStyles = XlsxDifferentialStyleReader.ReadAll(stylesXml, workbookNs);
 
             foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
             {

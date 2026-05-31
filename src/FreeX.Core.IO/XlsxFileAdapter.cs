@@ -56,9 +56,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var workbookMetadata = XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageStream);
         packageStream.Position = 0;
-        var numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(packageStream);
-        packageStream.Position = 0;
-        var indexedColors = XlsxIndexedColorPaletteMapper.Load(packageStream);
+        var stylesXml = XlsxStylesheetReader.Load(packageStream);
+        var numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(stylesXml);
+        var indexedColors = XlsxIndexedColorPaletteMapper.Load(stylesXml);
         packageStream.Position = 0;
         var pivotMetadata = XlsxPivotTableReader.Load(packageStream, numberFormatCatalog);
         packageStream.Position = 0;
@@ -68,7 +68,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var structuredTableMetadata = XlsxStructuredTableMetadataReader.Load(packageStream);
         packageStream.Position = 0;
-        var pivotTableStyleMetadata = XlsxPivotTableStyleMetadataReader.Load(packageStream);
+        var pivotTableStyleMetadata = XlsxPivotTableStyleMetadataReader.Load(stylesXml);
         var xlsxCustomViews = workbookMetadata.CustomViews;
 
         packageStream.Position = 0;
@@ -76,7 +76,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
         packageStream.Position = 0;
-        var sheetXmlLayout = LoadSheetXmlLayout(packageStream);
+        var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml);
         var workbook = new Workbook("Untitled");
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = workbookMetadata.Uses1904DateSystem;

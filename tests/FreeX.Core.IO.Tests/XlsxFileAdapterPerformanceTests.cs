@@ -272,6 +272,22 @@ public sealed class XlsxFileAdapterPerformanceTests
         metadataSource.Should().Contain("return LoadWorkbookMetadata(workbookXml);");
     }
 
+    [Fact]
+    public void LoadCore_ReusesSingleStylesheetParseForLoadMetadata()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+
+        adapterSource.Should().Contain("var stylesXml = XlsxStylesheetReader.Load(packageStream);");
+        adapterSource.Should().Contain("XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(stylesXml)");
+        adapterSource.Should().Contain("XlsxIndexedColorPaletteMapper.Load(stylesXml)");
+        adapterSource.Should().Contain("XlsxPivotTableStyleMetadataReader.Load(stylesXml)");
+        adapterSource.Should().Contain("LoadSheetXmlLayout(packageStream, stylesXml)");
+        adapterSource.Should().NotContain("LoadNumberFormatCatalog(packageStream)");
+        adapterSource.Should().NotContain("XlsxIndexedColorPaletteMapper.Load(packageStream)");
+        adapterSource.Should().NotContain("XlsxPivotTableStyleMetadataReader.Load(packageStream)");
+        adapterSource.Should().NotContain("LoadSheetXmlLayout(packageStream);");
+    }
+
     private const int DenseSheetCount = 8;
     private const int DenseRowsPerSheet = 80;
     private const int DenseColumnsPerSheet = 24;
