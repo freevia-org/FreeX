@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
 
@@ -139,6 +140,32 @@ public class XlsxFeatureInspectorTests
               </c:chart>
             </c:chartSpace>
             """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
+    }
+
+    [Theory]
+    [InlineData("treemap")]
+    [InlineData("sunburst")]
+    [InlineData("clusteredColumn")]
+    [InlineData("boxWhisker")]
+    [InlineData("waterfall")]
+    [InlineData("funnel")]
+    public void Inspect_ChartExAdvancedFamiliesWithSourceRanges_DoesNotReportUnsupportedChart(string layoutId)
+    {
+        using var package = CreatePackageWithContent(("xl/charts/chart1.xml", BuildChartExPackageXml(layoutId)));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().NotContain(f => f.Kind == XlsxUnsupportedFeatureKind.Charts);
+    }
+
+    [Fact]
+    public void Inspect_ChartExParetoWithSourceRanges_DoesNotReportUnsupportedChart()
+    {
+        using var package = CreatePackageWithContent(("xl/charts/chart1.xml", BuildChartExPackageXml("clusteredColumn", includeParetoLine: true)));
 
         var report = XlsxFeatureInspector.Inspect(package);
 
@@ -809,6 +836,39 @@ public class XlsxFeatureInspectorTests
 
         stream.Position = 0;
         return stream;
+    }
+
+    private static string BuildChartExPackageXml(string layoutId, bool includeParetoLine = false)
+    {
+        XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        var chartDataId = "data0";
+        var region = new XElement(chartExNs + "plotAreaRegion",
+            new XElement(chartExNs + "series",
+                new XAttribute("layoutId", layoutId),
+                new XElement(chartExNs + "dataId", new XAttribute("val", chartDataId))));
+        if (includeParetoLine)
+        {
+            region.Add(new XElement(chartExNs + "series",
+                new XAttribute("layoutId", "paretoLine"),
+                new XElement(chartExNs + "dataId", new XAttribute("val", chartDataId))));
+        }
+
+        return new XDocument(
+            new XElement(chartExNs + "chartSpace",
+                new XAttribute(XNamespace.Xmlns + "cx", chartExNs),
+                new XElement(chartExNs + "chartData",
+                    new XElement(chartExNs + "data",
+                        new XAttribute("id", chartDataId),
+                        new XElement(chartExNs + "strDim",
+                            new XAttribute("type", "cat"),
+                            new XElement(chartExNs + "f", "Sheet1!$A$2:$A$4")),
+                        new XElement(chartExNs + "numDim",
+                            new XAttribute("type", "val"),
+                            new XElement(chartExNs + "f", "Sheet1!$B$2:$B$4"),
+                            new XElement(chartExNs + "nf", "Sheet1!$B$1")))),
+                new XElement(chartExNs + "chart",
+                    new XElement(chartExNs + "plotArea", region))))
+            .ToString(SaveOptions.DisableFormatting);
     }
 
     private static string FindWorkspaceFile(params string[] parts)

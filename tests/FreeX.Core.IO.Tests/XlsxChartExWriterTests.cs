@@ -31,6 +31,8 @@ public sealed class XlsxChartExWriterTests
         string expectedLayoutId,
         bool expectParetoLine = false)
     {
+        ChartTypeSupport.IsChartExFamily(chartType).Should().BeTrue();
+
         var saved = SaveWorkbookWithChart(chartType);
 
         using (var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
@@ -183,10 +185,17 @@ public sealed class XlsxChartExWriterTests
         loadedChart.LegendOverlay.Should().BeTrue();
     }
 
-    [Fact]
-    public void Save_LoadedEditedChartExModelKeepsNativePayloadAndAppliesModeledLegend()
+    [Theory]
+    [InlineData(ChartType.Treemap)]
+    [InlineData(ChartType.Sunburst)]
+    [InlineData(ChartType.Histogram)]
+    [InlineData(ChartType.Pareto)]
+    [InlineData(ChartType.BoxAndWhisker)]
+    [InlineData(ChartType.Waterfall)]
+    [InlineData(ChartType.Funnel)]
+    public void Save_LoadedEditedChartExModelKeepsNativePayloadAndAppliesModeledLegend(ChartType chartType)
     {
-        var source = SaveWorkbookWithChart(ChartType.Treemap, configureChart: chart =>
+        var source = SaveWorkbookWithChart(chartType, configureChart: chart =>
         {
             chart.ShowLegend = true;
             chart.LegendPosition = ChartLegendPosition.Right;

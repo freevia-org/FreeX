@@ -362,6 +362,89 @@ public sealed class ObjectDialogTests
     }
 
     [Fact]
+    public void ShapeEffectsDialogPlanner_CreatePlan_OffersExcelLikeEffectPresets()
+    {
+        var plan = ShapeEffectsDialogPlanner.CreatePlan(DrawingShapeEffectPreset.Glow);
+
+        plan.SelectedPreset.Should().Be(DrawingShapeEffectPreset.Glow);
+        plan.Options.Select(option => option.Preset).Should().Equal(
+            DrawingShapeEffectPreset.None,
+            DrawingShapeEffectPreset.Shadow,
+            DrawingShapeEffectPreset.Glow,
+            DrawingShapeEffectPreset.SoftEdges);
+        plan.Options.Select(option => option.Label).Should().Equal(
+            "No Effect",
+            "Shadow",
+            "Glow",
+            "Soft Edges");
+    }
+
+    [Fact]
+    public void ShapeEffectsDialogPlanner_CreatePlan_NormalizesUnknownPresetToNone()
+    {
+        var plan = ShapeEffectsDialogPlanner.CreatePlan((DrawingShapeEffectPreset)99);
+
+        plan.SelectedPreset.Should().Be(DrawingShapeEffectPreset.None);
+    }
+
+    [Fact]
+    public void ShapeEffectsDialog_TryCreateResult_AcceptsKnownPreset()
+    {
+        ShapeEffectsDialog.TryCreateResult(DrawingShapeEffectPreset.SoftEdges, out var result)
+            .Should()
+            .BeTrue();
+
+        result.Should().Be(new ShapeEffectsDialogResult(DrawingShapeEffectPreset.SoftEdges));
+    }
+
+    [Fact]
+    public void ShapeEffectsDialog_TryCreateResult_RejectsUnknownPreset()
+    {
+        ShapeEffectsDialog.TryCreateResult((DrawingShapeEffectPreset)99, out _)
+            .Should()
+            .BeFalse();
+    }
+
+    [Fact]
+    public void ShapeEffectsDialog_ControlsExposeAutomationMetadata()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ShapeEffectsDialog(DrawingShapeEffectPreset.SoftEdges);
+            try
+            {
+                var effectBox = GetField<ComboBox>(dialog, "_effectBox");
+                AutomationProperties.GetName(effectBox).Should().Be("Shape effect");
+                AutomationProperties.GetAutomationId(effectBox).Should().Be("ShapeEffectsPresetBox");
+                AutomationProperties.GetHelpText(effectBox).Should().Be("Choose no effect, shadow, glow, or soft edges for the selected shape.");
+                effectBox.SelectedItem.Should()
+                    .BeOfType<ShapeEffectsDialogOption>()
+                    .Which.Preset.Should()
+                    .Be(DrawingShapeEffectPreset.SoftEdges);
+
+                var descriptionText = GetField<TextBlock>(dialog, "_descriptionText");
+                AutomationProperties.GetName(descriptionText).Should().Be("Shape effect description");
+                AutomationProperties.GetAutomationId(descriptionText).Should().Be("ShapeEffectsDescriptionText");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void ShapeEffectsDialog_LabelsPresetComboWithAccessKeyTarget()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ShapeEffectsDialog.cs"));
+
+        source.Should().Contain("Content = UiText.Get(\"ShapeEffects_EffectLabel\")");
+        source.Should().Contain("Target = _effectBox");
+        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
+        source.Should().Contain("Keyboard.Focus(_effectBox);");
+    }
+
+    [Fact]
     public void RotationDialog_TryParseRotation_AcceptsNumericDegrees()
     {
         RotationDialog.TryParseRotation("45.5", out var rotation).Should().BeTrue();

@@ -963,6 +963,45 @@
   <data name="ShapeGradient_EndColorSummary" xml:space="preserve">
     <value>End: {0}</value>
   </data>
+  <data name="ShapeEffects_Title" xml:space="preserve">
+    <value>Shape Effects</value>
+  </data>
+  <data name="ShapeEffects_EffectLabel" xml:space="preserve">
+    <value>_Effect:</value>
+  </data>
+  <data name="ShapeEffects_None" xml:space="preserve">
+    <value>No Effect</value>
+  </data>
+  <data name="ShapeEffects_Shadow" xml:space="preserve">
+    <value>Shadow</value>
+  </data>
+  <data name="ShapeEffects_Glow" xml:space="preserve">
+    <value>Glow</value>
+  </data>
+  <data name="ShapeEffects_SoftEdges" xml:space="preserve">
+    <value>Soft Edges</value>
+  </data>
+  <data name="ShapeEffects_NoneDescription" xml:space="preserve">
+    <value>Remove authored shape effects.</value>
+  </data>
+  <data name="ShapeEffects_ShadowDescription" xml:space="preserve">
+    <value>Apply an outside shadow effect to the selected shape.</value>
+  </data>
+  <data name="ShapeEffects_GlowDescription" xml:space="preserve">
+    <value>Apply a glow outline effect to the selected shape.</value>
+  </data>
+  <data name="ShapeEffects_SoftEdgesDescription" xml:space="preserve">
+    <value>Apply a softened edge effect to the selected shape.</value>
+  </data>
+  <data name="ShapeEffects_EffectAutomationName" xml:space="preserve">
+    <value>Shape effect</value>
+  </data>
+  <data name="ShapeEffects_EffectHelpText" xml:space="preserve">
+    <value>Choose no effect, shadow, glow, or soft edges for the selected shape.</value>
+  </data>
+  <data name="ShapeEffects_DescriptionAutomationName" xml:space="preserve">
+    <value>Shape effect description</value>
+  </data>
   <data name="SelectionPane_Title" xml:space="preserve">
     <value>Selection Pane</value>
   </data>
@@ -2935,7 +2974,7 @@
     <value>Spreadsheet grid. Use arrow keys to navigate cells, F2 to edit, and Tab/Enter to move focus.</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ToggleTheSelectedShapeShadowEffect" xml:space="preserve">
-    <value>Toggle the selected shape shadow effect.</value>
+    <value>Choose no effect, shadow, glow, or soft edges for the selected shape.</value>
   </data>
   <data name="MainWindow_AutomationName_AboutFreeX" xml:space="preserve">
     <value>About FreeX</value>
@@ -6127,7 +6166,7 @@
     <value>Switch the current chart trendline between supported Excel-like trendline types.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAShadowEffectOnTheSelectedShape" xml:space="preserve">
-    <value>Toggle a shadow effect on the selected shape.</value>
+    <value>Choose no effect, shadow, glow, or soft edges for the selected shape.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ToggleAutomaticOrDataBasedXAxisBoundsForTheCurrentChart" xml:space="preserve">
     <value>Toggle automatic or data-based X axis bounds for the current chart.</value>

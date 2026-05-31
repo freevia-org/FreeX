@@ -1879,7 +1879,7 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("Click=\"ChartLineMenuItem_Click\"");
         xaml.Should().Contain("Click=\"ChartPieMenuItem_Click\"");
         source.Should().Contain("private void InsertChartOfType(ChartType type)");
-        source.Should().Contain("ChartTypeSupport.IsRenderable(type)");
+        source.Should().Contain("ChartAuthoringPlanner.CanAuthor(type)");
         source.Should().Contain("new AddChartCommand(_currentSheetId, currentRange, type, \"Chart\")");
         source.Should().Contain("UpdateViewport();");
     }
@@ -2830,7 +2830,7 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeGradientButton\"");
         xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Open gradient fill controls for the selected shape.");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeEffectsButton\"");
-        xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Toggle the selected shape shadow effect.");
+        xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Choose no effect, shadow, glow, or soft edges for the selected shape.");
         xaml.Should().Contain("Click=\"ObjectGradientBtn_Click\"");
         xaml.Should().Contain("Click=\"ObjectEffectsBtn_Click\"");
     }

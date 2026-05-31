@@ -188,6 +188,9 @@ public static partial class RibbonCommandPresentationPlanner
         if (name.Contains("decrease decimal")) return new(RibbonCommandIconKind.Decimal);
         if (name.Contains("decimal")) return new(RibbonCommandIconKind.Decimal);
         if (name.Contains("conditional formatting")) return new(RibbonCommandIconKind.Color, RibbonCommandIconAccent.Color);
+        if (name.Contains("table name")) return new(RibbonCommandIconKind.Label);
+        if (name.Contains("table style")) return new(RibbonCommandIconKind.Theme, RibbonCommandIconAccent.Theme);
+        if (name.Contains("convert to range")) return new(RibbonCommandIconKind.Table);
         if (name.Contains("format as table")) return new(RibbonCommandIconKind.Table, RibbonCommandIconAccent.Green);
         if (name.Contains("recommended pivottable")) return new(RibbonCommandIconKind.PivotTable, RibbonCommandIconAccent.Green);
         if (name.Contains("pivottable")) return new(RibbonCommandIconKind.PivotTable, RibbonCommandIconAccent.Green);
