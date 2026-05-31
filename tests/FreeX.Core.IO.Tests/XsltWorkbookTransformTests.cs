@@ -282,6 +282,27 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetOutputIndentNo_PreservesCompactXml()
+    {
+        using var source = StreamFromString("<rows><row name=\"Nina\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml" indent="no" omit-xml-declaration="yes" />
+              <xsl:template match="/rows">
+                <workbook>
+                  <row><cell><xsl:value-of select="row/@name" /></cell></row>
+                </workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should().Be("<workbook><row><cell>Nina</cell></row></workbook>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetTextOutput_PreservesRawText()
     {
         using var source = StreamFromString("<rows><row name=\"India &amp; Juliet\" /></rows>");
