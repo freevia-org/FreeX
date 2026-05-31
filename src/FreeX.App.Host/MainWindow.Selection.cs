@@ -809,8 +809,28 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         FormulaBar.Text = FormatFormulaBarText(sheet?.GetCell(target), target);
         FocusSheetGridIfNeeded();
-        RefreshToolbar();
+        RefreshToolbarAfterDragSelectionChange();
         RefreshStatusBarAfterDragSelectionChange();
+    }
+
+    private void RefreshToolbarAfterDragSelectionChange()
+    {
+        if (_dragSelectActive)
+        {
+            _dragSelectToolbarRefreshPending = true;
+            return;
+        }
+
+        RefreshToolbar();
+    }
+
+    private void CompleteDragSelectionToolbarRefresh()
+    {
+        if (!_dragSelectToolbarRefreshPending)
+            return;
+
+        _dragSelectToolbarRefreshPending = false;
+        RefreshToolbar();
     }
 
     private void RefreshStatusBarAfterDragSelectionChange()
@@ -859,6 +879,7 @@ public partial class MainWindow
             _dragSelectActive = false;
             _dragSelectAddsAdditionalRange = false;
             SheetGrid.ReleaseMouseCapture();
+            CompleteDragSelectionToolbarRefresh();
             CompleteDragSelectionStatusRefresh();
             if (hitAddr.HasValue)
                 UpdateCommentPreview(hitAddr.Value);
@@ -928,6 +949,7 @@ public partial class MainWindow
             _dragSelectActive = false;
             _dragSelectAddsAdditionalRange = false;
             SheetGrid.ReleaseMouseCapture();
+            CompleteDragSelectionToolbarRefresh();
             CompleteDragSelectionStatusRefresh();
 
             if (SheetGrid.SelectedRange is { } selectedRange)
@@ -945,6 +967,7 @@ public partial class MainWindow
         _dragSelectActive = false;
         _dragSelectAddsAdditionalRange = false;
         SheetGrid.ReleaseMouseCapture();
+        CompleteDragSelectionToolbarRefresh();
         CompleteDragSelectionStatusRefresh();
         if (hitAddr.HasValue)
             UpdateCommentPreview(hitAddr.Value);
