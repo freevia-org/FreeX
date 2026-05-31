@@ -241,7 +241,8 @@ public sealed class GridViewRenderPerformanceTests
         properties.Should().Contain("public static readonly DependencyProperty IsLiveResizingProperty");
         properties.Should().Contain("FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender)");
         onRender.Should().Contain("var isLiveResizing = IsLiveResizing;");
-        onRender.Should().Contain("if (!isLiveResizing)");
+        onRender.Should().Contain("var skipHeavyLayers = isLiveResizing || _resizeTarget != ResizeTarget.None;");
+        onRender.Should().Contain("if (!skipHeavyLayers)");
         onRender.Should().Contain("RenderLiveResizeContinuation(dc);");
         onRender.Should().Contain("RenderCells(dc);");
         onRender.Should().Contain("RenderSelection(dc);");
@@ -251,7 +252,7 @@ public sealed class GridViewRenderPerformanceTests
         onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal)
             .Should().BeLessThan(onRender.IndexOf("RenderFormulaTraceArrows(dc);", StringComparison.Ordinal));
         onRender.IndexOf("if (ObjectDisplayMode == GridObjectDisplayMode.Placeholders)", StringComparison.Ordinal)
-            .Should().BeGreaterThan(onRender.LastIndexOf("if (!isLiveResizing)", StringComparison.Ordinal));
+            .Should().BeGreaterThan(onRender.LastIndexOf("if (!skipHeavyLayers)", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -299,6 +300,7 @@ public sealed class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<Brush, Pen> _underlinePenCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();");
+        gridViewSource.Should().Contain("private readonly Dictionary<TextWidthLayoutKey, double> _textWidthLayoutCache = new();");
         gridViewSource.Should().Contain("private RenderCellLookupCache? _renderCellLookupCache;");
         gridViewSource.Should().Contain("private OccupiedCellLookupCache? _occupiedCellLookupCache;");
     }
@@ -311,11 +313,26 @@ public sealed class GridViewRenderPerformanceTests
         var headers = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
 
         cacheSource.Should().Contain("private FormattedText GetDefaultFormattedText");
+        cacheSource.Should().Contain("private static bool CanUseDefaultFormattedText");
         cacheSource.Should().Contain("_defaultTextLayoutCache.TryGetValue");
         cacheSource.Should().Contain("_defaultTextLayoutCache.Count >= DefaultTextLayoutCacheLimit");
-        rendering.Should().Contain("style is null");
+        rendering.Should().Contain("CanUseDefaultFormattedText(style, wrapText)");
         rendering.Should().Contain("GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)");
         headers.Should().Contain("GetDefaultFormattedText(");
+    }
+
+    [Fact]
+    public void ShrinkToFitTextWidthMeasurements_AreCachedAcrossRenderPasses()
+    {
+        var cacheSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.TextLayoutCache.cs"));
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+
+        cacheSource.Should().Contain("private double MeasureCellTextWidth");
+        cacheSource.Should().Contain("_textWidthLayoutCache.TryGetValue");
+        cacheSource.Should().Contain("_textWidthLayoutCache.Count >= TextWidthLayoutCacheLimit");
+        rendering.Should().Contain("var typefaceKey = CreateCellTypefaceKey(style);");
+        rendering.Should().Contain("MeasureCellTextWidth(cell.DisplayText, typefaceKey, typeface, size, pixelsPerDip)");
+        rendering.Should().NotContain("size => new FormattedText(");
     }
 
     [Fact]
@@ -448,7 +465,8 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private static void DrawCommentIndicator", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("CreateCellTypeface(style, _typefaceCache)");
+        renderCells.Should().Contain("var typefaceKey = CreateCellTypefaceKey(style);");
+        renderCells.Should().Contain("CreateCellTypeface(typefaceKey, _typefaceCache)");
     }
 
     [Fact]

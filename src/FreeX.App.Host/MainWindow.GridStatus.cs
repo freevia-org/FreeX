@@ -70,6 +70,7 @@ public partial class MainWindow
 
     private void OnColumnResizing(uint col, double newWidthPx)
     {
+        CancelPendingViewportResizeRefresh();
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
         var (startCol, endCol) = GetSelectedColRange(col);
@@ -104,6 +105,7 @@ public partial class MainWindow
 
     private void OnRowResizing(uint row, double newHeightPx)
     {
+        CancelPendingViewportResizeRefresh();
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet == null) return;
         var (startRow, endRow) = GetSelectedRowRange(row);
