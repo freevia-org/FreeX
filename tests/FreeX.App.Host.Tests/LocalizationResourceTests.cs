@@ -1,10 +1,12 @@
 using System.Globalization;
+using System.IO;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using FreeX.App.Host;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed class LocalizationResourceTests
+public sealed partial class LocalizationResourceTests
 {
     [Fact]
     public void UiText_CommonProperties_ReturnNeutralStrings()
@@ -89,6 +91,34 @@ public sealed class LocalizationResourceTests
             keys.Should().Contain(expectedKey);
         }
     }
+
+    [Fact]
+    public void LocalizedSelectorItems_DoNotExposeAccessKeyUnderscoresAsVisibleText()
+    {
+        var hostDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml"))!;
+        var offenders = Directory
+            .EnumerateFiles(hostDirectory, "*.xaml", SearchOption.AllDirectories)
+            .SelectMany(file => LocalizedSelectorItemPattern()
+                .Matches(File.ReadAllText(file))
+                .Select(match =>
+                {
+                    var key = match.Groups["key"].Value;
+                    return new
+                    {
+                        File = Path.GetRelativePath(hostDirectory, file),
+                        Control = match.Groups["control"].Value,
+                        Key = key,
+                        Value = UiText.Get(key)
+                    };
+                }))
+            .Where(item => item.Value.StartsWith("_", StringComparison.Ordinal))
+            .ToList();
+
+        offenders.Should().BeEmpty("selector item text is rendered literally and should not carry access-key markers");
+    }
+
+    [GeneratedRegex("<(?<control>ListBoxItem|ComboBoxItem|TreeViewItem)\\b[^>]*(?:Content|Header)=\"\\{local:Loc Key=(?<key>[^}]+)\\}\"", RegexOptions.CultureInvariant)]
+    private static partial Regex LocalizedSelectorItemPattern();
 
     private sealed class CultureScope : IDisposable
     {
