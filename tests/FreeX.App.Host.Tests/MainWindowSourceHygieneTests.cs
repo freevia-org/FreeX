@@ -2830,7 +2830,7 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeGradientButton\"");
         xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Open gradient fill controls for the selected shape.");
         xaml.Should().Contain("AutomationProperties.AutomationId=\"DrawShapeEffectsButton\"");
-        xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Toggle the selected shape shadow effect.");
+        xaml.ShouldContainLocalizedAttribute("AutomationProperties.HelpText", "Choose no effect, shadow, glow, or soft edges for the selected shape.");
         xaml.Should().Contain("Click=\"ObjectGradientBtn_Click\"");
         xaml.Should().Contain("Click=\"ObjectEffectsBtn_Click\"");
     }
