@@ -261,9 +261,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [Fact]
     public void MainRibbonGroupLabels_MapToSemanticIcons()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var ribbonXaml = xaml[
-            xaml.IndexOf("<TabControl x:Name=\"RibbonTabs\"", StringComparison.Ordinal)..xaml.IndexOf("<Grid Grid.Row=\"3\"", StringComparison.Ordinal)];
+        var ribbonXaml = ReadMainRibbonXaml();
         var genericGroupLabels = Regex
             .Matches(ribbonXaml, "<TextBlock Text=\"(?<label>[^\"]+)\" Style=\"\\{StaticResource GroupLbl\\}\"")
             .Select(match => match.Groups["label"].Value.Replace("&amp;", "&", StringComparison.Ordinal))
@@ -278,9 +276,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [Fact]
     public void MainRibbonCommandTitles_MapToSemanticIcons()
     {
-        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
-        var ribbonXaml = xaml[
-            xaml.IndexOf("<TabControl x:Name=\"RibbonTabs\"", StringComparison.Ordinal)..xaml.IndexOf("<Grid Grid.Row=\"3\"", StringComparison.Ordinal)];
+        var ribbonXaml = ReadMainRibbonXaml();
         var genericTitles = Regex
             .Matches(ribbonXaml, "local:RibbonMetadata.CommandName=\"(?<title>[^\"]+)\"")
             .Select(match => match.Groups["title"].Value.Replace("&amp;", "&", StringComparison.Ordinal))
@@ -291,5 +287,15 @@ public sealed class RibbonCommandPresentationPlannerTests
             .ToList();
 
         genericTitles.Should().BeEmpty("visible ribbon commands should use a specific semantic icon rather than the generic fallback");
+    }
+
+    private static string ReadMainRibbonXaml()
+    {
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var start = xaml.IndexOf("<TabControl x:Name=\"RibbonTabs\"", StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0, "MainWindow.xaml should expose the main ribbon tab control");
+        var end = xaml.IndexOf("</TabControl>", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start, "the main ribbon tab control should be closed after it starts");
+        return xaml[start..(end + "</TabControl>".Length)];
     }
 }
