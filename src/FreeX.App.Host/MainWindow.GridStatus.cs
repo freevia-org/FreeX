@@ -22,7 +22,7 @@ public partial class MainWindow
     {
         if (SheetGrid.SelectedRange is not { } range)
         {
-            ApplyStatusBarDisplayState(StatusBarDisplayState.Ready("Ready"));
+            ApplyStatusBarDisplayState(StatusBarDisplayState.Ready(UiText.Get("MainWindow_Text_Ready")));
             return;
         }
 

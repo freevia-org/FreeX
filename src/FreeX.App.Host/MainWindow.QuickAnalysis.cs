@@ -106,7 +106,7 @@ public partial class MainWindow
         _suppressNextQuickAnalysisClosedStatusReset = true;
         CloseQuickAnalysisMenu();
         ClearQuickAnalysisPreview(resetStatus: false);
-        StatusReadyText.Text = "Select a range to use Quick Analysis.";
+        StatusReadyText.Text = UiText.Get("QuickAnalysis_SelectRangeStatus");
     }
 
     private static void QuickAnalysisMenu_Opened(object sender, RoutedEventArgs e)
@@ -327,7 +327,7 @@ public partial class MainWindow
         SheetGrid.QuickAnalysisPreviewRange = null;
         SheetGrid.QuickAnalysisPreviewVisual = GridQuickAnalysisPreviewVisualKind.None;
         if (resetStatus && !_preserveQuickAnalysisUnsupportedStatus)
-            StatusReadyText.Text = "Ready";
+            StatusReadyText.Text = UiText.Get("MainWindow_Text_Ready");
     }
 
     private static GridQuickAnalysisPreviewVisualKind MapQuickAnalysisPreviewVisual(QuickAnalysisPreviewVisualKind kind) =>

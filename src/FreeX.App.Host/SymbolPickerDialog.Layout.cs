@@ -35,25 +35,25 @@ public sealed partial class SymbolPickerDialog
 
         var fontBox = new ComboBox { ItemsSource = FontChoices, SelectedIndex = 0, MinWidth = 160 };
         var subsetBox = new ComboBox { ItemsSource = SubsetChoices, SelectedIndex = 0, MinWidth = 160 };
-        AutomationProperties.SetName(fontBox, "Symbol font");
-        AutomationProperties.SetHelpText(fontBox, "Choose the font used to preview and insert symbols.");
-        AutomationProperties.SetName(subsetBox, "Symbol subset");
-        AutomationProperties.SetHelpText(subsetBox, "Choose the Unicode subset shown in the symbol grid.");
-        AutomationProperties.SetName(selectedCode, "Character code");
-        AutomationProperties.SetHelpText(selectedCode, "Enter a Unicode hexadecimal character code.");
-        AutomationProperties.SetName(preview, "Selected symbol preview");
-        AutomationProperties.SetHelpText(preview, "Shows the currently selected symbol.");
-        topGrid.Children.Add(new Label { Content = "_Font:", Target = fontBox, VerticalAlignment = VerticalAlignment.Center });
+        AutomationProperties.SetName(fontBox, UiText.Get("SymbolPicker_FontAutomationName"));
+        AutomationProperties.SetHelpText(fontBox, UiText.Get("SymbolPicker_FontHelpText"));
+        AutomationProperties.SetName(subsetBox, UiText.Get("SymbolPicker_SubsetAutomationName"));
+        AutomationProperties.SetHelpText(subsetBox, UiText.Get("SymbolPicker_SubsetHelpText"));
+        AutomationProperties.SetName(selectedCode, UiText.Get("SymbolPicker_CharacterCodeAutomationName"));
+        AutomationProperties.SetHelpText(selectedCode, UiText.Get("SymbolPicker_CharacterCodeHelpText"));
+        AutomationProperties.SetName(preview, UiText.Get("SymbolPicker_SelectedSymbolPreviewAutomationName"));
+        AutomationProperties.SetHelpText(preview, UiText.Get("SymbolPicker_SelectedSymbolPreviewHelpText"));
+        topGrid.Children.Add(new Label { Content = UiText.Get("SymbolPicker_FontLabel"), Target = fontBox, VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(fontBox, 1);
         topGrid.Children.Add(fontBox);
-        var subsetLabel = new Label { Content = "_Subset:", Target = subsetBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+        var subsetLabel = new Label { Content = UiText.Get("SymbolPicker_SubsetLabel"), Target = subsetBox, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
         Grid.SetColumn(subsetLabel, 2);
         topGrid.Children.Add(subsetLabel);
         Grid.SetColumn(subsetBox, 3);
         topGrid.Children.Add(subsetBox);
 
         var grid = new UniformGrid { Columns = 10, Width = 360 };
-        AutomationProperties.SetName(grid, "Symbols");
+        AutomationProperties.SetName(grid, UiText.Get("SymbolPicker_SymbolsAutomationName"));
         var recent = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
 
         void SelectSymbol(char value)
@@ -108,7 +108,7 @@ public sealed partial class SymbolPickerDialog
         void PopulateRecent()
         {
             recent.Children.Clear();
-            recent.Children.Add(new TextBlock { Text = "Recently used symbols", VerticalAlignment = VerticalAlignment.Center, Width = 140 });
+            recent.Children.Add(new TextBlock { Text = UiText.Get("SymbolPicker_RecentlyUsedSymbols"), VerticalAlignment = VerticalAlignment.Center, Width = 140 });
             foreach (var symbol in recentSymbols)
                 recent.Children.Add(CreateSymbolButton(symbol, 28, 28, 14));
         }
@@ -159,8 +159,8 @@ public sealed partial class SymbolPickerDialog
         var specialPanel = new StackPanel();
         specialPanel.Children.Add(specialList);
 
-        tabControl.Items.Add(new TabItem { Header = "_Symbols", Content = symbolsPanel });
-        tabControl.Items.Add(new TabItem { Header = "Special _Characters", Content = specialPanel });
+        tabControl.Items.Add(new TabItem { Header = UiText.Get("SymbolPicker_SymbolsTab"), Content = symbolsPanel });
+        tabControl.Items.Add(new TabItem { Header = UiText.Get("SymbolPicker_SpecialCharactersTab"), Content = specialPanel });
 
         var leftPanel = new StackPanel();
         leftPanel.Children.Add(tabControl);
@@ -178,7 +178,7 @@ public sealed partial class SymbolPickerDialog
     private ListBox CreateSpecialCharacterList(Action<string> selectSymbolText, Action acceptSelectedSymbol)
     {
         var specialList = new ListBox { Height = 292, MinWidth = 360 };
-        AutomationProperties.SetName(specialList, "Special characters");
+        AutomationProperties.SetName(specialList, UiText.Get("SymbolPicker_SpecialCharactersAutomationName"));
         foreach (var special in GetSpecialCharacters())
         {
             var item = new ListBoxItem
@@ -187,7 +187,7 @@ public sealed partial class SymbolPickerDialog
                 Tag = special.Symbol,
                 FontSize = 14
             };
-            AutomationProperties.SetName(item, $"{special.Name}, {CreateSymbolAutomationName(special.Symbol)}");
+            AutomationProperties.SetName(item, UiText.Format("SymbolPicker_SpecialCharacterAutomationNameFormat", special.Name, CreateSymbolAutomationName(special.Symbol)));
             specialList.Items.Add(item);
         }
         specialList.SelectionChanged += (_, _) =>
@@ -202,12 +202,12 @@ public sealed partial class SymbolPickerDialog
     private StackPanel CreateCharacterCodeRow(TextBox selectedCode, Action<string> selectSymbolText)
     {
         var codeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-        codeRow.Children.Add(new Label { Content = "Character _code:", Target = selectedCode, Padding = new Thickness(0), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        codeRow.Children.Add(new Label { Content = UiText.Get("SymbolPicker_CharacterCodeLabel"), Target = selectedCode, Padding = new Thickness(0), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
         codeRow.Children.Add(selectedCode);
-        codeRow.Children.Add(new TextBlock { Text = "from: Unicode (hex)", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) });
-        var codeSelect = new Button { Content = "_Go", Width = 52, Margin = new Thickness(8, 0, 0, 0) };
-        AutomationProperties.SetName(codeSelect, "Go to character code");
-        AutomationProperties.SetHelpText(codeSelect, "Select the symbol for the entered Unicode character code.");
+        codeRow.Children.Add(new TextBlock { Text = UiText.Get("SymbolPicker_FromUnicodeHex"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) });
+        var codeSelect = new Button { Content = UiText.Get("SymbolPicker_GoButton"), Width = 52, Margin = new Thickness(8, 0, 0, 0) };
+        AutomationProperties.SetName(codeSelect, UiText.Get("SymbolPicker_GoToCharacterCodeAutomationName"));
+        AutomationProperties.SetHelpText(codeSelect, UiText.Get("SymbolPicker_GoToCharacterCodeHelpText"));
         codeSelect.Click += (_, _) =>
         {
             if (TryParseCharacterCode(selectedCode.Text, out var symbol))
@@ -236,13 +236,13 @@ public sealed partial class SymbolPickerDialog
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 8, 0, 0)
         };
-        var insert = new Button { Content = "_Insert", Width = 80, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-        AutomationProperties.SetName(insert, "Insert selected symbol");
-        AutomationProperties.SetHelpText(insert, "Insert the selected symbol or special character.");
+        var insert = new Button { Content = UiText.Get("SymbolPicker_InsertButton"), Width = 80, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        AutomationProperties.SetName(insert, UiText.Get("SymbolPicker_InsertSelectedSymbolAutomationName"));
+        AutomationProperties.SetHelpText(insert, UiText.Get("SymbolPicker_InsertSelectedSymbolHelpText"));
         insert.Click += (_, _) => acceptSelectedSymbol();
-        var cancel = new Button { Content = "_Cancel", Width = 80, IsCancel = true };
-        AutomationProperties.SetName(cancel, "Cancel symbol insertion");
-        AutomationProperties.SetHelpText(cancel, "Close the Symbol dialog without inserting a symbol.");
+        var cancel = new Button { Content = UiText.Cancel, Width = 80, IsCancel = true };
+        AutomationProperties.SetName(cancel, UiText.Get("SymbolPicker_CancelAutomationName"));
+        AutomationProperties.SetHelpText(cancel, UiText.Get("SymbolPicker_CancelHelpText"));
         btnRow.Children.Add(insert);
         btnRow.Children.Add(cancel);
         return btnRow;
@@ -259,7 +259,7 @@ public sealed partial class SymbolPickerDialog
 
     private void ShowInvalidCharacterCodeWarning(TextBox selectedCode)
     {
-        DialogMessageHelper.ShowWarning(this, "Enter a valid Unicode character code.", Title);
+        DialogMessageHelper.ShowWarning(this, UiText.Get("SymbolPicker_InvalidCharacterCodeMessage"), Title);
         selectedCode.Focus();
         selectedCode.SelectAll();
         Keyboard.Focus(selectedCode);
@@ -268,11 +268,11 @@ public sealed partial class SymbolPickerDialog
     private static string CreateSymbolAutomationName(string value)
     {
         if (string.IsNullOrEmpty(value))
-            return "Symbol";
+            return UiText.Get("SymbolPicker_SymbolAutomationName");
 
         var rune = value.EnumerateRunes().FirstOrDefault();
         return rune == default
-            ? "Symbol"
-            : $"Symbol U+{rune.Value:X4}";
+            ? UiText.Get("SymbolPicker_SymbolAutomationName")
+            : UiText.Format("SymbolPicker_SymbolCodeAutomationNameFormat", rune.Value);
     }
 }

@@ -14,7 +14,7 @@ public sealed class ThreadedCommentDialogTests
     {
         var source = ReadThreadedCommentDialogSource();
 
-        source.Should().Contain("existing is null ? \"_Add\" : \"_Reply\"");
+        source.Should().Contain("existing is null ? UiText.Get(\"ThreadedComment_AddButton\") : UiText.Get(\"ThreadedComment_ReplyButton\")");
         source.Should().Contain("IsDefault = true");
     }
 
@@ -52,42 +52,42 @@ public sealed class ThreadedCommentDialogTests
     {
         var source = ReadThreadedCommentDialogSource();
 
-        source.Should().Contain("Content = \"Ca_ncel\"");
+        source.Should().Contain("Content = UiText.Get(\"ThreadedComment_CancelButton\")");
         source.Should().Contain("Target = _rootBox");
         source.Should().Contain("Target = _replyBox");
-        source.Should().Contain("existing is null ? \"_Comment:\" : \"Edit _comment:\"");
-        source.Should().Contain("Content = \"Repl_y:\"");
+        source.Should().Contain("existing is null ? UiText.Get(\"ThreadedComment_CommentLabel\") : UiText.Get(\"ThreadedComment_EditCommentLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"ThreadedComment_ReplyLabel\")");
     }
 
     [Fact]
     public void DialogSource_AccessKeysAreUniqueWithinNewCommentScope()
     {
         var source = ReadThreadedCommentDialogSource();
-        var labels = new[] { "_Comment:", "_Mark as Resolved", "_Add", "Ca_ncel" };
+        var keys = new[] { "ThreadedComment_CommentLabel", "ThreadedComment_MarkAsResolved", "ThreadedComment_AddButton", "ThreadedComment_CancelButton" };
 
-        source.Should().ContainAll(labels.Select(label => $"\"{label}\""));
-        labels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
+        source.Should().ContainAll(keys.Select(key => $"UiText.Get(\"{key}\")"));
+        keys.Select(key => GetAccessKey(UiText.Get(key))).Should().OnlyHaveUniqueItems();
     }
 
     [Fact]
     public void DialogSource_AccessKeysAreUniqueWithinReplyScope()
     {
         var source = ReadThreadedCommentDialogSource();
-        var labels = new[]
+        var keys = new[]
         {
-            "Edit _comment:",
-            "Select re_ply:",
-            "Selected reply te_xt:",
-            "Repl_y:",
-            "_Mark as Resolved",
-            "_Update Reply",
-            "_Delete Reply",
-            "_Reply",
-            "Ca_ncel"
+            "ThreadedComment_EditCommentLabel",
+            "ThreadedComment_SelectReplyLabel",
+            "ThreadedComment_SelectedReplyTextLabel",
+            "ThreadedComment_ReplyLabel",
+            "ThreadedComment_MarkAsResolved",
+            "ThreadedComment_UpdateReplyButton",
+            "ThreadedComment_DeleteReplyButton",
+            "ThreadedComment_ReplyButton",
+            "ThreadedComment_CancelButton"
         };
 
-        source.Should().ContainAll(labels.Select(label => $"\"{label}\""));
-        labels.Select(GetAccessKey).Should().OnlyHaveUniqueItems();
+        source.Should().ContainAll(keys.Select(key => $"UiText.Get(\"{key}\")"));
+        keys.Select(key => GetAccessKey(UiText.Get(key))).Should().OnlyHaveUniqueItems();
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class ThreadedCommentDialogTests
             .Should()
             .BeFalse();
 
-        error.Should().Be("Enter a reply.");
+        error.Should().Be(UiText.Get("ThreadedComment_EnterReplyMessage"));
     }
 
     [Fact]
@@ -172,29 +172,29 @@ public sealed class ThreadedCommentDialogTests
                 var resolvedBox = FindLogicalDescendants<CheckBox>(dialog)
                     .Single(box => AutomationProperties.GetAutomationId(box) == "ThreadedCommentResolvedBox");
 
-                AutomationProperties.GetName(textBoxes["ThreadedCommentRootBox"]).Should().Be("Edit comment");
-                AutomationProperties.GetHelpText(textBoxes["ThreadedCommentRootBox"]).Should().Be("Edit the root comment text.");
-                AutomationProperties.GetName(replySelector).Should().Be("Reply to edit or delete");
-                AutomationProperties.GetHelpText(replySelector).Should().Be("Select a threaded comment reply to edit or delete.");
+                AutomationProperties.GetName(textBoxes["ThreadedCommentRootBox"]).Should().Be(UiText.Get("ThreadedComment_EditCommentAutomationName"));
+                AutomationProperties.GetHelpText(textBoxes["ThreadedCommentRootBox"]).Should().Be(UiText.Get("ThreadedComment_EditCommentHelpText"));
+                AutomationProperties.GetName(replySelector).Should().Be(UiText.Get("ThreadedComment_ReplyToEditOrDeleteAutomationName"));
+                AutomationProperties.GetHelpText(replySelector).Should().Be(UiText.Get("ThreadedComment_ReplySelectorHelpText"));
                 replySelector.SelectedIndex.Should().Be(0);
-                AutomationProperties.GetName(textBoxes["ThreadedCommentSelectedReplyBox"]).Should().Be("Selected reply text");
-                AutomationProperties.GetHelpText(textBoxes["ThreadedCommentSelectedReplyBox"]).Should().Be("Edit the selected reply text before choosing Update Reply.");
+                AutomationProperties.GetName(textBoxes["ThreadedCommentSelectedReplyBox"]).Should().Be(UiText.Get("ThreadedComment_SelectedReplyTextAutomationName"));
+                AutomationProperties.GetHelpText(textBoxes["ThreadedCommentSelectedReplyBox"]).Should().Be(UiText.Get("ThreadedComment_SelectedReplyTextHelpText"));
                 textBoxes["ThreadedCommentSelectedReplyBox"].Text.Should().Be("Existing reply");
-                AutomationProperties.GetName(textBoxes["ThreadedCommentReplyBox"]).Should().Be("Reply");
-                AutomationProperties.GetHelpText(textBoxes["ThreadedCommentReplyBox"]).Should().Be("Enter an optional reply to the threaded comment. Press Ctrl+Enter to reply.");
+                AutomationProperties.GetName(textBoxes["ThreadedCommentReplyBox"]).Should().Be(UiText.Get("ThreadedComment_ReplyAutomationName"));
+                AutomationProperties.GetHelpText(textBoxes["ThreadedCommentReplyBox"]).Should().Be(UiText.Get("ThreadedComment_ReplyHelpText"));
 
-                AutomationProperties.GetName(buttons["ThreadedCommentUpdateReplyButton"]).Should().Be("Update selected reply");
-                AutomationProperties.GetHelpText(buttons["ThreadedCommentUpdateReplyButton"]).Should().Be("Update the selected threaded comment reply.");
-                AutomationProperties.GetName(buttons["ThreadedCommentDeleteReplyButton"]).Should().Be("Delete selected reply");
-                AutomationProperties.GetHelpText(buttons["ThreadedCommentDeleteReplyButton"]).Should().Be("Delete the selected threaded comment reply.");
+                AutomationProperties.GetName(buttons["ThreadedCommentUpdateReplyButton"]).Should().Be(UiText.Get("ThreadedComment_UpdateSelectedReplyAutomationName"));
+                AutomationProperties.GetHelpText(buttons["ThreadedCommentUpdateReplyButton"]).Should().Be(UiText.Get("ThreadedComment_UpdateSelectedReplyHelpText"));
+                AutomationProperties.GetName(buttons["ThreadedCommentDeleteReplyButton"]).Should().Be(UiText.Get("ThreadedComment_DeleteSelectedReplyAutomationName"));
+                AutomationProperties.GetHelpText(buttons["ThreadedCommentDeleteReplyButton"]).Should().Be(UiText.Get("ThreadedComment_DeleteSelectedReplyHelpText"));
                 buttons["ThreadedCommentReplyButton"].IsDefault.Should().BeTrue();
-                AutomationProperties.GetName(buttons["ThreadedCommentReplyButton"]).Should().Be("Reply to comment");
-                AutomationProperties.GetHelpText(buttons["ThreadedCommentReplyButton"]).Should().Be("Add a reply to the threaded comment.");
+                AutomationProperties.GetName(buttons["ThreadedCommentReplyButton"]).Should().Be(UiText.Get("ThreadedComment_ReplyToCommentAutomationName"));
+                AutomationProperties.GetHelpText(buttons["ThreadedCommentReplyButton"]).Should().Be(UiText.Get("ThreadedComment_ReplyToCommentHelpText"));
                 buttons["ThreadedCommentCancelButton"].IsCancel.Should().BeTrue();
-                AutomationProperties.GetName(buttons["ThreadedCommentCancelButton"]).Should().Be("Cancel");
+                AutomationProperties.GetName(buttons["ThreadedCommentCancelButton"]).Should().Be(UiText.CreateAutomationName(UiText.Cancel));
 
-                AutomationProperties.GetName(resolvedBox).Should().Be("Mark as resolved");
-                AutomationProperties.GetHelpText(resolvedBox).Should().Be("Mark the threaded comment as resolved.");
+                AutomationProperties.GetName(resolvedBox).Should().Be(UiText.Get("ThreadedComment_MarkAsResolvedAutomationName"));
+                AutomationProperties.GetHelpText(resolvedBox).Should().Be(UiText.Get("ThreadedComment_MarkAsResolvedHelpText"));
             }
             finally
             {

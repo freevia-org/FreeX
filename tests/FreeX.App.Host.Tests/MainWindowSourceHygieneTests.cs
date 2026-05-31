@@ -2180,6 +2180,12 @@ public sealed class MainWindowSourceHygieneTests
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusCountText, state.CountText)");
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusNumericalCountText, state.NumericalCountText)");
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusSumText, state.SumText)");
+        gridStatusSource.Should().Contain("StatusBarDisplayState.Ready(UiText.Get(\"MainWindow_Text_Ready\"))");
+        File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "StatusBarDisplayState.cs"))
+            .Should()
+            .Contain("UiText.Format(\"StatusBar_CountFormat\", stats.Count)")
+            .And.Contain("UiText.Format(\"StatusBar_NumericalCountFormat\", stats.NumericalCount)")
+            .And.Contain("UiText.Format(\"StatusBar_SumFormat\", StatusBarCalculator.FormatNumber(stats.Sum))");
         gridStatusSource.Should().Contain("if (stats.Count == 0)");
     }
 
@@ -2398,7 +2404,7 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("QuickAnalysisMenuItem_MouseLeave");
         source.Should().Contain("QuickAnalysisPlanner.BuildHoverPreview(range, option)");
         source.Should().Contain("StatusReadyText.Text = preview.StatusText");
-        source.Should().Contain("StatusReadyText.Text = \"Ready\"");
+        source.Should().Contain("StatusReadyText.Text = UiText.Get(\"MainWindow_Text_Ready\")");
     }
 
     [Fact]

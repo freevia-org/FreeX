@@ -1274,7 +1274,8 @@ public sealed class DataToolDialogTests
         source.Should().Contain("DialogReferencePicker.CreateEditor");
         source.Should().Contain("RequestRangeSelection");
         source.Should().Contain("_requestRangeSelection?.Invoke(RangeSelectionRequest)");
-        pickerSource.Should().Contain("Collapse dialog and select range");
+        pickerSource.Should().Contain("UiText.Get(\"DialogReferencePicker_ToolTip\")");
+        pickerSource.Should().Contain("UiText.Get(\"DialogReferencePicker_HelpText\")");
         source.Should().NotContain("Content = \"Collapse Dialog\"");
         source.Should().NotContain("Text = \"E1:F2\"");
         source.Should().Contain("Header = UiText.Get(\"AdvancedFilter_Action\")");
@@ -2624,7 +2625,7 @@ public sealed class DataToolDialogTests
             captured.Should().Be(request);
 
             var button = DialogReferencePicker.CreateButton(box, "Select table range");
-            button.ToolTip.Should().Be("Collapse dialog and select range");
+            button.ToolTip.Should().Be(UiText.Get("DialogReferencePicker_ToolTip"));
 
             var pickerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DialogReferencePicker.cs"));
             pickerSource.Should().Contain("DialogFocus.FocusAndSelect(textBox);");

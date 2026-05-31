@@ -21,10 +21,10 @@ internal sealed record StatusBarDisplayState(
             Visibility.Collapsed,
             Visibility.Visible,
             "",
-            stats.Average.HasValue ? $"Average: {StatusBarCalculator.FormatNumber(stats.Average.Value)}" : "",
-            $"Count: {stats.Count}",
-            $"Numerical Count: {stats.NumericalCount}",
-            stats.NumericalCount > 0 ? $"Sum: {StatusBarCalculator.FormatNumber(stats.Sum)}" : "",
-            stats.Min.HasValue ? $"Min: {StatusBarCalculator.FormatNumber(stats.Min.Value)}" : "",
-            stats.Max.HasValue ? $"Max: {StatusBarCalculator.FormatNumber(stats.Max.Value)}" : "");
+            stats.Average.HasValue ? UiText.Format("StatusBar_AverageFormat", StatusBarCalculator.FormatNumber(stats.Average.Value)) : "",
+            UiText.Format("StatusBar_CountFormat", stats.Count),
+            UiText.Format("StatusBar_NumericalCountFormat", stats.NumericalCount),
+            stats.NumericalCount > 0 ? UiText.Format("StatusBar_SumFormat", StatusBarCalculator.FormatNumber(stats.Sum)) : "",
+            stats.Min.HasValue ? UiText.Format("StatusBar_MinFormat", StatusBarCalculator.FormatNumber(stats.Min.Value)) : "",
+            stats.Max.HasValue ? UiText.Format("StatusBar_MaxFormat", StatusBarCalculator.FormatNumber(stats.Max.Value)) : "");
 }
