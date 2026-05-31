@@ -261,6 +261,8 @@ internal static class RibbonAdaptiveStateApplicator
         MainWindow.RibbonCompactButtonSnapshot snapshot,
         MainWindow.RibbonCompactLevel level)
     {
+        snapshot.Button.HorizontalAlignment = HorizontalAlignment.Left;
+
         if (snapshot.SmallSpacerColumn is not null)
         {
             snapshot.SmallSpacerColumn.Width = level == MainWindow.RibbonCompactLevel.IconOnly

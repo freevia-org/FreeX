@@ -158,6 +158,7 @@ public static partial class RibbonCommandPresentationPlanner
         name.Contains("page layout") ||
         name.Contains("custom views") ||
         name == "zoom" ||
+        name == "100%" ||
         name.Contains("zoom to 100") ||
         name.Contains("zoom to selection") ||
         name == "macros";

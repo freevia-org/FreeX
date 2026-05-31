@@ -121,6 +121,17 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    private void CancelPendingViewportResizeRefresh()
+    {
+        if (!_resizeViewportRefreshPending)
+            return;
+
+        _resizeViewportRefreshTimer?.Stop();
+        _resizeViewportRefreshPending = false;
+        _resizeViewportRefreshGeneration++;
+        SheetGrid.IsLiveResizing = false;
+    }
+
     private string FormatCellReference(CellAddress address) =>
         SpreadsheetDisplayFormatter.FormatCellReference(address, _options.UseR1C1ReferenceStyle);
 

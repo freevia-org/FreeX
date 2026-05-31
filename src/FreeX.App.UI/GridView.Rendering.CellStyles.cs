@@ -184,7 +184,13 @@ public partial class GridView
         CellStyle? style,
         Dictionary<CellTypefaceKey, Typeface> typefaceCache)
     {
-        var key = CreateCellTypefaceKey(style);
+        return CreateCellTypeface(CreateCellTypefaceKey(style), typefaceCache);
+    }
+
+    private static Typeface CreateCellTypeface(
+        CellTypefaceKey key,
+        Dictionary<CellTypefaceKey, Typeface> typefaceCache)
+    {
         if (typefaceCache.TryGetValue(key, out var cached))
             return cached;
 
