@@ -203,6 +203,48 @@ public sealed class ThreadedCommentDialogTests
         });
     }
 
+    [Fact]
+    public void ExistingThread_RuntimeConversationHeadingsExposeCreatedTimestamps()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var existing = new ThreadedComment("Root note", "Quinn")
+            {
+                CreatedAtUtc = new DateTimeOffset(2026, 5, 31, 8, 0, 0, TimeSpan.Zero),
+                Replies =
+                [
+                    new CommentReply("Existing reply", "Codex")
+                    {
+                        CreatedAtUtc = new DateTimeOffset(2026, 5, 31, 8, 5, 0, TimeSpan.Zero)
+                    }
+                ]
+            };
+            var dialog = new ThreadedCommentDialog("Sheet1!A1", existing);
+
+            try
+            {
+                var headings = FindLogicalDescendants<TextBlock>(dialog)
+                    .Select(block => block.Text)
+                    .ToList();
+                headings.Should().Contain("Quinn - 2026-05-31 08:00 UTC");
+                headings.Should().Contain("Codex - 2026-05-31 08:05 UTC");
+
+                var replySelector = FindLogicalDescendants<ComboBox>(dialog)
+                    .Single(box => AutomationProperties.GetAutomationId(box) == "ThreadedCommentReplySelector");
+                var replyItem = replySelector.Items.OfType<ComboBoxItem>().Single();
+
+                replyItem.Content.Should().Be("1. Codex - 2026-05-31 08:05 UTC: Existing reply");
+                AutomationProperties.GetName(replyItem)
+                    .Should()
+                    .Be("Reply 1 by Codex - 2026-05-31 08:05 UTC: Existing reply");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     private static string ReadThreadedCommentDialogSource()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ThreadedCommentDialog.cs"));

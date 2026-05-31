@@ -152,6 +152,31 @@ public sealed class CommentNavigationPlannerTests
     }
 
     [Fact]
+    public void FormatCommentList_IncludesThreadedCreatedTimestampsWhenAvailable()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 1, 1);
+        var threadedComments = new Dictionary<CellAddress, ThreadedComment>
+        {
+            [address] = new("Please review total", "Quinn")
+            {
+                CreatedAtUtc = new DateTimeOffset(2026, 5, 31, 8, 0, 0, TimeSpan.Zero),
+                Replies =
+                [
+                    new CommentReply("Updated", "Codex")
+                    {
+                        CreatedAtUtc = new DateTimeOffset(2026, 5, 31, 8, 5, 0, TimeSpan.Zero)
+                    }
+                ]
+            }
+        };
+
+        CommentNavigationPlanner.FormatCommentList(new Dictionary<CellAddress, string>(), threadedComments)
+            .Should()
+            .Be("A1: Quinn (2026-05-31 08:00 UTC): Please review total | Codex (2026-05-31 08:05 UTC): Updated");
+    }
+
+    [Fact]
     public void FormatCommentList_ShowsNoteAndThreadWhenCellHasBoth()
     {
         var sheetId = SheetId.New();

@@ -39,14 +39,20 @@ public sealed partial class NativeJsonAdapter
                 .Where(reply => reply.Text is not null)
                 .Select(reply => new CommentReply(
                     reply.Text!,
-                    string.IsNullOrWhiteSpace(reply.Author) ? "FreeX" : reply.Author.Trim()))
+                    string.IsNullOrWhiteSpace(reply.Author) ? "FreeX" : reply.Author.Trim())
+                {
+                    CreatedAtUtc = ToUtc(reply.CreatedAtUtc),
+                    ModifiedAtUtc = ToUtc(reply.ModifiedAtUtc)
+                })
                 .ToList();
             var comment = new ThreadedComment(
                 commentDto.Text,
                 string.IsNullOrWhiteSpace(commentDto.Author) ? "FreeX" : commentDto.Author.Trim())
             {
                 Replies = replies,
-                IsResolved = commentDto.IsResolved
+                IsResolved = commentDto.IsResolved,
+                CreatedAtUtc = ToUtc(commentDto.CreatedAtUtc),
+                ModifiedAtUtc = ToUtc(commentDto.ModifiedAtUtc)
             };
             return (address, comment);
         }
@@ -86,8 +92,16 @@ public sealed partial class NativeJsonAdapter
         Text = pair.Value.Text,
         Author = pair.Value.Author,
         IsResolved = pair.Value.IsResolved,
+        CreatedAtUtc = ToUtc(pair.Value.CreatedAtUtc),
+        ModifiedAtUtc = ToUtc(pair.Value.ModifiedAtUtc),
         Replies = pair.Value.Replies
-            .Select(reply => new CommentReplyDto { Text = reply.Text, Author = reply.Author })
+            .Select(reply => new CommentReplyDto
+            {
+                Text = reply.Text,
+                Author = reply.Author,
+                CreatedAtUtc = ToUtc(reply.CreatedAtUtc),
+                ModifiedAtUtc = ToUtc(reply.ModifiedAtUtc)
+            })
             .ToList()
     };
 
@@ -112,4 +126,7 @@ public sealed partial class NativeJsonAdapter
                 : HyperlinkTargetKind.ExistingFileOrWebPage,
             (dto.ScreenTip ?? "").Trim(),
             (dto.Bookmark ?? "").Trim());
+
+    private static DateTimeOffset? ToUtc(DateTimeOffset? timestamp) =>
+        timestamp?.ToUniversalTime();
 }

@@ -1,11 +1,17 @@
 namespace FreeX.Core.Model;
 
-public sealed record CommentReply(string Text, string Author = "FreeX");
+public sealed record CommentReply(string Text, string Author = "FreeX")
+{
+    public DateTimeOffset? CreatedAtUtc { get; init; }
+    public DateTimeOffset? ModifiedAtUtc { get; init; }
+}
 
 public sealed record ThreadedComment(string Text, string Author = "FreeX")
 {
     public IReadOnlyList<CommentReply> Replies { get; init; } = [];
     public bool IsResolved { get; init; } = false;
+    public DateTimeOffset? CreatedAtUtc { get; init; }
+    public DateTimeOffset? ModifiedAtUtc { get; init; }
 }
 
 public enum HyperlinkTargetKind

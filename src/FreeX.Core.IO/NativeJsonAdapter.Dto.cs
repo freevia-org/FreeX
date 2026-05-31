@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -768,6 +769,10 @@ public sealed partial class NativeJsonAdapter
         public string? Text { get; set; }
         public string? Author { get; set; }
         public bool IsResolved { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public DateTimeOffset? CreatedAtUtc { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public DateTimeOffset? ModifiedAtUtc { get; set; }
         public List<CommentReplyDto> Replies { get; set; } = [];
     }
 
@@ -775,6 +780,10 @@ public sealed partial class NativeJsonAdapter
     {
         public string? Text { get; set; }
         public string? Author { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public DateTimeOffset? CreatedAtUtc { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public DateTimeOffset? ModifiedAtUtc { get; set; }
     }
 
     private class HyperlinkDto
