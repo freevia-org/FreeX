@@ -180,6 +180,20 @@ public sealed class GridViewAutofillTests
     }
 
     [Fact]
+    public void CalculateAutofillEdgeScrollIntent_IgnoresCollapsedContentArea()
+    {
+        GridAutofillPlanner.CalculateEdgeScrollIntent(
+                pointerX: 48,
+                pointerY: 24,
+                width: 48,
+                height: 24,
+                rowHeaderWidth: 48,
+                columnHeaderHeight: 24)
+            .Should()
+            .Be(new GridAutoScrollRequest(0, 0));
+    }
+
+    [Fact]
     public void CalculateAutofillEdgeScrollIntent_ChoosesNearestEdgeWhenHotZonesOverlap()
     {
         GridAutofillPlanner.CalculateEdgeScrollIntent(
