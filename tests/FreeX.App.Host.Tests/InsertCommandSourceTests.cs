@@ -7,7 +7,7 @@ public sealed class InsertCommandSourceTests
 {
     [Theory]
     [InlineData("PivotTable", "PivotTable", "PT", "PivotTableBtn_Click")]
-    [InlineData("Recommended PivotTables", "Recommended", "RP", "RecommendedPivotTablesMenuItem_Click")]
+    [InlineData("Recommended PivotTables", "Recommended PivotTables", "RP", "RecommendedPivotTablesMenuItem_Click")]
     [InlineData("Table", "Table", "TB", "TableBtn_Click")]
     [InlineData("Pictures", "Pictures", "IP", "InsertPictureBtn_Click")]
     [InlineData("Shapes", "Shapes", "SH", "DrawRectBtn_Click")]
