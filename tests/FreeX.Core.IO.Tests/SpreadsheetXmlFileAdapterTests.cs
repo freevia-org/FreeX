@@ -1036,6 +1036,7 @@ public sealed class SpreadsheetXmlFileAdapterTests
                         <ss:Cell ss:StyleID="money">
                           <ss:Data ss:Type="Number"><xsl:value-of select="row/@amount"/></ss:Data>
                         </ss:Cell>
+                        <ss:Cell ss:Index="3" ss:StyleID="money"/>
                       </ss:Row>
                     </ss:Table>
                   </ss:Worksheet>
@@ -1048,6 +1049,8 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
         var sheet = workbook.GetSheetAt(0);
         workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+        sheet.GetCell(1, 3).Should().BeNull();
+        workbook.GetStyle(sheet.GetStyleOnly(1, 3)!.Value).NumberFormat.Should().Be("$#,##0.00");
     }
 
     [Fact]
