@@ -169,14 +169,14 @@ internal sealed class FreeXUiRun : IDisposable
     {
         var appExe = ResolveAppExecutable();
         var artifacts = CreateArtifactDirectory();
-        SeedOptions(artifacts);
+        var optionsPath = SeedDeterministicOptions(artifacts);
         var startInfo = new ProcessStartInfo(appExe)
         {
             WorkingDirectory = Path.GetDirectoryName(appExe)!,
             UseShellExecute = false
         };
         startInfo.Environment["APPDATA"] = artifacts.FullName;
-        startInfo.Environment["FREEX_APPDATA"] = artifacts.FullName;
+        startInfo.Environment[FreeXOptions.OptionsPathEnvironmentVariable] = optionsPath;
 
         var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to launch FreeX.");
 
@@ -189,17 +189,18 @@ internal sealed class FreeXUiRun : IDisposable
         return new FreeXUiRun(process, window, artifacts);
     }
 
-    private static void SeedOptions(DirectoryInfo artifacts)
+    private static string SeedDeterministicOptions(DirectoryInfo artifacts)
     {
-        var optionsDirectory = Path.Combine(artifacts.FullName, "FreeX");
-        Directory.CreateDirectory(optionsDirectory);
-        File.WriteAllText(
-            Path.Combine(optionsDirectory, "options.json"),
-            """
-            {
-              "AppLanguage": "en-US"
-            }
-            """);
+        var optionsPath = Path.Combine(artifacts.FullName, "FreeX", "options.json");
+        var saved = new FreeXOptions
+        {
+            AppLanguage = AppLanguageCatalog.EnglishUnitedStatesCultureName
+        }.SaveToPath(optionsPath);
+
+        if (!saved)
+            throw new InvalidOperationException($"Failed to seed deterministic FreeX UIE2E options at {optionsPath}.");
+
+        return optionsPath;
     }
 
     public void ClickCell(int col, int row)

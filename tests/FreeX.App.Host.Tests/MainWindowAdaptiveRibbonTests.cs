@@ -203,6 +203,116 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void IconOnlyRibbonMenuButtonsPlaceChevronInSideSegment()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var grid = new Grid { Width = 24, Height = 24 };
+            var icon = new Border { Width = 24, Height = 24 };
+            RibbonMetadata.SetRole(icon, RibbonMetadataRole.CommandIcon);
+            RibbonMetadata.SetCommandContentLayout(grid, RibbonCommandContentLayout.IconOnly);
+            grid.Children.Add(icon);
+            var addChevron = typeof(MainWindow)
+                .GetMethod("AddRibbonDropdownChevronToGrid", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "AddRibbonDropdownChevronToGrid");
+
+            addChevron.Invoke(null, [grid, RibbonCommandContentLayout.IconOnly]);
+
+            var chevron = grid.Children
+                .OfType<FrameworkElement>()
+                .Single(RibbonMetadata.IsDropdownChevron);
+            grid.ColumnDefinitions.Should().HaveCount(2);
+            grid.ColumnDefinitions[0].Width.Value.Should().Be(24);
+            grid.ColumnDefinitions[1].Width.Value.Should().Be(12);
+            Grid.GetColumn(icon).Should().Be(0);
+            Grid.GetColumn(chevron).Should().Be(1);
+            grid.Width.Should().BeGreaterThanOrEqualTo(36);
+        });
+    }
+
+    [Fact]
+    public void SmallRibbonMenuButtonsReserveIconOnlySplitWidth()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var createContent = typeof(MainWindow)
+                .GetMethod("CreateRibbonCommandContent", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCommandContent");
+            var ensureChevron = typeof(MainWindow)
+                .GetMethod("EnsureRibbonDropdownChevron", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "EnsureRibbonDropdownChevron");
+            var content = (Grid)createContent.Invoke(null, ["Sort & Filter", "Sort & Filter", RibbonCommandLayoutKind.Small])!;
+            var button = new Button
+            {
+                Content = content,
+                Padding = new Thickness(4, 2, 4, 2),
+                BorderThickness = new Thickness(0),
+                Width = 128,
+                Height = 24
+            };
+            RibbonMetadata.SetCompactWidths(button, 128, 24);
+
+            ensureChevron.Invoke(null, [button]);
+
+            RibbonMetadata.TryGetCompactWidths(button, out var fullWidth, out var compactWidth).Should().BeTrue();
+            fullWidth.Should().Be(128);
+            compactWidth.Should().Be(36);
+            content.ColumnDefinitions[^1].Width.Value.Should().Be(12);
+        });
+    }
+
+    [Fact]
+    public void IconOnlyRibbonMenuButtonDropdownZoneStartsAfterCommandIcon()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var createContent = typeof(MainWindow)
+                .GetMethod("CreateRibbonCommandContent", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CreateRibbonCommandContent");
+            var ensureChevron = typeof(MainWindow)
+                .GetMethod("EnsureRibbonDropdownChevron", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "EnsureRibbonDropdownChevron");
+            var setCompact = typeof(MainWindow)
+                .GetMethod("SetRibbonButtonCompact", BindingFlags.Static | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SetRibbonButtonCompact");
+            var compactLevel = typeof(MainWindow).GetNestedType("RibbonCompactLevel", BindingFlags.NonPublic)
+                ?? throw new MissingMemberException(nameof(MainWindow), "RibbonCompactLevel");
+            var iconOnly = Enum.Parse(compactLevel, "IconOnly");
+            var content = (Grid)createContent.Invoke(null, ["Sort & Filter", "Sort & Filter", RibbonCommandLayoutKind.Small])!;
+            var button = new Button
+            {
+                Content = content,
+                Padding = new Thickness(4, 0, 4, 0),
+                BorderThickness = new Thickness(0),
+                Width = 36,
+                Height = 24
+            };
+            RibbonMetadata.SetCompactWidths(button, 128, 36);
+
+            ensureChevron.Invoke(null, [button]);
+            setCompact.Invoke(null, [button, iconOnly]);
+            content.ColumnDefinitions[^1].Width.Value.Should().Be(12);
+            var window = ShowStandaloneRibbonButton(button, 36, 24);
+            try
+            {
+                var icon = EnumerateSelfAndVisualDescendants(button)
+                    .OfType<FrameworkElement>()
+                    .First(element => RibbonMetadata.IsCommandIcon(element));
+                var iconBounds = icon.TransformToAncestor(button)
+                    .TransformBounds(new Rect(0, 0, icon.ActualWidth, icon.ActualHeight));
+                var dropdownBounds = GetRibbonDropdownZoneBounds(button);
+
+                dropdownBounds.X.Should().BeGreaterThanOrEqualTo(iconBounds.Right - 0.5);
+                dropdownBounds.Height.Should().BeApproximately(button.ActualHeight, 0.5);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void InsertRibbon_HidesChartFormattingCommands()
     {
         StaTestRunner.Run(() =>
@@ -376,6 +486,37 @@ public sealed class MainWindowAdaptiveRibbonTests
                 harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
                     0.5,
                     $"View at 1100px should promote commands without hidden overflow; {harness.DebugActiveRibbonChildren}");
+            }
+        });
+    }
+
+    [Fact]
+    public void PageLayoutAndFormulasRibbon_PromoteStandaloneCommandsToTallIconLabelsAtWideWidth()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Page Layout", 1465);
+            if (harness.CanUseRequestedRibbonWidth(1465))
+            {
+                harness.TallLargeRibbonCommandLabels.Should().Contain(
+                    ["Themes", "Colors", "Fonts", "Effects", "Scale"],
+                    $"Page Layout should spend wide ribbon space on standalone large commands while keeping stacked Page Setup compact; {harness.DebugActiveRibbonChildren}");
+                harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                    0.5,
+                    $"Page Layout should promote standalone commands without hidden overflow; {harness.DebugActiveRibbonChildren}");
+            }
+
+            harness.SelectRibbonTab("Formulas", 1465);
+            if (harness.CanUseRequestedRibbonWidth(1465))
+            {
+                harness.TallLargeRibbonCommandLabels.Should().Contain(
+                    ["Insert Function", "AutoSum", "Name Manager", "Define Name", "Use in Formula", "Create from Selection", "Calculate Now", "Calculate Sheet", "Calc Options"],
+                    $"Formulas should use large icon-label commands for standalone ribbon actions before compacting dense stacks; {harness.DebugActiveRibbonChildren}");
+                harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                    0.5,
+                    $"Formulas should promote standalone commands without hidden overflow; {harness.DebugActiveRibbonChildren}");
             }
         });
     }
@@ -617,7 +758,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             {
                 new RibbonFallbackExpectation("Insert", 900, Expanded: ["Tables"], Collapsed: ["Charts"]),
                 new RibbonFallbackExpectation("Data", 1120, Expanded: ["Sort & Filter", "Data Tools", "Forecast"], Collapsed: []),
-                new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup"], Collapsed: ["Arrange"]),
+                new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup", "Arrange"], Collapsed: []),
                 new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show"], Collapsed: []),
                 new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views", "Show", "Window"], Collapsed: [])
             };
@@ -1202,6 +1343,55 @@ public sealed class MainWindowAdaptiveRibbonTests
                 }
             }
         });
+    }
+
+    private static Window ShowStandaloneRibbonButton(Button button, double width, double height)
+    {
+        button.Width = width;
+        button.Height = height;
+        var host = new Grid
+        {
+            Width = width,
+            Height = height,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            VerticalAlignment = System.Windows.VerticalAlignment.Top,
+            Children = { button }
+        };
+        var window = new Window
+        {
+            Width = width + 64,
+            Height = height + 64,
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            Content = host
+        };
+        window.Show();
+        window.UpdateLayout();
+        PumpDispatcher();
+        return window;
+    }
+
+    private static Rect GetRibbonDropdownZoneBounds(ButtonBase button)
+    {
+        var method = typeof(MainWindow).GetMethod(
+            "TryGetRibbonDropdownZoneBounds",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        var args = new object[] { button, Rect.Empty };
+        ((bool)method!.Invoke(null, args)!).Should().BeTrue();
+        return (Rect)args[1];
+    }
+
+    private static IEnumerable<DependencyObject> EnumerateSelfAndVisualDescendants(DependencyObject root)
+    {
+        yield return root;
+
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            foreach (var descendant in EnumerateSelfAndVisualDescendants(child))
+                yield return descendant;
+        }
     }
 
     private sealed class MainWindowHarness : IDisposable

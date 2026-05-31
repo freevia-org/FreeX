@@ -181,9 +181,7 @@ public partial class MainWindow
 
     private bool ShouldShowKeyTipElement(FrameworkElement element, RibbonKeyTipScope scope)
     {
-        var isQuickAccessButton =
-            element is Button button &&
-            button.ReadLocalValue(DockPanel.DockProperty) is Dock.Left;
+        var isQuickAccessButton = IsQuickAccessToolbarButton(element);
         if (scope == RibbonKeyTipScope.TopLevel)
             return element is TabItem || isQuickAccessButton;
 
@@ -481,7 +479,7 @@ public partial class MainWindow
                     yield return tabItem;
             }
 
-            foreach (var quickAccessButton in EnumerateQuickAccessKeyTipButtons())
+            foreach (var quickAccessButton in EnumerateQuickAccessToolbarButtons())
                 yield return quickAccessButton;
 
             yield break;
@@ -512,16 +510,6 @@ public partial class MainWindow
             foreach (var element in EnumerateKeyTipCandidateDescendants(RootGrid))
                 yield return element;
         }
-    }
-
-    private IEnumerable<FrameworkElement> EnumerateQuickAccessKeyTipButtons()
-    {
-        if (SaveQatBtn is not null)
-            yield return SaveQatBtn;
-        if (UndoQatBtn is not null)
-            yield return UndoQatBtn;
-        if (RedoQatBtn is not null)
-            yield return RedoQatBtn;
     }
 
     private static IEnumerable<FrameworkElement> EnumerateKeyTipCandidateDescendants(DependencyObject root) =>

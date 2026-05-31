@@ -349,7 +349,7 @@ public partial class MainWindow
             : AddSheetButton.IsMouseOver
                 ? (Brush)FindResource("FreeXAccentSoftBrush")
                 : (Brush)FindResource("FreeXChromeSurfaceBrush");
-        var tentativeStrokeBrush = accentBrush;
+        var tentativeStrokeBrush = inactiveStrokeBrush;
 
         Rect? addRect = null;
         if (AddSheetButton.ActualWidth > 0)

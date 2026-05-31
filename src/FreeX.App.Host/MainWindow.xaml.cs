@@ -213,6 +213,7 @@ public partial class MainWindow : Window, IWorkbookWindow
 
         InitializeComponent();
         RibbonMenuIconSeeder.Register();
+        RebuildQuickAccessToolbar();
         ConfigureBackstageInfoActionButtons();
         RegisterKeyboardCommandShortcuts();
 

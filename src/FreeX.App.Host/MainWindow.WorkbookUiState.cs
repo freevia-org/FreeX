@@ -153,8 +153,7 @@ public partial class MainWindow
         {
             _toolbarVisualStateCache.Clear();
             _lastToolbarVisualState = null;
-            UndoQatBtn.IsEnabled = canUndo;
-            RedoQatBtn.IsEnabled = canRedo;
+            RefreshQuickAccessToolbarCommandStates();
             return;
         }
         var sheet = _workbook.GetSheet(_currentSheetId);
@@ -162,8 +161,7 @@ public partial class MainWindow
         {
             _toolbarVisualStateCache.Clear();
             _lastToolbarVisualState = null;
-            UndoQatBtn.IsEnabled = canUndo;
-            RedoQatBtn.IsEnabled = canRedo;
+            RefreshQuickAccessToolbarCommandStates();
             return;
         }
         var styleId = sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default;
@@ -181,8 +179,7 @@ public partial class MainWindow
         _suppressToolbarSync = true;
         try
         {
-            UndoQatBtn.IsEnabled = state.CanUndo;
-            RedoQatBtn.IsEnabled = state.CanRedo;
+            RefreshQuickAccessToolbarCommandStates();
             BoldButton.IsChecked = state.Bold;
             ItalicButton.IsChecked = state.Italic;
             UnderlineButton.IsChecked = state.Underline;

@@ -21,7 +21,7 @@ public enum FreeXObjectDisplay
 
 public sealed class FreeXOptions
 {
-    private const string AppDataOverrideEnvironmentVariable = "FREEX_APPDATA";
+    internal const string OptionsPathEnvironmentVariable = "FREEX_OPTIONS_PATH";
 
     private static readonly JsonSerializerOptions StoreJsonOptions = new()
     {
@@ -53,6 +53,11 @@ public sealed class FreeXOptions
     // Save
     public string DefaultFormat { get; set; } = ".xlsx";
 
+    // Quick Access Toolbar
+    public bool QuickAccessToolbarBelowRibbon { get; set; }
+    public List<string> QuickAccessToolbarCommands { get; set; } =
+        QuickAccessToolbarCatalog.DefaultCommandIds.ToList();
+
     // Diagnostics
     public bool CrashAnalyticsEnabled { get; set; }
     public bool CrashAnalyticsPrompted { get; set; }
@@ -63,17 +68,19 @@ public sealed class FreeXOptions
     [JsonIgnore]
     public string? LastPersistenceError { get; private set; }
 
-    private static readonly string StorePath = ResolveStorePath();
-
-    internal static string ResolveStorePath() =>
-        System.IO.Path.Combine(ResolveAppDataRoot(), "FreeX", "options.json");
-
-    private static string ResolveAppDataRoot() =>
-        Environment.GetEnvironmentVariable(AppDataOverrideEnvironmentVariable) is { Length: > 0 } overrideRoot
-            ? overrideRoot
-            : Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+    private static string StorePath => ResolveStorePath();
 
     public static FreeXOptions Load() => LoadFromPath(StorePath);
+
+    private static string ResolveStorePath()
+    {
+        var overridePath = Environment.GetEnvironmentVariable(OptionsPathEnvironmentVariable);
+        return string.IsNullOrWhiteSpace(overridePath)
+            ? System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "FreeX", "options.json")
+            : overridePath;
+    }
 
     internal static FreeXOptions LoadFromPath(string storePath)
     {

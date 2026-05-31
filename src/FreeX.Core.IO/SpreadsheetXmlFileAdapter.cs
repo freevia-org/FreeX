@@ -19,6 +19,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static readonly XName SpreadsheetMergeAcrossAttribute = SpreadsheetNs + "MergeAcross";
     private static readonly XName SpreadsheetMergeDownAttribute = SpreadsheetNs + "MergeDown";
     private static readonly XName SpreadsheetIdAttribute = SpreadsheetNs + "ID";
+    private static readonly XName SpreadsheetParentAttribute = SpreadsheetNs + "Parent";
     private static readonly XName SpreadsheetStyleIdAttribute = SpreadsheetNs + "StyleID";
     private static readonly XName SpreadsheetFormatAttribute = SpreadsheetNs + "Format";
     private static readonly XName SpreadsheetHrefAttribute = SpreadsheetNs + "HRef";
@@ -166,16 +167,26 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         if (stylesElement is null)
             return styles;
 
+        var definitions = new Dictionary<string, StyleDefinition>(StringComparer.Ordinal);
         foreach (var styleElement in stylesElement.Elements(SpreadsheetNs + "Style"))
         {
             var id = styleElement.Attribute(SpreadsheetIdAttribute)?.Value;
             if (string.IsNullOrWhiteSpace(id))
                 continue;
 
-            var numberFormat = styleElement
-                .Element(SpreadsheetNs + "NumberFormat")
-                ?.Attribute(SpreadsheetFormatAttribute)
-                ?.Value;
+            definitions[id] = new StyleDefinition(
+                id,
+                styleElement.Attribute(SpreadsheetParentAttribute)?.Value,
+                styleElement.Element(SpreadsheetNs + "NumberFormat")?.Attribute(SpreadsheetFormatAttribute)?.Value);
+        }
+
+        foreach (var styleElement in stylesElement.Elements(SpreadsheetNs + "Style"))
+        {
+            var id = styleElement.Attribute(SpreadsheetIdAttribute)?.Value;
+            if (string.IsNullOrWhiteSpace(id))
+                continue;
+
+            var numberFormat = ResolveNumberFormat(id, definitions, []);
             if (string.IsNullOrWhiteSpace(numberFormat))
                 continue;
 
@@ -184,6 +195,24 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
         return styles;
     }
+
+    private static string? ResolveNumberFormat(
+        string styleId,
+        IReadOnlyDictionary<string, StyleDefinition> definitions,
+        HashSet<string> visited)
+    {
+        if (!visited.Add(styleId) || !definitions.TryGetValue(styleId, out var definition))
+            return null;
+
+        if (!string.IsNullOrWhiteSpace(definition.NumberFormat))
+            return definition.NumberFormat;
+
+        return string.IsNullOrWhiteSpace(definition.ParentId)
+            ? null
+            : ResolveNumberFormat(definition.ParentId, definitions, visited);
+    }
+
+    private sealed record StyleDefinition(string? Id, string? ParentId, string? NumberFormat);
 
     private static void ReadWorksheet(Sheet sheet, XElement worksheetElement, IReadOnlyDictionary<string, StyleId> styles)
     {
@@ -354,15 +383,45 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 new NumberValue(number),
             "Boolean" when ReadBoolean(text, out var boolean) =>
                 new BoolValue(boolean),
-            "DateTime" when DateTime.TryParse(
-                text,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeLocal,
-                out var dateTime) =>
+            "DateTime" when TryParseSpreadsheetDateTime(text, out var dateTime) =>
                 DateTimeValue.FromDateTime(dateTime),
             "Error" when text.Length > 0 => new ErrorValue(text),
             _ => new TextValue(text)
         };
+    }
+
+    private static bool TryParseSpreadsheetDateTime(string text, out DateTime dateTime)
+    {
+        if (HasExplicitTimeZoneOffset(text) &&
+            DateTimeOffset.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var offset))
+        {
+            dateTime = offset.UtcDateTime;
+            return true;
+        }
+
+        return DateTime.TryParse(
+            text,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out dateTime);
+    }
+
+    private static bool HasExplicitTimeZoneOffset(string text)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.EndsWith('Z') || trimmed.EndsWith('z'))
+            return true;
+
+        var timeSeparator = Math.Max(trimmed.LastIndexOf('T'), trimmed.LastIndexOf(' '));
+        if (timeSeparator < 0)
+            return false;
+
+        var zoneStart = Math.Max(trimmed.LastIndexOf('+'), trimmed.LastIndexOf('-'));
+        return zoneStart > timeSeparator;
     }
 
     private static string? ReadComment(XElement cellElement)
