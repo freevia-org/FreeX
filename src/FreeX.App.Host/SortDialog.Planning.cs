@@ -8,6 +8,11 @@ public sealed partial class SortDialog
     public static IReadOnlyList<SortKey> BuildSortKeys(IEnumerable<SortDialogLevel> levels) =>
         SortDialogPlanner.BuildSortKeys(levels);
 
+    public static IReadOnlyList<SortKey> ApplyCustomOrderToFirstKey(
+        IReadOnlyList<SortKey> keys,
+        CustomSortOrder? customOrder) =>
+        SortDialogPlanner.ApplyCustomOrderToFirstKey(keys, customOrder);
+
     public static IReadOnlyList<SortDirectionChoice> BuildOrderChoices(string? sortOn) =>
         SortDialogPlanner.BuildOrderChoices(sortOn);
 
@@ -90,6 +95,24 @@ internal static class SortDialogPlanner
         }
 
         return keys;
+    }
+
+    /// <summary>
+    /// Applies the Sort Options "First key sort order" custom list to the primary sort key,
+    /// mirroring Excel which applies the chosen custom list only to the first key and only when
+    /// it sorts on cell values. Returns the keys unchanged when no custom order is supplied.
+    /// </summary>
+    public static IReadOnlyList<SortKey> ApplyCustomOrderToFirstKey(
+        IReadOnlyList<SortKey> keys,
+        CustomSortOrder? customOrder)
+    {
+        if (customOrder is null || keys.Count == 0 ||
+            keys[0].SortOn != FreeX.Core.Commands.SortOn.CellValues)
+            return keys;
+
+        var updated = keys.ToList();
+        updated[0] = updated[0] with { CustomOrder = customOrder };
+        return updated;
     }
 
     public static IReadOnlyList<SortDirectionChoice> BuildOrderChoices(string? sortOn) =>

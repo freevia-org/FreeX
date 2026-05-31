@@ -9,7 +9,7 @@ public enum SortOn
     FontColor
 }
 
-public sealed record SortKey(uint ColumnOffset, bool Ascending, SortOn SortOn = SortOn.CellValues, CellColor? TargetColor = null);
+public sealed record SortKey(uint ColumnOffset, bool Ascending, SortOn SortOn = SortOn.CellValues, CellColor? TargetColor = null, CustomSortOrder? CustomOrder = null);
 
 public sealed record SortOptions(bool CaseSensitive = false, bool LeftToRight = false);
 
@@ -72,7 +72,7 @@ public sealed class SortCommand : IWorkbookCommand
         if (_sortKeys.Any(key => key.ColumnOffset >= keyLimit))
             return new CommandOutcome(false, "Sort key offset is outside the sort range.");
         var keyColIndexes = _sortKeys
-            .Select(key => ((int)key.ColumnOffset, key.Ascending, key.SortOn, key.TargetColor))
+            .Select(key => ((int)key.ColumnOffset, key.Ascending, key.SortOn, key.TargetColor, key.CustomOrder))
             .ToList();
 
         int rowCount = (int)(endRow - startRow + 1);
@@ -124,9 +124,9 @@ public sealed class SortCommand : IWorkbookCommand
 
         rows.Sort((a, b) =>
         {
-            foreach (var (index, ascending, sortOn, targetColor) in keyColIndexes)
+            foreach (var (index, ascending, sortOn, targetColor, customOrder) in keyColIndexes)
             {
-                var cmp = CompareKey(ctx.Workbook, a.Cells[index], b.Cells[index], sortOn, targetColor, _options.CaseSensitive);
+                var cmp = CompareKey(ctx.Workbook, a.Cells[index], b.Cells[index], sortOn, targetColor, customOrder, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -180,7 +180,7 @@ public sealed class SortCommand : IWorkbookCommand
         uint endRow,
         uint startCol,
         uint endCol,
-        IReadOnlyList<(int RowIndex, bool Ascending, SortOn SortOn, CellColor? TargetColor)> keyRowIndexes,
+        IReadOnlyList<(int RowIndex, bool Ascending, SortOn SortOn, CellColor? TargetColor, CustomSortOrder? CustomOrder)> keyRowIndexes,
         int rowCount,
         int colCount)
     {
@@ -231,9 +231,9 @@ public sealed class SortCommand : IWorkbookCommand
 
         columns.Sort((a, b) =>
         {
-            foreach (var (index, ascending, sortOn, targetColor) in keyRowIndexes)
+            foreach (var (index, ascending, sortOn, targetColor, customOrder) in keyRowIndexes)
             {
-                var cmp = CompareKey(workbook, a.Cells[index], b.Cells[index], sortOn, targetColor, _options.CaseSensitive);
+                var cmp = CompareKey(workbook, a.Cells[index], b.Cells[index], sortOn, targetColor, customOrder, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -310,7 +310,7 @@ public sealed class SortCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
     }
 
-    private static int CompareKey(Workbook workbook, Cell? a, Cell? b, SortOn sortOn, CellColor? targetColor, bool caseSensitive)
+    private static int CompareKey(Workbook workbook, Cell? a, Cell? b, SortOn sortOn, CellColor? targetColor, CustomSortOrder? customOrder, bool caseSensitive)
     {
         if (targetColor is not null && sortOn is SortOn.CellColor or SortOn.FontColor)
         {
@@ -323,7 +323,7 @@ public sealed class SortCommand : IWorkbookCommand
         {
             SortOn.CellColor => CompareNullableColor(GetStyle(workbook, a).FillColor, GetStyle(workbook, b).FillColor),
             SortOn.FontColor => CompareNullableColor(GetStyle(workbook, a).FontColor, GetStyle(workbook, b).FontColor),
-            _ => CompareScalar(a?.Value ?? BlankValue.Instance, b?.Value ?? BlankValue.Instance, caseSensitive)
+            _ => CompareScalar(a?.Value ?? BlankValue.Instance, b?.Value ?? BlankValue.Instance, customOrder, caseSensitive)
         };
     }
 
@@ -359,7 +359,7 @@ public sealed class SortCommand : IWorkbookCommand
     /// <summary>
     /// Sort comparison mirroring Excel's order: numbers/dates, text, booleans, blanks/errors last.
     /// </summary>
-    private static int CompareScalar(ScalarValue a, ScalarValue b, bool caseSensitive)
+    private static int CompareScalar(ScalarValue a, ScalarValue b, CustomSortOrder? customOrder, bool caseSensitive)
     {
         bool aNum = a is NumberValue or DateTimeValue;
         bool bNum = b is NumberValue or DateTimeValue;
@@ -371,6 +371,9 @@ public sealed class SortCommand : IWorkbookCommand
         }
         if (aNum) return -1;  // numbers/dates before text/bool/blank
         if (bNum) return  1;
+        // Custom list ("First key sort order") ranks text by its position in the list.
+        if (customOrder is not null && a is TextValue textA && b is TextValue textB)
+            return customOrder.Compare(textA.Value, textB.Value);
         return (a, b) switch
         {
             (TextValue ta,   TextValue tb  ) => string.Compare(ta.Value, tb.Value, caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase),

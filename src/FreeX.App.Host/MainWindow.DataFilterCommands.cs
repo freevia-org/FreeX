@@ -51,6 +51,8 @@ public partial class MainWindow
             return;
 
         var keys = dialog.ResultSortKeys;
+        if (CustomSortOrder.TryParse(dialog.ResultOptions.FirstKeySortOrder, out var customOrder))
+            keys = SortDialog.ApplyCustomOrderToFirstKey(keys, customOrder);
         var options = new SortOptions(dialog.ResultOptions.CaseSensitive, dialog.ResultOptions.LeftToRight);
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
