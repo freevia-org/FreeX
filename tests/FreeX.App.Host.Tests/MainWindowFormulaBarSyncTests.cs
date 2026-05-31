@@ -136,6 +136,27 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarEscape_RestoresActiveCellTextAndReturnsFocusToGrid()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("draft edit");
+
+            harness.PressFormulaBarKey(Key.Escape).Should().BeTrue();
+
+            harness.FormulaBarText.Should().Be("original");
+            harness.CellText(1, 1).Should().Be("original");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void CtrlEnterFormulaBarEdit_FillsSelectedRangeWhenNotChoosingFormulaReferences()
     {
         StaTestRunner.Run(() =>
@@ -253,6 +274,7 @@ public sealed class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _setActiveCell;
         private readonly MethodInfo _showInlineEditor;
         private readonly MethodInfo _executeClearSelection;
+        private readonly MethodInfo _formulaBarKeyDown;
         private readonly MethodInfo _cellAddressBoxKeyDown;
 
         private MainWindowHarness(MainWindow window)
@@ -288,6 +310,9 @@ public sealed class MainWindowFormulaBarSyncTests
             _executeClearSelection = typeof(MainWindow)
                 .GetMethod("ExecuteClearSelection", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteClearSelection");
+            _formulaBarKeyDown = typeof(MainWindow)
+                .GetMethod("FormulaBar_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "FormulaBar_KeyDown");
             _cellAddressBoxKeyDown = typeof(MainWindow)
                 .GetMethod("CellAddressBox_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "CellAddressBox_KeyDown");
@@ -404,6 +429,19 @@ public sealed class MainWindowFormulaBarSyncTests
                 RoutedEvent = Keyboard.KeyDownEvent
             };
             _cellAddressBoxKeyDown.Invoke(_window, [((TextBox)_window.FindName("CellAddressBox")), args]);
+            PumpDispatcher();
+            return args.Handled;
+        }
+
+        public bool PressFormulaBarKey(Key key)
+        {
+            var source = PresentationSource.FromVisual(_window)
+                ?? throw new InvalidOperationException("MainWindow presentation source is not available.");
+            var args = new KeyEventArgs(Keyboard.PrimaryDevice, source, Environment.TickCount, key)
+            {
+                RoutedEvent = Keyboard.KeyDownEvent
+            };
+            _formulaBarKeyDown.Invoke(_window, [((TextBox)_window.FindName("FormulaBar")), args]);
             PumpDispatcher();
             return args.Handled;
         }
