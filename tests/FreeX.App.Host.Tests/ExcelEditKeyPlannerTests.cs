@@ -26,6 +26,14 @@ public sealed class ExcelEditKeyPlannerTests
             .Be(expected);
     }
 
+    [Fact]
+    public void ShouldCycleFormulaReference_DoesNotTreatSystemAltF4AsFormulaReferenceCycle()
+    {
+        ExcelEditKeyPlanner.ShouldCycleFormulaReference(Key.System, ModifierKeys.Alt, Key.F4)
+            .Should()
+            .BeFalse();
+    }
+
     [Theory]
     [InlineData(Key.Enter, ModifierKeys.None, 11, 5)]
     [InlineData(Key.Enter, ModifierKeys.Shift, 9, 5)]
