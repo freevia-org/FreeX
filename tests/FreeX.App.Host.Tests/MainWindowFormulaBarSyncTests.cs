@@ -398,9 +398,9 @@ public sealed class MainWindowFormulaBarSyncTests
 
         public bool InlineEditorVisible => InlineEditor?.IsVisible == true;
 
-        public bool FormulaBarFocused => ReferenceEquals(Keyboard.FocusedElement, (TextBox)_window.FindName("FormulaBar"));
+        public bool FormulaBarFocused => IsFocused((TextBox)_window.FindName("FormulaBar"));
 
-        public bool SheetGridFocused => ReferenceEquals(Keyboard.FocusedElement, (SheetGridView)_window.FindName("SheetGrid"));
+        public bool SheetGridFocused => IsFocused((SheetGridView)_window.FindName("SheetGrid"));
 
         public void SetCellText(uint row, uint col, string text)
         {
@@ -525,7 +525,11 @@ public sealed class MainWindowFormulaBarSyncTests
 
         public void FocusFormulaBar()
         {
-            ((TextBox)_window.FindName("FormulaBar")).Focus();
+            var formulaBar = (TextBox)_window.FindName("FormulaBar");
+            _window.Activate();
+            FocusManager.SetFocusedElement(_window, formulaBar);
+            formulaBar.Focus();
+            Keyboard.Focus(formulaBar);
             PumpDispatcher();
         }
 
@@ -558,6 +562,7 @@ public sealed class MainWindowFormulaBarSyncTests
             };
 
             window.Show();
+            window.Activate();
             window.UpdateLayout();
             PumpDispatcher();
             return new MainWindowHarness(window);
@@ -568,6 +573,10 @@ public sealed class MainWindowFormulaBarSyncTests
                 ?? throw new InvalidOperationException("MainWindow workbook is not initialized."));
 
         private TextBox? InlineEditor => (TextBox?)_inlineEditorField.GetValue(_window);
+
+        private bool IsFocused(IInputElement element) =>
+            ReferenceEquals(Keyboard.FocusedElement, element) ||
+            ReferenceEquals(FocusManager.GetFocusedElement(_window), element);
 
         public void Dispose()
         {

@@ -172,10 +172,10 @@ public sealed class NamedRangeDialogXamlTests
     {
         var source = ReadNamedRangeDialogSource();
 
-        source.Should().Contain("AutomationProperties.SetName(_nameBox, \"Name\");");
-        source.Should().Contain("AutomationProperties.SetName(_scopeBox, \"Scope\");");
-        source.Should().Contain("AutomationProperties.SetName(_commentBox, \"Comment\");");
-        source.Should().Contain("AutomationProperties.SetName(_refersToBox, \"Refers to\");");
+        source.Should().Contain("AutomationProperties.SetName(_nameBox, UiText.Get(\"NameDefinition_NameAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetName(_scopeBox, UiText.Get(\"NameDefinition_ScopeAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetName(_commentBox, UiText.Get(\"NameDefinition_CommentAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetName(_refersToBox, UiText.Get(\"NameDefinition_RefersToAutomationName\"));");
     }
 
     [Fact]

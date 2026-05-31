@@ -69,7 +69,7 @@ public sealed partial class RemoveDuplicatesDialog : Window
                 Margin = new Thickness(0, 0, 0, 4)
             };
             AutomationProperties.SetAutomationId(box, $"RemoveDuplicatesColumn{column.Offset}Box");
-            AutomationProperties.SetHelpText(box, "Select to include this column when identifying duplicate rows.");
+            AutomationProperties.SetHelpText(box, UiText.Get("RemoveDuplicates_ColumnHelpText"));
             box.Checked += (_, _) => RefreshBulkButtonState();
             box.Unchecked += (_, _) => RefreshBulkButtonState();
             _boxes.Add(box);
@@ -90,21 +90,21 @@ public sealed partial class RemoveDuplicatesDialog : Window
 
     private void ApplyAutomationMetadata()
     {
-        AutomationProperties.SetName(_hasHeadersBox, "My data has headers");
+        AutomationProperties.SetName(_hasHeadersBox, UiText.Get("RemoveDuplicates_MyDataHasHeadersAutomationName"));
         AutomationProperties.SetAutomationId(_hasHeadersBox, "RemoveDuplicatesHasHeadersBox");
-        AutomationProperties.SetHelpText(_hasHeadersBox, "Select when the first row contains column headers.");
+        AutomationProperties.SetHelpText(_hasHeadersBox, UiText.Get("RemoveDuplicates_MyDataHasHeadersHelpText"));
 
-        AutomationProperties.SetName(_columnsPanel, "Columns");
+        AutomationProperties.SetName(_columnsPanel, UiText.Get("RemoveDuplicates_ColumnsAutomationName"));
         AutomationProperties.SetAutomationId(_columnsPanel, "RemoveDuplicatesColumnsPanel");
-        AutomationProperties.SetHelpText(_columnsPanel, "Choose the columns used to identify duplicate rows.");
+        AutomationProperties.SetHelpText(_columnsPanel, UiText.Get("RemoveDuplicates_ColumnsHelpText"));
 
-        AutomationProperties.SetName(_selectAllButton, "Select all columns");
+        AutomationProperties.SetName(_selectAllButton, UiText.Get("RemoveDuplicates_SelectAllAutomationName"));
         AutomationProperties.SetAutomationId(_selectAllButton, "RemoveDuplicatesSelectAllButton");
-        AutomationProperties.SetHelpText(_selectAllButton, "Select every column for duplicate detection.");
+        AutomationProperties.SetHelpText(_selectAllButton, UiText.Get("RemoveDuplicates_SelectAllHelpText"));
 
-        AutomationProperties.SetName(_unselectAllButton, "Unselect all columns");
+        AutomationProperties.SetName(_unselectAllButton, UiText.Get("RemoveDuplicates_UnselectAllAutomationName"));
         AutomationProperties.SetAutomationId(_unselectAllButton, "RemoveDuplicatesUnselectAllButton");
-        AutomationProperties.SetHelpText(_unselectAllButton, "Clear every column selection.");
+        AutomationProperties.SetHelpText(_unselectAllButton, UiText.Get("RemoveDuplicates_UnselectAllHelpText"));
     }
 
     private void FocusInitialKeyboardTarget()
@@ -134,7 +134,7 @@ public sealed partial class RemoveDuplicatesDialog : Window
             if (label is not null)
             {
                 box.Content = label.Header;
-                AutomationProperties.SetName(box, $"{label.Header} column");
+                AutomationProperties.SetName(box, UiText.Format("RemoveDuplicates_ColumnAutomationNameFormat", label.Header));
             }
         }
     }

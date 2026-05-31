@@ -23,7 +23,7 @@ public partial class MainWindow
         {
             StatusStatsPanel.Visibility = Visibility.Collapsed;
             StatusReadyText.Visibility  = Visibility.Visible;
-            StatusReadyText.Text = "Ready";
+            StatusReadyText.Text = UiText.Get("MainWindow_Text_Ready");
             return;
         }
 
@@ -42,12 +42,12 @@ public partial class MainWindow
 
         StatusReadyText.Visibility  = Visibility.Collapsed;
         StatusStatsPanel.Visibility = Visibility.Visible;
-        StatusAvgText.Text   = stats.Average.HasValue ? $"Average: {StatusBarCalculator.FormatNumber(stats.Average.Value)}" : "";
-        StatusCountText.Text = $"Count: {stats.Count}";
-        StatusNumericalCountText.Text = $"Numerical Count: {stats.NumericalCount}";
-        StatusSumText.Text   = stats.NumericalCount > 0 ? $"Sum: {StatusBarCalculator.FormatNumber(stats.Sum)}" : "";
-        StatusMinText.Text   = stats.Min.HasValue ? $"Min: {StatusBarCalculator.FormatNumber(stats.Min.Value)}" : "";
-        StatusMaxText.Text   = stats.Max.HasValue ? $"Max: {StatusBarCalculator.FormatNumber(stats.Max.Value)}" : "";
+        StatusAvgText.Text   = stats.Average.HasValue ? UiText.Format("StatusBar_AverageFormat", StatusBarCalculator.FormatNumber(stats.Average.Value)) : "";
+        StatusCountText.Text = UiText.Format("StatusBar_CountFormat", stats.Count);
+        StatusNumericalCountText.Text = UiText.Format("StatusBar_NumericalCountFormat", stats.NumericalCount);
+        StatusSumText.Text   = stats.NumericalCount > 0 ? UiText.Format("StatusBar_SumFormat", StatusBarCalculator.FormatNumber(stats.Sum)) : "";
+        StatusMinText.Text   = stats.Min.HasValue ? UiText.Format("StatusBar_MinFormat", StatusBarCalculator.FormatNumber(stats.Min.Value)) : "";
+        StatusMaxText.Text   = stats.Max.HasValue ? UiText.Format("StatusBar_MaxFormat", StatusBarCalculator.FormatNumber(stats.Max.Value)) : "";
     }
 
     private (uint start, uint end) GetSelectedColRange(uint col)

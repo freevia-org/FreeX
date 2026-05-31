@@ -13,8 +13,8 @@ public sealed class SymbolPickerDialogSourceTests
     {
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("Content = \"_Insert\"");
-        source.Should().Contain("Content = \"_Cancel\"");
+        source.Should().Contain("Content = UiText.Get(\"SymbolPicker_InsertButton\")");
+        source.Should().Contain("Content = UiText.Cancel");
     }
 
     [Fact]
@@ -22,12 +22,12 @@ public sealed class SymbolPickerDialogSourceTests
     {
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("Content = \"_Font:\"");
-        source.Should().Contain("Content = \"_Subset:\"");
-        source.Should().Contain("Recently used symbols");
-        source.Should().Contain("Content = \"Character _code:\"");
+        source.Should().Contain("Content = UiText.Get(\"SymbolPicker_FontLabel\")");
+        source.Should().Contain("Content = UiText.Get(\"SymbolPicker_SubsetLabel\")");
+        source.Should().Contain("UiText.Get(\"SymbolPicker_RecentlyUsedSymbols\")");
+        source.Should().Contain("Content = UiText.Get(\"SymbolPicker_CharacterCodeLabel\")");
         source.Should().Contain("Target = selectedCode");
-        source.Should().Contain("from: Unicode (hex)");
+        source.Should().Contain("UiText.Get(\"SymbolPicker_FromUnicodeHex\")");
         source.Should().Contain("UniformGrid");
     }
 
@@ -37,7 +37,7 @@ public sealed class SymbolPickerDialogSourceTests
         var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("ShowInvalidCharacterCodeWarning(selectedCode);");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, \"Enter a valid Unicode character code.\", Title);");
+        source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"SymbolPicker_InvalidCharacterCodeMessage\"), Title);");
         source.Should().Contain("selectedCode.Focus();");
         source.Should().Contain("selectedCode.SelectAll();");
         source.Should().Contain("Keyboard.Focus(selectedCode);");
@@ -112,8 +112,8 @@ public sealed class SymbolPickerDialogSourceTests
 
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("Header = \"_Symbols\"");
-        source.Should().Contain("Header = \"Special _Characters\"");
+        source.Should().Contain("Header = UiText.Get(\"SymbolPicker_SymbolsTab\")");
+        source.Should().Contain("Header = UiText.Get(\"SymbolPicker_SpecialCharactersTab\")");
     }
 
     [Fact]
@@ -121,8 +121,8 @@ public sealed class SymbolPickerDialogSourceTests
     {
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("Header = \"_Symbols\"");
-        source.Should().Contain("Header = \"Special _Characters\"");
+        source.Should().Contain("Header = UiText.Get(\"SymbolPicker_SymbolsTab\")");
+        source.Should().Contain("Header = UiText.Get(\"SymbolPicker_SpecialCharactersTab\")");
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget(grid);");
         source.Should().Contain("private static void FocusInitialKeyboardTarget(UniformGrid grid)");
         source.Should().Contain("Keyboard.Focus(firstSymbol);");
@@ -142,8 +142,8 @@ public sealed class SymbolPickerDialogSourceTests
     {
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("AutomationProperties.SetName(grid, \"Symbols\");");
-        source.Should().Contain("AutomationProperties.SetName(specialList, \"Special characters\");");
+        source.Should().Contain("AutomationProperties.SetName(grid, UiText.Get(\"SymbolPicker_SymbolsAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetName(specialList, UiText.Get(\"SymbolPicker_SpecialCharactersAutomationName\"));");
     }
 
     [Fact]
@@ -151,20 +151,20 @@ public sealed class SymbolPickerDialogSourceTests
     {
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("AutomationProperties.SetName(fontBox, \"Symbol font\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(fontBox, \"Choose the font used to preview and insert symbols.\");");
-        source.Should().Contain("AutomationProperties.SetName(subsetBox, \"Symbol subset\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(subsetBox, \"Choose the Unicode subset shown in the symbol grid.\");");
-        source.Should().Contain("AutomationProperties.SetName(selectedCode, \"Character code\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(selectedCode, \"Enter a Unicode hexadecimal character code.\");");
-        source.Should().Contain("AutomationProperties.SetName(preview, \"Selected symbol preview\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(preview, \"Shows the currently selected symbol.\");");
-        source.Should().Contain("AutomationProperties.SetName(codeSelect, \"Go to character code\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(codeSelect, \"Select the symbol for the entered Unicode character code.\");");
-        source.Should().Contain("AutomationProperties.SetName(insert, \"Insert selected symbol\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(insert, \"Insert the selected symbol or special character.\");");
-        source.Should().Contain("AutomationProperties.SetName(cancel, \"Cancel symbol insertion\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(cancel, \"Close the Symbol dialog without inserting a symbol.\");");
+        source.Should().Contain("AutomationProperties.SetName(fontBox, UiText.Get(\"SymbolPicker_FontAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(fontBox, UiText.Get(\"SymbolPicker_FontHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(subsetBox, UiText.Get(\"SymbolPicker_SubsetAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(subsetBox, UiText.Get(\"SymbolPicker_SubsetHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(selectedCode, UiText.Get(\"SymbolPicker_CharacterCodeAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(selectedCode, UiText.Get(\"SymbolPicker_CharacterCodeHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(preview, UiText.Get(\"SymbolPicker_SelectedSymbolPreviewAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(preview, UiText.Get(\"SymbolPicker_SelectedSymbolPreviewHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(codeSelect, UiText.Get(\"SymbolPicker_GoToCharacterCodeAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(codeSelect, UiText.Get(\"SymbolPicker_GoToCharacterCodeHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(insert, UiText.Get(\"SymbolPicker_InsertSelectedSymbolAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(insert, UiText.Get(\"SymbolPicker_InsertSelectedSymbolHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(cancel, UiText.Get(\"SymbolPicker_CancelAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(cancel, UiText.Get(\"SymbolPicker_CancelHelpText\"));");
     }
 
     [Fact]
@@ -174,7 +174,7 @@ public sealed class SymbolPickerDialogSourceTests
 
         source.Should().Contain("AutomationProperties.SetName(button, CreateSymbolAutomationName(value));");
         source.Should().Contain("private static string CreateSymbolAutomationName(string value)");
-        source.Should().Contain("AutomationProperties.SetName(item, $\"{special.Name}, {CreateSymbolAutomationName(special.Symbol)}\");");
+        source.Should().Contain("AutomationProperties.SetName(item, UiText.Format(\"SymbolPicker_SpecialCharacterAutomationNameFormat\", special.Name, CreateSymbolAutomationName(special.Symbol)));");
     }
 
     [Fact]
@@ -186,9 +186,9 @@ public sealed class SymbolPickerDialogSourceTests
             try
             {
                 var fontBox = FindLogicalChildren<ComboBox>(dialog)
-                    .Single(box => AutomationProperties.GetName(box) == "Symbol font");
+                    .Single(box => AutomationProperties.GetName(box) == UiText.Get("SymbolPicker_FontAutomationName"));
                 var preview = FindLogicalChildren<TextBlock>(dialog)
-                    .Single(text => AutomationProperties.GetName(text) == "Selected symbol preview");
+                    .Single(text => AutomationProperties.GetName(text) == UiText.Get("SymbolPicker_SelectedSymbolPreviewAutomationName"));
                 var symbolButtons = FindLogicalChildren<Button>(dialog)
                     .Where(button => button.Tag is string)
                     .ToList();

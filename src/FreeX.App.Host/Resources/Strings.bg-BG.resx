@@ -8298,40 +8298,40 @@
     <value>Изберете категория с опции на FreeX.</value>
   </data>
   <data name="Options_General" xml:space="preserve">
-    <value>_Общи</value>
+    <value>Общи</value>
   </data>
   <data name="Options_Formulas" xml:space="preserve">
-    <value>_Формули</value>
+    <value>Формули</value>
   </data>
   <data name="Options_Proofing" xml:space="preserve">
-    <value>_Проверка</value>
+    <value>Проверка</value>
   </data>
   <data name="Options_Save" xml:space="preserve">
-    <value>_Записване</value>
+    <value>Записване</value>
   </data>
   <data name="Options_Language" xml:space="preserve">
-    <value>_Език</value>
+    <value>Език</value>
   </data>
   <data name="Options_EaseOfAccess" xml:space="preserve">
-    <value>_Достъпност</value>
+    <value>Достъпност</value>
   </data>
   <data name="Options_Advanced" xml:space="preserve">
-    <value>_Разширени</value>
+    <value>Разширени</value>
   </data>
   <data name="Options_CustomizeRibbon" xml:space="preserve">
-    <value>_Персонализиране на лентата</value>
+    <value>Персонализиране на лентата</value>
   </data>
   <data name="Options_QuickAccessToolbar" xml:space="preserve">
-    <value>_Лента с бърз достъп</value>
+    <value>Лента с бърз достъп</value>
   </data>
   <data name="Options_AddIns" xml:space="preserve">
-    <value>_Добавки</value>
+    <value>Добавки</value>
   </data>
   <data name="Options_TrustCenter" xml:space="preserve">
-    <value>_Център за надеждност</value>
+    <value>Център за надеждност</value>
   </data>
   <data name="Options_View" xml:space="preserve">
-    <value>_Изглед</value>
+    <value>Изглед</value>
   </data>
   <data name="Options_GeneralOptionsForWorkingWithFreeX" xml:space="preserve">
     <value>Общи опции за работа с FreeX.</value>
@@ -13688,6 +13688,534 @@
   </data>
   <data name="TableDesign_TableRangeLabel" xml:space="preserve">
     <value>_Диапазон на таблицата:</value>
+  </data>
+  <data name="DialogReferencePicker_ToolTip" xml:space="preserve">
+    <value>Свийте диалога и изберете диапазон</value>
+  </data>
+  <data name="DialogReferencePicker_HelpText" xml:space="preserve">
+    <value>Свийте диалога и изберете диапазон от работния лист за това поле.</value>
+  </data>
+  <data name="HeaderFooterPicture_WidthAutomationName" xml:space="preserve">
+    <value>Ширина на картина в горен/долен колонтитул</value>
+  </data>
+  <data name="HeaderFooterPicture_WidthHelpText" xml:space="preserve">
+    <value>Въведете ширината на картината в горния или долния колонтитул.</value>
+  </data>
+  <data name="HeaderFooterPicture_HeightAutomationName" xml:space="preserve">
+    <value>Височина на картина в горен/долен колонтитул</value>
+  </data>
+  <data name="HeaderFooterPicture_HeightHelpText" xml:space="preserve">
+    <value>Въведете височината на картината в горния или долния колонтитул.</value>
+  </data>
+  <data name="HeaderFooterPicture_LockAspectRatioAutomationName" xml:space="preserve">
+    <value>Заключване на пропорциите</value>
+  </data>
+  <data name="HeaderFooterPicture_LockAspectRatioHelpText" xml:space="preserve">
+    <value>Запазете ширината и височината на картината пропорционални.</value>
+  </data>
+  <data name="HeaderFooterPicture_ResetSizeAutomationName" xml:space="preserve">
+    <value>Нулиране на размера на картината</value>
+  </data>
+  <data name="HeaderFooterPicture_ResetSizeHelpText" xml:space="preserve">
+    <value>Върнете ширината и височината на картината към първоначалния размер.</value>
+  </data>
+  <data name="ShapeGradient_StartColorAutomationName" xml:space="preserve">
+    <value>Начален цвят на градиента</value>
+  </data>
+  <data name="ShapeGradient_StartColorHelpText" xml:space="preserve">
+    <value>Въведете първия цвят на градиентния стоп като R,G,B.</value>
+  </data>
+  <data name="ShapeGradient_EndColorAutomationName" xml:space="preserve">
+    <value>Краен цвят на градиента</value>
+  </data>
+  <data name="ShapeGradient_EndColorHelpText" xml:space="preserve">
+    <value>Въведете втория цвят на градиентния стоп като R,G,B.</value>
+  </data>
+  <data name="ShapeGradient_ChooseStartColorAutomationName" xml:space="preserve">
+    <value>Избор на начален цвят на градиента</value>
+  </data>
+  <data name="ShapeGradient_ChooseStartColorHelpText" xml:space="preserve">
+    <value>Отворете избора на цвят за първия градиентен стоп.</value>
+  </data>
+  <data name="ShapeGradient_ChooseEndColorAutomationName" xml:space="preserve">
+    <value>Избор на краен цвят на градиента</value>
+  </data>
+  <data name="ShapeGradient_ChooseEndColorHelpText" xml:space="preserve">
+    <value>Отворете избора на цвят за втория градиентен стоп.</value>
+  </data>
+  <data name="RemoveDuplicates_MyDataHasHeadersAutomationName" xml:space="preserve">
+    <value>Моите данни имат заглавки</value>
+  </data>
+  <data name="RemoveDuplicates_MyDataHasHeadersHelpText" xml:space="preserve">
+    <value>Изберете, когато първият ред съдържа заглавки на колони.</value>
+  </data>
+  <data name="RemoveDuplicates_ColumnsAutomationName" xml:space="preserve">
+    <value>Колони</value>
+  </data>
+  <data name="RemoveDuplicates_ColumnsHelpText" xml:space="preserve">
+    <value>Изберете колоните, използвани за намиране на дублирани редове.</value>
+  </data>
+  <data name="RemoveDuplicates_SelectAllAutomationName" xml:space="preserve">
+    <value>Избиране на всички колони</value>
+  </data>
+  <data name="RemoveDuplicates_SelectAllHelpText" xml:space="preserve">
+    <value>Изберете всяка колона за откриване на дубликати.</value>
+  </data>
+  <data name="RemoveDuplicates_UnselectAllAutomationName" xml:space="preserve">
+    <value>Премахване на избора от всички колони</value>
+  </data>
+  <data name="RemoveDuplicates_UnselectAllHelpText" xml:space="preserve">
+    <value>Изчистете избора на всички колони.</value>
+  </data>
+  <data name="RemoveDuplicates_ColumnHelpText" xml:space="preserve">
+    <value>Изберете, за да включите тази колона при намиране на дублирани редове.</value>
+  </data>
+  <data name="RemoveDuplicates_ColumnAutomationNameFormat" xml:space="preserve">
+    <value>колона {0}</value>
+  </data>
+  <data name="Subtotal_ColumnAutomationNameFormat" xml:space="preserve">
+    <value>колона {0} за междинна сума</value>
+  </data>
+  <data name="Subtotal_ColumnHelpText" xml:space="preserve">
+    <value>Изберете, за да добавите изчисление на междинна сума към тази колона.</value>
+  </data>
+  <data name="Subtotal_AtEachChangeInAutomationName" xml:space="preserve">
+    <value>При всяка промяна в</value>
+  </data>
+  <data name="Subtotal_AtEachChangeInHelpText" xml:space="preserve">
+    <value>Изберете колоната, която определя всяка група за междинна сума.</value>
+  </data>
+  <data name="Subtotal_UseFunctionAutomationName" xml:space="preserve">
+    <value>Използване на функция</value>
+  </data>
+  <data name="Subtotal_UseFunctionHelpText" xml:space="preserve">
+    <value>Изберете функцията, използвана за изчисляване на всяка междинна сума.</value>
+  </data>
+  <data name="Subtotal_AddSubtotalToAutomationName" xml:space="preserve">
+    <value>Добавяне на междинна сума към</value>
+  </data>
+  <data name="Subtotal_AddSubtotalToHelpText" xml:space="preserve">
+    <value>Изберете колоните, които получават изчисления на междинни суми.</value>
+  </data>
+  <data name="Subtotal_ReplaceCurrentSubtotalsAutomationName" xml:space="preserve">
+    <value>Замяна на текущите междинни суми</value>
+  </data>
+  <data name="Subtotal_ReplaceCurrentSubtotalsHelpText" xml:space="preserve">
+    <value>Заменете съществуващите междинни суми с новите настройки.</value>
+  </data>
+  <data name="Subtotal_PageBreakBetweenGroupsAutomationName" xml:space="preserve">
+    <value>Разделяне на страници между групите</value>
+  </data>
+  <data name="Subtotal_PageBreakBetweenGroupsHelpText" xml:space="preserve">
+    <value>Вмъкнете разделител на страница след всяка група с междинна сума.</value>
+  </data>
+  <data name="Subtotal_SummaryBelowDataAutomationName" xml:space="preserve">
+    <value>Обобщение под данните</value>
+  </data>
+  <data name="Subtotal_SummaryBelowDataHelpText" xml:space="preserve">
+    <value>Поставете редовете с междинни суми под всяка група.</value>
+  </data>
+  <data name="Subtotal_RemoveAllAutomationName" xml:space="preserve">
+    <value>Премахване на всички междинни суми</value>
+  </data>
+  <data name="Subtotal_RemoveAllHelpText" xml:space="preserve">
+    <value>Премахнете всички редове с междинни суми от избраните данни.</value>
+  </data>
+  <data name="Subtotal_EnterValidGroupColumnOffset" xml:space="preserve">
+    <value>Въведете валидно отместване на групиращата колона.</value>
+  </data>
+  <data name="Subtotal_EnterValidSubtotalColumnOffsets" xml:space="preserve">
+    <value>Въведете едно или повече валидни отмествания на колони за междинни суми.</value>
+  </data>
+  <data name="PrintPreview_OrientationLabel" xml:space="preserve">
+    <value>_Ориентация:</value>
+  </data>
+  <data name="PrintPreview_ScalingLabel" xml:space="preserve">
+    <value>_Мащабиране:</value>
+  </data>
+  <data name="PrintPreview_Scale100Percent" xml:space="preserve">
+    <value>100%</value>
+  </data>
+  <data name="PrintPreview_FitToOnePage" xml:space="preserve">
+    <value>Побиране на 1 страница</value>
+  </data>
+  <data name="PrintPreview_FitToOnePageWide" xml:space="preserve">
+    <value>Побиране на 1 страница ширина</value>
+  </data>
+  <data name="PrintPreview_IgnorePrintArea" xml:space="preserve">
+    <value>_Игнорирай областта за печат</value>
+  </data>
+  <data name="PrintPreview_IgnorePrintAreaToolTip" xml:space="preserve">
+    <value>Визуализирайте и отпечатайте активния лист вместо записаната област за печат.</value>
+  </data>
+  <data name="PrintPreview_IgnorePrintAreaAutomationName" xml:space="preserve">
+    <value>Игнориране на областта за печат</value>
+  </data>
+  <data name="PrintPreview_IgnorePrintAreaHelpText" xml:space="preserve">
+    <value>Когато е отметнато, визуализацията печата активния лист вместо записаната област за печат.</value>
+  </data>
+  <data name="PrintPreview_PrintOptionsSection" xml:space="preserve">
+    <value>Опции за печат</value>
+  </data>
+  <data name="PrintSettings_OrientationFormat" xml:space="preserve">
+    <value>Ориентация: {0}</value>
+  </data>
+  <data name="PrintSettings_PaperSizeFormat" xml:space="preserve">
+    <value>Размер на хартията: {0}</value>
+  </data>
+  <data name="PrintSettings_ScalingFormat" xml:space="preserve">
+    <value>Мащабиране: {0}</value>
+  </data>
+  <data name="PrintSettings_GridlinesFormat" xml:space="preserve">
+    <value>Мрежови линии: {0}</value>
+  </data>
+  <data name="PrintSettings_HeadingsFormat" xml:space="preserve">
+    <value>Заглавия: {0}</value>
+  </data>
+  <data name="PrintSettings_PrintActiveSheet" xml:space="preserve">
+    <value>Печат на активния лист</value>
+  </data>
+  <data name="PrintSettings_PrintActiveSheetIgnorePrintArea" xml:space="preserve">
+    <value>Печат на активния лист (игнориране на областта за печат)</value>
+  </data>
+  <data name="PrintSettings_PrintSelectedPrintArea" xml:space="preserve">
+    <value>Печат на избраната област за печат</value>
+  </data>
+  <data name="PrintSettings_FitPagesWideByTall" xml:space="preserve">
+    <value>побиране {0} стр. ширина по {1} стр. височина</value>
+  </data>
+  <data name="PrintSettings_Auto" xml:space="preserve">
+    <value>авто</value>
+  </data>
+  <data name="PrintSettings_Automatic" xml:space="preserve">
+    <value>Автоматично</value>
+  </data>
+  <data name="PrintSettings_On" xml:space="preserve">
+    <value>вкл.</value>
+  </data>
+  <data name="PrintSettings_Off" xml:space="preserve">
+    <value>изкл.</value>
+  </data>
+  <data name="Protection_PasswordAutomationName" xml:space="preserve">
+    <value>Парола за защита</value>
+  </data>
+  <data name="Protection_PasswordHelpText" xml:space="preserve">
+    <value>Въведете незадължителната парола за защита на листа или работната книга.</value>
+  </data>
+  <data name="Protection_ConfirmPasswordAutomationName" xml:space="preserve">
+    <value>Потвърждение на паролата за защита</value>
+  </data>
+  <data name="Protection_ConfirmPasswordHelpText" xml:space="preserve">
+    <value>Въведете отново паролата, за да потвърдите защитата.</value>
+  </data>
+  <data name="WorkbookTheme_ColorAutomationNameFormat" xml:space="preserve">
+    <value>{0} цвят на тема</value>
+  </data>
+  <data name="WorkbookTheme_ColorHelpText" xml:space="preserve">
+    <value>Въведете цвят на тема като #RRGGBB стойност.</value>
+  </data>
+  <data name="WorkbookTheme_PickColorHelpTextFormat" xml:space="preserve">
+    <value>Изберете цвета {0} на темата.</value>
+  </data>
+  <data name="NameDefinition_NewNameTitle" xml:space="preserve">
+    <value>Ново име</value>
+  </data>
+  <data name="NameDefinition_EditNameTitle" xml:space="preserve">
+    <value>Редактиране на име</value>
+  </data>
+  <data name="NameDefinition_NameAutomationName" xml:space="preserve">
+    <value>Име</value>
+  </data>
+  <data name="NameDefinition_ScopeAutomationName" xml:space="preserve">
+    <value>Обхват</value>
+  </data>
+  <data name="NameDefinition_CommentAutomationName" xml:space="preserve">
+    <value>Коментар</value>
+  </data>
+  <data name="NameDefinition_RefersToAutomationName" xml:space="preserve">
+    <value>Препраща към</value>
+  </data>
+  <data name="NameDefinition_RangePickerToolTip" xml:space="preserve">
+    <value>Свийте диалога и изберете реферирания диапазон от работния лист</value>
+  </data>
+  <data name="NameDefinition_RangePickerAutomationName" xml:space="preserve">
+    <value>Избор на рефериран диапазон</value>
+  </data>
+  <data name="NameDefinition_RangePickerHelpText" xml:space="preserve">
+    <value>Свийте диалога и изберете реферирания диапазон от работния лист.</value>
+  </data>
+  <data name="NameDefinition_NameLabel" xml:space="preserve">
+    <value>_Име:</value>
+  </data>
+  <data name="NameDefinition_ScopeLabel" xml:space="preserve">
+    <value>_Обхват:</value>
+  </data>
+  <data name="NameDefinition_CommentLabel" xml:space="preserve">
+    <value>_Коментар:</value>
+  </data>
+  <data name="NameDefinition_RefersToLabel" xml:space="preserve">
+    <value>_Препраща към:</value>
+  </data>
+  <data name="NameDefinition_InvalidRangeFormatMessage" xml:space="preserve">
+    <value>Невалиден формат на диапазон. Използвайте: SheetName!A1:B10 или A1:B10</value>
+  </data>
+  <data name="NameDefinition_PleaseEnterNameMessage" xml:space="preserve">
+    <value>Въведете име.</value>
+  </data>
+  <data name="Hyperlink_SetHyperlinkScreenTipTitle" xml:space="preserve">
+    <value>Задаване на екранна подсказка за хипервръзка</value>
+  </data>
+  <data name="Hyperlink_ScreenTipTextLabel" xml:space="preserve">
+    <value>Текст на _екранната подсказка:</value>
+  </data>
+  <data name="Hyperlink_ScreenTipTextAutomationName" xml:space="preserve">
+    <value>Текст на екранната подсказка</value>
+  </data>
+  <data name="Hyperlink_ScreenTipTextHelpText" xml:space="preserve">
+    <value>Въведете текст за екранната подсказка.</value>
+  </data>
+  <data name="Hyperlink_BookmarkOrCellReferenceLabel" xml:space="preserve">
+    <value>_Отметка или препратка към клетка:</value>
+  </data>
+  <data name="Hyperlink_BookmarkOrCellReferenceAutomationName" xml:space="preserve">
+    <value>Отметка или препратка към клетка</value>
+  </data>
+  <data name="Hyperlink_BookmarkOrCellReferenceHelpText" xml:space="preserve">
+    <value>Въведете отметка, дефинирано име или препратка към клетка.</value>
+  </data>
+  <data name="ThreadedComment_TitleFormat" xml:space="preserve">
+    <value>Коментар - {0}</value>
+  </data>
+  <data name="ThreadedComment_MarkAsResolved" xml:space="preserve">
+    <value>_Маркирай като разрешен</value>
+  </data>
+  <data name="ThreadedComment_AddButton" xml:space="preserve">
+    <value>_Добави</value>
+  </data>
+  <data name="ThreadedComment_ReplyButton" xml:space="preserve">
+    <value>_Отговор</value>
+  </data>
+  <data name="ThreadedComment_CancelButton" xml:space="preserve">
+    <value>_Отказ</value>
+  </data>
+  <data name="ThreadedComment_AddCommentAutomationName" xml:space="preserve">
+    <value>Добавяне на коментар</value>
+  </data>
+  <data name="ThreadedComment_ReplyToCommentAutomationName" xml:space="preserve">
+    <value>Отговор на коментар</value>
+  </data>
+  <data name="ThreadedComment_AddCommentHelpText" xml:space="preserve">
+    <value>Добавете коментара в нишка.</value>
+  </data>
+  <data name="ThreadedComment_ReplyToCommentHelpText" xml:space="preserve">
+    <value>Добавете отговор към коментара в нишка.</value>
+  </data>
+  <data name="ThreadedComment_CancelHelpText" xml:space="preserve">
+    <value>Затворете диалога за коментар, без да прилагате промени.</value>
+  </data>
+  <data name="ThreadedComment_CommentAutomationName" xml:space="preserve">
+    <value>Коментар</value>
+  </data>
+  <data name="ThreadedComment_EditCommentAutomationName" xml:space="preserve">
+    <value>Редактиране на коментар</value>
+  </data>
+  <data name="ThreadedComment_CommentHelpText" xml:space="preserve">
+    <value>Въведете текста на коментара в нишка.</value>
+  </data>
+  <data name="ThreadedComment_EditCommentHelpText" xml:space="preserve">
+    <value>Редактирайте текста на основния коментар.</value>
+  </data>
+  <data name="ThreadedComment_CommentLabel" xml:space="preserve">
+    <value>_Коментар:</value>
+  </data>
+  <data name="ThreadedComment_EditCommentLabel" xml:space="preserve">
+    <value>Редактиране на _коментар:</value>
+  </data>
+  <data name="ThreadedComment_ReplyLabel" xml:space="preserve">
+    <value>Отгово_р:</value>
+  </data>
+  <data name="ThreadedComment_ReplyAutomationName" xml:space="preserve">
+    <value>Отговор</value>
+  </data>
+  <data name="ThreadedComment_ReplyHelpText" xml:space="preserve">
+    <value>Въведете незадължителен отговор към коментара в нишка. Натиснете Ctrl+Enter за отговор.</value>
+  </data>
+  <data name="ThreadedComment_MarkAsResolvedAutomationName" xml:space="preserve">
+    <value>Маркирай като разрешен</value>
+  </data>
+  <data name="ThreadedComment_MarkAsResolvedHelpText" xml:space="preserve">
+    <value>Маркирайте коментара в нишка като разрешен.</value>
+  </data>
+  <data name="ThreadedComment_EnterCommentMessage" xml:space="preserve">
+    <value>Въведете коментар.</value>
+  </data>
+  <data name="ThreadedComment_NoThreadedCommentAvailableMessage" xml:space="preserve">
+    <value>Няма наличен коментар в нишка.</value>
+  </data>
+  <data name="ThreadedComment_SelectReplyMessage" xml:space="preserve">
+    <value>Изберете отговор.</value>
+  </data>
+  <data name="ThreadedComment_EnterReplyMessage" xml:space="preserve">
+    <value>Въведете отговор.</value>
+  </data>
+  <data name="ThreadedComment_ReplyToEditOrDeleteAutomationName" xml:space="preserve">
+    <value>Отговор за редактиране или изтриване</value>
+  </data>
+  <data name="ThreadedComment_ReplySelectorHelpText" xml:space="preserve">
+    <value>Изберете отговор на коментар в нишка за редактиране или изтриване.</value>
+  </data>
+  <data name="ThreadedComment_SelectReplyLabel" xml:space="preserve">
+    <value>Избор на отгово_р:</value>
+  </data>
+  <data name="ThreadedComment_SelectedReplyTextAutomationName" xml:space="preserve">
+    <value>Текст на избрания отговор</value>
+  </data>
+  <data name="ThreadedComment_SelectedReplyTextHelpText" xml:space="preserve">
+    <value>Редактирайте текста на избрания отговор, преди да изберете Актуализиране на отговор.</value>
+  </data>
+  <data name="ThreadedComment_SelectedReplyTextLabel" xml:space="preserve">
+    <value>Текст на избрания от_говор:</value>
+  </data>
+  <data name="ThreadedComment_UpdateReplyButton" xml:space="preserve">
+    <value>_Актуализирай отговор</value>
+  </data>
+  <data name="ThreadedComment_DeleteReplyButton" xml:space="preserve">
+    <value>_Изтрий отговор</value>
+  </data>
+  <data name="ThreadedComment_UpdateSelectedReplyAutomationName" xml:space="preserve">
+    <value>Актуализиране на избрания отговор</value>
+  </data>
+  <data name="ThreadedComment_DeleteSelectedReplyAutomationName" xml:space="preserve">
+    <value>Изтриване на избрания отговор</value>
+  </data>
+  <data name="ThreadedComment_UpdateSelectedReplyHelpText" xml:space="preserve">
+    <value>Актуализирайте избрания отговор към коментара в нишка.</value>
+  </data>
+  <data name="ThreadedComment_DeleteSelectedReplyHelpText" xml:space="preserve">
+    <value>Изтрийте избрания отговор към коментара в нишка.</value>
+  </data>
+  <data name="ThreadedComment_ReplyAutomationNameFormat" xml:space="preserve">
+    <value>Отговор {0} от {1}: {2}</value>
+  </data>
+  <data name="SymbolPicker_FontAutomationName" xml:space="preserve">
+    <value>Шрифт на символите</value>
+  </data>
+  <data name="SymbolPicker_FontHelpText" xml:space="preserve">
+    <value>Изберете шрифта, използван за преглед и вмъкване на символи.</value>
+  </data>
+  <data name="SymbolPicker_SubsetAutomationName" xml:space="preserve">
+    <value>Подмножество символи</value>
+  </data>
+  <data name="SymbolPicker_SubsetHelpText" xml:space="preserve">
+    <value>Изберете Unicode подмножеството, показано в мрежата със символи.</value>
+  </data>
+  <data name="SymbolPicker_CharacterCodeAutomationName" xml:space="preserve">
+    <value>Код на знака</value>
+  </data>
+  <data name="SymbolPicker_CharacterCodeHelpText" xml:space="preserve">
+    <value>Въведете шестнадесетичен Unicode код на знак.</value>
+  </data>
+  <data name="SymbolPicker_SelectedSymbolPreviewAutomationName" xml:space="preserve">
+    <value>Преглед на избрания символ</value>
+  </data>
+  <data name="SymbolPicker_SelectedSymbolPreviewHelpText" xml:space="preserve">
+    <value>Показва текущо избрания символ.</value>
+  </data>
+  <data name="SymbolPicker_FontLabel" xml:space="preserve">
+    <value>_Шрифт:</value>
+  </data>
+  <data name="SymbolPicker_SubsetLabel" xml:space="preserve">
+    <value>_Подмножество:</value>
+  </data>
+  <data name="SymbolPicker_SymbolsAutomationName" xml:space="preserve">
+    <value>Символи</value>
+  </data>
+  <data name="SymbolPicker_RecentlyUsedSymbols" xml:space="preserve">
+    <value>Наскоро използвани символи</value>
+  </data>
+  <data name="SymbolPicker_SymbolsTab" xml:space="preserve">
+    <value>_Символи</value>
+  </data>
+  <data name="SymbolPicker_SpecialCharactersTab" xml:space="preserve">
+    <value>Специални _знаци</value>
+  </data>
+  <data name="SymbolPicker_SpecialCharactersAutomationName" xml:space="preserve">
+    <value>Специални знаци</value>
+  </data>
+  <data name="SymbolPicker_SpecialCharacterAutomationNameFormat" xml:space="preserve">
+    <value>{0}, {1}</value>
+  </data>
+  <data name="SymbolPicker_CharacterCodeLabel" xml:space="preserve">
+    <value>Код на _знака:</value>
+  </data>
+  <data name="SymbolPicker_FromUnicodeHex" xml:space="preserve">
+    <value>от: Unicode (hex)</value>
+  </data>
+  <data name="SymbolPicker_GoButton" xml:space="preserve">
+    <value>_Отиди</value>
+  </data>
+  <data name="SymbolPicker_GoToCharacterCodeAutomationName" xml:space="preserve">
+    <value>Отиди до код на знак</value>
+  </data>
+  <data name="SymbolPicker_GoToCharacterCodeHelpText" xml:space="preserve">
+    <value>Изберете символа за въведения Unicode код на знак.</value>
+  </data>
+  <data name="SymbolPicker_InsertButton" xml:space="preserve">
+    <value>_Вмъкни</value>
+  </data>
+  <data name="SymbolPicker_InsertSelectedSymbolAutomationName" xml:space="preserve">
+    <value>Вмъкване на избрания символ</value>
+  </data>
+  <data name="SymbolPicker_InsertSelectedSymbolHelpText" xml:space="preserve">
+    <value>Вмъкнете избрания символ или специален знак.</value>
+  </data>
+  <data name="SymbolPicker_CancelAutomationName" xml:space="preserve">
+    <value>Отказ от вмъкване на символ</value>
+  </data>
+  <data name="SymbolPicker_CancelHelpText" xml:space="preserve">
+    <value>Затворете диалога Символ, без да вмъквате символ.</value>
+  </data>
+  <data name="SymbolPicker_InvalidCharacterCodeMessage" xml:space="preserve">
+    <value>Въведете валиден Unicode код на знак.</value>
+  </data>
+  <data name="SymbolPicker_SymbolAutomationName" xml:space="preserve">
+    <value>Символ</value>
+  </data>
+  <data name="SymbolPicker_SymbolCodeAutomationNameFormat" xml:space="preserve">
+    <value>Символ U+{0:X4}</value>
+  </data>
+  <data name="StatusBar_AverageFormat" xml:space="preserve">
+    <value>Средно: {0}</value>
+  </data>
+  <data name="StatusBar_CountFormat" xml:space="preserve">
+    <value>Брой: {0}</value>
+  </data>
+  <data name="StatusBar_NumericalCountFormat" xml:space="preserve">
+    <value>Числов брой: {0}</value>
+  </data>
+  <data name="StatusBar_SumFormat" xml:space="preserve">
+    <value>Сума: {0}</value>
+  </data>
+  <data name="StatusBar_MinFormat" xml:space="preserve">
+    <value>Мин: {0}</value>
+  </data>
+  <data name="StatusBar_MaxFormat" xml:space="preserve">
+    <value>Макс: {0}</value>
+  </data>
+  <data name="StatusBar_EditMode" xml:space="preserve">
+    <value>Редактиране</value>
+  </data>
+  <data name="StatusBar_ExtendSelectionMode" xml:space="preserve">
+    <value>Разширяване на селекцията</value>
+  </data>
+  <data name="StatusBar_AddToSelectionMode" xml:space="preserve">
+    <value>Добавяне към селекцията</value>
+  </data>
+  <data name="StatusBar_EndMode" xml:space="preserve">
+    <value>Режим End</value>
+  </data>
+  <data name="QuickAnalysis_SelectRangeStatus" xml:space="preserve">
+    <value>Изберете диапазон, за да използвате бърз анализ.</value>
   </data>
 </root>
 

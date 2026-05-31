@@ -28,6 +28,10 @@ public sealed class LocalizationUsageTests
         @"\bnew\s+FailedWorkbookCommand\(\s*(?:\$@?|@?\$?)""",
         RegexOptions.Compiled);
 
+    private static readonly Regex RawAutomationPropertyStringRegex = new(
+        @"(?s)\bAutomationProperties\.Set(?<kind>Name|HelpText)\(\s*[^,]+,\s*(?:\$@?|@?\$?)""",
+        RegexOptions.Compiled);
+
     private static readonly HashSet<string> AllowedRawXamlAttributeValues = new(StringComparer.Ordinal)
     {
         "A",
@@ -112,6 +116,19 @@ public sealed class LocalizationUsageTests
         offenders.Should().BeEmpty("message/progress user-facing text should flow through UiText resources");
     }
 
+    [Fact]
+    public void AppCodeAutomationMetadata_UsesLocalizationResources()
+    {
+        var sourceRoot = Path.GetDirectoryName(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "UiText.cs"))!;
+        var offenders = Directory
+            .EnumerateFiles(sourceRoot, "*.cs", SearchOption.TopDirectoryOnly)
+            .SelectMany(FindRawAutomationPropertyText)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        offenders.Should().BeEmpty("automation names and help text are user-facing and should flow through UiText resources");
+    }
+
     private static IEnumerable<string> FindLocalizationKeys(string path)
     {
         var source = File.ReadAllText(path);
@@ -181,6 +198,13 @@ public sealed class LocalizationUsageTests
         var source = File.ReadAllText(path);
         foreach (Match match in RawFailedWorkbookCommandRegex.Matches(source))
             yield return $"{Path.GetFileName(path)}:{LineNumber(source, match.Index)} FailedWorkbookCommand";
+    }
+
+    private static IEnumerable<string> FindRawAutomationPropertyText(string path)
+    {
+        var source = File.ReadAllText(path);
+        foreach (Match match in RawAutomationPropertyStringRegex.Matches(source))
+            yield return $"{Path.GetFileName(path)}:{LineNumber(source, match.Index)} AutomationProperties.Set{match.Groups["kind"].Value}";
     }
 
     private static int GetLine(XObject node) =>

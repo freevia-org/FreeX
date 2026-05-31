@@ -7,7 +7,13 @@ namespace FreeX.App.Host;
 public sealed class ScreenTipDialog : TextEntryDialog
 {
     public ScreenTipDialog(string? initialText = "")
-        : base("Set Hyperlink ScreenTip", "_ScreenTip text:", initialText)
+        : base(
+            UiText.Get("Hyperlink_SetHyperlinkScreenTipTitle"),
+            UiText.Get("Hyperlink_ScreenTipTextLabel"),
+            initialText,
+            "SetHyperlinkScreenTipTextBox",
+            UiText.Get("Hyperlink_ScreenTipTextAutomationName"),
+            UiText.Get("Hyperlink_ScreenTipTextHelpText"))
     {
     }
 }
@@ -15,7 +21,13 @@ public sealed class ScreenTipDialog : TextEntryDialog
 public sealed class BookmarkDialog : TextEntryDialog
 {
     public BookmarkDialog(string? initialText = "")
-        : base("Select Place in Document", "_Bookmark or cell reference:", initialText)
+        : base(
+            UiText.Get("Hyperlink_SelectPlaceInDocument"),
+            UiText.Get("Hyperlink_BookmarkOrCellReferenceLabel"),
+            initialText,
+            "SelectPlaceinDocumentTextBox",
+            UiText.Get("Hyperlink_BookmarkOrCellReferenceAutomationName"),
+            UiText.Get("Hyperlink_BookmarkOrCellReferenceHelpText"))
     {
     }
 }
@@ -28,7 +40,13 @@ public class TextEntryDialog : Window
 
     public TextEntryDialogResult Result { get; private set; }
 
-    public TextEntryDialog(string title, string label, string? initialText = "")
+    public TextEntryDialog(
+        string title,
+        string label,
+        string? initialText = "",
+        string? automationId = null,
+        string? automationName = null,
+        string? helpText = null)
     {
         Result = CreateResult(initialText);
         Title = title;
@@ -38,9 +56,9 @@ public class TextEntryDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _textBox.Text = initialText ?? "";
-        AutomationProperties.SetName(_textBox, CreateAutomationName(label));
-        AutomationProperties.SetAutomationId(_textBox, CreateAutomationId(title));
-        AutomationProperties.SetHelpText(_textBox, CreateHelpText(label));
+        AutomationProperties.SetName(_textBox, automationName ?? CreateAutomationName(label));
+        AutomationProperties.SetAutomationId(_textBox, automationId ?? CreateAutomationId(title));
+        AutomationProperties.SetHelpText(_textBox, helpText ?? CreateHelpText(label));
         Content = ObjectSizeDialog.CreateSingleInputContent(label, _textBox, () =>
         {
             Result = CreateResult(_textBox.Text);

@@ -2118,8 +2118,8 @@ public sealed class MainWindowSourceHygieneTests
         xaml.IndexOf("x:Name=\"StatusNumericalCountText\"", StringComparison.Ordinal)
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusSumText\"", StringComparison.Ordinal));
 
-        gridStatusSource.Should().Contain("StatusCountText.Text = $\"Count: {stats.Count}\"");
-        gridStatusSource.Should().Contain("StatusNumericalCountText.Text = $\"Numerical Count: {stats.NumericalCount}\"");
+        gridStatusSource.Should().Contain("StatusCountText.Text = UiText.Format(\"StatusBar_CountFormat\", stats.Count)");
+        gridStatusSource.Should().Contain("StatusNumericalCountText.Text = UiText.Format(\"StatusBar_NumericalCountFormat\", stats.NumericalCount)");
         gridStatusSource.Should().Contain("StatusSumText.Text   = stats.NumericalCount > 0");
         gridStatusSource.Should().Contain("if (stats.Count == 0)");
     }
@@ -2339,7 +2339,7 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("QuickAnalysisMenuItem_MouseLeave");
         source.Should().Contain("QuickAnalysisPlanner.BuildHoverPreview(range, option)");
         source.Should().Contain("StatusReadyText.Text = preview.StatusText");
-        source.Should().Contain("StatusReadyText.Text = \"Ready\"");
+        source.Should().Contain("StatusReadyText.Text = UiText.Get(\"MainWindow_Text_Ready\")");
     }
 
     [Fact]

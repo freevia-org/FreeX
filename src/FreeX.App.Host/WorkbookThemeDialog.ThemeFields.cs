@@ -34,29 +34,29 @@ public partial class WorkbookThemeDialog
         {
             var label = FormatThemeColorSlotName(field.Slot);
 
-            AutomationProperties.SetName(field.TextBox, $"{label} theme color");
+            AutomationProperties.SetName(field.TextBox, UiText.Format("WorkbookTheme_ColorAutomationNameFormat", label));
             AutomationProperties.SetAutomationId(field.TextBox, $"WorkbookTheme{field.Slot}ColorBox");
-            AutomationProperties.SetHelpText(field.TextBox, "Enter a theme color as a #RRGGBB value.");
+            AutomationProperties.SetHelpText(field.TextBox, UiText.Get("WorkbookTheme_ColorHelpText"));
 
             AutomationProperties.SetAutomationId(field.Button, $"WorkbookTheme{field.Slot}ColorPickerButton");
-            AutomationProperties.SetHelpText(field.Button, $"Pick the {label} theme color.");
+            AutomationProperties.SetHelpText(field.Button, UiText.Format("WorkbookTheme_PickColorHelpTextFormat", label));
         }
     }
 
     private static string FormatThemeColorSlotName(WorkbookThemeColorSlot slot) => slot switch
     {
-        WorkbookThemeColorSlot.Dark1 => "Dark 1",
-        WorkbookThemeColorSlot.Light1 => "Light 1",
-        WorkbookThemeColorSlot.Dark2 => "Dark 2",
-        WorkbookThemeColorSlot.Light2 => "Light 2",
-        WorkbookThemeColorSlot.Accent1 => "Accent 1",
-        WorkbookThemeColorSlot.Accent2 => "Accent 2",
-        WorkbookThemeColorSlot.Accent3 => "Accent 3",
-        WorkbookThemeColorSlot.Accent4 => "Accent 4",
-        WorkbookThemeColorSlot.Accent5 => "Accent 5",
-        WorkbookThemeColorSlot.Accent6 => "Accent 6",
-        WorkbookThemeColorSlot.Hyperlink => "Hyperlink",
-        WorkbookThemeColorSlot.FollowedHyperlink => "Followed Hyperlink",
+        WorkbookThemeColorSlot.Dark1 => UiText.CreateAutomationName(UiText.Get("WorkbookTheme_Dark1")),
+        WorkbookThemeColorSlot.Light1 => UiText.CreateAutomationName(UiText.Get("WorkbookTheme_Light1")),
+        WorkbookThemeColorSlot.Dark2 => UiText.CreateAutomationName(UiText.Get("WorkbookTheme_Dark2")),
+        WorkbookThemeColorSlot.Light2 => UiText.CreateAutomationName(UiText.Get("WorkbookTheme_Light2")),
+        WorkbookThemeColorSlot.Accent1 => UiText.CreateAutomationName(UiText.Get("WorkbookTheme_Accent1")),
+        WorkbookThemeColorSlot.Accent2 => UiText.CreateAutomationName(UiText.Get("WorkbookTheme_Accent2")),
+        WorkbookThemeColorSlot.Accent3 => UiText.CreateAutomationName(UiText.Get("WorkbookTheme_Accent3")),
+        WorkbookThemeColorSlot.Accent4 => UiText.CreateAutomationName(UiText.Get("WorkbookTheme_Accent4")),
+        WorkbookThemeColorSlot.Accent5 => UiText.CreateAutomationName(UiText.Get("WorkbookTheme_Accent5")),
+        WorkbookThemeColorSlot.Accent6 => UiText.CreateAutomationName(UiText.Get("WorkbookTheme_Accent6")),
+        WorkbookThemeColorSlot.Hyperlink => UiText.CreateAutomationName(UiText.Get("WorkbookTheme_Hyperlink")),
+        WorkbookThemeColorSlot.FollowedHyperlink => UiText.CreateAutomationName(UiText.Get("WorkbookTheme_FollowedHyperlink")),
         _ => slot.ToString()
     };
 }

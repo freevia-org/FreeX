@@ -169,12 +169,14 @@ internal sealed class FreeXUiRun : IDisposable
     {
         var appExe = ResolveAppExecutable();
         var artifacts = CreateArtifactDirectory();
+        SeedOptions(artifacts);
         var startInfo = new ProcessStartInfo(appExe)
         {
             WorkingDirectory = Path.GetDirectoryName(appExe)!,
             UseShellExecute = false
         };
         startInfo.Environment["APPDATA"] = artifacts.FullName;
+        startInfo.Environment["FREEX_APPDATA"] = artifacts.FullName;
 
         var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to launch FreeX.");
 
@@ -185,6 +187,19 @@ internal sealed class FreeXUiRun : IDisposable
         Thread.Sleep(600);
 
         return new FreeXUiRun(process, window, artifacts);
+    }
+
+    private static void SeedOptions(DirectoryInfo artifacts)
+    {
+        var optionsDirectory = Path.Combine(artifacts.FullName, "FreeX");
+        Directory.CreateDirectory(optionsDirectory);
+        File.WriteAllText(
+            Path.Combine(optionsDirectory, "options.json"),
+            """
+            {
+              "AppLanguage": "en-US"
+            }
+            """);
     }
 
     public void ClickCell(int col, int row)
