@@ -82,7 +82,7 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("private void ObjectFillBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: true);");
         source.Should().Contain("private void ObjectOutlineBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: false);");
         source.Should().Contain("private void ObjectGradientBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingShapeGradient();");
-        source.Should().Contain("private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e) => ToggleSelectedDrawingShapeEffect();");
+        source.Should().Contain("private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingShapeEffect();");
         source.Should().Contain("new BringDrawingShapeForwardCommand(sheetId, target?.Id ?? Guid.Empty)");
         source.Should().Contain("new SendDrawingShapeBackwardCommand(sheetId, target?.Id ?? Guid.Empty)");
         source.Should().Contain("new ObjectSizeDialog(target.Width, target.Height, UiText.Get(\"MainWindowMessage_ObjectSizeTitle\"))");
@@ -91,9 +91,10 @@ public sealed class DrawCommandSourceTests
         source.Should().Contain("new SetTextBoxColorsCommand(");
         source.Should().Contain("new ShapeGradientDialog");
         source.Should().Contain("new SetDrawingShapeGradientCommand(");
+        source.Should().Contain("new ShapeEffectsDialog(shape.GetEffectiveEffectPreset())");
         source.Should().Contain("new SetDrawingShapeEffectCommand(");
-        source.Should().Contain("shape.GetEffectiveEffectPreset() == DrawingShapeEffectPreset.None");
-        source.Should().Contain("DrawingShapeEffectPreset.Shadow");
+        source.Should().Contain("dialog.Result.Preset");
+        source.Should().NotContain("shape.GetEffectiveEffectPreset() == DrawingShapeEffectPreset.None");
         source.Should().Contain("new PictureCropDialog(picture)");
         source.Should().Contain("private void PictureCropDialogMenuItem_Click(object sender, RoutedEventArgs e) =>");
         source.Should().Contain("new SetPictureCropCommand(");

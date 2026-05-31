@@ -229,7 +229,7 @@ public partial class MainWindow
     private void ObjectFillBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: true);
     private void ObjectOutlineBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingObjectColor(isFill: false);
     private void ObjectGradientBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingShapeGradient();
-    private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e) => ToggleSelectedDrawingShapeEffect();
+    private void ObjectEffectsBtn_Click(object sender, RoutedEventArgs e) => SetSelectedDrawingShapeEffect();
 
     // ── Page Layout tab ───────────────────────────────────────────────────────
 
@@ -443,7 +443,7 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void ToggleSelectedDrawingShapeEffect()
+    private void SetSelectedDrawingShapeEffect()
     {
         var shape = GetTargetDrawingShape(_currentSheetId);
         if (shape is null)
@@ -456,15 +456,16 @@ public partial class MainWindow
             return;
         }
 
-        var effectPreset = shape.GetEffectiveEffectPreset() == DrawingShapeEffectPreset.None
-            ? DrawingShapeEffectPreset.Shadow
-            : DrawingShapeEffectPreset.None;
+        var dialog = new ShapeEffectsDialog(shape.GetEffectiveEffectPreset()) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Shape Effects",
                 sheetId => new SetDrawingShapeEffectCommand(
                     sheetId,
                     GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty,
-                    effectPreset)))
+                    dialog.Result.Preset)))
             return;
 
         SetActiveCell(shape.Anchor);
