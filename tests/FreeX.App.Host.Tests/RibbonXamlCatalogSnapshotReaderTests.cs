@@ -103,9 +103,9 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
             command => command.ClickHandler == "RecommendedPivotTablesMenuItem_Click" &&
                        command.KeyTip == "RP");
 
-        Command(catalog, "Insert", "Symbols", "Equation").Should().Match<RibbonCommandDefinition>(
-            command => command.IsExplicitlyDisabled &&
-                       command.KeyTip == "EQ");
+        Group(catalog, "Insert", "Symbols").Commands.Select(command => command.Title)
+            .Should()
+            .Equal("Symbol");
 
         Command(catalog, "Help", "Help", "Legal Notices").Should().Match<RibbonCommandDefinition>(
             command => command.Kind == RibbonCommandKind.Button &&
@@ -489,8 +489,6 @@ public sealed class RibbonXamlCatalogSnapshotReaderTests
         new("View", "Ruler", "Show Ruler"),
         new("View", "Formula Bar", "Show Formula Bar"),
         new("View", "100%", "100% Zoom"),
-        new("View", "Hide", "Hide Window"),
-        new("View", "Unhide", "Unhide Window"),
 
         new("Help", "Help Online", "Help (opens project repo)"),
         new("Help", "Feedback", "Send Feedback (opens issue form)")

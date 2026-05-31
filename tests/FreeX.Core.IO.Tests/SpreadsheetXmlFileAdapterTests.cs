@@ -1217,6 +1217,41 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlColumnSpanLayout()
+    {
+        using var source = StreamFromString("""
+            <layout width="21.25"/>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/layout">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Layout">
+                    <ss:Table>
+                      <ss:Column ss:Index="2" ss:Span="2" ss:Width="{@width}" ss:Hidden="1"/>
+                      <ss:Row>
+                        <ss:Cell ss:Index="4"><ss:Data ss:Type="String">After span</ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.ColumnWidths.Should().Contain(new KeyValuePair<uint, double>(2, 21.25));
+        sheet.ColumnWidths.Should().Contain(new KeyValuePair<uint, double>(3, 21.25));
+        sheet.ColumnWidths.Should().Contain(new KeyValuePair<uint, double>(4, 21.25));
+        sheet.HiddenCols.Should().Contain([2u, 3u, 4u]);
+        sheet.GetCell(1, 4)!.Value.Should().Be(new TextValue("After span"));
+    }
+
+    [Fact]
     public void LoadTransformed_UsesCurrentStreamPositionsAndLeavesInputStreamsOpen()
     {
         using var source = PositionedStreamFromString("ignored", "<rows><row name=\"Gamma\"/></rows>");

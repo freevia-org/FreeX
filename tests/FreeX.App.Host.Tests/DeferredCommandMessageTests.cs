@@ -18,11 +18,9 @@ public sealed class DeferredCommandMessageTests
     }
 
     [Theory]
-    [InlineData("New Window")]
     [InlineData("View Side by Side")]
     [InlineData("Synchronous Scrolling")]
     [InlineData("Reset Window Position")]
-    [InlineData("Switch Windows")]
     public void MultiWindowMessage_NamesDeferredWindowHosting(string commandName)
     {
         var message = DeferredCommandMessages.MultiWindow(commandName);
@@ -31,21 +29,6 @@ public sealed class DeferredCommandMessageTests
         message.Body.Should().Contain("deferred");
         message.Body.Should().Contain("multi-window workbook hosting");
         message.Body.Should().Contain("documented parity gap");
-    }
-
-    [Fact]
-    public void ViewWindowPlannerMessage_NamesSingleWindowStateBoundary()
-    {
-        var plan = ViewWindowCommandPlanner.CreatePlan(
-            ViewWindowCommandKind.NewWindow,
-            ViewWorkbookWindowState.SingleVisibleWorkbook);
-
-        var message = ViewWindowCommandPlanner.CreateMessage("New Window", plan);
-
-        message.Title.Should().Be("New Window");
-        message.Body.Should().Contain("deferred");
-        message.Body.Should().Contain("additional live workbook windows");
-        message.Body.Should().Contain("disables unsafe dependent commands");
     }
 
     [Fact]

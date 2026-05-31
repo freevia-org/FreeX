@@ -3,7 +3,6 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -152,82 +151,38 @@ public partial class MainWindow
 
     private void RefreshViewWindowCommandState()
     {
-        var state = GetViewWindowCommandState();
-        ApplyViewWindowCommandState(ViewNewWindowBtn, ViewWindowCommandKind.NewWindow, state);
-        ApplyViewWindowCommandState(ViewHideWindowBtn, ViewWindowCommandKind.Hide, state);
-        ApplyViewWindowCommandState(ViewUnhideWindowBtn, ViewWindowCommandKind.Unhide, state);
-        ApplyViewWindowCommandState(ViewSideBySideBtn, ViewWindowCommandKind.ViewSideBySide, state);
-        ApplyViewWindowCommandState(ViewSynchronousScrollingBtn, ViewWindowCommandKind.SynchronousScrolling, state);
-        ApplyViewWindowCommandState(ViewResetWindowPositionBtn, ViewWindowCommandKind.ResetWindowPosition, state);
-        ApplyViewWindowCommandState(ViewSwitchWindowsBtn, ViewWindowCommandKind.SwitchWindows, state);
-        ApplyLiveWindowCommandEnabledState();
+        ApplyLiveWindowCommandState();
         InvalidateVisibleKeyTipElementCache();
     }
 
-    /// <summary>
-    /// New Window and Switch Windows are now backed by the live <see cref="WorkbookWindowRegistry"/>
-    /// rather than the deferred-stub planner. New Window is always available; Switch Windows enables
-    /// once a second window exists over the shared workbook. (Hide/Unhide/Side-by-Side/Synchronous
-    /// Scrolling/Reset Window Position remain deferred and keep their planner-driven disabled state.)
-    /// </summary>
-    private void ApplyLiveWindowCommandEnabledState()
+    private void ApplyLiveWindowCommandState()
     {
-        if (ViewNewWindowBtn is not null)
-            ViewNewWindowBtn.IsEnabled = true;
+        ApplyRibbonWindowCommandState(
+            ViewNewWindowBtn,
+            isEnabled: true,
+            UiText.Get("MainWindow_TooltipDescription_OpenAnotherLiveWindowForThisWorkbook"));
 
-        if (ViewSwitchWindowsBtn is not null)
-            ViewSwitchWindowsBtn.IsEnabled = (_windowRegistry?.Count ?? 1) > 1;
+        var canSwitchWindows = (_windowRegistry?.Count ?? 1) > 1;
+        ApplyRibbonWindowCommandState(
+            ViewSwitchWindowsBtn,
+            canSwitchWindows,
+            UiText.Get(canSwitchWindows
+                ? "MainWindow_TooltipDescription_SwitchToAnotherVisibleWorkbookWindow"
+                : "MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow"));
     }
 
-    private static ViewWorkbookWindowState GetViewWindowCommandState() =>
-        ViewWorkbookWindowState.SingleVisibleWorkbook;
-
-    private static void ApplyViewWindowCommandState(
-        ButtonBase? button,
-        ViewWindowCommandKind command,
-        ViewWorkbookWindowState state)
+    private static void ApplyRibbonWindowCommandState(
+        System.Windows.Controls.Button? button,
+        bool isEnabled,
+        string description)
     {
         if (button is null)
             return;
 
-        var plan = ViewWindowCommandPlanner.CreatePlan(command, state);
-        var description = UiText.Get(plan.TooltipDescriptionResourceKey);
-        button.IsEnabled = plan.IsEnabled;
+        button.IsEnabled = isEnabled;
         RibbonTooltip.SetDescription(button, description);
         AutomationProperties.SetHelpText(button, description);
-
-        if (button is ToggleButton toggleButton)
-            toggleButton.IsChecked = plan.IsChecked;
     }
-
-    private void ViewWindowCommandBtn_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not ButtonBase button)
-            return;
-
-        var commandName = GetViewWindowCommandName(button);
-        if (!ViewWindowCommandPlanner.TryParseCommandName(commandName, out var command))
-            return;
-
-        var plan = ViewWindowCommandPlanner.CreatePlan(command, GetViewWindowCommandState());
-        if (!plan.IsEnabled)
-        {
-            RefreshViewWindowCommandState();
-            return;
-        }
-
-        var message = ViewWindowCommandPlanner.CreateMessage(commandName, plan);
-        ShowOwnedMessage(message.Body, message.Title, MessageBoxButton.OK, MessageBoxImage.Information);
-        RefreshViewWindowCommandState();
-        FocusSheetGridIfNeeded();
-    }
-
-    private static string GetViewWindowCommandName(ButtonBase button) =>
-        RibbonMetadata.TryGetCommandName(button, out var commandName)
-            ? commandName
-            : button is ContentControl contentControl
-                ? contentControl.Content?.ToString() ?? "This command"
-                : "This command";
 
     private void FreezePanesPickerBtn_Click(object sender, RoutedEventArgs e)
     {

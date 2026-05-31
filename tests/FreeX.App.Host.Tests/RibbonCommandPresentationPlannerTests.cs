@@ -40,6 +40,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Legend", true)]
     [InlineData("Column Chart", false)]
     [InlineData("Recommended Chart", false)]
+    [InlineData("Map Chart", true)]
     [InlineData("Sparkline", false)]
     [InlineData("Table", false)]
     public void ShouldHideFromInsertRibbon_HidesChartFormattingCommandsOnly(string title, bool expected)
@@ -51,7 +52,7 @@ public sealed class RibbonCommandPresentationPlannerTests
     [InlineData("Column Chart", true)]
     [InlineData("Surface Chart", true)]
     [InlineData("3D Surface Chart", true)]
-    [InlineData("Map Chart", true)]
+    [InlineData("Map Chart", false)]
     [InlineData("Column", true)]
     [InlineData("Trend Order", false)]
     [InlineData("R-squared", false)]

@@ -1299,7 +1299,13 @@ public sealed class MainWindowXamlKeyTipTests
         iconSetsMenu.Elements(presentation + "MenuItem")
             .Select(item => LocalizedAttribute(item, "Header"))
             .Should()
-            .Contain(["Directional", "Shapes", "Indicators", "Ratings", "More Rules..."]);
+            .Contain(["More Rules..."]);
+
+        iconSetsMenu.Elements(presentation + "MenuItem")
+            .Where(item => item.Attribute("Tag") is null)
+            .Select(item => LocalizedAttribute(item, "Header"))
+            .Should()
+            .NotContain(["Directional", "Shapes", "Indicators", "Ratings"]);
 
         iconSetsMenu.Descendants(presentation + "MenuItem")
             .Where(item => item.Attribute("Tag") is not null)
@@ -2031,8 +2037,7 @@ public sealed class MainWindowXamlKeyTipTests
         var missing = document
             .Descendants()
             .Where(element => element.Name == presentation + "Button" || element.Name == presentation + "ToggleButton")
-            .Where(button =>
-                button.Attribute("Click")?.Value is "PageLayoutDeferredBtn_Click" or "ViewWindowCommandBtn_Click")
+            .Where(button => button.Attribute("Click")?.Value == "PageLayoutDeferredBtn_Click")
             .Where(button =>
                 LocalizedAttribute(button, local + "RibbonTooltip.Description")?.Contains("Deferred:", StringComparison.OrdinalIgnoreCase) != true)
             .Select(button => LocalizedAttribute(button, local + "RibbonTooltip.Title") ?? LocalizedAttribute(button, "Content") ?? "Button")
@@ -2042,34 +2047,29 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
-    public void ViewWindowDeferredCommands_ExposeStableKeyTipsAndDeferredTooltips()
+    public void ViewWindowUnsupportedCommands_AreRemovedFromTheRibbon()
     {
-        // Multi-window slice 1 wired New Window and Switch Windows to live, registry-backed handlers
-        // (ViewNewWindowBtn_Click / ViewSwitchWindowsBtn_Click), so they no longer route through the
-        // deferred-stub ViewWindowCommandBtn_Click handler. Only the still-deferred window commands
-        // (Hide/Unhide/View Side by Side/Synchronous Scrolling/Reset Window Position) remain here.
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         XNamespace local = "clr-namespace:FreeX.App.Host";
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
-        document
+        var windowCommandNames = document
             .Descendants()
             .Where(element => element.Name == presentation + "Button" || element.Name == presentation + "ToggleButton")
-            .Where(button => button.Attribute("Click")?.Value == "ViewWindowCommandBtn_Click")
-            .Select(button => new
-            {
-                Title = LocalizedAttribute(button, local + "RibbonTooltip.Title"),
-                KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
-                Description = LocalizedAttribute(button, local + "RibbonTooltip.Description")
-            })
+            .Where(button => CommandName(button, local) is not null)
+            .Select(button => CommandName(button, local))
+            .ToArray();
+
+        windowCommandNames.Should().NotContain([
+            "Hide",
+            "Unhide",
+            "View Side by Side",
+            "Synchronous Scrolling",
+            "Reset Window Position"]);
+        document.Descendants()
+            .Select(element => element.Attribute("Click")?.Value)
             .Should()
-            .Equal([
-                new { Title = (string?)"Hide", KeyTip = (string?)"H", Description = (string?)"Deferred: requires workbook-window visibility state." },
-                new { Title = (string?)"Unhide", KeyTip = (string?)"U", Description = (string?)"Deferred: requires workbook-window visibility state." },
-                new { Title = (string?)"View Side by Side", KeyTip = (string?)"B", Description = (string?)"Deferred: requires multi-window workbook hosting and synchronized scroll routing." },
-                new { Title = (string?)"Synchronous Scrolling", KeyTip = (string?)"SS", Description = (string?)"Deferred: requires paired workbook windows with synchronized viewport state." },
-                new { Title = (string?)"Reset Window Position", KeyTip = (string?)"RP", Description = (string?)"Deferred: requires paired workbook windows and side-by-side layout state." }
-            ]);
+            .NotContain("ViewWindowCommandBtn_Click");
     }
 
     [Fact]
@@ -2086,32 +2086,41 @@ public sealed class MainWindowXamlKeyTipTests
             {
                 Title = LocalizedAttribute(button, local + "RibbonTooltip.Title"),
                 KeyTip = button.Attribute(local + "RibbonTooltip.KeyTip")?.Value,
-                Click = button.Attribute("Click")?.Value
+                Click = button.Attribute("Click")?.Value,
+                Description = LocalizedAttribute(button, local + "RibbonTooltip.Description")
             })
             .ToList();
 
         liveWindowCommands.Should().BeEquivalentTo(new[]
         {
-            new { Title = (string?)"New Window", KeyTip = (string?)"NW", Click = (string?)"ViewNewWindowBtn_Click" },
-            new { Title = (string?)"Switch Windows", KeyTip = (string?)"W", Click = (string?)"ViewSwitchWindowsBtn_Click" }
+            new
+            {
+                Title = (string?)"New Window",
+                KeyTip = (string?)"NW",
+                Click = (string?)"ViewNewWindowBtn_Click",
+                Description = (string?)"Open another live window for this workbook."
+            },
+            new
+            {
+                Title = (string?)"Switch Windows",
+                KeyTip = (string?)"W",
+                Click = (string?)"ViewSwitchWindowsBtn_Click",
+                Description = (string?)"Switch to another visible workbook window."
+            }
         });
     }
 
     [Fact]
-    public void ViewWindowDeferredCommands_UseOwnedDeferredMessage()
+    public void ViewWindowState_UsesLocalizedLiveCommandTooltips()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
-        var handlerStart = source.IndexOf("private void ViewWindowCommandBtn_Click(", StringComparison.Ordinal);
-        handlerStart.Should().BeGreaterThanOrEqualTo(0);
-        var handlerEnd = source.IndexOf("private void FreezePanesPickerBtn_Click(", handlerStart, StringComparison.Ordinal);
-        handlerEnd.Should().BeGreaterThan(handlerStart);
-        var handler = source[handlerStart..handlerEnd];
 
-        handler.Should().Contain("ViewWindowCommandPlanner.CreatePlan(command, GetViewWindowCommandState())");
-        handler.Should().Contain("ViewWindowCommandPlanner.CreateMessage(commandName, plan)");
-        handler.Should().Contain("ShowOwnedMessage(message.Body, message.Title, MessageBoxButton.OK, MessageBoxImage.Information);");
-        handler.Should().Contain("FocusSheetGridIfNeeded();");
-        handler.Should().NotContain("MessageBox.Show(");
+        source.Should().Contain("UiText.Get(\"MainWindow_TooltipDescription_OpenAnotherLiveWindowForThisWorkbook\")");
+        source.Should().Contain("UiText.Get(canSwitchWindows");
+        source.Should().Contain("MainWindow_TooltipDescription_SwitchToAnotherVisibleWorkbookWindow");
+        source.Should().Contain("MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow");
+        source.Should().NotContain("ViewWindowCommandPlanner");
+        source.Should().NotContain("ViewWindowCommandBtn_Click");
     }
 
     [Fact]

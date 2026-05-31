@@ -863,7 +863,6 @@
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_DataBars}"               local:RibbonTooltip.KeyTip="D" SubmenuOpened="CfDataBarsMenuItem_SubmenuOpened" local:RibbonMetadata.CommandName="Data Bars"/>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_ColorScales}"            local:RibbonTooltip.KeyTip="C" SubmenuOpened="CfColorScalesMenuItem_SubmenuOpened" local:RibbonMetadata.CommandName="Color Scales"/>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_IconSets}"                  local:RibbonTooltip.KeyTip="I" local:RibbonMetadata.CommandName="Icon Sets">
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Directional}" local:RibbonTooltip.KeyTip="ID" IsEnabled="False" local:RibbonMetadata.CommandName="Directional"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3Arrows}"               local:RibbonTooltip.KeyTip="I3" Tag="3Arrows" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Arrows"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3ArrowsGray}"        local:RibbonTooltip.KeyTip="IG" Tag="3ArrowsGray" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Arrows (Gray)"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_4Arrows}"               local:RibbonTooltip.KeyTip="I4" Tag="4Arrows" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="4 Arrows"/>
@@ -871,7 +870,6 @@
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_5Arrows}"               local:RibbonTooltip.KeyTip="I5" Tag="5Arrows" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="5 Arrows"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_5ArrowsGray}"        local:RibbonTooltip.KeyTip="IJ" Tag="5ArrowsGray" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="5 Arrows (Gray)"/>
                                                 <Separator/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Shapes}" local:RibbonTooltip.KeyTip="IK" IsEnabled="False" local:RibbonMetadata.CommandName="Shapes"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3TrafficLights}"       local:RibbonTooltip.KeyTip="IT" Tag="3TrafficLights1" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Traffic Lights"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3TrafficLightsRimmed}" local:RibbonTooltip.KeyTip="IR" Tag="3TrafficLights2" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Traffic Lights (Rimmed)"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3Signs}"                local:RibbonTooltip.KeyTip="IS" Tag="3Signs" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Signs"/>
@@ -879,11 +877,9 @@
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3SymbolsUncircled}"  local:RibbonTooltip.KeyTip="IU" Tag="3Symbols2" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Symbols (Uncircled)"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_3Flags}"                local:RibbonTooltip.KeyTip="IF" Tag="3Flags" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="3 Flags"/>
                                                 <Separator/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Indicators}" local:RibbonTooltip.KeyTip="IO" IsEnabled="False" local:RibbonMetadata.CommandName="Indicators"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_4TrafficLights}"       local:RibbonTooltip.KeyTip="IL" Tag="4TrafficLights" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="4 Traffic Lights"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_4RedToBlack}"         local:RibbonTooltip.KeyTip="IB" Tag="4RedToBlack" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="4 Red To Black"/>
                                                 <Separator/>
-                                                <MenuItem Header="{local:Loc Key=MainWindow_Header_Ratings}" local:RibbonTooltip.KeyTip="IZ" IsEnabled="False" local:RibbonMetadata.CommandName="Ratings"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_4Ratings}"              local:RibbonTooltip.KeyTip="I9" Tag="4Rating" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="4 Ratings"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_5Ratings}"              local:RibbonTooltip.KeyTip="IA" Tag="5Rating" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="5 Ratings"/>
                                                 <MenuItem Header="{local:Loc Key=MainWindow_Header_5Quarters}"             local:RibbonTooltip.KeyTip="IQ" Tag="5Quarters" Click="CfIconSetPresetMenuItem_Click" local:RibbonMetadata.CommandName="5 Quarters"/>
@@ -1399,9 +1395,6 @@
                                     <Button Content="{local:Loc Key=MainWindow_Content_Funnel}"       Width="66"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ChartFunnelMenuItem_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FunnelChart}" local:RibbonTooltip.KeyTip="FU"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertAFunnelChartToCompareStagedValues}" local:RibbonMetadata.CommandName="Funnel Chart"/>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_Map}"          Width="58"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="DeferredChartFamilyMenuItem_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_MapChart}" local:RibbonTooltip.KeyTip="MP"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRetainedFromXLSXFilesAuthoringAndRenderingNeedADedicatedDataMode_568CFF74}" local:RibbonMetadata.CommandName="Map Chart"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_3DColumn}"    Width="82"  Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="Chart3DColumnMenuItem_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_3DColumnChart}" local:RibbonTooltip.KeyTip="3C"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_InsertA3DClusteredColumnChartForTheSelectedData}" local:RibbonMetadata.CommandName="3D Column Chart"/>
@@ -1741,10 +1734,6 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="InsertSymbolsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <Button Content="{local:Loc Key=MainWindow_Content_Equation}" Width="82" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" IsEnabled="False"
-                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Equation}"
-                                        local:RibbonTooltip.KeyTip="EQ"
-                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_EquationAuthoringIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Equation"/>
                                 <Button Content="{local:Loc Key=MainWindow_Content_Symbol}" Width="80" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SymbolPickerBtn_Click"
                                         local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Symbol}"
                                         local:RibbonTooltip.KeyTip="SY"
@@ -2808,7 +2797,7 @@
                                     <Button x:Name="ViewNewWindowBtn" Content="{local:Loc Key=MainWindow_Content_NewWindow}" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewNewWindowBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_NewWindow}"
                                             local:RibbonTooltip.KeyTip="NW"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresMultipleLiveWindowsOverTheSameWorkbookSession}" local:RibbonMetadata.CommandName="New Window"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenAnotherLiveWindowForThisWorkbook}" local:RibbonMetadata.CommandName="New Window"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_ArrangeAll}" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ArrangeAllPickerBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ArrangeAll}"
                                             local:RibbonTooltip.KeyTip="A"
@@ -2842,32 +2831,10 @@
                                                   local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Split}"
                                                   local:RibbonTooltip.KeyTip="SP"
                                                   local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SplitTheWorksheetAtTheSelectedCellOrRemoveTheCurrentSplitCreatingASplitC_2DAD6EB5}" local:RibbonMetadata.CommandName="Split"/>
-                                    <Button x:Name="ViewHideWindowBtn" Content="{local:Loc Key=MainWindow_Content_Hide}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowCommandBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Hide}"
-                                            local:RibbonTooltip.KeyTip="H"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresWorkbookWindowVisibilityState}" local:RibbonMetadata.CommandName="Hide"/>
-                                    <Button x:Name="ViewUnhideWindowBtn" Content="{local:Loc Key=MainWindow_Content_Unhide}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowCommandBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Unhide}"
-                                            local:RibbonTooltip.KeyTip="U"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresWorkbookWindowVisibilityState}" local:RibbonMetadata.CommandName="Unhide"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Vertical">
-                                    <ToggleButton x:Name="ViewSideBySideBtn" Content="{local:Loc Key=MainWindow_Content_ViewSideBySide}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="ViewWindowCommandBtn_Click"
-                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ViewSideBySide}"
-                                                  local:RibbonTooltip.KeyTip="B"
-                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresMultiWindowWorkbookHostingAndSynchronizedScrollRouting}" local:RibbonMetadata.CommandName="View Side by Side"/>
-                                    <ToggleButton x:Name="ViewSynchronousScrollingBtn" Content="{local:Loc Key=MainWindow_Content_SynchronousScrolling}" Width="176" Height="22" Margin="1,1" Style="{StaticResource RibbonToggleBtn}" Click="ViewWindowCommandBtn_Click"
-                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SynchronousScrolling}"
-                                                  local:RibbonTooltip.KeyTip="SS"
-                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresPairedWorkbookWindowsWithSynchronizedViewportState}" local:RibbonMetadata.CommandName="Synchronous Scrolling"/>
-                                    <Button x:Name="ViewResetWindowPositionBtn" Content="{local:Loc Key=MainWindow_Content_ResetWindowPosition}" Width="176" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewWindowCommandBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ResetWindowPosition}"
-                                            local:RibbonTooltip.KeyTip="RP"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresPairedWorkbookWindowsAndSideBySideLayoutState}" local:RibbonMetadata.CommandName="Reset Window Position"/>
                                     <Button x:Name="ViewSwitchWindowsBtn" Content="{local:Loc Key=MainWindow_Content_SwitchWindows}" Width="136" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ViewSwitchWindowsBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_SwitchWindows}"
                                             local:RibbonTooltip.KeyTip="W"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeferredRequiresAMultiWindowWorkbookRegistry}" local:RibbonMetadata.CommandName="Switch Windows"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SwitchToAnotherVisibleWorkbookWindow}" local:RibbonMetadata.CommandName="Switch Windows"/>
                                 </StackPanel>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Window}" Style="{StaticResource GroupLbl}"/></Border>
@@ -2924,10 +2891,6 @@
                                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
                                     <StackPanel VerticalAlignment="Center" Margin="0,0,4,0">
-                                        <CheckBox x:Name="TableDesignHeaderRowBtn" Content="{local:Loc Key=MainWindow_Content_HeaderRow}" Width="102" Margin="4,1" IsChecked="True" IsEnabled="False"
-                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_HeaderRow}"
-                                                  local:RibbonTooltip.KeyTip="H"
-                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_HeaderRowsRemainVisibleForStructuredTablesInFreeX}" local:RibbonMetadata.CommandName="Header Row"/>
                                         <CheckBox x:Name="TableDesignTotalRowBtn" Content="{local:Loc Key=MainWindow_Content_TotalRow}" Width="102" Margin="4,1" Click="TableDesignTotalRowBtn_Click"
                                                   local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_TotalRow}"
                                                   local:RibbonTooltip.KeyTip="T"
@@ -2995,7 +2958,7 @@
                                     <Button Content="{local:Loc Key=MainWindow_Content_PivotTableName}" Width="116" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableNameBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PivotTableName}"
                                             local:RibbonTooltip.KeyTip="N"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RenamingPivotTablesFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="PivotTable Name"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RenameTheSelectedPivotTable}" local:RibbonMetadata.CommandName="PivotTable Name"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_Options}" Width="78" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableOptionsBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PivotTableOptions}"
                                             local:RibbonTooltip.KeyTip="O"
@@ -3070,15 +3033,15 @@
                                     <Button Content="{local:Loc Key=MainWindow_Content_Clear}" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableClearBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Clear}"
                                             local:RibbonTooltip.KeyTip="CL"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ClearingPivotTableFieldsFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Clear"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ClearFiltersSortStateAndItemSelectionsFromTheSelectedPivotTable}" local:RibbonMetadata.CommandName="Clear"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_Select}" Width="70" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableSelectBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Select}"
                                             local:RibbonTooltip.KeyTip="SE"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_PivotTableSelectionShortcutsAreDeferredInFreeX}" local:RibbonMetadata.CommandName="Select"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SelectTheSelectedPivotTableReportRange}" local:RibbonMetadata.CommandName="Select"/>
                                     <Button Content="{local:Loc Key=MainWindow_Content_MovePivotTable}" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="PivotTableMoveBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_MovePivotTable}"
                                             local:RibbonTooltip.KeyTip="M"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MovingPivotTablesFromTheRibbonIsDeferredInFreeX}" local:RibbonMetadata.CommandName="Move PivotTable"/>
+                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_MoveTheSelectedPivotTableToAnotherLocationOnTheCurrentWorksheet}" local:RibbonMetadata.CommandName="Move PivotTable"/>
                                 </StackPanel>
                                 <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Actions}" Style="{StaticResource GroupLbl}"/></Border>
                             </Grid>

@@ -27,6 +27,18 @@ public sealed class TableDesignCommandSourceTests
     }
 
     [Fact]
+    public void TableDesignHeaderRow_IsHiddenUntilARealHeaderRowCommandExists()
+    {
+        var xaml = ReadTableDesignTabXaml();
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.TableDesignCommands.cs"));
+
+        xaml.Should().NotContain("TableDesignHeaderRowBtn");
+        xaml.Should().NotContain("local:RibbonMetadata.CommandName=\"Header Row\"");
+        xaml.Should().NotContain("MainWindow_TooltipDescription_HeaderRowsRemainVisibleForStructuredTablesInFreeX");
+        source.Should().NotContain("TableDesignHeaderRowBtn");
+    }
+
+    [Fact]
     public void TableDesignTotalRow_UsesPhysicalTotalsRowCommandAndReappliesKnownGalleryStyle()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.TableDesignCommands.cs"));

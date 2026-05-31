@@ -84,8 +84,7 @@ public static partial class RibbonCommandPresentationPlanner
                 "radar chart" or
                 "stock chart" or
                 "surface chart" or
-                "3d surface chart" or
-                "map chart";
+                "3d surface chart";
 
     private static bool IsLargeRibbonCommand(string name) =>
         name == "paste" ||
