@@ -428,7 +428,7 @@ public sealed class MainWindowAdaptiveRibbonTests
         {
             using var harness = MainWindowHarness.Create();
 
-            harness.SelectRibbonTab("View", 640);
+            harness.SelectRibbonTab("View", 220);
             var arrangeAll = harness.CollapsedActiveMenuItem("Window", "Arrange All");
 
             arrangeAll.Should().NotBeNull(harness.DebugActiveRibbonChildren);
@@ -588,7 +588,7 @@ public sealed class MainWindowAdaptiveRibbonTests
                 new RibbonFallbackExpectation("Data", 1120, Expanded: ["Sort & Filter", "Data Tools", "Forecast"], Collapsed: []),
                 new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup"], Collapsed: ["Arrange"]),
                 new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show"], Collapsed: []),
-                new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views", "Show"], Collapsed: ["Zoom", "Window"])
+                new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views", "Show", "Window"], Collapsed: ["Zoom"])
             };
 
             foreach (var expectation in expectations)
