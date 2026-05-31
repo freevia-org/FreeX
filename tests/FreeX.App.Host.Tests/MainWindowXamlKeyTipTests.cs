@@ -392,6 +392,60 @@ public sealed class MainWindowXamlKeyTipTests
     }
 
     [Fact]
+    public void BackstageInteractiveIcons_UseLargeReadableSlots()
+    {
+        var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+        var resources = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "Resources", "MainWindowResources.xaml"));
+        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace local = "clr-namespace:FreeX.App.Host";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var sidebarStyle = StyleByKey(resources, presentation, x, "BackstageSidebarIcon");
+        SetterValue(sidebarStyle, presentation, "IconSize").Should().Be("24");
+        SetterValue(sidebarStyle, presentation, "Margin").Should().Be("0,0,12,0");
+
+        var pinButtonStyle = StyleByKey(resources, presentation, x, "BackstageRecentPinCommandButton");
+        SetterValue(pinButtonStyle, presentation, "Width").Should().Be("32");
+        SetterValue(pinButtonStyle, presentation, "Height").Should().Be("32");
+
+        var pinIconStyle = StyleByKey(resources, presentation, x, "BackstageRecentPinCommandIcon");
+        SetterValue(pinIconStyle, presentation, "IconSize").Should().Be("24");
+
+        var sidebar = document
+            .Descendants(presentation + "DockPanel")
+            .Single(element => element.Attribute(x + "Name")?.Value == "StartScreenSidebar");
+
+        var sidebarIcons = sidebar
+            .Descendants(local + "RibbonIcon")
+            .ToList();
+
+        sidebarIcons.Should().NotBeEmpty();
+        sidebarIcons.Should().OnlyContain(icon => icon.Attribute("IconSize") == null);
+        sidebarIcons
+            .Select(icon => icon.Attribute("Style")?.Value)
+            .Should()
+            .OnlyContain(style =>
+                string.Equals(style, "{StaticResource BackstageSidebarIcon}", StringComparison.Ordinal) ||
+                string.Equals(style, "{StaticResource BackstageSidebarBackIcon}", StringComparison.Ordinal));
+
+        var pinButtons = document
+            .Descendants(presentation + "Button")
+            .Where(button => button.Attribute("AutomationProperties.AutomationId")?.Value is
+                "BackstageRecentPinButton" or "BackstagePinnedUnpinButton")
+            .ToList();
+
+        pinButtons.Should().HaveCount(2);
+        pinButtons.Select(button => button.Attribute("Style")?.Value)
+            .Should()
+            .OnlyContain(style => string.Equals(style, "{StaticResource BackstageRecentPinCommandButton}", StringComparison.Ordinal));
+        pinButtons
+            .SelectMany(button => button.Descendants(local + "RibbonIcon"))
+            .Select(icon => icon.Attribute("Style")?.Value)
+            .Should()
+            .OnlyContain(style => string.Equals(style, "{StaticResource BackstageRecentPinCommandIcon}", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void BackstageSaveAsButton_UsesAccessKeyMatchingKeyTip()
     {
         var document = XDocument.Load(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
@@ -2893,6 +2947,18 @@ public sealed class MainWindowXamlKeyTipTests
 
     private static bool ContainsExcludedStatus(string? value) =>
         ResolveLocalizedValue(value)?.Contains("excluded", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static XElement StyleByKey(XDocument document, XNamespace presentation, XNamespace x, string key) =>
+        document
+            .Descendants(presentation + "Style")
+            .Single(style => style.Attribute(x + "Key")?.Value == key);
+
+    private static string? SetterValue(XElement style, XNamespace presentation, string property) =>
+        style
+            .Elements(presentation + "Setter")
+            .Single(setter => setter.Attribute("Property")?.Value == property)
+            .Attribute("Value")
+            ?.Value;
 
     private static string? CommandName(XElement element, XNamespace local) =>
         element.Attribute(local + "RibbonMetadata.CommandName")?.Value ??

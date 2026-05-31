@@ -575,5 +575,27 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
 
+        <Style x:Key="BackstageSidebarIcon" TargetType="{x:Type local:RibbonIcon}">
+            <Setter Property="IconSize" Value="24"/>
+            <Setter Property="Foreground" Value="{StaticResource FreeXWhiteBrush}"/>
+            <Setter Property="Margin" Value="0,0,12,0"/>
+        </Style>
+
+        <Style x:Key="BackstageSidebarBackIcon" BasedOn="{StaticResource BackstageSidebarIcon}" TargetType="{x:Type local:RibbonIcon}">
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+
+        <Style x:Key="BackstageRecentPinCommandButton" BasedOn="{StaticResource RibbonBtn}" TargetType="Button">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="4"/>
+        </Style>
+
+        <Style x:Key="BackstageRecentPinCommandIcon" TargetType="{x:Type local:RibbonIcon}">
+            <Setter Property="IconSize" Value="24"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
         </ResourceDictionary>
 
