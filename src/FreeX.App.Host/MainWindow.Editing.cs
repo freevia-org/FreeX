@@ -509,6 +509,7 @@ public partial class MainWindow
                 var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(addr.Value);
                 FormulaBar.Text = FormatFormulaBarText(cell, addr.Value);
             }
+            HideInlineEditor(commit: false);
             ClearFormulaRangeEntryState();
             ClearClipboardVisualState();
             SheetGrid.Focus();
