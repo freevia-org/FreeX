@@ -22,7 +22,7 @@ internal static class RibbonAdaptiveLayoutEngine
         double fixedChromeWidth,
         string? selectedTabHeader)
     {
-        var states = RibbonAdaptiveLayoutPlanner.Plan(availableWidth, groups, fixedChromeWidth).ToArray();
+        var states = RibbonAdaptiveLayoutPlanner.Plan(availableWidth, groups, fixedChromeWidth);
         RibbonAdaptiveTabProfiles.ApplyPlanOverridesInPlace(
             availableWidth,
             groupProfileKeys,

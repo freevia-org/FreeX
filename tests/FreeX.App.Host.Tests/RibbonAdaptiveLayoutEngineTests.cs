@@ -264,6 +264,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         method.Should().NotContain("ApplyRuntimeVisibilityStates(");
         method.Should().NotContain("states = RibbonAdaptiveTabProfiles");
         method.Should().NotContain("states = RibbonAdaptivePriorityPlanner");
+        method.Should().NotContain("RibbonAdaptiveLayoutPlanner.Plan(availableWidth, groups, fixedChromeWidth).ToArray()");
     }
 
     [Fact]

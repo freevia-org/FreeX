@@ -2,7 +2,7 @@ namespace FreeX.App.Host;
 
 public static class RibbonAdaptiveLayoutPlanner
 {
-    public static IReadOnlyList<RibbonAdaptiveGroupState> Plan(
+    public static RibbonAdaptiveGroupState[] Plan(
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroup> groups,
         double fixedChromeWidth = 0)
@@ -11,21 +11,32 @@ public static class RibbonAdaptiveLayoutPlanner
         var states = new RibbonAdaptiveGroupState[groups.Count];
         Array.Fill(states, RibbonAdaptiveGroupState.Full);
 
-        if (groups.Count == 0 || Fits(availableWidth, groups, states))
+        if (groups.Count == 0)
+            return states;
+
+        var width = 0d;
+        for (var index = 0; index < groups.Count; index++)
+            width += WidthFor(groups[index], RibbonAdaptiveGroupState.Full);
+
+        if (width <= availableWidth)
             return states;
 
         for (var index = groups.Count - 1; index >= 0; index--)
         {
+            var group = groups[index];
             states[index] = RibbonAdaptiveGroupState.SmallWithLabels;
-            if (Fits(availableWidth, groups, states))
+            width = ReplaceWidth(width, group, RibbonAdaptiveGroupState.Full, RibbonAdaptiveGroupState.SmallWithLabels);
+            if (width <= availableWidth)
                 return states;
 
             states[index] = RibbonAdaptiveGroupState.IconOnly;
-            if (Fits(availableWidth, groups, states))
+            width = ReplaceWidth(width, group, RibbonAdaptiveGroupState.SmallWithLabels, RibbonAdaptiveGroupState.IconOnly);
+            if (width <= availableWidth)
                 return states;
 
             states[index] = RibbonAdaptiveGroupState.Collapsed;
-            if (Fits(availableWidth, groups, states))
+            width = ReplaceWidth(width, group, RibbonAdaptiveGroupState.IconOnly, RibbonAdaptiveGroupState.Collapsed);
+            if (width <= availableWidth)
                 return states;
         }
 
@@ -38,21 +49,12 @@ public static class RibbonAdaptiveLayoutPlanner
         IReadOnlyList<RibbonAdaptiveGroupState> plannedStates) =>
         RibbonAdaptiveTabProfiles.ApplyBreakpointOverrides(availableWidth, groupNames, plannedStates);
 
-    private static bool Fits(
-        double availableWidth,
-        IReadOnlyList<RibbonAdaptiveGroup> groups,
-        IReadOnlyList<RibbonAdaptiveGroupState> states)
-    {
-        var width = 0d;
-        for (var index = 0; index < groups.Count; index++)
-        {
-            width += WidthFor(groups[index], states[index]);
-            if (width > availableWidth)
-                return false;
-        }
-
-        return true;
-    }
+    private static double ReplaceWidth(
+        double width,
+        RibbonAdaptiveGroup group,
+        RibbonAdaptiveGroupState previousState,
+        RibbonAdaptiveGroupState nextState) =>
+        width - WidthFor(group, previousState) + WidthFor(group, nextState);
 
     private static double WidthFor(RibbonAdaptiveGroup group, RibbonAdaptiveGroupState state) =>
         state switch
