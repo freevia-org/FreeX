@@ -6,6 +6,9 @@ namespace FreeX.Core.Model.Tests;
 
 public class CommentCommandTests
 {
+    private static readonly DateTimeOffset CreatedAtUtc = new(2026, 5, 31, 8, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset ModifiedAtUtc = new(2026, 5, 31, 9, 30, 0, TimeSpan.Zero);
+
     private static (Workbook wb, Sheet sheet, ICommandContext ctx) Setup()
     {
         var wb = new Workbook("test");
@@ -165,11 +168,13 @@ public class CommentCommandTests
         var (_, sheet, ctx) = Setup();
         var addr = new CellAddress(sheet.Id, 1, 1);
 
-        var cmd = new SetThreadedCommentCommand(sheet.Id, addr, "Start discussion");
+        var cmd = new SetThreadedCommentCommand(sheet.Id, addr, "Start discussion", timestampUtc: CreatedAtUtc);
         var outcome = cmd.Apply(ctx);
 
         outcome.Success.Should().BeTrue();
         sheet.ThreadedComments[addr].Text.Should().Be("Start discussion");
+        sheet.ThreadedComments[addr].CreatedAtUtc.Should().Be(CreatedAtUtc);
+        sheet.ThreadedComments[addr].ModifiedAtUtc.Should().Be(CreatedAtUtc);
 
         cmd.Revert(ctx);
 
@@ -183,9 +188,13 @@ public class CommentCommandTests
         var addr = new CellAddress(sheet.Id, 1, 1);
         sheet.ThreadedComments[addr] = new ThreadedComment("Old", "Quinn");
 
-        var cmd = new SetThreadedCommentCommand(sheet.Id, addr, "New", "Codex");
+        var cmd = new SetThreadedCommentCommand(sheet.Id, addr, "New", "Codex", CreatedAtUtc);
         cmd.Apply(ctx);
-        sheet.ThreadedComments[addr].Should().Be(new ThreadedComment("New", "Codex"));
+        sheet.ThreadedComments[addr].Should().Be(new ThreadedComment("New", "Codex")
+        {
+            CreatedAtUtc = CreatedAtUtc,
+            ModifiedAtUtc = CreatedAtUtc
+        });
 
         cmd.Revert(ctx);
 
@@ -203,14 +212,19 @@ public class CommentCommandTests
         };
         sheet.ThreadedComments[addr] = original;
 
-        var command = new AddThreadedCommentReplyCommand(sheet.Id, addr, "Second", "User");
+        var command = new AddThreadedCommentReplyCommand(sheet.Id, addr, "Second", "User", ModifiedAtUtc);
         var outcome = command.Apply(ctx);
 
         outcome.Success.Should().BeTrue();
         outcome.AffectedCells.Should().ContainSingle().Which.Should().Be(addr);
+        sheet.ThreadedComments[addr].ModifiedAtUtc.Should().Be(ModifiedAtUtc);
         sheet.ThreadedComments[addr].Replies.Should().Equal(
             new CommentReply("First", "Codex"),
-            new CommentReply("Second", "User"));
+            new CommentReply("Second", "User")
+            {
+                CreatedAtUtc = ModifiedAtUtc,
+                ModifiedAtUtc = ModifiedAtUtc
+            });
 
         command.Revert(ctx);
 
@@ -242,12 +256,16 @@ public class CommentCommandTests
         };
         sheet.ThreadedComments[addr] = original;
 
-        var command = new UpdateThreadedCommentTextCommand(sheet.Id, addr, "New root");
+        var command = new UpdateThreadedCommentTextCommand(sheet.Id, addr, "New root", ModifiedAtUtc);
         var outcome = command.Apply(ctx);
 
         outcome.Success.Should().BeTrue();
         outcome.AffectedCells.Should().ContainSingle().Which.Should().Be(addr);
-        sheet.ThreadedComments[addr].Should().Be(original with { Text = "New root" });
+        sheet.ThreadedComments[addr].Should().Be(original with
+        {
+            Text = "New root",
+            ModifiedAtUtc = ModifiedAtUtc
+        });
 
         command.Revert(ctx);
 
@@ -298,17 +316,26 @@ public class CommentCommandTests
         };
         sheet.ThreadedComments[addr] = original;
 
-        var command = new UpdateThreadedCommentReplyCommand(sheet.Id, addr, replyIndex: 1, text: "Updated second");
+        var command = new UpdateThreadedCommentReplyCommand(
+            sheet.Id,
+            addr,
+            replyIndex: 1,
+            text: "Updated second",
+            timestampUtc: ModifiedAtUtc);
         var outcome = command.Apply(ctx);
 
         outcome.Success.Should().BeTrue();
         outcome.AffectedCells.Should().ContainSingle().Which.Should().Be(addr);
         sheet.ThreadedComments[addr].Should().BeEquivalentTo(original with
         {
+            ModifiedAtUtc = ModifiedAtUtc,
             Replies =
             [
                 new CommentReply("First", "Codex"),
                 new CommentReply("Updated second", "User")
+                {
+                    ModifiedAtUtc = ModifiedAtUtc
+                }
             ]
         });
 
@@ -373,13 +400,14 @@ public class CommentCommandTests
         };
         sheet.ThreadedComments[addr] = original;
 
-        var command = new DeleteThreadedCommentReplyCommand(sheet.Id, addr, replyIndex: 1);
+        var command = new DeleteThreadedCommentReplyCommand(sheet.Id, addr, replyIndex: 1, timestampUtc: ModifiedAtUtc);
         var outcome = command.Apply(ctx);
 
         outcome.Success.Should().BeTrue();
         outcome.AffectedCells.Should().ContainSingle().Which.Should().Be(addr);
         sheet.ThreadedComments[addr].Should().BeEquivalentTo(original with
         {
+            ModifiedAtUtc = ModifiedAtUtc,
             Replies =
             [
                 new CommentReply("First", "Codex"),
@@ -442,11 +470,15 @@ public class CommentCommandTests
         };
         sheet.ThreadedComments[addr] = original;
 
-        var command = new ResolveThreadedCommentCommand(sheet.Id, addr, resolved: true);
+        var command = new ResolveThreadedCommentCommand(sheet.Id, addr, resolved: true, timestampUtc: ModifiedAtUtc);
         var outcome = command.Apply(ctx);
 
         outcome.Success.Should().BeTrue();
-        sheet.ThreadedComments[addr].Should().Be(original with { IsResolved = true });
+        sheet.ThreadedComments[addr].Should().Be(original with
+        {
+            IsResolved = true,
+            ModifiedAtUtc = ModifiedAtUtc
+        });
 
         command.Revert(ctx);
 
@@ -483,7 +515,8 @@ public class CommentCommandTests
             rootText: "New root",
             replyText: "Second reply",
             isResolved: true,
-            replyAuthor: "Reviewer");
+            replyAuthor: "Reviewer",
+            timestampUtc: ModifiedAtUtc);
         var outcome = command.Apply(ctx);
 
         outcome.Success.Should().BeTrue();
@@ -494,8 +527,13 @@ public class CommentCommandTests
             [
                 new CommentReply("First reply", "Codex"),
                 new CommentReply("Second reply", "Reviewer")
+                {
+                    CreatedAtUtc = ModifiedAtUtc,
+                    ModifiedAtUtc = ModifiedAtUtc
+                }
             ],
-            IsResolved = true
+            IsResolved = true,
+            ModifiedAtUtc = ModifiedAtUtc
         });
 
         command.Revert(ctx);

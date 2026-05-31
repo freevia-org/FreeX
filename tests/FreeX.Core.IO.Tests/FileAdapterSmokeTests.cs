@@ -7129,14 +7129,26 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("ThreadedCommentNativeTest");
         var sheet = workbook.AddSheet("S1");
         var address = new CellAddress(sheet.Id, 2, 3);
+        var createdAt = new DateTimeOffset(2026, 5, 31, 8, 0, 0, TimeSpan.Zero);
+        var modifiedAt = new DateTimeOffset(2026, 5, 31, 9, 15, 0, TimeSpan.Zero);
         sheet.ThreadedComments[address] = new ThreadedComment("Please review total", "Quinn")
         {
             Replies =
             [
-                new CommentReply("Looks right", "Codex"),
+                new CommentReply("Looks right", "Codex")
+                {
+                    CreatedAtUtc = createdAt.AddMinutes(5),
+                    ModifiedAtUtc = createdAt.AddMinutes(5)
+                },
                 new CommentReply("Resolving", "Quinn")
+                {
+                    CreatedAtUtc = modifiedAt,
+                    ModifiedAtUtc = modifiedAt
+                }
             ],
-            IsResolved = true
+            IsResolved = true,
+            CreatedAtUtc = createdAt,
+            ModifiedAtUtc = modifiedAt
         };
 
         var ms = new MemoryStream();
