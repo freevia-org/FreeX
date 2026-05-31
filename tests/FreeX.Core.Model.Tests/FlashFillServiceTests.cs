@@ -133,6 +133,46 @@ public sealed class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("SKU-2024-Retail", "Retail", "SKU-Wholesale", "Wholesale", "SKU-North-America-Online", "Online")]
+    [InlineData("Sales/West/Retail", "Retail", "Sales/Wholesale", "Wholesale", "Global/North/America/Online", "Online")]
+    [InlineData("Archive\\2024\\Retail", "Retail", "Archive\\Wholesale", "Wholesale", "Archive\\North\\America\\Online", "Online")]
+    [InlineData("Cost_Center_Retail", "Retail", "Channel_Wholesale", "Wholesale", "Org_North_America_Online", "Online")]
+    public void Fill_ExtractFinalDelimitedToken_UsesRightmostTokenAcrossVariableCounts(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
+    [Theory]
+    [InlineData("SKU-2024-0001", "SKU-2024", "SKU-2025-0042", "SKU-2025", "SKU-NORTH-2026-0007", "SKU-NORTH-2026")]
+    [InlineData("Archive/2024/January", "Archive/2024", "Archive/2025/February", "Archive/2025", "Archive/North/America/March", "Archive/North/America")]
+    [InlineData("Archive\\2024\\January", "Archive\\2024", "Archive\\2025\\February", "Archive\\2025", "Archive\\North\\America\\March", "Archive\\North\\America")]
+    [InlineData("Cost_Center_Retail", "Cost_Center", "Channel_Wholesale", "Channel", "Org_North_America_Online", "Org_North_America")]
+    public void Fill_RemoveFinalDelimitedToken_DropsRightmostTokenAcrossVariableCounts(
+        string source1,
+        string expected1,
+        string source2,
+        string expected2,
+        string remaining,
+        string expectedRemaining)
+    {
+        var result = FlashFillService.Fill(
+            [(source1, expected1), (source2, expected2)],
+            [remaining]);
+
+        result.Should().BeEquivalentTo([expectedRemaining], o => o.WithStrictOrdering());
+    }
+
     [Fact]
     public void Fill_ExtractSemicolonDelimitedToken_ExtractsConsistentPart()
     {

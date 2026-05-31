@@ -26,6 +26,7 @@ public static partial class FlashFillService
 
     // Delimiters tried in order for extract-by-delimiter, token casing, and initials patterns.
     private static readonly char[] Delimiters = [' ', ',', ';', ':', '|', '-', '_', '@', '.', '/', '\\'];
+    private static readonly char[] FinalDelimitedTokenDelimiters = [',', ';', ':', '|', '-', '_', '/', '\\'];
     private static readonly char[] DateComponentSeparators = ['/', '-', '.'];
     private static readonly string[] LabelValueSeparators = [":", "=", "->", "=>", "-", "/", "|"];
     private static readonly HashSet<string> KnownNameTitles = new(StringComparer.OrdinalIgnoreCase)
@@ -170,12 +171,38 @@ public static partial class FlashFillService
         return source => TryGetFinalDottedToken(source, out var token) ? token : null;
     }
 
+    private static Func<string, string?>? TryExtractFinalDelimitedToken(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var delimiter in FinalDelimitedTokenDelimiters)
+        {
+            if (!examples.All(e => TryGetFinalDelimitedToken(e.Source, delimiter, out var token) && token == e.Expected))
+                continue;
+
+            return source => TryGetFinalDelimitedToken(source, delimiter, out var token) ? token : null;
+        }
+
+        return null;
+    }
+
     private static Func<string, string?>? TryRemoveFinalDottedToken(IReadOnlyList<(string Source, string Expected)> examples)
     {
         if (!examples.All(e => TryRemoveFinalDottedToken(e.Source, out var stem) && stem == e.Expected))
             return null;
 
         return source => TryRemoveFinalDottedToken(source, out var stem) ? stem : null;
+    }
+
+    private static Func<string, string?>? TryRemoveFinalDelimitedToken(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        foreach (var delimiter in FinalDelimitedTokenDelimiters)
+        {
+            if (!examples.All(e => TryRemoveFinalDelimitedToken(e.Source, delimiter, out var stem) && stem == e.Expected))
+                continue;
+
+            return source => TryRemoveFinalDelimitedToken(source, delimiter, out var stem) ? stem : null;
+        }
+
+        return null;
     }
 
     private static bool TryRemoveFinalDottedToken(string source, out string stem)
@@ -189,6 +216,17 @@ public static partial class FlashFillService
         return stem.Length > 0;
     }
 
+    private static bool TryRemoveFinalDelimitedToken(string source, char delimiter, out string stem)
+    {
+        stem = string.Empty;
+        var lastDelimiterIndex = source.LastIndexOf(delimiter);
+        if (lastDelimiterIndex <= 0 || lastDelimiterIndex == source.Length - 1)
+            return false;
+
+        stem = source[..lastDelimiterIndex].Trim();
+        return stem.Length > 0;
+    }
+
     private static bool TryGetFinalDottedToken(string source, out string token)
     {
         var parts = source.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -199,6 +237,17 @@ public static partial class FlashFillService
         }
 
         token = parts[^1];
+        return token.Length > 0;
+    }
+
+    private static bool TryGetFinalDelimitedToken(string source, char delimiter, out string token)
+    {
+        token = string.Empty;
+        var lastDelimiterIndex = source.LastIndexOf(delimiter);
+        if (lastDelimiterIndex < 0 || lastDelimiterIndex == source.Length - 1)
+            return false;
+
+        token = source[(lastDelimiterIndex + 1)..].Trim();
         return token.Length > 0;
     }
 
