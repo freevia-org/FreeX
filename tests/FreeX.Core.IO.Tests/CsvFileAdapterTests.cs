@@ -344,6 +344,17 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_PreservesTrailingQuotedEmptyFieldAtEndOfFile()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("head,\"\""));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("head"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue(""));
+    }
+
+    [Fact]
     public void Load_HonorsExcelSeparatorDirective()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=;\r\nName;Amount\r\nAlice;3.5\r\n"));
