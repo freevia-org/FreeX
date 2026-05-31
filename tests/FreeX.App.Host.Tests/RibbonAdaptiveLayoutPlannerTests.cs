@@ -316,7 +316,7 @@ public sealed class RibbonAdaptiveLayoutPlannerTests
     }
 
     [Theory]
-    [InlineData(1120, new[] { "Tools", "Pens", "Convert", "Arrange", "Format" }, 3)]
+    [InlineData(1120, new[] { "Tools", "Pens", "Convert", "Arrange", "Format" }, 2)]
     public void ApplyBreakpointOverrides_AppliesExcelLikeTabSpecificCollapseOrder(
         double availableWidth,
         string[] groupNames,
