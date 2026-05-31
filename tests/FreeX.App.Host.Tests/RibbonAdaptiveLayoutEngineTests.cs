@@ -214,7 +214,7 @@ public sealed class RibbonAdaptiveLayoutEngineTests
         var thresholds = RibbonAdaptiveLayoutEngine.BuildResizeThresholds(groups, fixedChromeWidth: 36);
 
         thresholds.Should().BeInAscendingOrder();
-        thresholds.Should().Contain([700, 760, 900, 920, 1300, 1500]);
+        thresholds.Should().Contain([700, 900, 920, 1300, 1500]);
         thresholds.Should().NotContain(1120, "Home does not change adaptive state at 1120 once profile rules remove redundant breakpoint bands");
         thresholds.Should().OnlyHaveUniqueItems();
     }

@@ -141,6 +141,7 @@ public partial class MainWindow : Window
     private bool _ribbonResizeCompactionPendingOnExit;
     private bool _resizeViewportRefreshPending;
     private bool _isInWindowResizeMoveLoop;
+    private int _resizeViewportRefreshGeneration;
     private System.Windows.Threading.DispatcherTimer? _resizeViewportRefreshTimer;
     private CellColor _borderPickerColor = CellColor.Black;
     private BorderStyle _borderPickerStyle = BorderStyle.Thin;

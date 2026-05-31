@@ -71,6 +71,7 @@ public partial class MainWindow
             SheetGrid.IsLiveResizing = true;
 
         _resizeViewportRefreshPending = true;
+        _resizeViewportRefreshGeneration++;
         _resizeViewportRefreshTimer ??= CreateResizeViewportRefreshTimer();
         _resizeViewportRefreshTimer.Stop();
         if (_isInWindowResizeMoveLoop)
@@ -88,9 +89,28 @@ public partial class MainWindow
             Interval = System.TimeSpan.FromMilliseconds(ResizeViewportRefreshDelayMilliseconds)
         };
 
-        timer.Tick += (_, _) => CompleteViewportResizeRefresh();
+        timer.Tick += (_, _) => QueueViewportResizeRefreshCompletion();
 
         return timer;
+    }
+
+    private void QueueViewportResizeRefreshCompletion()
+    {
+        _resizeViewportRefreshTimer?.Stop();
+        var generation = _resizeViewportRefreshGeneration;
+        Dispatcher.BeginInvoke(
+            new System.Action(() =>
+            {
+                if (!_resizeViewportRefreshPending ||
+                    _isInWindowResizeMoveLoop ||
+                    generation != _resizeViewportRefreshGeneration)
+                {
+                    return;
+                }
+
+                CompleteViewportResizeRefresh();
+            }),
+            System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private void CompleteViewportResizeRefresh()
