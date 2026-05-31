@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -69,9 +70,72 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
         if (!IsWorksheetXml(sourceEntry))
             return null;
 
+        using (var scanStream = sourceEntry.Open())
+        {
+            if (!ContainsDuplicateStyleOnlyCells(scanStream))
+                return null;
+        }
+
         using var sourceStream = sourceEntry.Open();
         var worksheetXml = XDocument.Load(sourceStream);
         return StripRedundantStyleOnlyCells(worksheetXml) ? worksheetXml : null;
+    }
+
+    private static bool ContainsDuplicateStyleOnlyCells(Stream worksheetStream)
+    {
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            IgnoreComments = true,
+            IgnoreProcessingInstructions = true
+        };
+        using var reader = XmlReader.Create(worksheetStream, settings);
+        HashSet<string>? seenStyleIndexes = null;
+
+        while (reader.Read())
+        {
+            if (reader.NodeType != XmlNodeType.Element ||
+                reader.LocalName != "c" ||
+                reader.NamespaceURI != "http://schemas.openxmlformats.org/spreadsheetml/2006/main")
+            {
+                continue;
+            }
+
+            var styleIndex = reader.GetAttribute("s");
+            if (string.IsNullOrEmpty(styleIndex) ||
+                !IsStyleOnlyCell(reader))
+            {
+                continue;
+            }
+
+            seenStyleIndexes ??= new HashSet<string>(StringComparer.Ordinal);
+            if (!seenStyleIndexes.Add(styleIndex))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsStyleOnlyCell(XmlReader cellReader)
+    {
+        if (cellReader.IsEmptyElement)
+            return true;
+
+        var depth = cellReader.Depth;
+        while (cellReader.Read())
+        {
+            if (cellReader.NodeType == XmlNodeType.EndElement &&
+                cellReader.Depth == depth)
+            {
+                return true;
+            }
+
+            if (cellReader.NodeType == XmlNodeType.Element)
+                return false;
+        }
+
+        return true;
     }
 
     private static void CopyEntry(ZipArchiveEntry sourceEntry, ZipArchive strippedArchive)

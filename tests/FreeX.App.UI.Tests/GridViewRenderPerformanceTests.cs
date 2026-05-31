@@ -73,6 +73,19 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCells_DoesNotClipStyledTextUnlessItWrapsOrOverflows()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var shouldClipText = source[
+            source.IndexOf("private static bool ShouldClipText(", StringComparison.Ordinal)..
+            source.IndexOf("private static Pen UnderlinePenForTextBrush", StringComparison.Ordinal)];
+
+        shouldClipText.Should().Contain("if (wrapText)");
+        shouldClipText.Should().Contain("textPoint.X + text.Width > clipRect.Right + tolerance");
+        shouldClipText.Should().NotContain("style is not null || wrapText");
+    }
+
+    [Fact]
     public void RenderHeaders_ReusesPixelsPerDipAcrossFormattedTextCalls()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
