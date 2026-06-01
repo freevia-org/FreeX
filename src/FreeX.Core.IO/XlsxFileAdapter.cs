@@ -195,11 +195,6 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 sheet.SetCell(addr, cell);
             }
 
-            var explicitStyleOnlyRepresentativesByXlsxStyleIndex = (xmlLayout?.ExplicitStyleOnlyCells ?? [])
-                .GroupBy(cell => cell.StyleIndex)
-                .ToDictionary(
-                    group => group.Key,
-                    group => (group.First().Row, group.First().Col));
             foreach (var (row, col, styleIndex) in xmlLayout?.ExplicitStyleOnlyCells ?? [])
             {
                 if (sheet.GetCell(row, col) is not null)
@@ -207,10 +202,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
                 if (!explicitStyleOnlyStyleIdsByXlsxStyleIndex.TryGetValue(styleIndex, out var styleId))
                 {
-                    var representative = explicitStyleOnlyRepresentativesByXlsxStyleIndex.TryGetValue(styleIndex, out var address)
-                        ? address
-                        : (row, col);
-                    var xlCell = xlSheet.Cell((int)representative.Item1, (int)representative.Item2);
+                    var xlCell = xlSheet.Cell((int)row, (int)col);
                     var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, workbook.Theme);
                     styleId = style.Equals(CellStyle.Default)
                         ? null
