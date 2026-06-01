@@ -764,6 +764,7 @@ public sealed class DelimitedTextFileAdapterTests
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
         using var stream = new MemoryStream();
         adapter.Save(workbook, stream);
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"'=A1*2\"\r\n");
         stream.Position = 0;
 
         var roundTripped = adapter.Load(stream);
@@ -775,9 +776,10 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Theory]
+    [InlineData("=A1*2", "\"'=A1*2\"\r\n")]
     [InlineData("+42", "\"'+42\"\r\n")]
     [InlineData("-42", "\"'-42\"\r\n")]
-    [InlineData("@SUM(A1)", "\"@SUM(A1)\"\r\n")]
+    [InlineData("@SUM(A1)", "\"'@SUM(A1)\"\r\n")]
     public void Save_RoundTripsFormulaPrefixTextFieldsAsLiteralText(string text, string expected)
     {
         var workbook = new Workbook("Book1");

@@ -152,6 +152,34 @@ public sealed class XlsxPackageMetadataMergerTests
             .ContainSingle();
     }
 
+    [Theory]
+    [InlineData("/xl/media/rooted.bin")]
+    [InlineData("xl\\media\\backslash.bin")]
+    [InlineData("xl/../escape.bin")]
+    [InlineData("../escape.bin")]
+    [InlineData("xl/./dot.bin")]
+    [InlineData("xl/media//empty-segment.bin")]
+    [InlineData("C:/absolute.bin")]
+    [InlineData(" xl/media/padded.bin")]
+    public void CopyUnknownPackageParts_SkipsHostileEntryNames(string hostileEntryName)
+    {
+        using var sourcePackage = new MemoryStream();
+        using (var sourceArchive = new ZipArchive(sourcePackage, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WritePackageEntry(sourceArchive, "xl/media/safe.bin", "safe");
+            WritePackageEntry(sourceArchive, hostileEntryName, "evil");
+        }
+
+        sourcePackage.Position = 0;
+        using var targetPackage = new MemoryStream();
+        using var source = new ZipArchive(sourcePackage, ZipArchiveMode.Read, leaveOpen: true);
+        using var target = new ZipArchive(targetPackage, ZipArchiveMode.Update, leaveOpen: true);
+
+        XlsxPackageMetadataMerger.CopyUnknownPackageParts(source, target);
+
+        target.Entries.Select(entry => entry.FullName).Should().Equal("xl/media/safe.bin");
+    }
+
     [Fact]
     public void MergeRelationshipParts_PreservesWhitespacePaddedInternalTargetsForCopiedParts()
     {

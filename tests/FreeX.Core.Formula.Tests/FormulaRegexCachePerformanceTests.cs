@@ -28,6 +28,18 @@ public sealed class FormulaRegexCachePerformanceTests
         source.Should().NotMatchRegex(StaticRegexCallPattern);
     }
 
+    [Fact]
+    public void WildcardAndSearchRegexCaches_AreBoundedAndTimed()
+    {
+        var criteriaSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "BuiltInFunctions.Criteria.cs"));
+        var textSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "BuiltInFunctions.TextCore.cs"));
+
+        criteriaSource.Should().Contain("FormulaSafetyLimits.MaxRegexCacheEntries");
+        criteriaSource.Should().Contain("FormulaSafetyLimits.RegexTimeout");
+        textSource.Should().Contain("FormulaSafetyLimits.MaxRegexCacheEntries");
+        textSource.Should().Contain("FormulaSafetyLimits.RegexTimeout");
+    }
+
     private const string StaticRegexCallPattern = @"\bRegex\.(?:Match|IsMatch)\s*\(";
 
     private static string FindWorkspaceFile(params string[] relativeParts)

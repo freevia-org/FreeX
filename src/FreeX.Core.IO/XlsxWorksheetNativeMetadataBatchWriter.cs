@@ -5,7 +5,7 @@ namespace FreeX.Core.IO;
 internal static class XlsxWorksheetNativeMetadataBatchWriter
 {
     public static bool HasMetadata(Sheet sheet) =>
-        sheet.ProtectionMetadata is not null ||
+        XlsxWorksheetProtectionMetadataWriter.HasProtectionState(sheet) ||
         sheet.PrintOptionsMetadata is not null ||
         sheet.DimensionMetadata is not null ||
         sheet.SheetPropertiesMetadata is not null ||

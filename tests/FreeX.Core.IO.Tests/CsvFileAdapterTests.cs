@@ -612,7 +612,7 @@ public sealed class CsvFileAdapterTests
         using var stream = new MemoryStream();
         new CsvFileAdapter().Save(workbook, stream);
 
-        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"=A1*2\"\r\n");
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"'=A1*2\"\r\n");
     }
 
     [Fact]
@@ -704,6 +704,7 @@ public sealed class CsvFileAdapterTests
         var adapter = new CsvFileAdapter();
         using var stream = new MemoryStream();
         adapter.Save(workbook, stream);
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"'=A1*2\"\r\n");
         stream.Position = 0;
 
         var roundTripped = adapter.Load(stream);
@@ -724,7 +725,7 @@ public sealed class CsvFileAdapterTests
         var adapter = new CsvFileAdapter();
         using var stream = new MemoryStream();
         adapter.Save(workbook, stream);
-        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"@SUM(A1)\"\r\n");
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("\"'@SUM(A1)\"\r\n");
         stream.Position = 0;
 
         var roundTripped = adapter.Load(stream);

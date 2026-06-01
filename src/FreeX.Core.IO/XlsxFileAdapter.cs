@@ -76,7 +76,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
         packageStream.Position = 0;
-        var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml);
+        var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, warnings);
         var workbook = new Workbook("Untitled");
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = workbookMetadata.Uses1904DateSystem;
@@ -221,9 +221,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                         hyperlink.Tooltip ?? "",
                         NormalizeInternalHyperlinkAddress(hyperlink.InternalAddress) ?? "");
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Skip hyperlinks ClosedXML cannot expose.
+                    warnings.Add($"[hyperlinks] Sheet '{xlSheet.Name}': {ex.Message}");
                 }
             }
 
