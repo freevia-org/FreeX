@@ -105,6 +105,24 @@ public sealed class GridResizeHitPlannerTests
             .Be(new GridResizeHit(GridResizeHitTarget.None, 0, 0));
 
         GridResizeHitPlanner.HitTest(
+                CreateViewport(),
+                new Point(30 + 40, -1),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                hitZone: 4)
+            .Should()
+            .Be(new GridResizeHit(GridResizeHitTarget.None, 0, 0));
+
+        GridResizeHitPlanner.HitTest(
+                CreateViewport(),
+                new Point(-1, 18 + 20),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                hitZone: 4)
+            .Should()
+            .Be(new GridResizeHit(GridResizeHitTarget.None, 0, 0));
+
+        GridResizeHitPlanner.HitTest(
                 null,
                 new Point(32, 8),
                 rowHeaderWidth: 30,
