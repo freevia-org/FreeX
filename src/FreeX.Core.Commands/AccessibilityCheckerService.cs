@@ -324,10 +324,11 @@ public static class AccessibilityCheckerService
 
     private static void AddLowContrastCellTextIssues(List<AccessibilityIssue> issues, Workbook workbook, Sheet sheet)
     {
+        var occupiedCells = sheet.GetOccupiedCellMap();
         var conditionalContrastRules = GetConditionalContrastRules(sheet);
         Dictionary<StyleId, CellStyle>? workbookStyleCache = null;
         Dictionary<CellStyle, CellContrastCheck>? contrastCache = null;
-        foreach (var entry in sheet.GetOccupiedCellMap())
+        foreach (var entry in occupiedCells)
         {
             var (row, col) = entry.Key;
             var cell = entry.Value;
@@ -354,7 +355,7 @@ public static class AccessibilityCheckerService
         }
     }
 
-    private static List<ConditionalFormat>? GetConditionalContrastRules(Sheet sheet)
+    private static ConditionalContrastRuleSet? GetConditionalContrastRules(Sheet sheet)
     {
         List<ConditionalFormat>? rules = null;
         foreach (var rule in sheet.ConditionalFormats)
@@ -370,12 +371,54 @@ public static class AccessibilityCheckerService
             return null;
 
         rules.Sort(static (left, right) => left.Priority.CompareTo(right.Priority));
-        return rules;
+        var hasSharedAppliesToRange = TryGetSharedAppliesToRange(rules, out var sharedAppliesToRange);
+        return new ConditionalContrastRuleSet(
+            rules,
+            hasSharedAppliesToRange,
+            sharedAppliesToRange,
+            hasSharedAppliesToRange ? GetAlwaysTrueTextValueStyle(rules) : null);
     }
+
+    private static bool TryGetSharedAppliesToRange(IReadOnlyList<ConditionalFormat> rules, out GridRange range)
+    {
+        range = rules[0].AppliesTo;
+        for (var i = 1; i < rules.Count; i++)
+        {
+            if (rules[i].AppliesTo != range)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static CellStyle? GetAlwaysTrueTextValueStyle(IReadOnlyList<ConditionalFormat> rules)
+    {
+        CellStyle? style = null;
+        foreach (var rule in rules)
+        {
+            if (!IsRuleAlwaysTrueForScannedText(rule))
+                return null;
+
+            style = rule.FormatIfTrue!;
+            if (rule.StopIfTrue)
+                break;
+        }
+
+        return style;
+    }
+
+    private static bool IsRuleAlwaysTrueForScannedText(ConditionalFormat rule) =>
+        rule.RuleType is CfRuleType.NoBlanks or CfRuleType.NoErrors;
+
+    private sealed record ConditionalContrastRuleSet(
+        IReadOnlyList<ConditionalFormat> Rules,
+        bool HasSharedAppliesToRange,
+        GridRange SharedAppliesToRange,
+        CellStyle? AlwaysTrueTextValueStyle);
 
     private static CellStyle GetEffectiveContrastStyle(
         Workbook workbook,
-        IReadOnlyList<ConditionalFormat>? conditionalContrastRules,
+        ConditionalContrastRuleSet? conditionalContrastRules,
         CellAddress address,
         Cell cell,
         ref Dictionary<StyleId, CellStyle>? workbookStyleCache)
@@ -384,7 +427,19 @@ public static class AccessibilityCheckerService
         if (conditionalContrastRules is null)
             return GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
 
-        foreach (var rule in conditionalContrastRules)
+        if (conditionalContrastRules.HasSharedAppliesToRange)
+        {
+            if (!conditionalContrastRules.SharedAppliesToRange.Contains(address))
+                return GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
+
+            if (conditionalContrastRules.AlwaysTrueTextValueStyle is { } alwaysTrueTextValueStyle)
+                return alwaysTrueTextValueStyle;
+
+            return GetEffectiveContrastStyleForApplicableRules(conditionalContrastRules.Rules, cell) ??
+                GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
+        }
+
+        foreach (var rule in conditionalContrastRules.Rules)
         {
             if (!rule.AppliesTo.Contains(address))
                 continue;
@@ -398,6 +453,24 @@ public static class AccessibilityCheckerService
         }
 
         return style ?? GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
+    }
+
+    private static CellStyle? GetEffectiveContrastStyleForApplicableRules(
+        IReadOnlyList<ConditionalFormat> rules,
+        Cell cell)
+    {
+        CellStyle? style = null;
+        foreach (var rule in rules)
+        {
+            if (!IsConditionalFormatTrue(rule, cell.Value))
+                continue;
+
+            style = rule.FormatIfTrue!;
+            if (rule.StopIfTrue)
+                break;
+        }
+
+        return style;
     }
 
     private static CellStyle GetCachedWorkbookStyle(
