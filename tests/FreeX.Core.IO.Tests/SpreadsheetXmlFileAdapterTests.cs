@@ -292,6 +292,31 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Save_SkipsOutOfBoundsSpreadsheetMlNamedRanges()
+    {
+        var workbook = new Workbook("XmlInvalidNames");
+        var sheet = workbook.AddSheet("Data");
+        workbook.DefineNamedRange(
+            "ValidName",
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 2, 2)));
+        workbook.NamedRanges["InvalidName"] = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, CellAddress.MaxRow + 1, 2));
+
+        using var stream = new MemoryStream();
+        new SpreadsheetXmlFileAdapter().Save(workbook, stream);
+
+        stream.Position = 0;
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var namedRange = document.Descendants(ss + "NamedRange").Should().ContainSingle().Which;
+        namedRange.Attribute(ss + "Name")!.Value.Should().Be("ValidName");
+        namedRange.Attribute(ss + "RefersTo")!.Value.Should().Be("=Data!A1:B2");
+    }
+
+    [Fact]
     public void Load_NormalizesInvalidBlankDuplicateAndLongWorksheetNames()
     {
         using var stream = StreamFromString("""
