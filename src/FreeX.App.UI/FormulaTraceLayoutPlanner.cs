@@ -84,10 +84,7 @@ public static class FormulaTraceLayoutPlanner
     {
         var lookup = new Dictionary<uint, RowMetric>(viewport.RowMetrics.Count);
         foreach (var row in viewport.RowMetrics)
-        {
-            if (!lookup.ContainsKey(row.Row))
-                lookup.Add(row.Row, row);
-        }
+            lookup.TryAdd(row.Row, row);
 
         return lookup;
     }
@@ -96,10 +93,7 @@ public static class FormulaTraceLayoutPlanner
     {
         var lookup = new Dictionary<uint, ColMetric>(viewport.ColMetrics.Count);
         foreach (var col in viewport.ColMetrics)
-        {
-            if (!lookup.ContainsKey(col.Col))
-                lookup.Add(col.Col, col);
-        }
+            lookup.TryAdd(col.Col, col);
 
         return lookup;
     }
