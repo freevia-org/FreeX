@@ -362,6 +362,7 @@ public sealed class AutoFilterDialogTests
 
         source.Should().Contain("_filterByColorGroup");
         source.Should().Contain("Header = UiText.Get(\"AutoFilter_FilterByColor2\")");
+        source.Should().Contain("colorOptions.Count > 0 && HasFilterByColorEntry(menuPlan)");
         source.Should().Contain("PopulateColorChoices");
         source.Should().Contain("UiText.Get(\"AutoFilter_CellColor\")");
         source.Should().Contain("UiText.Get(\"AutoFilter_FontColor\")");
@@ -403,7 +404,10 @@ public sealed class AutoFilterDialogTests
             var menuPlan = new AutoFilterMenuPlan(
                 "Status",
                 AutoFilterMenuFilterKind.Text,
-                [new AutoFilterMenuEntry(new AutoFilterChecklistItem("Open", "Open"))],
+                [
+                    new AutoFilterMenuEntry(UiText.Get("AutoFilter_FilterByColor"), AutoFilterMenuEntryKind.FilterByColor),
+                    new AutoFilterMenuEntry(new AutoFilterChecklistItem("Open", "Open"))
+                ],
                 [
                     new AutoFilterColorOption("#00B050", AutoFilterColorFilterKind.CellFillColor, new CellColor(0, 176, 80)),
                     new AutoFilterColorOption("No Fill", AutoFilterColorFilterKind.NoFill, null),

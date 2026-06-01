@@ -130,7 +130,6 @@ public sealed class AutoFilterDropdownPlannerTests
             UiText.Get("AutoFilter_SortAscending"),
             UiText.Get("AutoFilter_SortDescending"),
             UiText.Format("AutoFilter_ClearFilterFrom", "Fruit"),
-            UiText.Get("AutoFilter_FilterByColor"),
             UiText.Get("AutoFilter_FilterFamily_Text"),
             UiText.Get("AutoFilter_Search"),
             UiText.Get("AutoFilter_SelectAll"),
@@ -180,7 +179,6 @@ public sealed class AutoFilterDropdownPlannerTests
             AutoFilterMenuEntryKind.SortDescending,
             AutoFilterMenuEntryKind.Separator,
             AutoFilterMenuEntryKind.ClearFilter,
-            AutoFilterMenuEntryKind.FilterByColor,
             AutoFilterMenuEntryKind.FilterFamily,
             AutoFilterMenuEntryKind.Separator,
             AutoFilterMenuEntryKind.Search,
@@ -219,7 +217,6 @@ public sealed class AutoFilterDropdownPlannerTests
         menu.Sections[0].Entries.Select(entry => entry.Header).Should().Equal(UiText.Get("AutoFilter_SortAscending"), UiText.Get("AutoFilter_SortDescending"));
         menu.Sections[1].Entries.Select(entry => entry.Header).Should().Equal(
             UiText.Format("AutoFilter_ClearFilterFrom", "Fruit"),
-            UiText.Get("AutoFilter_FilterByColor"),
             UiText.Get("AutoFilter_FilterFamily_Text"));
         menu.Sections[2].Entries.Select(entry => entry.Header).Should().Equal(UiText.Get("AutoFilter_Search"), UiText.Get("AutoFilter_SelectAll"));
         menu.Sections[3].Entries.Select(entry => entry.Header).Should().Equal("Apple", "Banana");
@@ -367,6 +364,8 @@ public sealed class AutoFilterDropdownPlannerTests
 
         var menu = AutoFilterDropdownPlanner.CreateMenuPlan(workbook, sheet, plan);
 
+        menu.Entries.Should().Contain(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);
+        menu.Sections[1].Entries.Select(entry => entry.Kind).Should().Contain(AutoFilterMenuEntryKind.FilterByColor);
         menu.ColorOptions.Should().Equal(
             new AutoFilterColorOption("#00B050", AutoFilterColorFilterKind.CellFillColor, green),
             new AutoFilterColorOption("#FFC000", AutoFilterColorFilterKind.CellFillColor, yellow),
@@ -386,5 +385,27 @@ public sealed class AutoFilterDropdownPlannerTests
 
         AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan)
             .ColorOptions.Should().BeEmpty();
+        AutoFilterDropdownPlanner.CreateMenuPlan(sheet, plan)
+            .Entries.Should().NotContain(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);
+    }
+
+    [Fact]
+    public void CreateMenuPlan_OmitsFilterByColorEntryWhenWorkbookHasNoColorChoices()
+    {
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Fruit"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Apple"));
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownPlanner.CreateMenuPlan(workbook, sheet, plan);
+
+        menu.ColorOptions.Should().BeEmpty();
+        menu.Entries.Should().NotContain(entry => entry.Kind == AutoFilterMenuEntryKind.FilterByColor);
+        menu.Sections[1].Entries.Select(entry => entry.Kind).Should().Equal(
+            AutoFilterMenuEntryKind.ClearFilter,
+            AutoFilterMenuEntryKind.FilterFamily);
     }
 }
