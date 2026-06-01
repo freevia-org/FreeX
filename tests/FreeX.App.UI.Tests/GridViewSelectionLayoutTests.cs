@@ -361,6 +361,27 @@ public sealed class GridViewSelectionLayoutTests
     }
 
     [Fact]
+    public void CalculateQuickAnalysisCellPreviewRects_SkipsCellsTooSmallForInsetPreview()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 2, 2));
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 6, 0), new RowMetric(2, 12, 6)],
+            [new ColMetric(1, 6, 0), new ColMetric(2, 16, 6)]);
+
+        var rects = GridView.CalculateQuickAnalysisCellPreviewRects(
+            viewport,
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18);
+
+        rects.Should().Equal(new Rect(39, 27, 10, 6));
+    }
+
+    [Fact]
     public void CalculateQuickAnalysisSparklinePreviewRects_ReturnsCompactRectPerVisibleTargetRow()
     {
         var sheetId = SheetId.New();

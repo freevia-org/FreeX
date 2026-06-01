@@ -116,11 +116,14 @@ internal static class QuickAnalysisPreviewLayoutPlanner
                 if (col.Col > range.End.Col)
                     break;
 
+                if (row.Height <= 6 || col.Width <= 6)
+                    continue;
+
                 consumer.Accept(new Rect(
                     col.LeftOffset + rowHeaderWidth + 3,
                     row.TopOffset + columnHeaderHeight + 3,
-                    Math.Max(0, col.Width - 6),
-                    Math.Max(0, row.Height - 6)));
+                    col.Width - 6,
+                    row.Height - 6));
             }
         }
     }
