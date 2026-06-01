@@ -715,21 +715,42 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
-    public void GeneratedDvCountPackage_RetainsTenDataValidationRulesInXml()
+    public void GeneratedDvCountPackage_RetainsSemanticDataValidationRulesAfterModelEdit()
     {
         using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-dv-count-package-003");
-        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var before = CaptureDataValidationPackageSummary(package);
+        var expectedRules = new[]
+        {
+            new DataValidationRuleXmlSummary("list", "", "B2:B10", "A,B,C", ""),
+            new DataValidationRuleXmlSummary("whole", "between", "C2:C10", "1", "100"),
+            new DataValidationRuleXmlSummary("decimal", "greaterThan", "D2:D10", "0", ""),
+            new DataValidationRuleXmlSummary("date", "greaterThanOrEqual", "E2:E10", "DATE(2026,1,1)", ""),
+            new DataValidationRuleXmlSummary("time", "between", "F2:F10", "TIME(8,0,0)", "TIME(18,0,0)"),
+            new DataValidationRuleXmlSummary("textLength", "lessThanOrEqual", "G2:G10", "50", ""),
+            new DataValidationRuleXmlSummary("custom", "", "H2:H10", "LEN(H2)>0", ""),
+            new DataValidationRuleXmlSummary("list", "", "I2:I10", "Yes,No", ""),
+            new DataValidationRuleXmlSummary("whole", "greaterThan", "J2:J10", "0", ""),
+            new DataValidationRuleXmlSummary("decimal", "lessThan", "K2:K10", "1000", "")
+        };
 
-        var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
-        worksheetEntry.Should().NotBeNull("generated-dv-count-package-003 must contain xl/worksheets/sheet1.xml");
+        before.CountAttribute.Should().Be("10", "generated-dv-count-package-003 declares ten dataValidation records");
+        before.Rules.Should().Equal(expectedRules, "the fixture should exercise list, numeric, date/time, text-length, and custom validation semantics");
 
-        XDocument worksheetXml;
-        using (var stream = worksheetEntry!.Open())
-            worksheetXml = XDocument.Load(stream);
+        package.Position = 0;
+        var adapter = new XlsxFileAdapter();
+        var workbook = adapter.Load(package);
+        workbook.GetSheetAt(0).SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 12, 1), new TextValue("freex-dv-semantic-edit"));
 
-        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var dvElements = worksheetXml.Descendants(sheetNs + "dataValidation").ToArray();
-        dvElements.Should().HaveCount(10, "generated-dv-count-package-003 embeds ten dataValidation elements in its worksheet XML");
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+        AssertPackageHealth(saved, "generated-dv-count-package-003");
+
+        var after = CaptureDataValidationPackageSummary(saved);
+        after.Should().BeEquivalentTo(
+            before,
+            options => options.WithStrictOrdering(),
+            "data-validation rule type/operator/formula/sqref semantics should survive ordinary model edits");
     }
 
     [Theory]
@@ -4643,6 +4664,64 @@ public class XlsxCorpusRunnerTests
         }
     }
 
+    private static DataValidationPackageXmlSummary CaptureDataValidationPackageSummary(Stream stream)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+
+        try
+        {
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+            worksheetEntry.Should().NotBeNull("generated-dv-count-package-003 must contain xl/worksheets/sheet1.xml");
+
+            var worksheetXml = LoadPackageXml(worksheetEntry!);
+            XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var container = worksheetXml.Root!.Element(sheetNs + "dataValidations");
+            container.Should().NotBeNull("generated-dv-count-package-003 must include a dataValidations container");
+
+            return new DataValidationPackageXmlSummary(
+                container!.Attribute("count")?.Value ?? "",
+                container.Elements(sheetNs + "dataValidation")
+                    .Select(element =>
+                    {
+                        var type = element.Attribute("type")?.Value ?? "";
+                        return new DataValidationRuleXmlSummary(
+                            type,
+                            NormalizeDataValidationOperator(type, element.Attribute("operator")?.Value ?? ""),
+                            element.Attribute("sqref")?.Value ?? "",
+                            NormalizeDataValidationFormula(type, element.Element(sheetNs + "formula1")?.Value ?? ""),
+                            element.Element(sheetNs + "formula2")?.Value ?? "");
+                    })
+                    .ToArray());
+        }
+        finally
+        {
+            if (stream.CanSeek)
+                stream.Position = originalPosition;
+        }
+    }
+
+    private static string NormalizeDataValidationOperator(string type, string op)
+    {
+        if (type is "list" or "custom" && string.Equals(op, "between", StringComparison.OrdinalIgnoreCase))
+            return "";
+
+        if (!string.IsNullOrWhiteSpace(op))
+            return op;
+
+        return type is "whole" or "decimal" or "date" or "time" or "textLength" ? "between" : "";
+    }
+
+    private static string NormalizeDataValidationFormula(string type, string formula)
+    {
+        if (type != "list" || formula.Length < 2 || formula[0] != '"' || formula[^1] != '"')
+            return formula;
+
+        return formula[1..^1].Replace("\"\"", "\"", StringComparison.Ordinal);
+    }
+
     private static void AssertPackageHealth(Stream stream, string because)
     {
         var originalPosition = stream.CanSeek ? stream.Position : 0;
@@ -5744,6 +5823,17 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<string> CriticalRelationshipTargets,
         IReadOnlyList<string> CriticalRelationshipDetails,
         IReadOnlyList<string> CriticalContentTypeOverrides);
+
+    private sealed record DataValidationPackageXmlSummary(
+        string CountAttribute,
+        IReadOnlyList<DataValidationRuleXmlSummary> Rules);
+
+    private sealed record DataValidationRuleXmlSummary(
+        string Type,
+        string Operator,
+        string Sqref,
+        string Formula1,
+        string Formula2);
 
     // ── NativeXmlPreserveBag test helpers ────────────────────────────────────
 
