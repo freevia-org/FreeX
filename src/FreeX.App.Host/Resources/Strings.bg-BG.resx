@@ -13651,7 +13651,7 @@
     <value>Запазване на работна книга</value>
   </data>
   <data name="MainWindow_Header_TableDesign" xml:space="preserve">
-    <value>Таблица</value>
+    <value>Проектиране на таблица</value>
   </data>
   <data name="MainWindow_Content_TableName" xml:space="preserve">
     <value>Име на таблица</value>
