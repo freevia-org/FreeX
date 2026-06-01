@@ -688,7 +688,10 @@ public sealed class ManageConditionalFormatsDialogTests
     {
         var source = ReadManageConditionalFormatsDialogSource();
 
-        source.Should().Contain("MouseDoubleClick += EditRule_Click");
+        source.Should().Contain("_listView.MouseDoubleClick += ListView_MouseDoubleClick");
+        source.Should().Contain("private void ListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
+        source.Should().Contain("EditRule_Click(sender, e);");
+        source.Should().Contain("e.Handled = true;");
     }
 
     [Fact]
