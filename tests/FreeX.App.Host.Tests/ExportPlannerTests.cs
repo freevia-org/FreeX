@@ -59,6 +59,23 @@ public class ExportPlannerTests
         request.ActualPath.Should().Be(@"C:\temp\report.pdf");
     }
 
+    [Theory]
+    [InlineData(@"C:\temp\report.export", @"C:\temp\report.pdf")]
+    [InlineData(@"C:\temp\report.xlsx", @"C:\temp\report.pdf")]
+    public void PlanExport_NormalizesMismatchedExtensionForInferredPdfRequests(
+        string path,
+        string expectedPath)
+    {
+        var request = ExportPlanner.PlanExport(path);
+
+        request.Should().Be(new ExportRequest(
+            expectedPath,
+            ExportFormat.Pdf,
+            ExportOptions.ExcelLikeDefault,
+            null));
+        request.ActualPath.Should().Be(expectedPath);
+    }
+
     [Fact]
     public void PlanExport_XpsRequestKeepsRequestedPathAndDoesNotUseFallback()
     {

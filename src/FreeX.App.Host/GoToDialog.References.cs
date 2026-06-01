@@ -6,7 +6,7 @@ public sealed partial class GoToDialog
 {
     public static bool TryParseAddress(string text, SheetId sheetId, out CellAddress address)
     {
-        if (CellReferenceInputParser.TryParseCell(text, sheetId, out address))
+        if (CellReferenceInputParser.TryParseCell(text.Trim(), sheetId, out address))
         {
             return true;
         }
