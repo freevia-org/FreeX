@@ -144,4 +144,12 @@ public sealed class GridViewTextDecorationTests
             .Should()
             .Be("#666666");
     }
+
+    [Fact]
+    public void ResolveConditionalIconColor_TreatsMissingStyleAsDefaultPalette()
+    {
+        GridView.ResolveConditionalIconColor(new ConditionalFormatIcon(null!, 1, 3, true))
+            .Should()
+            .Be("#FFC000");
+    }
 }
