@@ -57,15 +57,7 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
-            foreach (var run in GetStyleOnlyRuns(sheet))
-            {
-                var style = GetCachedStyle(workbook, styleCache, run.StyleId);
-                if (style.Equals(CellStyle.Default))
-                    continue;
-
-                var xlRange = xlSheet.Range((int)run.Row, (int)run.StartCol, (int)run.Row, (int)run.EndCol);
-                XlsxClosedXmlCellMapper.ApplyStyle(xlRange.Style, style);
-            }
+            ApplyStyleOnlyRuns(workbook, styleCache, xlSheet, sheet);
 
             foreach (var (rowNum, height) in sheet.RowHeights)
             {
@@ -354,6 +346,34 @@ public sealed partial class XlsxFileAdapter
 
         if (hasRun)
             yield return new StyleOnlyRun(currentRow, startCol, previousCol, previousStyleId);
+    }
+
+    private static void ApplyStyleOnlyRuns(
+        Workbook workbook,
+        Dictionary<StyleId, CellStyle> styleCache,
+        IXLWorksheet xlSheet,
+        Sheet sheet)
+    {
+        if (!sheet.HasStyleOnlyCells)
+            return;
+
+        var xlsxStyleCache = new Dictionary<StyleId, IXLStyle>();
+        foreach (var run in GetStyleOnlyRuns(sheet))
+        {
+            var style = GetCachedStyle(workbook, styleCache, run.StyleId);
+            if (style.Equals(CellStyle.Default))
+                continue;
+
+            var xlRange = xlSheet.Range((int)run.Row, (int)run.StartCol, (int)run.Row, (int)run.EndCol);
+            if (xlsxStyleCache.TryGetValue(run.StyleId, out var xlsxStyle))
+            {
+                xlRange.Style = xlsxStyle;
+                continue;
+            }
+
+            XlsxClosedXmlCellMapper.ApplyStyle(xlRange.Style, style);
+            xlsxStyleCache.Add(run.StyleId, xlRange.Style);
+        }
     }
 
     private readonly record struct StyleOnlyRun(uint Row, uint StartCol, uint EndCol, StyleId StyleId);

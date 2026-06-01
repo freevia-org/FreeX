@@ -69,6 +69,7 @@ public sealed class XlsxFileAdapterFormatTests
         adapterSource.Should().NotContain("packageStream.ToArray()");
         saveSource.Should().NotContain("GetUsedCells()");
         saveSource.Should().Contain("GetStyleOnlyRuns");
+        saveSource.Should().Contain("Dictionary<StyleId, IXLStyle>");
         saveSource.Should().NotContain(".GroupBy(entry => entry.Key.Row)");
         saveSource.Should().NotContain(".OrderBy(entry => entry.Key.Col)");
         savePostProcessingSource.Should().NotContain("GetUsedCells()");
