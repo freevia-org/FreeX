@@ -15,6 +15,7 @@ public sealed partial class NativeJsonAdapter
 
     public void Save(Workbook workbook, Stream stream)
     {
+        var styleDtoCache = new Dictionary<StyleId, CellStyleDto?>(workbook.StyleCount);
         var dto = new WorkbookDto
         {
             FileFormat = NativeFileFormat,
@@ -291,30 +292,91 @@ public sealed partial class NativeJsonAdapter
                     .Select(validation => ToDataValidationDto(validation, s.Id))
                     .ToList(),
                 ConditionalFormats = ToConditionalFormatDtos(s.ConditionalFormats, s.Id),
-                Cells = s.EnumerateCells()
-                    .Where(entry => IsValidAddressOnSheet(entry.Address, s.Id))
-                    .Select(entry => new CellDto
-                    {
-                        Address   = entry.Address.ToA1(),
-                        Value     = NativeJsonScalarValueMapper.Serialize(entry.Cell.Value),
-                        ValueType = NativeJsonScalarValueMapper.GetValueType(entry.Cell.Value),
-                        Formula   = entry.Cell.HasFormula ? NormalizeNativeFormulaText(entry.Cell.FormulaText!) : null,
-                        IgnoreFormulaError = entry.Cell.IgnoreFormulaError,
-                        Style = FromCellStyle(workbook.GetStyle(entry.Cell.StyleId))
-                    }).ToList(),
-                StyleOnlyCells = s.GetStyleOnlyEntries()
-                    .Where(entry => NativeJsonValueSanitizer.IsValidRowIndex(entry.Key.Row) && NativeJsonValueSanitizer.IsValidColumnIndex(entry.Key.Col))
-                    .Select(entry => new StyleOnlyCellDto
-                    {
-                        Address = new CellAddress(s.Id, entry.Key.Row, entry.Key.Col).ToA1(),
-                        Style = FromCellStyle(workbook.GetStyle(entry.StyleId))
-                    }).ToList()
+                Cells = ToCellDtos(workbook, s, styleDtoCache),
+                StyleOnlyCells = ToStyleOnlyCellDtos(workbook, s, styleDtoCache)
             }).ToList()
         };
 
         PopulateCalculationOptions(workbook, dto);
 
         JsonSerializer.Serialize(stream, dto, SaveOptions);
+    }
+
+    private static List<CellDto> ToCellDtos(
+        Workbook workbook,
+        Sheet sheet,
+        Dictionary<StyleId, CellStyleDto?> styleDtoCache)
+    {
+        var cells = sheet.GetOccupiedCellMap();
+        if (cells.Count == 0)
+            return [];
+
+        var result = new List<CellDto>(cells.Count);
+        foreach (var entry in cells)
+        {
+            var (row, col) = entry.Key;
+            if (!NativeJsonValueSanitizer.IsValidRowIndex(row) ||
+                !NativeJsonValueSanitizer.IsValidColumnIndex(col))
+                continue;
+
+            var address = new CellAddress(sheet.Id, row, col);
+            var cell = entry.Value;
+            result.Add(new CellDto
+            {
+                Address = address.ToA1(),
+                Value = NativeJsonScalarValueMapper.Serialize(cell.Value),
+                ValueType = NativeJsonScalarValueMapper.GetValueType(cell.Value),
+                Formula = cell.HasFormula ? NormalizeNativeFormulaText(cell.FormulaText!) : null,
+                IgnoreFormulaError = cell.IgnoreFormulaError,
+                Style = GetCachedCellStyleDto(workbook, styleDtoCache, cell.StyleId)
+            });
+        }
+
+        return result;
+    }
+
+    private static List<StyleOnlyCellDto> ToStyleOnlyCellDtos(
+        Workbook workbook,
+        Sheet sheet,
+        Dictionary<StyleId, CellStyleDto?> styleDtoCache)
+    {
+        if (!sheet.HasStyleOnlyCells)
+            return [];
+
+        var result = new List<StyleOnlyCellDto>();
+        foreach (var entry in sheet.GetStyleOnlyEntries())
+        {
+            var (row, col) = entry.Key;
+            if (!NativeJsonValueSanitizer.IsValidRowIndex(row) ||
+                !NativeJsonValueSanitizer.IsValidColumnIndex(col))
+                continue;
+
+            result.Add(new StyleOnlyCellDto
+            {
+                Address = new CellAddress(sheet.Id, row, col).ToA1(),
+                Style = GetCachedCellStyleDto(workbook, styleDtoCache, entry.StyleId, includeDefault: true)
+            });
+        }
+
+        return result;
+    }
+
+    private static CellStyleDto? GetCachedCellStyleDto(
+        Workbook workbook,
+        Dictionary<StyleId, CellStyleDto?> styleDtoCache,
+        StyleId styleId,
+        bool includeDefault = false)
+    {
+        if (styleId == StyleId.Default && !includeDefault)
+            return null;
+
+        if (!styleDtoCache.TryGetValue(styleId, out var dto))
+        {
+            dto = FromCellStyle(workbook.GetStyle(styleId));
+            styleDtoCache[styleId] = dto;
+        }
+
+        return dto;
     }
 
     private static bool IsValidAddressOnSheet(CellAddress address, SheetId sheetId) =>
