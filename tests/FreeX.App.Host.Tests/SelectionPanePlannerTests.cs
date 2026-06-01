@@ -633,7 +633,7 @@ public sealed class SelectionPanePlannerTests
             source.IndexOf("private IReadOnlyList<SelectionPaneVisibilityChange>", StringComparison.Ordinal) -
             source.IndexOf("private void AcceptMove", StringComparison.Ordinal));
         acceptMoveBody.Should().NotContain("DialogResult = true");
-        hostSource.Should().Contain("result.MoveChanges.Select");
+        hostSource.Should().Contain("SelectionPaneGroupedCommandPlanner.CreateCommand");
         hostSource.Should().NotContain("SelectionPaneDialogAction.MoveUp when dialog.Result.Target");
     }
 
