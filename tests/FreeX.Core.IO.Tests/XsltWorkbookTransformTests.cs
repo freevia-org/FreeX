@@ -905,6 +905,39 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_DecimalFormat_GeneratesFormattedTextCells()
+    {
+        using var source = StreamFromString("<rows><row amount=\"1234.5\" ratio=\"0.875\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:decimal-format name="report" decimal-separator="," grouping-separator="." percent="%" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Formatted">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="format-number(row/@amount, '#.##0,00', 'report')" /></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="format-number(row/@ratio, '0,0%', 'report')" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .Contain("<ss:Worksheet ss:Name=\"Formatted\">")
+            .And.Contain("<ss:Data ss:Type=\"String\">1.234,50</ss:Data>")
+            .And.Contain("<ss:Data ss:Type=\"String\">87,5%</ss:Data>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetHtmlOutput_PreservesHtmlSerialization()
     {
         using var source = StreamFromString("<rows><row name=\"April\" /></rows>");
