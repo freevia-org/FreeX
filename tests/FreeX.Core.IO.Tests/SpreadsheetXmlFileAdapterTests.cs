@@ -2342,6 +2342,49 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromDataTypeAttributeValueTemplate()
+    {
+        using var source = StreamFromString("""
+            <cells>
+              <cell type="String" value="Ready"/>
+              <cell type="Number" value="42.25"/>
+              <cell type="Boolean" value="1"/>
+              <cell type="DateTime" value="2026-05-31T08:15:30"/>
+            </cells>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/cells">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Dynamic Types">
+                    <ss:Table>
+                      <ss:Row>
+                        <xsl:for-each select="cell">
+                          <ss:Cell>
+                            <ss:Data ss:Type="{@type}"><xsl:value-of select="@value"/></ss:Data>
+                          </ss:Cell>
+                        </xsl:for-each>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Dynamic Types");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Ready"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(42.25));
+        sheet.GetCell(1, 3)!.Value.Should().Be(new BoolValue(true));
+        sheet.GetCell(1, 4)!.Value.Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 31, 8, 15, 30)));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlHyperlinksAndComments()
     {
         using var source = StreamFromString("""
