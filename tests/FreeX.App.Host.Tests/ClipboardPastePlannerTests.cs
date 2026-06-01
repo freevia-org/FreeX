@@ -120,8 +120,7 @@ public sealed class ClipboardPastePlannerTests
             var previousText = Clipboard.ContainsText() ? Clipboard.GetText() : null;
             try
             {
-                Clipboard.SetText("alpha\t42\r\nbeta\t99");
-                var clipboardText = Clipboard.GetText();
+                var clipboardText = SetClipboardTextAndReadBack("alpha\t42\r\nbeta\t99");
 
                 ClipboardPastePlanner.ShouldUseInternalClipboard("old internal copy", clipboardText)
                     .Should()
@@ -138,10 +137,39 @@ public sealed class ClipboardPastePlannerTests
             finally
             {
                 if (previousText is not null)
-                    Clipboard.SetText(previousText);
+                    _ = SetClipboardTextAndReadBack(previousText);
                 else
                     Clipboard.Clear();
             }
         });
+    }
+
+    private static string SetClipboardTextAndReadBack(string text)
+    {
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            try
+            {
+                Clipboard.SetText(text, TextDataFormat.UnicodeText);
+                Clipboard.Flush();
+
+                if (Clipboard.ContainsText(TextDataFormat.UnicodeText))
+                {
+                    var clipboardText = Clipboard.GetText(TextDataFormat.UnicodeText);
+                    if (clipboardText == text)
+                        return clipboardText;
+                }
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                // The OS clipboard is process-global; retry when another process briefly owns it.
+            }
+
+            Thread.Sleep(50);
+        }
+
+        return Clipboard.ContainsText(TextDataFormat.UnicodeText)
+            ? Clipboard.GetText(TextDataFormat.UnicodeText)
+            : "";
     }
 }
