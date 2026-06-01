@@ -5,6 +5,8 @@ namespace FreeX.Core.Commands;
 
 public static partial class DataValidationService
 {
+    private static readonly string MissingBlankCellText = ToValidationText(BlankValue.Instance);
+
     private static string? ValidateList(DataValidation dv, ScalarValue value)
     {
         if (string.IsNullOrEmpty(dv.Formula1))
@@ -319,6 +321,19 @@ public static partial class DataValidationService
         var startCol = Math.Min(firstCol, lastCol);
         var endCol = Math.Max(firstCol, lastCol);
         var textValue = ToValidationText(value);
+        var occupiedCells = sheet.GetOccupiedCellMap();
+        var rowCount = (ulong)(endRow - startRow) + 1;
+        var colCount = (ulong)(endCol - startCol) + 1;
+
+        if (occupiedCells.Count > 0 &&
+            (ulong)occupiedCells.Count <= rowCount * colCount &&
+            !CouldMatchMissingBlankCell(textValue))
+        {
+            if (occupiedCells is Dictionary<(uint Row, uint Col), Cell> occupiedDictionary)
+                return OccupiedRangeContainsValue(occupiedDictionary, startRow, endRow, startCol, endCol, textValue);
+
+            return OccupiedRangeContainsValue(occupiedCells, startRow, endRow, startCol, endCol, textValue);
+        }
 
         for (var row = startRow; row <= endRow; row++)
         {
@@ -332,6 +347,49 @@ public static partial class DataValidationService
 
         return false;
     }
+
+    private static bool OccupiedRangeContainsValue(
+        Dictionary<(uint Row, uint Col), Cell> occupiedCells,
+        uint startRow,
+        uint endRow,
+        uint startCol,
+        uint endCol,
+        string textValue)
+    {
+        foreach (var ((row, col), cell) in occupiedCells)
+        {
+            if (row < startRow || row > endRow || col < startCol || col > endCol)
+                continue;
+
+            if (string.Equals(ToValidationText(cell.Value), textValue, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool OccupiedRangeContainsValue(
+        IReadOnlyDictionary<(uint Row, uint Col), Cell> occupiedCells,
+        uint startRow,
+        uint endRow,
+        uint startCol,
+        uint endCol,
+        string textValue)
+    {
+        foreach (var ((row, col), cell) in occupiedCells)
+        {
+            if (row < startRow || row > endRow || col < startCol || col > endCol)
+                continue;
+
+            if (string.Equals(ToValidationText(cell.Value), textValue, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool CouldMatchMissingBlankCell(string textValue) =>
+        string.Equals(textValue, MissingBlankCellText, StringComparison.OrdinalIgnoreCase);
 
     private static IReadOnlyCollection<string> ReadRangeValues(
         Sheet sheet,
