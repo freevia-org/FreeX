@@ -37,6 +37,13 @@ public static class RibbonTooltip
         TryOpenSubmenuForKeyTip(menu, keyTip, out _);
 
     public static bool TryOpenSubmenuForKeyTip(ItemsControl menu, string keyTip, out MenuItem? openedSubmenu)
+        => TryOpenSubmenuForKeyTip(menu, keyTip, scopePrefix: null, out openedSubmenu);
+
+    public static bool TryOpenSubmenuForKeyTip(
+        ItemsControl menu,
+        string keyTip,
+        string? scopePrefix,
+        out MenuItem? openedSubmenu)
     {
         var normalizedKeyTip = NormalizeKeyTip(keyTip);
         if (normalizedKeyTip is null)
@@ -50,7 +57,10 @@ public static class RibbonTooltip
             if (!item.IsEnabled)
                 continue;
 
-            if (string.Equals(NormalizeKeyTip(GetKeyTip(item)), normalizedKeyTip, StringComparison.OrdinalIgnoreCase) &&
+            if (string.Equals(
+                    RibbonMenuKeyTipScopePlanner.GetScopedKeyTip(item, scopePrefix),
+                    normalizedKeyTip,
+                    StringComparison.OrdinalIgnoreCase) &&
                 item.Items.Count > 0)
             {
                 item.IsSubmenuOpen = true;
@@ -62,7 +72,7 @@ public static class RibbonTooltip
             if (item.Items.Count > 0)
                 item.IsSubmenuOpen = true;
 
-            if (TryOpenSubmenuForKeyTip(item, normalizedKeyTip, out openedSubmenu))
+            if (TryOpenSubmenuForKeyTip(item, normalizedKeyTip, scopePrefix, out openedSubmenu))
             {
                 item.IsSubmenuOpen = true;
                 if (openedSubmenu is not null)
