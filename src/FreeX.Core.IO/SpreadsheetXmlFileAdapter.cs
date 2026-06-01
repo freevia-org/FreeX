@@ -618,7 +618,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     {
         if (workbook.ValidateNamedRangeName(name) is not null ||
             workbook.GetSheet(range.Start.Sheet) is not { } sheet ||
-            range.Start.Sheet != range.End.Sheet)
+            !IsValidGridRange(range))
         {
             return null;
         }
