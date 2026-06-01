@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Xml.Linq;
 using FreeX.App.Host;
 using FluentAssertions;
@@ -287,6 +288,8 @@ public sealed class OptionsDialogSourceTests
         xaml.Should().Contain("x:Name=\"QuickAccessMoveDownButton\"");
         xaml.Should().Contain("x:Name=\"QuickAccessResetButton\"");
         xaml.Should().Contain("Click=\"QuickAccessResetButton_Click\"");
+        xaml.Should().Contain("MouseDoubleClick=\"QuickAccessAvailableCommandsList_MouseDoubleClick\"");
+        xaml.Should().Contain("MouseDoubleClick=\"QuickAccessSelectedCommandsList_MouseDoubleClick\"");
 
         source.Should().Contain("PanelQuickAccessToolbar.Visibility = selectedIndex == 8 ? Visibility.Visible : Visibility.Collapsed;");
         source.Should().Contain("QuickAccessToolbarCatalog.NormalizeCommandIds(_opts.QuickAccessToolbarCommands)");
@@ -295,6 +298,11 @@ public sealed class OptionsDialogSourceTests
         source.Should().Contain("QuickAccessToolbarCatalog.DefaultCommandIds");
         source.Should().Contain("QuickAccessCommandMatchesFilter(command, filterText)");
         source.Should().Contain("QuickAccessSearchBox_TextChanged");
+        source.Should().Contain("private void QuickAccessAvailableCommandsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
+        source.Should().Contain("private void QuickAccessSelectedCommandsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
+        source.Should().Contain("QuickAccessAddButton_Click(sender, e);");
+        source.Should().Contain("QuickAccessRemoveButton_Click(sender, e);");
+        source.Should().Contain("e.Handled = true;");
         source.Should().NotContain("DeferredCommandMessages.QuickAccessToolbarReset()");
     }
 
@@ -329,6 +337,49 @@ public sealed class OptionsDialogSourceTests
                 GetListDisplayNames(availableList).Should().BeEmpty();
                 GetListDisplayNames(selectedList).Should().Contain("Bold");
                 addButton.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void OptionsDialog_RuntimeQuickAccessToolbarDoubleClickAddsAndRemovesSelectedCommand()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new OptionsDialog(new FreeXOptions());
+            dialog.Show();
+            try
+            {
+                var tabList = GetControl<ListBox>(dialog, "TabList");
+                var searchBox = GetControl<TextBox>(dialog, "QuickAccessSearchBox");
+                var availableList = GetControl<ListBox>(dialog, "QuickAccessAvailableCommandsList");
+                var selectedList = GetControl<ListBox>(dialog, "QuickAccessSelectedCommandsList");
+
+                tabList.SelectedIndex = 8;
+                searchBox.Text = "bold";
+                availableList.SelectedIndex = 0;
+
+                var addDoubleClick = CreateMouseDoubleClickEvent();
+                availableList.RaiseEvent(addDoubleClick);
+
+                addDoubleClick.Handled.Should().BeTrue();
+                GetListDisplayNames(availableList).Should().BeEmpty();
+                GetListDisplayNames(selectedList).Should().Contain("Bold");
+
+                selectedList.SelectedItem = selectedList.Items
+                    .Cast<object>()
+                    .First(item => string.Equals(GetListDisplayName(item), "Bold", StringComparison.Ordinal));
+
+                var removeDoubleClick = CreateMouseDoubleClickEvent();
+                selectedList.RaiseEvent(removeDoubleClick);
+
+                removeDoubleClick.Handled.Should().BeTrue();
+                GetListDisplayNames(availableList).Should().Equal("Bold");
+                GetListDisplayNames(selectedList).Should().NotContain("Bold");
             }
             finally
             {
@@ -448,8 +499,17 @@ public sealed class OptionsDialogSourceTests
     private static IReadOnlyList<string> GetListDisplayNames(ListBox listBox) =>
         listBox.Items
             .Cast<object>()
-            .Select(item => item.GetType().GetProperty("DisplayName")?.GetValue(item) as string ?? string.Empty)
+            .Select(GetListDisplayName)
             .ToArray();
+
+    private static string GetListDisplayName(object item) =>
+        item.GetType().GetProperty("DisplayName")?.GetValue(item) as string ?? string.Empty;
+
+    private static MouseButtonEventArgs CreateMouseDoubleClickEvent() =>
+        new(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+        {
+            RoutedEvent = Control.MouseDoubleClickEvent
+        };
 
     private static void ClickOkAllowingNonModalDialogResult(OptionsDialog dialog)
     {

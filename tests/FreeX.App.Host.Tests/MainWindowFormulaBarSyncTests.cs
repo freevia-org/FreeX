@@ -761,6 +761,28 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void NameBoxEnter_WithPaddedValidNewName_DefinesTrimmedNameForSelectedRange()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var expectedRange = new GridRange(
+                new CellAddress(harness.CurrentSheetId, 2, 2),
+                new CellAddress(harness.CurrentSheetId, 4, 3));
+
+            harness.SelectRange(2, 2, 4, 3);
+            harness.SetCellAddressBoxText("  SalesData  ");
+
+            harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
+
+            harness.NamedRange("SalesData").Should().Be(expectedRange);
+            harness.SelectedRange.Should().Be(expectedRange);
+            harness.CellAddressBoxText.Should().Be("SalesData");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void NameBoxEscape_RestoresSelectedRangeReferenceAndReturnsFocusToGrid()
     {
         StaTestRunner.Run(() =>

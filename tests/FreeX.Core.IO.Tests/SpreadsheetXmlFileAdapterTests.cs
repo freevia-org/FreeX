@@ -905,6 +905,38 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Save_IgnoresOutOfBoundsSpreadsheetMlCellsAndRanges()
+    {
+        var workbook = new Workbook("XmlInvalidBounds");
+        var sheet = workbook.AddSheet("Data");
+        var validAddress = new CellAddress(sheet.Id, 1, 1);
+        var invalidRow = new CellAddress(sheet.Id, CellAddress.MaxRow + 1, 1);
+        var invalidColumn = new CellAddress(sheet.Id, 1, CellAddress.MaxCol + 1);
+        sheet.SetCell(validAddress, new TextValue("kept"));
+        sheet.SetCell(invalidRow, new TextValue("drop-row"));
+        sheet.SetCell(invalidColumn, new TextValue("drop-column"));
+        sheet.Comments[invalidRow] = "drop comment";
+        sheet.Hyperlinks[invalidColumn] = "https://example.invalid/drop";
+        var styleId = workbook.RegisterStyle(new CellStyle { NumberFormat = "0.00" });
+        sheet.SetStyleOnly(CellAddress.MaxRow + 1, 2, styleId);
+        sheet.AddMergedRegion(new GridRange(
+            validAddress,
+            invalidColumn));
+
+        using var stream = new MemoryStream();
+        new SpreadsheetXmlFileAdapter().Save(workbook, stream);
+
+        stream.Position = 0;
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var cells = document.Descendants(ss + "Cell").ToList();
+        cells.Should().ContainSingle();
+        cells.Single().Element(ss + "Data")!.Value.Should().Be("kept");
+        cells.Single().Attribute(ss + "MergeAcross").Should().BeNull();
+        document.ToString(SaveOptions.DisableFormatting).Should().NotContain("drop-");
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsMergedRegions()
     {
         var workbook = new Workbook("XmlMergeRoundTrip");
@@ -2523,6 +2555,48 @@ public sealed class SpreadsheetXmlFileAdapterTests
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 1, 3)));
         var formulaCell = sheet.GetCell(2, 3);
+        formulaCell.Should().NotBeNull();
+        formulaCell!.FormulaText.Should().Be("SUM(RC[-2]:RC[-1])");
+        formulaCell.Value.Should().Be(new NumberValue(19.75));
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromFormulaAttributeValueTemplate()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row first="12.5" second="7.25" formula="=SUM(RC[-2]:RC[-1])" total="19.75" />
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Dynamic Formula">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@first" /></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@second" /></ss:Data></ss:Cell>
+                        <ss:Cell ss:Formula="{row/@formula}">
+                          <ss:Data ss:Type="Number"><xsl:value-of select="row/@total" /></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Dynamic Formula");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new NumberValue(12.5));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(7.25));
+        var formulaCell = sheet.GetCell(1, 3);
         formulaCell.Should().NotBeNull();
         formulaCell!.FormulaText.Should().Be("SUM(RC[-2]:RC[-1])");
         formulaCell.Value.Should().Be(new NumberValue(19.75));
