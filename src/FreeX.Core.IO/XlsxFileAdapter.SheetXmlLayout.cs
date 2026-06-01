@@ -86,7 +86,10 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
         string? CodeName);
 
-    private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(Stream xlsxStream, XDocument? stylesXml)
+    private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(
+        Stream xlsxStream,
+        XDocument? stylesXml,
+        List<string>? warnings = null)
     {
         var result = new Dictionary<string, SheetXmlLayout>(StringComparer.OrdinalIgnoreCase);
 
@@ -128,9 +131,9 @@ public sealed partial class XlsxFileAdapter
                 result[name] = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry, differentialStyles);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Worksheet XML metadata is best-effort; ClosedXML still loads workbook content.
+            warnings?.Add($"[worksheet-xml-metadata]: {ex.Message}");
         }
 
         return result;

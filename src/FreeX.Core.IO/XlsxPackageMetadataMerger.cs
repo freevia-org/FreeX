@@ -16,22 +16,27 @@ internal static class XlsxPackageMetadataMerger
 
         foreach (var sourceEntry in sourceArchive.Entries)
         {
-            if (IsExcludedSourcePart(sourceEntry.FullName, excludedSourceParts))
+            if (!TryNormalizeCopyableEntryName(sourceEntry.FullName, out var sourceEntryName))
                 continue;
-            if (IsPackageMetadataEntry(sourceEntry.FullName))
+            if (IsExcludedSourcePart(sourceEntryName, excludedSourceParts))
                 continue;
-            if (targetArchive.GetEntry(sourceEntry.FullName) is not null)
+            if (IsPackageMetadataEntry(sourceEntryName))
+                continue;
+            if (targetArchive.GetEntry(sourceEntryName) is not null)
                 continue;
 
-            CopyEntry(sourceEntry, targetArchive);
+            CopyEntry(sourceEntry, targetArchive, sourceEntryName);
         }
 
         return generatedEntriesBeforeMerge;
     }
 
     public static void CopyEntry(ZipArchiveEntry sourceEntry, ZipArchive targetArchive)
+        => CopyEntry(sourceEntry, targetArchive, sourceEntry.FullName);
+
+    private static void CopyEntry(ZipArchiveEntry sourceEntry, ZipArchive targetArchive, string targetEntryName)
     {
-        var targetEntry = targetArchive.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
+        var targetEntry = targetArchive.CreateEntry(targetEntryName, CompressionLevel.Optimal);
         targetEntry.LastWriteTime = sourceEntry.LastWriteTime;
         using var sourceStream = sourceEntry.Open();
         using var targetStream = targetEntry.Open();
@@ -160,6 +165,36 @@ internal static class XlsxPackageMetadataMerger
     private static bool IsPackageMetadataEntry(string entryName) =>
         string.Equals(entryName, "[Content_Types].xml", StringComparison.OrdinalIgnoreCase) ||
         entryName.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryNormalizeCopyableEntryName(string entryName, out string normalized)
+    {
+        normalized = "";
+        if (string.IsNullOrWhiteSpace(entryName))
+            return false;
+
+        var trimmed = entryName.Trim();
+        if (trimmed.Length != entryName.Length ||
+            trimmed[0] is '/' or '\\' ||
+            trimmed.Contains('\\') ||
+            trimmed.Contains(':'))
+        {
+            return false;
+        }
+
+        var segments = trimmed.Split('/');
+        if (segments.Length == 0 ||
+            segments.Any(segment => segment.Length == 0 || segment is "." or ".."))
+        {
+            return false;
+        }
+
+        var normalizedPath = XlsxPackagePath.NormalizeZipPath(trimmed);
+        if (!string.Equals(normalizedPath, trimmed, StringComparison.Ordinal))
+            return false;
+
+        normalized = normalizedPath;
+        return true;
+    }
 
     private static string NormalizeContentTypePartName(string value) =>
         XlsxPackagePath.NormalizeZipPath(value.Trim().Replace('\\', '/').TrimStart('/'));
