@@ -27,6 +27,58 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_RoundTripsPersistedGeneralUiOptions()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "FreeXOptionsDialogTests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(tempDirectory, "options.json");
+        var previousPath = Environment.GetEnvironmentVariable(FreeXOptions.OptionsPathEnvironmentVariable);
+        Environment.SetEnvironmentVariable(FreeXOptions.OptionsPathEnvironmentVariable, path);
+
+        try
+        {
+            StaTestRunner.Run(() =>
+            {
+                var dialog = new OptionsDialog(new FreeXOptions
+                {
+                    CollapseRibbonAutomatically = true,
+                    ShowScreenTips = false
+                });
+                dialog.Show();
+                try
+                {
+                    var collapseRibbon = GetControl<CheckBox>(dialog, "OptCollapseRibbon");
+                    var showScreenTips = GetControl<CheckBox>(dialog, "OptShowScreenTips");
+
+                    collapseRibbon.IsChecked.Should().BeTrue();
+                    showScreenTips.IsChecked.Should().BeFalse();
+
+                    collapseRibbon.IsChecked = false;
+                    showScreenTips.IsChecked = true;
+
+                    ClickOkAllowingNonModalDialogResult(dialog);
+
+                    dialog.Result.CollapseRibbonAutomatically.Should().BeFalse();
+                    dialog.Result.ShowScreenTips.Should().BeTrue();
+                }
+                finally
+                {
+                    dialog.Close();
+                }
+            });
+
+            var reloaded = FreeXOptions.LoadFromPath(path);
+            reloaded.CollapseRibbonAutomatically.Should().BeFalse();
+            reloaded.ShowScreenTips.Should().BeTrue();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(FreeXOptions.OptionsPathEnvironmentVariable, previousPath);
+            if (Directory.Exists(tempDirectory))
+                Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void OptionsDialog_PreservesPersistedExportOptionsWhenSavingGeneralOptions()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
@@ -398,4 +450,19 @@ public sealed class OptionsDialogSourceTests
             .Cast<object>()
             .Select(item => item.GetType().GetProperty("DisplayName")?.GetValue(item) as string ?? string.Empty)
             .ToArray();
+
+    private static void ClickOkAllowingNonModalDialogResult(OptionsDialog dialog)
+    {
+        var okButton = GetControl<Button>(dialog, "OkBtn");
+        try
+        {
+            okButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        }
+        catch (InvalidOperationException invalidOperation)
+            when (invalidOperation.Message.Contains("DialogResult", StringComparison.Ordinal))
+        {
+            // The handler commits Result before setting DialogResult. Direct modeless invocation in
+            // tests reaches that WPF guard after exercising the same save path as the dialog button.
+        }
+    }
 }
