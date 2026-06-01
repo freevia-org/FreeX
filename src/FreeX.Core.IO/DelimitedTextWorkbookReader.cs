@@ -33,7 +33,9 @@ internal static partial class DelimitedTextWorkbookReader
         using var reader = CreateTextReader(stream);
         uint row = 1;
         var canReadSeparatorDirective = allowSeparatorDirective;
-        while (TryReadRecord(reader, delimiter, out var fields))
+        var fields = new DelimitedTextRecord();
+        var fieldBuilder = new StringBuilder();
+        while (TryReadRecord(reader, delimiter, fields, fieldBuilder))
         {
             if (row > CellAddress.MaxRow)
                 break;
@@ -77,7 +79,7 @@ internal static partial class DelimitedTextWorkbookReader
     }
 
     private static bool TryReadSeparatorDirective(
-        IReadOnlyList<DelimitedTextField> fields,
+        DelimitedTextRecord fields,
         char currentDelimiter,
         out char delimiter)
     {
@@ -107,7 +109,24 @@ internal static partial class DelimitedTextWorkbookReader
     internal static bool TryReadRecord(TextReader reader, char delimiter, out List<DelimitedTextField> fields)
     {
         fields = [];
-        var current = new StringBuilder();
+        var record = new DelimitedTextRecord();
+        if (!TryReadRecord(reader, delimiter, record, new StringBuilder()))
+            return false;
+
+        fields.Capacity = record.Count;
+        for (var i = 0; i < record.Count; i++)
+            fields.Add(record[i]);
+        return true;
+    }
+
+    private static bool TryReadRecord(
+        TextReader reader,
+        char delimiter,
+        DelimitedTextRecord fields,
+        StringBuilder current)
+    {
+        fields.Clear();
+        current.Clear();
         var inQuotes = false;
         var atFieldStart = true;
         var currentWasQuoted = false;
@@ -181,6 +200,25 @@ internal static partial class DelimitedTextWorkbookReader
     }
 
     internal readonly record struct DelimitedTextField(string Value, bool WasQuoted);
+
+    private sealed class DelimitedTextRecord
+    {
+        private DelimitedTextField[] fields = new DelimitedTextField[16];
+
+        public int Count { get; private set; }
+
+        public DelimitedTextField this[int index] => fields[index];
+
+        public void Clear() => Count = 0;
+
+        public void Add(DelimitedTextField field)
+        {
+            if (Count == fields.Length)
+                Array.Resize(ref fields, fields.Length * 2);
+
+            fields[Count++] = field;
+        }
+    }
 
     private static bool ShouldPreserveQuotedFormulaLikeText(DelimitedTextField field)
     {
