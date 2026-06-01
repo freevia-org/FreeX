@@ -603,6 +603,42 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_CopyOf_CopiesSpreadsheetMlFragmentsFromSource()
+    {
+        using var source = StreamFromString("""
+            <payload xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <template>
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Copied">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String">Alpha</ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </template>
+            </payload>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml" omit-xml-declaration="yes" />
+              <xsl:template match="/payload">
+                <xsl:copy-of select="template/*" />
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .StartWith("<ss:Workbook")
+            .And.Contain("ss:Name=\"Copied\"")
+            .And.Contain("<ss:Data ss:Type=\"String\">Alpha</ss:Data>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetHtmlOutput_PreservesHtmlSerialization()
     {
         using var source = StreamFromString("<rows><row name=\"April\" /></rows>");
