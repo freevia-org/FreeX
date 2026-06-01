@@ -28,8 +28,11 @@ public sealed class NativeJsonAdapterPerformanceTests
             .EnumerateArray()
             .ToDictionary(cell => cell.GetProperty("Address").GetString()!);
 
-        cells["A1"].GetProperty("Style").ValueKind.Should().Be(JsonValueKind.Null);
-        cells["B1"].GetProperty("Style").GetProperty("Bold").GetBoolean().Should().BeTrue();
+        cells["A1"].TryGetProperty("Style", out _).Should().BeFalse();
+        cells["A1"].TryGetProperty("StyleId", out _).Should().BeFalse();
+        var styleId = cells["B1"].GetProperty("StyleId").GetInt32();
+        cells["B1"].TryGetProperty("Style", out _).Should().BeFalse();
+        document.RootElement.GetProperty("CellStyles")[styleId].GetProperty("Bold").GetBoolean().Should().BeTrue();
 
         stream.Position = 0;
         var loaded = adapter.Load(stream);
