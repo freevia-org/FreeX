@@ -263,6 +263,57 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void Benchmark_LoadDrawingPicturesWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        const int pictureCount = 180;
+        var workbook = CreateDrawingPicturesWorkbook(pictureCount);
+        var adapter = new XlsxFileAdapter();
+        byte[] package;
+        using (var source = new MemoryStream())
+        {
+            adapter.Save(workbook, source);
+            package = source.ToArray();
+        }
+
+        using (var warmup = new MemoryStream(package))
+        {
+            var loaded = adapter.Load(warmup);
+            loaded.GetSheetAt(0).Pictures.Should().HaveCount(pictureCount);
+        }
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream(package);
+            var step = Stopwatch.StartNew();
+            var loaded = adapter.Load(stream);
+            step.Stop();
+            loaded.GetSheetAt(0).Pictures.Should().HaveCount(pictureCount);
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_LOAD_DRAWING_PICTURES " +
+            $"pictures={pictureCount} package_bytes={package.Length:N0} steps={iterations} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Benchmark_SaveIgnoredErrorsWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -1082,6 +1133,44 @@ public sealed class XlsxFileAdapterPerformanceTests
 
         return workbook;
     }
+
+    private static Workbook CreateDrawingPicturesWorkbook(int pictureCount)
+    {
+        var workbook = new Workbook("Drawing Pictures IO");
+        var sheet = workbook.AddSheet("Sheet1");
+        var imageBytes = MinimalPngBytes();
+        for (var index = 0; index < pictureCount; index++)
+        {
+            var row = (uint)(1 + index / 18);
+            var column = (uint)(1 + index % 18);
+            sheet.Pictures.Add(new PictureModel
+            {
+                Name = $"Picture {index + 1}",
+                Anchor = new CellAddress(sheet.Id, row, column),
+                Kind = PictureKind.Image,
+                ImageBytes = imageBytes,
+                ContentType = "image/png",
+                Width = 72,
+                Height = 48,
+                AltText = $"Drawing picture {index + 1}"
+            });
+        }
+
+        return workbook;
+    }
+
+    private static byte[] MinimalPngBytes() =>
+    [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82
+    ];
 
     private static Workbook CreateIgnoredErrorsSaveWorkbook()
     {
