@@ -1058,6 +1058,8 @@ public sealed partial class NativeJsonAdapter
     private class CellDto
     {
         public string Address { get; set; } = "";
+        [JsonIgnore]
+        public ulong ParsedAddress { get; set; }
         public string? Value { get; set; }
         public string? ValueType { get; set; }
         public string? Formula { get; set; }
@@ -1072,6 +1074,8 @@ public sealed partial class NativeJsonAdapter
     private class StyleOnlyCellDto
     {
         public string? Address { get; set; }
+        [JsonIgnore]
+        public ulong ParsedAddress { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? StyleId { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -1134,6 +1138,65 @@ public sealed partial class NativeJsonAdapter
 
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
             => GetEnumerator();
+    }
+
+    private static bool TryReadCellAddressToken(ref Utf8JsonReader reader, out uint row, out uint col)
+    {
+        if (reader.HasValueSequence)
+        {
+            row = 0;
+            col = 0;
+            return false;
+        }
+
+        return TryParseCellAddressUtf8(reader.ValueSpan, out row, out col);
+    }
+
+    private static ulong PackCellAddress(uint row, uint col) =>
+        ((ulong)row << 32) | col;
+
+    private static bool TryParseCellAddressUtf8(ReadOnlySpan<byte> value, out uint row, out uint col)
+    {
+        row = 0;
+        col = 0;
+        var index = 0;
+        var columnStart = index;
+        while (index < value.Length)
+        {
+            var c = value[index];
+            var columnDigit = (uint)(c - 'A');
+            if (columnDigit > 25)
+            {
+                columnDigit = (uint)(c - 'a');
+                if (columnDigit > 25)
+                    break;
+            }
+
+            col = col * 26 + columnDigit + 1;
+            if (col > CellAddress.MaxCol)
+                return false;
+            index++;
+        }
+
+        if (index == columnStart)
+            return false;
+
+        var rowStart = index;
+        while (index < value.Length)
+        {
+            var c = value[index];
+            var digit = (uint)(c - '0');
+            if (digit > 9)
+                return false;
+
+            if (row > CellAddress.MaxRow / 10 || row == CellAddress.MaxRow / 10 && digit > CellAddress.MaxRow % 10)
+                return false;
+
+            row = row * 10 + digit;
+            index++;
+        }
+
+        return index > rowStart && row > 0;
     }
 
     private sealed class CellDtoSequenceJsonConverter : JsonConverter<CellDtoSequence>
@@ -1261,7 +1324,22 @@ public sealed partial class NativeJsonAdapter
                 if (reader.ValueTextEquals(AddressProperty))
                 {
                     reader.Read();
-                    dto.Address = reader.TokenType == JsonTokenType.Null ? "" : reader.GetString() ?? "";
+                    if (reader.TokenType == JsonTokenType.Null)
+                    {
+                        dto.Address = "";
+                    }
+                    else if (reader.TokenType != JsonTokenType.String)
+                    {
+                        throw new JsonException();
+                    }
+                    else if (TryReadCellAddressToken(ref reader, out var row, out var col))
+                    {
+                        dto.ParsedAddress = PackCellAddress(row, col);
+                    }
+                    else
+                    {
+                        dto.Address = reader.GetString() ?? "";
+                    }
                 }
                 else if (reader.ValueTextEquals(ValueProperty))
                 {
@@ -1363,7 +1441,22 @@ public sealed partial class NativeJsonAdapter
                 if (reader.ValueTextEquals(AddressProperty))
                 {
                     reader.Read();
-                    dto.Address = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
+                    if (reader.TokenType == JsonTokenType.Null)
+                    {
+                        dto.Address = null;
+                    }
+                    else if (reader.TokenType != JsonTokenType.String)
+                    {
+                        throw new JsonException();
+                    }
+                    else if (TryReadCellAddressToken(ref reader, out var row, out var col))
+                    {
+                        dto.ParsedAddress = PackCellAddress(row, col);
+                    }
+                    else
+                    {
+                        dto.Address = reader.GetString();
+                    }
                 }
                 else if (reader.ValueTextEquals(StyleIdProperty))
                 {
