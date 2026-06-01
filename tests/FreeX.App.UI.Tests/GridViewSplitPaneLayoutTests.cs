@@ -921,6 +921,32 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void FormulaTraceLayoutPlanner_VisitLayouts_MatchesCalculateLayouts()
+    {
+        var sheetId = SheetId.New();
+        var otherSheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(2, 24, 20), new RowMetric(4, 30, 44)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(4, 100, 144)],
+            null,
+            []);
+        FormulaTraceArrow[] arrows =
+        [
+            new(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2)),
+            new(new CellAddress(sheetId, 4, 4), new CellAddress(sheetId, 8, 4)),
+            new(new CellAddress(otherSheetId, 1, 1), new CellAddress(sheetId, 1, 1))
+        ];
+
+        var expected = FormulaTraceLayoutPlanner.CalculateLayouts(viewport, arrows, sheetId);
+        var consumer = new CollectingFormulaTraceArrowLayoutConsumer();
+
+        FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, sheetId, ref consumer);
+
+        consumer.Layouts.Should().Equal(expected);
+    }
+
+    [Fact]
     public void CalculateFormulaTraceArrowLayouts_ReturnsMarkersForCrossSheetAndOffscreenCells()
     {
         var sheetId = SheetId.New();
@@ -1043,6 +1069,23 @@ public sealed class GridViewSplitPaneLayoutTests
         rowLookupBuilder.Should().NotContain("ContainsKey");
         columnLookupBuilder.Should().Contain("lookup.TryAdd(col.Col, col);");
         columnLookupBuilder.Should().NotContain("ContainsKey");
+    }
+
+    private struct CollectingFormulaTraceArrowLayoutConsumer : IFormulaTraceArrowLayoutConsumer
+    {
+        private List<FormulaTraceArrowLayout>? _layouts;
+
+        public void AcceptLayout(
+            Point start,
+            Point end,
+            FormulaTraceArrowLayoutKind kind,
+            CellAddress? navigationTarget)
+        {
+            _layouts ??= [];
+            _layouts.Add(new FormulaTraceArrowLayout(start, end, kind, navigationTarget));
+        }
+
+        public readonly IReadOnlyList<FormulaTraceArrowLayout> Layouts => _layouts ?? [];
     }
 
     private static DisplayCell Cell(uint row, uint col, string text, CellStyle? style = null) =>

@@ -64,10 +64,12 @@ public partial class GridView
 
     private void RenderFormulaTraceArrows(DrawingContext dc)
     {
-        if (Viewport is null || FormulaTraceArrows is not { Count: > 0 }) return;
+        var viewport = Viewport;
+        var arrows = FormulaTraceArrows;
+        if (viewport is null || arrows is not { Count: > 0 }) return;
 
-        foreach (var arrow in CalculateFormulaTraceArrowLayouts(Viewport, FormulaTraceArrows, FormulaTraceSheetId))
-            DrawFormulaTraceArrow(dc, arrow);
+        var consumer = new FormulaTraceArrowDrawingConsumer(dc);
+        FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, FormulaTraceSheetId, ref consumer);
     }
 
     public static IReadOnlyList<FormulaTraceArrowLayout> CalculateFormulaTraceArrowLayouts(
@@ -83,29 +85,43 @@ public partial class GridView
         Point pos) =>
         FormulaTraceLayoutPlanner.HitTestMarker(viewport, arrows, sheetId, pos);
 
-    private static void DrawFormulaTraceArrow(DrawingContext dc, FormulaTraceArrowLayout arrow)
+    private readonly struct FormulaTraceArrowDrawingConsumer(DrawingContext dc) : IFormulaTraceArrowLayoutConsumer
     {
-        if (arrow.Kind != FormulaTraceArrowLayoutKind.VisibleArrow)
+        public void AcceptLayout(
+            Point start,
+            Point end,
+            FormulaTraceArrowLayoutKind kind,
+            CellAddress? navigationTarget) =>
+            DrawFormulaTraceArrow(dc, start, end, kind);
+    }
+
+    private static void DrawFormulaTraceArrow(
+        DrawingContext dc,
+        Point start,
+        Point end,
+        FormulaTraceArrowLayoutKind kind)
+    {
+        if (kind != FormulaTraceArrowLayoutKind.VisibleArrow)
         {
-            DrawFormulaTraceMarker(dc, arrow);
+            DrawFormulaTraceMarker(dc, start, kind);
             return;
         }
 
-        dc.DrawLine(FormulaTraceArrowPen, arrow.Start, arrow.End);
+        dc.DrawLine(FormulaTraceArrowPen, start, end);
 
-        var vector = arrow.Start - arrow.End;
+        var vector = start - end;
         if (vector.Length <= 0.1) return;
         vector.Normalize();
         var perpendicular = new Vector(-vector.Y, vector.X);
         const double arrowHeadLength = 8;
         const double arrowHeadHalfWidth = 4;
-        var p1 = arrow.End + vector * arrowHeadLength + perpendicular * arrowHeadHalfWidth;
-        var p2 = arrow.End + vector * arrowHeadLength - perpendicular * arrowHeadHalfWidth;
+        var p1 = end + vector * arrowHeadLength + perpendicular * arrowHeadHalfWidth;
+        var p2 = end + vector * arrowHeadLength - perpendicular * arrowHeadHalfWidth;
 
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
-            ctx.BeginFigure(arrow.End, isFilled: true, isClosed: true);
+            ctx.BeginFigure(end, isFilled: true, isClosed: true);
             ctx.LineTo(p1, isStroked: true, isSmoothJoin: false);
             ctx.LineTo(p2, isStroked: true, isSmoothJoin: false);
         }
@@ -113,12 +129,12 @@ public partial class GridView
         dc.DrawGeometry(FormulaTraceArrowBrush, null, geometry);
     }
 
-    private static void DrawFormulaTraceMarker(DrawingContext dc, FormulaTraceArrowLayout arrow)
+    private static void DrawFormulaTraceMarker(DrawingContext dc, Point point, FormulaTraceArrowLayoutKind kind)
     {
         const double radius = 5;
-        dc.DrawEllipse(FormulaTraceArrowBrush, null, arrow.Start, radius, radius);
-        if (arrow.Kind == FormulaTraceArrowLayoutKind.CrossSheetMarker)
-            dc.DrawEllipse(null, FormulaTraceArrowPen, arrow.Start, radius + 3, radius + 3);
+        dc.DrawEllipse(FormulaTraceArrowBrush, null, point, radius, radius);
+        if (kind == FormulaTraceArrowLayoutKind.CrossSheetMarker)
+            dc.DrawEllipse(null, FormulaTraceArrowPen, point, radius + 3, radius + 3);
     }
 
     private void RenderWorksheetViewOverlay(DrawingContext dc)
