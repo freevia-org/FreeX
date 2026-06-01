@@ -10,6 +10,7 @@ public partial class GridView
     private const int DefaultTextLayoutCacheLimit = 8192;
     private const int DefaultWrappedTextLayoutCacheLimit = 8192;
     private const int TextWidthLayoutCacheLimit = 32768;
+    private const int ShrinkTextLayoutCacheLimit = 32768;
 
     private readonly record struct DefaultTextLayoutKey(
         string Text,
@@ -30,6 +31,15 @@ public partial class GridView
         string CultureName,
         CellTypefaceKey Typeface,
         double FontSize,
+        double PixelsPerDip);
+
+    private readonly record struct ShrinkTextLayoutKey(
+        string Text,
+        string CultureName,
+        CellTypefaceKey Typeface,
+        double RequestedFontSize,
+        double AvailableWidth,
+        double MinimumFontSize,
         double PixelsPerDip);
 
     private FormattedText GetDefaultFormattedText(string text, double fontSize, double pixelsPerDip)
@@ -151,5 +161,37 @@ public partial class GridView
             pixelsPerDip).Width;
         _textWidthLayoutCache.Add(key, width);
         return width;
+    }
+
+    private double ResolveCachedShrinkFontSize(
+        string text,
+        CellTypefaceKey typefaceKey,
+        Typeface typeface,
+        double requestedFontSize,
+        double availableWidth,
+        double minimumFontSize,
+        double pixelsPerDip)
+    {
+        var key = new ShrinkTextLayoutKey(
+            text,
+            CultureInfo.CurrentCulture.Name,
+            typefaceKey,
+            requestedFontSize,
+            availableWidth,
+            minimumFontSize,
+            pixelsPerDip);
+        if (_shrinkTextLayoutCache.TryGetValue(key, out var cached))
+            return cached;
+
+        if (_shrinkTextLayoutCache.Count >= ShrinkTextLayoutCacheLimit)
+            _shrinkTextLayoutCache.Clear();
+
+        var resolved = ResolveShrinkFontSize(
+            requestedFontSize,
+            availableWidth,
+            size => MeasureCellTextWidth(text, typefaceKey, typeface, size, pixelsPerDip),
+            minimumFontSize);
+        _shrinkTextLayoutCache.Add(key, resolved);
+        return resolved;
     }
 }
