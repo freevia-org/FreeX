@@ -346,6 +346,7 @@ public sealed class MainWindowFormulaBarSyncTests
             harness.InsertFormulaFunction("SUM");
 
             harness.FormulaBarText.Should().Be("=SUM(");
+            harness.FormulaBarCaretIndex.Should().Be("=SUM(".Length);
             harness.InlineEditorVisible.Should().BeFalse();
             harness.FormulaBarFocused.Should().BeTrue();
             harness.CellText(1, 1).Should().Be("original");
