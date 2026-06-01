@@ -332,7 +332,7 @@ public static class AccessibilityCheckerService
         {
             var (row, col) = entry.Key;
             var cell = entry.Value;
-            if (cell.Value is not TextValue text || string.IsNullOrWhiteSpace(text.Value))
+            if (!HasVisibleCellText(cell.Value))
                 continue;
 
             var address = new CellAddress(sheet.Id, row, col);
@@ -534,7 +534,16 @@ public static class AccessibilityCheckerService
             CfRuleType.NotContainsText => !ValueText(value).Contains(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
             CfRuleType.BeginsWith => ValueText(value).StartsWith(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
             CfRuleType.EndsWith => ValueText(value).EndsWith(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
+            CfRuleType.DateOccurring => IsDateOccurringRuleTrue(rule, value),
             CfRuleType.CellValue => IsCellValueRuleTrue(rule, value),
+            _ => false
+        };
+
+    private static bool HasVisibleCellText(ScalarValue value) =>
+        value switch
+        {
+            TextValue text => !string.IsNullOrWhiteSpace(text.Value),
+            DateTimeValue => true,
             _ => false
         };
 
@@ -557,6 +566,42 @@ public static class AccessibilityCheckerService
             _ => false
         };
     }
+
+    private static bool IsDateOccurringRuleTrue(ConditionalFormat rule, ScalarValue value)
+    {
+        if (value is not DateTimeValue dateValue)
+            return false;
+
+        var date = dateValue.ToDateTime().Date;
+        var today = DateTime.Today;
+
+        return (rule.DateOccurringPeriod ?? "today") switch
+        {
+            "yesterday" => date == today.AddDays(-1),
+            "today" => date == today,
+            "tomorrow" => date == today.AddDays(1),
+            "last7Days" => date >= today.AddDays(-6) && date <= today,
+            "lastWeek" => IsWithinWeek(date, StartOfWeek(today).AddDays(-7)),
+            "thisWeek" => IsWithinWeek(date, StartOfWeek(today)),
+            "nextWeek" => IsWithinWeek(date, StartOfWeek(today).AddDays(7)),
+            "lastMonth" => MatchesMonth(date, today.AddMonths(-1)),
+            "thisMonth" => MatchesMonth(date, today),
+            "nextMonth" => MatchesMonth(date, today.AddMonths(1)),
+            _ => date == today
+        };
+    }
+
+    private static DateTime StartOfWeek(DateTime date)
+    {
+        var offset = (7 + (int)date.DayOfWeek - (int)DayOfWeek.Monday) % 7;
+        return date.AddDays(-offset).Date;
+    }
+
+    private static bool IsWithinWeek(DateTime date, DateTime weekStart) =>
+        date >= weekStart && date < weekStart.AddDays(7);
+
+    private static bool MatchesMonth(DateTime date, DateTime target) =>
+        date.Year == target.Year && date.Month == target.Month;
 
     private static int CompareCellValue(ScalarValue value, string cellText, string? threshold)
     {
