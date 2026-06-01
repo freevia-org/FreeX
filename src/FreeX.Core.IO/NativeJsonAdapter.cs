@@ -306,10 +306,11 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
             foreach (var cDto in sDto.Cells ?? CellDtoSequence.Empty)
             {
-                if (string.IsNullOrEmpty(cDto?.Address)) continue;
+                if (cDto is null) continue;
                 try
                 {
-                    var addr = CellAddress.Parse(cDto.Address, sheet.Id);
+                    if (!TryGetCellAddress(cDto, sheet.Id, out var addr))
+                        continue;
                     var value = NativeJsonScalarValueMapper.Deserialize(cDto.Value, cDto.ValueType);
                     var cell = cDto.Formula != null
                         ? Cell.FromFormula(NormalizeNativeFormulaText(cDto.Formula))
@@ -326,13 +327,14 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
             foreach (var styleOnlyDto in sDto.StyleOnlyCells ?? StyleOnlyCellDtoSequence.Empty)
             {
-                if (string.IsNullOrWhiteSpace(styleOnlyDto?.Address) ||
+                if (styleOnlyDto is null ||
                     (styleOnlyDto.StyleId is null && styleOnlyDto.Style is null))
                     continue;
 
                 try
                 {
-                    var address = CellAddress.Parse(styleOnlyDto.Address, sheet.Id);
+                    if (!TryGetCellAddress(styleOnlyDto, sheet.Id, out var address))
+                        continue;
                     if (address.Sheet != sheet.Id)
                         continue;
                     if (ResolveCellStyleId(workbook, cellStyleTable, ref styleIdCache, styleOnlyDto.StyleId, styleOnlyDto.Style) is { } styleId)
@@ -452,6 +454,32 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         }
 
         return workbook;
+    }
+
+    private static bool TryGetCellAddress(CellDto dto, SheetId sheetId, out CellAddress address)
+    {
+        if (dto.ParsedAddress != 0)
+        {
+            address = new CellAddress(sheetId, (uint)(dto.ParsedAddress >> 32), (uint)dto.ParsedAddress);
+            return true;
+        }
+
+        address = default;
+        return !string.IsNullOrEmpty(dto.Address) &&
+               CellAddress.TryParse(dto.Address, sheetId, out address);
+    }
+
+    private static bool TryGetCellAddress(StyleOnlyCellDto dto, SheetId sheetId, out CellAddress address)
+    {
+        if (dto.ParsedAddress != 0)
+        {
+            address = new CellAddress(sheetId, (uint)(dto.ParsedAddress >> 32), (uint)dto.ParsedAddress);
+            return true;
+        }
+
+        address = default;
+        return !string.IsNullOrWhiteSpace(dto.Address) &&
+               CellAddress.TryParse(dto.Address, sheetId, out address);
     }
 
     private static Sheet? ResolveLoadedSheet(

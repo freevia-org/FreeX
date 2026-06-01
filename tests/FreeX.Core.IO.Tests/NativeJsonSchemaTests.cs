@@ -221,6 +221,35 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_AcceptsTrimmedFallbackCellAddresses()
+    {
+        const string json = """
+            {
+              "Name": "AddressFallback",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Cells": [
+                    { "Address": " a1 ", "Value": "42", "ValueType": "n" },
+                    { "Address": " b2 ", "Value": "fallback", "ValueType": "s" }
+                  ],
+                  "StyleOnlyCells": [
+                    { "Address": " c3 ", "StyleId": 0 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sheet = new NativeJsonAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.GetCell(1, 1)!.Value.Should().Be(new NumberValue(42));
+        sheet.GetCell(2, 2)!.Value.Should().Be(new TextValue("fallback"));
+        sheet.GetStyleOnly(3, 3).Should().Be(StyleId.Default);
+    }
+
+    [Fact]
     public void Load_TreatsNullSheetCellCollectionsAsEmpty()
     {
         const string json = """
