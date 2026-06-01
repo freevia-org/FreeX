@@ -681,6 +681,55 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_ConditionalTemplates_GenerateOptionalCells()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row name="Alpha" status="ok" note="Ready" />
+              <row name="Beta" status="warn" />
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Conditional">
+                    <ss:Table>
+                      <xsl:for-each select="row">
+                        <ss:Row>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@name" /></ss:Data></ss:Cell>
+                          <ss:Cell>
+                            <ss:Data ss:Type="String">
+                              <xsl:choose>
+                                <xsl:when test="@status = 'ok'">Pass</xsl:when>
+                                <xsl:otherwise>Review</xsl:otherwise>
+                              </xsl:choose>
+                            </ss:Data>
+                          </ss:Cell>
+                          <xsl:if test="@note">
+                            <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@note" /></ss:Data></ss:Cell>
+                          </xsl:if>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .Contain("<ss:Data ss:Type=\"String\">Pass</ss:Data>")
+            .And.Contain("<ss:Data ss:Type=\"String\">Review</ss:Data>")
+            .And.Contain("<ss:Data ss:Type=\"String\">Ready</ss:Data>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetHtmlOutput_PreservesHtmlSerialization()
     {
         using var source = StreamFromString("<rows><row name=\"April\" /></rows>");
