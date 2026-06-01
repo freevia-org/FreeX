@@ -197,6 +197,7 @@ public partial class GridView : FrameworkElement
     private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();
     private readonly Dictionary<DefaultWrappedTextLayoutKey, FormattedText> _defaultWrappedTextLayoutCache = new();
     private readonly Dictionary<TextWidthLayoutKey, double> _textWidthLayoutCache = new();
+    private readonly Dictionary<ShrinkTextLayoutKey, double> _shrinkTextLayoutCache = new();
     private readonly Dictionary<Rect, RectangleGeometry> _cellClipGeometryCache = new();
     private readonly Dictionary<ChartRenderCacheKey, ImageSource> _chartRenderCache = new();
     private RenderCellLookupCache? _renderCellLookupCache;
