@@ -399,6 +399,49 @@ public sealed class GridViewPerformanceMeasurementTests
         });
     }
 
+    [Fact]
+    public void Benchmark_RenderOffscreenDrawingObjectHeavyViewport_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const int iterations = 6;
+            const int width = 1440;
+            const int height = 900;
+            var grid = CreateOffscreenDrawingObjectHeavyGrid(width, height);
+
+            RenderOnce(grid, width, height);
+            RenderOnce(grid, width, height);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var timings = new List<double>(iterations);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            for (var i = 0; i < iterations; i++)
+            {
+                var step = Stopwatch.StartNew();
+                RenderOnce(grid, width, height);
+                step.Stop();
+                timings.Add(step.Elapsed.TotalMilliseconds);
+            }
+
+            total.Stop();
+            var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            var ordered = timings.OrderBy(value => value).ToArray();
+            var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+            Console.WriteLine(
+                "PERF GRID_RENDER_OFFSCREEN_DRAWING_OBJECTS " +
+                $"steps={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+                $"mean_ms={timings.Average():F2} p95_ms={p95:F2} max_ms={ordered[^1]:F2} " +
+                $"allocated_bytes={allocatedBytes:N0}");
+
+            timings.Average().Should().BeGreaterThan(0);
+        });
+    }
+
     private static GridView CreateTextHeavyGrid(double width, double height)
         => CreateTextHeavyGrid(width, height, null);
 
@@ -747,6 +790,123 @@ public sealed class GridViewPerformanceMeasurementTests
             Width = width,
             Height = height,
             Viewport = new ViewportModel([], rows, columns),
+            DrawingShapes = shapes,
+            TextBoxes = textBoxes,
+            SelectedRange = new GridRange(
+                new CellAddress(sheetId, 1, 1),
+                new CellAddress(sheetId, 1, 1))
+        };
+        grid.Measure(new Size(width, height));
+        grid.Arrange(new Rect(0, 0, width, height));
+        grid.UpdateLayout();
+        return grid;
+    }
+
+    private static GridView CreateOffscreenDrawingObjectHeavyGrid(double width, double height)
+    {
+        const int rowCount = 96;
+        const int columnCount = 160;
+        const double rowHeight = 20;
+        const double columnWidth = 64;
+
+        var sheetId = SheetId.New();
+        var rows = Enumerable
+            .Range(0, rowCount)
+            .Select(index => new RowMetric((uint)(index + 1), rowHeight, index * rowHeight))
+            .ToArray();
+        var columns = Enumerable
+            .Range(0, columnCount)
+            .Select(index => new ColMetric((uint)(index + 1), columnWidth, index * columnWidth))
+            .ToArray();
+
+        var fills = new[]
+        {
+            new CellColor(91, 155, 213),
+            new CellColor(112, 173, 71),
+            new CellColor(237, 125, 49),
+            new CellColor(165, 165, 165)
+        };
+        var outlines = new[]
+        {
+            new CellColor(68, 114, 196),
+            new CellColor(84, 130, 53),
+            new CellColor(191, 95, 32),
+            new CellColor(89, 89, 89)
+        };
+
+        var textBoxes = new List<TextBoxModel>(900);
+        for (var index = 0; index < 900; index++)
+        {
+            var anchor = index % 3 == 0
+                ? new CellAddress(sheetId, (uint)(62 + index % 28), (uint)(2 + index % 18))
+                : new CellAddress(sheetId, (uint)(1 + index % 28), (uint)(74 + index % 70));
+            textBoxes.Add(new TextBoxModel
+            {
+                Name = $"OffscreenTextBox{index}",
+                Anchor = anchor,
+                Text = $"Offscreen benchmark text box {index:D4}",
+                Width = 128 + index % 5 * 18,
+                Height = 34 + index % 4 * 8,
+                FillColor = fills[index % fills.Length],
+                OutlineColor = outlines[index % outlines.Length],
+                RotationDegrees = index % 17 == 0 ? 7 : 0
+            });
+        }
+
+        var shapes = new List<DrawingShapeModel>(900);
+        for (var index = 0; index < 900; index++)
+        {
+            var anchor = index % 4 == 0
+                ? new CellAddress(sheetId, (uint)(64 + index % 24), (uint)(3 + index % 16))
+                : new CellAddress(sheetId, (uint)(2 + index % 30), (uint)(82 + index % 60));
+            shapes.Add(new DrawingShapeModel
+            {
+                Name = $"OffscreenShape{index}",
+                Anchor = anchor,
+                Kind = index % 5 == 0
+                    ? DrawingShapeKind.Line
+                    : index % 2 == 0
+                        ? DrawingShapeKind.Ellipse
+                        : DrawingShapeKind.Rectangle,
+                Width = 80 + index % 6 * 14,
+                Height = 30 + index % 5 * 8,
+                FillColor = fills[index % fills.Length],
+                OutlineColor = outlines[index % outlines.Length],
+                GradientFillEndColor = index % 9 == 0 ? fills[(index + 1) % fills.Length] : null,
+                EffectPreset = index % 10 == 0
+                    ? DrawingShapeEffectPreset.Glow
+                    : index % 12 == 0
+                        ? DrawingShapeEffectPreset.SoftEdges
+                        : index % 3 == 0
+                            ? DrawingShapeEffectPreset.Shadow
+                            : DrawingShapeEffectPreset.None,
+                RotationDegrees = index % 19 == 0 ? -6 : 0
+            });
+        }
+
+        var charts = new List<ChartModel>(20);
+        for (var index = 0; index < 20; index++)
+        {
+            charts.Add(new ChartModel
+            {
+                Type = ChartType.Column,
+                Title = $"Offscreen Chart {index}",
+                DataRange = new GridRange(
+                    new CellAddress(sheetId, 1, 1),
+                    new CellAddress(sheetId, 8, 4)),
+                Left = 2600 + index * 48,
+                Top = 80 + index % 8 * 72,
+                Width = 360,
+                Height = 220
+            });
+        }
+
+        var grid = new GridView
+        {
+            Width = width,
+            Height = height,
+            Viewport = new ViewportModel([], rows, columns),
+            Charts = charts,
             DrawingShapes = shapes,
             TextBoxes = textBoxes,
             SelectedRange = new GridRange(
