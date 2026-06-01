@@ -431,8 +431,16 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue PowerScalarOp(ScalarValue left, ScalarValue right)
     {
+        if (left is NumberValue leftNumber && right is NumberValue rightNumber)
+            return PowerNumberValues(leftNumber.Value, rightNumber.Value);
+
         if (!TryCoerceToNumberValue(left, out var baseVal)) return NumericCoercionError(left);
         if (!TryCoerceToNumberValue(right, out var exp)) return NumericCoercionError(right);
+        return PowerNumberValues(baseVal, exp);
+    }
+
+    private static ScalarValue PowerNumberValues(double baseVal, double exp)
+    {
         if (baseVal == 0 && exp <= 0) return exp == 0 ? ErrorValue.Num : ErrorValue.DivByZero;
         double result = Math.Pow(baseVal, exp);
         return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
@@ -462,8 +470,16 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue ArithScalarOp(ScalarValue left, ScalarValue right, ArithmeticKind kind)
     {
+        if (left is NumberValue leftNumberValue && right is NumberValue rightNumberValue)
+            return ArithNumberValues(leftNumberValue.Value, rightNumberValue.Value, kind);
+
         if (!TryCoerceToNumberValue(left, out var leftNumber)) return NumericCoercionError(left);
         if (!TryCoerceToNumberValue(right, out var rightNumber)) return NumericCoercionError(right);
+        return ArithNumberValues(leftNumber, rightNumber, kind);
+    }
+
+    private static ScalarValue ArithNumberValues(double leftNumber, double rightNumber, ArithmeticKind kind)
+    {
         double result = kind switch
         {
             ArithmeticKind.Add => leftNumber + rightNumber,
@@ -478,8 +494,16 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue DivideScalarOp(ScalarValue left, ScalarValue right)
     {
+        if (left is NumberValue leftNumber && right is NumberValue rightNumber)
+            return DivideNumberValues(leftNumber.Value, rightNumber.Value);
+
         if (!TryCoerceToNumberValue(left, out var dividend)) return NumericCoercionError(left);
         if (!TryCoerceToNumberValue(right, out var divisor)) return NumericCoercionError(right);
+        return DivideNumberValues(dividend, divisor);
+    }
+
+    private static ScalarValue DivideNumberValues(double dividend, double divisor)
+    {
         if (divisor == 0) return ErrorValue.DivByZero;
         double result = dividend / divisor;
         return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
@@ -684,6 +708,9 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue NegateScalarOp(ScalarValue v)
     {
+        if (v is NumberValue numberValue)
+            return new NumberValue(-numberValue.Value);
+
         if (!TryCoerceToNumberValue(v, out var number)) return NumericCoercionError(v);
         return new NumberValue(-number);
     }
@@ -693,6 +720,9 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue PercentScalarOp(ScalarValue v)
     {
+        if (v is NumberValue numberValue)
+            return new NumberValue(numberValue.Value / 100.0);
+
         if (!TryCoerceToNumberValue(v, out var number)) return NumericCoercionError(v);
         return new NumberValue(number / 100.0);
     }
