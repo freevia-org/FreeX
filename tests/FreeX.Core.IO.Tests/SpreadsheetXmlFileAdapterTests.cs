@@ -1764,6 +1764,46 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromAttributeSet()
+    {
+        using var source = StreamFromString("<rows><row amount=\"42.5\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:attribute-set name="moneyCell">
+                <xsl:attribute name="ss:StyleID">money</xsl:attribute>
+              </xsl:attribute-set>
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <ss:Style ss:ID="money">
+                      <ss:NumberFormat ss:Format="$#,##0.00" />
+                    </ss:Style>
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Styled">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell xsl:use-attribute-sets="moneyCell">
+                          <ss:Data ss:Type="Number"><xsl:value-of select="row/@amount" /></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Styled");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new NumberValue(42.5));
+        workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlScalarValueTypesAndIndexes()
     {
         using var source = StreamFromString("""
