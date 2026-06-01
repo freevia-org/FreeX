@@ -1450,6 +1450,83 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlCopiedFromSourceTemplate()
+    {
+        using var source = StreamFromString("""
+            <payload xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <template>
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Copied">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String">Alpha</ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number">42.5</ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </template>
+            </payload>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/payload">
+                <xsl:copy-of select="template/*" />
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Copied");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Alpha"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(42.5));
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromCalledTemplates()
+    {
+        using var source = StreamFromString("<rows><row label=\"Alpha\" amount=\"42.5\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template name="cell">
+                <xsl:param name="type" />
+                <xsl:param name="value" />
+                <ss:Cell><ss:Data ss:Type="{$type}"><xsl:value-of select="$value" /></ss:Data></ss:Cell>
+              </xsl:template>
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Templates">
+                    <ss:Table>
+                      <ss:Row>
+                        <xsl:call-template name="cell">
+                          <xsl:with-param name="type" select="'String'" />
+                          <xsl:with-param name="value" select="row/@label" />
+                        </xsl:call-template>
+                        <xsl:call-template name="cell">
+                          <xsl:with-param name="type" select="'Number'" />
+                          <xsl:with-param name="value" select="row/@amount" />
+                        </xsl:call-template>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Templates");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Alpha"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(42.5));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlScalarValueTypesAndIndexes()
     {
         using var source = StreamFromString("""

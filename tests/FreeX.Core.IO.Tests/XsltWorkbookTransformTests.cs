@@ -603,6 +603,84 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_CopyOf_CopiesSpreadsheetMlFragmentsFromSource()
+    {
+        using var source = StreamFromString("""
+            <payload xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <template>
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Copied">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String">Alpha</ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </template>
+            </payload>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml" omit-xml-declaration="yes" />
+              <xsl:template match="/payload">
+                <xsl:copy-of select="template/*" />
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .StartWith("<ss:Workbook")
+            .And.Contain("ss:Name=\"Copied\"")
+            .And.Contain("<ss:Data ss:Type=\"String\">Alpha</ss:Data>");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_CallTemplateWithParams_GeneratesReusableCells()
+    {
+        using var source = StreamFromString("<rows><row label=\"Alpha\" amount=\"42.5\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template name="cell">
+                <xsl:param name="type" />
+                <xsl:param name="value" />
+                <ss:Cell><ss:Data ss:Type="{$type}"><xsl:value-of select="$value" /></ss:Data></ss:Cell>
+              </xsl:template>
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Templates">
+                    <ss:Table>
+                      <ss:Row>
+                        <xsl:call-template name="cell">
+                          <xsl:with-param name="type" select="'String'" />
+                          <xsl:with-param name="value" select="row/@label" />
+                        </xsl:call-template>
+                        <xsl:call-template name="cell">
+                          <xsl:with-param name="type" select="'Number'" />
+                          <xsl:with-param name="value" select="row/@amount" />
+                        </xsl:call-template>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .Contain("<ss:Data ss:Type=\"String\">Alpha</ss:Data>")
+            .And.Contain("<ss:Data ss:Type=\"Number\">42.5</ss:Data>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetHtmlOutput_PreservesHtmlSerialization()
     {
         using var source = StreamFromString("<rows><row name=\"April\" /></rows>");

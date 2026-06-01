@@ -104,6 +104,29 @@ public sealed class ExcelEditKeyPlannerTests
         intent.Target.Should().Be(edgeCell);
     }
 
+    [Theory]
+    [InlineData(Key.Tab, ModifierKeys.Control, Key.None)]
+    [InlineData(Key.Tab, ModifierKeys.Alt, Key.None)]
+    [InlineData(Key.System, ModifierKeys.Alt, Key.Tab)]
+    [InlineData(Key.Tab, ModifierKeys.Control | ModifierKeys.Shift, Key.None)]
+    [InlineData(Key.Tab, ModifierKeys.Alt | ModifierKeys.Shift, Key.None)]
+    public void GetIntent_DoesNotTreatExtraModifiedTabAsCommitAndMove(
+        Key key,
+        ModifierKeys modifiers,
+        Key systemKey)
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            key,
+            modifiers,
+            Current,
+            pageSize: 20,
+            allowFormulaBarNavigationKeys: false,
+            systemKey: systemKey);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.None);
+        intent.Target.Should().BeNull();
+    }
+
     [Fact]
     public void GetIntent_DoesNotCommitInlineEditorOnPlainArrowKeys()
     {

@@ -204,6 +204,30 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarTab_CommitsEditMovesSelectionRightAndRefreshesEditors()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("tabbed from formula bar");
+
+            harness.PressFormulaBarKey(Key.Tab).Should().BeTrue();
+
+            harness.CellText(1, 1).Should().Be("tabbed from formula bar");
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 2),
+                new CellAddress(harness.CurrentSheetId, 1, 2)));
+            harness.CellAddressBoxText.Should().Be("B1");
+            harness.FormulaBarText.Should().BeEmpty();
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void CtrlEnterFormulaBarEdit_FillsSelectedRangeWhenNotChoosingFormulaReferences()
     {
         StaTestRunner.Run(() =>
@@ -435,6 +459,8 @@ public sealed class MainWindowFormulaBarSyncTests
                 new CellAddress(harness.CurrentSheetId, 1, 1),
                 new CellAddress(harness.CurrentSheetId, 1, 1)));
             harness.CellAddressBoxText.Should().Be("not a reference");
+            harness.CellAddressBoxFocused.Should().BeTrue();
+            harness.CellAddressBoxSelectionLength.Should().Be(harness.CellAddressBoxText.Length);
             harness.FormulaBarText.Should().Be("active cell");
         });
     }
@@ -568,6 +594,10 @@ public sealed class MainWindowFormulaBarSyncTests
         public bool InlineEditorVisible => InlineEditor?.IsVisible == true;
 
         public bool FormulaBarFocused => IsFocused((TextBox)_window.FindName("FormulaBar"));
+
+        public bool CellAddressBoxFocused => IsFocused((TextBox)_window.FindName("CellAddressBox"));
+
+        public int CellAddressBoxSelectionLength => ((TextBox)_window.FindName("CellAddressBox")).SelectionLength;
 
         public bool SheetGridFocused => IsFocused((SheetGridView)_window.FindName("SheetGrid"));
 

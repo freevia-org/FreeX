@@ -15,12 +15,13 @@ public static partial class BuiltInFunctions
         if (args.Count > 2 && args[2] is ErrorValue sumRangeError) return sumRangeError;
         if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
         RangeValue? sumRange = args.Count > 2 ? (RangeValue)args[2] : null;
+        var criteriaMatcher = CompileCriteria(criteria);
 
         double total = 0;
         int len = FlatCount(rangeArg);
         for (int i = 0; i < len; i++)
         {
-            if (MatchesCriteria(CellAtFlatIndex(rangeArg, i), criteria))
+            if (criteriaMatcher.Matches(CellAtFlatIndex(rangeArg, i)))
             {
                 var sv = sumRange is not null
                     ? CellAtRelativeOffsetOrContext(sumRange, i / rangeArg.ColCount, i % rangeArg.ColCount, ctx)
@@ -39,11 +40,12 @@ public static partial class BuiltInFunctions
         if (args[0] is not RangeValue rangeArg) return ErrorValue.Value;
         var criteria = args[1];
         if (criteria is ErrorValue criteriaError) return criteriaError;
+        var criteriaMatcher = CompileCriteria(criteria);
 
         int count = 0;
         for (int r = 0; r < rangeArg.RowCount; r++)
             for (int c = 0; c < rangeArg.ColCount; c++)
-                if (MatchesCriteria(rangeArg.Cells[r, c], criteria))
+                if (criteriaMatcher.Matches(rangeArg.Cells[r, c]))
                     count++;
         return new NumberValue(count);
     }
@@ -57,13 +59,14 @@ public static partial class BuiltInFunctions
         if (args.Count > 2 && args[2] is ErrorValue avgRangeError) return avgRangeError;
         if (args.Count > 2 && args[2] is not RangeValue) return ErrorValue.Value;
         RangeValue? avgRange = args.Count > 2 ? (RangeValue)args[2] : null;
+        var criteriaMatcher = CompileCriteria(criteria);
 
         double total = 0;
         int count = 0;
         int len = FlatCount(rangeArg);
         for (int i = 0; i < len; i++)
         {
-            if (MatchesCriteria(CellAtFlatIndex(rangeArg, i), criteria))
+            if (criteriaMatcher.Matches(CellAtFlatIndex(rangeArg, i)))
             {
                 var sv = avgRange is not null
                     ? CellAtRelativeOffsetOrContext(avgRange, i / rangeArg.ColCount, i % rangeArg.ColCount, ctx)
@@ -82,14 +85,14 @@ public static partial class BuiltInFunctions
         if (args[0] is not RangeValue sumRange) return ErrorValue.Value;
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
         int pairCount = (args.Count - 1) / 2;
-        var pairs = new (RangeValue Range, ScalarValue Criteria)[pairCount];
+        var pairs = new (RangeValue Range, CriteriaMatcher Criteria)[pairCount];
         for (int p = 0; p < pairCount; p++)
         {
             if (args[1 + p * 2] is ErrorValue rangeError) return rangeError;
             if (args[1 + p * 2] is not RangeValue cr) return ErrorValue.Value;
             if (!SameShape(sumRange, cr)) return ErrorValue.Value;
             if (args[2 + p * 2] is ErrorValue criteriaError) return criteriaError;
-            pairs[p] = (cr, args[2 + p * 2]);
+            pairs[p] = (cr, CompileCriteria(args[2 + p * 2]));
         }
         double total = 0;
         for (int r = 0; r < sumRange.RowCount; r++)
@@ -99,7 +102,7 @@ public static partial class BuiltInFunctions
                 bool include = true;
                 foreach (var (criteriaRange, pairCriteria) in pairs)
                 {
-                    if (!MatchesCriteria(criteriaRange.Cells[r, c], pairCriteria))
+                    if (!pairCriteria.Matches(criteriaRange.Cells[r, c]))
                         { include = false; break; }
                 }
                 if (include)
@@ -117,7 +120,7 @@ public static partial class BuiltInFunctions
     {
         if (args.Count < 2 || args.Count % 2 != 0) return ErrorValue.Value;
         int pairCount = args.Count / 2;
-        var pairs = new (RangeValue Range, ScalarValue Criteria)[pairCount];
+        var pairs = new (RangeValue Range, CriteriaMatcher Criteria)[pairCount];
         RangeValue? firstRange = null;
         for (int p = 0; p < pairCount; p++)
         {
@@ -126,7 +129,7 @@ public static partial class BuiltInFunctions
             firstRange ??= cr;
             if (!SameShape(firstRange, cr)) return ErrorValue.Value;
             if (args[p * 2 + 1] is ErrorValue criteriaError) return criteriaError;
-            pairs[p] = (cr, args[p * 2 + 1]);
+            pairs[p] = (cr, CompileCriteria(args[p * 2 + 1]));
         }
         int count = 0;
         for (int r = 0; r < firstRange!.RowCount; r++)
@@ -136,7 +139,7 @@ public static partial class BuiltInFunctions
                 bool include = true;
                 foreach (var (criteriaRange, criteria) in pairs)
                 {
-                    if (!MatchesCriteria(criteriaRange.Cells[r, c], criteria))
+                    if (!criteria.Matches(criteriaRange.Cells[r, c]))
                         { include = false; break; }
                 }
                 if (include) count++;
@@ -151,14 +154,14 @@ public static partial class BuiltInFunctions
         if (args[0] is not RangeValue avgRange) return ErrorValue.Value;
         if (args.Count < 3 || (args.Count - 1) % 2 != 0) return ErrorValue.Value;
         int pairCount = (args.Count - 1) / 2;
-        var pairs = new (RangeValue Range, ScalarValue Criteria)[pairCount];
+        var pairs = new (RangeValue Range, CriteriaMatcher Criteria)[pairCount];
         for (int p = 0; p < pairCount; p++)
         {
             if (args[1 + p * 2] is ErrorValue rangeError) return rangeError;
             if (args[1 + p * 2] is not RangeValue cr) return ErrorValue.Value;
             if (!SameShape(avgRange, cr)) return ErrorValue.Value;
             if (args[2 + p * 2] is ErrorValue criteriaError) return criteriaError;
-            pairs[p] = (cr, args[2 + p * 2]);
+            pairs[p] = (cr, CompileCriteria(args[2 + p * 2]));
         }
         double total = 0;
         int count = 0;
@@ -169,7 +172,7 @@ public static partial class BuiltInFunctions
                 bool include = true;
                 foreach (var (criteriaRange, pairCriteria) in pairs)
                 {
-                    if (!MatchesCriteria(criteriaRange.Cells[r, c], pairCriteria))
+                    if (!pairCriteria.Matches(criteriaRange.Cells[r, c]))
                         { include = false; break; }
                 }
                 if (include)

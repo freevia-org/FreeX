@@ -845,6 +845,42 @@ public sealed class AccessibilityCheckerServiceTests
             .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
     }
 
+    [Fact]
+    public void FindIssues_LowContrastCellText_SharedConditionalRulesPreserveStopIfTrue()
+    {
+        var workbook = new Workbook("Accessibility");
+        var stopSheet = workbook.AddSheet("Stop");
+        var stopAddress = new CellAddress(stopSheet.Id, 1, 1);
+        stopSheet.SetCell(stopAddress, new TextValue("Escalated"));
+        AddNoBlankContrastRule(stopSheet, stopAddress, priority: 1, stopIfTrue: true, CellColor.Black, CellColor.White);
+        AddNoBlankContrastRule(
+            stopSheet,
+            stopAddress,
+            priority: 2,
+            stopIfTrue: false,
+            new CellColor(120, 120, 120),
+            new CellColor(130, 130, 130));
+
+        var stackSheet = workbook.AddSheet("Stack");
+        var stackAddress = new CellAddress(stackSheet.Id, 1, 1);
+        stackSheet.SetCell(stackAddress, new TextValue("Escalated"));
+        AddNoBlankContrastRule(stackSheet, stackAddress, priority: 1, stopIfTrue: false, CellColor.Black, CellColor.White);
+        AddNoBlankContrastRule(
+            stackSheet,
+            stackAddress,
+            priority: 2,
+            stopIfTrue: false,
+            new CellColor(120, 120, 120),
+            new CellColor(130, 130, 130));
+
+        var lowContrastIssues = AccessibilityCheckerService.FindIssues(workbook)
+            .Where(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText)
+            .ToList();
+
+        lowContrastIssues.Should().ContainSingle()
+            .Which.SheetName.Should().Be("Stack");
+    }
+
     [Theory]
     [InlineData(18, false)]
     [InlineData(14, true)]
@@ -906,6 +942,7 @@ public sealed class AccessibilityCheckerServiceTests
         source.Should().NotContain("GetUsedCells()");
         source.Should().Contain("GetOccupiedCellMap()");
         source.Should().Contain("GetConditionalContrastRules(sheet)");
+        source.Should().Contain("SharedAppliesToRange");
     }
 
     [Fact]
@@ -983,5 +1020,27 @@ public sealed class AccessibilityCheckerServiceTests
         }
 
         throw new FileNotFoundException($"Could not find workspace file: {Path.Combine(parts)}");
+    }
+
+    private static void AddNoBlankContrastRule(
+        Sheet sheet,
+        CellAddress address,
+        int priority,
+        bool stopIfTrue,
+        CellColor fontColor,
+        CellColor fillColor)
+    {
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(address, address),
+            Priority = priority,
+            RuleType = CfRuleType.NoBlanks,
+            StopIfTrue = stopIfTrue,
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = fontColor,
+                FillColor = fillColor
+            }
+        });
     }
 }

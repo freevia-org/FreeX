@@ -91,7 +91,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static XElement? ToChart3DViewXml(ChartModel chart, XNamespace chartNs)
     {
-        if (chart.ThreeDView is not { } view)
+        if ((chart.ThreeDView ?? ToExcelNativeDefault3DView(chart.Type)) is not { } view)
             return null;
 
         var element = new XElement(chartNs + "view3D");
@@ -104,14 +104,39 @@ internal static partial class XlsxChartXmlWriter
         return element.HasElements ? element : null;
     }
 
+    private static Chart3DViewModel? ToExcelNativeDefault3DView(ChartType chartType) =>
+        chartType switch
+        {
+            ChartType.ThreeDColumn or ChartType.ThreeDBar => new Chart3DViewModel
+            {
+                RotationX = 15,
+                RotationY = 20,
+                RightAngleAxes = true
+            },
+            ChartType.ThreeDLine or ChartType.ThreeDArea or ChartType.ThreeDSurface => new Chart3DViewModel
+            {
+                RotationX = 15,
+                RotationY = 20,
+                RightAngleAxes = false
+            },
+            ChartType.ThreeDPie => new Chart3DViewModel
+            {
+                RotationX = 30,
+                RotationY = 0,
+                RightAngleAxes = false
+            },
+            _ => null
+        };
+
     private static XElement? ToChartSurfaceFormatXml(
+        ChartModel chart,
         XNamespace chartNs,
         XNamespace drawingNs,
         string elementName,
         ChartSurfaceFormatModel? format)
     {
         if (format is null)
-            return null;
+            return ToExcelNativeDefault3DSurfaceFormatXml(chart.Type, chartNs, drawingNs, elementName);
 
         var shapeProperties = ToShapeProperties(
             chartNs,
@@ -126,6 +151,27 @@ internal static partial class XlsxChartXmlWriter
             ? null
             : new XElement(chartNs + elementName, shapeProperties);
     }
+
+    private static XElement? ToExcelNativeDefault3DSurfaceFormatXml(
+        ChartType chartType,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        string elementName) =>
+        chartType is ChartType.ThreeDColumn
+            or ChartType.ThreeDBar
+            or ChartType.ThreeDLine
+            or ChartType.ThreeDArea
+            or ChartType.ThreeDPie
+            or ChartType.ThreeDSurface
+                ? new XElement(chartNs + elementName,
+                    new XElement(chartNs + "thickness", new XAttribute("val", "0")),
+                    new XElement(chartNs + "spPr",
+                        new XElement(drawingNs + "noFill"),
+                        new XElement(drawingNs + "ln",
+                            new XElement(drawingNs + "noFill")),
+                        new XElement(drawingNs + "effectLst"),
+                        new XElement(drawingNs + "sp3d")))
+                : null;
 
     private static XElement? ToBlankDisplayXml(ChartModel chart, XNamespace chartNs) =>
         chart.BlankDisplayMode == ChartBlankDisplayMode.Gap

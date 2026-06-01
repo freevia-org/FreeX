@@ -103,7 +103,7 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
                 new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
                 ToSeriesTitleXml(chart, sheet, col, chartNs),
-                ToSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs),
+                ToScatterSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs),
                 ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
@@ -117,6 +117,31 @@ internal static partial class XlsxChartXmlWriter
                         new XElement(chartNs + "f", yValueRange))));
             seriesIndex++;
         }
+    }
+
+    private static XElement? ToScatterSeriesLineShapeProperties(
+        ChartModel chart,
+        int seriesIndex,
+        XNamespace chartNs,
+        XNamespace drawingNs)
+    {
+        if (ScatterSeriesRequestsLine(chart, seriesIndex))
+            return ToSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs);
+
+        return new XElement(chartNs + "spPr",
+            new XElement(drawingNs + "ln",
+                new XElement(drawingNs + "noFill")));
+    }
+
+    private static bool ScatterSeriesRequestsLine(ChartModel chart, int seriesIndex)
+    {
+        var format = GetSeriesFormat(chart, seriesIndex);
+        return format is not null &&
+            (format.StrokeColor is not null ||
+             format.StrokeThemeColor is not null ||
+             format.StrokeThickness is not null ||
+             format.DashStyle is not null ||
+             format.Smooth == true);
     }
 
     private static HashSet<int> GetSecondaryAxisSeriesIndexes(ChartModel chart, int seriesCount)

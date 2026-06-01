@@ -133,9 +133,45 @@ public sealed class ChartRendererTests
         model.Series.Should().HaveCount(2);
         model.Series[0].Should().BeOfType<RectangleBarSeries>();
         model.Series[1].Should().BeOfType<LineSeries>();
-        model.Axes.Should().Contain(a => a.Position == AxisPosition.Right);
+        var percentAxis = model.Axes.Should().Contain(a => a.Position == AxisPosition.Right).Which;
+        percentAxis.MajorStep.Should().Be(20);
+        percentAxis.FormatValue(80).Should().Be("80%");
         var catAxis = model.Axes.OfType<CategoryAxis>().Should().ContainSingle().Subject;
         catAxis.Labels[0].Should().Be("B");  // highest value first
+    }
+
+    [Fact]
+    public void ParetoRenderer_AggregatesRepeatedCategoriesBeforeSorting()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Pareto,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Item"), Cell(1, 2, "Count"),
+                Cell(2, 1, "A"),   Cell(2, 2, "10"),
+                Cell(3, 1, "B"),   Cell(3, 2, "50"),
+                Cell(4, 1, "A"),   Cell(4, 2, "25"),
+                Cell(5, 1, "C"),   Cell(5, 2, "20")
+            ],
+            [],
+            []));
+
+        var bars = model.Series[0].Should().BeOfType<RectangleBarSeries>().Subject;
+        bars.Items.Select(item => Math.Max(item.Y0, item.Y1)).Should().Equal(50, 35, 20);
+        var cumulativeLine = model.Series[1].Should().BeOfType<LineSeries>().Subject;
+        cumulativeLine.Points.Select(point => point.Y).Should().Equal(
+            100.0 * 50 / 105,
+            100.0 * 85 / 105,
+            100.0);
+        var catAxis = model.Axes.OfType<CategoryAxis>().Should().ContainSingle().Subject;
+        catAxis.Labels.Should().Equal("B", "A", "C");
     }
 
     [Fact]

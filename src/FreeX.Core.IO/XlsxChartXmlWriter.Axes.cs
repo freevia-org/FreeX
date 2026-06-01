@@ -150,7 +150,7 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisTitleLayout,
             ValueAxisId,
             CategoryAxisId,
-            ToXlsxAxisPosition(chart.YAxisPosition, "l"),
+            ToXlsxValueAxisPosition(chart),
             chart.HideYAxis,
             chart.YAxisMinimum,
             chart.YAxisMaximum,
@@ -235,7 +235,7 @@ internal static partial class XlsxChartXmlWriter
                 drawingNs);
         }
 
-        if (chart.Type is ChartType.Surface or ChartType.ThreeDSurface)
+        if (UsesSeriesAxis(chart.Type))
             yield return ToSeriesAxisXml(chartNs);
     }
 
@@ -245,7 +245,7 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "scaling",
                 new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(chart.XAxisReverseOrder)))),
             new XElement(chartNs + "delete", new XAttribute("val", chart.HideXAxis ? "1" : "0")),
-            new XElement(chartNs + "axPos", new XAttribute("val", ToXlsxAxisPosition(chart.XAxisPosition, "b"))),
+            new XElement(chartNs + "axPos", new XAttribute("val", ToXlsxCategoryAxisPosition(chart))),
             ToAxisTitleXml(chart.XAxisTitle, chart.XAxisTitleLayout, chart.AxisTitleTextThemeColor, chart.AxisTitleTextColor, chart.AxisTitleFontSize, chartNs, drawingNs),
             ToAxisGridlinesXml("majorGridlines", chart.ShowXAxisMajorGridlines, chart.XAxisMajorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
             ToAxisGridlinesXml("minorGridlines", chart.ShowXAxisMinorGridlines, chart.XAxisMinorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
@@ -340,11 +340,11 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "scaling",
                 new XElement(chartNs + "orientation", new XAttribute("val", "minMax"))),
             new XElement(chartNs + "delete", new XAttribute("val", "0")),
-            new XElement(chartNs + "axPos", new XAttribute("val", "r")),
+            new XElement(chartNs + "axPos", new XAttribute("val", "b")),
             new XElement(chartNs + "majorTickMark", new XAttribute("val", "none")),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", "none")),
             new XElement(chartNs + "tickLblPos", new XAttribute("val", "nextTo")),
-            new XElement(chartNs + "crossAx", new XAttribute("val", CategoryAxisId)),
+            new XElement(chartNs + "crossAx", new XAttribute("val", ValueAxisId)),
             new XElement(chartNs + "crosses", new XAttribute("val", "autoZero")));
 
     private static XElement? ToAxisGridlinesXml(
@@ -404,6 +404,22 @@ internal static partial class XlsxChartXmlWriter
             ChartAxisPosition.Right => "r",
             _ => fallback
         };
+
+    private static string ToXlsxCategoryAxisPosition(ChartModel chart) =>
+        IsHorizontalBarChart(chart.Type) && chart.XAxisPosition == ChartAxisPosition.Bottom
+            ? "l"
+            : ToXlsxAxisPosition(chart.XAxisPosition, IsHorizontalBarChart(chart.Type) ? "l" : "b");
+
+    private static string ToXlsxValueAxisPosition(ChartModel chart) =>
+        IsHorizontalBarChart(chart.Type) && chart.YAxisPosition == ChartAxisPosition.Left
+            ? "b"
+            : ToXlsxAxisPosition(chart.YAxisPosition, IsHorizontalBarChart(chart.Type) ? "b" : "l");
+
+    private static bool IsHorizontalBarChart(ChartType chartType) =>
+        chartType is ChartType.Bar
+            or ChartType.StackedBar
+            or ChartType.PercentStackedBar
+            or ChartType.ThreeDBar;
 
     private static string ToXlsxTickLabelPosition(bool showLabels, ChartAxisTickLabelPosition position)
     {

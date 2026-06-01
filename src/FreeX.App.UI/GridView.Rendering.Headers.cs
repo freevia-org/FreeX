@@ -214,6 +214,9 @@ public partial class GridView
     {
         if (selectedRanges is { Count: > 0 })
         {
+            if (selectedRanges.Count == 1)
+                return [selector(selectedRanges[0])];
+
             var intervals = new List<HeaderSelectionInterval>(selectedRanges.Count);
             foreach (var range in selectedRanges)
                 intervals.Add(selector(range));
