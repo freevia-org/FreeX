@@ -1,4 +1,3 @@
-using System.Globalization;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -88,7 +87,7 @@ internal static class XlsxStructuredTableModelMapper
     {
         foreach (var filter in filters)
         {
-            var text = ToFilterText(sheet.GetValue(row, filter.Column));
+            var text = XlsxFilterValueTextFormatter.ToFilterText(sheet.GetValue(row, filter.Column));
             if (text.Length == 0 && filter.IncludeBlank)
                 continue;
             if (!filter.AllowedValues.Contains(text))
@@ -97,16 +96,6 @@ internal static class XlsxStructuredTableModelMapper
 
         return true;
     }
-
-    private static string ToFilterText(ScalarValue value) => value switch
-    {
-        TextValue text => text.Value,
-        NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
-        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-        DateTimeValue dateTime => dateTime.ToDateTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-        ErrorValue error => error.Code,
-        _ => string.Empty
-    };
 
     private sealed record StructuredTableFilterState(
         uint Column,
