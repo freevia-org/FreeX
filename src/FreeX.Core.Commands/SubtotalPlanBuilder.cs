@@ -39,27 +39,25 @@ internal static class SubtotalPlanBuilder
         IReadOnlyList<GroupSpan> groups,
         bool pageBreakBetweenGroups)
     {
-        var orderedGroups = groups.OrderByDescending(g => g.EndRow).ToList();
-        var groupRows = new List<SubtotalInsertionPlan>(orderedGroups.Count);
-        var pendingBreaks = new List<uint>();
+        var groupRows = new List<SubtotalInsertionPlan>(groups.Count);
+        var pageBreakRows = pageBreakBetweenGroups
+            ? new List<uint>(Math.Max(0, groups.Count - 1))
+            : [];
 
-        foreach (var group in orderedGroups)
+        for (var index = groups.Count - 1; index >= 0; index--)
         {
+            var group = groups[index];
             groupRows.Add(new SubtotalInsertionPlan(
                 group.EndRow + 1,
                 $"{group.Label} Total",
                 group.StartRow,
                 group.EndRow));
 
-            if (pageBreakBetweenGroups && group.EndRow < range.End.Row)
-                pendingBreaks.Add(group.EndRow);
-        }
-
-        var pageBreakRows = new List<uint>(pendingBreaks.Count);
-        foreach (var sourceEndRow in pendingBreaks)
-        {
-            uint subsequentInsertions = (uint)orderedGroups.Count(g => g.EndRow < sourceEndRow);
-            pageBreakRows.Add(sourceEndRow + 2 + subsequentInsertions);
+            if (pageBreakBetweenGroups && index < groups.Count - 1)
+            {
+                var subsequentInsertions = (uint)index;
+                pageBreakRows.Add(group.EndRow + 2 + subsequentInsertions);
+            }
         }
 
         uint grandTotalRow = range.End.Row + (uint)groups.Count + 1;
@@ -77,14 +75,16 @@ internal static class SubtotalPlanBuilder
         IReadOnlyList<GroupSpan> groups,
         bool pageBreakBetweenGroups)
     {
-        var orderedGroups = groups.OrderByDescending(g => g.StartRow).ToList();
-        var groupRows = orderedGroups
-            .Select(group => new SubtotalInsertionPlan(
+        var groupRows = new List<SubtotalInsertionPlan>(groups.Count);
+        for (var index = groups.Count - 1; index >= 0; index--)
+        {
+            var group = groups[index];
+            groupRows.Add(new SubtotalInsertionPlan(
                 group.StartRow,
                 $"{group.Label} Total",
                 group.StartRow + 1,
-                group.EndRow + 1))
-            .ToList();
+                group.EndRow + 1));
+        }
 
         uint summaryRow = range.Start.Row + 1;
         uint summaryEndRow = range.End.Row + (uint)groups.Count + 1;
@@ -95,12 +95,13 @@ internal static class SubtotalPlanBuilder
             summaryEndRow);
 
         var pageBreakRows = pageBreakBetweenGroups
-            ? groups
-                .OrderBy(g => g.StartRow)
-                .Skip(1)
-                .Select((group, index) => group.StartRow + (uint)index + 2)
-                .ToList()
+            ? new List<uint>(Math.Max(0, groups.Count - 1))
             : [];
+        if (pageBreakBetweenGroups)
+        {
+            for (var index = 1; index < groups.Count; index++)
+                pageBreakRows.Add(groups[index].StartRow + (uint)index + 1);
+        }
 
         return new SubtotalPlan(groupRows, grandTotal, pageBreakRows);
     }

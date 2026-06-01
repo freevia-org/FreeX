@@ -147,6 +147,9 @@ public static class ClipboardSerializer
     /// <summary>Parses tab/newline-delimited text into a 2-D array of strings.</summary>
     public static string[][] Deserialize(string text)
     {
+        if (!text.Contains('"'))
+            return DeserializePlainText(text);
+
         text = text.TrimEnd('\r', '\n');
         var rows = new List<string[]>();
         var row = new List<string>();
@@ -215,5 +218,58 @@ public static class ClipboardSerializer
         row.Add(field.ToString());
         rows.Add(row.ToArray());
         return rows.ToArray();
+    }
+
+    private static string[][] DeserializePlainText(string text)
+    {
+        text = text.TrimEnd('\r', '\n');
+        var rows = new List<string[]>();
+        var row = new List<string>(EstimateFirstRowFieldCount(text));
+        var fieldStart = 0;
+
+        for (var i = 0; i < text.Length; i++)
+        {
+            var ch = text[i];
+            if (ch == '\t')
+            {
+                row.Add(text[fieldStart..i]);
+                fieldStart = i + 1;
+                continue;
+            }
+
+            if (ch != '\r' && ch != '\n')
+                continue;
+
+            row.Add(text[fieldStart..i]);
+            rows.Add(row.ToArray());
+            row.Clear();
+
+            if (ch == '\r' && i + 1 < text.Length && text[i + 1] == '\n')
+                i++;
+
+            fieldStart = i + 1;
+        }
+
+        row.Add(text[fieldStart..]);
+        rows.Add(row.ToArray());
+        return rows.ToArray();
+    }
+
+    private static int EstimateFirstRowFieldCount(string text)
+    {
+        var count = 1;
+        foreach (var ch in text)
+        {
+            if (ch == '\t')
+            {
+                count++;
+                continue;
+            }
+
+            if (ch is '\r' or '\n')
+                break;
+        }
+
+        return count;
     }
 }
