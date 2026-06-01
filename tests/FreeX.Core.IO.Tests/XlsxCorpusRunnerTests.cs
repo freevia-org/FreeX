@@ -625,6 +625,36 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedLinkedDataTypesRetentionPackage_LinksRichValueDataToStructurePart()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-linked-data-types-001");
+        var report = XlsxFeatureInspector.Inspect(package);
+        report.Features.Select(feature => feature.Kind).Distinct().Should().BeEquivalentTo(
+            new[] { XlsxUnsupportedFeatureKind.LinkedDataTypes });
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var richValueDataEntry = archive.GetEntry("xl/richData/rdrichvalue.xml");
+        var richValueStructureEntry = archive.GetEntry("xl/richData/rdRichValueStructure.xml");
+        var richValueDataRelsEntry = archive.GetEntry("xl/richData/_rels/rdrichvalue.xml.rels");
+        richValueDataEntry.Should().NotBeNull();
+        richValueStructureEntry.Should().NotBeNull();
+        richValueDataRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XDocument richValueDataRelsXml;
+        using (var stream = richValueDataRelsEntry!.Open())
+            richValueDataRelsXml = XDocument.Load(stream);
+
+        richValueDataRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure" &&
+                relationship.Attribute("Target")?.Value == "rdRichValueStructure.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
     {
         var rows = ReadManifestRows()
@@ -1171,6 +1201,16 @@ public class XlsxCorpusRunnerTests
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-ignored-errors-001");
         AssertWorksheetIgnoredErrors(source, "generated-worksheet-ignored-errors-001 source");
+        var before = CaptureWorksheetIgnoredErrorsPackageSummary(source);
+        before.Errors.Should().BeEquivalentTo(
+            [
+                new WorksheetIgnoredErrorXmlSummary(
+                    "A1",
+                    true,
+                    [new NativeAttributeSummary("twoDigitTextYear", "1")])
+            ],
+            options => options.WithStrictOrdering(),
+            "generated-worksheet-ignored-errors-001 should exercise modeled ignored-error state plus a retained native flag");
 
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
@@ -1182,6 +1222,11 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-ignored-errors-001");
         AssertWorksheetIgnoredErrors(saved, "generated-worksheet-ignored-errors-001 saved");
+        var after = CaptureWorksheetIgnoredErrorsPackageSummary(saved);
+        after.Should().BeEquivalentTo(
+            before,
+            options => options.WithStrictOrdering(),
+            "worksheet ignored-error sqref, modeled ignore state, and retained native flags should survive ordinary model edits");
     }
 
     [Fact]
@@ -4577,6 +4622,13 @@ public class XlsxCorpusRunnerTests
     }
 
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    private static readonly string[] ModeledIgnoredErrorFlags =
+    [
+        "numberStoredAsText",
+        "evalError",
+        "formula",
+        "emptyCellReference"
+    ];
 
     private static bool HasExpectedPublicPackageTags(ManifestRow row)
     {
@@ -4739,6 +4791,60 @@ public class XlsxCorpusRunnerTests
                 stream.Position = originalPosition;
         }
     }
+
+    private static WorksheetIgnoredErrorsPackageXmlSummary CaptureWorksheetIgnoredErrorsPackageSummary(Stream stream)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+
+        try
+        {
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+            worksheetEntry.Should().NotBeNull("generated-worksheet-ignored-errors-001 must contain xl/worksheets/sheet1.xml");
+
+            var worksheetXml = LoadPackageXml(worksheetEntry!);
+            XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var container = worksheetXml.Root!.Element(sheetNs + "ignoredErrors");
+            container.Should().NotBeNull("generated-worksheet-ignored-errors-001 must include worksheet ignoredErrors metadata");
+
+            return new WorksheetIgnoredErrorsPackageXmlSummary(
+                container!.Attributes()
+                    .Where(attribute => !attribute.IsNamespaceDeclaration)
+                    .OrderBy(attribute => attribute.Name.ToString(), StringComparer.Ordinal)
+                    .Select(attribute => new NativeAttributeSummary(attribute.Name.ToString(), attribute.Value))
+                    .ToArray(),
+                container.Elements(sheetNs + "ignoredError")
+                    .Select(element => new WorksheetIgnoredErrorXmlSummary(
+                        element.Attribute("sqref")?.Value ?? "",
+                        HasModeledIgnoredErrorFlag(element),
+                        CaptureRetainedIgnoredErrorAttributes(element)))
+                    .ToArray());
+        }
+        finally
+        {
+            if (stream.CanSeek)
+                stream.Position = originalPosition;
+        }
+    }
+
+    private static bool HasModeledIgnoredErrorFlag(XElement ignoredError) =>
+        ModeledIgnoredErrorFlags.Any(flag => IsTruthyXmlBoolean(ignoredError.Attribute(flag)?.Value));
+
+    private static IReadOnlyList<NativeAttributeSummary> CaptureRetainedIgnoredErrorAttributes(XElement ignoredError) =>
+        ignoredError.Attributes()
+            .Where(attribute =>
+                !attribute.IsNamespaceDeclaration &&
+                !string.Equals(attribute.Name.LocalName, "sqref", StringComparison.Ordinal) &&
+                !ModeledIgnoredErrorFlags.Contains(attribute.Name.LocalName, StringComparer.Ordinal))
+            .OrderBy(attribute => attribute.Name.ToString(), StringComparer.Ordinal)
+            .Select(attribute => new NativeAttributeSummary(attribute.Name.ToString(), attribute.Value))
+            .ToArray();
+
+    private static bool IsTruthyXmlBoolean(string? value) =>
+        string.Equals(value, "1", StringComparison.Ordinal) ||
+        string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 
     private static WorksheetElementXmlSummary CaptureXmlElementSummary(XElement element) =>
         new(
@@ -5877,6 +5983,15 @@ public class XlsxCorpusRunnerTests
     private sealed record WorksheetSortFilterPackageXmlSummary(
         WorksheetElementXmlSummary AutoFilter,
         WorksheetElementXmlSummary SortState);
+
+    private sealed record WorksheetIgnoredErrorsPackageXmlSummary(
+        IReadOnlyList<NativeAttributeSummary> ContainerAttributes,
+        IReadOnlyList<WorksheetIgnoredErrorXmlSummary> Errors);
+
+    private sealed record WorksheetIgnoredErrorXmlSummary(
+        string Sqref,
+        bool HasModeledIgnoredError,
+        IReadOnlyList<NativeAttributeSummary> RetainedNativeAttributes);
 
     private sealed record WorksheetElementXmlSummary(
         string Name,

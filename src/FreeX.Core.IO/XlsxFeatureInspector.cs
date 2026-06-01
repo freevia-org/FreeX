@@ -326,6 +326,7 @@ public static class XlsxFeatureInspector
             }
 
             if (normalizedType.EndsWith("/rdrichvalue", StringComparison.OrdinalIgnoreCase) ||
+                normalizedType.EndsWith("/rdrichvaluestructure", StringComparison.OrdinalIgnoreCase) ||
                 normalizedType.EndsWith("/rdrichvaluetypes", StringComparison.OrdinalIgnoreCase) ||
                 normalizedType.EndsWith("/richvaluerel", StringComparison.OrdinalIgnoreCase) ||
                 normalizedTarget.Contains("richdata/", StringComparison.OrdinalIgnoreCase))

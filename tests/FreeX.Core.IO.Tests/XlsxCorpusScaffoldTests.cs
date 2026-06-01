@@ -462,6 +462,21 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesLinkedDataTypePackageReferenceCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/linked-data-types-001.xlsx" &&
+            row.FeatureTags.Contains("linked-data-types", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("rich-data", StringComparison.Ordinal));
+        const string reportLine = "| Linked data type package references | Rich data package parts and Rich Value Structure relationships are exercised by generated known-gap retention coverage |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
+    }
+
+    [Fact]
     public void OutstandingBuild_StatesCurrentCorpusManifestCounts()
     {
         var manifestRows = ReadManifestRows();

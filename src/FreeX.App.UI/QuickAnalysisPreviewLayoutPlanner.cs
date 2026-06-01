@@ -72,6 +72,9 @@ internal static class QuickAnalysisPreviewLayoutPlanner
                 rows.TryGetValue(cell.Row, out var row) &&
                 cols.TryGetValue(cell.Col, out var col))
             {
+                if (row.Height <= 8 || col.Width <= 6)
+                    continue;
+
                 consumer.Accept(CreateDataBarRect(row, col, value, max, rowHeaderWidth, columnHeaderHeight));
             }
         }
