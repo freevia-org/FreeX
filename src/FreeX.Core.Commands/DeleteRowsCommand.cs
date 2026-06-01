@@ -47,14 +47,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
 
         _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
-        _deletedSnapshot = sheet.EnumerateCells()
-            .Where(p => p.Address.Row >= _startRow && p.Address.Row <= endRow)
-            .Select(p => (p.Address, p.Cell.Clone()))
-            .ToList();
-        _shiftedSnapshot = sheet.EnumerateCells()
-            .Where(p => p.Address.Row > endRow)
-            .Select(p => (p.Address, p.Cell.Clone()))
-            .ToList();
+        (_deletedSnapshot, _shiftedSnapshot) = CaptureDeletedAndShiftedCells(sheet, endRow);
 
         foreach (var (addr, _) in _deletedSnapshot)
             sheet.ClearCell(addr);
@@ -172,5 +165,28 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
+    }
+
+    private (List<(CellAddress Addr, Cell Cell)> Deleted, List<(CellAddress Addr, Cell Cell)> Shifted)
+        CaptureDeletedAndShiftedCells(Sheet sheet, uint endRow)
+    {
+        var deleted = new List<(CellAddress Addr, Cell Cell)>();
+        var shifted = new List<(CellAddress Addr, Cell Cell)>(sheet.CellCount);
+
+        foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+        {
+            if (row > endRow)
+            {
+                var addr = new CellAddress(sheet.Id, row, col);
+                shifted.Add((addr, cell.Clone()));
+            }
+            else if (row >= _startRow)
+            {
+                var addr = new CellAddress(sheet.Id, row, col);
+                deleted.Add((addr, cell.Clone()));
+            }
+        }
+
+        return (deleted, shifted);
     }
 }

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -457,6 +458,118 @@ public class InsertDeleteColumnsTests
 
         result.Success.Should().BeFalse();
         result.ErrorMessage.Should().Contain("pushed past the last column");
+    }
+
+    [Fact]
+    public void Benchmark_InsertColumnsWithDenseMovedCells_ReportsTiming()
+    {
+        const int iterations = 3;
+        var (workbook, sheet, ctx) = SetupDenseShiftWorkbook();
+
+        var warmup = new InsertColumnsCommand(sheet.Id, beforeCol: DenseShiftBeforeColumn);
+        warmup.Apply(ctx).Success.Should().BeTrue();
+        warmup.Revert(ctx);
+        sheet.CellCount.Should().Be(DenseShiftRows * DenseShiftColumns);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var command = new InsertColumnsCommand(sheet.Id, beforeCol: DenseShiftBeforeColumn);
+            var step = Stopwatch.StartNew();
+            command.Apply(ctx).Success.Should().BeTrue();
+            command.Revert(ctx);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        workbook.SheetCount.Should().Be(1);
+        sheet.CellCount.Should().Be(DenseShiftRows * DenseShiftColumns);
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1001));
+        sheet.GetValue(DenseShiftRows, DenseShiftColumns).Should().Be(new NumberValue(DenseShiftRows * 1000 + DenseShiftColumns));
+        Console.WriteLine(
+            "PERF INSERT_COLUMNS_DENSE_SHIFT " +
+            $"rows={DenseShiftRows} cols={DenseShiftColumns} before_col={DenseShiftBeforeColumn} " +
+            $"moved_cells={DenseShiftRows * (DenseShiftColumns - DenseShiftBeforeColumn + 1)} steps={iterations} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_DeleteColumnsWithDenseMovedCells_ReportsTiming()
+    {
+        const int iterations = 3;
+        var (workbook, sheet, ctx) = SetupDenseShiftWorkbook();
+
+        var warmup = new DeleteColumnsCommand(sheet.Id, startCol: DenseShiftBeforeColumn);
+        warmup.Apply(ctx).Success.Should().BeTrue();
+        warmup.Revert(ctx);
+        sheet.CellCount.Should().Be(DenseShiftRows * DenseShiftColumns);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var command = new DeleteColumnsCommand(sheet.Id, startCol: DenseShiftBeforeColumn);
+            var step = Stopwatch.StartNew();
+            command.Apply(ctx).Success.Should().BeTrue();
+            command.Revert(ctx);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        workbook.SheetCount.Should().Be(1);
+        sheet.CellCount.Should().Be(DenseShiftRows * DenseShiftColumns);
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1001));
+        sheet.GetValue(DenseShiftRows, DenseShiftColumns).Should().Be(new NumberValue(DenseShiftRows * 1000 + DenseShiftColumns));
+        Console.WriteLine(
+            "PERF DELETE_COLUMNS_DENSE_SHIFT " +
+            $"rows={DenseShiftRows} cols={DenseShiftColumns} start_col={DenseShiftBeforeColumn} " +
+            $"moved_cells={DenseShiftRows * (DenseShiftColumns - DenseShiftBeforeColumn)} steps={iterations} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    private const int DenseShiftRows = 500;
+    private const int DenseShiftColumns = 80;
+    private const uint DenseShiftBeforeColumn = 2;
+
+    private static (Workbook Workbook, Sheet Sheet, ICommandContext Context) SetupDenseShiftWorkbook()
+    {
+        var workbook = new Workbook("dense column shift perf");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        for (uint row = 1; row <= DenseShiftRows; row++)
+        {
+            for (uint col = 1; col <= DenseShiftColumns; col++)
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * 1000 + col));
+        }
+
+        return (workbook, sheet, new SimpleCtx(workbook));
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
