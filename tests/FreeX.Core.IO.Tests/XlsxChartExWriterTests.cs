@@ -11,12 +11,20 @@ public sealed class XlsxChartExWriterTests
     private const string ChartExContentType = "application/vnd.ms-office.chartex+xml";
     private const string ChartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
     private const string ChartExDrawingUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+    private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
+    private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
+    private const string ChartExStyleContentType = "application/vnd.ms-office.chartstyle+xml";
+    private const string ChartExColorStyleContentType = "application/vnd.ms-office.chartcolorstyle+xml";
     private static readonly XNamespace ContentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+    private static readonly XNamespace SpreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
     private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace ClassicChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace ChartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+    private static readonly XNamespace ChartStyleNs = "http://schemas.microsoft.com/office/drawing/2012/chartStyle";
+    private static readonly XNamespace MarkupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    private static readonly XNamespace ChartExCompatNs = "http://schemas.microsoft.com/office/drawing/2015/9/8/chartex";
 
     [Theory]
     [InlineData(ChartType.Treemap, "treemap")]
@@ -91,6 +99,19 @@ public sealed class XlsxChartExWriterTests
                 .ToList();
             chartContentTypeOverrides.Should().ContainSingle();
 
+            contentTypesXml.Root!
+                .Elements(ContentTypesNs + "Override")
+                .Where(element =>
+                    element.Attribute("PartName")?.Value == "/xl/charts/style1.xml" &&
+                    element.Attribute("ContentType")?.Value == ChartExStyleContentType)
+                .Should().ContainSingle();
+            contentTypesXml.Root!
+                .Elements(ContentTypesNs + "Override")
+                .Where(element =>
+                    element.Attribute("PartName")?.Value == "/xl/charts/colors1.xml" &&
+                    element.Attribute("ContentType")?.Value == ChartExColorStyleContentType)
+                .Should().ContainSingle();
+
             var drawingRelsXml = LoadPackageXml(archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels")!);
             var chartExRelationships = drawingRelsXml.Root!
                 .Elements(PackageRelNs + "Relationship")
@@ -100,7 +121,46 @@ public sealed class XlsxChartExWriterTests
                 .ToList();
             chartExRelationships.Should().ContainSingle();
 
+            var chartRelsXml = LoadPackageXml(archive.GetEntry("xl/charts/_rels/chart1.xml.rels")!);
+            chartRelsXml.Root!
+                .Elements(PackageRelNs + "Relationship")
+                .Where(element =>
+                    element.Attribute("Type")?.Value == ChartExStyleRelationshipType &&
+                    element.Attribute("Target")?.Value == "style1.xml")
+                .Should().ContainSingle();
+            chartRelsXml.Root!
+                .Elements(PackageRelNs + "Relationship")
+                .Where(element =>
+                    element.Attribute("Type")?.Value == ChartExColorStyleRelationshipType &&
+                    element.Attribute("Target")?.Value == "colors1.xml")
+                .Should().ContainSingle();
+
+            var styleXml = LoadPackageXml(archive.GetEntry("xl/charts/style1.xml")!);
+            styleXml.Root!.Name.Should().Be(ChartStyleNs + "chartStyle");
+            styleXml.Root.Attribute("id")!.Value.Should().Be("410");
+            styleXml.Root.Elements(ChartStyleNs + "legend").Should().ContainSingle();
+            styleXml.Root.Elements(ChartStyleNs + "valueAxis").Should().ContainSingle();
+
+            var colorsXml = LoadPackageXml(archive.GetEntry("xl/charts/colors1.xml")!);
+            colorsXml.Root!.Name.Should().Be(ChartStyleNs + "colorStyle");
+            colorsXml.Root.Attribute("meth")!.Value.Should().Be("cycle");
+            colorsXml.Root.Elements(DrawingNs + "schemeClr").Select(element => element.Attribute("val")!.Value)
+                .Should().Equal("accent1", "accent2", "accent3", "accent4", "accent5", "accent6");
+
             var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
+            drawingXml.Root!.Elements(SpreadsheetDrawingNs + "twoCellAnchor").Should().ContainSingle();
+            drawingXml.Root.Elements(SpreadsheetDrawingNs + "absoluteAnchor").Should().BeEmpty();
+            var alternateContent = drawingXml.Descendants(MarkupCompatNs + "AlternateContent").Should().ContainSingle().Subject;
+            alternateContent.Element(MarkupCompatNs + "Choice").Should().NotBeNull();
+            var choice = alternateContent.Element(MarkupCompatNs + "Choice")!;
+            choice.Attribute("Requires")!.Value.Should().Be("cx1");
+            choice.Attribute(XNamespace.Xmlns + "cx1")!.Value.Should().Be(ChartExCompatNs.NamespaceName);
+            alternateContent.Element(MarkupCompatNs + "Fallback").Should().NotBeNull();
+            var fallback = alternateContent.Element(MarkupCompatNs + "Fallback")!;
+            fallback.Descendants(SpreadsheetDrawingNs + "sp").Should().ContainSingle();
+            fallback.Descendants(DrawingNs + "t").Select(element => element.Value)
+                .Should().Contain(text => text.Contains("This chart isn't available", StringComparison.Ordinal));
+
             var graphicData = drawingXml.Descendants(DrawingNs + "graphicData").Should().ContainSingle().Subject;
             graphicData.Attribute("uri")!.Value.Should().Be(ChartExDrawingUri);
             graphicData.Elements(ChartExNs + "chart").Should().ContainSingle()
@@ -110,11 +170,14 @@ public sealed class XlsxChartExWriterTests
 
         saved.Position = 0;
         var loaded = new XlsxFileAdapter().Load(saved);
-        var reloadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.TextBoxes.Should().BeEmpty();
+        loadedSheet.DrawingShapes.Should().BeEmpty();
+        var reloadedChart = loadedSheet.Charts.Should().ContainSingle().Subject;
         reloadedChart.Type.Should().Be(chartType);
         reloadedChart.DataRange.Should().Be(new GridRange(
-            new CellAddress(loaded.GetSheetAt(0).Id, 1, 1),
-            new CellAddress(loaded.GetSheetAt(0).Id, 4, 2)));
+            new CellAddress(loadedSheet.Id, 1, 1),
+            new CellAddress(loadedSheet.Id, 4, 2)));
         reloadedChart.FirstRowIsHeader.Should().BeTrue();
         reloadedChart.FirstColIsCategories.Should().BeTrue();
     }
@@ -135,6 +198,35 @@ public sealed class XlsxChartExWriterTests
                 element.Attribute("ContentType")?.Value == ChartExContentType)
             .ToList();
         chartContentTypeOverrides.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Save_TreatsSingleColumnHistogramRangeAsValues()
+    {
+        var workbook = new Workbook("SingleColumnHistogram");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Histogram,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 1)),
+            Title = "Histogram"
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var data = chartXml.Descendants(ChartExNs + "data").Should().ContainSingle().Subject;
+        data.Elements(ChartExNs + "strDim").Should().BeEmpty();
+        data.Elements(ChartExNs + "numDim").Should().ContainSingle()
+            .Which.Element(ChartExNs + "f")!.Value.Should().Contain("$A$2:$A$4");
+        chartXml.Descendants(ChartExNs + "series").Should().ContainSingle();
     }
 
     [Theory]
@@ -186,7 +278,7 @@ public sealed class XlsxChartExWriterTests
     }
 
     [Fact]
-    public void Save_WritesHistogramBinningLayoutPr()
+    public void Save_OmitsHistogramBinningLayoutPrBecauseExcelRejectsCustomBinning()
     {
         var saved = SaveWorkbookWithChart(ChartType.Histogram, configureChart: chart =>
             chart.HistogramBinning = new HistogramBinningModel(
@@ -194,10 +286,8 @@ public sealed class XlsxChartExWriterTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
-        var binning = chartXml.Descendants(ChartExNs + "binning").Should().ContainSingle().Subject;
-        binning.Attribute("intervalClosed")!.Value.Should().Be("r");
-        binning.Attribute("overflow")!.Value.Should().Be("25");
-        binning.Element(ChartExNs + "binSize")!.Value.Should().Be("5");
+        chartXml.Descendants(ChartExNs + "binning").Should().BeEmpty();
+        chartXml.Descendants(ChartExNs + "layoutPr").Should().BeEmpty();
     }
 
     [Fact]
@@ -214,7 +304,7 @@ public sealed class XlsxChartExWriterTests
     }
 
     [Fact]
-    public void SaveLoad_HistogramBinningRoundTripsThroughChartEx()
+    public void SaveLoad_HistogramBinningIsNotPersistedThroughChartExForExcelOpenability()
     {
         var saved = SaveWorkbookWithChart(ChartType.Histogram, configureChart: chart =>
             chart.HistogramBinning = new HistogramBinningModel(
@@ -222,8 +312,7 @@ public sealed class XlsxChartExWriterTests
 
         var loaded = new XlsxFileAdapter().Load(saved);
         var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
-        chart.HistogramBinning.Should().Be(new HistogramBinningModel(
-            HistogramBinningMode.BinCount, BinCount: 5, OverflowThreshold: 25, UnderflowThreshold: 12));
+        chart.HistogramBinning.Should().BeNull();
     }
 
     [Fact]

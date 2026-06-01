@@ -78,8 +78,9 @@ internal static partial class XlsxChartXmlWriter
         XNamespace chartExNs)
     {
         var dataStartRow = chart.FirstRowIsHeader ? chart.DataRange.Start.Row + 1 : chart.DataRange.Start.Row;
-        var seriesStartCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
-        var categoryRange = chart.FirstColIsCategories
+        var hasCategoryColumn = chart.FirstColIsCategories && chart.DataRange.End.Col > chart.DataRange.Start.Col;
+        var seriesStartCol = hasCategoryColumn ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
+        var categoryRange = hasCategoryColumn
             ? FormatSheetRange(sheet.Name, dataStartRow, chart.DataRange.Start.Col, chart.DataRange.End.Row, chart.DataRange.Start.Col)
             : null;
 
@@ -129,46 +130,18 @@ internal static partial class XlsxChartXmlWriter
     }
 
     /// <summary>
-    /// Optional per-series layout properties for chartEx families: histogram binning
-    /// (<c>cx:binning</c>) and waterfall total/anchor columns (<c>cx:subtotals</c>). Returns null when
+    /// Optional per-series layout properties for chartEx families: waterfall total/anchor columns
+    /// (<c>cx:subtotals</c>). Histogram bin settings are intentionally not emitted because current
+    /// desktop Excel rejects otherwise valid chartEx packages containing <c>cx:binCount</c> or
+    /// <c>cx:binSize</c>. Returns null when
     /// the chart carries no such settings so the element is omitted (Excel's defaults apply).
     /// </summary>
     private static XElement? BuildChartExSeriesLayoutPr(ChartModel chart, XNamespace chartExNs)
     {
-        var binning = BuildChartExBinning(chart, chartExNs);
         var subtotals = BuildChartExSubtotals(chart, chartExNs);
-        return binning is null && subtotals is null
+        return subtotals is null
             ? null
-            : new XElement(chartExNs + "layoutPr", binning, subtotals);
-    }
-
-    private static XElement? BuildChartExBinning(ChartModel chart, XNamespace chartExNs)
-    {
-        if (chart.HistogramBinning is not { } binning)
-            return null;
-
-        // cx:binSize / cx:binCount carry their value as element text content (no val attribute).
-        var sizeOrCount = binning.Mode switch
-        {
-            HistogramBinningMode.BinWidth when binning.BinWidth is { } width && width > 0 =>
-                new XElement(chartExNs + "binSize", Invariant(width)),
-            HistogramBinningMode.BinCount when binning.BinCount is { } count && count > 0 =>
-                new XElement(chartExNs + "binCount", count.ToString(CultureInfo.InvariantCulture)),
-            _ => null,
-        };
-
-        // Nothing to persist for plain automatic binning with no overflow/underflow tails.
-        if (sizeOrCount is null && binning.OverflowThreshold is null && binning.UnderflowThreshold is null)
-            return null;
-
-        var element = new XElement(chartExNs + "binning",
-            new XAttribute("intervalClosed", "r"),
-            sizeOrCount);
-        if (binning.UnderflowThreshold is { } underflow)
-            element.SetAttributeValue("underflow", Invariant(underflow));
-        if (binning.OverflowThreshold is { } overflow)
-            element.SetAttributeValue("overflow", Invariant(overflow));
-        return element;
+            : new XElement(chartExNs + "layoutPr", subtotals);
     }
 
     private static XElement? BuildChartExSubtotals(ChartModel chart, XNamespace chartExNs)
@@ -182,9 +155,6 @@ internal static partial class XlsxChartXmlWriter
                 .OrderBy(index => index)
                 .Select(index => new XElement(chartExNs + "idx", new XAttribute("val", index))));
     }
-
-    private static string Invariant(double value) =>
-        value.ToString("R", CultureInfo.InvariantCulture);
 
     // cx:data/@id and cx:dataId/@val are xsd:unsignedInt — a bare numeric id, not "data{n}".
     private static string ToChartExDataId(int seriesIndex) =>

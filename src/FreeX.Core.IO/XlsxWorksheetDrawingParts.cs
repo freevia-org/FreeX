@@ -207,9 +207,13 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var shapes = new List<XlsxShapePackagePart>();
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
         foreach (var shapeElement in drawingXml.Descendants(spreadsheetDrawingNs + "sp"))
         {
+            if (shapeElement.Ancestors(markupCompatNs + "Fallback").Any())
+                continue;
+
             var name = ReadNonVisualName(shapeElement);
             var title = ReadNonVisualTitle(shapeElement);
             var altText = ReadNonVisualDescription(shapeElement);
