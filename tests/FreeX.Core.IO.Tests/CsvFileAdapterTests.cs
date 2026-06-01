@@ -68,7 +68,7 @@ public sealed class CsvFileAdapterTests
 
         coerceValue.IndexOf("TryParseFiniteNumber(trimmed", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(coerceValue.IndexOf("TryParseIsoDateTime(trimmed", StringComparison.Ordinal));
+            .BeLessThan(coerceValue.IndexOf("TryParseDateTime(trimmed", StringComparison.Ordinal));
     }
 
     [Fact]
