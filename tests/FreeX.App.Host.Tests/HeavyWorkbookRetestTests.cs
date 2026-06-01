@@ -10,13 +10,12 @@ public sealed class HeavyWorkbookRetestTests
 {
     private const string DefaultHeavyWorkbookPath = @"E:\Users\quinn\Documents\Samples\Acme\Sample Dashboard 20250116.xlsx";
 
-    [Fact]
+    [HeavyWorkbookRetestFact]
     [Trait("Category", "ExternalWorkbook")]
     public async Task PartnerDashboardWorkbook_OpensAndSavesWithinSmokeBudget()
     {
-        var sourcePath = ResolveHeavyWorkbookPath();
-        if (sourcePath is null)
-            throw SkipException.ForSkip("Heavy workbook retest requires FREEX_HEAVY_WORKBOOK_PATH or the documented local workbook path.");
+        var sourcePath = ResolveHeavyWorkbookPath()
+            ?? throw SkipException.ForSkip(HeavyWorkbookRetestFactAttribute.SkipReasonWhenMissing);
 
         var adapter = new XlsxFileAdapter();
         var loader = new OpenWorkbookLoader(_ => { });
@@ -74,5 +73,16 @@ public sealed class HeavyWorkbookRetestTests
     private sealed class ImmediateProgress<T>(Action<T> report) : IProgress<T>
     {
         public void Report(T value) => report(value);
+    }
+
+    private sealed class HeavyWorkbookRetestFactAttribute : FactAttribute
+    {
+        public const string SkipReasonWhenMissing =
+            "Heavy workbook retest requires FREEX_HEAVY_WORKBOOK_PATH or the documented local workbook path.";
+
+        public HeavyWorkbookRetestFactAttribute()
+        {
+            Skip = ResolveHeavyWorkbookPath() is null ? SkipReasonWhenMissing : null;
+        }
     }
 }
