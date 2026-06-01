@@ -85,7 +85,7 @@ public static partial class PivotTableRefreshService
 
     private static List<PivotKey> ApplyValueFilters(
         List<PivotKey> keys,
-        IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
+        PivotColumnRowMap rowsByColumnKey,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
         IReadOnlyList<PivotFieldModel> fields)
@@ -111,7 +111,7 @@ public static partial class PivotTableRefreshService
                 .Select(key => new
                 {
                     Key = key,
-                    Value = Aggregate(rows.Where(row => ColumnKeyMatches(row, fields, key)).ToList(), dataField, pivotTable, headers)
+                    Value = Aggregate(RowsForColumnKey(rowsByColumnKey, key), dataField, pivotTable, headers)
                 })
                 .ToList();
             var average = aggregates.Count == 0 ? 0 : aggregates.Average(item => item.Value);
@@ -239,7 +239,7 @@ public static partial class PivotTableRefreshService
 
     private static List<PivotKey> ApplySorts(
         List<PivotKey> keys,
-        IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
+        PivotColumnRowMap rowsByColumnKey,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
         IReadOnlyList<PivotFieldModel> fields)
@@ -262,9 +262,12 @@ public static partial class PivotTableRefreshService
             sort.DataFieldIndex < pivotTable.DataFields.Count)
         {
             var dataField = pivotTable.DataFields[sort.DataFieldIndex];
+            var aggregates = keys
+                .Select(key => (Key: key, Value: Aggregate(RowsForColumnKey(rowsByColumnKey, key), dataField, pivotTable, headers)))
+                .ToList();
             return sort.Direction == PivotSortDirection.Descending
-                ? keys.OrderByDescending(key => Aggregate(rows.Where(row => ColumnKeyMatches(row, fields, key)).ToList(), dataField, pivotTable, headers)).ThenBy(key => key, PivotKeyComparer.Instance).ToList()
-                : keys.OrderBy(key => Aggregate(rows.Where(row => ColumnKeyMatches(row, fields, key)).ToList(), dataField, pivotTable, headers)).ThenBy(key => key, PivotKeyComparer.Instance).ToList();
+                ? aggregates.OrderByDescending(item => item.Value).ThenBy(item => item.Key, PivotKeyComparer.Instance).Select(item => item.Key).ToList()
+                : aggregates.OrderBy(item => item.Value).ThenBy(item => item.Key, PivotKeyComparer.Instance).Select(item => item.Key).ToList();
         }
 
         return keys.Order(PivotKeyComparer.Instance).ToList();

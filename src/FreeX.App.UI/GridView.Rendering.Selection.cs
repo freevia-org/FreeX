@@ -26,11 +26,15 @@ public partial class GridView
         {
             if (row.Row == range.Start.Row) top    = row.TopOffset + columnHeaderHeight;
             if (row.Row == range.End.Row)   bottom = row.TopOffset + row.Height + columnHeaderHeight;
+            if (top.HasValue && bottom.HasValue)
+                break;
         }
         foreach (var col in vp.ColMetrics)
         {
             if (col.Col == range.Start.Col) left  = col.LeftOffset + rowHeaderWidth;
             if (col.Col == range.End.Col)   right = col.LeftOffset + col.Width + rowHeaderWidth;
+            if (left.HasValue && right.HasValue)
+                break;
         }
         return (top, left, bottom, right);
     }

@@ -291,6 +291,20 @@ public sealed class GridViewSelectionLayoutTests
     }
 
     [Fact]
+    public void SelectionEdgeLookup_StopsAfterRangeEdgesAreFound()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
+        var getRangePixels = source[
+            source.IndexOf("private (double? top, double? left, double? bottom, double? right) GetRangePixels(", StringComparison.Ordinal)..
+            source.IndexOf("public static Rect? CalculateVisibleSelectionRect", StringComparison.Ordinal)];
+
+        getRangePixels.Should().Contain("if (top.HasValue && bottom.HasValue)");
+        getRangePixels.Should().Contain("if (left.HasValue && right.HasValue)");
+        getRangePixels.Should().Contain("break;");
+    }
+
+    [Fact]
     public void CalculateQuickAnalysisCellPreviewRects_ReturnsInsetCellsForColorScalePreview()
     {
         var sheetId = SheetId.New();
