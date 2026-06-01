@@ -322,7 +322,12 @@ public partial class OptionsDialog : Window
             CrashAnalyticsPrompted = _opts.CrashAnalyticsPrompted || OptCrashAnalytics.IsChecked == true,
             PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage),
         };
-        opts.Save();
+        if (!opts.Save())
+        {
+            DialogMessageHelper.ShowError(this, opts.LastPersistenceError, Title);
+            return;
+        }
+
         Result = opts;
         DisabledFormulaErrorCodesResult = CollectDisabledFormulaErrorCodes();
         DialogResult = true;

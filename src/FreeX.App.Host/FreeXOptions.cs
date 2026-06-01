@@ -103,7 +103,7 @@ public sealed class FreeXOptions
         return new FreeXOptions();
     }
 
-    public void Save() => SaveToPath(StorePath);
+    public bool Save() => SaveToPath(StorePath);
 
     internal bool SaveToPath(string storePath)
     {

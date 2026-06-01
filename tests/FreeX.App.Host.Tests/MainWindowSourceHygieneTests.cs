@@ -1403,6 +1403,7 @@ public sealed class MainWindowSourceHygieneTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookUiState.cs"));
         var qatSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.QuickAccessToolbar.cs"));
+        var qatStateSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "QuickAccessCommandState.cs"));
         var toolbarSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ToolbarVisualState.cs"));
         var cacheSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ToolbarVisualStateCache.cs"));
 
@@ -1411,9 +1412,13 @@ public sealed class MainWindowSourceHygieneTests
         qatSource.Should().Contain("var state = new QuickAccessCommandState(");
         qatSource.Should().Contain("_commandBus.CanUndo(_workbook.Id)");
         qatSource.Should().Contain("_commandBus.CanRedo(_workbook.Id)");
+        qatSource.Should().Contain("_workbook.GetSheet(_currentSheetId) is not null");
+        qatSource.Should().Contain("SheetGrid.SelectedRange is not null");
         qatSource.Should().Contain("if (!force && _lastQuickAccessCommandState == state)");
-        qatSource.Should().Contain("\"Undo\" => state.CanUndo");
-        qatSource.Should().Contain("\"Redo\" => state.CanRedo");
+        qatSource.Should().Contain("RibbonMetadata.TryGetCatalogId(button, out var commandId)");
+        qatSource.Should().Contain("QuickAccessCommandStateResolver.CanExecute(commandId, state)");
+        qatStateSource.Should().Contain("QuickAccessToolbarCommandIds.Undo => state.CanUndo");
+        qatStateSource.Should().Contain("QuickAccessToolbarCommandIds.Redo => state.CanRedo");
         toolbarSource.Should().NotContain("bool CanUndo");
         toolbarSource.Should().NotContain("bool CanRedo");
         cacheSource.Should().Contain("private readonly record struct Source(WorkbookId WorkbookId, StyleId StyleId);");

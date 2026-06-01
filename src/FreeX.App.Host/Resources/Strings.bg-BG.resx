@@ -9164,6 +9164,27 @@
   <data name="DataValidation_MaximumRequired" xml:space="preserve">
     <value>Изисква се максимум.</value>
   </data>
+  <data name="DataValidation_InvalidWholeNumberCriteria" xml:space="preserve">
+    <value>Критериите за цяло число трябва да са цели числа или валидни формули.</value>
+  </data>
+  <data name="DataValidation_InvalidDecimalCriteria" xml:space="preserve">
+    <value>Критериите за десетично число трябва да са числа или валидни формули.</value>
+  </data>
+  <data name="DataValidation_InvalidDateCriteria" xml:space="preserve">
+    <value>Критериите за дата трябва да са дати, серийни числа за дата или валидни формули.</value>
+  </data>
+  <data name="DataValidation_InvalidTimeCriteria" xml:space="preserve">
+    <value>Критериите за час трябва да са часове, серийни числа за час или валидни формули.</value>
+  </data>
+  <data name="DataValidation_InvalidTextLengthCriteria" xml:space="preserve">
+    <value>Критериите за дължина на текста трябва да са цели числа или валидни формули.</value>
+  </data>
+  <data name="DataValidation_InvalidListCriteria" xml:space="preserve">
+    <value>Източникът трябва да е списък, разделен със запетаи, или валидна формула.</value>
+  </data>
+  <data name="DataValidation_InvalidCustomCriteria" xml:space="preserve">
+    <value>Формулата трябва да е валидна формула.</value>
+  </data>
   <data name="FindReplace_OptionsExpanded" xml:space="preserve">
     <value>_Опции &lt;&lt;</value>
   </data>
