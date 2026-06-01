@@ -170,6 +170,54 @@ public sealed class ErrorCheckingDialogSourceTests
         });
     }
 
+    [Fact]
+    public void ErrorCheckingDialog_ShowCalculationStepsTargetsFormulaIssuesOnly()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var formulaIssue = CreateIssue(sheetId, row: 1);
+            var literalIssue = new FormulaErrorIssue(
+                sheetId,
+                "Sheet1",
+                new CellAddress(sheetId, 2, 1),
+                "A2",
+                FormulaAuditingService.NumberStoredAsTextErrorCode,
+                null,
+                "The number in this cell is formatted as text.");
+
+            var showStepsCalls = 0;
+            var traceCalls = 0;
+            var dialog = new ErrorCheckingDialog(
+                [formulaIssue, literalIssue],
+                _ => { },
+                _ => true,
+                _ => traceCalls++,
+                showCalculationSteps: _ => showStepsCalls++);
+            dialog.Show();
+            try
+            {
+                var list = FindVisualChildren<ListView>(dialog).Single();
+                var showStepsButton = FindVisualChildren<Button>(dialog)
+                    .Single(button => Equals(button.Content, "Show _Calculation Steps"));
+
+                showStepsButton.IsEnabled.Should().BeTrue();
+                showStepsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                showStepsCalls.Should().Be(1);
+                traceCalls.Should().Be(0);
+
+                list.SelectedIndex = 1;
+
+                showStepsButton.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     private static FormulaErrorIssue CreateIssue(SheetId sheetId, uint row) =>
         new(
             sheetId,

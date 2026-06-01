@@ -13,6 +13,7 @@ public sealed class ErrorCheckingDialog : Window
     private readonly Action<CellAddress> _navigateTo;
     private readonly Func<FormulaErrorIssue, bool> _ignoreError;
     private readonly Action<FormulaErrorIssue> _traceError;
+    private readonly Action<FormulaErrorIssue> _showCalculationSteps;
     private readonly Action? _openOptions;
     private readonly ObservableCollection<FormulaErrorIssue> _issues = [];
     private readonly ListView _listView;
@@ -32,11 +33,13 @@ public sealed class ErrorCheckingDialog : Window
         Action<CellAddress> navigateTo,
         Func<FormulaErrorIssue, bool> ignoreError,
         Action<FormulaErrorIssue> traceError,
+        Action<FormulaErrorIssue>? showCalculationSteps = null,
         Action? openOptions = null)
     {
         _navigateTo = navigateTo;
         _ignoreError = ignoreError;
         _traceError = traceError;
+        _showCalculationSteps = showCalculationSteps ?? traceError;
         _openOptions = openOptions;
 
         Title = UiText.Get("ErrorChecking_Title");
@@ -76,7 +79,7 @@ public sealed class ErrorCheckingDialog : Window
         _helpButton.Click += (_, _) => ShowSelectedIssueHelp();
         actionStack.Children.Add(_helpButton);
         _showStepsButton = new Button { Content = UiText.Get("ErrorChecking_ShowCalculationStepsButton"), Height = 26, Margin = new Thickness(0, 0, 0, 6) };
-        _showStepsButton.Click += (_, _) => TraceSelected();
+        _showStepsButton.Click += (_, _) => ShowCalculationStepsSelected();
         actionStack.Children.Add(_showStepsButton);
         _sideIgnoreButton = new Button { Content = UiText.Get("ErrorChecking_IgnoreErrorButton"), Height = 26, Margin = new Thickness(0, 0, 0, 6) };
         _sideIgnoreButton.Click += (_, _) => IgnoreSelected();
@@ -222,7 +225,9 @@ public sealed class ErrorCheckingDialog : Window
         var selectedIndex = _listView.SelectedIndex;
         var hasSelection = selectedIndex >= 0 && selectedIndex < _issues.Count;
         _helpButton.IsEnabled = hasSelection;
-        _showStepsButton.IsEnabled = hasSelection;
+        _showStepsButton.IsEnabled = hasSelection &&
+            _listView.SelectedItem is FormulaErrorIssue selectedIssue &&
+            HasCalculationSteps(selectedIssue);
         _sideIgnoreButton.IsEnabled = hasSelection;
         _editFormulaButton.IsEnabled = hasSelection;
         _goToButton.IsEnabled = hasSelection;
@@ -230,6 +235,15 @@ public sealed class ErrorCheckingDialog : Window
         _traceButton.IsEnabled = hasSelection;
         _previousButton.IsEnabled = hasSelection && selectedIndex > 0;
         _nextButton.IsEnabled = hasSelection && selectedIndex < _issues.Count - 1;
+    }
+
+    private static bool HasCalculationSteps(FormulaErrorIssue issue) =>
+        !string.IsNullOrWhiteSpace(issue.FormulaText);
+
+    private void ShowCalculationStepsSelected()
+    {
+        if (_listView.SelectedItem is FormulaErrorIssue issue && HasCalculationSteps(issue))
+            _showCalculationSteps(issue);
     }
 
     private void TraceSelected()
