@@ -136,6 +136,36 @@ public sealed class RibbonKeyTipOverlayPlacementTests
     }
 
     [Fact]
+    public void PlaceBadge_CollapsedGroupKindCentersBadgeInsideTallOverflowControl()
+    {
+        // Collapsed ribbon groups are tall overflow buttons. Their badges should
+        // sit in the button center instead of straddling the caption/chevron edge.
+        var elementBounds = new Rect(220, 96, 52, 76);
+        var overlaySize = new Size(1280, 720);
+        var badgeSize = new Size(28, 16);
+
+        var point = RibbonKeyTipOverlayPlacement.PlaceBadge(
+            elementBounds, overlaySize, badgeSize, RibbonKeyTipBadgeKind.CollapsedGroup);
+
+        point.X.Should().Be(232);
+        point.Y.Should().Be(126);
+    }
+
+    [Fact]
+    public void PlaceBadge_CollapsedGroupKindClampsCenteredBadgeInsideOverlayBounds()
+    {
+        var elementBounds = new Rect(2, -40, 52, 76);
+        var overlaySize = new Size(60, 60);
+        var badgeSize = new Size(28, 16);
+
+        var point = RibbonKeyTipOverlayPlacement.PlaceBadge(
+            elementBounds, overlaySize, badgeSize, RibbonKeyTipBadgeKind.CollapsedGroup);
+
+        point.X.Should().Be(14);
+        point.Y.Should().Be(0);
+    }
+
+    [Fact]
     public void PlaceBadge_TabKindCentersBadgeBelowTabWithGap()
     {
         // Tab keytips sit centered just below the tab label rather than straddling
