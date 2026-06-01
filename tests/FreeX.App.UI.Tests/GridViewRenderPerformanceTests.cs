@@ -740,10 +740,17 @@ public sealed class GridViewRenderPerformanceTests
     public void ConditionalIconGlyphRenderer_ReusesFrozenBrushesAndPens()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "ConditionalIconGlyphRenderer.cs"));
+        var drawMethod = source[
+            source.IndexOf("public static void Draw", StringComparison.Ordinal)..
+            source.IndexOf("private static ConditionalIconAppearance ResolveAppearance", StringComparison.Ordinal)];
 
         source.Should().Contain("private static readonly SolidColorBrush IconDarkRedBrush");
         source.Should().Contain("private static readonly Pen OutlinePen");
         source.Should().Contain("private static readonly Pen WhiteThinPen");
+        source.Should().Contain("private static readonly ConcurrentDictionary<ConditionalIconAppearanceKey, ConditionalIconAppearance> AppearanceCache");
+        drawMethod.Should().Contain("var appearance = ResolveAppearance(icon);");
+        drawMethod.Should().NotContain("ResolveColor(icon)");
+        drawMethod.Should().NotContain("ResolveGlyphKind(icon)");
         source.Should().Contain("brush.Freeze();");
         source.Should().Contain("pen.Freeze();");
         source.Should().NotContain("new BrushConverter");
