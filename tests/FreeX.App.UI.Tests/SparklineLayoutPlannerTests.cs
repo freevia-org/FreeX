@@ -124,6 +124,25 @@ public sealed class SparklineLayoutPlannerTests
             new SparklineColumnBar(new Rect(65.25, 20, 19.5, 20), IsNegative: true));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CalculateColumnLayout_KeepsBarsInsideTinyTargetRect(bool winLoss)
+    {
+        var target = new Rect(10, 20, 2, 1);
+
+        var layout = SparklineLayoutPlanner.CalculateColumnLayout([1, -1], target, winLoss);
+
+        layout.Bars.Should().HaveCount(2);
+        foreach (var bar in layout.Bars)
+        {
+            bar.Rect.Left.Should().BeGreaterThanOrEqualTo(target.Left);
+            bar.Rect.Right.Should().BeLessThanOrEqualTo(target.Right);
+            bar.Rect.Top.Should().BeGreaterThanOrEqualTo(target.Top);
+            bar.Rect.Bottom.Should().BeLessThanOrEqualTo(target.Bottom);
+        }
+    }
+
     [Fact]
     public void SparklineLayoutPlanner_AvoidsLinqAndIntermediatePointArrays()
     {

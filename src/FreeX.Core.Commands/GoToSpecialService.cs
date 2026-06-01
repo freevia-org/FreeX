@@ -405,12 +405,9 @@ public static class GoToSpecialService
     private static IReadOnlyList<CellAddress> FindDependents(Workbook workbook, Sheet sheet, GridRange range)
     {
         var result = new List<CellAddress>();
-        foreach (var address in range.AllCells())
-        {
-            foreach (var dependent in FormulaAuditingService.GetDirectDependents(workbook, address))
-                if (dependent.Sheet == sheet.Id && !result.Contains(dependent))
-                    result.Add(dependent);
-        }
+        foreach (var dependent in FormulaAuditingService.GetDirectDependents(workbook, range))
+            if (dependent.Sheet == sheet.Id)
+                result.Add(dependent);
 
         return result;
     }

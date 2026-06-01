@@ -351,6 +351,36 @@ public sealed class GoToSpecialServiceTests
         count.Should().Be(rules);
     }
 
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Benchmark_FindDependentsManyFormulaCells_ReportsTimingAndAllocatedBytes()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        const uint selectedRows = 30;
+        const int formulas = 1_200;
+        const int iterations = 2;
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, selectedRows, 1));
+
+        for (var i = 0; i < formulas; i++)
+        {
+            var formulaAddress = new CellAddress(sheet.Id, (uint)(i + 1), 4);
+            var precedentRow = (uint)(i % selectedRows + 1);
+            sheet.SetCell(formulaAddress, Cell.FromFormula($"A{precedentRow}*2"));
+        }
+
+        var (count, elapsed, allocated) = MeasureFind(
+            () => GoToSpecialService.Find(wb, sheet, range, GoToSpecialKind.Dependents),
+            iterations);
+
+        WritePerfLine(
+            $"PERF GOTO_SPECIAL_DEPENDENTS_FORMULA_SCAN selected_rows={selectedRows} formulas={formulas} " +
+            $"steps={iterations} total_ms={elapsed.TotalMilliseconds:F2} allocated_bytes={allocated} matches={count}");
+        count.Should().Be(formulas);
+    }
+
     private static void Set(Sheet sheet, uint row, uint col, string value) =>
         sheet.SetCell(new CellAddress(sheet.Id, row, col), new TextValue(value));
 
