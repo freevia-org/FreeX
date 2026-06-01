@@ -90,4 +90,33 @@ public sealed class BuiltInFunctionsPerformanceTests
         _output.WriteLine($"UNIQUE large single-column allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(8_000_000);
     }
+
+    [Fact]
+    public void Xnpv_LargeCashFlowRangeAvoidsDateListAllocationChurn()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var firstDate = new DateTime(2026, 1, 1);
+        for (uint row = 1; row <= 20_000; row++)
+        {
+            var value = row == 1 ? -10_000d : 1d;
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(value));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(firstDate.AddDays(row - 1).ToOADate()));
+        }
+
+        evaluator.Evaluate("=XNPV(0.08,A1:A20000,B1:B20000)", sheet)
+            .Should().BeOfType<NumberValue>();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        var result = evaluator.Evaluate("=XNPV(0.08,A1:A20000,B1:B20000)", sheet);
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        result.Should().BeOfType<NumberValue>();
+        _output.WriteLine($"XNPV large cash-flow range allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(750_000);
+    }
 }
