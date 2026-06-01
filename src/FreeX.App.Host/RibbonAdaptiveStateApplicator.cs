@@ -16,9 +16,9 @@ internal static class RibbonAdaptiveStateApplicator
         var changedGroupCount = 0;
         for (var i = 0; i < groupSnapshots.Count; i++)
         {
-            var plannedState = NormalizePlannedState(groupSnapshots[i], plannedStates[i]);
+            var plannedState = NormalizePlannedState(groupSnapshots[i], plannedStates[i], availableWidth);
             var previousState = previousStates is not null && i < previousStates.Count
-                ? NormalizePlannedState(groupSnapshots[i], previousStates[i])
+                ? NormalizePlannedState(groupSnapshots[i], previousStates[i], availableWidth)
                 : (RibbonAdaptiveGroupState?)null;
 
             if (previousState is not null &&
@@ -106,6 +106,10 @@ internal static class RibbonAdaptiveStateApplicator
             "TableDesignStyleOptionsGroup" or
             "PivotTableAnalyzeCalculationsGroup" or
             "PivotTableDesignStyleOptionsGroup";
+
+    public static bool ShouldUseFullLayoutForIconOnlyGroup(string? catalogId, double availableWidth) =>
+        availableWidth > 760 &&
+        catalogId is "DataToolsGroup";
 
     public static void ApplyButton(
         MainWindow.RibbonCompactButtonSnapshot snapshot,
@@ -232,12 +236,29 @@ internal static class RibbonAdaptiveStateApplicator
 
     private static RibbonAdaptiveGroupState NormalizePlannedState(
         MainWindow.RibbonCompactGroupSnapshot snapshot,
-        RibbonAdaptiveGroupState plannedState) =>
-        plannedState == RibbonAdaptiveGroupState.IconOnly &&
-        RibbonMetadata.TryGetCatalogId(snapshot.Group, out var catalogId) &&
-        ShouldUseSmallWithLabelsForIconOnlyGroup(catalogId)
+        RibbonAdaptiveGroupState plannedState,
+        double availableWidth)
+    {
+        if (plannedState != RibbonAdaptiveGroupState.IconOnly ||
+            !RibbonMetadata.TryGetCatalogId(snapshot.Group, out var catalogId))
+        {
+            return plannedState;
+        }
+
+        if (ShouldCollapseIconOnlyGroup(catalogId, availableWidth))
+            return RibbonAdaptiveGroupState.Collapsed;
+
+        if (ShouldUseFullLayoutForIconOnlyGroup(catalogId, availableWidth))
+            return RibbonAdaptiveGroupState.Full;
+
+        return ShouldUseSmallWithLabelsForIconOnlyGroup(catalogId)
             ? RibbonAdaptiveGroupState.SmallWithLabels
             : plannedState;
+    }
+
+    private static bool ShouldCollapseIconOnlyGroup(string? catalogId, double availableWidth) =>
+        availableWidth <= 1300 &&
+        catalogId is "DataSortFilterGroup";
 
     private static bool TryGetCollapsedRibbonButtonCaption(Button button, out TextBlock caption)
     {
