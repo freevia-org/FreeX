@@ -63,6 +63,17 @@ public sealed class SparklineLayoutPlannerTests
         layout.Segments.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData(0, 40)]
+    [InlineData(80, 0)]
+    public void CalculateLineLayout_ReturnsEmptyLayoutForDegenerateTargetRect(double width, double height)
+    {
+        var layout = SparklineLayoutPlanner.CalculateLineLayout([1, 2, 3], new Rect(10, 20, width, height));
+
+        layout.SinglePoint.Should().BeNull();
+        layout.Segments.Should().BeEmpty();
+    }
+
     [Fact]
     public void CalculateColumnLayout_ScalesPositiveAndNegativeBarsAroundAxis()
     {
@@ -79,6 +90,16 @@ public sealed class SparklineLayoutPlannerTests
     public void CalculateColumnLayout_ReturnsEmptyLayoutForNoValues()
     {
         var layout = SparklineLayoutPlanner.CalculateColumnLayout([], new Rect(0, 0, 100, 40), winLoss: false);
+
+        layout.Bars.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(0, 40)]
+    [InlineData(100, 0)]
+    public void CalculateColumnLayout_ReturnsEmptyLayoutForDegenerateTargetRect(double width, double height)
+    {
+        var layout = SparklineLayoutPlanner.CalculateColumnLayout([1, -2], new Rect(0, 0, width, height), winLoss: false);
 
         layout.Bars.Should().BeEmpty();
     }

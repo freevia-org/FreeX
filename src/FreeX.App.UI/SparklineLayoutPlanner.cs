@@ -35,7 +35,7 @@ public static class SparklineLayoutPlanner
         ref TConsumer consumer)
         where TConsumer : struct, ISparklineLineLayoutConsumer
     {
-        if (values.Count == 0)
+        if (values.Count == 0 || rect.Width <= 0 || rect.Height <= 0)
             return;
 
         var firstIndex = -1;
@@ -114,7 +114,7 @@ public static class SparklineLayoutPlanner
         ref TConsumer consumer)
         where TConsumer : struct, ISparklineColumnLayoutConsumer
     {
-        if (values.Count == 0)
+        if (values.Count == 0 || rect.Width <= 0 || rect.Height <= 0)
             return;
 
         var maxAbs = 0d;

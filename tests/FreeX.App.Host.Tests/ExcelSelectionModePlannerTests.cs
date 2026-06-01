@@ -58,8 +58,14 @@ public sealed class ExcelSelectionModePlannerTests
     [Theory]
     [InlineData(ExcelSelectionMode.Normal, ModifierKeys.None, false)]
     [InlineData(ExcelSelectionMode.Normal, ModifierKeys.Shift, true)]
+    [InlineData(ExcelSelectionMode.Normal, ModifierKeys.Control | ModifierKeys.Shift, true)]
+    [InlineData(ExcelSelectionMode.Normal, ModifierKeys.Alt | ModifierKeys.Shift, false)]
+    [InlineData(ExcelSelectionMode.Normal, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift, false)]
     [InlineData(ExcelSelectionMode.Extend, ModifierKeys.None, true)]
+    [InlineData(ExcelSelectionMode.Extend, ModifierKeys.Control | ModifierKeys.Alt, true)]
     [InlineData(ExcelSelectionMode.Add, ModifierKeys.None, false)]
+    [InlineData(ExcelSelectionMode.Add, ModifierKeys.Control | ModifierKeys.Shift, true)]
+    [InlineData(ExcelSelectionMode.Add, ModifierKeys.Alt | ModifierKeys.Shift, false)]
     public void ShouldExtendSelection_TreatsF8ExtendModeLikeShift(
         ExcelSelectionMode mode,
         ModifierKeys modifiers,

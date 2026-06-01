@@ -30,7 +30,8 @@ public static class ExcelSelectionModePlanner
     }
 
     public static bool ShouldExtendSelection(ExcelSelectionMode mode, ModifierKeys modifiers) =>
-        mode == ExcelSelectionMode.Extend || (modifiers & ModifierKeys.Shift) != 0;
+        mode == ExcelSelectionMode.Extend ||
+        modifiers is ModifierKeys.Shift or (ModifierKeys.Control | ModifierKeys.Shift);
 }
 
 public enum ExcelSelectionMode
