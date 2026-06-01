@@ -5,7 +5,8 @@ namespace FreeX.App.Host;
 public enum RibbonKeyTipBadgeKind
 {
     Command,
-    Tab
+    Tab,
+    CollapsedGroup
 }
 
 public static class RibbonKeyTipOverlayPlacement
@@ -27,6 +28,10 @@ public static class RibbonKeyTipOverlayPlacement
         {
             // Tab: center horizontally, anchored just below the tab with a small gap.
             RibbonKeyTipBadgeKind.Tab => elementBounds.Bottom + TabBelowGap,
+            // Collapsed groups are tall overflow buttons; keep badges centered in the button
+            // instead of down in the caption/chevron area.
+            RibbonKeyTipBadgeKind.CollapsedGroup =>
+                elementBounds.Top + (elementBounds.Height / 2) - (badgeSize.Height / 2),
             // Compact title-bar commands are QAT buttons; Excel places those badges below the icons.
             RibbonKeyTipBadgeKind.Command when IsCompactTitleBarCommand(elementBounds) =>
                 elementBounds.Bottom + TitleBarCommandBelowGap,

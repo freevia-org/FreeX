@@ -79,6 +79,22 @@ public sealed class ErrorCheckingDialogSourceTests
     }
 
     [Fact]
+    public void ErrorCheckingDialog_DoubleClickNavigateHandlesMouseEvent()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
+        var doubleClick = source[
+            source.IndexOf("private void ListView_MouseDoubleClick", StringComparison.Ordinal)..
+            source.IndexOf("private void ListView_KeyDown", StringComparison.Ordinal)];
+
+        doubleClick.Should().Contain("_listView.SelectedItem is not FormulaErrorIssue issue");
+        doubleClick.Should().Contain("_navigateTo(issue.Address);");
+        doubleClick.Should().Contain("e.Handled = true;");
+        doubleClick.IndexOf("_navigateTo(issue.Address);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(doubleClick.IndexOf("e.Handled = true;", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ErrorCheckingDialog_LabelsIssueListWithAccessKeyAndAutomationName()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
