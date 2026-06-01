@@ -98,7 +98,7 @@ public static class ChartDataLabelFormatter
             ? value.ToString("0%", CultureInfo.InvariantCulture)
             : chart.DataLabelNumberFormat switch
             {
-                ChartDataLabelNumberFormat.Number => value.ToString("0.00"),
+                ChartDataLabelNumberFormat.Number => value.ToString("0.00", CultureInfo.InvariantCulture),
                 ChartDataLabelNumberFormat.Currency => value.ToString("$#,##0.00", CultureInfo.InvariantCulture),
                 ChartDataLabelNumberFormat.Percent => value.ToString("0%", CultureInfo.InvariantCulture),
                 _ => value.ToString("0.###", CultureInfo.InvariantCulture)

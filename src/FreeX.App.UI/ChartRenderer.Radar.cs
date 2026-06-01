@@ -53,7 +53,7 @@ public static partial class ChartRenderer
             for (uint row = dataStartRow; row <= endRow; row++, i++)
             {
                 if (!cellLookup.TryGetValue((row, col), out var cell) ||
-                    !double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
+                    !TryGetChartNumericValue(cell, out var value))
                     continue;
 
                 var point = new DataPoint(i * 360.0 / pointCount, value);

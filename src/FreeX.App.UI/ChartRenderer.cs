@@ -29,14 +29,18 @@ public static partial class ChartRenderer
         Render(chart, viewport, WorkbookTheme.Office);
 
     public static ImageSource? Render(ChartModel chart, ViewportModel viewport, WorkbookTheme? theme)
+        => Render(chart, viewport, theme, renderScale: 1.0);
+
+    public static ImageSource? Render(ChartModel chart, ViewportModel viewport, WorkbookTheme? theme, double renderScale)
     {
         var model = BuildPlotModel(chart, viewport, theme ?? WorkbookTheme.Office);
         if (model == null) return null;
 
+        renderScale = double.IsFinite(renderScale) ? Math.Clamp(renderScale, 0.25, 4.0) : 1.0;
         var exporter = new PngExporter
         {
-            Width  = (int)chart.Width,
-            Height = (int)chart.Height,
+            Width  = Math.Max(1, (int)Math.Ceiling(chart.Width * renderScale)),
+            Height = Math.Max(1, (int)Math.Ceiling(chart.Height * renderScale)),
         };
 
         using var stream = new System.IO.MemoryStream();
@@ -113,7 +117,7 @@ public static partial class ChartRenderer
             for (uint r = dataStartRow; r <= endRow; r++)
             {
                 if (!cellLookup.TryGetValue((r, dataStartCol), out var cell)) continue;
-                if (!double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) continue;
+                if (!TryGetChartNumericValue(cell, out var v)) continue;
                 var label = categories.Count > (int)(r - dataStartRow) ? categories[(int)(r - dataStartRow)] : "";
                 var sliceIndex = pieSeries.Slices.Count;
                 var slice = new PieSlice(label, v)
@@ -257,7 +261,7 @@ public static partial class ChartRenderer
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
                     if (cellLookup.TryGetValue((r, col), out var cell)
-                        && double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
+                        && TryGetChartNumericValue(cell, out var v))
                     {
                         series.Items.Add(new RectangleBarItem(i - colHalfWidth, Math.Min(0, v), i + colHalfWidth, Math.Max(0, v)));
                         trendPoints?.Add(new DataPoint(i, v));
@@ -266,7 +270,7 @@ public static partial class ChartRenderer
                     }
                     else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero
                         && cellLookup.TryGetValue((r, col), out cell)
-                        && string.IsNullOrWhiteSpace(cell.DisplayText))
+                        && IsChartBlank(cell))
                     {
                         series.Items.Add(new RectangleBarItem(i - colHalfWidth, 0, i + colHalfWidth, 0));
                         trendPoints?.Add(new DataPoint(i, 0));
@@ -302,7 +306,7 @@ public static partial class ChartRenderer
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
                     if (cellLookup.TryGetValue((r, col), out var cell)
-                        && double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
+                        && TryGetChartNumericValue(cell, out var v))
                     {
                         series.Items.Add(new BarItem { Value = v });
                         trendPoints?.Add(new DataPoint(i, v));
@@ -311,7 +315,7 @@ public static partial class ChartRenderer
                     }
                     else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero
                         && cellLookup.TryGetValue((r, col), out cell)
-                        && string.IsNullOrWhiteSpace(cell.DisplayText))
+                        && IsChartBlank(cell))
                     {
                         series.Items.Add(new BarItem { Value = 0 });
                         trendPoints?.Add(new DataPoint(i, 0));
@@ -369,14 +373,14 @@ public static partial class ChartRenderer
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
                     if (cellLookup.TryGetValue((r, col), out var cell)
-                        && double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
+                        && TryGetChartNumericValue(cell, out var v))
                     {
                         series.Points.Add(new DataPoint(i, v));
                         trendPoints?.Add(new DataPoint(i, v));
                         if (ShouldUseAnnotationLabels(chart))
                             AddDataLabelAnnotation(model, chart, theme, seriesName, seriesIndex, i, ChartDataLabelFormatter.GetCategory(categories, i), i, v, v);
                     }
-                    else if (cellLookup.TryGetValue((r, col), out cell) && string.IsNullOrWhiteSpace(cell.DisplayText))
+                    else if (cellLookup.TryGetValue((r, col), out cell) && IsChartBlank(cell))
                     {
                         if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
                         {
@@ -419,11 +423,11 @@ public static partial class ChartRenderer
                 for (uint r = dataStartRow; r <= endRow; r++)
                 {
                     if (!cellLookup.TryGetValue((r, xCol), out var xCell) ||
-                        !double.TryParse(xCell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var x))
+                        !TryGetChartNumericValue(xCell, out var x))
                         x = r - dataStartRow;
 
                     if (cellLookup.TryGetValue((r, col), out var yCell)
-                        && double.TryParse(yCell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var y))
+                        && TryGetChartNumericValue(yCell, out var y))
                     {
                         series.Points.Add(new ScatterPoint(x, y));
                         trendPoints?.Add(new DataPoint(x, y));
@@ -488,7 +492,7 @@ public static partial class ChartRenderer
                 lookup[(cell.Row, cell.Col)] = new DisplayCell(
                     cell.Row,
                     cell.Col,
-                    null,
+                    cell.RawValue,
                     cell.DisplayText,
                     null,
                     StyleId.Default,
@@ -501,6 +505,27 @@ public static partial class ChartRenderer
 
         return lookup;
     }
+
+    private static bool TryGetChartNumericValue(DisplayCell cell, out double value)
+    {
+        switch (cell.RawValue)
+        {
+            case NumberValue number:
+                value = number.Value;
+                return double.IsFinite(value);
+            case DateTimeValue dateTime:
+                value = dateTime.Value;
+                return double.IsFinite(value);
+            case BoolValue boolean:
+                value = boolean.Value ? 1 : 0;
+                return true;
+        }
+
+        return double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool IsChartBlank(DisplayCell cell) =>
+        cell.RawValue is null or BlankValue || string.IsNullOrWhiteSpace(cell.DisplayText);
 
     private static LineSeries CreateLineSeries(ChartModel chart, string title, int seriesIndex, WorkbookTheme theme)
     {

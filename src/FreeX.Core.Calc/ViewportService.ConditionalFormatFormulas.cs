@@ -24,7 +24,7 @@ public sealed partial class ViewportService
             int dc = (int)addr.Col - (int)cf.AppliesTo.Start.Col;
             var ast = GetShiftedCfFormula(formulaCache, dr, dc);
 
-            var result = _cfEvaluator.Evaluate(ast, sheet, workbook);
+            var result = _cfEvaluator.Evaluate(ast, sheet, workbook, addr);
             return result switch
             {
                 BoolValue bv => bv.Value,

@@ -8,6 +8,7 @@ public sealed partial class ViewportService
         Sheet sheet,
         CellAddress addr,
         ScalarValue value,
+        Workbook workbook,
         CfEvaluationContext cfContext)
     {
         foreach (var rule in cfContext.IconRulesByPriority)
@@ -19,7 +20,7 @@ public sealed partial class ViewportService
 
             var style = string.IsNullOrWhiteSpace(rule.IconSetStyle) ? "3TrafficLights1" : rule.IconSetStyle!;
             var iconCount = GetIconSetCount(style);
-            var bucketIndex = ResolveIconSetIndex(rule, cellValue, cache.Min, cache.Max, iconCount);
+            var bucketIndex = ResolveIconSetIndex(rule, cellValue, cache, sheet, workbook, addr, iconCount);
 
             if (rule.IconOverrides.Count == iconCount)
             {
@@ -36,21 +37,28 @@ public sealed partial class ViewportService
         return null;
     }
 
-    private static int ResolveIconSetIndex(ConditionalFormat rule, double value, double min, double max, int iconCount)
+    private static int ResolveIconSetIndex(
+        ConditionalFormat rule,
+        double value,
+        CfAggregateCache cache,
+        Sheet sheet,
+        Workbook workbook,
+        CellAddress addr,
+        int iconCount)
     {
-        if (TryResolveIconSetThresholds(rule, min, max, iconCount, out var thresholds))
+        if (TryResolveIconSetThresholds(rule, cache, sheet, workbook, addr, iconCount, out var thresholds))
         {
             var index = 0;
             foreach (var threshold in thresholds)
             {
-                if (value >= threshold)
+                if (threshold.GreaterThanOrEqual ? value >= threshold.Value : value > threshold.Value)
                     index++;
             }
 
             return Math.Clamp(index, 0, iconCount - 1);
         }
 
-        return ResolveInterpolatedIconSetIndex(value, min, max, iconCount);
+        return ResolveInterpolatedIconSetIndex(value, cache.Min, cache.Max, iconCount);
     }
 
     private static int ResolveInterpolatedIconSetIndex(double value, double min, double max, int iconCount)
@@ -66,33 +74,32 @@ public sealed partial class ViewportService
 
     private static bool TryResolveIconSetThresholds(
         ConditionalFormat rule,
-        double min,
-        double max,
+        CfAggregateCache cache,
+        Sheet sheet,
+        Workbook workbook,
+        CellAddress addr,
         int iconCount,
-        out double[] thresholds)
+        out (double Value, bool GreaterThanOrEqual)[] thresholds)
     {
         thresholds = [];
         if (rule.IconSetThresholds.Count < iconCount - 1)
             return false;
 
-        var resolved = new List<double>(iconCount - 1);
-        foreach (var threshold in rule.IconSetThresholds.Take(iconCount - 1))
+        var resolved = new List<(double Value, bool GreaterThanOrEqual)>(iconCount - 1);
+        for (var i = 0; i < iconCount - 1; i++)
         {
-            switch (threshold.Type)
-            {
-                case CfThresholdType.Number:
-                    if (!TryParseDouble(threshold.Value, out var number))
-                        return false;
-                    resolved.Add(number);
-                    break;
-                case CfThresholdType.Percent:
-                    if (!TryParseDouble(threshold.Value, out var percent))
-                        return false;
-                    resolved.Add(min + (max - min) * (percent / 100d));
-                    break;
-                default:
-                    return false;
-            }
+            var threshold = rule.IconSetThresholds[i];
+            if (!ViewportConditionalFormatEvaluator.TryResolveThreshold(
+                    threshold.Type,
+                    threshold.Value,
+                    cache,
+                    sheet,
+                    workbook,
+                    addr,
+                    out var value))
+                return false;
+
+            resolved.Add((value, threshold.GreaterThanOrEqual ?? true));
         }
 
         thresholds = resolved.ToArray();

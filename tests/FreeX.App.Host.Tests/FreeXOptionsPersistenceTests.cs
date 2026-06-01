@@ -36,6 +36,27 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
     }
 
     [Fact]
+    public void Save_WhenStorePathCannotBeWritten_ReturnsFalseWithObservableError()
+    {
+        Directory.CreateDirectory(_tempDirectory);
+        var previousPath = Environment.GetEnvironmentVariable(FreeXOptions.OptionsPathEnvironmentVariable);
+        Environment.SetEnvironmentVariable(FreeXOptions.OptionsPathEnvironmentVariable, _tempDirectory);
+        try
+        {
+            var options = new FreeXOptions();
+
+            options.Save().Should().BeFalse();
+
+            options.LastPersistenceError.Should().Contain("Failed to save options");
+            options.LastPersistenceError.Should().Contain(_tempDirectory);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(FreeXOptions.OptionsPathEnvironmentVariable, previousPath);
+        }
+    }
+
+    [Fact]
     public void SaveToPath_WritesAtomicallyAndClearsPreviousError()
     {
         Directory.CreateDirectory(_tempDirectory);

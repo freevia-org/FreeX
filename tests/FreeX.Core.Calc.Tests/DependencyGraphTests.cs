@@ -69,9 +69,9 @@ public class DependencyGraphTests
         afterPlan.Should().Contain("plan.OrderedCells.Count == 0");
         afterPlan.Should().Contain("plan.CyclicCells.Count == 0");
         afterPlan.Should().Contain("_volatileCells.Count == 0");
-        afterPlan.Should().Contain("!HasChangedFormulaCells(workbook, changedCells)");
+        afterPlan.Should().Contain("changedFormulaCells is null");
         afterPlan.Should().Contain("return EmptyReport;");
-        source.Should().Contain("private static bool HasChangedFormulaCells");
+        source.Should().Contain("private static List<CellAddress>? CollectChangedFormulaCells");
         source.Should().NotContain("changedCells.Where");
 
         var workbook = new Workbook();
@@ -892,6 +892,80 @@ public class AstCacheTests
         report.RecalculatedCells.Should().Contain(b1);
         sheet.GetValue(a1).Should().BeOfType<DateTimeValue>();
         sheet.GetValue(b1).Should().Be(sheet.GetValue(a1));
+    }
+
+    [Fact]
+    public void Recalculate_DirtyFormulaRoots_EvaluatesPrecedentsBeforeDependents()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+
+        sheet.SetCell(a2, new NumberValue(1));
+        sheet.SetFormula(b1, "A1+1");
+        sheet.SetFormula(a1, "A2+1");
+        engine.RebuildFormulaDependencies(wb);
+
+        var report = engine.Recalculate(wb, [b1, a1]);
+
+        sheet.GetValue(a1).Should().Be(new NumberValue(2));
+        sheet.GetValue(b1).Should().Be(new NumberValue(3));
+        report.RecalculatedCells.Should().ContainInOrder(a1, b1);
+    }
+
+    [Fact]
+    public void RecalculateAllFormulas_EvaluatesInsertedDependentAfterPrecedent()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+
+        sheet.SetCell(a2, new NumberValue(1));
+        sheet.SetFormula(b1, "A1+1");
+        sheet.SetFormula(a1, "A2+1");
+
+        engine.RecalculateAllFormulas(wb);
+
+        sheet.GetValue(a1).Should().Be(new NumberValue(2));
+        sheet.GetValue(b1).Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void Recalculate_ParseFailureClearsStaleDependenciesAndVolatileTracking()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+
+        sheet.SetCell(a1, new NumberValue(1));
+        sheet.SetFormula(b1, "NOW()+A1");
+        engine.RebuildFormulaDependencies(wb);
+
+        sheet.SetFormula(b1, "NOW(");
+        var parseReport = engine.Recalculate(wb, [b1]);
+
+        sheet.GetValue(b1).Should().Be(ErrorValue.Value);
+        parseReport.Errors.Should().ContainSingle(error => error.Cell.Equals(b1));
+
+        sheet.SetCell(a1, new NumberValue(2));
+        var dependencyReport = engine.Recalculate(wb, [a1]);
+        dependencyReport.Errors.Should().BeEmpty();
+        dependencyReport.RecalculatedCells.Should().BeEmpty();
+
+        var volatileReport = engine.Recalculate(wb, []);
+        volatileReport.Errors.Should().BeEmpty();
+        volatileReport.RecalculatedCells.Should().BeEmpty();
     }
 }
 

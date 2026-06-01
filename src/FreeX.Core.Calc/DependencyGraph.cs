@@ -209,6 +209,48 @@ public sealed class DependencyGraph
         return new RecalcPlan(sorted, cycles ?? []);
     }
 
+    /// <summary>
+    /// Topologically order a known dirty set, including the dirty roots themselves.
+    /// </summary>
+    public RecalcPlan GetEvaluationOrder(IReadOnlyCollection<CellAddress> dirtyCells)
+    {
+        if (dirtyCells.Count == 0)
+            return EmptyPlan;
+
+        var candidates = dirtyCells as HashSet<CellAddress> ?? new HashSet<CellAddress>(dirtyCells);
+        var inDegree = new Dictionary<CellAddress, int>(candidates.Count);
+        foreach (var cell in candidates)
+            inDegree[cell] = CountPrecedentsWithin(cell, candidates);
+
+        var sorted = new List<CellAddress>(candidates.Count);
+        var ready = new Queue<CellAddress>();
+        foreach (var (cell, degree) in inDegree)
+        {
+            if (degree == 0)
+                ready.Enqueue(cell);
+        }
+
+        while (ready.Count > 0)
+        {
+            var cell = ready.Dequeue();
+            sorted.Add(cell);
+
+            DecrementDependentInDegrees(cell, inDegree, ready);
+        }
+
+        List<CellAddress>? cycles = null;
+        foreach (var (cell, degree) in inDegree)
+        {
+            if (degree > 0)
+            {
+                cycles ??= [];
+                cycles.Add(cell);
+            }
+        }
+
+        return new RecalcPlan(sorted, cycles ?? []);
+    }
+
     private bool HasAnyDependents(IReadOnlyList<CellAddress> cells)
     {
         for (var i = 0; i < cells.Count; i++)
