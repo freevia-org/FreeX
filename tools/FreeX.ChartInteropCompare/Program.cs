@@ -1494,23 +1494,13 @@ internal sealed record VisualExpectation(int HashThreshold, int RoundTripHashThr
     private static readonly IReadOnlyDictionary<string, string> KnownGaps =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["ThreeDColumn"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
-            ["ThreeDLine"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
-            ["ThreeDPie"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
-            ["ThreeDBar"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
-            ["ThreeDArea"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
-            ["ThreeDSurface"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling."
+            ["ThreeDColumn"] = "Excel-native -> FreeX -> Excel 3-D column round-trip chart export has minor raster variance."
         };
 
     private static readonly IReadOnlySet<string> KnownRoundTripGaps =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "ThreeDColumn",
-            "ThreeDLine",
-            "ThreeDPie",
-            "ThreeDBar",
-            "ThreeDArea",
-            "ThreeDSurface"
+            "ThreeDColumn"
         };
 
     public static VisualExpectation For(ChartCompareResult result, CompareOptions options)

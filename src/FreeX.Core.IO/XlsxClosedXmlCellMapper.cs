@@ -61,11 +61,28 @@ internal static class XlsxClosedXmlCellMapper
         NumberValue n => n.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
         TextValue t => t.Value,
         BoolValue b => b.Value,
-        DateTimeValue dt when double.IsFinite(dt.Value) => DateTime.FromOADate(dt.Value),
+        DateTimeValue dt when TryMapDateTimeValue(dt, out var dateTime) => dateTime,
         DateTimeValue dt => dt.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
         ErrorValue e => MapErrorValueInverse(e),
         _ => Blank.Value
     };
+
+    private static bool TryMapDateTimeValue(DateTimeValue value, out DateTime dateTime)
+    {
+        dateTime = default;
+        if (!double.IsFinite(value.Value))
+            return false;
+
+        try
+        {
+            dateTime = DateTime.FromOADate(value.Value);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
 
     public static CellStyle MapStyle(IXLStyle xlStyle, WorkbookTheme theme)
     {

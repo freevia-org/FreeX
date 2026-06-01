@@ -83,6 +83,25 @@ public sealed class XlsxFileAdapterFormatTests
     }
 
     [Fact]
+    public void Save_WritesOutOfRangeDateTimesAsTextCells()
+    {
+        var workbook = new Workbook("OutOfRange dates xlsx");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new DateTimeValue(double.MaxValue));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new DateTimeValue(double.MinValue));
+
+        var adapter = new XlsxFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+
+        loaded.GetCell(1, 1)!.Value.Should().Be(new TextValue(double.MaxValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
+        loaded.GetCell(1, 2)!.Value.Should().Be(new TextValue(double.MinValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
+    }
+
+    [Fact]
     public void LoadPath_AvoidsFullPackageToArrayCopies()
     {
         var adapterSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
