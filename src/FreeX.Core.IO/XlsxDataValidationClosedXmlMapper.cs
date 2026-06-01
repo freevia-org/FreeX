@@ -108,10 +108,11 @@ internal static class XlsxDataValidationClosedXmlMapper
 #pragma warning disable CS0618 // SetDataValidation is obsolete in newer ClosedXML but CreateDataValidation may not exist in 0.105
                 var xlDv = xlRange.CreateDataValidation();
 #pragma warning restore CS0618
-                foreach (var additionalRange in dv.AdditionalRanges.Where(range =>
-                    range.Start.Sheet == sheet.Id &&
-                    range.End.Sheet == sheet.Id))
+                foreach (var additionalRange in dv.AdditionalRanges)
                 {
+                    if (additionalRange.Start.Sheet != sheet.Id || additionalRange.End.Sheet != sheet.Id)
+                        continue;
+
                     xlDv.AddRange(xlSheet.Range(ToA1Range(additionalRange)));
                 }
 
