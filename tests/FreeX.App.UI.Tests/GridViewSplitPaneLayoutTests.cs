@@ -969,11 +969,21 @@ public sealed class GridViewSplitPaneLayoutTests
             source.IndexOf("private static ColMetric? GetColMetric", StringComparison.Ordinal)];
         var columnLookup = source[
             source.IndexOf("private static ColMetric? FindColMetric", StringComparison.Ordinal)..];
+        var rowLookupBuilder = source[
+            source.IndexOf("private static Dictionary<uint, RowMetric> BuildRowMetricLookup", StringComparison.Ordinal)..
+            source.IndexOf("private static Dictionary<uint, ColMetric> BuildColMetricLookup", StringComparison.Ordinal)];
+        var columnLookupBuilder = source[
+            source.IndexOf("private static Dictionary<uint, ColMetric> BuildColMetricLookup", StringComparison.Ordinal)..
+            source.IndexOf("private static bool TryGetCellRect", StringComparison.Ordinal)];
 
         rowLookup.Should().Contain("if (metric.Row > row)");
         rowLookup.Should().Contain("break;");
         columnLookup.Should().Contain("if (metric.Col > col)");
         columnLookup.Should().Contain("break;");
+        rowLookupBuilder.Should().Contain("lookup.TryAdd(row.Row, row);");
+        rowLookupBuilder.Should().NotContain("ContainsKey");
+        columnLookupBuilder.Should().Contain("lookup.TryAdd(col.Col, col);");
+        columnLookupBuilder.Should().NotContain("ContainsKey");
     }
 
     private static DisplayCell Cell(uint row, uint col, string text, CellStyle? style = null) =>
