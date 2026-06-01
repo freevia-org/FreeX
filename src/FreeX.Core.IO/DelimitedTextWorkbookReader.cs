@@ -366,8 +366,11 @@ internal static partial class DelimitedTextWorkbookReader
             return new NumberValue(percentage);
         if (TryParseCurrency(trimmed, out var currency))
             return new NumberValue(currency);
-        if (double.TryParse(trimmed, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
+        if (double.TryParse(trimmed, NumberStyles.Any, CultureInfo.InvariantCulture, out var number) &&
+            double.IsFinite(number))
+        {
             return new NumberValue(number);
+        }
         if (TryParseIsoDateTime(trimmed, out var dateTime))
             return DateTimeValue.FromDateTime(dateTime);
         if (TryParseTime(trimmed, out var time))
@@ -451,8 +454,11 @@ internal static partial class DelimitedTextWorkbookReader
         if (field.Length < 2 || field[^1] != '%')
             return false;
 
-        if (!double.TryParse(field[..^1], NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
+        if (!double.TryParse(field[..^1], NumberStyles.Any, CultureInfo.InvariantCulture, out var number) ||
+            !double.IsFinite(number))
+        {
             return false;
+        }
 
         value = number / 100d;
         return true;
@@ -468,6 +474,7 @@ internal static partial class DelimitedTextWorkbookReader
             field,
             NumberStyles.Currency,
             CultureInfo.GetCultureInfo("en-US"),
-            out value);
+            out value) &&
+            double.IsFinite(value);
     }
 }
