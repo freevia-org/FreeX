@@ -143,7 +143,7 @@ public static class ChartTypeSupport
         if (chart.Type is ChartType.Scatter or ChartType.Bubble)
             return chart.DataRange.Start.Col;
 
-        return chart.FirstColIsCategories ? chart.DataRange.Start.Col : null;
+        return HasCategoryColumn(chart) ? chart.DataRange.Start.Col : null;
     }
 
     public static IReadOnlyList<uint> GetXAxisValueColumns(ChartModel chart)
@@ -184,7 +184,7 @@ public static class ChartTypeSupport
 
     private static uint GetSeriesValueStartColumn(ChartModel chart)
     {
-        var startCol = chart.FirstColIsCategories ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
+        var startCol = HasCategoryColumn(chart) ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
         return chart.Type == ChartType.Scatter && !chart.FirstColIsCategories
             ? startCol + 1
             : startCol;
@@ -192,4 +192,9 @@ public static class ChartTypeSupport
 
     private static bool IsPastEndColumn(ChartModel chart, uint column) =>
         column > chart.DataRange.End.Col;
+
+    private static bool HasCategoryColumn(ChartModel chart) =>
+        chart.FirstColIsCategories &&
+        (chart.DataRange.End.Col > chart.DataRange.Start.Col ||
+         chart.Type is not (ChartType.Histogram or ChartType.Pareto or ChartType.BoxAndWhisker));
 }

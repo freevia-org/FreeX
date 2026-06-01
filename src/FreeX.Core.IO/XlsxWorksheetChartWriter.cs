@@ -7,6 +7,7 @@ namespace FreeX.Core.IO;
 internal static class XlsxWorksheetChartWriter
 {
     private const string ChartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
+    private const string ChartExDrawingUri = "http://schemas.microsoft.com/office/drawing/2014/chartex";
     private const string ChartExColorStyleContentType = "application/vnd.ms-office.chartcolorstyle+xml";
     private const string ChartExStyleContentType = "application/vnd.ms-office.chartstyle+xml";
     private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
@@ -110,6 +111,7 @@ internal static class XlsxWorksheetChartWriter
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         XNamespace chartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
         XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
+        XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
         var drawingPath = $"xl/drawings/drawing{drawingIndex}.xml";
         var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
@@ -145,7 +147,7 @@ internal static class XlsxWorksheetChartWriter
                 new XAttribute("Type", chartRelationshipType),
                 new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, chartPath))));
 
-            anchors.Add(ToChartAnchor(chart, sheet, currentChartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs));
+            anchors.Add(ToChartAnchor(chart, sheet, currentChartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs));
         }
 
         XlsxPackageXmlEditor.ReplaceXml(archive, drawingPath, new XDocument(
@@ -414,13 +416,19 @@ internal static class XlsxWorksheetChartWriter
         XNamespace drawingNs,
         XNamespace chartNs,
         XNamespace chartExNs,
-        XNamespace relNs) =>
-        chart.DrawingAnchorKind switch
+        XNamespace relNs,
+        XNamespace markupCompatNs)
+    {
+        if (IsChartExRelationshipType(chartRelationshipType))
+            return ToTwoCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs);
+
+        return chart.DrawingAnchorKind switch
         {
-            ChartDrawingAnchorKind.OneCell => ToOneCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs),
-            ChartDrawingAnchorKind.TwoCell => ToTwoCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs),
-            _ => ToAbsoluteChartAnchor(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs)
+            ChartDrawingAnchorKind.OneCell => ToOneCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
+            ChartDrawingAnchorKind.TwoCell => ToTwoCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
+            _ => ToAbsoluteChartAnchor(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs)
         };
+    }
 
     private static XElement ToAbsoluteChartAnchor(
         ChartModel chart,
@@ -431,7 +439,8 @@ internal static class XlsxWorksheetChartWriter
         XNamespace drawingNs,
         XNamespace chartNs,
         XNamespace chartExNs,
-        XNamespace relNs) =>
+        XNamespace relNs,
+        XNamespace markupCompatNs) =>
         new(spreadsheetDrawingNs + "absoluteAnchor",
             new XElement(spreadsheetDrawingNs + "pos",
                 new XAttribute("x", PixelsToEmus(chart.Left)),
@@ -439,7 +448,7 @@ internal static class XlsxWorksheetChartWriter
             new XElement(spreadsheetDrawingNs + "ext",
                 new XAttribute("cx", PixelsToEmus(chart.Width)),
                 new XAttribute("cy", PixelsToEmus(chart.Height))),
-            ToChartGraphicFrame(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs),
+            ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
             new XElement(spreadsheetDrawingNs + "clientData"));
 
     private static XElement ToOneCellChartAnchor(
@@ -452,7 +461,8 @@ internal static class XlsxWorksheetChartWriter
         XNamespace drawingNs,
         XNamespace chartNs,
         XNamespace chartExNs,
-        XNamespace relNs)
+        XNamespace relNs,
+        XNamespace markupCompatNs)
     {
         var from = ToAnchorMarker(sheet, chart.Left, chart.Top);
         return new XElement(spreadsheetDrawingNs + "oneCellAnchor",
@@ -460,7 +470,7 @@ internal static class XlsxWorksheetChartWriter
             new XElement(spreadsheetDrawingNs + "ext",
                 new XAttribute("cx", PixelsToEmus(chart.Width)),
                 new XAttribute("cy", PixelsToEmus(chart.Height))),
-            ToChartGraphicFrame(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs),
+            ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
             new XElement(spreadsheetDrawingNs + "clientData"));
     }
 
@@ -474,15 +484,42 @@ internal static class XlsxWorksheetChartWriter
         XNamespace drawingNs,
         XNamespace chartNs,
         XNamespace chartExNs,
-        XNamespace relNs)
+        XNamespace relNs,
+        XNamespace markupCompatNs)
     {
         var from = ToAnchorMarker(sheet, chart.Left, chart.Top);
         var to = ToAnchorMarker(sheet, chart.Left + chart.Width, chart.Top + chart.Height);
         return new XElement(spreadsheetDrawingNs + "twoCellAnchor",
             ToAnchorMarkerXml("from", from, spreadsheetDrawingNs),
             ToAnchorMarkerXml("to", to, spreadsheetDrawingNs),
-            ToChartGraphicFrame(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs),
+            ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
             new XElement(spreadsheetDrawingNs + "clientData"));
+    }
+
+    private static XElement ToChartFrameOrAlternateContent(
+        ChartModel chart,
+        int chartIndex,
+        string chartRelId,
+        string chartRelationshipType,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        XNamespace chartNs,
+        XNamespace chartExNs,
+        XNamespace relNs,
+        XNamespace markupCompatNs)
+    {
+        var graphicFrame = ToChartGraphicFrame(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs);
+        if (!IsChartExRelationshipType(chartRelationshipType))
+            return graphicFrame;
+
+        return new XElement(markupCompatNs + "AlternateContent",
+            new XAttribute(XNamespace.Xmlns + "mc", markupCompatNs),
+            new XElement(markupCompatNs + "Choice",
+                new XAttribute(XNamespace.Xmlns + "cx1", ChartExChoiceNamespace),
+                new XAttribute("Requires", "cx1"),
+                graphicFrame),
+            new XElement(markupCompatNs + "Fallback",
+                ToChartExFallbackShape(chart, spreadsheetDrawingNs, drawingNs)));
     }
 
     private static XElement ToChartGraphicFrame(
@@ -496,48 +533,34 @@ internal static class XlsxWorksheetChartWriter
         XNamespace chartExNs,
         XNamespace relNs)
     {
-        var graphicFrame = new XElement(spreadsheetDrawingNs + "graphicFrame",
+        var isChartEx = IsChartExRelationshipType(chartRelationshipType);
+        return new XElement(spreadsheetDrawingNs + "graphicFrame",
+            isChartEx ? new XAttribute("macro", "") : null,
             new XElement(spreadsheetDrawingNs + "nvGraphicFramePr",
                 new XElement(spreadsheetDrawingNs + "cNvPr",
                     new XAttribute("id", chartIndex + 1),
                     new XAttribute("name", DrawingName(chart.Name, $"Chart {chartIndex}"))),
                 new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr")),
-            new XElement(spreadsheetDrawingNs + "xfrm"),
+            new XElement(spreadsheetDrawingNs + "xfrm",
+                isChartEx
+                    ? new object[]
+                    {
+                        new XElement(drawingNs + "off",
+                            new XAttribute("x", "0"),
+                            new XAttribute("y", "0")),
+                        new XElement(drawingNs + "ext",
+                            new XAttribute("cx", "0"),
+                            new XAttribute("cy", "0"))
+                    }
+                    : []),
             new XElement(drawingNs + "graphic",
                 new XElement(drawingNs + "graphicData",
                     new XAttribute("uri", ToChartDrawingUri(chartRelationshipType)),
                     new XElement(ToChartDrawingElementName(chartRelationshipType, chartNs, chartExNs), new XAttribute(relNs + "id", chartRelId)))));
-
-        if (!IsChartExRelationshipType(chartRelationshipType))
-            return graphicFrame;
-
-        XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
-        return new XElement(markupCompatNs + "AlternateContent",
-            new XAttribute(XNamespace.Xmlns + "mc", markupCompatNs),
-            new XElement(markupCompatNs + "Choice",
-                new XAttribute(XNamespace.Xmlns + "cx1", ChartExChoiceNamespace),
-                new XAttribute("Requires", "cx1"),
-                graphicFrame),
-            new XElement(markupCompatNs + "Fallback",
-                ToChartExFallbackShape(chart, chartIndex, spreadsheetDrawingNs, drawingNs)));
     }
-
-    private static string ToChartDrawingUri(string chartRelationshipType) =>
-        IsChartExRelationshipType(chartRelationshipType)
-            ? "http://schemas.microsoft.com/office/drawing/2014/chartex"
-            : "http://schemas.openxmlformats.org/drawingml/2006/chart";
-
-    private static XName ToChartDrawingElementName(string chartRelationshipType, XNamespace chartNs, XNamespace chartExNs) =>
-        IsChartExRelationshipType(chartRelationshipType)
-            ? chartExNs + "chart"
-            : chartNs + "chart";
-
-    private static bool IsChartExRelationshipType(string chartRelationshipType) =>
-        string.Equals(chartRelationshipType, ChartExRelationshipType, StringComparison.OrdinalIgnoreCase);
 
     private static XElement ToChartExFallbackShape(
         ChartModel chart,
-        int chartIndex,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs) =>
         new(spreadsheetDrawingNs + "sp",
@@ -545,8 +568,8 @@ internal static class XlsxWorksheetChartWriter
             new XAttribute("textlink", ""),
             new XElement(spreadsheetDrawingNs + "nvSpPr",
                 new XElement(spreadsheetDrawingNs + "cNvPr",
-                    new XAttribute("id", chartIndex + 1000),
-                    new XAttribute("name", $"{DrawingName(chart.Name, $"Chart {chartIndex}")} Fallback")),
+                    new XAttribute("id", "0"),
+                    new XAttribute("name", "")),
                 new XElement(spreadsheetDrawingNs + "cNvSpPr",
                     new XElement(drawingNs + "spLocks", new XAttribute("noTextEdit", "1")))),
             new XElement(spreadsheetDrawingNs + "spPr",
@@ -576,7 +599,21 @@ internal static class XlsxWorksheetChartWriter
                         new XElement(drawingNs + "rPr",
                             new XAttribute("lang", "en-US"),
                             new XAttribute("sz", "1100")),
-                        new XElement(drawingNs + "t", "This chart isn't available in your version of Excel.")))));
+                        new XElement(drawingNs + "t",
+                            "This chart isn't available in your version of Excel.\n\nEditing this shape or saving this workbook into a different file format will permanently break the chart.")))));
+
+    private static string ToChartDrawingUri(string chartRelationshipType) =>
+        IsChartExRelationshipType(chartRelationshipType)
+            ? ChartExDrawingUri
+            : "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+    private static XName ToChartDrawingElementName(string chartRelationshipType, XNamespace chartNs, XNamespace chartExNs) =>
+        IsChartExRelationshipType(chartRelationshipType)
+            ? chartExNs + "chart"
+            : chartNs + "chart";
+
+    private static bool IsChartExRelationshipType(string chartRelationshipType) =>
+        string.Equals(chartRelationshipType, ChartExRelationshipType, StringComparison.OrdinalIgnoreCase);
 
     private static XElement ToAnchorMarkerXml(string name, AnchorMarker marker, XNamespace spreadsheetDrawingNs) =>
         new(spreadsheetDrawingNs + name,
