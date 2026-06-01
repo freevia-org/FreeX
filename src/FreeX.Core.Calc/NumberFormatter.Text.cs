@@ -10,15 +10,16 @@ public static partial class NumberFormatter
         WorkbookIndexedColorPalette? indexedColors,
         WorkbookTheme? theme)
     {
+        var parsedSections = ParseSections(sections, indexedColors, theme, out _);
         if (sections.Length <= 3)
         {
-            var firstSection = ParseSection(sections[0], indexedColors, theme);
+            var firstSection = parsedSections[0];
             return firstSection.Format.Contains('@', StringComparison.Ordinal)
                 ? new FormatResult(ApplyTextSection(firstSection.Format, text), firstSection.ColorHex)
                 : new FormatResult(text);
         }
 
-        var parsed = ParseSection(sections[3], indexedColors, theme);
+        var parsed = parsedSections[3];
         if (parsed.Format == "")
             return new FormatResult("", parsed.ColorHex);
 

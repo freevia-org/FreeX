@@ -445,8 +445,8 @@ public class PerformanceBenchmarkTests
             $"{allocated:N0} bytes allocated, {allocated / iterations:N0} bytes/iteration");
 
         (allocated / iterations).Should().BeLessThan(
-            1_350,
-            "repeated custom display formats should reuse cached split-section arrays");
+            750,
+            "repeated custom display formats should reuse cached split-section and parsed-section arrays");
     }
 
     [Fact]
@@ -473,8 +473,8 @@ public class PerformanceBenchmarkTests
             $"{allocated:N0} bytes allocated, {allocated / iterations:N0} bytes/iteration");
 
         (allocated / iterations).Should().BeLessThan(
-            1_600,
-            "single-section date/time formats should skip section array and parsed-section scaffolding");
+            200,
+            "single-section date/time formats should reuse the parsed Excel-to-.NET date/time format");
     }
 
     [Fact]
