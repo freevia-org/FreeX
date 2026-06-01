@@ -558,6 +558,43 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsSpreadsheetMlStyledFormulaCellsThroughValueStreamingPath()
+    {
+        var workbook = new Workbook("XmlStyledFormulaFastPath");
+        var sheet = workbook.AddSheet("Data");
+        var currency = workbook.RegisterStyle(new CellStyle { NumberFormat = "$#,##0.00" });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(12.5));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(7.25));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new Cell
+        {
+            FormulaText = "SUM(A1:B1)",
+            Value = new NumberValue(19.75),
+            StyleId = currency
+        });
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var formulaCell = document.Descendants(ss + "Cell")
+            .Single(cell => cell.Attribute(ss + "Formula")?.Value == "=SUM(A1:B1)");
+        formulaCell.Attribute(ss + "StyleID").Should().NotBeNull();
+        formulaCell.Element(ss + "Data")!.Attribute(ss + "Type")!.Value.Should().Be("Number");
+        formulaCell.Element(ss + "Data")!.Value.Should().Be("19.75");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedFormulaCell = loadedSheet.GetCell(1, 3)!;
+        loadedFormulaCell.FormulaText.Should().Be("SUM(A1:B1)");
+        loadedFormulaCell.Value.Should().Be(new NumberValue(19.75));
+        loaded.GetStyle(loadedFormulaCell.StyleId).NumberFormat.Should().Be("$#,##0.00");
+    }
+
+    [Fact]
     public void Load_AdvancesImplicitCellIndexPastMergeAcrossSpan()
     {
         using var stream = StreamFromString("""
