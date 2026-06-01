@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using System.Diagnostics;
 
 namespace FreeX.Core.Model.Tests;
 
@@ -249,9 +250,132 @@ public sealed class GoToSpecialServiceTests
             .Equal(selectedFormula, new CellAddress(sheet.Id, 4, 4));
     }
 
+    [Fact]
+    public void FindRuleBackedKinds_IndexedPathPreservesCellOrderAndDeduplicates()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 8));
+        var expected = Enumerable.Range(1, 8)
+            .Select(col => new CellAddress(sheet.Id, 1, (uint)col))
+            .ToArray();
+
+        for (var col = 8; col >= 1; col--)
+        {
+            var address = new CellAddress(sheet.Id, 1, (uint)col);
+            sheet.ConditionalFormats.Add(new ConditionalFormat
+            {
+                AppliesTo = new GridRange(address, address),
+                RuleType = CfRuleType.Formula
+            });
+
+            var validation = new DataValidation
+            {
+                AppliesTo = new GridRange(address, address),
+                Type = DvType.WholeNumber
+            };
+            if (col == 8)
+                validation.AdditionalRanges.Add(new GridRange(expected[0], expected[0]));
+            sheet.DataValidations.Add(validation);
+        }
+
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.ConditionalFormats)
+            .Should()
+            .Equal(expected);
+        GoToSpecialService.Find(sheet, range, GoToSpecialKind.DataValidation)
+            .Should()
+            .Equal(expected);
+    }
+
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Benchmark_FindConditionalFormatsManyRules_ReportsTimingAndAllocatedBytes()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        const uint rows = 200;
+        const uint cols = 200;
+        const int rules = 400;
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, rows, cols));
+
+        for (var i = 0; i < rules; i++)
+        {
+            var row = (uint)(i % rows + 1);
+            var col = (uint)(i / rows + 1);
+            var address = new CellAddress(sheet.Id, row, col);
+            sheet.ConditionalFormats.Add(new ConditionalFormat
+            {
+                AppliesTo = new GridRange(address, address),
+                RuleType = CfRuleType.Formula
+            });
+        }
+
+        var (count, elapsed, allocated) = MeasureFind(
+            () => GoToSpecialService.Find(sheet, range, GoToSpecialKind.ConditionalFormats),
+            iterations: 5);
+
+        WritePerfLine(
+            $"PERF GOTO_SPECIAL_CONDITIONAL_FORMATS_RANGE_LOOKUP rows={rows} cols={cols} rules={rules} steps=5 total_ms={elapsed.TotalMilliseconds:F2} allocated_bytes={allocated} matches={count}");
+        count.Should().Be(rules);
+    }
+
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Benchmark_FindDataValidationsManyRules_ReportsTimingAndAllocatedBytes()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        const uint rows = 200;
+        const uint cols = 200;
+        const int rules = 400;
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, rows, cols));
+
+        for (var i = 0; i < rules; i++)
+        {
+            var row = (uint)(i % rows + 1);
+            var col = (uint)(i / rows + 1);
+            var address = new CellAddress(sheet.Id, row, col);
+            sheet.DataValidations.Add(new DataValidation
+            {
+                AppliesTo = new GridRange(address, address),
+                Type = DvType.WholeNumber
+            });
+        }
+
+        var (count, elapsed, allocated) = MeasureFind(
+            () => GoToSpecialService.Find(sheet, range, GoToSpecialKind.DataValidation),
+            iterations: 5);
+
+        WritePerfLine(
+            $"PERF GOTO_SPECIAL_DATA_VALIDATION_RANGE_LOOKUP rows={rows} cols={cols} rules={rules} steps=5 total_ms={elapsed.TotalMilliseconds:F2} allocated_bytes={allocated} matches={count}");
+        count.Should().Be(rules);
+    }
+
     private static void Set(Sheet sheet, uint row, uint col, string value) =>
         sheet.SetCell(new CellAddress(sheet.Id, row, col), new TextValue(value));
 
     private static void Set(Sheet sheet, uint row, uint col, double value) =>
         sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(value));
+
+    private static (int Count, TimeSpan Elapsed, long Allocated) MeasureFind(
+        Func<IReadOnlyList<CellAddress>> find,
+        int iterations)
+    {
+        find().Count.Should().BeGreaterThan(0);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var count = 0;
+        for (var iteration = 0; iteration < iterations; iteration++)
+            count = find().Count;
+        stopwatch.Stop();
+
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        return (count, stopwatch.Elapsed, allocated);
+    }
+
+    private static void WritePerfLine(string line) => Console.WriteLine(line);
 }
