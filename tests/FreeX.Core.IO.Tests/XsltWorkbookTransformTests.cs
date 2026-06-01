@@ -526,6 +526,46 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetSort_OrdersGeneratedRows()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row name="Gamma" amount="12.5" />
+              <row name="Alpha" amount="42.5" />
+              <row name="Beta" amount="42.5" />
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Sorted">
+                    <ss:Table>
+                      <xsl:for-each select="row">
+                        <xsl:sort select="@amount" data-type="number" order="descending" />
+                        <xsl:sort select="@name" data-type="text" order="ascending" />
+                        <ss:Row>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@name" /></ss:Data></ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        var xml = reader.ReadToEnd();
+        xml.IndexOf(">Alpha<", StringComparison.Ordinal).Should().BeLessThan(xml.IndexOf(">Beta<", StringComparison.Ordinal));
+        xml.IndexOf(">Beta<", StringComparison.Ordinal).Should().BeLessThan(xml.IndexOf(">Gamma<", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetHtmlOutput_PreservesHtmlSerialization()
     {
         using var source = StreamFromString("<rows><row name=\"April\" /></rows>");
