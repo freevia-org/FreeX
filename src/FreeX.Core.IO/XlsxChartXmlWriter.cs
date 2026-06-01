@@ -46,9 +46,9 @@ internal static partial class XlsxChartXmlWriter
                     chart.AutoTitleDeleted ? new XElement(chartNs + "autoTitleDeleted", new XAttribute("val", "1")) : null,
                     ToPivotFormatsXml(chart, chartNs),
                     ToChart3DViewXml(chart, chartNs),
-                    ToChartSurfaceFormatXml(chartNs, drawingNs, "floor", chart.FloorFormat),
-                    ToChartSurfaceFormatXml(chartNs, drawingNs, "sideWall", chart.SideWallFormat),
-                    ToChartSurfaceFormatXml(chartNs, drawingNs, "backWall", chart.BackWallFormat),
+                    ToChartSurfaceFormatXml(chart, chartNs, drawingNs, "floor", chart.FloorFormat),
+                    ToChartSurfaceFormatXml(chart, chartNs, drawingNs, "sideWall", chart.SideWallFormat),
+                    ToChartSurfaceFormatXml(chart, chartNs, drawingNs, "backWall", chart.BackWallFormat),
                     new XElement(chartNs + "plotArea",
                         ToManualLayoutXml(chart.PlotAreaLayout, chartNs),
                         plotCharts,
@@ -66,6 +66,12 @@ internal static partial class XlsxChartXmlWriter
 
     private static bool ShouldWriteChartAxes(ChartType chartType) =>
         chartType is not ChartType.Pie and not ChartType.ThreeDPie and not ChartType.Doughnut;
+
+    private static bool UsesSeriesAxis(ChartType chartType) =>
+        chartType is ChartType.Surface
+            or ChartType.ThreeDSurface
+            or ChartType.ThreeDLine
+            or ChartType.ThreeDArea;
 
     private static IEnumerable<XElement> ToPlotChartXml(
         ChartModel chart,
@@ -169,6 +175,7 @@ internal static partial class XlsxChartXmlWriter
             ChartType.Surface => new XElement(chartNs + "surfaceChart",
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
             ChartType.ThreeDSurface => new XElement(chartNs + "surface3DChart",
+                new XElement(chartNs + "wireframe", new XAttribute("val", "0")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
             ChartType.Area => new XElement(chartNs + "areaChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
@@ -176,11 +183,13 @@ internal static partial class XlsxChartXmlWriter
             ChartType.ThreeDArea => new XElement(chartNs + "area3DChart",
                 new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)),
-            ChartType.ThreeDColumn or ChartType.ThreeDBar => WithBarChartSpacing(new XElement(chartNs + "bar3DChart",
+            ChartType.ThreeDColumn or ChartType.ThreeDBar => new XElement(chartNs + "bar3DChart",
                 new XElement(chartNs + "barDir", new XAttribute("val", chart.Type == ChartType.ThreeDBar ? "bar" : "col")),
                 new XElement(chartNs + "grouping", new XAttribute("val", "clustered")),
                 ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
-                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries)), chart, chartNs),
+                BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries),
+                ToBarGapWidthXml(chart, chartNs),
+                new XElement(chartNs + "shape", new XAttribute("val", "box"))),
             ChartType.Bubble => new XElement(chartNs + "bubbleChart",
                 BuildBubbleChartSeries(chart, sheet, chartNs, drawingNs),
                 ToBubbleChartOptionXml(chart, chartNs)),
@@ -195,12 +204,14 @@ internal static partial class XlsxChartXmlWriter
                 BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs),
                 new XElement(chartNs + "holeSize",
                     new XAttribute("val", Math.Clamp((int)Math.Round(chart.DoughnutHoleSize * 100), 10, 90)))),
-            _ => WithBarChartSpacing(new XElement(chartNs + "barChart",
+            _ => new XElement(chartNs + "barChart",
                 new XElement(chartNs + "barDir", new XAttribute("val", ToXlsxBarDirection(chart.Type))),
                 new XElement(chartNs + "grouping", new XAttribute("val", ToXlsxBarGrouping(chart.Type))),
                 ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
                 BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries),
-                ToSeriesLinesXml(chart, chartNs, drawingNs)), chart, chartNs)
+                ToBarGapWidthXml(chart, chartNs),
+                ToBarOverlapXml(chart, chartNs),
+                ToSeriesLinesXml(chart, chartNs, drawingNs))
         };
 
     private static XElement CreateStockVolumeBarChart(
@@ -208,10 +219,12 @@ internal static partial class XlsxChartXmlWriter
         Sheet sheet,
         XNamespace chartNs,
         XNamespace drawingNs) =>
-        WithBarChartSpacing(new XElement(chartNs + "barChart",
+        new(chartNs + "barChart",
             new XElement(chartNs + "barDir", new XAttribute("val", "col")),
             new XElement(chartNs + "grouping", new XAttribute("val", "clustered")),
-            BuildChartSeries(chart, sheet, chartNs, drawingNs, index => index == 0)), chart, chartNs);
+            BuildChartSeries(chart, sheet, chartNs, drawingNs, index => index == 0),
+            ToBarGapWidthXml(chart, chartNs),
+            ToBarOverlapXml(chart, chartNs));
 
     private static XElement CreateStockPlotChart(
         ChartModel chart,
@@ -232,14 +245,39 @@ internal static partial class XlsxChartXmlWriter
     private static bool IsVolumeStockSubtype(StockChartSubtype subtype) =>
         subtype is StockChartSubtype.VolumeHighLowClose or StockChartSubtype.VolumeOpenHighLowClose;
 
-    private static XElement WithBarChartSpacing(XElement barChart, ChartModel chart, XNamespace chartNs)
+    private static XElement? ToBarGapWidthXml(ChartModel chart, XNamespace chartNs)
     {
-        if (chart.BarOverlap is { } overlap)
-            barChart.Add(new XElement(chartNs + "overlap", new XAttribute("val", Math.Clamp(overlap, -100, 100))));
-        if (chart.BarGapWidth is { } gapWidth)
-            barChart.Add(new XElement(chartNs + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500))));
-        return barChart;
+        var gapWidth = chart.BarGapWidth ?? ToExcelNativeDefaultBarGapWidth(chart.Type);
+        return gapWidth is { } value
+            ? new XElement(chartNs + "gapWidth", new XAttribute("val", Math.Clamp(value, 0, 500)))
+            : null;
     }
+
+    private static XElement? ToBarOverlapXml(ChartModel chart, XNamespace chartNs)
+    {
+        var overlap = chart.BarOverlap ?? ToExcelNativeDefaultBarOverlap(chart.Type);
+        return overlap is { } value
+            ? new XElement(chartNs + "overlap", new XAttribute("val", Math.Clamp(value, -100, 100)))
+            : null;
+    }
+
+    private static int? ToExcelNativeDefaultBarGapWidth(ChartType chartType) =>
+        chartType is ChartType.StackedColumn
+            or ChartType.PercentStackedColumn
+            or ChartType.StackedBar
+            or ChartType.PercentStackedBar
+            or ChartType.ThreeDColumn
+            or ChartType.ThreeDBar
+                ? 219
+                : null;
+
+    private static int? ToExcelNativeDefaultBarOverlap(ChartType chartType) =>
+        chartType is ChartType.StackedColumn
+            or ChartType.PercentStackedColumn
+            or ChartType.StackedBar
+            or ChartType.PercentStackedBar
+                ? -27
+                : null;
 
     private static XElement? ToChartBooleanValueXml(XNamespace chartNs, string elementName, bool? value) =>
         value.HasValue
@@ -381,7 +419,7 @@ internal static partial class XlsxChartXmlWriter
         bool includeDataLabels)
     {
         if (includeDataLabels && ToDataLabelsXml(chart, chartNs, drawingNs) is { } dataLabels)
-            plotChart.Add(dataLabels);
+            InsertAfterLastSeries(plotChart, dataLabels, chartNs);
 
         if (!ShouldWriteChartAxes(chart.Type))
             return;
@@ -389,9 +427,17 @@ internal static partial class XlsxChartXmlWriter
         plotChart.Add(
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
             new XElement(chartNs + "axId", new XAttribute("val", usesSecondaryAxis ? SecondaryValueAxisId : ValueAxisId)),
-            chart.Type is ChartType.Surface or ChartType.ThreeDSurface
+            UsesSeriesAxis(chart.Type)
                 ? new XElement(chartNs + "axId", new XAttribute("val", SeriesAxisId))
                 : null);
+    }
+
+    private static void InsertAfterLastSeries(XElement plotChart, XElement element, XNamespace chartNs)
+    {
+        if (plotChart.Elements(chartNs + "ser").LastOrDefault() is { } lastSeries)
+            lastSeries.AddAfterSelf(element);
+        else
+            plotChart.Add(element);
     }
 
     public static bool IsSupportedXlsxChart(ChartModel chart) =>
