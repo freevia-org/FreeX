@@ -9,9 +9,27 @@ public static class ClipboardSerializer
     /// tab/newline-delimited text.</summary>
     public static string Serialize(ViewportModel viewport, GridRange range)
     {
-        var cellLookup = viewport.Cells.ToDictionary(c => (c.Row, c.Col));
+        var plan = AnalyzeCells(viewport.Cells, range);
+        var sb = new StringBuilder(plan.EstimatedCapacity);
+        if (plan.IsRowMajorSorted)
+        {
+            AppendSortedCells(sb, viewport.Cells, range);
+            return sb.ToString();
+        }
 
-        var sb = new StringBuilder();
+        var cellLookup = new Dictionary<(uint Row, uint Col), DisplayCell>(viewport.Cells.Count);
+        foreach (var cell in viewport.Cells)
+            cellLookup.Add((cell.Row, cell.Col), cell);
+
+        AppendLookupCells(sb, cellLookup, range);
+        return sb.ToString();
+    }
+
+    private static void AppendLookupCells(
+        StringBuilder sb,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        GridRange range)
+    {
         bool firstRow = true;
 
         for (uint r = range.Start.Row; r <= range.End.Row; r++)
@@ -29,23 +47,102 @@ public static class ClipboardSerializer
                     AppendTsvCell(sb, cell.DisplayText);
             }
         }
+    }
 
-        return sb.ToString();
+    private static void AppendSortedCells(StringBuilder sb, IReadOnlyList<DisplayCell> cells, GridRange range)
+    {
+        var cellIndex = 0;
+        bool firstRow = true;
+
+        for (uint r = range.Start.Row; r <= range.End.Row; r++)
+        {
+            if (!firstRow) sb.Append("\r\n");
+            firstRow = false;
+
+            bool firstCol = true;
+            for (uint c = range.Start.Col; c <= range.End.Col; c++)
+            {
+                if (!firstCol) sb.Append('\t');
+                firstCol = false;
+
+                while (cellIndex < cells.Count && IsBefore(cells[cellIndex], r, c))
+                    cellIndex++;
+
+                if (cellIndex < cells.Count && cells[cellIndex].Row == r && cells[cellIndex].Col == c)
+                    AppendTsvCell(sb, cells[cellIndex].DisplayText);
+            }
+        }
     }
 
     private static void AppendTsvCell(StringBuilder sb, string text)
     {
-        if (text.Contains('\t') || text.Contains('\r') || text.Contains('\n') || text.Contains('"'))
-        {
-            sb.Append('"');
-            sb.Append(text.Replace("\"", "\"\""));
-            sb.Append('"');
-        }
-        else
+        if (!RequiresTsvQuoting(text))
         {
             sb.Append(text);
+            return;
         }
+
+        sb.Append('"');
+        foreach (var ch in text)
+        {
+            if (ch == '"')
+                sb.Append("\"\"");
+            else
+                sb.Append(ch);
+        }
+
+        sb.Append('"');
     }
+
+    private static bool RequiresTsvQuoting(string text)
+    {
+        foreach (var ch in text)
+        {
+            if (ch is '\t' or '\r' or '\n' or '"')
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsBefore(DisplayCell cell, uint row, uint col) =>
+        cell.Row < row || (cell.Row == row && cell.Col < col);
+
+    private static SerializationPlan AnalyzeCells(IReadOnlyList<DisplayCell> cells, GridRange range)
+    {
+        var rowCount = (long)range.End.Row - range.Start.Row + 1;
+        var colCount = (long)range.End.Col - range.Start.Col + 1;
+        var capacity = Math.Max(0, rowCount - 1) * 2 + rowCount * Math.Max(0, colCount - 1);
+        var isSorted = true;
+
+        for (var i = 0; i < cells.Count; i++)
+        {
+            var cell = cells[i];
+            if (i > 0)
+            {
+                var previous = cells[i - 1];
+                if (cell.Row < previous.Row || (cell.Row == previous.Row && cell.Col <= previous.Col))
+                    isSorted = false;
+            }
+
+            if (cell.Row < range.Start.Row || cell.Row > range.End.Row ||
+                cell.Col < range.Start.Col || cell.Col > range.End.Col)
+            {
+                continue;
+            }
+
+            if (capacity < int.MaxValue)
+            {
+                capacity += cell.DisplayText.Length + 2;
+                if (capacity >= int.MaxValue)
+                    capacity = int.MaxValue;
+            }
+        }
+
+        return new SerializationPlan((int)capacity, isSorted);
+    }
+
+    private readonly record struct SerializationPlan(int EstimatedCapacity, bool IsRowMajorSorted);
 
     /// <summary>Parses tab/newline-delimited text into a 2-D array of strings.</summary>
     public static string[][] Deserialize(string text)
