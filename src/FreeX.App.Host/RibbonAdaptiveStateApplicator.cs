@@ -154,13 +154,15 @@ internal static class RibbonAdaptiveStateApplicator
         if (contentGrid is null)
             return null;
 
-        var spacerColumn = contentGrid.ColumnDefinitions
-            .Cast<ColumnDefinition>()
-            .FirstOrDefault(RibbonMetadata.IsCommandSpacer);
-        if (spacerColumn is null && contentGrid.ColumnDefinitions.Count >= 2)
-            spacerColumn = contentGrid.ColumnDefinitions[1];
+        foreach (ColumnDefinition column in contentGrid.ColumnDefinitions)
+        {
+            if (RibbonMetadata.IsCommandSpacer(column))
+                return column;
+        }
 
-        return spacerColumn;
+        return contentGrid.ColumnDefinitions.Count >= 2
+            ? contentGrid.ColumnDefinitions[1]
+            : null;
     }
 
     public static void ApplySmallButtonLayout(
@@ -193,12 +195,26 @@ internal static class RibbonAdaptiveStateApplicator
         ButtonBase button,
         MainWindow.RibbonCompactLevel level)
     {
-        var iconSlot = contentStack.Children
-            .OfType<Border>()
-            .FirstOrDefault(RibbonMetadata.IsCommandIcon);
-        var labelBlock = contentStack.Children
-            .OfType<TextBlock>()
-            .FirstOrDefault(RibbonMetadata.IsCommandLabel);
+        Border? iconSlot = null;
+        TextBlock? labelBlock = null;
+        foreach (var child in contentStack.Children)
+        {
+            if (iconSlot is null &&
+                child is Border border &&
+                RibbonMetadata.IsCommandIcon(border))
+            {
+                iconSlot = border;
+            }
+            else if (labelBlock is null &&
+                     child is TextBlock textBlock &&
+                     RibbonMetadata.IsCommandLabel(textBlock))
+            {
+                labelBlock = textBlock;
+            }
+
+            if (iconSlot is not null && labelBlock is not null)
+                break;
+        }
 
         ApplyLargeButtonLayout(
             new MainWindow.RibbonCompactButtonSnapshot(
@@ -245,10 +261,17 @@ internal static class RibbonAdaptiveStateApplicator
         if (button.Content is not Panel content)
             return false;
 
-        caption = content.Children
-            .OfType<TextBlock>()
-            .FirstOrDefault(RibbonMetadata.IsCommandLabel)!;
-        return caption is not null;
+        foreach (var child in content.Children)
+        {
+            if (child is TextBlock textBlock &&
+                RibbonMetadata.IsCommandLabel(textBlock))
+            {
+                caption = textBlock;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool TryGetCollapsedRibbonButtonTextIcon(Button button, out TextBlock icon)
@@ -257,15 +280,29 @@ internal static class RibbonAdaptiveStateApplicator
         if (button.Content is not Panel content)
             return false;
 
-        icon = content.Children
-            .OfType<TextBlock>()
-            .Concat(content.Children
-                .OfType<Border>()
-                .Select(border => border.Child)
-                .OfType<TextBlock>())
-            .FirstOrDefault(textBlock => RibbonMetadata.IsCommandIcon(textBlock) &&
-                                         !RibbonMetadata.IsCollapsedChevron(textBlock))!;
-        return icon is not null;
+        foreach (var child in content.Children)
+        {
+            if (child is TextBlock textBlock &&
+                RibbonMetadata.IsCommandIcon(textBlock) &&
+                !RibbonMetadata.IsCollapsedChevron(textBlock))
+            {
+                icon = textBlock;
+                return true;
+            }
+        }
+
+        foreach (var child in content.Children)
+        {
+            if (child is Border { Child: TextBlock textBlock } &&
+                RibbonMetadata.IsCommandIcon(textBlock) &&
+                !RibbonMetadata.IsCollapsedChevron(textBlock))
+            {
+                icon = textBlock;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void ApplyCollapsedRibbonButtonCaptionFootprint(
@@ -315,10 +352,14 @@ internal static class RibbonAdaptiveStateApplicator
         if (contentGrid is null)
             return null;
 
-        foreach (var chevron in contentGrid.Children
-                     .OfType<FrameworkElement>()
-                     .Where(RibbonMetadata.IsDropdownChevron))
+        foreach (var child in contentGrid.Children)
         {
+            if (child is not FrameworkElement chevron ||
+                !RibbonMetadata.IsDropdownChevron(chevron))
+            {
+                continue;
+            }
+
             var columnIndex = Grid.GetColumn(chevron);
             if (columnIndex >= 0 && columnIndex < contentGrid.ColumnDefinitions.Count)
                 return contentGrid.ColumnDefinitions[columnIndex];

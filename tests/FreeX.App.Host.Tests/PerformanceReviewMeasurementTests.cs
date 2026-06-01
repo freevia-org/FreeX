@@ -103,6 +103,52 @@ public sealed class PerformanceReviewMeasurementTests
     }
 
     [Fact]
+    public void Benchmark_RibbonCollapsedButtonFootprint_ReportsTimingAndAllocatedBytes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var buttons = CreateCollapsedFootprintButtons(count: 12);
+            var widths = new[] { 1500d, 920d, 900d, 820d, 700d, 640d, 760d, 1000d };
+
+            foreach (var width in widths)
+                RibbonAdaptiveStateApplicator.SetCollapsedButtonFootprint(buttons, width);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var timings = new List<double>(widths.Length * 3000);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            for (var iteration = 0; iteration < 3000; iteration++)
+            {
+                foreach (var width in widths)
+                {
+                    var step = Stopwatch.StartNew();
+                    RibbonAdaptiveStateApplicator.SetCollapsedButtonFootprint(buttons, width);
+                    step.Stop();
+                    timings.Add(step.Elapsed.TotalMilliseconds);
+                }
+            }
+
+            total.Stop();
+            var result = MeasurementResult.From(
+                timings,
+                total.Elapsed.TotalMilliseconds,
+                GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+            Console.WriteLine(
+                "PERF RIBBON_COLLAPSED_BUTTON_FOOTPRINT " +
+                $"steps={result.StepCount} buttons={buttons.Count:N0} " +
+                $"total_ms={result.TotalMilliseconds:F2} mean_ms={result.MeanMilliseconds:F4} " +
+                $"p95_ms={result.P95Milliseconds:F4} max_ms={result.MaxMilliseconds:F4} " +
+                $"allocated_bytes={result.AllocatedBytes:N0}");
+
+            result.StepCount.Should().Be(widths.Length * 3000);
+            result.TotalMilliseconds.Should().BeGreaterThan(0);
+        });
+    }
+
+    [Fact]
     public void Benchmark_SelectionDragStatusRefresh_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -493,6 +539,35 @@ public sealed class PerformanceReviewMeasurementTests
         {
             MainWindowTestCleanup.CloseWithoutSavePrompt(_window);
         }
+    }
+
+    private static IReadOnlyList<Button> CreateCollapsedFootprintButtons(int count)
+    {
+        var buttons = new List<Button>(count);
+        for (var index = 0; index < count; index++)
+        {
+            var content = new StackPanel();
+            var caption = new TextBlock { Text = $"Group {index}" };
+            RibbonMetadata.SetRole(caption, RibbonMetadataRole.CommandLabel);
+            content.Children.Add(caption);
+
+            if (index % 2 == 0)
+            {
+                var icon = new TextBlock { Text = "\uE8A5" };
+                RibbonMetadata.SetRole(icon, RibbonMetadataRole.CommandIcon);
+                content.Children.Add(icon);
+            }
+            else
+            {
+                var icon = new TextBlock { Text = "\uE8A5" };
+                RibbonMetadata.SetRole(icon, RibbonMetadataRole.CommandIcon);
+                content.Children.Add(new Border { Child = icon });
+            }
+
+            buttons.Add(new Button { Content = content });
+        }
+
+        return buttons;
     }
 
     private sealed class ColumnResizePreviewHarness : IDisposable
