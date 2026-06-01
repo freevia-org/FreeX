@@ -1059,6 +1059,45 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_FormulaAttributeValueTemplate_GeneratesSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row first="12.5" second="7.25" formula="=SUM(RC[-2]:RC[-1])" total="19.75" />
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Dynamic Formula">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@first" /></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@second" /></ss:Data></ss:Cell>
+                        <ss:Cell ss:Formula="{row/@formula}">
+                          <ss:Data ss:Type="Number"><xsl:value-of select="row/@total" /></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var formulaCell = XDocument.Load(transformed).Descendants(ss + "Cell").ElementAt(2);
+
+        formulaCell.Attribute(ss + "Formula")!.Value.Should().Be("=SUM(RC[-2]:RC[-1])");
+        formulaCell.Element(ss + "Data")!.Value.Should().Be("19.75");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NumberInstruction_GeneratesFormattedSequenceCells()
     {
         using var source = StreamFromString("""
