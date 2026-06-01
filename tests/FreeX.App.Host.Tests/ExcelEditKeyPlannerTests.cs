@@ -218,6 +218,27 @@ public sealed class ExcelEditKeyPlannerTests
     }
 
     [Theory]
+    [InlineData(Key.PageUp, 0, 9)]
+    [InlineData(Key.PageDown, 0, 11)]
+    [InlineData(Key.PageUp, -5, 9)]
+    [InlineData(Key.PageDown, -5, 11)]
+    public void GetIntent_FormulaBarPageNavigationUsesMinimumSingleRowStep(
+        Key key,
+        int pageSize,
+        uint expectedRow)
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            key,
+            ModifierKeys.None,
+            Current,
+            pageSize,
+            allowFormulaBarNavigationKeys: true);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.CommitAndMove);
+        intent.Target.Should().Be(new CellAddress(SheetId, expectedRow, Current.Col));
+    }
+
+    [Theory]
     [InlineData(Key.Up)]
     [InlineData(Key.Down)]
     [InlineData(Key.PageUp)]
@@ -257,6 +278,28 @@ public sealed class ExcelEditKeyPlannerTests
 
         intent.Action.Should().Be(ExcelEditKeyAction.SelectFormulaReference);
         intent.Target.Should().Be(new CellAddress(SheetId, expectedRow, expectedCol));
+    }
+
+    [Theory]
+    [InlineData(Key.PageUp, 0, 9)]
+    [InlineData(Key.PageDown, 0, 11)]
+    [InlineData(Key.PageUp, -5, 9)]
+    [InlineData(Key.PageDown, -5, 11)]
+    public void GetIntent_FormulaReferencePageNavigationUsesMinimumSingleRowStep(
+        Key key,
+        int pageSize,
+        uint expectedRow)
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            key,
+            ModifierKeys.None,
+            Current,
+            pageSize,
+            allowFormulaBarNavigationKeys: false,
+            formulaRangeEntryActive: true);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.SelectFormulaReference);
+        intent.Target.Should().Be(new CellAddress(SheetId, expectedRow, Current.Col));
     }
 
     [Theory]
