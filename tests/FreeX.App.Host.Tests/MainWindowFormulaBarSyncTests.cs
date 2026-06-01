@@ -394,6 +394,27 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void UseInFormulaInsertion_PrependsFormulaPrefixForPlainFormulaBarText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaBarText("A1+");
+            harness.SetFormulaBarCaretIndex("A1+".Length);
+
+            harness.InsertDefinedNameIntoFormula("SalesData");
+
+            harness.FormulaBarText.Should().Be("=A1+SalesData");
+            harness.FormulaBarCaretIndex.Should().Be(harness.FormulaBarText.Length);
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.CellText(1, 1).Should().Be("original");
+        });
+    }
+
+    [Fact]
     public void EditInFormulaBar_LoadsActiveCellFormulaAndFocusesFormulaBar()
     {
         StaTestRunner.Run(() =>
