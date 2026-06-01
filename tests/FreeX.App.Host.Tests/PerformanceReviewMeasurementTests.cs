@@ -89,7 +89,11 @@ public sealed class PerformanceReviewMeasurementTests
                 $"layout_plan_computes={adaptiveDiagnostics.LayoutPlanComputeCount:N0} " +
                 $"layout_plan_hits={adaptiveDiagnostics.LayoutPlanCacheHitCount:N0} " +
                 $"measured_overflow_checks={adaptiveDiagnostics.MeasuredOverflowMeasurementCount:N0} " +
-                $"applied_state_skips={adaptiveDiagnostics.AppliedStateSkipCount:N0}");
+                $"corrected_state_hits={adaptiveDiagnostics.CorrectedStateCacheHitCount:N0} " +
+                $"applied_state_skips={adaptiveDiagnostics.AppliedStateSkipCount:N0} " +
+                $"state_applies={adaptiveDiagnostics.StateApplyCount:N0} " +
+                $"state_changed_groups={adaptiveDiagnostics.StateChangedGroupCount:N0} " +
+                $"collapsed_footprint_applies={adaptiveDiagnostics.CollapsedFootprintApplyCount:N0}");
 
             resize.StepCount.Should().Be(widths.Length * 3);
             forcedCompact.StepCount.Should().Be(widths.Length * 3);
