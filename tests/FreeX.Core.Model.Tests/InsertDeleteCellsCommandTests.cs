@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -174,6 +175,73 @@ public sealed class InsertDeleteCellsCommandTests
         outcome.ErrorMessage.Should().Contain("protected");
         sheet.GetValue(1, 1).Should().Be(new TextValue("A1"));
         sheet.GetValue(1, 2).Should().Be(new TextValue("B1"));
+    }
+
+    [Fact]
+    public void Benchmark_InsertCellsShiftRightWithDenseMovedCells_ReportsTiming()
+    {
+        const int iterations = 3;
+        var (workbook, sheet, ctx) = SetupDenseShiftWorkbook();
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 2),
+            new CellAddress(sheet.Id, DenseCellShiftRows, 2));
+
+        var warmup = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Right);
+        warmup.Apply(ctx).Success.Should().BeTrue();
+        warmup.Revert(ctx);
+        sheet.CellCount.Should().Be(DenseCellShiftRows * DenseCellShiftColumns);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var command = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Right);
+            var step = Stopwatch.StartNew();
+            command.Apply(ctx).Success.Should().BeTrue();
+            command.Revert(ctx);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        workbook.SheetCount.Should().Be(1);
+        sheet.CellCount.Should().Be(DenseCellShiftRows * DenseCellShiftColumns);
+        sheet.GetValue(1, 1).Should().Be(new NumberValue(1001));
+        sheet.GetValue(DenseCellShiftRows, DenseCellShiftColumns).Should().Be(new NumberValue(DenseCellShiftRows * 1000 + DenseCellShiftColumns));
+        Console.WriteLine(
+            "PERF INSERT_CELLS_SHIFT_RIGHT_DENSE " +
+            $"rows={DenseCellShiftRows} cols={DenseCellShiftColumns} " +
+            $"moved_cells={DenseCellShiftRows * (DenseCellShiftColumns - 1)} steps={iterations} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    private const int DenseCellShiftRows = 400;
+    private const int DenseCellShiftColumns = 80;
+
+    private static (Workbook Workbook, Sheet Sheet, ICommandContext Context) SetupDenseShiftWorkbook()
+    {
+        var workbook = new Workbook("dense cell shift perf");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        for (uint row = 1; row <= DenseCellShiftRows; row++)
+        {
+            for (uint col = 1; col <= DenseCellShiftColumns; col++)
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * 1000 + col));
+        }
+
+        return (workbook, sheet, new SimpleCtx(workbook));
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
