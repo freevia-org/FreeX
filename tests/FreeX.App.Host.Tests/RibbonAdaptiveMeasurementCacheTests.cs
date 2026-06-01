@@ -139,6 +139,51 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
     }
 
     [Fact]
+    public void ForcedCompact_SkipsTreeMutationWhenAppliedStateIsAlreadyCurrent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonAdaptiveDiagnosticsHarness.Create();
+
+            harness.SelectRibbonTab("Home", 1280);
+            harness.UpdateCompact(force: true);
+            harness.ResetDiagnostics();
+
+            harness.UpdateCompact(force: true);
+
+            var repeated = harness.Diagnostics;
+            repeated.LayoutPlanComputeCount.Should().Be(0);
+            repeated.LayoutPlanCacheHitCount.Should().Be(1);
+            repeated.AppliedStateSkipCount.Should().Be(1, "a forced compact pass should not rewrite an unchanged ribbon state");
+            repeated.StateApplyCount.Should().Be(0);
+            repeated.StateChangedGroupCount.Should().Be(0);
+            repeated.CollapsedFootprintApplyCount.Should().Be(0);
+        });
+    }
+
+    [Fact]
+    public void ForcedCompact_SkipsTreeMutationAcrossWidthsWithSameVisualStateMode()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonAdaptiveDiagnosticsHarness.Create();
+
+            harness.SelectRibbonTab("Home", 1280);
+            harness.UpdateCompact(force: true);
+            harness.SetWidth(1279);
+            harness.ResetDiagnostics();
+
+            harness.UpdateCompact(force: true);
+
+            var repeated = harness.Diagnostics;
+            repeated.AppliedStateSkipCount.Should().Be(1, "a one-pixel width drift keeps the same applied ribbon visuals");
+            repeated.StateApplyCount.Should().Be(0);
+            repeated.StateChangedGroupCount.Should().Be(0);
+            repeated.CollapsedFootprintApplyCount.Should().Be(0);
+        });
+    }
+
+    [Fact]
     public void AdaptiveCompaction_ReusesLayoutPlansWhenReturningToPreviouslySeenWidths()
     {
         StaTestRunner.Run(() =>
