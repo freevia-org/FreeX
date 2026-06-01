@@ -312,6 +312,21 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_KeepsNonFiniteNumericTextAsText()
+    {
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("NaN\tInfinity\t-Infinity\tInfinity%\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("NaN"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("Infinity"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new TextValue("-Infinity"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 4)).Should().Be(new TextValue("Infinity%"));
+    }
+
+    [Fact]
     public void Load_UsesExcelLikeTextCoercionForErrorLiterals()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
