@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -71,7 +72,7 @@ public sealed class AllowEditRangeDialog : Window
         _existingRangesBox.MinHeight = 80;
         _existingRangesBox.SelectionMode = SelectionMode.Single;
         _existingRangesBox.SelectionChanged += (_, _) => UpdateRangeButtons();
-        _existingRangesBox.MouseDoubleClick += DeleteSelectedRange_Click;
+        _existingRangesBox.MouseDoubleClick += ExistingRangesBox_MouseDoubleClick;
         var existingRangesLabel = new Label { Content = UiText.Get("AllowEditRange_ExistingRangesLabel"), Target = _existingRangesBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) };
         DockPanel.SetDock(existingRangesLabel, Dock.Top);
         existingPanel.Children.Add(existingRangesLabel);
@@ -183,6 +184,12 @@ public sealed class AllowEditRangeDialog : Window
         Range = range;
         Result = CreateRemoveResult(range);
         DialogResult = true;
+    }
+
+    private void ExistingRangesBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        DeleteSelectedRange_Click(sender, e);
+        e.Handled = true;
     }
 
     private void ClearAllRanges_Click(object sender, RoutedEventArgs e)

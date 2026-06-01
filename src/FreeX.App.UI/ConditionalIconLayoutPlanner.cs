@@ -20,8 +20,9 @@ public static class ConditionalIconLayoutPlanner
             Math.Min(
                 Math.Max(0, cellRect.Width - 8),
                 Math.Max(0, cellRect.Height - 6)));
+        var iconLeft = Math.Clamp(cellRect.Left + 4, cellRect.Left, cellRect.Right - size);
         var iconRect = new Rect(
-            Math.Round(cellRect.Left + 4),
+            Math.Round(iconLeft),
             Math.Round(cellRect.Top + (cellRect.Height - size) / 2),
             size,
             size);
