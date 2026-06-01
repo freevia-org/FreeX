@@ -10,7 +10,7 @@ public partial class GridView
 
     private void RenderSplitDivider(DrawingContext dc)
     {
-        if (Viewport == null) return;
+        if (Viewport?.SplitPanes is null) return;
         var layout = CalculateSplitDividerLayout(Viewport);
 
         if (layout.HorizontalY is { } horizontalY)
