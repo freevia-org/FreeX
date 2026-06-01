@@ -16,7 +16,8 @@ public static class SheetTabFocusPlanner
         if (index < 0)
             index = GetMissingCurrentAnchorIndex(visibleTabs, direction);
 
-        var nextIndex = Math.Clamp(index + direction, 0, visibleTabs.Count - 1);
+        var step = Math.Sign(direction);
+        var nextIndex = Math.Clamp(index + step, 0, visibleTabs.Count - 1);
         return visibleTabs[nextIndex].Id;
     }
 
