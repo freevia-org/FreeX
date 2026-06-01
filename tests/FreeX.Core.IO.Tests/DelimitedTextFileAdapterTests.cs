@@ -797,6 +797,28 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Save_WritesNonFiniteDateTimeValuesAsText()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new DateTimeValue(double.NaN));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new DateTimeValue(double.PositiveInfinity));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new DateTimeValue(double.NegativeInfinity));
+
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("NaN\tInfinity\t-Infinity\r\n");
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.GetCell(1, 1)!.Value.Should().Be(new TextValue("NaN"));
+        loaded.GetCell(1, 2)!.Value.Should().Be(new TextValue("Infinity"));
+        loaded.GetCell(1, 3)!.Value.Should().Be(new TextValue("-Infinity"));
+    }
+
+    [Fact]
     public void Save_RoundTripsFormulaLikeTextFieldsAsLiteralText()
     {
         var workbook = new Workbook("Book1");

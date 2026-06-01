@@ -8,8 +8,9 @@ public static partial class KeyboardShortcutMatcher
     private static readonly KeyboardCommandShortcutRule[] CommandShortcutRules =
     [
         new(KeyboardCommandShortcut.NewWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.N),
-        new(KeyboardCommandShortcut.OpenWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.O),
-        new(KeyboardCommandShortcut.SaveWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.S),
+        new(KeyboardCommandShortcut.OpenWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key is (Key.O or Key.F12)),
+        new(KeyboardCommandShortcut.SaveWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.S ||
+            modifiers == ModifierKeys.Shift && key == Key.F12),
         new(KeyboardCommandShortcut.Copy, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.C ||
             modifiers == ModifierKeys.Control && key == Key.Insert),
         new(KeyboardCommandShortcut.Cut, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.X ||
@@ -50,7 +51,8 @@ public static partial class KeyboardShortcutMatcher
         new(KeyboardCommandShortcut.ToggleFilter, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.L),
         new(KeyboardCommandShortcut.ReapplyFilter, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Alt) && key == Key.L),
         new(KeyboardCommandShortcut.QuickAnalysis, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.Q),
-        new(KeyboardCommandShortcut.OpenPrintPreview, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.P),
+        new(KeyboardCommandShortcut.OpenPrintPreview, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.P ||
+            modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.F12),
         new(KeyboardCommandShortcut.PasteValues, (key, modifiers) => modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.V),
         new(KeyboardCommandShortcut.GoTo, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F5 || modifiers == ModifierKeys.Control && key == Key.G),
         new(KeyboardCommandShortcut.InsertEmbeddedChart, (key, modifiers) => modifiers == ModifierKeys.Alt && key == Key.F1),
