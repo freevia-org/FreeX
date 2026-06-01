@@ -22,6 +22,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private GridRange? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
+    private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Insert {_count} Row(s)";
@@ -47,6 +48,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         if (maxOccupied > 0 && maxOccupied + _count > Model.CellAddress.MaxRow)
             return new CommandOutcome(false,
                 ErrorMessage: $"Cannot insert {_count} row(s): data would be pushed past the last row ({Model.CellAddress.MaxRow}).");
+
+        _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
         _movedSnapshot = sheet.EnumerateCells()
             .Where(p => p.Address.Row >= _beforeRow)
@@ -89,6 +92,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftSortedSetUp(sheet.RowPageBreaks, _beforeRow, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(sheet);
         RowColumnShiftHelpers.ShiftChartRowsUp(sheet, _sheetId, _beforeRow, _count);
+        RowColumnShiftHelpers.ShiftAddressBearingRowsUp(ctx.Workbook, sheet, _addressStateSnapshot, _beforeRow, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
         var shiftedMerges = sheet.MergedRegions.Select(m =>
@@ -145,6 +149,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         sheet.PrintArea = _printAreaSnapshot;
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
+        RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 }
 

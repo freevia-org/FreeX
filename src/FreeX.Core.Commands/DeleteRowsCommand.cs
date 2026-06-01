@@ -25,6 +25,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
     private GridRange? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
+    private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Delete {_count} Row(s)";
@@ -43,6 +44,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
             return protectedOutcome;
 
         uint endRow = _startRow + _count - 1;
+
+        _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
         _deletedSnapshot = sheet.EnumerateCells()
             .Where(p => p.Address.Row >= _startRow && p.Address.Row <= endRow)
@@ -95,6 +98,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftSortedSetDown(sheet.RowPageBreaks, _startRow, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(sheet);
         RowColumnShiftHelpers.ShiftChartRowsDown(sheet, _sheetId, _startRow, _count);
+        RowColumnShiftHelpers.ShiftAddressBearingRowsDown(ctx.Workbook, sheet, _addressStateSnapshot, _startRow, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
         var adjustedMerges = new List<GridRange>();
@@ -167,5 +171,6 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         sheet.PrintArea = _printAreaSnapshot;
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
+        RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 }
