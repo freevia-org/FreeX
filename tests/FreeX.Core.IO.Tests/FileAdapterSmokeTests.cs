@@ -26005,7 +26005,7 @@ public partial class FileAdapterSmokeTests
         method.Should().NotBeNull();
         return (IReadOnlyList<ConditionalFormat>)method!.Invoke(
             null,
-            [worksheetXml, worksheetNs, Array.Empty<CellStyle>(), WorkbookTheme.Office])!;
+            [worksheetXml, worksheetNs, Array.Empty<CellStyle>(), WorkbookTheme.Office, new WorkbookIndexedColorPalette()])!;
     }
 
     /// <summary>Adds an attribute to the NativeXmlPreserveBag entry for the given key.
