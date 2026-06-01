@@ -48,6 +48,33 @@ public sealed class SelectionCornerNavigatorTests
     }
 
     [Fact]
+    public void GetNextCorner_SkipsDuplicateCornersForSingleColumnSelection()
+    {
+        var range = new GridRange(
+            new CellAddress(SheetId, 2, 4),
+            new CellAddress(SheetId, 6, 4));
+
+        SelectionCornerNavigator.GetNextCorner(range, new CellAddress(SheetId, 2, 4))
+            .Should()
+            .Be(new CellAddress(SheetId, 6, 4));
+
+        SelectionCornerNavigator.GetNextCorner(range, new CellAddress(SheetId, 6, 4))
+            .Should()
+            .Be(new CellAddress(SheetId, 2, 4));
+    }
+
+    [Fact]
+    public void GetNextCorner_KeepsSingleCellSelectionStable()
+    {
+        var cell = new CellAddress(SheetId, 5, 5);
+        var range = new GridRange(cell, cell);
+
+        SelectionCornerNavigator.GetNextCorner(range, cell)
+            .Should()
+            .Be(cell);
+    }
+
+    [Fact]
     public void GetNextCorner_ReturnsStartWhenCurrentCellIsNotASelectionCorner()
     {
         var range = new GridRange(
