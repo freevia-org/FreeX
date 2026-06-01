@@ -249,6 +249,33 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_HonorsEmptySheetProtectionPermissions()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "EmptyProtectionPermissions",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "IsProtected": true,
+                  "ProtectionPermissions": []
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.IsProtected.Should().BeTrue();
+        sheet.ProtectionPermissions.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Load_AcceptsLegacyUnversionedNativeJsonAndMigratesOnSave()
     {
         const string legacyJson = """

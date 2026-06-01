@@ -36,7 +36,10 @@ public static class ConditionalIconLayoutPlanner
             cellRect.Top,
             Math.Max(0, cellRect.Right - textLeft),
             cellRect.Height);
-        return new ConditionalIconCellLayout(iconRect, textRect, ShouldDrawText: true);
+        return new ConditionalIconCellLayout(
+            iconRect,
+            textRect,
+            ShouldDrawText: textRect.Width > 0 && textRect.Height > 0);
     }
 
     public static ConditionalIconGlyphKind ResolveGlyphKind(ConditionalFormatIcon icon)

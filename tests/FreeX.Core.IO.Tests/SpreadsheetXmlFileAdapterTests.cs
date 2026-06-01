@@ -1460,6 +1460,39 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromDefaultXsltParameters()
+    {
+        using var source = StreamFromString("<rows><row amount=\"18.75\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:param name="sheetName" select="'Default Parameters'" />
+              <xsl:param name="label" select="'Default label'" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="{$sheetName}">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="$label" /></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@amount" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Default Parameters");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Default label"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(18.75));
+    }
+
+    [Fact]
     public void LoadTransformed_AppliesNamespacedXsltParametersToGeneratedSpreadsheetMl()
     {
         using var source = StreamFromString("<rows />");
