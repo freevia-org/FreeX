@@ -8,7 +8,9 @@ public sealed record SpellingIssue(
     CellAddress Address,
     string Word,
     string Suggestion,
-    string CellText);
+    string CellText,
+    int StartIndex = -1,
+    int Length = 0);
 
 public sealed record SpellingCorrectionEdit(
     CellAddress Address,
@@ -84,7 +86,7 @@ public static partial class SpellCheckService
             {
                 var wordText = wordSpan.ToString();
                 issues ??= [];
-                issues.Add(new SpellingIssue(address, wordText, MatchCapitalization(wordSpan, suggestion), text));
+                issues.Add(new SpellingIssue(address, wordText, MatchCapitalization(wordSpan, suggestion), text, word.Start, word.Length));
             }
 
             if (previousWord is { } previous &&
@@ -99,7 +101,9 @@ public static partial class SpellCheckService
                     address,
                     text.Substring(previous.Start, word.End - previous.Start),
                     text.Substring(previous.Start, previous.Length),
-                    text));
+                    text,
+                    previous.Start,
+                    word.End - previous.Start));
             }
 
             previousWord = word;
@@ -152,13 +156,41 @@ public static partial class SpellCheckService
 
     public static string ApplyCorrection(SpellingIssue issue, string replacement)
     {
-        var correctedReplacement = MatchCapitalization(issue.Word, replacement);
-        return Regex.Replace(
-            issue.CellText,
+        if (IsValidIssueSpan(issue))
+        {
+            var original = issue.CellText.AsSpan(issue.StartIndex, issue.Length);
+            var correctedReplacement = MatchCapitalization(original, replacement);
+            return issue.CellText[..issue.StartIndex] + correctedReplacement + issue.CellText[(issue.StartIndex + issue.Length)..];
+        }
+
+        return ApplyCorrectionOccurrences(issue, replacement, replaceAll: false);
+    }
+
+    public static string ApplyCorrectionToAllOccurrences(SpellingIssue issue, string replacement) =>
+        ApplyCorrectionOccurrences(issue, replacement, replaceAll: true);
+
+    private static bool IsValidIssueSpan(SpellingIssue issue)
+    {
+        if (issue.StartIndex < 0 ||
+            issue.Length <= 0 ||
+            issue.StartIndex > issue.CellText.Length - issue.Length)
+        {
+            return false;
+        }
+
+        return issue.CellText.AsSpan(issue.StartIndex, issue.Length).Equals(issue.Word, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ApplyCorrectionOccurrences(SpellingIssue issue, string replacement, bool replaceAll)
+    {
+        var regex = new Regex(
             $@"\b{Regex.Escape(issue.Word)}\b",
-            correctedReplacement,
             RegexOptions.IgnoreCase,
             TimeSpan.FromMilliseconds(100));
+
+        return replaceAll
+            ? regex.Replace(issue.CellText, match => MatchCapitalization(match.Value, replacement))
+            : regex.Replace(issue.CellText, match => MatchCapitalization(match.Value, replacement), 1);
     }
 
     private static string ApplyKnownCorrections(string text, out int replacementCount)
