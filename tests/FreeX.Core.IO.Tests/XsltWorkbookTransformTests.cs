@@ -407,6 +407,35 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_NamespacedParameters_AreAvailableToStylesheet()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:cfg="urn:freex:xslt:test"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:param name="cfg:sheetName" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="{$cfg:sheetName}">
+                    <ss:Table />
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(
+            source,
+            stylesheet,
+            new Dictionary<string, string?> { ["{urn:freex:xslt:test}sheetName"] = "Namespaced" });
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should().Contain("ss:Name=\"Namespaced\"");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_EmptyParameterName_ThrowsArgumentException()
     {
         using var source = StreamFromString("<rows />");
@@ -416,6 +445,37 @@ public sealed class XsltWorkbookTransformTests
             source,
             stylesheet,
             new Dictionary<string, string?> { [" "] = "ignored" });
+
+        act.Should().Throw<ArgumentException>()
+            .Where(exception => exception.ParamName == "parameters");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_InvalidParameterName_ThrowsArgumentException()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(
+            source,
+            stylesheet,
+            new Dictionary<string, string?> { ["bad:name"] = "ignored" });
+
+        act.Should().Throw<ArgumentException>()
+            .Where(exception => exception.ParamName == "parameters")
+            .WithInnerException<XmlException>();
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_InvalidNamespacedParameterName_ThrowsArgumentException()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = IdentityStylesheet();
+
+        var act = () => XsltWorkbookTransform.TransformToSpreadsheetXml(
+            source,
+            stylesheet,
+            new Dictionary<string, string?> { ["{urn:freex:xslt:test}"] = "ignored" });
 
         act.Should().Throw<ArgumentException>()
             .Where(exception => exception.ParamName == "parameters");

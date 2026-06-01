@@ -1167,6 +1167,45 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_AppliesNamespacedXsltParametersToGeneratedSpreadsheetMl()
+    {
+        using var source = StreamFromString("<rows />");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:cfg="urn:freex:xslt:test"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:param name="cfg:sheetName" />
+              <xsl:param name="cfg:label" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="{$cfg:sheetName}">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="$cfg:label" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(
+            source,
+            stylesheet,
+            new Dictionary<string, string?>
+            {
+                ["{urn:freex:xslt:test}sheetName"] = "Namespaced",
+                ["{urn:freex:xslt:test}label"] = "Namespaced label"
+            });
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Namespaced");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Namespaced label"));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlScalarValueTypesAndIndexes()
     {
         using var source = StreamFromString("""
