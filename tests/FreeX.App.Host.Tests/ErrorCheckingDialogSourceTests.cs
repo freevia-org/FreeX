@@ -193,6 +193,40 @@ public sealed class ErrorCheckingDialogSourceTests
         formulaSource.Should().Contain("evaluationDialog.ShowDialog();");
     }
 
+    [Fact]
+    public void ErrorCheckingDialog_DisablesCalculationStepsForFormulaStoredAsTextIssues()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var issue = new FormulaErrorIssue(
+                sheetId,
+                "Sheet1",
+                new CellAddress(sheetId, 1, 1),
+                "A1",
+                FormulaAuditingService.FormulaStoredAsTextErrorCode,
+                null,
+                "Formula is stored as text.");
+            var dialog = new ErrorCheckingDialog([issue], _ => { }, _ => true, _ => { });
+            dialog.Show();
+            try
+            {
+                var buttons = FindVisualChildren<Button>(dialog)
+                    .Where(button => button.Content is string)
+                    .GroupBy(button => (string)button.Content)
+                    .ToDictionary(group => group.Key, group => group.ToList());
+
+                buttons["Show _Calculation Steps"].Single().IsEnabled.Should().BeFalse();
+                buttons["_Go To"].Single().IsEnabled.Should().BeTrue();
+                buttons["_Ignore Error"].Should().AllSatisfy(button => button.IsEnabled.Should().BeTrue());
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     private static FormulaErrorIssue CreateIssue(SheetId sheetId, uint row) =>
         new(
             sheetId,

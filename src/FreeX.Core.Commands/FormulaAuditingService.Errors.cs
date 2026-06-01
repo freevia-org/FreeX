@@ -77,6 +77,9 @@ public static partial class FormulaAuditingService
         if (!workbook.DisabledFormulaErrorCodes.Contains(TwoDigitYearTextDateErrorCode))
             result.AddRange(FindTwoDigitYearTextDateIssues(workbook, sheetId));
 
+        if (!workbook.DisabledFormulaErrorCodes.Contains(FormulaStoredAsTextErrorCode))
+            result.AddRange(FindFormulaStoredAsTextIssues(workbook, sheetId));
+
         result.AddRange(FindFormulaCellIssues(workbook, sheetId));
 
         if (result.Count <= 1)
@@ -111,6 +114,7 @@ public static partial class FormulaAuditingService
         cell.Value is ErrorValue ||
         (!cell.HasFormula && cell.Value is TextValue text && IsNumberStoredAsText(text.Value)) ||
         (!cell.HasFormula && cell.Value is TextValue dateText && IsTextDateWithTwoDigitYear(dateText.Value)) ||
+        IsFormulaStoredAsText(cell) ||
         FormulaRefersToBlankCells(workbook, sheetId, cell) ||
         IsInconsistentFormula(workbook, sheetId, address) ||
         FormulaOmitsAdjacentCells(workbook, sheetId, cell) ||
@@ -271,6 +275,30 @@ public static partial class FormulaAuditingService
                     TwoDigitYearTextDateErrorCode,
                     null,
                     "The text date in this cell contains a two-digit year.");
+            }
+        }
+    }
+
+    private static IEnumerable<FormulaErrorIssue> FindFormulaStoredAsTextIssues(Workbook workbook, SheetId? sheetId)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            foreach (var (address, cell) in sheet.EnumerateCells())
+            {
+                if (cell.IgnoreFormulaError || !IsFormulaStoredAsText(cell))
+                    continue;
+
+                yield return new FormulaErrorIssue(
+                    sheet.Id,
+                    sheet.Name,
+                    address,
+                    address.ToA1(),
+                    FormulaStoredAsTextErrorCode,
+                    null,
+                    "The text in this cell starts with '=' and is stored as text instead of a formula.");
             }
         }
     }
@@ -761,6 +789,17 @@ public static partial class FormulaAuditingService
             out var value)
         && !double.IsNaN(value)
         && !double.IsInfinity(value);
+
+    private static bool IsFormulaStoredAsText(Cell cell) =>
+        !cell.HasFormula &&
+        cell.Value is TextValue text &&
+        IsFormulaTextLiteral(text.Value);
+
+    private static bool IsFormulaTextLiteral(string text)
+    {
+        var trimmed = text.TrimStart();
+        return trimmed.Length > 1 && trimmed[0] == '=';
+    }
 
     private static bool IsTextDateWithTwoDigitYear(string text)
     {
