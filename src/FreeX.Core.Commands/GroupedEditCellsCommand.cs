@@ -10,7 +10,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
     private readonly IReadOnlyList<SheetId> _sheetIds;
     private readonly SheetId _sourceSheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _sourceEdits;
-    private List<(SheetId SheetId, CellAddress Address, Cell? OldCell)>? _snapshot;
+    private List<(SheetId SheetId, CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
     public string Label => "Edit Grouped Sheets";
 
@@ -50,7 +50,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
             {
                 var address = RemapAddress(sourceAddress, sheetId);
                 var oldCell = sheet.GetCell(address)?.Clone();
-                _snapshot.Add((sheetId, address, oldCell));
+                _snapshot.Add((sheetId, address, oldCell, sheet.GetStyleOnly(address.Row, address.Col)));
 
                 var appliedCell = sourceCell.Clone();
                 if (oldCell is not null)
@@ -69,13 +69,18 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
         if (_snapshot is null)
             return;
 
-        foreach (var (sheetId, address, oldCell) in _snapshot)
+        foreach (var (sheetId, address, oldCell, oldStyleOnly) in _snapshot)
         {
             var sheet = ctx.GetSheet(sheetId);
             if (oldCell is null)
+            {
                 sheet.ClearCell(address);
+                RestoreStyleOnly(sheet, address, oldStyleOnly);
+            }
             else
+            {
                 sheet.SetCell(address, oldCell.Clone());
+            }
         }
     }
 
@@ -85,5 +90,13 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
             ? address
             : new CellAddress(_sourceSheetId, address.Row, address.Col);
         return new CellAddress(targetSheetId, sourceAddress.Row, sourceAddress.Col);
+    }
+
+    private static void RestoreStyleOnly(Sheet sheet, CellAddress address, StyleId? styleId)
+    {
+        if (styleId.HasValue)
+            sheet.SetStyleOnly(address.Row, address.Col, styleId.Value);
+        else
+            sheet.ClearStyleOnly(address.Row, address.Col);
     }
 }
