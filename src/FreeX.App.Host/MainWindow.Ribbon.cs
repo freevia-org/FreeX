@@ -1225,12 +1225,13 @@ public partial class MainWindow
     private bool IsCachedRibbonSurfaceSelected()
     {
         if (RibbonTabs?.SelectedItem is not TabItem selectedTab ||
-            _ribbonAdaptiveControlCachePanel is not { } cachedPanel)
+            _ribbonAdaptiveControlCachePanel is not { IsVisible: true } ||
+            _ribbonAdaptiveControlCacheTab is null)
         {
             return false;
         }
 
-        return ReferenceEquals(FindVisualAncestor<TabItem>(cachedPanel), selectedTab);
+        return ReferenceEquals(_ribbonAdaptiveControlCacheTab, selectedTab);
     }
 
     private void PrepareSelectedRibbonTabForImmediateCompaction()

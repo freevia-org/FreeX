@@ -69,6 +69,38 @@ public sealed class RibbonResizeCoordinatorTests
     }
 
     [Fact]
+    public void ResizeHotPath_ReusesCachedRibbonPanelOwnerInsteadOfAncestorWalks()
+    {
+        var fieldSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+        var adaptiveSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.RibbonAdaptive.cs"));
+        var ribbonSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Ribbon.cs"));
+
+        fieldSource.Should().Contain("Dictionary<TabItem, RibbonActivePanelCacheEntry>");
+        fieldSource.Should().Contain("private TabItem? _ribbonAdaptiveControlCacheTab;");
+        adaptiveSource.Should().Contain("private sealed record RibbonActivePanelCacheEntry");
+
+        var cachedPanelLookup = ExtractMethodSource(
+            adaptiveSource,
+            "private bool TryGetCachedActiveRibbonPanel(TabItem tabItem, out StackPanel? activePanel)");
+        cachedPanelLookup.Should().Contain("cached.Panel.IsVisible");
+        cachedPanelLookup.Should().NotContain("FindVisualAncestor<TabItem>");
+
+        var tabIdentityLookup = ExtractMethodSource(
+            adaptiveSource,
+            "private string GetRibbonAdaptiveTabIdentity(DependencyObject element)");
+        tabIdentityLookup.Should().Contain("TryGetSelectedRibbonActivePanelCache");
+        tabIdentityLookup.IndexOf("TryGetSelectedRibbonActivePanelCache", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(tabIdentityLookup.IndexOf("FindVisualAncestor<TabItem>", StringComparison.Ordinal));
+
+        var selectedSurfaceCheck = ExtractMethodSource(
+            ribbonSource,
+            "private bool IsCachedRibbonSurfaceSelected()");
+        selectedSurfaceCheck.Should().Contain("_ribbonAdaptiveControlCacheTab");
+        selectedSurfaceCheck.Should().NotContain("FindVisualAncestor<TabItem>");
+    }
+
+    [Fact]
     public void WindowResize_UsesResizeThresholdGateBeforeCompactingRibbon()
     {
         StaTestRunner.Run(() =>
@@ -254,6 +286,31 @@ public sealed class RibbonResizeCoordinatorTests
             executed.SkippedCompactLayoutCount.Should().Be(1);
             executed.LastExecutedWork.Should().Be("None");
         });
+    }
+
+    private static string ExtractMethodSource(string source, string signature)
+    {
+        var signatureIndex = source.IndexOf(signature, StringComparison.Ordinal);
+        signatureIndex.Should().BeGreaterThanOrEqualTo(0, $"source should contain {signature}");
+
+        var bodyStart = source.IndexOf('{', signatureIndex);
+        bodyStart.Should().BeGreaterThanOrEqualTo(signatureIndex, $"source should contain a body for {signature}");
+
+        var depth = 0;
+        for (var index = bodyStart; index < source.Length; index++)
+        {
+            depth += source[index] switch
+            {
+                '{' => 1,
+                '}' => -1,
+                _ => 0
+            };
+
+            if (depth == 0)
+                return source.Substring(signatureIndex, index - signatureIndex + 1);
+        }
+
+        throw new InvalidOperationException($"Could not find the end of {signature}.");
     }
 
     private sealed class RibbonCoordinatorHarness : IDisposable

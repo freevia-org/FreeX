@@ -105,8 +105,9 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _ribbonResizeNormalizationRequired = true;
     private RibbonAppliedStateKey? _lastRibbonAdaptiveAppliedStateKey;
     private string? _ribbonAdaptiveControlCacheKey;
-    private readonly Dictionary<TabItem, StackPanel> _ribbonAdaptiveActivePanelCacheByTab = [];
+    private readonly Dictionary<TabItem, RibbonActivePanelCacheEntry> _ribbonAdaptiveActivePanelCacheByTab = [];
     private StackPanel? _ribbonAdaptiveControlCachePanel;
+    private TabItem? _ribbonAdaptiveControlCacheTab;
     private ScrollViewer? _ribbonAdaptiveScrollViewerCache;
     private IReadOnlyList<FrameworkElement>? _ribbonAdaptiveGroupControlCache;
     private IReadOnlyList<Button>? _ribbonAdaptiveCollapsedButtonCache;
