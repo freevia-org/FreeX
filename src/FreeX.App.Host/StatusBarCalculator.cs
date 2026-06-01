@@ -46,6 +46,27 @@ public static class StatusBarCalculator
         return new Stats(sum, count, numericalCount, average, min, max);
     }
 
+    public static Stats Combine(Stats left, Stats right)
+    {
+        var sum = left.Sum + right.Sum;
+        var count = left.Count + right.Count;
+        var numericalCount = left.NumericalCount + right.NumericalCount;
+        double? average = numericalCount > 0 ? sum / numericalCount : null;
+        var min = Min(left.Min, right.Min);
+        var max = Max(left.Max, right.Max);
+        return new Stats(sum, count, numericalCount, average, min, max);
+    }
+
+    private static double? Min(double? left, double? right) =>
+        left.HasValue
+            ? right.HasValue ? Math.Min(left.Value, right.Value) : left
+            : right;
+
+    private static double? Max(double? left, double? right) =>
+        left.HasValue
+            ? right.HasValue ? Math.Max(left.Value, right.Value) : left
+            : right;
+
     private static GridRange Intersect(GridRange range, GridRange usedRange)
     {
         return new GridRange(

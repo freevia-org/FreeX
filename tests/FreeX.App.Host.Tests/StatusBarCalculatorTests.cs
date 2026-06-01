@@ -187,6 +187,36 @@ public sealed class StatusBarCalculatorTests
     }
 
     [Fact]
+    public void Benchmark_ExpandingStatusSelection_ReusesPreviousStats()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= 50_000; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), Cell.FromValue(new NumberValue(row)));
+
+        var cache = new StatusBarStatsCache();
+        const int iterations = 2_000;
+
+        var sw = Stopwatch.StartNew();
+        StatusBarCalculator.Stats stats = default;
+        for (uint row = 1; row <= iterations; row++)
+        {
+            var range = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, row, 1));
+            stats = cache.GetOrCalculate(sheet, range, revision: 1);
+        }
+        sw.Stop();
+
+        Console.WriteLine(
+            $"Expanding status selection: {iterations:N0} steps, " +
+            $"{sw.Elapsed.TotalMilliseconds:F2}ms, final sum {stats.Sum:N0}");
+
+        stats.Count.Should().Be(iterations);
+        stats.NumericalCount.Should().Be(iterations);
+        stats.Sum.Should().Be(iterations * (iterations + 1) / 2d);
+    }
+
+    [Fact]
     public void Benchmark_ClippedSparseStatusSelection()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
