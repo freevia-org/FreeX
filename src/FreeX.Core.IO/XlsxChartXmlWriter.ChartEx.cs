@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -28,14 +29,48 @@ internal static partial class XlsxChartXmlWriter
                 new XAttribute(XNamespace.Xmlns + "a", drawingNs),
                 new XElement(chartExNs + "chartData", chartData),
                 new XElement(chartExNs + "chart",
+                    // chartEx (cx:) has its own title/legend shapes — distinct from the classic c:
+                    // schema — so it must not reuse the classic builders.
                     string.IsNullOrWhiteSpace(chart.Title)
                         ? null
-                        : ToChartTitleXml(chart, chartExNs, drawingNs),
+                        : ToChartExTitleXml(chart, chartExNs, drawingNs),
                     new XElement(chartExNs + "plotArea",
                         new XElement(chartExNs + "plotAreaRegion",
                             BuildChartExSeries(chart, chartExNs, chartData.Count))),
-                    ToLegendXml(chart, chartExNs, drawingNs))));
+                    ToChartExLegendXml(chart, chartExNs))));
     }
+
+    // CT_Title (chartEx): a tx with a rich text body (a:bodyPr must come first per CT_TextBody).
+    private static XElement ToChartExTitleXml(ChartModel chart, XNamespace chartExNs, XNamespace drawingNs) =>
+        new(chartExNs + "title",
+            new XElement(chartExNs + "tx",
+                new XElement(chartExNs + "rich",
+                    new XElement(drawingNs + "bodyPr"),
+                    new XElement(drawingNs + "p",
+                        new XElement(drawingNs + "r",
+                            new XElement(drawingNs + "t", chart.Title))))));
+
+    // CT_Legend (chartEx): position is the "pos" attribute (t/b/l/r), not a legendPos child element.
+    private static XElement? ToChartExLegendXml(ChartModel chart, XNamespace chartExNs)
+    {
+        if (!chart.ShowLegend || chart.LegendPosition == ChartLegendPosition.None)
+            return null;
+
+        return new XElement(chartExNs + "legend",
+            new XAttribute("pos", ToChartExLegendPosition(chart.LegendPosition)),
+            new XAttribute("align", "ctr"),
+            new XAttribute("overlay", chart.LegendOverlay ? "1" : "0"));
+    }
+
+    private static string ToChartExLegendPosition(ChartLegendPosition position) =>
+        position switch
+        {
+            ChartLegendPosition.Top => "t",
+            ChartLegendPosition.Bottom => "b",
+            ChartLegendPosition.Left => "l",
+            ChartLegendPosition.Right => "r",
+            _ => "b",
+        };
 
     private static IEnumerable<XElement> BuildChartExData(
         ChartModel chart,
@@ -78,9 +113,11 @@ internal static partial class XlsxChartXmlWriter
         for (var seriesIndex = 0; seriesIndex < dataCount; seriesIndex++)
         {
             var dataId = ToChartExDataId(seriesIndex);
+            // Per CT_Series the optional layoutPr (binning / subtotals) follows dataId.
             yield return new XElement(chartExNs + "series",
                 new XAttribute("layoutId", ToChartExSeriesLayoutId(chart.Type)),
-                new XElement(chartExNs + "dataId", new XAttribute("val", dataId)));
+                new XElement(chartExNs + "dataId", new XAttribute("val", dataId)),
+                BuildChartExSeriesLayoutPr(chart, chartExNs));
 
             if (chart.Type == ChartType.Pareto)
             {
@@ -91,8 +128,67 @@ internal static partial class XlsxChartXmlWriter
         }
     }
 
+    /// <summary>
+    /// Optional per-series layout properties for chartEx families: histogram binning
+    /// (<c>cx:binning</c>) and waterfall total/anchor columns (<c>cx:subtotals</c>). Returns null when
+    /// the chart carries no such settings so the element is omitted (Excel's defaults apply).
+    /// </summary>
+    private static XElement? BuildChartExSeriesLayoutPr(ChartModel chart, XNamespace chartExNs)
+    {
+        var binning = BuildChartExBinning(chart, chartExNs);
+        var subtotals = BuildChartExSubtotals(chart, chartExNs);
+        return binning is null && subtotals is null
+            ? null
+            : new XElement(chartExNs + "layoutPr", binning, subtotals);
+    }
+
+    private static XElement? BuildChartExBinning(ChartModel chart, XNamespace chartExNs)
+    {
+        if (chart.HistogramBinning is not { } binning)
+            return null;
+
+        // cx:binSize / cx:binCount carry their value as element text content (no val attribute).
+        var sizeOrCount = binning.Mode switch
+        {
+            HistogramBinningMode.BinWidth when binning.BinWidth is { } width && width > 0 =>
+                new XElement(chartExNs + "binSize", Invariant(width)),
+            HistogramBinningMode.BinCount when binning.BinCount is { } count && count > 0 =>
+                new XElement(chartExNs + "binCount", count.ToString(CultureInfo.InvariantCulture)),
+            _ => null,
+        };
+
+        // Nothing to persist for plain automatic binning with no overflow/underflow tails.
+        if (sizeOrCount is null && binning.OverflowThreshold is null && binning.UnderflowThreshold is null)
+            return null;
+
+        var element = new XElement(chartExNs + "binning",
+            new XAttribute("intervalClosed", "r"),
+            sizeOrCount);
+        if (binning.UnderflowThreshold is { } underflow)
+            element.SetAttributeValue("underflow", Invariant(underflow));
+        if (binning.OverflowThreshold is { } overflow)
+            element.SetAttributeValue("overflow", Invariant(overflow));
+        return element;
+    }
+
+    private static XElement? BuildChartExSubtotals(ChartModel chart, XNamespace chartExNs)
+    {
+        if (chart.WaterfallTotalPointIndices is not { Count: > 0 } totals)
+            return null;
+
+        return new XElement(chartExNs + "subtotals",
+            totals.Where(index => index >= 0)
+                .Distinct()
+                .OrderBy(index => index)
+                .Select(index => new XElement(chartExNs + "idx", new XAttribute("val", index))));
+    }
+
+    private static string Invariant(double value) =>
+        value.ToString("R", CultureInfo.InvariantCulture);
+
+    // cx:data/@id and cx:dataId/@val are xsd:unsignedInt — a bare numeric id, not "data{n}".
     private static string ToChartExDataId(int seriesIndex) =>
-        FormattableString.Invariant($"data{seriesIndex}");
+        seriesIndex.ToString(CultureInfo.InvariantCulture);
 
     private static string ToChartExSeriesLayoutId(ChartType chartType) =>
         chartType switch

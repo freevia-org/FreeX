@@ -52,7 +52,7 @@ public sealed class XlsxChartExWriterTests
             var chartData = chartXml.Root.Element(ChartExNs + "chartData");
             chartData.Should().NotBeNull();
             var data = chartData!.Elements(ChartExNs + "data").Should().ContainSingle().Subject;
-            data.Attribute("id")!.Value.Should().Be("data0");
+            data.Attribute("id")!.Value.Should().Be("0");
             data.Elements(ChartExNs + "strDim").Should().ContainSingle()
                 .Which.Should().Match<XElement>(element =>
                     element.Attribute("type")!.Value == "cat" &&
@@ -73,13 +73,13 @@ public sealed class XlsxChartExWriterTests
             regionSeries.Should().HaveCount(expectParetoLine ? 2 : 1);
             var series = regionSeries[0];
             series.Attribute("layoutId")!.Value.Should().Be(expectedLayoutId);
-            series.Element(ChartExNs + "dataId")!.Attribute("val")!.Value.Should().Be("data0");
+            series.Element(ChartExNs + "dataId")!.Attribute("val")!.Value.Should().Be("0");
 
             if (expectParetoLine)
             {
                 var paretoLine = regionSeries[1];
                 paretoLine.Attribute("layoutId")!.Value.Should().Be("paretoLine");
-                paretoLine.Element(ChartExNs + "dataId")!.Attribute("val")!.Value.Should().Be("data0");
+                paretoLine.Element(ChartExNs + "dataId")!.Attribute("val")!.Value.Should().Be("0");
             }
 
             var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
@@ -185,6 +185,58 @@ public sealed class XlsxChartExWriterTests
         loadedChart.LegendOverlay.Should().BeTrue();
     }
 
+    [Fact]
+    public void Save_WritesHistogramBinningLayoutPr()
+    {
+        var saved = SaveWorkbookWithChart(ChartType.Histogram, configureChart: chart =>
+            chart.HistogramBinning = new HistogramBinningModel(
+                HistogramBinningMode.BinWidth, BinWidth: 5, OverflowThreshold: 25));
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var binning = chartXml.Descendants(ChartExNs + "binning").Should().ContainSingle().Subject;
+        binning.Attribute("intervalClosed")!.Value.Should().Be("r");
+        binning.Attribute("overflow")!.Value.Should().Be("25");
+        binning.Element(ChartExNs + "binSize")!.Value.Should().Be("5");
+    }
+
+    [Fact]
+    public void Save_WritesWaterfallSubtotalsLayoutPr()
+    {
+        var saved = SaveWorkbookWithChart(ChartType.Waterfall, configureChart: chart =>
+            chart.WaterfallTotalPointIndices = [0, 2]);
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var subtotals = chartXml.Descendants(ChartExNs + "subtotals").Should().ContainSingle().Subject;
+        subtotals.Elements(ChartExNs + "idx").Select(idx => idx.Attribute("val")!.Value)
+            .Should().Equal("0", "2");
+    }
+
+    [Fact]
+    public void SaveLoad_HistogramBinningRoundTripsThroughChartEx()
+    {
+        var saved = SaveWorkbookWithChart(ChartType.Histogram, configureChart: chart =>
+            chart.HistogramBinning = new HistogramBinningModel(
+                HistogramBinningMode.BinCount, BinCount: 5, OverflowThreshold: 25, UnderflowThreshold: 12));
+
+        var loaded = new XlsxFileAdapter().Load(saved);
+        var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        chart.HistogramBinning.Should().Be(new HistogramBinningModel(
+            HistogramBinningMode.BinCount, BinCount: 5, OverflowThreshold: 25, UnderflowThreshold: 12));
+    }
+
+    [Fact]
+    public void SaveLoad_WaterfallTotalPointIndicesRoundTripThroughChartEx()
+    {
+        var saved = SaveWorkbookWithChart(ChartType.Waterfall, configureChart: chart =>
+            chart.WaterfallTotalPointIndices = [0, 2]);
+
+        var loaded = new XlsxFileAdapter().Load(saved);
+        var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        chart.WaterfallTotalPointIndices.Should().Equal(0, 2);
+    }
+
     [Theory]
     [InlineData(ChartType.Treemap)]
     [InlineData(ChartType.Sunburst)]
@@ -226,8 +278,9 @@ public sealed class XlsxChartExWriterTests
             .Element(ChartExNs + "chart")!
             .Element(ChartExNs + "legend");
         legend.Should().NotBeNull();
-        legend!.Element(ChartExNs + "legendPos")!.Attribute("val")!.Value.Should().Be("b");
-        legend.Element(ChartExNs + "overlay")!.Attribute("val")!.Value.Should().Be("1");
+        // chartEx legend position/overlay are attributes on <cx:legend>, not child elements.
+        legend!.Attribute("pos")!.Value.Should().Be("b");
+        legend.Attribute("overlay")!.Value.Should().Be("1");
     }
 
     [Fact]

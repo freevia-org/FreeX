@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -114,6 +115,8 @@ public static partial class XlsxChartPartReader
                     element.Name.LocalName == "strDim" &&
                     string.Equals(element.Attribute("type")?.Value, "cat", StringComparison.OrdinalIgnoreCase) &&
                     element.Elements().Any(child => child.Name.LocalName == "f" && !string.IsNullOrWhiteSpace(child.Value))) == true;
+
+                ReadChartExSeriesLayout(series, result);
             }
             else
             {
@@ -142,6 +145,61 @@ public static partial class XlsxChartPartReader
         chart = result;
         return true;
     }
+
+    /// <summary>
+    /// Reads chartEx per-series <c>layoutPr</c> settings (histogram <c>binning</c>, waterfall
+    /// <c>subtotals</c>) into the model so they round-trip through XLSX.
+    /// </summary>
+    private static void ReadChartExSeriesLayout(XElement series, ChartModel chart)
+    {
+        var layoutPr = series.Elements().FirstOrDefault(element => element.Name.LocalName == "layoutPr");
+        if (layoutPr is null)
+            return;
+
+        var binning = layoutPr.Elements().FirstOrDefault(element => element.Name.LocalName == "binning");
+        if (binning is not null && ParseChartExBinning(binning) is { } binningModel)
+            chart.HistogramBinning = binningModel;
+
+        var subtotals = layoutPr.Elements().FirstOrDefault(element => element.Name.LocalName == "subtotals");
+        if (subtotals is not null)
+        {
+            var indices = subtotals.Elements()
+                .Where(element => element.Name.LocalName == "idx")
+                .Select(element => int.TryParse(element.Attribute("val")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) ? i : -1)
+                .Where(i => i >= 0)
+                .Distinct()
+                .OrderBy(i => i)
+                .ToList();
+            chart.WaterfallTotalPointIndices = indices;
+        }
+    }
+
+    private static HistogramBinningModel? ParseChartExBinning(XElement binning)
+    {
+        var binSize = binning.Elements().FirstOrDefault(element => element.Name.LocalName == "binSize")?.Value;
+        var binCount = binning.Elements().FirstOrDefault(element => element.Name.LocalName == "binCount")?.Value;
+        var underflow = ParseChartExThreshold(binning.Attribute("underflow")?.Value);
+        var overflow = ParseChartExThreshold(binning.Attribute("overflow")?.Value);
+
+        if (!string.IsNullOrWhiteSpace(binSize) &&
+            double.TryParse(binSize, NumberStyles.Float, CultureInfo.InvariantCulture, out var width) && width > 0)
+            return new HistogramBinningModel(HistogramBinningMode.BinWidth, BinWidth: width, OverflowThreshold: overflow, UnderflowThreshold: underflow);
+
+        if (!string.IsNullOrWhiteSpace(binCount) &&
+            int.TryParse(binCount, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) && count > 0)
+            return new HistogramBinningModel(HistogramBinningMode.BinCount, BinCount: count, OverflowThreshold: overflow, UnderflowThreshold: underflow);
+
+        if (underflow is not null || overflow is not null)
+            return new HistogramBinningModel(HistogramBinningMode.Automatic, OverflowThreshold: overflow, UnderflowThreshold: underflow);
+
+        return null;
+    }
+
+    private static double? ParseChartExThreshold(string? text) =>
+        !string.IsNullOrWhiteSpace(text) &&
+        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : null;
 
     private static IEnumerable<string> ReadDeferredAdvancedSeriesRangeFormulas(XDocument chartXml, XElement series)
     {

@@ -39,6 +39,46 @@ public sealed class XlsxSchemaValidationTests
         themeErrors.Should().BeEmpty();
     }
 
+    [Theory]
+    // Classic (c:) charts — a schema-valid title/axis text body (a:bodyPr) is required for Excel to open them.
+    [InlineData(ChartType.Column)]
+    [InlineData(ChartType.Bar)]
+    [InlineData(ChartType.Line)]
+    [InlineData(ChartType.Pie)]
+    [InlineData(ChartType.Area)]
+    [InlineData(ChartType.Scatter)]
+    // Modern (cx:) chartEx families.
+    [InlineData(ChartType.Histogram)]
+    [InlineData(ChartType.Waterfall)]
+    [InlineData(ChartType.Treemap)]
+    [InlineData(ChartType.Sunburst)]
+    [InlineData(ChartType.Pareto)]
+    [InlineData(ChartType.Funnel)]
+    [InlineData(ChartType.BoxAndWhisker)]
+    public void XlsxAdapter_Save_ProducesSchemaValidChartWorkbook(ChartType chartType)
+    {
+        var workbook = new Workbook("ChartExValid");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("C"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(30));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = chartType,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)),
+            Title = chartType.ToString(),
+            ShowLegend = true,
+            LegendPosition = ChartLegendPosition.Bottom,
+        });
+
+        SchemaErrors(workbook).Should().BeEmpty();
+    }
+
     private static System.Collections.Generic.List<string> SchemaErrors(Workbook workbook)
     {
         var stream = new MemoryStream();
