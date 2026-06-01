@@ -2761,7 +2761,7 @@ public partial class FileAdapterSmokeTests
         adapter.Save(workbook, source);
         source.Position = 0;
         var imageBytes = MinimalPngBytes();
-        AddMinimalPicturePackage(source, imageBytes);
+        AddMinimalPicturePackage(source, imageBytes, rotationDegrees: 75);
 
         source.Position = 0;
         var loaded = adapter.Load(source);
@@ -2773,6 +2773,7 @@ public partial class FileAdapterSmokeTests
         picture.ContentType.Should().Be("image/png");
         picture.Width.Should().Be(120);
         picture.Height.Should().Be(80);
+        picture.RotationDegrees.Should().Be(75);
         picture.Title.Should().Be("Native picture title");
         picture.AltText.Should().Be("Native picture");
     }
@@ -2856,6 +2857,7 @@ public partial class FileAdapterSmokeTests
             ContentType = "image/png",
             Width = 120,
             Height = 80,
+            RotationDegrees = 33,
             AltText = "Authored picture"
         });
 
@@ -2869,6 +2871,15 @@ public partial class FileAdapterSmokeTests
             archive.GetEntry("xl/drawings/drawing1.xml").Should().NotBeNull();
             archive.GetEntry("xl/drawings/_rels/drawing1.xml.rels").Should().NotBeNull();
             archive.GetEntry("xl/media/freexPicture1.png").Should().NotBeNull();
+            var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            drawingXml.Descendants(drawingNs + "xfrm")
+                .Should()
+                .ContainSingle()
+                .Which
+                .Attribute("rot")?.Value
+                .Should()
+                .Be("1980000");
         }
 
         ms.Position = 0;
@@ -2881,6 +2892,7 @@ public partial class FileAdapterSmokeTests
         picture.ContentType.Should().Be("image/png");
         picture.Width.Should().Be(120);
         picture.Height.Should().Be(80);
+        picture.RotationDegrees.Should().Be(33);
         picture.AltText.Should().Be("Authored picture");
     }
 
@@ -24303,7 +24315,8 @@ public partial class FileAdapterSmokeTests
         double cropLeft = 0,
         double cropTop = 0,
         double cropRight = 0,
-        double cropBottom = 0)
+        double cropBottom = 0,
+        double rotationDegrees = 0)
     {
         using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
         {
@@ -24375,7 +24388,10 @@ public partial class FileAdapterSmokeTests
                                     : null,
                                 new XElement(drawingNs + "stretch", new XElement(drawingNs + "fillRect"))),
                             new XElement(spreadsheetDrawingNs + "spPr",
-                                new XElement(drawingNs + "xfrm"),
+                                new XElement(drawingNs + "xfrm",
+                                    rotationDegrees == 0
+                                        ? null
+                                        : new XAttribute("rot", ToDrawingRotationUnits(rotationDegrees))),
                                 new XElement(drawingNs + "prstGeom", new XAttribute("prst", "rect"), new XElement(drawingNs + "avLst")))),
                         new XElement(spreadsheetDrawingNs + "clientData"))));
             ReplacePackageXml(archive, "xl/drawings/drawing1.xml", drawingXml);
@@ -24402,6 +24418,15 @@ public partial class FileAdapterSmokeTests
 
     private static string ToSourceRectanglePercent(double ratio) =>
         ((int)Math.Round(Math.Clamp(ratio, 0, 1) * 100000)).ToString(CultureInfo.InvariantCulture);
+
+    private static string ToDrawingRotationUnits(double rotationDegrees)
+    {
+        var normalized = rotationDegrees % 360;
+        if (normalized < 0)
+            normalized += 360;
+
+        return ((long)Math.Round(normalized * 60000)).ToString(CultureInfo.InvariantCulture);
+    }
 
     private static void AddMinimalShapePackage(MemoryStream packageStream)
     {

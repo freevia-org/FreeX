@@ -228,7 +228,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         : null,
                     new XElement(drawingNs + "stretch", new XElement(drawingNs + "fillRect"))),
                 new XElement(spreadsheetDrawingNs + "spPr",
-                    new XElement(drawingNs + "xfrm"),
+                    ToDrawingTransform(picture.RotationDegrees, drawingNs),
                     new XElement(drawingNs + "prstGeom",
                         new XAttribute("prst", "rect"),
                         new XElement(drawingNs + "avLst")))),
@@ -328,10 +328,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         CellColor? gradientFillEndColor = null,
         DrawingShapeEffectPreset effectPreset = DrawingShapeEffectPreset.None)
     {
-        var rotation = NormalizeRotation(rotationDegrees);
         return new XElement(spreadsheetDrawingNs + "spPr",
-            new XElement(drawingNs + "xfrm",
-                rotation == 0 ? null : new XAttribute("rot", (long)Math.Round(rotation * 60000))),
+            ToDrawingTransform(rotationDegrees, drawingNs),
             new XElement(drawingNs + "prstGeom",
                 new XAttribute("prst", preset),
                 new XElement(drawingNs + "avLst")),
@@ -340,6 +338,13 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 : ToSolidFill(fillThemeColor, fillColor, drawingNs),
             ToLineProperties(outlineThemeColor, outlineColor, drawingNs),
             ToEffectList(effectPreset, drawingNs));
+    }
+
+    private static XElement ToDrawingTransform(double rotationDegrees, XNamespace drawingNs)
+    {
+        var rotation = NormalizeRotation(rotationDegrees);
+        return new XElement(drawingNs + "xfrm",
+            rotation == 0 ? null : new XAttribute("rot", (long)Math.Round(rotation * 60000)));
     }
 
     private static XElement ToGradientFill(CellColor startColor, CellColor endColor, XNamespace drawingNs) =>
