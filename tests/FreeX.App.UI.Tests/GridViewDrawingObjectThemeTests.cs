@@ -856,7 +856,12 @@ public sealed class GridViewDrawingObjectThemeTests
         anchorHitTest.Should().Contain("if (position.Y < top)");
         anchorHitTest.Should().Contain("break;");
         anchorHitTest.Should().Contain("if (position.X < left)");
+        anchorHitTest.Should().Contain("SumRowHeights(pinnedRows)");
+        anchorHitTest.Should().Contain("SumColumnWidths(pinnedColumns)");
+        anchorHitTest.Should().Contain("if (metric.Row > row)");
+        anchorHitTest.Should().Contain("if (metric.Col > column)");
         anchorHitTest.Should().Contain("return new CellAddress(default, row.Row, column.Col);");
+        anchorHitTest.Should().NotContain(".Sum(");
     }
 
     [Fact]
