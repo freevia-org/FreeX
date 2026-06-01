@@ -31,6 +31,34 @@ public sealed class SheetTabFocusPlannerTests
         SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), -1).Should().Be(tabs[1].Id);
     }
 
+    [Theory]
+    [InlineData(2)]
+    [InlineData(10)]
+    public void AdjacentTab_TreatsPositiveDirectionAsSingleStep(int direction)
+    {
+        var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3", "Sheet4");
+
+        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[0].Id, direction).Should().Be(tabs[1].Id);
+    }
+
+    [Theory]
+    [InlineData(-2)]
+    [InlineData(-10)]
+    public void AdjacentTab_TreatsNegativeDirectionAsSingleStep(int direction)
+    {
+        var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3", "Sheet4");
+
+        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[3].Id, direction).Should().Be(tabs[2].Id);
+    }
+
+    [Fact]
+    public void AdjacentTab_ZeroDirectionKeepsCurrentVisibleTab()
+    {
+        var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3");
+
+        SheetTabFocusPlanner.AdjacentTab(tabs, tabs[1].Id, 0).Should().Be(tabs[1].Id);
+    }
+
     [Fact]
     public void EdgeTab_ReturnsRequestedEdgeOrNull()
     {
