@@ -111,10 +111,7 @@ internal sealed class ExportOptionsDialog : Window
         pdfLanguagePanel.Children.Add(_pdfLanguageBox);
         stack.Children.Add(pdfLanguagePanel);
         stack.Children.Add(_bitmapTextBox);
-        _pdfABox.ToolTip = UiText.Get("ExportOptions_FreeXSCurrentPdfExporterCannotWritePdfAConformanceMetadata");
-        _structureTagsBox.ToolTip = UiText.Get("ExportOptions_FreeXSCurrentPdfExporterCannotWriteTaggedPdfStructureTrees");
-        AutomationProperties.SetHelpText(_pdfABox, UiText.Get("ExportOptions_FreeXSCurrentPdfExporterCannotWritePdfAConformanceMetadata"));
-        AutomationProperties.SetHelpText(_structureTagsBox, UiText.Get("ExportOptions_FreeXSCurrentPdfExporterCannotWriteTaggedPdfStructureTrees"));
+        ApplyUnsupportedPdfPublishOptionHelpText(format);
         stack.Children.Add(_pdfABox);
         stack.Children.Add(_structureTagsBox);
         stack.Children.Add(_standardQualityButton);
@@ -214,6 +211,19 @@ internal sealed class ExportOptionsDialog : Window
 
         if (!availability.MinimumSizeEnabled)
             DisableOption(_minimumSizeButton, UiText.Get("Export_QualityMinimumSizePdfOnly"));
+    }
+
+    private void ApplyUnsupportedPdfPublishOptionHelpText(ExportFormat format)
+    {
+        var pdfAHelpText = format == ExportFormat.Xps
+            ? UiText.Get("Export_PdfAPdfOnlyUnsupported")
+            : UiText.Get("ExportOptions_FreeXSCurrentPdfExporterCannotWritePdfAConformanceMetadata");
+        var structureTagsHelpText = format == ExportFormat.Xps
+            ? UiText.Get("Export_TaggedPdfPdfOnlyUnsupported")
+            : UiText.Get("ExportOptions_FreeXSCurrentPdfExporterCannotWriteTaggedPdfStructureTrees");
+
+        DisableOption(_pdfABox, pdfAHelpText);
+        DisableOption(_structureTagsBox, structureTagsHelpText);
     }
 
     private static void DisableOption(Control control, string helpText)

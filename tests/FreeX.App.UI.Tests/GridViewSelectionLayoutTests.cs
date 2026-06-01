@@ -187,8 +187,7 @@ public sealed class GridViewSelectionLayoutTests
 
         rects.Should().Equal(
             new Rect(33, 22, 29, 12),
-            new Rect(97, 22, 58, 12),
-            new Rect(97, 42, 0, 12));
+            new Rect(97, 22, 58, 12));
     }
 
     [Fact]
@@ -239,7 +238,31 @@ public sealed class GridViewSelectionLayoutTests
             rowHeaderWidth: 30,
             columnHeaderHeight: 18);
 
-        rects.Should().Equal(new Rect(39, 30, 0, 12));
+        rects.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CalculateQuickAnalysisDataBarPreviewRects_SkipsValuesWithoutDrawablePositiveWidth()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 1, 2));
+        var viewport = new ViewportModel(
+            [
+                new DisplayCell(1, 1, new NumberValue(0), "0", null, StyleId.Default, null),
+                new DisplayCell(1, 2, new NumberValue(-5), "-5", null, StyleId.Default, null)
+            ],
+            [new RowMetric(1, 20, 0)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64)]);
+
+        var rects = GridView.CalculateQuickAnalysisDataBarPreviewRects(
+            viewport,
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18);
+
+        rects.Should().BeEmpty();
     }
 
     [Fact]

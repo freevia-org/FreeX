@@ -29,7 +29,8 @@ public static class ExcelTextEditorPlanner
         bool useR1C1ReferenceStyle,
         out ExcelTextEdit edit)
     {
-        edit = new ExcelTextEdit(text, Math.Clamp(caretIndex, 0, text.Length), 0);
+        var safeCaretIndex = Math.Clamp(caretIndex, 0, text.Length);
+        edit = new ExcelTextEdit(text, safeCaretIndex, 0);
         if (!text.StartsWith("=", StringComparison.Ordinal))
             return false;
 
@@ -39,14 +40,14 @@ public static class ExcelTextEditorPlanner
         var changed = useR1C1ReferenceStyle && anchor is { } address
             ? FormulaReferenceCycler.TryCycleR1C1ReferenceAtCaret(
                 text,
-                caretIndex,
+                safeCaretIndex,
                 address,
                 out cycled,
                 out selectionStart,
                 out selectionLength)
             : FormulaReferenceCycler.TryCycleReferenceAtCaret(
                 text,
-                caretIndex,
+                safeCaretIndex,
                 out cycled,
                 out selectionStart,
                 out selectionLength);
