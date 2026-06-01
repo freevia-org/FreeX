@@ -162,6 +162,8 @@ public partial class MainWindow
             var badgeSize = badge.DesiredSize;
             var badgeKind = element is TabItem
                 ? RibbonKeyTipBadgeKind.Tab
+                : RibbonMetadata.IsCollapsedGroupButton(element)
+                    ? RibbonKeyTipBadgeKind.CollapsedGroup
                 : RibbonKeyTipBadgeKind.Command;
             var point = RibbonKeyTipOverlayPlacement.PlaceBadge(
                 new Rect(origin, new Size(element.ActualWidth, element.ActualHeight)),
