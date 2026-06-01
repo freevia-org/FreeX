@@ -1280,6 +1280,54 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Benchmark_SaveRichDenseWorkbook_ReportsTimingAndAllocatedBytes()
+    {
+        const int iterations = 3;
+        const int sheetCount = 2;
+        const int rowCount = 120;
+        const int columnCount = 80;
+        var workbook = CreateRichDenseWorkbook(sheetCount, rowCount, columnCount);
+        var adapter = new SpreadsheetXmlFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF SPREADSHEET_XML_SAVE_RICH_DENSE " +
+            $"sheets={sheetCount} rows={rowCount} cols={columnCount} " +
+            $"steps={iterations} bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+        allocatedBytes.Should().BeGreaterThan(0);
+        packageSizes.Should().OnlyContain(size => size > 0);
+    }
+
+    [Fact]
     public void LoadTransformed_AppliesSafeXsltAndLoadsSpreadsheetMlOutput()
     {
         using var source = StreamFromString("""
@@ -2845,6 +2893,42 @@ public sealed class SpreadsheetXmlFileAdapterTests
                     }
                 }
             }
+        }
+
+        return workbook;
+    }
+
+    private static Workbook CreateRichDenseWorkbook(int sheetCount, int rowCount, int columnCount)
+    {
+        var workbook = CreateDenseWorkbook(sheetCount, rowCount, columnCount);
+        var styleOnly = workbook.RegisterStyle(new CellStyle { NumberFormat = "0.0000" });
+        var styleOnlyCol = (uint)columnCount + 1;
+
+        for (var sheetIndex = 0; sheetIndex < workbook.Sheets.Count; sheetIndex++)
+        {
+            var sheet = workbook.Sheets[sheetIndex];
+            for (uint row = 1; row <= rowCount; row += 8)
+            {
+                var hyperlinkAddress = new CellAddress(sheet.Id, row, 2);
+                sheet.Hyperlinks[hyperlinkAddress] = $"https://example.com/sheet-{sheetIndex + 1}/row-{row}";
+                sheet.HyperlinkMetadata[hyperlinkAddress] = new HyperlinkMetadata(
+                    HyperlinkTargetKind.ExistingFileOrWebPage,
+                    $"Open row {row}",
+                    "");
+
+                sheet.Comments[new CellAddress(sheet.Id, row, 3)] = $"Review row {row}";
+                sheet.SetStyleOnly(row, styleOnlyCol, styleOnly);
+                sheet.RowHeights[row] = 18.5 + row % 3;
+            }
+
+            for (uint row = 2; row < rowCount; row += 12)
+            {
+                sheet.AddMergedRegion(new GridRange(
+                    new CellAddress(sheet.Id, row, 4),
+                    new CellAddress(sheet.Id, row + 1, 6)));
+            }
+
+            sheet.HiddenRows.Add(Math.Min((uint)rowCount, 7u));
         }
 
         return workbook;

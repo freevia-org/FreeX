@@ -33,7 +33,7 @@ public sealed class UnhideSheetDialog : Window
         AutomationProperties.SetAutomationId(_sheetBox, "UnhideSheetList");
         AutomationProperties.SetHelpText(_sheetBox, UiText.Get("UnhideSheet_SelectTheHiddenWorksheetToMakeVisible"));
         _sheetBox.SelectionChanged += (_, _) => UpdateButtonState();
-        _sheetBox.MouseDoubleClick += (_, _) => Accept();
+        _sheetBox.MouseDoubleClick += SheetBox_MouseDoubleClick;
 
         AutomationProperties.SetName(_okButton, UiText.Get("UnhideSheet_Ok"));
         AutomationProperties.SetAutomationId(_okButton, "UnhideSheetOkButton");
@@ -86,5 +86,11 @@ public sealed class UnhideSheetDialog : Window
 
         Result = CreateResult(sheetName);
         DialogResult = true;
+    }
+
+    private void SheetBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        Accept();
+        e.Handled = true;
     }
 }

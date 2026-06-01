@@ -1263,10 +1263,12 @@ public sealed class RemainingDialogTests
             dialog.Dispatcher.BeginInvoke(() =>
             {
                 sheetBox.SelectedItem = "Hidden 2";
-                sheetBox.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
                 {
                     RoutedEvent = Control.MouseDoubleClickEvent
-                });
+                };
+                sheetBox.RaiseEvent(doubleClick);
+                doubleClick.Handled.Should().BeTrue();
 
                 dialog.Dispatcher.BeginInvoke(() =>
                 {
