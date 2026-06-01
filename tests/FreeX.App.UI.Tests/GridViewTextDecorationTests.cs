@@ -101,6 +101,24 @@ public sealed class GridViewTextDecorationTests
         iconsOnly.ShouldDrawText.Should().BeFalse();
     }
 
+    [Fact]
+    public void CalculateConditionalIconCellLayout_ClampsIconInsideTinyCells()
+    {
+        var cellRect = new Rect(10, 20, 6, 5);
+
+        var layout = GridView.CalculateConditionalIconCellLayout(
+            cellRect,
+            new ConditionalFormatIcon("3TrafficLights1", 1, 3, ShowValue: true));
+
+        layout.IconRect.Left.Should().BeGreaterThanOrEqualTo(cellRect.Left);
+        layout.IconRect.Right.Should().BeLessThanOrEqualTo(cellRect.Right);
+        layout.IconRect.Top.Should().BeGreaterThanOrEqualTo(cellRect.Top);
+        layout.IconRect.Bottom.Should().BeLessThanOrEqualTo(cellRect.Bottom);
+        layout.IconRect.Width.Should().Be(0);
+        layout.IconRect.Height.Should().Be(0);
+        layout.TextRect.Width.Should().Be(0);
+    }
+
     [Theory]
     [InlineData(0, 5, "#C00000")]
     [InlineData(1, 5, "#ED7D31")]
