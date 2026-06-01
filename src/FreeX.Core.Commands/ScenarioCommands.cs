@@ -67,7 +67,7 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
         }
 
         _applied = true;
-        return new CommandOutcome(true, AffectedCells: _scenario.ChangingCells.Select(c => c.Address).ToList());
+        return new CommandOutcome(true, AffectedCells: ScenarioCommandHelpers.BuildAffectedCells(_scenario.ChangingCells));
     }
 
     public void Revert(ICommandContext ctx)
@@ -123,7 +123,7 @@ public sealed class ApplyScenarioCommand : IWorkbookCommand
         }
 
         _applied = true;
-        return new CommandOutcome(true, AffectedCells: scenario.ChangingCells.Select(c => c.Address).ToList());
+        return new CommandOutcome(true, AffectedCells: ScenarioCommandHelpers.BuildAffectedCells(scenario.ChangingCells));
     }
 
     public void Revert(ICommandContext ctx)
@@ -174,7 +174,7 @@ public sealed class DeleteScenarioCommand : IWorkbookCommand
 
         ctx.Workbook.Scenarios.RemoveAt(_removedIndex);
         _applied = true;
-        return new CommandOutcome(true, AffectedCells: _removedScenario.ChangingCells.Select(c => c.Address).ToList());
+        return new CommandOutcome(true, AffectedCells: ScenarioCommandHelpers.BuildAffectedCells(_removedScenario.ChangingCells));
     }
 
     public void Revert(ICommandContext ctx)
@@ -194,8 +194,13 @@ internal static class ScenarioProtectionGuards
         Workbook workbook,
         IEnumerable<ScenarioCellValue> changingCells)
     {
-        foreach (var sheetId in changingCells.Select(cell => cell.Address.Sheet).Distinct())
+        var checkedSheets = new HashSet<SheetId>();
+        foreach (var cell in changingCells)
         {
+            var sheetId = cell.Address.Sheet;
+            if (!checkedSheets.Add(sheetId))
+                continue;
+
             var sheet = workbook.GetSheet(sheetId);
             if (sheet is null)
                 return new CommandOutcome(false, "Scenario changing cells must belong to this workbook.");
@@ -204,6 +209,70 @@ internal static class ScenarioProtectionGuards
         }
 
         return null;
+    }
+}
+
+file static class ScenarioCommandHelpers
+{
+    public static List<CellAddress> BuildAffectedCells(IReadOnlyList<ScenarioCellValue> changingCells)
+    {
+        var affectedCells = new List<CellAddress>(changingCells.Count);
+        for (var index = 0; index < changingCells.Count; index++)
+            affectedCells.Add(changingCells[index].Address);
+
+        return affectedCells;
+    }
+
+    public static Dictionary<SheetId, int> BuildSheetOrder(Workbook workbook)
+    {
+        var sheetOrder = new Dictionary<SheetId, int>(workbook.Sheets.Count);
+        for (var index = 0; index < workbook.Sheets.Count; index++)
+            sheetOrder[workbook.Sheets[index].Id] = index;
+
+        return sheetOrder;
+    }
+
+    public static List<CellAddress> CollectOrderedChangingCells(
+        IReadOnlyList<WorkbookScenario> scenarios,
+        IReadOnlyDictionary<SheetId, int> sheetOrder)
+    {
+        var changingCells = new List<CellAddress>();
+        var seen = new HashSet<CellAddress>();
+        for (var scenarioIndex = 0; scenarioIndex < scenarios.Count; scenarioIndex++)
+        {
+            var scenarioCells = scenarios[scenarioIndex].ChangingCells;
+            for (var cellIndex = 0; cellIndex < scenarioCells.Count; cellIndex++)
+            {
+                var address = scenarioCells[cellIndex].Address;
+                if (seen.Add(address))
+                    changingCells.Add(address);
+            }
+        }
+
+        changingCells.Sort(new CellAddressWorkbookOrderComparer(sheetOrder));
+        return changingCells;
+    }
+
+    private sealed class CellAddressWorkbookOrderComparer(
+        IReadOnlyDictionary<SheetId, int> sheetOrder) : IComparer<CellAddress>
+    {
+        public int Compare(CellAddress left, CellAddress right)
+        {
+            var leftOrder = sheetOrder.TryGetValue(left.Sheet, out var leftIndex)
+                ? leftIndex
+                : int.MaxValue;
+            var rightOrder = sheetOrder.TryGetValue(right.Sheet, out var rightIndex)
+                ? rightIndex
+                : int.MaxValue;
+            var orderComparison = leftOrder.CompareTo(rightOrder);
+            if (orderComparison != 0)
+                return orderComparison;
+
+            var rowComparison = left.Row.CompareTo(right.Row);
+            return rowComparison != 0
+                ? rowComparison
+                : left.Col.CompareTo(right.Col);
+        }
     }
 }
 
@@ -256,32 +325,29 @@ public sealed class ScenarioSummaryReportCommand : IWorkbookCommand
                 new TextValue(ctx.Workbook.Scenarios[index].Name));
         }
 
-        var sheetOrder = ctx.Workbook.Sheets
-            .Select((sheet, index) => (sheet.Id, index))
-            .ToDictionary(item => item.Id, item => item.index);
-        var changingCells = ctx.Workbook.Scenarios
-            .SelectMany(s => s.ChangingCells.Select(c => c.Address))
-            .Distinct()
-            .OrderBy(a => sheetOrder.TryGetValue(a.Sheet, out var index) ? index : int.MaxValue)
-            .ThenBy(a => a.Row)
-            .ThenBy(a => a.Col)
-            .ToList();
+        var sheetOrder = ScenarioCommandHelpers.BuildSheetOrder(ctx.Workbook);
+        var changingCells = ScenarioCommandHelpers.CollectOrderedChangingCells(ctx.Workbook.Scenarios, sheetOrder);
+        var changingCellRows = new Dictionary<CellAddress, int>(changingCells.Count);
 
         for (var rowIndex = 0; rowIndex < changingCells.Count; rowIndex++)
         {
             var address = changingCells[rowIndex];
             var reportRow = (uint)rowIndex + 4;
+            changingCellRows[address] = rowIndex;
             report.SetCell(new CellAddress(report.Id, reportRow, 1), new TextValue(FormatAddress(ctx.Workbook, address)));
+        }
 
-            for (var scenarioIndex = 0; scenarioIndex < ctx.Workbook.Scenarios.Count; scenarioIndex++)
+        for (var scenarioIndex = 0; scenarioIndex < ctx.Workbook.Scenarios.Count; scenarioIndex++)
+        {
+            var scenario = ctx.Workbook.Scenarios[scenarioIndex];
+            for (var changeIndex = scenario.ChangingCells.Count - 1; changeIndex >= 0; changeIndex--)
             {
-                var scenario = ctx.Workbook.Scenarios[scenarioIndex];
-                var change = scenario.ChangingCells.FirstOrDefault(c => c.Address == address);
-                if (change is null)
+                var change = scenario.ChangingCells[changeIndex];
+                if (!changingCellRows.TryGetValue(change.Address, out var rowIndex))
                     continue;
 
                 report.SetCell(
-                    new CellAddress(report.Id, reportRow, (uint)scenarioIndex + 2),
+                    new CellAddress(report.Id, (uint)rowIndex + 4, (uint)scenarioIndex + 2),
                     Cell.FromValue(change.Value));
             }
         }
