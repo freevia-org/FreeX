@@ -85,11 +85,33 @@ public sealed class MainWindowSheetTabKeyboardTests
         });
     }
 
+    [Fact]
+    public void SheetTabChrome_ReusesRenderedPathsAcrossRepeatedManyTabNavigationUpdates()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(sheetCount: 140);
+
+            harness.UpdateSheetTabNavigation();
+            var chromeChildren = harness.SheetTabChromeChildren;
+            var overlayChildren = harness.SheetTabOverlayChildren;
+
+            chromeChildren.Should().NotBeEmpty("many visible tabs should render chrome paths before repeated scroll or resize callbacks");
+            overlayChildren.Should().NotBeEmpty("the sheet-tab grid rule should be rendered before repeated callbacks");
+
+            harness.UpdateSheetTabNavigation(iterations: 60);
+
+            harness.SheetTabChromeChildren.Should().Equal(chromeChildren, "unchanged many-tab navigation callbacks should skip chrome clear/rebuild churn");
+            harness.SheetTabOverlayChildren.Should().Equal(overlayChildren, "unchanged many-tab navigation callbacks should keep the overlay path intact");
+        });
+    }
+
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
         private readonly MethodInfo _insertNewSheet;
         private readonly MethodInfo _sheetTabMouseRightButtonDown;
+        private readonly MethodInfo _updateSheetTabNavigation;
         private readonly MethodInfo _tryFocusCurrentSheetTab;
         private readonly MethodInfo _tryOpenFocusedSheetTabContextMenu;
         private readonly MethodInfo _sheetTabContextMenuOpened;
@@ -104,6 +126,9 @@ public sealed class MainWindowSheetTabKeyboardTests
             _sheetTabMouseRightButtonDown = typeof(MainWindow)
                 .GetMethod("SheetTab_MouseRightButtonDown", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SheetTab_MouseRightButtonDown");
+            _updateSheetTabNavigation = typeof(MainWindow)
+                .GetMethod("UpdateSheetTabNavigation", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateSheetTabNavigation");
             _tryFocusCurrentSheetTab = typeof(MainWindow)
                 .GetMethod("TryFocusCurrentSheetTab", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryFocusCurrentSheetTab");
@@ -147,6 +172,12 @@ public sealed class MainWindowSheetTabKeyboardTests
                 .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal))
                 ?.InputGestureText;
 
+        public IReadOnlyList<UIElement> SheetTabChromeChildren =>
+            ((Panel)_window.FindName("SheetTabsChromeLayer")).Children.Cast<UIElement>().ToList();
+
+        public IReadOnlyList<UIElement> SheetTabOverlayChildren =>
+            ((Panel)_window.FindName("SheetTabsOverlayLayer")).Children.Cast<UIElement>().ToList();
+
         public string DebugSheetTabs =>
             string.Join("; ", SheetTabTargets.Select(element =>
             {
@@ -166,6 +197,15 @@ public sealed class MainWindowSheetTabKeyboardTests
         public void InsertNewSheet()
         {
             _insertNewSheet.Invoke(_window, null);
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
+        public void UpdateSheetTabNavigation(int iterations = 1)
+        {
+            for (var i = 0; i < iterations; i++)
+                _updateSheetTabNavigation.Invoke(_window, null);
+
             _window.UpdateLayout();
             PumpDispatcher();
         }
@@ -199,11 +239,11 @@ public sealed class MainWindowSheetTabKeyboardTests
                 _sheetTabContextMenuOpened.Invoke(null, [menu, new RoutedEventArgs(ContextMenu.OpenedEvent, menu)]);
         }
 
-        public static MainWindowHarness Create()
+        public static MainWindowHarness Create(int sheetCount = 2)
         {
             var workbook = new Workbook("Book1");
-            workbook.AddSheet("Sheet1");
-            workbook.AddSheet("Sheet2");
+            for (var i = 1; i <= sheetCount; i++)
+                workbook.AddSheet($"Sheet{i}");
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();

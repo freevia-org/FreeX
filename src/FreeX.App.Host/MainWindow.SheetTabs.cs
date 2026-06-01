@@ -18,6 +18,10 @@ public partial class MainWindow
 
     private bool _addSheetButtonHoverVisualActive;
     private bool _suppressAddSheetHoverUntilLeave;
+    private SheetTabViewportMeasureKey? _lastSheetTabViewportMeasureKey;
+    private double _lastSheetTabViewportContentWidth;
+    private bool _sheetTabViewportRefreshQueued;
+    private SheetTabsChromeRenderKey? _lastSheetTabsChromeRenderKey;
 
     private void RefreshSheetTabs()
     {
@@ -249,6 +253,13 @@ public partial class MainWindow
 
         var rowHeaderWidth = SheetGrid.ActualRowHeaderWidth;
         SheetTabsLeadingSpacer.Width = rowHeaderWidth;
+        var rowWidth = GetSheetTabsAvailableRowWidth();
+        var viewportKey = CreateSheetTabViewportMeasureKey(rowHeaderWidth, rowWidth);
+        if (_lastSheetTabViewportMeasureKey == viewportKey && _lastSheetTabViewportContentWidth > 0)
+        {
+            ApplySheetTabViewportWidths(_lastSheetTabViewportContentWidth, rowHeaderWidth, rowWidth);
+            return;
+        }
 
         SheetTabsControl.Measure(new Size(double.PositiveInfinity, SheetTabsRowGrid.ActualHeight));
         AddSheetButton.Measure(new Size(double.PositiveInfinity, SheetTabsRowGrid.ActualHeight));
@@ -256,12 +267,24 @@ public partial class MainWindow
         if (tabContentWidth <= 0)
             return;
 
+        _lastSheetTabViewportMeasureKey = viewportKey;
+        _lastSheetTabViewportContentWidth = tabContentWidth;
+        ApplySheetTabViewportWidths(tabContentWidth, rowHeaderWidth, rowWidth);
+    }
+
+    private double GetSheetTabsAvailableRowWidth()
+    {
         var rowWidth = SheetTabsRowGrid.ActualWidth;
         if (WindowState == WindowState.Normal && !double.IsNaN(Width) && Width > 0)
             rowWidth = Math.Min(rowWidth, Width);
         else if (RootGrid.ActualWidth > 0)
             rowWidth = Math.Min(rowWidth, RootGrid.ActualWidth);
 
+        return rowWidth;
+    }
+
+    private void ApplySheetTabViewportWidths(double tabContentWidth, double rowHeaderWidth, double rowWidth)
+    {
         var fixedWidth = rowHeaderWidth;
         var available = Math.Max(
             SheetTabMinimumViewportWidth + SheetTabMinimumHorizontalScrollbarWidth,
@@ -292,10 +315,44 @@ public partial class MainWindow
 
         SheetTabsScroller.Width = targetWidth;
         HorizontalScroll.Width = targetScrollbarWidth;
+        if (_sheetTabViewportRefreshQueued)
+            return;
+
+        _sheetTabViewportRefreshQueued = true;
         Dispatcher.BeginInvoke(() =>
         {
+            _sheetTabViewportRefreshQueued = false;
             UpdateSheetTabNavigation();
         }, DispatcherPriority.Loaded);
+    }
+
+    private SheetTabViewportMeasureKey CreateSheetTabViewportMeasureKey(double rowHeaderWidth, double rowWidth)
+    {
+        var tabHash = new HashCode();
+        foreach (var tab in _sheetTabs)
+        {
+            tabHash.Add(tab.Id);
+            tabHash.Add(tab.Name, StringComparer.Ordinal);
+            if (tab.TabColor is { } color)
+            {
+                tabHash.Add(color.R);
+                tabHash.Add(color.G);
+                tabHash.Add(color.B);
+            }
+            else
+            {
+                tabHash.Add(0);
+            }
+        }
+
+        return new SheetTabViewportMeasureKey(
+            QuantizeSheetTabLayoutValue(rowHeaderWidth),
+            QuantizeSheetTabLayoutValue(rowWidth),
+            QuantizeSheetTabLayoutValue(SheetTabsRowGrid.ActualHeight),
+            QuantizeSheetTabLayoutValue(AddSheetButton.ActualWidth),
+            QuantizeSheetTabLayoutValue(AddSheetButton.MinWidth),
+            _sheetTabs.Count,
+            tabHash.ToHashCode());
     }
 
     private void UpdateSheetTabsScrollerClip()
@@ -365,8 +422,6 @@ public partial class MainWindow
         if (SheetTabsChromeLayer.ActualWidth <= 0 || SheetTabsRowGrid.ActualWidth <= 0)
             return;
 
-        SheetTabsChromeLayer.Children.Clear();
-        SheetTabsOverlayLayer.Children.Clear();
         var chromeWidth = SheetTabsChromeLayer.ActualWidth;
         var accentBrush = (Brush)FindResource("FreeXAccentBrush");
         var inactiveStrokeBrush = (Brush)FindResource("FreeXBorderStrongBrush");
@@ -387,6 +442,23 @@ public partial class MainWindow
             addRect = SheetTabChromeBounds(AddSheetButton, SheetTabOverlapWidth);
         }
 
+        var visibleTabs = _sheetTabs.ToList();
+        var tabRects = visibleTabs
+            .Select(tab => TryGetSheetTabChromeBounds(tab, chromeWidth))
+            .ToArray();
+        var renderKey = CreateSheetTabsChromeRenderKey(
+            chromeWidth,
+            addRect,
+            showAddSheetHover,
+            showAddSheetPressed,
+            visibleTabs,
+            tabRects);
+        if (_lastSheetTabsChromeRenderKey == renderKey)
+            return;
+
+        _lastSheetTabsChromeRenderKey = renderKey;
+        SheetTabsChromeLayer.Children.Clear();
+        SheetTabsOverlayLayer.Children.Clear();
         var tabClipGeometry = CreateVisibleSheetTabClipGeometry(addRect);
         var scrollableClipGeometry = CreateScrollableSheetTabClipGeometry();
         if (addRect is { } add && add.Right > -16 && add.Left < SheetTabsChromeLayer.ActualWidth + 16)
@@ -408,13 +480,12 @@ public partial class MainWindow
                 showAddSheetHover ? 0.95 : 0.82));
         }
 
-        var visibleTabs = _sheetTabs.ToList();
         var activeTabIndex = visibleTabs.FindIndex(tab => tab.Id == _currentSheetId);
         var activeTab = activeTabIndex >= 0 ? visibleTabs[activeTabIndex] : null;
         Rect? activeRect = null;
         if (activeTabIndex >= 0)
             activeRect = ClipSheetTabChromeBoundsToVisibleTabs(
-                TryGetSheetTabChromeBounds(visibleTabs[activeTabIndex], chromeWidth),
+                tabRects[activeTabIndex],
                 addRect);
 
         if (activeTabIndex < 0)
@@ -435,7 +506,7 @@ public partial class MainWindow
         {
             var tab = visibleTabs[tabIndex];
             if (tab.Id == _currentSheetId ||
-                ClipSheetTabChromeBoundsToVisibleTabs(TryGetSheetTabChromeBounds(tab, chromeWidth), addRect) is not { } tabRect)
+                ClipSheetTabChromeBoundsToVisibleTabs(tabRects[tabIndex], addRect) is not { } tabRect)
                 return;
 
             var isGrouped = tab.IsGrouped;
@@ -495,6 +566,71 @@ public partial class MainWindow
             activeRect,
             accentBrush);
     }
+
+    private SheetTabsChromeRenderKey CreateSheetTabsChromeRenderKey(
+        double chromeWidth,
+        Rect? addRect,
+        bool showAddSheetHover,
+        bool showAddSheetPressed,
+        IReadOnlyList<SheetTabViewModel> visibleTabs,
+        IReadOnlyList<Rect?> tabRects)
+    {
+        var tabHash = new HashCode();
+        for (var i = 0; i < visibleTabs.Count; i++)
+        {
+            var tab = visibleTabs[i];
+            tabHash.Add(tab.Id);
+            tabHash.Add(tab.IsGrouped);
+            tabHash.Add(tab.IsLeftSideCoveredByActive);
+            tabHash.Add(tab.IsRightSideCoveredByActive);
+            if (tab.TabColor is { } color)
+            {
+                tabHash.Add(color.R);
+                tabHash.Add(color.G);
+                tabHash.Add(color.B);
+            }
+            else
+            {
+                tabHash.Add(0);
+            }
+
+            AddRectToHash(ref tabHash, tabRects[i]);
+        }
+
+        return new SheetTabsChromeRenderKey(
+            QuantizeSheetTabLayoutValue(chromeWidth),
+            QuantizeSheetTabLayoutValue(SheetTabsRowGrid.ActualWidth),
+            QuantizeSheetTabLayoutValue(SheetTabsScroller.HorizontalOffset),
+            QuantizeSheetTabLayoutValue(SheetTabsScroller.ActualWidth),
+            QuantizeSheetTabLayoutValue(SheetTabsScroller.ActualHeight),
+            QuantizeSheetTabLayoutValue(AddSheetButton.ActualWidth),
+            QuantizeSheetTabLayoutValue(AddSheetButton.ActualHeight),
+            QuantizeSheetTabLayoutValue(addRect?.Left ?? double.NaN),
+            QuantizeSheetTabLayoutValue(addRect?.Right ?? double.NaN),
+            showAddSheetHover,
+            showAddSheetPressed,
+            _currentSheetId,
+            visibleTabs.Count,
+            tabHash.ToHashCode());
+    }
+
+    private static void AddRectToHash(ref HashCode hash, Rect? rect)
+    {
+        if (rect is not { } value)
+        {
+            hash.Add(0);
+            return;
+        }
+
+        hash.Add(1);
+        hash.Add(QuantizeSheetTabLayoutValue(value.Left));
+        hash.Add(QuantizeSheetTabLayoutValue(value.Top));
+        hash.Add(QuantizeSheetTabLayoutValue(value.Width));
+        hash.Add(QuantizeSheetTabLayoutValue(value.Height));
+    }
+
+    private static long QuantizeSheetTabLayoutValue(double value)
+        => double.IsFinite(value) ? (long)Math.Round(value * 2, MidpointRounding.AwayFromZero) : long.MinValue;
 
     private void RenderSheetTabsOverlay(
         Rect? addRect,
@@ -1252,4 +1388,29 @@ public partial class MainWindow
 
         return null;
     }
+
+    private readonly record struct SheetTabViewportMeasureKey(
+        long RowHeaderWidth,
+        long RowWidth,
+        long RowHeight,
+        long AddButtonActualWidth,
+        long AddButtonMinWidth,
+        int TabCount,
+        int TabHash);
+
+    private readonly record struct SheetTabsChromeRenderKey(
+        long ChromeWidth,
+        long RowWidth,
+        long HorizontalOffset,
+        long ScrollerWidth,
+        long ScrollerHeight,
+        long AddButtonWidth,
+        long AddButtonHeight,
+        long AddButtonLeft,
+        long AddButtonRight,
+        bool ShowAddSheetHover,
+        bool ShowAddSheetPressed,
+        SheetId CurrentSheetId,
+        int TabCount,
+        int TabHash);
 }
