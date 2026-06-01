@@ -8,9 +8,14 @@ internal static class XlsxSparklineMapper
 {
     public static IReadOnlyList<SparklineModel> Read(XDocument worksheetXml)
     {
+        var extensionList = worksheetXml.Root?.Elements()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "extLst", StringComparison.OrdinalIgnoreCase));
+        if (extensionList is null)
+            return [];
+
         var result = new List<SparklineModel>();
         var tempSheet = SheetId.New();
-        foreach (var group in worksheetXml.Descendants().Where(element =>
+        foreach (var group in extensionList.Descendants().Where(element =>
                      string.Equals(element.Name.LocalName, "sparklineGroup", StringComparison.OrdinalIgnoreCase)))
         {
             var kind = group.Attribute("type")?.Value switch
