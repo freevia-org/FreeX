@@ -373,10 +373,13 @@ public partial class MainWindow
             appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
         }
 
+        var relaxedProtectedGroupIndexes = availableWidth >= 1000
+            ? protectedGroupIndexes
+            : runtimeVisibilityProtectedGroupIndexes;
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
         {
             var previousStates = plannedStates.ToArray();
-            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false, runtimeVisibilityProtectedGroupIndexes))
+            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false, relaxedProtectedGroupIndexes))
                 break;
 
             appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
