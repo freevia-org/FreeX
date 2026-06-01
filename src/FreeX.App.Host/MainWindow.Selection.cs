@@ -767,6 +767,9 @@ public partial class MainWindow
 
     private void ExtendSelection(CellAddress anchor, CellAddress to)
     {
+        if (IsSelectionExtensionUnchanged(anchor, to))
+            return;
+
         HideValidationDropdown();
         ClearCommentPreview();
 
@@ -783,6 +786,9 @@ public partial class MainWindow
 
     private void AddOrMoveAdditionalSelection(CellAddress target, bool extendSelection)
     {
+        if (IsAdditionalSelectionExtensionUnchanged(target, extendSelection))
+            return;
+
         HideValidationDropdown();
         ClearCommentPreview();
 
@@ -812,6 +818,39 @@ public partial class MainWindow
         RefreshToolbarAfterDragSelectionChange();
         RefreshStatusBarAfterDragSelectionChange();
     }
+
+    private bool IsSelectionExtensionUnchanged(CellAddress anchor, CellAddress target) =>
+        _selectionCursor == target &&
+        SheetGrid.SelectedRanges is null &&
+        SheetGrid.SelectedRange is { } range &&
+        IsSameNormalizedRange(range, _currentSheetId, anchor, target);
+
+    private bool IsAdditionalSelectionExtensionUnchanged(CellAddress target, bool extendSelection)
+    {
+        if (!extendSelection || _selectionCursor != target)
+            return false;
+
+        var anchor = _selectionAnchor ?? target;
+        if (SheetGrid.SelectedRange is not { } activeRange ||
+            !IsSameNormalizedRange(activeRange, _currentSheetId, anchor, target))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsSameNormalizedRange(
+        GridRange range,
+        SheetId sheetId,
+        CellAddress anchor,
+        CellAddress target) =>
+        range.Start.Sheet == sheetId &&
+        range.End.Sheet == sheetId &&
+        range.Start.Row == Math.Min(anchor.Row, target.Row) &&
+        range.Start.Col == Math.Min(anchor.Col, target.Col) &&
+        range.End.Row == Math.Max(anchor.Row, target.Row) &&
+        range.End.Col == Math.Max(anchor.Col, target.Col);
 
     private void RefreshToolbarAfterDragSelectionChange()
     {

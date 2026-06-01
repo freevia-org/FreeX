@@ -182,6 +182,29 @@ public sealed class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void DragSelectionNoOpsUnchangedTargetsBeforeRefreshingUiState()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+
+        var extendSelection = selectionSource[
+            selectionSource.IndexOf("private void ExtendSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)];
+        var addSelection = selectionSource[
+            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void RefreshToolbarAfterDragSelectionChange", StringComparison.Ordinal)];
+
+        extendSelection.Should().Contain("if (IsSelectionExtensionUnchanged(anchor, to))");
+        addSelection.Should().Contain("if (IsAdditionalSelectionExtensionUnchanged(target, extendSelection))");
+        extendSelection.IndexOf("if (IsSelectionExtensionUnchanged(anchor, to))", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(extendSelection.IndexOf("HideValidationDropdown();", StringComparison.Ordinal));
+        addSelection.IndexOf("if (IsAdditionalSelectionExtensionUnchanged(target, extendSelection))", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(addSelection.IndexOf("HideValidationDropdown();", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void DragMouseMoveClearsStaleCommentPreviewWhenPointerLeavesCells()
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
