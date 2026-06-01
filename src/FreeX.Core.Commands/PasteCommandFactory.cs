@@ -19,6 +19,21 @@ public static class PasteCommandFactory
         IReadOnlyList<IReadOnlyList<string>> rows,
         bool preserveText = false)
     {
+        if (destination.Sheet != targetSheetId)
+            return new RejectedWorkbookCommand("Paste", "Paste destination must be on the target sheet.");
+
+        var rowCount = (ulong)rows.Count;
+        var colCount = 0UL;
+        foreach (var row in rows)
+            colCount = Math.Max(colCount, (ulong)row.Count);
+
+        if (rowCount > 0 &&
+            colCount > 0 &&
+            !WorksheetBounds.TryGetRectangleEnd(destination, rowCount, colCount, out _))
+        {
+            return new RejectedWorkbookCommand("Paste", "Paste destination range is outside the worksheet bounds.");
+        }
+
         var edits = new List<(CellAddress Address, Cell Cell)>();
         for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
         {
@@ -45,6 +60,15 @@ public static class PasteCommandFactory
         PasteCellsMode mode,
         PasteSpecialOptions options)
     {
+        var validationError = PasteCommandValidator.ValidateInternalPaste(
+            targetSheetId,
+            sourceRange,
+            sourceCells.Select(c => c.Source),
+            destination,
+            options.Transpose);
+        if (validationError is not null)
+            return new RejectedWorkbookCommand("Paste", validationError);
+
         var targetSheet = workbook.GetSheet(targetSheetId);
         var activeSheetName = targetSheet?.Name ?? "";
 

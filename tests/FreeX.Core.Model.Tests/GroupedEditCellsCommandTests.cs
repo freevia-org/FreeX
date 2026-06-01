@@ -79,6 +79,34 @@ public sealed class GroupedEditCellsCommandTests
     }
 
     [Fact]
+    public void Undo_RestoresStyleOnlyFormattingOnEmptyGroupedTargets()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new SimpleCtx(wb);
+        var styleId = wb.RegisterStyle(new CellStyle { Italic = true });
+        var source = new CellAddress(sheet1.Id, 2, 3);
+        var groupedTarget = new CellAddress(sheet2.Id, 2, 3);
+        sheet2.SetStyleOnly(groupedTarget.Row, groupedTarget.Col, styleId);
+
+        var command = new GroupedEditCellsCommand(
+            [sheet1.Id, sheet2.Id],
+            sheet1.Id,
+            [(source, Cell.FromValue(new NumberValue(42)))]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet2.GetCell(groupedTarget).Should().NotBeNull();
+        sheet2.GetStyleOnly(groupedTarget.Row, groupedTarget.Col).Should().BeNull();
+
+        command.Revert(ctx);
+
+        sheet2.GetCell(groupedTarget).Should().BeNull();
+        sheet2.GetStyleOnly(groupedTarget.Row, groupedTarget.Col).Should().Be(styleId);
+    }
+
+    [Fact]
     public void Apply_RejectsProtectedGroupedTargetBeforeChangingAnySheet()
     {
         var wb = new Workbook("test");

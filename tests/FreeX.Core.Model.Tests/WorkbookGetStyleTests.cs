@@ -5,35 +5,39 @@ using FluentAssertions;
 namespace FreeX.Core.Model.Tests;
 
 /// <summary>
-/// Tests that verify <see cref="Workbook.GetStyle"/> returns the registered instance directly (no defensive clone),
-/// and that callers which modify styles use their own clone before mutating.
+/// Tests that verify <see cref="Workbook.GetStyle"/> returns defensive clones of registered styles.
 /// </summary>
 public class WorkbookGetStyleTests
 {
     [Fact]
-    public void GetStyle_ReturnsSameInstanceAsRegistered()
+    public void GetStyle_ReturnsDefensiveCloneOfRegisteredStyle()
     {
         var wb = new Workbook("test");
         var style = new CellStyle { Bold = true, FontSize = 14 };
         var id = wb.RegisterStyle(style);
 
         var retrieved = wb.GetStyle(id);
+        retrieved.Bold = false;
+        retrieved.FontSize = 9;
 
-        // Must be the same object — no defensive clone on read.
-        retrieved.Should().BeSameAs(wb.GetStyle(id));
-        retrieved.Bold.Should().BeTrue();
-        retrieved.FontSize.Should().Be(14);
+        var registered = wb.GetStyle(id);
+        registered.Should().NotBeSameAs(retrieved);
+        registered.Bold.Should().BeTrue();
+        registered.FontSize.Should().Be(14);
     }
 
     [Fact]
-    public void GetStyle_OutOfRangeId_ReturnsSameInstanceAsDefault()
+    public void GetStyle_OutOfRangeId_ReturnsDefensiveCloneOfDefault()
     {
         var wb = new Workbook("test");
 
         var defaultStyle = wb.GetStyle(StyleId.Default);
         var outOfRange = wb.GetStyle(new StyleId(9999));
 
-        outOfRange.Should().BeSameAs(defaultStyle);
+        outOfRange.Should().NotBeSameAs(defaultStyle);
+        outOfRange.Should().Be(defaultStyle);
+        outOfRange.Bold = true;
+        wb.GetStyle(StyleId.Default).Bold.Should().BeFalse();
     }
 
     [Fact]
