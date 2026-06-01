@@ -335,6 +335,9 @@ public class PerformanceBenchmarkTests
         valueSheet.HasFormulas.Should().BeFalse();
         formulaSheet.FormulaCellCount.Should().Be((int)formulaCount);
         allocated.Should().BeGreaterThan(0);
+        (allocated / iterations).Should().BeLessThan(
+            540_000,
+            "exact-reference formula dependency rebuilds should not allocate empty compact-range lists per formula");
     }
 
     [Fact]
