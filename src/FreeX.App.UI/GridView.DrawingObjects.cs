@@ -32,17 +32,151 @@ public partial class GridView
     private readonly Dictionary<Rect, RectangleGeometry> _drawingObjectClipGeometryCache = new();
     private readonly Dictionary<DrawingObjectTextLayoutKey, FormattedText> _drawingObjectTextLayoutCache = new();
 
+    private double GetDrawingViewportRight()
+    {
+        var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
+        return Math.Max(0, ActualWidth / zoom);
+    }
+
+    private double GetDrawingViewportBottom()
+    {
+        var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
+        return Math.Max(0, ActualHeight / zoom);
+    }
+
+    private (uint LastRow, uint LastColumn) GetRenderableDrawingAnchorBounds(double visibleRight, double visibleBottom)
+    {
+        var viewport = Viewport!;
+        return (
+            FindLastRenderableDrawingRow(viewport.RowMetrics, EffectiveColHeaderHeight, visibleBottom),
+            FindLastRenderableDrawingColumn(viewport.ColMetrics, ActualRowHeaderWidth, visibleRight));
+    }
+
+    private static uint FindLastRenderableDrawingRow(
+        IReadOnlyList<RowMetric> rows,
+        double columnHeaderHeight,
+        double visibleBottom)
+    {
+        uint lastRow = 0;
+        foreach (var row in rows)
+            if (columnHeaderHeight + row.TopOffset < visibleBottom && row.Row > lastRow)
+                lastRow = row.Row;
+
+        return lastRow;
+    }
+
+    private static uint FindLastRenderableDrawingColumn(
+        IReadOnlyList<ColMetric> columns,
+        double rowHeaderWidth,
+        double visibleRight)
+    {
+        uint lastColumn = 0;
+        foreach (var column in columns)
+            if (rowHeaderWidth + column.LeftOffset < visibleRight && column.Col > lastColumn)
+                lastColumn = column.Col;
+
+        return lastColumn;
+    }
+
+    private static bool CanAnchoredObjectReachDrawingViewport(
+        CellAddress anchor,
+        uint lastRenderableRow,
+        uint lastRenderableColumn) =>
+        lastRenderableRow > 0 &&
+        lastRenderableColumn > 0 &&
+        anchor.Row <= lastRenderableRow &&
+        anchor.Col <= lastRenderableColumn;
+
+    private static bool NeedsDrawingViewportCull(
+        Rect rect,
+        double rotationDegrees,
+        double visibleRight,
+        double visibleBottom) =>
+        Math.Abs(rotationDegrees % 360) > 0.0001 ||
+        rect.Left < 0 ||
+        rect.Top < 0 ||
+        rect.Left >= visibleRight ||
+        rect.Top >= visibleBottom;
+
+    private bool IntersectsDrawingViewport(Rect rect) =>
+        IntersectsDrawingViewport(rect, 0);
+
+    private bool IntersectsDrawingViewport(Rect rect, double rotationDegrees)
+    {
+        return IntersectsDrawingViewport(
+            rect,
+            rotationDegrees,
+            GetDrawingViewportRight(),
+            GetDrawingViewportBottom());
+    }
+
+    private static bool IntersectsDrawingViewport(
+        Rect rect,
+        double rotationDegrees,
+        double visibleRight,
+        double visibleBottom)
+    {
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return false;
+
+        if (visibleRight <= 0 || visibleBottom <= 0)
+            return false;
+
+        var cullRect = Math.Abs(rotationDegrees % 360) <= 0.0001
+            ? rect
+            : CalculateRotatedBounds(rect, rotationDegrees);
+        return IntersectsVisibleGrid(cullRect, 0, 0, visibleRight, visibleBottom);
+    }
+
+    private static Rect CalculateRotatedBounds(Rect rect, double rotationDegrees)
+    {
+        var radians = rotationDegrees * Math.PI / 180.0;
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        var centerX = rect.Left + rect.Width / 2.0;
+        var centerY = rect.Top + rect.Height / 2.0;
+
+        var minX = double.PositiveInfinity;
+        var minY = double.PositiveInfinity;
+        var maxX = double.NegativeInfinity;
+        var maxY = double.NegativeInfinity;
+
+        IncludeRotatedCorner(rect.Left, rect.Top);
+        IncludeRotatedCorner(rect.Right, rect.Top);
+        IncludeRotatedCorner(rect.Right, rect.Bottom);
+        IncludeRotatedCorner(rect.Left, rect.Bottom);
+
+        return new Rect(new Point(minX, minY), new Point(maxX, maxY));
+
+        void IncludeRotatedCorner(double x, double y)
+        {
+            var dx = x - centerX;
+            var dy = y - centerY;
+            var rotatedX = centerX + dx * cos - dy * sin;
+            var rotatedY = centerY + dx * sin + dy * cos;
+            minX = Math.Min(minX, rotatedX);
+            minY = Math.Min(minY, rotatedY);
+            maxX = Math.Max(maxX, rotatedX);
+            maxY = Math.Max(maxY, rotatedY);
+        }
+    }
+
     private void RenderCharts(DrawingContext dc)
     {
         if (Charts == null || Viewport == null) return;
+        var visibleRight = GetDrawingViewportRight();
+        var visibleBottom = GetDrawingViewportBottom();
         foreach (var chart in Charts)
         {
             if (!chart.IsVisible) continue;
-            var img = GetCachedChartImage(chart, Viewport, WorkbookTheme);
-            if (img == null) continue;
             var rect = new Rect(
                 chart.Left + ActualRowHeaderWidth, chart.Top + EffectiveColHeaderHeight,
                 chart.Width, chart.Height);
+            if (!IntersectsDrawingViewport(rect, 0, visibleRight, visibleBottom))
+                continue;
+
+            var img = GetCachedChartImage(chart, Viewport, WorkbookTheme);
+            if (img == null) continue;
             dc.DrawImage(img, rect);
         }
     }
@@ -53,10 +187,18 @@ public partial class GridView
 
         var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var visibleRight = GetDrawingViewportRight();
+        var visibleBottom = GetDrawingViewportBottom();
+        var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
         foreach (var textBox in TextBoxes)
         {
             if (!textBox.IsVisible) continue;
+            if (!CanAnchoredObjectReachDrawingViewport(textBox.Anchor, lastRenderableRow, lastRenderableColumn))
+                continue;
             if (!TryCreateAnchoredObjectRect(textBox.Anchor, textBox.Width, textBox.Height, 24, 18, out var rect))
+                continue;
+            if (NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom) &&
+                !IntersectsDrawingViewport(rect, textBox.RotationDegrees, visibleRight, visibleBottom))
                 continue;
 
             var rotationPushed = PushRotation(dc, textBox.RotationDegrees, rect);
@@ -82,10 +224,18 @@ public partial class GridView
         if (DrawingShapes == null || Viewport == null) return;
 
         var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);
+        var visibleRight = GetDrawingViewportRight();
+        var visibleBottom = GetDrawingViewportBottom();
+        var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
         foreach (var shape in DrawingShapes)
         {
             if (!shape.IsVisible) continue;
+            if (!CanAnchoredObjectReachDrawingViewport(shape.Anchor, lastRenderableRow, lastRenderableColumn))
+                continue;
             if (!TryCreateAnchoredObjectRect(shape.Anchor, shape.Width, shape.Height, 8, 8, out var rect))
+                continue;
+            if (NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom) &&
+                !IntersectsDrawingViewport(rect, shape.RotationDegrees, visibleRight, visibleBottom))
                 continue;
 
             var rotationPushed = PushRotation(dc, shape.RotationDegrees, rect);
@@ -115,6 +265,8 @@ public partial class GridView
         if (Viewport == null)
             return;
 
+        var visibleRight = GetDrawingViewportRight();
+        var visibleBottom = GetDrawingViewportBottom();
         if (NativeSlicers is not null)
         {
             foreach (var slicer in NativeSlicers)
@@ -123,7 +275,11 @@ public partial class GridView
                     !TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
                     continue;
 
-                DrawNativeSlicerControl(dc, EnsureMinimumControlRect(rect), slicer);
+                var controlRect = EnsureMinimumControlRect(rect);
+                if (!IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
+                    continue;
+
+                DrawNativeSlicerControl(dc, controlRect, slicer);
             }
         }
 
@@ -135,7 +291,11 @@ public partial class GridView
                     !TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
                     continue;
 
-                DrawNativeTimelineControl(dc, EnsureMinimumControlRect(rect), timeline);
+                var controlRect = EnsureMinimumControlRect(rect);
+                if (!IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
+                    continue;
+
+                DrawNativeTimelineControl(dc, controlRect, timeline);
             }
         }
     }
@@ -359,27 +519,38 @@ public partial class GridView
     {
         if (Viewport == null) return;
 
+        var visibleRight = GetDrawingViewportRight();
+        var visibleBottom = GetDrawingViewportBottom();
         if (Charts is not null)
         {
             var index = 1;
             foreach (var chart in Charts)
             {
                 if (chart.IsVisible)
-                    DrawObjectPlaceholder(dc, new Rect(
+                {
+                    var rect = new Rect(
                         chart.Left + ActualRowHeaderWidth,
                         chart.Top + EffectiveColHeaderHeight,
                         Math.Max(24, chart.Width),
-                        Math.Max(18, chart.Height)), CreateObjectPlaceholderLabel("Chart", chart.Name, index));
+                        Math.Max(18, chart.Height));
+                    if (IntersectsDrawingViewport(rect, 0, visibleRight, visibleBottom))
+                        DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Chart", chart.Name, index));
+                }
                 index++;
             }
         }
 
+        var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
         if (DrawingShapes is not null)
         {
             var index = 1;
             foreach (var shape in DrawingShapes)
             {
-                if (shape.IsVisible && TryCreateAnchoredObjectRect(shape.Anchor, shape.Width, shape.Height, 8, 8, out var rect))
+                if (shape.IsVisible &&
+                    CanAnchoredObjectReachDrawingViewport(shape.Anchor, lastRenderableRow, lastRenderableColumn) &&
+                    TryCreateAnchoredObjectRect(shape.Anchor, shape.Width, shape.Height, 8, 8, out var rect) &&
+                    (!NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom) ||
+                        IntersectsDrawingViewport(rect, shape.RotationDegrees, visibleRight, visibleBottom)))
                     DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Shape", shape.Name, index));
                 index++;
             }
@@ -390,7 +561,11 @@ public partial class GridView
             var index = 1;
             foreach (var picture in Pictures)
             {
-                if (picture.IsVisible && TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect))
+                if (picture.IsVisible &&
+                    CanAnchoredObjectReachDrawingViewport(picture.Anchor, lastRenderableRow, lastRenderableColumn) &&
+                    TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect) &&
+                    (!NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom) ||
+                        IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom)))
                     DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Picture", picture.Name, index));
                 index++;
             }
@@ -401,7 +576,11 @@ public partial class GridView
             var index = 1;
             foreach (var textBox in TextBoxes)
             {
-                if (textBox.IsVisible && TryCreateAnchoredObjectRect(textBox.Anchor, textBox.Width, textBox.Height, 24, 18, out var rect))
+                if (textBox.IsVisible &&
+                    CanAnchoredObjectReachDrawingViewport(textBox.Anchor, lastRenderableRow, lastRenderableColumn) &&
+                    TryCreateAnchoredObjectRect(textBox.Anchor, textBox.Width, textBox.Height, 24, 18, out var rect) &&
+                    (!NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom) ||
+                        IntersectsDrawingViewport(rect, textBox.RotationDegrees, visibleRight, visibleBottom)))
                     DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Text Box", textBox.Name, index));
                 index++;
             }
@@ -414,7 +593,11 @@ public partial class GridView
             {
                 if (slicer.DrawingAnchor is { } anchor &&
                     TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
-                    DrawObjectPlaceholder(dc, EnsureMinimumControlRect(rect), CreateObjectPlaceholderLabel("Slicer", slicer.DrawingShapeName ?? slicer.Caption ?? slicer.Name, index));
+                {
+                    var controlRect = EnsureMinimumControlRect(rect);
+                    if (IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
+                        DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel("Slicer", slicer.DrawingShapeName ?? slicer.Caption ?? slicer.Name, index));
+                }
                 index++;
             }
         }
@@ -426,7 +609,11 @@ public partial class GridView
             {
                 if (timeline.DrawingAnchor is { } anchor &&
                     TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
-                    DrawObjectPlaceholder(dc, EnsureMinimumControlRect(rect), CreateObjectPlaceholderLabel("Timeline", timeline.DrawingShapeName ?? timeline.Caption ?? timeline.Name, index));
+                {
+                    var controlRect = EnsureMinimumControlRect(rect);
+                    if (IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
+                        DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel("Timeline", timeline.DrawingShapeName ?? timeline.Caption ?? timeline.Name, index));
+                }
                 index++;
             }
         }

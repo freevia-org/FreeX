@@ -19,6 +19,7 @@ public sealed class FreeXUiE2eTests
 
         using var run = FreeXUiRun.Start();
 
+        UiAutomationCatalogSnapshotHarness.Run(run);
         CellOverflowEditingUiE2eHarness.Run(run);
         FormulaEditingUiE2eHarness.Run(run);
     }

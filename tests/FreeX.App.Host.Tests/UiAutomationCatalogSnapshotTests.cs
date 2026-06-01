@@ -6,16 +6,17 @@ using System.Xml.Linq;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed class UiAutomationCatalogSnapshotTests
+internal static class UiAutomationCatalogSnapshotHarness
 {
-    [UiE2eFact]
-    [Trait("Category", "UIE2E")]
-    public void VisibleControls_MatchCatalogSnapshotExpectations()
+    public static void Run(FreeXUiRun run)
     {
-        UiE2ePreconditions.SkipUnlessEnabled();
+        VisibleControls_MatchCatalogSnapshotExpectations(run);
+        VisibleShellControls_ExposeExpectedAutomationPatterns(run);
+        VisibleDialogEntryPointControls_ExposeInvokePattern(run);
+    }
 
-        using var run = FreeXUiRun.Start();
-
+    private static void VisibleControls_MatchCatalogSnapshotExpectations(FreeXUiRun run)
+    {
         var snapshot = CaptureVisibleControlsWhen(
             run,
             controls => controls.Any(control => control.AutomationId == "SaveQatBtn") &&
@@ -47,13 +48,8 @@ public sealed class UiAutomationCatalogSnapshotTests
         snapshot.Should().Contain(control => control.AutomationId == "AddSheetButton" && control.Name == UiText.Get("MainWindow_AutomationName_InsertSheet") && control.ControlType == "Button");
     }
 
-    [UiE2eFact]
-    [Trait("Category", "UIE2E")]
-    public void VisibleDialogEntryPointControls_ExposeInvokePattern()
+    private static void VisibleDialogEntryPointControls_ExposeInvokePattern(FreeXUiRun run)
     {
-        UiE2ePreconditions.SkipUnlessEnabled();
-
-        using var run = FreeXUiRun.Start();
         var root = AutomationElement.FromHandle(run.WindowHandle)
             ?? throw new InvalidOperationException("UI Automation could not attach to the FreeX window.");
 
@@ -63,15 +59,12 @@ public sealed class UiAutomationCatalogSnapshotTests
         SelectTab(root, run.ProcessId, UiText.Get("MainWindow_Header_File"));
         AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "BackstageAccountButton", UiText.Get("MainWindow_AutomationName_Account"));
         AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "BackstageOptionsButton", UiText.Get("MainWindow_AutomationName_Options"));
+
+        SelectTab(root, run.ProcessId, UiText.Get("MainWindow_Header_Home"));
     }
 
-    [UiE2eFact]
-    [Trait("Category", "UIE2E")]
-    public void VisibleShellControls_ExposeExpectedAutomationPatterns()
+    private static void VisibleShellControls_ExposeExpectedAutomationPatterns(FreeXUiRun run)
     {
-        UiE2ePreconditions.SkipUnlessEnabled();
-
-        using var run = FreeXUiRun.Start();
         var root = AutomationElement.FromHandle(run.WindowHandle)
             ?? throw new InvalidOperationException("UI Automation could not attach to the FreeX window.");
 

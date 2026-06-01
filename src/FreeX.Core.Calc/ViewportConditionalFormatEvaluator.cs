@@ -17,6 +17,7 @@ internal sealed record CfEvaluationContext(
     Dictionary<ConditionalFormat, CfAggregateCache> Aggregates,
     Dictionary<ConditionalFormat, CfFormulaCache> Formulas,
     Dictionary<CfThresholdFormulaKey, FormulaNode> ThresholdFormulas,
+    Dictionary<CfThresholdFormulaKey, double> StaticThresholdFormulaValues,
     Dictionary<ConditionalFormat, CfIconSetThresholdCache> IconSetThresholds);
 
 internal sealed record CfIconSetThresholdCache(double[] Values, bool[] GreaterThanOrEqual);
@@ -65,6 +66,7 @@ internal static class ViewportConditionalFormatEvaluator
     private static readonly Dictionary<ConditionalFormat, CfAggregateCache> EmptyAggregates = new(ReferenceEqualityComparer.Instance);
     private static readonly Dictionary<ConditionalFormat, CfFormulaCache> EmptyFormulas = new(ReferenceEqualityComparer.Instance);
     private static readonly Dictionary<CfThresholdFormulaKey, FormulaNode> EmptyThresholdFormulas = [];
+    private static readonly Dictionary<CfThresholdFormulaKey, double> EmptyStaticThresholdFormulaValues = [];
     private static readonly Dictionary<ConditionalFormat, CfIconSetThresholdCache> EmptyIconSetThresholds = new(ReferenceEqualityComparer.Instance);
     private static readonly FormulaEvaluator ThresholdFormulaEvaluator = new();
     private static readonly CfEvaluationContext EmptyContext = new(
@@ -73,9 +75,10 @@ internal static class ViewportConditionalFormatEvaluator
         EmptyAggregates,
         EmptyFormulas,
         EmptyThresholdFormulas,
+        EmptyStaticThresholdFormulaValues,
         EmptyIconSetThresholds);
 
-    public static CfEvaluationContext BuildContext(Sheet sheet)
+    public static CfEvaluationContext BuildContext(Sheet sheet, Workbook workbook)
     {
         if (sheet.ConditionalFormats.Count == 0)
             return EmptyContext;
@@ -84,6 +87,7 @@ internal static class ViewportConditionalFormatEvaluator
         var iconRulesByPriority = CopyIconRulesByPriority(rulesByPriority);
         var aggregates = PrecomputeAggregates(sheet);
         var thresholdFormulas = PrecomputeThresholdFormulaCaches(sheet);
+        var staticThresholdFormulaValues = PrecomputeStaticThresholdFormulaValues(sheet, workbook, thresholdFormulas);
 
         return new CfEvaluationContext(
             rulesByPriority,
@@ -91,6 +95,7 @@ internal static class ViewportConditionalFormatEvaluator
             aggregates,
             PrecomputeFormulaCaches(sheet),
             thresholdFormulas,
+            staticThresholdFormulaValues,
             PrecomputeIconSetThresholdCaches(sheet, aggregates));
     }
 
@@ -392,6 +397,66 @@ internal static class ViewportConditionalFormatEvaluator
         return result ?? EmptyThresholdFormulas;
     }
 
+    private static Dictionary<CfThresholdFormulaKey, double> PrecomputeStaticThresholdFormulaValues(
+        Sheet sheet,
+        Workbook workbook,
+        Dictionary<CfThresholdFormulaKey, FormulaNode> thresholdFormulas)
+    {
+        if (thresholdFormulas.Count == 0)
+            return EmptyStaticThresholdFormulaValues;
+
+        Dictionary<CfThresholdFormulaKey, double>? result = null;
+        foreach (var (key, ast) in thresholdFormulas)
+        {
+            if (HasRelativeReferences(ast) || IsCurrentCellSensitive(ast))
+                continue;
+
+            if (TryEvaluateThresholdFormula(ast, sheet, workbook, key.Rule.AppliesTo.Start, out var value))
+                (result ??= [])[key] = value;
+        }
+
+        return result ?? EmptyStaticThresholdFormulaValues;
+    }
+
+    private static bool IsCurrentCellSensitive(FormulaNode node)
+    {
+        return node switch
+        {
+            StructuredReferenceNode or StructuredCurrentRowReferenceNode => true,
+            RangeRefNode range => IsCurrentCellSensitive(range.Start) || IsCurrentCellSensitive(range.End),
+            FullColumnRangeRefNode or FullRowRangeRefNode => false,
+            BinaryOpNode binary => IsCurrentCellSensitive(binary.Left) || IsCurrentCellSensitive(binary.Right),
+            UnaryOpNode unary => IsCurrentCellSensitive(unary.Operand),
+            FunctionCallNode function => IsCurrentCellSensitiveFunction(function) || IsCurrentCellSensitive(function.Arguments),
+            _ => false
+        };
+    }
+
+    private static bool IsCurrentCellSensitive(IReadOnlyList<FormulaNode> nodes)
+    {
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (IsCurrentCellSensitive(nodes[i]))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsCurrentCellSensitiveFunction(FunctionCallNode function)
+    {
+        if (function.FunctionName is "NOW" or "TODAY" or "RAND" or "RANDBETWEEN" or "RANDARRAY" or "INDIRECT" or "OFFSET" or "CELL" or "INFO")
+            return true;
+
+        if (function.Arguments.Count == 0 &&
+            function.FunctionName is "ROW" or "COLUMN")
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     private static Dictionary<ConditionalFormat, CfIconSetThresholdCache> PrecomputeIconSetThresholdCaches(
         Sheet sheet,
         Dictionary<ConditionalFormat, CfAggregateCache> aggregates)
@@ -494,6 +559,15 @@ internal static class ViewportConditionalFormatEvaluator
         int index = -1) =>
         cfContext.ThresholdFormulas.TryGetValue(new CfThresholdFormulaKey(cf, slot, index), out var ast)
             ? ast
+            : null;
+
+    internal static double? GetStaticThresholdFormulaValue(
+        CfEvaluationContext cfContext,
+        ConditionalFormat cf,
+        CfThresholdFormulaSlot slot,
+        int index = -1) =>
+        cfContext.StaticThresholdFormulaValues.TryGetValue(new CfThresholdFormulaKey(cf, slot, index), out var value)
+            ? value
             : null;
 
     internal static int GetIconSetCount(string? style) =>
@@ -758,6 +832,7 @@ internal static class ViewportConditionalFormatEvaluator
                 sheet,
                 workbook,
                 addr,
+                GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMin),
                 GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMin),
                 out var min) ||
             !TryResolveThreshold(
@@ -767,6 +842,7 @@ internal static class ViewportConditionalFormatEvaluator
                 sheet,
                 workbook,
                 addr,
+                GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMax),
                 GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMax),
                 out var max))
         {
@@ -783,6 +859,7 @@ internal static class ViewportConditionalFormatEvaluator
                                sheet,
                                workbook,
                                addr,
+                               GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMid),
                                GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMid),
                                out var mid) &&
                            mid > min &&
@@ -802,6 +879,7 @@ internal static class ViewportConditionalFormatEvaluator
         Sheet sheet,
         Workbook workbook,
         CellAddress currentCell,
+        double? staticFormulaValue,
         FormulaNode? formulaAst,
         out double value)
     {
@@ -815,7 +893,9 @@ internal static class ViewportConditionalFormatEvaluator
                                        Set(cache.Min + (cache.Max - cache.Min) * (percent / 100d), out value),
             CfThresholdType.Percentile => TryParseDouble(text, out var percentile) &&
                                           TryResolvePercentile(cache.SortedValues, percentile, out value),
-            CfThresholdType.Formula => TryEvaluateThresholdFormula(formulaAst, sheet, workbook, currentCell, out value),
+            CfThresholdType.Formula => staticFormulaValue.HasValue
+                ? Set(staticFormulaValue.Value, out value)
+                : TryEvaluateThresholdFormula(formulaAst, sheet, workbook, currentCell, out value),
             _ => false
         };
 

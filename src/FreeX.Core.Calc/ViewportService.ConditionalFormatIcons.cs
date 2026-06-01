@@ -127,6 +127,11 @@ public sealed partial class ViewportService
                     sheet,
                     workbook,
                     addr,
+                    ViewportConditionalFormatEvaluator.GetStaticThresholdFormulaValue(
+                        cfContext,
+                        rule,
+                        CfThresholdFormulaSlot.IconSet,
+                        i),
                     ViewportConditionalFormatEvaluator.GetThresholdFormula(
                         cfContext,
                         rule,

@@ -77,12 +77,13 @@ public sealed class MainWindowSourceHygieneTests
             .Select(file => file.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal)
             .Should()
-            .Equal(["FormulaEditingUiE2eTests.cs", "UiAutomationCatalogSnapshotTests.cs"]);
+            .Equal(["FormulaEditingUiE2eTests.cs"]);
         testSources
             .Single(file => file.RelativePath == "FormulaEditingUiE2eTests.cs")
             .Source
             .Should()
             .Contain("SharedAppInstance_CoversLiveUiScenarios")
+            .And.Contain("UiAutomationCatalogSnapshotHarness.Run(run)")
             .And.Contain("CellOverflowEditingUiE2eHarness.Run(run)")
             .And.Contain("FormulaEditingUiE2eHarness.Run(run)");
     }

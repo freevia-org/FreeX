@@ -212,7 +212,7 @@ public partial class GridView
             dc.DrawRectangle(fill, GridPen, rect);
             DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
 
-            if (style is not null)
+            if (style is not null && HasVisibleCellBorder(style))
             {
                 DrawBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), _brushCache, _borderPenCache);
                 DrawBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
@@ -347,56 +347,63 @@ public partial class GridView
         _underlinePenCache.Clear();
         RenderCellBackgroundBase(dc, rowHeaderWidth, columnHeaderHeight);
 
-        // Pass 1: non-default backgrounds and merged-cell surfaces
-        foreach (var rowMetric in viewport.RowMetrics)
+        var hasCellSurfaces = styleLookup.Count > 0;
+        var hasMergedSurfaces = _mergeLookup.Count > 0;
+        if (hasCellSurfaces || hasMergedSurfaces)
         {
-            foreach (var colMetric in viewport.ColMetrics)
+            // Pass 1: non-default backgrounds and merged-cell surfaces
+            foreach (var rowMetric in viewport.RowMetrics)
             {
-                var merge = FindMerge(rowMetric.Row, colMetric.Col);
-                if (merge.HasValue && (rowMetric.Row != merge.Value.Start.Row || colMetric.Col != merge.Value.Start.Col))
-                    continue;
-                styleLookup.TryGetValue((rowMetric.Row, colMetric.Col), out var bg);
-                if (bg is null && !merge.HasValue)
-                    continue;
-
-                double w = colMetric.Width;
-                double h = rowMetric.Height;
-
-                if (merge.HasValue)
+                foreach (var colMetric in viewport.ColMetrics)
                 {
-                    for (uint c2 = merge.Value.Start.Col + 1; c2 <= merge.Value.End.Col; c2++)
-                        if (colLookupAll.TryGetValue(c2, out var cm2)) w += cm2.Width;
-                    for (uint r2 = merge.Value.Start.Row + 1; r2 <= merge.Value.End.Row; r2++)
-                        if (rowLookupAll.TryGetValue(r2, out var rm2)) h += rm2.Height;
-                }
+                    var merge = hasMergedSurfaces ? FindMerge(rowMetric.Row, colMetric.Col) : null;
+                    if (merge.HasValue && (rowMetric.Row != merge.Value.Start.Row || colMetric.Col != merge.Value.Start.Col))
+                        continue;
+                    CellStyle? bg = null;
+                    if (hasCellSurfaces)
+                        styleLookup.TryGetValue((rowMetric.Row, colMetric.Col), out bg);
+                    if (bg is null && !merge.HasValue)
+                        continue;
 
-                var rect = new Rect(
-                    colMetric.LeftOffset + rowHeaderWidth, rowMetric.TopOffset + columnHeaderHeight, w, h);
-                if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
-                    continue;
+                    double w = colMetric.Width;
+                    double h = rowMetric.Height;
 
-                Brush? fill = null;
-                if (bg?.FillColor.HasValue == true)
-                {
-                    fill = BrushForCellColor(bg.FillColor.Value, _brushCache);
-                }
-                else if (WorksheetBackground == null &&
-                         (merge.HasValue || bg?.FillPatternStyle is not null and not CellFillPatternStyle.None))
-                {
-                    fill = Brushes.White;
-                }
+                    if (merge.HasValue)
+                    {
+                        for (uint c2 = merge.Value.Start.Col + 1; c2 <= merge.Value.End.Col; c2++)
+                            if (colLookupAll.TryGetValue(c2, out var cm2)) w += cm2.Width;
+                        for (uint r2 = merge.Value.Start.Row + 1; r2 <= merge.Value.End.Row; r2++)
+                            if (rowLookupAll.TryGetValue(r2, out var rm2)) h += rm2.Height;
+                    }
 
-                if (fill is not null || merge.HasValue)
-                    dc.DrawRectangle(fill, merge.HasValue ? GridPen : null, rect);
-                if (bg is not null)
-                    DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache);
+                    var rect = new Rect(
+                        colMetric.LeftOffset + rowHeaderWidth, rowMetric.TopOffset + columnHeaderHeight, w, h);
+                    if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
+                        continue;
+
+                    Brush? fill = null;
+                    if (bg?.FillColor.HasValue == true)
+                    {
+                        fill = BrushForCellColor(bg.FillColor.Value, _brushCache);
+                    }
+                    else if (WorksheetBackground == null &&
+                             (merge.HasValue || bg?.FillPatternStyle is not null and not CellFillPatternStyle.None))
+                    {
+                        fill = Brushes.White;
+                    }
+
+                    if (fill is not null || merge.HasValue)
+                        dc.DrawRectangle(fill, merge.HasValue ? GridPen : null, rect);
+                    if (bg is not null)
+                        DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache);
+                }
             }
         }
 
         // Pass 2: explicit cell borders
         foreach (var cell in viewport.Cells)
         {
-            if (cell.Style == null) continue;
+            if (cell.Style is not { } style || !HasVisibleCellBorder(style)) continue;
             if (!rowLookupAll.TryGetValue(cell.Row, out var rowMetric)) continue;
             if (!colLookupAll.TryGetValue(cell.Col, out var colMetric)) continue;
 
@@ -408,10 +415,10 @@ public partial class GridView
             if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
                 continue;
 
-            DrawBorderEdge(dc, cell.Style.BorderTop,    new Point(x,     y),     new Point(x + w, y),     _brushCache, _borderPenCache);
-            DrawBorderEdge(dc, cell.Style.BorderBottom, new Point(x,     y + h), new Point(x + w, y + h), _brushCache, _borderPenCache);
-            DrawBorderEdge(dc, cell.Style.BorderLeft,   new Point(x,     y),     new Point(x,     y + h), _brushCache, _borderPenCache);
-            DrawBorderEdge(dc, cell.Style.BorderRight,  new Point(x + w, y),     new Point(x + w, y + h), _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, style.BorderTop,    new Point(x,     y),     new Point(x + w, y),     _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, style.BorderBottom, new Point(x,     y + h), new Point(x + w, y + h), _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, style.BorderLeft,   new Point(x,     y),     new Point(x,     y + h), _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, style.BorderRight,  new Point(x + w, y),     new Point(x + w, y + h), _brushCache, _borderPenCache);
         }
 
         // Pass 2b: comment/note indicators
@@ -647,7 +654,7 @@ public partial class GridView
         Dictionary<(uint Row, uint Col), CellStyle>? lookup = null;
         foreach (var cell in cells)
         {
-            if (cell.Style is { } style)
+            if (cell.Style is { } style && HasVisibleCellSurface(style))
             {
                 lookup ??= new Dictionary<(uint Row, uint Col), CellStyle>(cells.Count);
                 lookup.Add((cell.Row, cell.Col), style);

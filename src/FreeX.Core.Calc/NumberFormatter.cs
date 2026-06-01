@@ -116,7 +116,9 @@ public static partial class NumberFormatter
             return false;
         }
 
-        var text = FormatDateTime(oaDate, formatString);
+        var text = TryFormatCachedSimpleDateTime(oaDate, formatString, out var cachedText)
+            ? cachedText
+            : FormatDateTime(oaDate, formatString);
         text = ApplyAccountingTargetWidth(text, formatString, targetWidthCharacters);
         result = new FormatResult(text);
         return true;

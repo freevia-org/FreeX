@@ -381,6 +381,39 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetWhitespaceRules_PreserveSelectedElementWhitespace()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row>
+                <name>Alpha</name>
+                <note>  keep padded note  </note>
+              </row>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml" omit-xml-declaration="yes" />
+              <xsl:strip-space elements="*" />
+              <xsl:preserve-space elements="note" />
+              <xsl:template match="/rows">
+                <worksheet>
+                  <cell><xsl:value-of select="row/name" /></cell>
+                  <note><xsl:value-of select="row/note" /></note>
+                </worksheet>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .Contain("<cell>Alpha</cell>")
+            .And.Contain("<note>  keep padded note  </note>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_IdentityTransform_PreservesCommentsAndProcessingInstructions()
     {
         using var source = StreamFromString("<rows><?freex keep=\"true\"?><!--keep me--><row name=\"Golf\" /></rows>");

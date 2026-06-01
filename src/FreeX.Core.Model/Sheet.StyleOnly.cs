@@ -17,7 +17,14 @@ public sealed partial class Sheet
     public void ClearStyleOnly(uint row, uint col)
         => _styleOnly.Remove((row, col));
 
+    /// <summary>Removes all style-only overrides for empty cells.</summary>
+    public void ClearStyleOnlyEntries()
+        => _styleOnly.Clear();
+
     /// <summary>Enumerates all style-only entries (for empty cells that have been styled).</summary>
     public IEnumerable<((uint Row, uint Col) Key, StyleId StyleId)> GetStyleOnlyEntries()
-        => _styleOnly.Select(kv => (kv.Key, kv.Value));
+    {
+        foreach (var entry in _styleOnly)
+            yield return (entry.Key, entry.Value);
+    }
 }

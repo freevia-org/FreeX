@@ -26,7 +26,7 @@ public sealed partial class ViewportService : IViewportService
         var hasAnyStyleOnlyCells = sheet.HasStyleOnlyCells;
 
         // Pre-compute CF rule order and aggregates once per frame rather than per cell.
-        var cfContext = BuildConditionalFormatContext(sheet);
+        var cfContext = BuildConditionalFormatContext(sheet, workbook);
         var hasConditionalFormats = cfContext.RulesByPriority.Count != 0;
         var hasConditionalIcons = cfContext.IconRulesByPriority.Count != 0;
         var cells = new List<DisplayCell>(EstimateDisplayCellCapacity(

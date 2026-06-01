@@ -59,7 +59,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         foreach (var (addr, _) in _deletedSnapshot)
             sheet.ClearCell(addr);
 
-        foreach (var (addr, _) in _shiftedSnapshot.OrderBy(p => p.Addr.Row))
+        foreach (var (addr, _) in _shiftedSnapshot)
             sheet.ClearCell(addr);
         foreach (var (addr, cell) in _shiftedSnapshot)
             sheet.SetCell(new CellAddress(addr.Sheet, addr.Row - _count, addr.Col), cell.Clone());

@@ -313,37 +313,45 @@ public sealed partial class XlsxFileAdapter
 
     private static IEnumerable<StyleOnlyRun> GetStyleOnlyRuns(Sheet sheet)
     {
-        foreach (var rowGroup in sheet.GetStyleOnlyEntries()
-                     .Where(entry =>
-                         IsValidWorksheetRow(entry.Key.Row) &&
-                         IsValidWorksheetColumn(entry.Key.Col) &&
-                         sheet.GetCell(entry.Key.Row, entry.Key.Col) is null)
-                     .GroupBy(entry => entry.Key.Row))
+        if (!sheet.HasStyleOnlyCells)
+            yield break;
+
+        var occupiedCells = sheet.GetOccupiedCellMap();
+        var hasRun = false;
+        uint currentRow = 0;
+        uint startCol = 0;
+        uint previousCol = 0;
+        var previousStyleId = StyleId.Default;
+        foreach (var ((row, col), styleId) in sheet.GetStyleOnlyEntries())
         {
-            uint? startCol = null;
-            uint previousCol = 0;
-            StyleId? previousStyleId = null;
-            foreach (var ((_, col), styleId) in rowGroup.OrderBy(entry => entry.Key.Col))
+            if (!IsValidWorksheetRow(row) ||
+                !IsValidWorksheetColumn(col) ||
+                occupiedCells.ContainsKey((row, col)))
             {
-                if (startCol.HasValue &&
-                    previousStyleId == styleId &&
-                    col == previousCol + 1)
-                {
-                    previousCol = col;
-                    continue;
-                }
-
-                if (startCol.HasValue && previousStyleId is { } runStyleId)
-                    yield return new StyleOnlyRun(rowGroup.Key, startCol.Value, previousCol, runStyleId);
-
-                startCol = col;
-                previousCol = col;
-                previousStyleId = styleId;
+                continue;
             }
 
-            if (startCol.HasValue && previousStyleId is { } finalStyleId)
-                yield return new StyleOnlyRun(rowGroup.Key, startCol.Value, previousCol, finalStyleId);
+            if (hasRun &&
+                row == currentRow &&
+                styleId == previousStyleId &&
+                col == previousCol + 1)
+            {
+                previousCol = col;
+                continue;
+            }
+
+            if (hasRun)
+                yield return new StyleOnlyRun(currentRow, startCol, previousCol, previousStyleId);
+
+            currentRow = row;
+            startCol = col;
+            previousCol = col;
+            previousStyleId = styleId;
+            hasRun = true;
         }
+
+        if (hasRun)
+            yield return new StyleOnlyRun(currentRow, startCol, previousCol, previousStyleId);
     }
 
     private readonly record struct StyleOnlyRun(uint Row, uint StartCol, uint EndCol, StyleId StyleId);

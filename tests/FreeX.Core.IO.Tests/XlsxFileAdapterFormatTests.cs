@@ -8,6 +8,39 @@ namespace FreeX.Core.IO.Tests;
 public sealed class XlsxFileAdapterFormatTests
 {
     [Fact]
+    public void Save_RoundTripsStyleOnlyCellsWithoutMaterializingBlanks()
+    {
+        var workbook = new Workbook("Style-only xlsx");
+        var sheet = workbook.AddSheet("Styled blanks");
+        var styleId = workbook.RegisterStyle(new CellStyle
+        {
+            FillColor = new CellColor(221, 235, 247),
+            BorderBottom = new CellBorder(BorderStyle.Thin, new CellColor(91, 155, 213))
+        });
+
+        sheet.SetStyleOnly(1, 3, styleId);
+        sheet.SetStyleOnly(1, 4, styleId);
+        sheet.SetStyleOnly(1, 5, styleId);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new NumberValue(42));
+
+        var adapter = new XlsxFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream);
+        var loadedSheet = loaded.Sheets[0];
+
+        loadedSheet.GetCell(1, 3).Should().BeNull();
+        loadedSheet.GetCell(1, 5).Should().BeNull();
+        loadedSheet.GetCell(1, 4)!.Value.Should().Be(new NumberValue(42));
+        loadedSheet.GetStyleOnly(1, 3).Should().NotBeNull();
+        loadedSheet.GetStyleOnly(1, 5).Should().NotBeNull();
+        loaded.GetStyle(loadedSheet.GetStyleOnly(1, 3)!.Value).FillColor.Should().Be(new CellColor(221, 235, 247));
+        loaded.GetStyle(loadedSheet.GetStyleOnly(1, 5)!.Value).BorderBottom.Style.Should().Be(BorderStyle.Thin);
+    }
+
+    [Fact]
     public void LoadPath_AvoidsFullPackageToArrayCopies()
     {
         var adapterSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
@@ -36,6 +69,8 @@ public sealed class XlsxFileAdapterFormatTests
         adapterSource.Should().NotContain("packageStream.ToArray()");
         saveSource.Should().NotContain("GetUsedCells()");
         saveSource.Should().Contain("GetStyleOnlyRuns");
+        saveSource.Should().NotContain(".GroupBy(entry => entry.Key.Row)");
+        saveSource.Should().NotContain(".OrderBy(entry => entry.Key.Col)");
         savePostProcessingSource.Should().NotContain("GetUsedCells()");
         diagnosticsSource.Should().NotContain("GetUsedCells()");
         adapterSource.Should().Contain("CreateLoadPackageStream(stream)");
@@ -55,7 +90,10 @@ public sealed class XlsxFileAdapterFormatTests
         pivotReferencePreserverSource.Should().Contain("PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, context, pivotWorksheetPaths)");
         tableReferencePreserverSource.Should().Contain("GetWorksheetPathsWithTableRelationships(sourceArchive, context)");
         adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream)");
-        styleOnlyStripperSource.Should().Contain("seenStyleIndexes.Add(styleIndex.Value)");
+        styleOnlyStripperSource.Should().Contain("sheetData.Elements(rowName)");
+        styleOnlyStripperSource.Should().Contain("cell.HasElements");
+        styleOnlyStripperSource.Should().Contain("seenStyleIndexes.Add(styleIndex)");
+        styleOnlyStripperSource.Should().NotContain("worksheetXml.Descendants(worksheetNs + \"c\").ToList()");
         sheetXmlLayoutSource.Should().Contain("XlsxWorksheetDrawingPartReader.ReadParts");
         preserveSourcePackageParts.Should().Contain("var sourceParts = InspectSourcePackageParts(sourceArchive)");
         preserveSourcePackageParts.Should().Contain("sourceParts.HasPivotPackageParts");

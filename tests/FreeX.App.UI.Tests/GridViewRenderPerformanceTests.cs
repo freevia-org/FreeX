@@ -54,9 +54,34 @@ public sealed class GridViewRenderPerformanceTests
 
         source.Should().Contain("private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);");
         buildStyleLookup.Should().Contain("Dictionary<(uint Row, uint Col), CellStyle>? lookup = null;");
+        buildStyleLookup.Should().Contain("cell.Style is { } style && HasVisibleCellSurface(style)");
         buildStyleLookup.Should().Contain("lookup ??= new Dictionary<(uint Row, uint Col), CellStyle>(cells.Count);");
         buildStyleLookup.Should().Contain("return lookup ?? EmptyRenderCellStyleLookup;");
         buildStyleLookup.Should().NotContain("var lookup = new Dictionary<(uint Row, uint Col), CellStyle>();");
+
+        var buildLookup = typeof(GridView).GetMethod(
+            "BuildRenderCellStyleLookup",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        buildLookup.Should().NotBeNull();
+
+        var defaultLookup = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)buildLookup!.Invoke(
+            null,
+            [new DisplayCell[] { Cell(1, 1, "default", CellStyle.Default) }])!;
+        defaultLookup.Should().BeEmpty();
+
+        var fontOnlyStyle = CellStyle.Default.Clone();
+        fontOnlyStyle.Bold = true;
+        var fontOnlyLookup = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)buildLookup.Invoke(
+            null,
+            [new DisplayCell[] { Cell(1, 1, "font", fontOnlyStyle) }])!;
+        fontOnlyLookup.Should().BeEmpty();
+
+        var fillStyle = CellStyle.Default.Clone();
+        fillStyle.FillColor = CellColor.White;
+        var fillLookup = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)buildLookup.Invoke(
+            null,
+            [new DisplayCell[] { Cell(1, 1, "fill", fillStyle) }])!;
+        fillLookup.Should().ContainKey((1u, 1u));
     }
 
     [Fact]
@@ -471,11 +496,37 @@ public sealed class GridViewRenderPerformanceTests
         renderCells.Should().Contain("var rowHeaderWidth = ActualRowHeaderWidth;");
         renderCells.Should().Contain("var columnHeaderHeight = EffectiveColHeaderHeight;");
         renderCells.Should().Contain("RenderCellBackgroundBase(dc, rowHeaderWidth, columnHeaderHeight);");
+        renderCells.Should().Contain("var hasCellSurfaces = styleLookup.Count > 0;");
+        renderCells.Should().Contain("var hasMergedSurfaces = _mergeLookup.Count > 0;");
+        renderCells.Should().Contain("if (hasCellSurfaces || hasMergedSurfaces)");
         renderCells.Should().Contain("if (bg is null && !merge.HasValue)");
         renderCells.Should().Contain("continue;");
         backgroundBase.Should().Contain("dc.DrawRectangle(Brushes.White, null, rect);");
         backgroundBase.Should().Contain("foreach (var row in Viewport.RowMetrics)");
         backgroundBase.Should().Contain("foreach (var column in Viewport.ColMetrics)");
+    }
+
+    [Fact]
+    public void RenderCells_SkipsDefaultLookingStyleBordersBeforeMetricLookup()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var borderPass = source[
+            source.IndexOf("// Pass 2: explicit cell borders", StringComparison.Ordinal)..
+            source.IndexOf("// Pass 2b: comment/note indicators", StringComparison.Ordinal)];
+
+        borderPass.Should().Contain("cell.Style is not { } style || !HasVisibleCellBorder(style)");
+        borderPass.IndexOf("!HasVisibleCellBorder(style)", StringComparison.Ordinal)
+            .Should().BeLessThan(borderPass.IndexOf("rowLookupAll.TryGetValue(cell.Row", StringComparison.Ordinal));
+
+        var hasVisibleBorder = typeof(GridView).GetMethod(
+            "HasVisibleCellBorder",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        hasVisibleBorder.Should().NotBeNull();
+        hasVisibleBorder!.Invoke(null, [CellStyle.Default]).Should().Be(false);
+
+        var borderedStyle = CellStyle.Default.Clone();
+        borderedStyle.BorderBottom = new CellBorder(BorderStyle.Thin, CellColor.Black);
+        hasVisibleBorder.Invoke(null, [borderedStyle]).Should().Be(true);
     }
 
     [Fact]
