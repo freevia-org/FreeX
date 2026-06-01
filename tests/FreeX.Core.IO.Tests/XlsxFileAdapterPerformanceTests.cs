@@ -109,6 +109,20 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void SparklineLoad_UsesExtensionListFastPath()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxSparklineMapper.cs"));
+        var readMethod = source[
+            source.IndexOf("public static IReadOnlyList<SparklineModel> Read", StringComparison.Ordinal)..
+            source.IndexOf("public static void Save", StringComparison.Ordinal)];
+
+        readMethod.Should().Contain("worksheetXml.Root?.Elements()");
+        readMethod.Should().Contain("return [];");
+        readMethod.Should().Contain("extensionList.Descendants()");
+        readMethod.Should().NotContain("worksheetXml.Descendants()");
+    }
+
+    [Fact]
     public void Benchmark_LoadIgnoredErrorAndStyleOnlyMetadataWorkbook_ReportsTiming()
     {
         const int iterations = 3;
