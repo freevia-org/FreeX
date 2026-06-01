@@ -147,7 +147,7 @@ public sealed partial class NativeJsonAdapter
 
         var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
         var breakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>();
-        foreach (var pair in model.BreakNativeAttributes)
+        foreach (var pair in model.BreakNativeAttributes ?? [])
         {
             var attributes = CleanNativeAttributesForSave(pair.Value);
             if (attributes.Count > 0)

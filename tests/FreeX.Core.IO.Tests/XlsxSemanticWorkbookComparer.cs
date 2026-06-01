@@ -56,6 +56,7 @@ internal static class XlsxSemanticWorkbookComparer
                 _actualWorkbook.DisabledFormulaErrorCodes,
                 StringComparer.OrdinalIgnoreCase);
             CompareNamedRanges();
+            CompareExternalLinks();
 
             CompareValue("Workbook.SheetCount", _expectedWorkbook.SheetCount, _actualWorkbook.SheetCount);
             var sheetCount = Math.Min(_expectedWorkbook.SheetCount, _actualWorkbook.SheetCount);
@@ -318,6 +319,14 @@ internal static class XlsxSemanticWorkbookComparer
                 pair => $"{pair.Value.Scope}|{pair.Value.Comment}",
                 StringComparer.OrdinalIgnoreCase);
             CompareStringDictionary("Workbook.NamedRangeMetadata", expectedMetadata, actualMetadata);
+        }
+
+        private void CompareExternalLinks()
+        {
+            CompareStringList(
+                "Workbook.ExternalLinks",
+                _expectedWorkbook.ExternalLinks.Select(FormatExternalLink).OrderBy(text => text, StringComparer.Ordinal),
+                _actualWorkbook.ExternalLinks.Select(FormatExternalLink).OrderBy(text => text, StringComparer.Ordinal));
         }
 
         private void CompareNullableRange(string path, GridRange? expected, GridRange? actual)
@@ -738,6 +747,16 @@ internal static class XlsxSemanticWorkbookComparer
 
     private static string FormatCommentReply(CommentReply reply) =>
         $"{reply.Text}:{reply.Author}:{reply.CreatedAtUtc?.ToString("O", CultureInfo.InvariantCulture) ?? ""}:{reply.ModifiedAtUtc?.ToString("O", CultureInfo.InvariantCulture) ?? ""}";
+
+    private static string FormatExternalLink(ExternalLinkModel link)
+    {
+        return string.Join("|", new[]
+        {
+            $"PackagePart={link.PackagePart}",
+            $"TargetUri={link.TargetUri ?? ""}",
+            $"TargetMode={link.TargetMode ?? ""}"
+        });
+    }
 
     private static string FormatHyperlinkMetadata(HyperlinkMetadata? metadata) =>
         metadata is null

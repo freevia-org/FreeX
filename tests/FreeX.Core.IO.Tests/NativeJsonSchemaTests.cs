@@ -643,6 +643,44 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_TreatsNullNativeJsonMetadataChildMapsAsEmpty()
+    {
+        var workbook = new Workbook("NullMetadataChildMaps");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.RowPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string> { ["manualBreakCount"] = "0" },
+            BreakNativeAttributes = null!
+        };
+        sheet.ColumnPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            BreakNativeAttributes = null!
+        };
+        sheet.CellWatchesMetadata = new WorksheetCellWatchesMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string> { ["xr:uid"] = "{watches}" },
+            WatchNativeAttributes = null!
+        };
+        sheet.IgnoredErrorsMetadata = new WorksheetIgnoredErrorsMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string> { ["ext"] = "1" },
+            ErrorNativeAttributes = null!
+        };
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var sheetJson = document.RootElement.GetProperty("Sheets").EnumerateArray().Single();
+        var rowPageBreaksMetadata = sheetJson.GetProperty("RowPageBreaksMetadata");
+        rowPageBreaksMetadata.GetProperty("NativeAttributes").GetProperty("manualBreakCount").GetString().Should().Be("0");
+        rowPageBreaksMetadata.GetProperty("BreakNativeAttributes").EnumerateObject().Should().BeEmpty();
+        sheetJson.GetProperty("ColumnPageBreaksMetadata").ValueKind.Should().Be(JsonValueKind.Null);
+        sheetJson.GetProperty("CellWatchesMetadata").GetProperty("WatchNativeAttributes").EnumerateObject().Should().BeEmpty();
+        sheetJson.GetProperty("IgnoredErrorsMetadata").GetProperty("ErrorNativeAttributes").EnumerateObject().Should().BeEmpty();
+    }
+
+    [Fact]
     public void Load_RejectsUnsupportedFutureNativeJsonSchema()
     {
         const string futureJson = """
