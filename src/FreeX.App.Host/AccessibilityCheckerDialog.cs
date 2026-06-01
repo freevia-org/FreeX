@@ -85,7 +85,7 @@ public sealed class AccessibilityCheckerDialog : Window
         _issueList.Margin = new Thickness(0, 0, 0, 16);
         _issueList.SelectedIndex = 0;
         _issueList.SelectionChanged += (_, _) => UpdateGoToButtonState();
-        _issueList.MouseDoubleClick += (_, _) => GoToSelectedIssue();
+        _issueList.MouseDoubleClick += IssueList_MouseDoubleClick;
         stack.Children.Add(_issueList);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
@@ -104,6 +104,15 @@ public sealed class AccessibilityCheckerDialog : Window
 
         Result = new AccessibilityCheckerDialogResult(item.Issue);
         DialogResult = true;
+    }
+
+    private void IssueList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_issueList.SelectedItem is null)
+            return;
+
+        GoToSelectedIssue();
+        e.Handled = true;
     }
 
     private void UpdateGoToButtonState()
