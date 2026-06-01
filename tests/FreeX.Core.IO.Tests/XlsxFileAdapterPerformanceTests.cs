@@ -515,7 +515,9 @@ public sealed class XlsxFileAdapterPerformanceTests
         var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
         var metadataSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookMetadataReader.cs"));
 
-        adapterSource.Should().Contain("var workbookMetadata = XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageStream);");
+        adapterSource.Should().Contain("workbookMetadata = packageParts.HasWorkbook");
+        adapterSource.Should().Contain("XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageArchive)");
+        adapterSource.Should().NotContain("XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageStream)");
         foreach (var legacyCall in new[]
         {
             "LoadUses1904DateSystem(packageStream)",
@@ -536,6 +538,7 @@ public sealed class XlsxFileAdapterPerformanceTests
         }
 
         metadataSource.Should().Contain("public static XlsxWorkbookMetadataSnapshot LoadWorkbookMetadata(Stream xlsxStream)");
+        metadataSource.Should().Contain("internal static XlsxWorkbookMetadataSnapshot LoadWorkbookMetadata(ZipArchive archive)");
         metadataSource.Should().Contain("var workbookEntry = archive.GetEntry(\"xl/workbook.xml\");");
         metadataSource.Should().Contain("return LoadWorkbookMetadata(workbookXml);");
     }
@@ -545,15 +548,37 @@ public sealed class XlsxFileAdapterPerformanceTests
     {
         var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
 
-        adapterSource.Should().Contain("var stylesXml = XlsxStylesheetReader.Load(packageStream);");
+        adapterSource.Should().Contain("stylesXml = packageParts.HasStyles");
+        adapterSource.Should().Contain("XlsxStylesheetReader.Load(packageArchive)");
         adapterSource.Should().Contain("XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(stylesXml)");
         adapterSource.Should().Contain("XlsxIndexedColorPaletteMapper.Load(stylesXml)");
         adapterSource.Should().Contain("XlsxPivotTableStyleMetadataReader.Load(stylesXml)");
         adapterSource.Should().Contain("LoadSheetXmlLayout(packageStream, stylesXml, warnings)");
+        adapterSource.Should().NotContain("XlsxStylesheetReader.Load(packageStream)");
         adapterSource.Should().NotContain("LoadNumberFormatCatalog(packageStream)");
         adapterSource.Should().NotContain("XlsxIndexedColorPaletteMapper.Load(packageStream)");
         adapterSource.Should().NotContain("XlsxPivotTableStyleMetadataReader.Load(packageStream)");
         adapterSource.Should().NotContain("LoadSheetXmlLayout(packageStream);");
+    }
+
+    [Fact]
+    public void LoadCore_UsesPackagePartSummaryToSkipOptionalMetadataReaders()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+
+        adapterSource.Should().Contain("packageParts = XlsxLoadPackageParts.Inspect(packageArchive);");
+        adapterSource.Should().Contain("if (packageParts.HasPivotPackageParts)");
+        adapterSource.Should().Contain("if (packageParts.HasSlicerTimelinePackageParts)");
+        adapterSource.Should().Contain("if (packageParts.HasExternalLinks)");
+        adapterSource.Should().Contain("if (packageParts.HasStructuredTables)");
+        adapterSource.Should().Contain("XlsxPivotTableReader.Load(packageArchive, numberFormatCatalog)");
+        adapterSource.Should().Contain("XlsxSlicerTimelineMetadataReader.Load(packageArchive)");
+        adapterSource.Should().Contain("XlsxExternalLinkMetadataReader.Load(packageArchive)");
+        adapterSource.Should().Contain("XlsxStructuredTableMetadataReader.Load(packageArchive)");
+        adapterSource.Should().NotContain("XlsxPivotTableReader.Load(packageStream, numberFormatCatalog)");
+        adapterSource.Should().NotContain("XlsxSlicerTimelineMetadataReader.Load(packageStream)");
+        adapterSource.Should().NotContain("XlsxExternalLinkMetadataReader.Load(packageStream)");
+        adapterSource.Should().NotContain("XlsxStructuredTableMetadataReader.Load(packageStream)");
     }
 
     [Fact]

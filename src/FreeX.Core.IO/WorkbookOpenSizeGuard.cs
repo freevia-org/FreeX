@@ -57,34 +57,11 @@ public static class WorkbookOpenSizeGuard
         try
         {
             using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
-            long totalUncompressed = 0;
-            long totalCompressed = 0;
-
-            foreach (var entry in archive.Entries)
-            {
-                totalUncompressed += entry.Length;
-                totalCompressed += entry.CompressedLength;
-
-                if (totalUncompressed > maxTotalUncompressedBytes)
-                {
-                    throw new WorkbookTooLargeException(
-                        string.Create(
-                            CultureInfo.InvariantCulture,
-                            $"The workbook expands to at least {FormatBytes(totalUncompressed)}, which exceeds the {FormatBytes(maxTotalUncompressedBytes)} open limit."));
-                }
-            }
-
-            if (totalCompressed >= compressionRatioFloorBytes && totalCompressed > 0)
-            {
-                var ratio = (double)totalUncompressed / totalCompressed;
-                if (ratio > maxCompressionRatio)
-                {
-                    throw new WorkbookTooLargeException(
-                        string.Create(
-                            CultureInfo.InvariantCulture,
-                            $"The workbook has an unusually high compression ratio ({ratio:F0}:1), which is characteristic of a malformed or malicious package."));
-                }
-            }
+            EnsureArchiveWithinLimits(
+                archive,
+                maxTotalUncompressedBytes,
+                maxCompressionRatio,
+                compressionRatioFloorBytes);
         }
         catch (InvalidDataException)
         {
@@ -94,6 +71,42 @@ public static class WorkbookOpenSizeGuard
         {
             if (canSeek)
                 packageStream.Position = originalPosition;
+        }
+    }
+
+    public static void EnsureArchiveWithinLimits(
+        ZipArchive archive,
+        long maxTotalUncompressedBytes = DefaultMaxTotalUncompressedBytes,
+        double maxCompressionRatio = DefaultMaxCompressionRatio,
+        long compressionRatioFloorBytes = CompressionRatioFloorBytes)
+    {
+        long totalUncompressed = 0;
+        long totalCompressed = 0;
+
+        foreach (var entry in archive.Entries)
+        {
+            totalUncompressed += entry.Length;
+            totalCompressed += entry.CompressedLength;
+
+            if (totalUncompressed > maxTotalUncompressedBytes)
+            {
+                throw new WorkbookTooLargeException(
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"The workbook expands to at least {FormatBytes(totalUncompressed)}, which exceeds the {FormatBytes(maxTotalUncompressedBytes)} open limit."));
+            }
+        }
+
+        if (totalCompressed >= compressionRatioFloorBytes && totalCompressed > 0)
+        {
+            var ratio = (double)totalUncompressed / totalCompressed;
+            if (ratio > maxCompressionRatio)
+            {
+                throw new WorkbookTooLargeException(
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"The workbook has an unusually high compression ratio ({ratio:F0}:1), which is characteristic of a malformed or malicious package."));
+            }
         }
     }
 

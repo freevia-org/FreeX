@@ -14,6 +14,20 @@ internal static partial class XlsxPivotTableReader
         try
         {
             using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            return Load(archive, numberFormatCatalog);
+        }
+        catch
+        {
+            return PivotPackageMetadata.Empty;
+        }
+    }
+
+    internal static PivotPackageMetadata Load(
+        ZipArchive archive,
+        IReadOnlyDictionary<int, string> numberFormatCatalog)
+    {
+        try
+        {
             var workbookEntry = archive.GetEntry("xl/workbook.xml");
             var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
             if (workbookEntry is null || workbookRelsEntry is null)

@@ -11,6 +11,18 @@ internal static class XlsxExternalLinkMetadataReader
         try
         {
             using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            return Load(archive);
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    internal static IReadOnlyList<ExternalLinkModel> Load(ZipArchive archive)
+    {
+        try
+        {
             var workbookEntry = archive.GetEntry("xl/workbook.xml");
             if (workbookEntry is null)
                 return [];
