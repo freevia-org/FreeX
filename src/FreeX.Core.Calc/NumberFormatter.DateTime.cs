@@ -87,6 +87,30 @@ public static partial class NumberFormatter
         catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
     }
 
+    private static bool ShouldFormatDateTimeValue(string formatString) =>
+        ShouldFormatDateTimeValue(SplitSections(formatString));
+
+    private static bool ShouldFormatDateTimeValue(string[] sections)
+    {
+        for (var i = 0; i < sections.Length; i++)
+        {
+            var (_, format) = NumberFormatColorMapper.ExtractColor(sections[i]);
+            if (TryResolveSpecialDateTimeLocaleToken(format, out _))
+                return true;
+
+            format = PreserveLocaleCurrencyTokens(format, out _, out _);
+            if (DateTimeElapsedTokenRegex.IsMatch(format))
+                return true;
+
+            format = DateTimeBracketDirectiveRegex.Replace(format, "");
+            format = RemoveSpacingAndFillDirectives(format);
+            if (IsDateTimeFormat(format))
+                return true;
+        }
+
+        return false;
+    }
+
     private static string FormatDateTimeValue(
         DateTime dateTime,
         string excelFormat,

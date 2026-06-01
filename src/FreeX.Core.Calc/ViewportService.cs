@@ -237,7 +237,7 @@ public sealed partial class ViewportService : IViewportService
             if (cfStyle != null)
                 style = MergeStyles(style, cfStyle);
             if (hasConditionalIcons)
-                cfIcon = EvaluateConditionalIcon(sheet, addr, value, cfContext);
+                cfIcon = EvaluateConditionalIcon(sheet, addr, value, workbook, cfContext);
         }
 
         if (hasAnyCellComments)

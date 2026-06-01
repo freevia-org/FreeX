@@ -75,6 +75,7 @@ public static partial class NumberFormatter
         }
 
         if (value is DateTimeValue dateTimeValue &&
+            ShouldFormatDateTimeValue(formatString) &&
             TryFormatSimpleDateTime(dateTimeValue.Value, formatString, targetWidthCharacters, out var simpleDateTime))
         {
             return simpleDateTime;
@@ -85,7 +86,9 @@ public static partial class NumberFormatter
         return value switch
         {
             NumberValue n   => FormatNumber(n.Value, sections, targetWidthCharacters, indexedColors, theme),
-            DateTimeValue d => FormatDateTimeWithColor(d.Value, sections, targetWidthCharacters, indexedColors, theme),
+            DateTimeValue d => ShouldFormatDateTimeValue(sections)
+                ? FormatDateTimeWithColor(d.Value, sections, targetWidthCharacters, indexedColors, theme)
+                : FormatNumber(d.Value, sections, targetWidthCharacters, indexedColors, theme),
             TextValue t     => FormatTextWithColor(t.Value, sections, indexedColors, theme),
             BoolValue b     => new FormatResult(b.Value ? "TRUE" : "FALSE"),
             ErrorValue e    => new FormatResult(e.Code),
