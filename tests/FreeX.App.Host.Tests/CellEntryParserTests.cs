@@ -1,3 +1,4 @@
+using System.Globalization;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -7,15 +8,14 @@ public sealed class CellEntryParserTests
 {
     private static readonly CellAddress Anchor = new(SheetId.New(), 2, 2);
 
-    [Theory]
-    [InlineData("12.5", 12.5)]
-    [InlineData("-3", -3)]
-    public void CreateCell_ParsesFiniteInvariantNumbers(string text, double expected)
+    [Fact]
+    public void CreateCell_ParsesFiniteCurrentCultureAndInvariantNumbers()
     {
-        var cell = CellEntryParser.CreateCell(text, Anchor, useR1C1ReferenceStyle: false);
+        using var cultureScope = new CultureScope("fr-FR");
 
-        cell.Value.Should().BeOfType<NumberValue>()
-            .Which.Value.Should().Be(expected);
+        AssertNumber("12,5", 12.5);
+        AssertNumber("12.5", 12.5);
+        AssertNumber("-3", -3);
     }
 
     [Theory]
@@ -36,6 +36,7 @@ public sealed class CellEntryParserTests
     [InlineData("plain text")]
     public void CreateCell_TreatsNonFiniteAndNonInvariantNumbersAsText(string text)
     {
+        using var cultureScope = new CultureScope("en-US");
         var cell = CellEntryParser.CreateCell(text, Anchor, useR1C1ReferenceStyle: false);
 
         cell.Value.Should().BeOfType<TextValue>()
@@ -56,5 +57,28 @@ public sealed class CellEntryParserTests
         var cell = CellEntryParser.CreateCell("=R[-1]C+R1C1", Anchor, useR1C1ReferenceStyle: true);
 
         cell.FormulaText.Should().Be("B1+$A$1");
+    }
+
+    private static void AssertNumber(string text, double expected)
+    {
+        var cell = CellEntryParser.CreateCell(text, Anchor, useR1C1ReferenceStyle: false);
+
+        cell.Value.Should().BeOfType<NumberValue>()
+            .Which.Value.Should().Be(expected);
+    }
+
+    private sealed class CultureScope : IDisposable
+    {
+        private readonly CultureInfo previousCulture = CultureInfo.CurrentCulture;
+
+        public CultureScope(string currentCulture)
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(currentCulture);
+        }
+
+        public void Dispose()
+        {
+            CultureInfo.CurrentCulture = previousCulture;
+        }
     }
 }

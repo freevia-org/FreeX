@@ -158,6 +158,27 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarEscape_RestoresActiveCellFormulaAndReturnsFocusToGrid()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellFormula(1, 1, "SUM(B1:C1)");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=AVERAGE(B1:C1)");
+
+            harness.PressFormulaBarKey(Key.Escape).Should().BeTrue();
+
+            harness.FormulaBarText.Should().Be("=SUM(B1:C1)");
+            harness.CellFormula(1, 1).Should().Be("SUM(B1:C1)");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void FormulaBarEscape_WhileInlineEditorVisible_CancelsInlineEditAndReturnsFocusToGrid()
     {
         StaTestRunner.Run(() =>
