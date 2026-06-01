@@ -1142,6 +1142,50 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_DataTypeAttributeValueTemplate_GeneratesSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <cells>
+              <cell type="String" value="Ready"/>
+              <cell type="Number" value="42.25"/>
+              <cell type="Boolean" value="1"/>
+              <cell type="DateTime" value="2026-05-31T08:15:30"/>
+            </cells>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/cells">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Dynamic Types">
+                    <ss:Table>
+                      <ss:Row>
+                        <xsl:for-each select="cell">
+                          <ss:Cell>
+                            <ss:Data ss:Type="{@type}"><xsl:value-of select="@value"/></ss:Data>
+                          </ss:Cell>
+                        </xsl:for-each>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var data = XDocument.Load(transformed).Descendants(ss + "Data").ToList();
+
+        data.Select(element => element.Attribute(ss + "Type")!.Value)
+            .Should().Equal("String", "Number", "Boolean", "DateTime");
+        data.Select(element => element.Value)
+            .Should().Equal("Ready", "42.25", "1", "2026-05-31T08:15:30");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NumberInstruction_GeneratesFormattedSequenceCells()
     {
         using var source = StreamFromString("""
