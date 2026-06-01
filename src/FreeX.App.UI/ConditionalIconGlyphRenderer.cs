@@ -21,6 +21,9 @@ internal static class ConditionalIconGlyphRenderer
 
     public static void Draw(DrawingContext dc, ConditionalFormatIcon icon, Rect rect)
     {
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return;
+
         var appearance = ResolveAppearance(icon);
         var brush = appearance.Brush;
         var outline = OutlinePen;
