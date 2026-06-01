@@ -905,6 +905,38 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Save_IgnoresOutOfBoundsSpreadsheetMlCellsAndRanges()
+    {
+        var workbook = new Workbook("XmlInvalidBounds");
+        var sheet = workbook.AddSheet("Data");
+        var validAddress = new CellAddress(sheet.Id, 1, 1);
+        var invalidRow = new CellAddress(sheet.Id, CellAddress.MaxRow + 1, 1);
+        var invalidColumn = new CellAddress(sheet.Id, 1, CellAddress.MaxCol + 1);
+        sheet.SetCell(validAddress, new TextValue("kept"));
+        sheet.SetCell(invalidRow, new TextValue("drop-row"));
+        sheet.SetCell(invalidColumn, new TextValue("drop-column"));
+        sheet.Comments[invalidRow] = "drop comment";
+        sheet.Hyperlinks[invalidColumn] = "https://example.invalid/drop";
+        var styleId = workbook.RegisterStyle(new CellStyle { NumberFormat = "0.00" });
+        sheet.SetStyleOnly(CellAddress.MaxRow + 1, 2, styleId);
+        sheet.AddMergedRegion(new GridRange(
+            validAddress,
+            invalidColumn));
+
+        using var stream = new MemoryStream();
+        new SpreadsheetXmlFileAdapter().Save(workbook, stream);
+
+        stream.Position = 0;
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var cells = document.Descendants(ss + "Cell").ToList();
+        cells.Should().ContainSingle();
+        cells.Single().Element(ss + "Data")!.Value.Should().Be("kept");
+        cells.Single().Attribute(ss + "MergeAcross").Should().BeNull();
+        document.ToString(SaveOptions.DisableFormatting).Should().NotContain("drop-");
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsMergedRegions()
     {
         var workbook = new Workbook("XmlMergeRoundTrip");

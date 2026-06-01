@@ -681,13 +681,14 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static List<SpreadsheetXmlCell> BuildSortedXmlCells(Sheet sheet)
     {
         var mergeStarts = new Dictionary<(uint Row, uint Col), GridRange>();
-        foreach (var region in sheet.MergedRegions)
+        foreach (var region in sheet.MergedRegions.Where(IsValidGridRange))
             mergeStarts.TryAdd((region.Start.Row, region.Start.Col), region);
 
         var emitted = new HashSet<(uint Row, uint Col)>();
         var cells = new List<SpreadsheetXmlCell>();
 
         foreach (var (address, cell) in sheet.EnumerateCells()
+                     .Where(entry => IsValidCellAddress(entry.Address.Row, entry.Address.Col))
                      .OrderBy(entry => entry.Address.Row)
                      .ThenBy(entry => entry.Address.Col))
         {
@@ -703,7 +704,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         }
 
         foreach (var (address, hyperlinkTarget) in sheet.Hyperlinks
-                     .Where(entry => !emitted.Contains((entry.Key.Row, entry.Key.Col)))
+                     .Where(entry => IsValidCellAddress(entry.Key.Row, entry.Key.Col) &&
+                                     !emitted.Contains((entry.Key.Row, entry.Key.Col)))
                      .OrderBy(entry => entry.Key.Row)
                      .ThenBy(entry => entry.Key.Col))
         {
@@ -725,7 +727,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         }
 
         foreach (var (address, comment) in sheet.Comments
-                     .Where(entry => !emitted.Contains((entry.Key.Row, entry.Key.Col)))
+                     .Where(entry => IsValidCellAddress(entry.Key.Row, entry.Key.Col) &&
+                                     !emitted.Contains((entry.Key.Row, entry.Key.Col)))
                      .OrderBy(entry => entry.Key.Row)
                      .ThenBy(entry => entry.Key.Col))
         {
@@ -745,7 +748,9 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         }
 
         foreach (var (key, styleId) in sheet.GetStyleOnlyEntries()
-                     .Where(entry => !emitted.Contains((entry.Key.Row, entry.Key.Col)) && entry.StyleId != StyleId.Default)
+                     .Where(entry => IsValidCellAddress(entry.Key.Row, entry.Key.Col) &&
+                                     !emitted.Contains((entry.Key.Row, entry.Key.Col)) &&
+                                     entry.StyleId != StyleId.Default)
                      .OrderBy(entry => entry.Key.Row)
                      .ThenBy(entry => entry.Key.Col))
         {
@@ -766,7 +771,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         }
 
         foreach (var mergeRange in sheet.MergedRegions
-                     .Where(region => !emitted.Contains((region.Start.Row, region.Start.Col)))
+                     .Where(region => IsValidGridRange(region) &&
+                                      !emitted.Contains((region.Start.Row, region.Start.Col)))
                      .OrderBy(region => region.Start.Row)
                      .ThenBy(region => region.Start.Col))
         {
@@ -791,6 +797,15 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static bool IsCoveredByMergeNonAnchor(Sheet sheet, CellAddress address) =>
         sheet.GetMergeRegion(address) is { } mergeRange &&
         (mergeRange.Start.Row != address.Row || mergeRange.Start.Col != address.Col);
+
+    private static bool IsValidCellAddress(uint row, uint column) =>
+        row is >= 1 and <= CellAddress.MaxRow &&
+        column is >= 1 and <= CellAddress.MaxCol;
+
+    private static bool IsValidGridRange(GridRange range) =>
+        range.Start.Sheet == range.End.Sheet &&
+        IsValidCellAddress(range.Start.Row, range.Start.Col) &&
+        IsValidCellAddress(range.End.Row, range.End.Col);
 
     private static IEnumerable<XElement> ToColumnElements(Sheet sheet)
     {
@@ -932,6 +947,9 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         var layoutRowIndex = 0;
         while (hasCell || layoutRowIndex < layoutRows.Count)
         {
+            while (hasCell && !IsValidCellAddress(cellEnumerator.Current.Key.Row, cellEnumerator.Current.Key.Col))
+                hasCell = cellEnumerator.MoveNext();
+
             var cellRow = hasCell ? cellEnumerator.Current.Key.Row : uint.MaxValue;
             var layoutRow = layoutRowIndex < layoutRows.Count ? layoutRows[layoutRowIndex] : uint.MaxValue;
             var rowIndex = cellRow <= layoutRow ? cellRow : layoutRow;
@@ -940,9 +958,13 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             while (hasCell && cellEnumerator.Current.Key.Row == rowIndex)
             {
                 var (key, cell) = cellEnumerator.Current;
-                rowElement.Add(ToCellElement(
-                    new SpreadsheetXmlCell(rowIndex, key.Col, cell, null, null, null, null),
-                    styleIds));
+                if (IsValidCellAddress(key.Row, key.Col))
+                {
+                    rowElement.Add(ToCellElement(
+                        new SpreadsheetXmlCell(rowIndex, key.Col, cell, null, null, null, null),
+                        styleIds));
+                }
+
                 hasCell = cellEnumerator.MoveNext();
             }
 
@@ -957,8 +979,11 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         IReadOnlyDictionary<(uint Row, uint Col), Cell> cells)
     {
         var rowCounts = new Dictionary<uint, int>(Math.Min(cells.Count, 1024));
-        foreach (var ((row, _), _) in cells)
+        foreach (var ((row, col), _) in cells)
         {
+            if (!IsValidCellAddress(row, col))
+                continue;
+
             if (!rowCounts.TryAdd(row, 1))
                 rowCounts[row]++;
         }
@@ -968,7 +993,10 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             cellsByRow.Add(row, new List<SpreadsheetXmlValueCell>(count));
 
         foreach (var ((row, col), cell) in cells)
-            cellsByRow[row].Add(new SpreadsheetXmlValueCell(col, cell));
+        {
+            if (IsValidCellAddress(row, col))
+                cellsByRow[row].Add(new SpreadsheetXmlValueCell(col, cell));
+        }
 
         foreach (var rowCells in cellsByRow.Values)
             rowCells.Sort(static (left, right) => left.Col.CompareTo(right.Col));
