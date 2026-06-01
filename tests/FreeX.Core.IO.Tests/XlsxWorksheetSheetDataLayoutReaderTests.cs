@@ -61,6 +61,7 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
         layout.RowColumnLayout.ColOutlineLevels.Should().Contain(3u, 1);
         layout.RowColumnLayout.GroupHiddenCols.Should().Equal(2u, 3u);
 
+        layout.CellLayout.HasStyleOnlyCells.Should().BeTrue();
         layout.CellLayout.ExplicitStyleOnlyCells.Should().Equal((5u, 1u, 4));
         layout.CellLayout.CachedFormulaErrors.Should().Equal(new Dictionary<(uint Row, uint Col), ErrorValue>
         {

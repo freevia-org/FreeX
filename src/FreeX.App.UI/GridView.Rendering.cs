@@ -244,6 +244,7 @@ public partial class GridView
 
             var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
             var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
+            var wrapText = style?.WrapText == true;
             var typefaceKey = CreateCellTypefaceKey(style);
             var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
             var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
@@ -252,7 +253,7 @@ public partial class GridView
                 textBrush = BrushForCellColor(fontColor, _brushCache);
 
             var indentPx = (style?.IndentLevel ?? 0) * 8.0;
-            if (style?.ShrinkToFit == true && style.WrapText != true)
+            if (style?.ShrinkToFit == true && !wrapText)
             {
                 var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
                 fontSize = ResolveShrinkFontSize(
@@ -262,20 +263,36 @@ public partial class GridView
                     ToDisplayFontSize(6));
             }
 
-            var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText: false);
+            var wrapMaxTextWidth = Math.Max(1, rect.Width - 4);
+            var wrapTextAlignment = hAlign switch
+            {
+                CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
+                CellHAlign.Right => TextAlignment.Right,
+                _ => TextAlignment.Left
+            };
+            var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);
+            var useDefaultWrappedTextLayout = !useDefaultTextLayout && wrapText && CanUseDefaultWrappedFormattedText(style);
             var text = useDefaultTextLayout
                 ? GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)
-                : new FormattedText(
-                    cell.DisplayText,
-                    CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
-                    typeface,
-                    fontSize,
-                    textBrush,
-                    pixelsPerDip);
+                : useDefaultWrappedTextLayout
+                    ? GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)
+                    : new FormattedText(
+                        cell.DisplayText,
+                        CultureInfo.CurrentCulture,
+                        FlowDirection.LeftToRight,
+                        typeface,
+                        fontSize,
+                        textBrush,
+                        pixelsPerDip);
 
-            if (!useDefaultTextLayout && BuildTextDecorations(style) is { } decorations)
+            if (!useDefaultTextLayout && !useDefaultWrappedTextLayout && BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);
+
+            if (wrapText && !useDefaultWrappedTextLayout)
+            {
+                text.MaxTextWidth = wrapMaxTextWidth;
+                text.TextAlignment = wrapTextAlignment;
+            }
 
             var textX = hAlign switch
             {

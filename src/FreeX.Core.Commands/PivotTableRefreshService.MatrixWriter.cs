@@ -20,13 +20,13 @@ public static partial class PivotTableRefreshService
         rowGroups = ApplyValueFilters(rowGroups, pivotTable, headers, rowFields);
         rowGroups = ApplySorts(rowGroups, pivotTable, headers, rowFields);
         var retainedRows = rowGroups.SelectMany(group => group).ToList();
-        var columnKeys = BuildColumnKeys(workbook, pivotTable, retainedRows, columnFields);
+        var rowsByColumnKey = BuildColumnRowsByKey(retainedRows, columnFields);
+        var columnKeys = BuildColumnKeys(workbook, pivotTable, retainedRows, columnFields, rowsByColumnKey);
         columnKeys = ApplyLabelFilters(columnKeys, pivotTable, columnFields);
-        columnKeys = ApplyValueFilters(columnKeys, retainedRows, pivotTable, headers, columnFields);
-        columnKeys = ApplySorts(columnKeys, retainedRows, pivotTable, headers, columnFields);
-        var visibleRows = retainedRows
-            .Where(row => columnKeys.Any(columnKey => ColumnKeyMatches(row, columnFields, columnKey)))
-            .ToList();
+        columnKeys = ApplyValueFilters(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields);
+        columnKeys = ApplySorts(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields);
+        var visibleRows = RowsForColumnKeys(rowsByColumnKey, columnKeys);
+        var visibleRowsByColumnKey = BuildColumnRowsByKey(visibleRows, columnFields);
         var singleDataField = pivotTable.DataFields.Count == 1;
 
         if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFields.Count > 1)
@@ -92,6 +92,7 @@ public static partial class PivotTableRefreshService
                         columnKeys,
                         columnFields,
                         visibleRows,
+                        visibleRowsByColumnKey,
                         currentSubtotalKey,
                         subtotalRows,
                         outputRow);
@@ -121,6 +122,7 @@ public static partial class PivotTableRefreshService
                             columnKeys,
                             columnFields,
                             visibleRows,
+                            visibleRowsByColumnKey,
                             subtotalKey,
                             rowsForSubtotal,
                             outputRow);
@@ -143,18 +145,13 @@ public static partial class PivotTableRefreshService
                 }
             }
 
-            var visibleRowGroupRows = rowGroup
-                .Where(row => columnKeys.Any(columnKey => ColumnKeyMatches(row, columnFields, columnKey)))
-                .ToList();
+            var rowGroupRowsByColumnKey = BuildColumnRowsByKey(rowGroupRows, columnFields);
+            var visibleRowGroupRows = RowsForColumnKeys(rowGroupRowsByColumnKey, columnKeys);
             outputColumn = valueStartCol;
             foreach (var columnKey in columnKeys)
             {
-                var columnRows = rowGroup
-                    .Where(row => ColumnKeyMatches(row, columnFields, columnKey))
-                    .ToList();
-                var columnTotalRows = visibleRows
-                    .Where(row => ColumnKeyMatches(row, columnFields, columnKey))
-                    .ToList();
+                var columnRows = RowsForColumnKey(rowGroupRowsByColumnKey, columnKey);
+                var columnTotalRows = RowsForColumnKey(visibleRowsByColumnKey, columnKey);
                 foreach (var dataField in pivotTable.DataFields)
                 {
                     SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
@@ -208,6 +205,7 @@ public static partial class PivotTableRefreshService
                 columnKeys,
                 columnFields,
                 visibleRows,
+                visibleRowsByColumnKey,
                 currentSubtotalKey,
                 subtotalRows,
                 outputRow);
@@ -222,9 +220,7 @@ public static partial class PivotTableRefreshService
             outputColumn = valueStartCol;
             foreach (var columnKey in columnKeys)
             {
-                var columnRows = retainedRows
-                    .Where(row => ColumnKeyMatches(row, columnFields, columnKey))
-                    .ToList();
+                var columnRows = RowsForColumnKey(rowsByColumnKey, columnKey);
                 foreach (var dataField in pivotTable.DataFields)
                 {
                     SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(
@@ -266,6 +262,7 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<PivotKey> columnKeys,
         IReadOnlyList<PivotFieldModel> columnFields,
         IReadOnlyList<IReadOnlyList<ScalarValue>> visibleRows,
+        PivotColumnRowMap visibleRowsByColumnKey,
         PivotKey subtotalKey,
         IReadOnlyList<IReadOnlyList<ScalarValue>> subtotalRows,
         uint outputRow)
@@ -275,18 +272,13 @@ public static partial class PivotTableRefreshService
             : subtotalKey.Values[^1];
         sheet.SetCell(new CellAddress(sheet.Id, outputRow, start.Col), new TextValue($"{captionItem} Total"));
 
-        var visibleSubtotalRows = subtotalRows
-            .Where(row => columnKeys.Any(columnKey => ColumnKeyMatches(row, columnFields, columnKey)))
-            .ToList();
+        var subtotalRowsByColumnKey = BuildColumnRowsByKey(subtotalRows, columnFields);
+        var visibleSubtotalRows = RowsForColumnKeys(subtotalRowsByColumnKey, columnKeys);
         var outputColumn = valueStartCol;
         foreach (var columnKey in columnKeys)
         {
-            var subtotalColumnRows = subtotalRows
-                .Where(row => ColumnKeyMatches(row, columnFields, columnKey))
-                .ToList();
-            var columnTotalRows = visibleRows
-                .Where(row => ColumnKeyMatches(row, columnFields, columnKey))
-                .ToList();
+            var subtotalColumnRows = RowsForColumnKey(subtotalRowsByColumnKey, columnKey);
+            var columnTotalRows = RowsForColumnKey(visibleRowsByColumnKey, columnKey);
             foreach (var dataField in pivotTable.DataFields)
             {
                 SetPivotValueCell(

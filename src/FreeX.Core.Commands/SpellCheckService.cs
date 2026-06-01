@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 using FreeX.Core.Model;
 
@@ -21,27 +22,6 @@ public sealed record SpellingCorrectionPlan(
 
 public static partial class SpellCheckService
 {
-    private static readonly Dictionary<string, string> KnownCorrections = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["teh"] = "the",
-        ["adn"] = "and",
-        ["recieve"] = "receive",
-        ["seperate"] = "separate",
-        ["occured"] = "occurred",
-        ["definately"] = "definitely",
-        ["adress"] = "address",
-        ["untill"] = "until",
-        ["acommodate"] = "accommodate",
-        ["calender"] = "calendar",
-        ["goverment"] = "government",
-        ["publically"] = "publicly",
-        ["recomend"] = "recommend",
-        ["recomendations"] = "recommendations",
-        ["sucess"] = "success",
-        ["tommorow"] = "tomorrow",
-        ["wierd"] = "weird",
-    };
-
     public static IReadOnlyList<SpellingIssue> FindIssues(Workbook workbook, SheetId? sheetId = null)
     {
         var result = new List<SpellingIssue>();
@@ -57,9 +37,15 @@ public static partial class SpellCheckService
                 sheetIssues.AddRange(FindIssuesInCell(address, textValue.Value));
             }
 
-            result.AddRange(sheetIssues
-                .OrderBy(issue => issue.Address.Row)
-                .ThenBy(issue => issue.Address.Col));
+            if (sheetIssues.Count == 0)
+                continue;
+
+            sheetIssues.Sort((left, right) =>
+            {
+                var rowCmp = left.Address.Row.CompareTo(right.Address.Row);
+                return rowCmp != 0 ? rowCmp : left.Address.Col.CompareTo(right.Address.Col);
+            });
+            result.AddRange(sheetIssues);
         }
 
         return result;
@@ -71,33 +57,46 @@ public static partial class SpellCheckService
     /// </summary>
     public static IReadOnlyList<SpellingIssue> FindIssuesInCell(CellAddress address, string text)
     {
-        var issues = new List<(int Index, SpellingIssue Issue)>();
+        List<SpellingIssue>? issues = null;
         var ignoredSpans = FindIgnoredSpans(text);
-        foreach (Match match in WordRegex().Matches(text))
+        WordToken? previousWord = null;
+        var index = 0;
+        while (TryReadNextWord(text, index, out var word))
         {
-            if (OverlapsIgnoredSpan(match.Index, match.Length, ignoredSpans))
+            index = word.End;
+            if (OverlapsIgnoredSpan(word.Start, word.Length, ignoredSpans))
+            {
+                previousWord = null;
                 continue;
+            }
 
-            if (KnownCorrections.TryGetValue(match.Value, out var suggestion))
-                issues.Add((match.Index, new SpellingIssue(address, match.Value, MatchCapitalization(match.Value, suggestion), text)));
+            var wordSpan = text.AsSpan(word.Start, word.Length);
+            if (TryGetKnownCorrection(wordSpan, out var suggestion))
+            {
+                var wordText = wordSpan.ToString();
+                issues ??= [];
+                issues.Add(new SpellingIssue(address, wordText, MatchCapitalization(wordSpan, suggestion), text));
+            }
+
+            if (previousWord is { } previous &&
+                previous.Length >= 2 &&
+                word.Length >= 2 &&
+                IsWhitespaceOnly(text, previous.End, word.Start) &&
+                EqualWordsIgnoreCase(text.AsSpan(previous.Start, previous.Length), wordSpan) &&
+                !TryGetKnownCorrection(wordSpan, out _))
+            {
+                issues ??= [];
+                issues.Add(new SpellingIssue(
+                    address,
+                    text.Substring(previous.Start, word.End - previous.Start),
+                    text.Substring(previous.Start, previous.Length),
+                    text));
+            }
+
+            previousWord = word;
         }
 
-        foreach (Match match in RepeatedWordRegex().Matches(text))
-        {
-            if (OverlapsIgnoredSpan(match.Index, match.Length, ignoredSpans))
-                continue;
-
-            var repeatedWord = match.Groups["word"].Value;
-            if (KnownCorrections.ContainsKey(repeatedWord))
-                continue;
-
-            issues.Add((match.Index, new SpellingIssue(address, match.Value, repeatedWord, text)));
-        }
-
-        return issues
-            .OrderBy(issue => issue.Index)
-            .Select(issue => issue.Issue)
-            .ToList();
+        return issues ?? [];
     }
 
     /// <summary>
@@ -154,35 +153,69 @@ public static partial class SpellCheckService
     {
         var count = 0;
         var ignoredSpans = FindIgnoredSpans(text);
-        var corrected = WordRegex().Replace(
-            text,
-            match =>
-            {
-                if (OverlapsIgnoredSpan(match.Index, match.Length, ignoredSpans))
-                    return match.Value;
+        StringBuilder? builder = null;
+        var appendStart = 0;
+        var index = 0;
+        while (TryReadNextWord(text, index, out var word))
+        {
+            index = word.End;
+            if (OverlapsIgnoredSpan(word.Start, word.Length, ignoredSpans))
+                continue;
 
-                if (!KnownCorrections.TryGetValue(match.Value, out var suggestion))
-                    return match.Value;
+            var wordSpan = text.AsSpan(word.Start, word.Length);
+            if (!TryGetKnownCorrection(wordSpan, out var suggestion))
+                continue;
 
-                count++;
-                return MatchCapitalization(match.Value, suggestion);
-            },
-            -1,
-            0);
+            builder ??= new StringBuilder(text.Length);
+            builder.Append(text, appendStart, word.Start - appendStart);
+            builder.Append(MatchCapitalization(wordSpan, suggestion));
+            appendStart = word.End;
+            count++;
+        }
+
         replacementCount = count;
-        return corrected;
+        if (builder is null)
+            return text;
+
+        builder.Append(text, appendStart, text.Length - appendStart);
+        return builder.ToString();
     }
 
-    private static IReadOnlyList<Range> FindIgnoredSpans(string text) =>
-        IgnoredAddressSpanRegex()
-            .Matches(text)
-            .Select(match => new Range(match.Index, match.Index + match.Length))
-            .ToList();
+    private static IReadOnlyList<Range> FindIgnoredSpans(string text)
+    {
+        if (!HasIgnoredSpanCandidate(text))
+            return [];
+
+        List<Range>? spans = null;
+        foreach (Match match in IgnoredAddressSpanRegex().Matches(text))
+        {
+            spans ??= [];
+            spans.Add(new Range(match.Index, match.Index + match.Length));
+        }
+
+        return spans ?? [];
+    }
+
+    private static bool HasIgnoredSpanCandidate(string text)
+    {
+        foreach (var value in text)
+            if (value is ':' or '/' or '\\' or '@' or '.' or '~')
+                return true;
+
+        return false;
+    }
 
     private static bool OverlapsIgnoredSpan(int index, int length, IReadOnlyList<Range> ignoredSpans)
     {
         var end = index + length;
-        return ignoredSpans.Any(span => index < span.End.Value && end > span.Start.Value);
+        for (var spanIndex = 0; spanIndex < ignoredSpans.Count; spanIndex++)
+        {
+            var span = ignoredSpans[spanIndex];
+            if (index < span.End.Value && end > span.Start.Value)
+                return true;
+        }
+
+        return false;
     }
 
     private static IEnumerable<Sheet> EnumerateTargetSheets(Workbook workbook, SheetId? sheetId)
@@ -194,12 +227,27 @@ public static partial class SpellCheckService
         }
     }
 
-    private static string MatchCapitalization(string original, string replacement)
+    private static string MatchCapitalization(string original, string replacement) =>
+        MatchCapitalization(original.AsSpan(), replacement);
+
+    private static string MatchCapitalization(ReadOnlySpan<char> original, string replacement)
     {
         if (original.Length == 0 || replacement.Length == 0)
             return replacement;
 
-        if (original.Any(char.IsLetter) && original.Where(char.IsLetter).All(char.IsUpper))
+        var hasLetter = false;
+        var allLettersAreUpper = true;
+        foreach (var value in original)
+        {
+            if (!char.IsLetter(value))
+                continue;
+
+            hasLetter = true;
+            if (!char.IsUpper(value))
+                allLettersAreUpper = false;
+        }
+
+        if (hasLetter && allLettersAreUpper)
             return replacement.ToUpperInvariant();
 
         if (char.IsUpper(original[0]))
@@ -208,11 +256,195 @@ public static partial class SpellCheckService
         return replacement;
     }
 
-    [GeneratedRegex(@"\b[\p{L}']+\b")]
-    private static partial Regex WordRegex();
+    private readonly record struct WordToken(int Start, int End)
+    {
+        public int Length => End - Start;
+    }
 
-    [GeneratedRegex(@"\b(?<word>[\p{L}']{2,})\b[\s\u00A0]+\k<word>\b", RegexOptions.IgnoreCase)]
-    private static partial Regex RepeatedWordRegex();
+    private static bool TryReadNextWord(string text, int startIndex, out WordToken word)
+    {
+        var index = startIndex;
+        while (index < text.Length)
+        {
+            while (index < text.Length && !char.IsLetter(text[index]))
+                index++;
+
+            if (index >= text.Length)
+                break;
+
+            var start = index;
+            index++;
+            while (index < text.Length && IsWordContinuation(text[index]))
+                index++;
+
+            if (IsWordBoundaryBefore(text, start) && IsWordBoundaryAfter(text, index))
+            {
+                word = new WordToken(start, index);
+                return true;
+            }
+        }
+
+        word = default;
+        return false;
+    }
+
+    private static bool IsWordContinuation(char value) =>
+        char.IsLetter(value) || value == '\'';
+
+    private static bool IsWordBoundaryBefore(string text, int index) =>
+        index == 0 || !IsLetterDigitOrUnderscore(text[index - 1]);
+
+    private static bool IsWordBoundaryAfter(string text, int index) =>
+        index >= text.Length || !IsLetterDigitOrUnderscore(text[index]);
+
+    private static bool IsLetterDigitOrUnderscore(char value) =>
+        char.IsLetterOrDigit(value) || value == '_';
+
+    private static bool IsWhitespaceOnly(string text, int start, int end)
+    {
+        if (start >= end)
+            return false;
+
+        for (var index = start; index < end; index++)
+            if (text[index] is not (' ' or '\t' or '\r' or '\n' or '\f' or '\v' or '\u00A0'))
+                return false;
+
+        return true;
+    }
+
+    private static bool EqualWordsIgnoreCase(ReadOnlySpan<char> left, ReadOnlySpan<char> right) =>
+        left.Equals(right, StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryGetKnownCorrection(ReadOnlySpan<char> word, out string suggestion)
+    {
+        switch (word.Length)
+        {
+            case 3:
+                if (EqualWord(word, "teh"))
+                {
+                    suggestion = "the";
+                    return true;
+                }
+
+                if (EqualWord(word, "adn"))
+                {
+                    suggestion = "and";
+                    return true;
+                }
+
+                break;
+            case 5:
+                if (EqualWord(word, "wierd"))
+                {
+                    suggestion = "weird";
+                    return true;
+                }
+
+                break;
+            case 6:
+                if (EqualWord(word, "adress"))
+                {
+                    suggestion = "address";
+                    return true;
+                }
+
+                if (EqualWord(word, "untill"))
+                {
+                    suggestion = "until";
+                    return true;
+                }
+
+                if (EqualWord(word, "sucess"))
+                {
+                    suggestion = "success";
+                    return true;
+                }
+
+                break;
+            case 7:
+                if (EqualWord(word, "recieve"))
+                {
+                    suggestion = "receive";
+                    return true;
+                }
+
+                if (EqualWord(word, "occured"))
+                {
+                    suggestion = "occurred";
+                    return true;
+                }
+
+                break;
+            case 8:
+                if (EqualWord(word, "seperate"))
+                {
+                    suggestion = "separate";
+                    return true;
+                }
+
+                if (EqualWord(word, "calender"))
+                {
+                    suggestion = "calendar";
+                    return true;
+                }
+
+                if (EqualWord(word, "recomend"))
+                {
+                    suggestion = "recommend";
+                    return true;
+                }
+
+                if (EqualWord(word, "tommorow"))
+                {
+                    suggestion = "tomorrow";
+                    return true;
+                }
+
+                break;
+            case 9:
+                if (EqualWord(word, "goverment"))
+                {
+                    suggestion = "government";
+                    return true;
+                }
+
+                break;
+            case 10:
+                if (EqualWord(word, "definately"))
+                {
+                    suggestion = "definitely";
+                    return true;
+                }
+
+                if (EqualWord(word, "acommodate"))
+                {
+                    suggestion = "accommodate";
+                    return true;
+                }
+
+                if (EqualWord(word, "publically"))
+                {
+                    suggestion = "publicly";
+                    return true;
+                }
+
+                break;
+            case 14:
+                if (EqualWord(word, "recomendations"))
+                {
+                    suggestion = "recommendations";
+                    return true;
+                }
+
+                break;
+        }
+
+        suggestion = string.Empty;
+        return false;
+    }
+
+    private static bool EqualWord(ReadOnlySpan<char> word, string expected) =>
+        word.Equals(expected, StringComparison.OrdinalIgnoreCase);
 
     [GeneratedRegex(@"(?ix)
         (?:

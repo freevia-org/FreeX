@@ -16,29 +16,63 @@ public static partial class PivotTableRefreshService
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers)
     {
-        var values = rows.Select(row => GetDataFieldValue(row, dataField, pivotTable, headers)).ToList();
-        var numericValues = values.Where(HasNumericValue).Select(Number).ToList();
+        var nonBlankCount = 0;
+        var numericCount = 0;
+        var sum = 0d;
+        var mean = 0d;
+        var sumSquaredDeviation = 0d;
+        var min = 0d;
+        var max = 0d;
+        var product = 1d;
+
+        foreach (var row in rows)
+        {
+            var value = GetDataFieldValue(row, dataField, pivotTable, headers);
+            if (IsNonBlank(value))
+                nonBlankCount++;
+
+            if (!HasNumericValue(value))
+                continue;
+
+            var numeric = Number(value);
+            numericCount++;
+            sum += numeric;
+            product *= numeric;
+            if (numericCount == 1)
+            {
+                min = numeric;
+                max = numeric;
+            }
+            else
+            {
+                min = Math.Min(min, numeric);
+                max = Math.Max(max, numeric);
+            }
+
+            var delta = numeric - mean;
+            mean += delta / numericCount;
+            sumSquaredDeviation += delta * (numeric - mean);
+        }
+
         return dataField.SummaryFunction.Trim().ToLowerInvariant() switch
         {
-            "count" => values.Count(IsNonBlank),
-            "countnums" or "countNums" => numericValues.Count,
-            "average" or "avg" => numericValues.Count == 0 ? 0 : numericValues.Average(),
-            "min" => numericValues.Count == 0 ? 0 : numericValues.Min(),
-            "max" => numericValues.Count == 0 ? 0 : numericValues.Max(),
-            "product" => numericValues.Count == 0 ? 0 : numericValues.Aggregate(1.0, (acc, value) => acc * value),
-            "stddev" or "stddevs" or "stddev.s" => numericValues.Count < 2 ? 0 : Math.Sqrt(Variance(numericValues, sample: true)),
-            "stddevp" or "stddev.p" => numericValues.Count == 0 ? 0 : Math.Sqrt(Variance(numericValues, sample: false)),
-            "var" or "vars" or "var.s" => numericValues.Count < 2 ? 0 : Variance(numericValues, sample: true),
-            "varp" or "var.p" => numericValues.Count == 0 ? 0 : Variance(numericValues, sample: false),
-            _ => numericValues.Sum()
+            "count" => nonBlankCount,
+            "countnums" => numericCount,
+            "average" or "avg" => numericCount == 0 ? 0 : sum / numericCount,
+            "min" => numericCount == 0 ? 0 : min,
+            "max" => numericCount == 0 ? 0 : max,
+            "product" => numericCount == 0 ? 0 : product,
+            "stddev" or "stddevs" or "stddev.s" => numericCount < 2 ? 0 : Math.Sqrt(Variance(sumSquaredDeviation, numericCount, sample: true)),
+            "stddevp" or "stddev.p" => numericCount == 0 ? 0 : Math.Sqrt(Variance(sumSquaredDeviation, numericCount, sample: false)),
+            "var" or "vars" or "var.s" => numericCount < 2 ? 0 : Variance(sumSquaredDeviation, numericCount, sample: true),
+            "varp" or "var.p" => numericCount == 0 ? 0 : Variance(sumSquaredDeviation, numericCount, sample: false),
+            _ => sum
         };
     }
 
-    private static double Variance(IReadOnlyList<double> values, bool sample)
+    private static double Variance(double sumSquaredDeviation, int count, bool sample)
     {
-        var average = values.Average();
-        var squaredDeviation = values.Sum(value => Math.Pow(value - average, 2));
-        return squaredDeviation / (sample ? values.Count - 1 : values.Count);
+        return sumSquaredDeviation / (sample ? count - 1 : count);
     }
 
     private sealed record PivotDisplayContext(

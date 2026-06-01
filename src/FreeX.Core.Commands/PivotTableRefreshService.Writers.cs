@@ -192,13 +192,12 @@ public static partial class PivotTableRefreshService
         IReadOnlyList<PivotFieldModel> columnFields)
     {
         var start = GetPivotBodyStart(pivotTable);
-        var columnKeys = BuildColumnKeys(workbook, pivotTable, rows, columnFields);
+        var rowsByColumnKey = BuildColumnRowsByKey(rows, columnFields);
+        var columnKeys = BuildColumnKeys(workbook, pivotTable, rows, columnFields, rowsByColumnKey);
         columnKeys = ApplyLabelFilters(columnKeys, pivotTable, columnFields);
-        columnKeys = ApplyValueFilters(columnKeys, rows, pivotTable, headers, columnFields);
-        columnKeys = ApplySorts(columnKeys, rows, pivotTable, headers, columnFields);
-        var visibleRows = rows
-            .Where(row => columnKeys.Any(columnKey => ColumnKeyMatches(row, columnFields, columnKey)))
-            .ToList();
+        columnKeys = ApplyValueFilters(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields);
+        columnKeys = ApplySorts(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields);
+        var visibleRows = RowsForColumnKeys(rowsByColumnKey, columnKeys);
         var singleDataField = pivotTable.DataFields.Count == 1;
 
         var outputColumn = start.Col;
@@ -225,7 +224,7 @@ public static partial class PivotTableRefreshService
         outputColumn = start.Col;
         foreach (var columnKey in columnKeys)
         {
-            var columnRows = rows.Where(row => ColumnKeyMatches(row, columnFields, columnKey)).ToList();
+            var columnRows = RowsForColumnKey(rowsByColumnKey, columnKey);
             foreach (var dataField in pivotTable.DataFields)
             {
                 SetPivotValueCell(workbook, sheet, new CellAddress(sheet.Id, outputRow, outputColumn), DisplayAggregate(

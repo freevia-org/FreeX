@@ -26,6 +26,10 @@ public sealed class FormulaEvaluator
     [ThreadStatic]
     private static int _evalDepth;
 
+    private static readonly object ParsedFormulaCacheGate = new();
+    private static readonly Dictionary<string, FormulaNode> ParsedFormulaCache = new(StringComparer.Ordinal);
+    private static readonly Queue<string> ParsedFormulaCacheOrder = new();
+
     private static readonly HashSet<string> AggregateFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
         "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "COUNTA", "AND", "OR", "CONCAT",
@@ -175,10 +179,7 @@ public sealed class FormulaEvaluator
         try
         {
             _evalDepth = 0;
-            var lexer = new Lexer(formulaText);
-            var tokens = lexer.Tokenize();
-            var parser = new Parser(tokens);
-            var ast = parser.Parse();
+            var ast = GetOrParseFormula(formulaText);
             var context = new SheetEvalContext(sheet, workbook, this, currentCell);
             return NormalizeTopLevelResult(EvaluateNode(ast, context));
         }
@@ -211,6 +212,42 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue NormalizeTopLevelResult(ScalarValue value) =>
         value is LambdaValue ? ErrorValue.Calc : value;
+
+    private static FormulaNode GetOrParseFormula(string formulaText)
+    {
+        lock (ParsedFormulaCacheGate)
+        {
+            if (ParsedFormulaCache.TryGetValue(formulaText, out var cached))
+                return cached;
+        }
+
+        var parsed = ParseFormulaUncached(formulaText);
+
+        lock (ParsedFormulaCacheGate)
+        {
+            if (ParsedFormulaCache.TryGetValue(formulaText, out var cached))
+                return cached;
+
+            if (ParsedFormulaCache.Count >= FormulaSafetyLimits.MaxParsedFormulaCacheEntries &&
+                ParsedFormulaCacheOrder.TryDequeue(out var oldest))
+            {
+                ParsedFormulaCache.Remove(oldest);
+            }
+
+            ParsedFormulaCache[formulaText] = parsed;
+            ParsedFormulaCacheOrder.Enqueue(formulaText);
+        }
+
+        return parsed;
+    }
+
+    private static FormulaNode ParseFormulaUncached(string formulaText)
+    {
+        var lexer = new Lexer(formulaText);
+        var tokens = lexer.Tokenize();
+        var parser = new Parser(tokens);
+        return parser.Parse();
+    }
 
     /// <summary>
     /// Evaluate an AST node recursively.
@@ -301,16 +338,16 @@ public sealed class FormulaEvaluator
 
         return node.Operator switch
         {
-            BinaryOperator.Add => ArithOp(left, right, (a, b) => a + b),
-            BinaryOperator.Subtract => ArithOp(left, right, (a, b) => a - b),
-            BinaryOperator.Multiply => ArithOp(left, right, (a, b) => a * b),
+            BinaryOperator.Add => ArithOp(left, right, ArithmeticKind.Add),
+            BinaryOperator.Subtract => ArithOp(left, right, ArithmeticKind.Subtract),
+            BinaryOperator.Multiply => ArithOp(left, right, ArithmeticKind.Multiply),
             BinaryOperator.Divide => DivideOp(left, right),
             BinaryOperator.Power => PowerOp(left, right),
             BinaryOperator.Concatenate => ConcatOp(left, right),
-            BinaryOperator.Equal => CompareOp(left, right, 0),
-            BinaryOperator.NotEqual => CompareOpNot(left, right, 0),
-            BinaryOperator.LessThan => CompareOp(left, right, -1),
-            BinaryOperator.GreaterThan => CompareOp(left, right, 1),
+            BinaryOperator.Equal => CompareOpEqual(left, right),
+            BinaryOperator.NotEqual => CompareOpNotEqual(left, right),
+            BinaryOperator.LessThan => CompareOpLessThan(left, right),
+            BinaryOperator.GreaterThan => CompareOpGreaterThan(left, right),
             BinaryOperator.LessOrEqual => CompareOpLessOrEqual(left, right),
             BinaryOperator.GreaterOrEqual => CompareOpGreaterOrEqual(left, right),
             _ => throw new FormulaEvalException("#VALUE!", $"Unknown operator: {node.Operator}")
@@ -386,16 +423,42 @@ public sealed class FormulaEvaluator
         return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
     }
 
-    private static ScalarValue ArithOp(ScalarValue left, ScalarValue right, Func<double, double, double> op)
-        => ElementwiseOp(left, right, (l, r) => ArithScalarOp(l, r, op));
+    private static ScalarValue ArithOp(ScalarValue left, ScalarValue right, ArithmeticKind kind)
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return ArithScalarOp(left, right, kind);
 
-    private static ScalarValue ArithScalarOp(ScalarValue left, ScalarValue right, Func<double, double, double> op)
+        return kind switch
+        {
+            ArithmeticKind.Add => ElementwiseOp(left, right, AddScalarOp),
+            ArithmeticKind.Subtract => ElementwiseOp(left, right, SubtractScalarOp),
+            _ => ElementwiseOp(left, right, MultiplyScalarOp)
+        };
+    }
+
+    private static ScalarValue AddScalarOp(ScalarValue left, ScalarValue right) =>
+        ArithScalarOp(left, right, ArithmeticKind.Add);
+
+    private static ScalarValue SubtractScalarOp(ScalarValue left, ScalarValue right) =>
+        ArithScalarOp(left, right, ArithmeticKind.Subtract);
+
+    private static ScalarValue MultiplyScalarOp(ScalarValue left, ScalarValue right) =>
+        ArithScalarOp(left, right, ArithmeticKind.Multiply);
+
+    private static ScalarValue ArithScalarOp(ScalarValue left, ScalarValue right, ArithmeticKind kind)
     {
         var a = CoerceToNumber(left);
         var b = CoerceToNumber(right);
         if (a is ErrorValue errA) return errA;
         if (b is ErrorValue errB) return errB;
-        double result = op(((NumberValue)a).Value, ((NumberValue)b).Value);
+        var leftNumber = ((NumberValue)a).Value;
+        var rightNumber = ((NumberValue)b).Value;
+        double result = kind switch
+        {
+            ArithmeticKind.Add => leftNumber + rightNumber,
+            ArithmeticKind.Subtract => leftNumber - rightNumber,
+            _ => leftNumber * rightNumber
+        };
         return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
     }
 
@@ -463,30 +526,84 @@ public sealed class FormulaEvaluator
 
     private static bool CanBroadcast(int left, int right) => left == right || left == 1 || right == 1;
 
-    private static ScalarValue CompareOp(ScalarValue left, ScalarValue right, int expected)
-        => ElementwiseOp(left, right, (l, r) => CompareScalarOp(l, r, expected));
-
-    private static ScalarValue CompareScalarOp(ScalarValue left, ScalarValue right, int expected)
+    private enum ArithmeticKind
     {
-        if (left is ErrorValue errL) return errL;
-        if (right is ErrorValue errR) return errR;
-        var cmp = CompareValues(left, right);
-        return new BoolValue(cmp == expected);
+        Add,
+        Subtract,
+        Multiply
     }
 
-    private static ScalarValue CompareOpNot(ScalarValue left, ScalarValue right, int expected)
-        => ElementwiseOp(left, right, (l, r) => CompareScalarOpNot(l, r, expected));
+    private static ScalarValue CompareOpEqual(ScalarValue left, ScalarValue right)
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return CompareScalarOpEqual(left, right);
 
-    private static ScalarValue CompareScalarOpNot(ScalarValue left, ScalarValue right, int expected)
+        return ElementwiseOp(left, right, CompareScalarOpEqual);
+    }
+
+    private static ScalarValue CompareScalarOpEqual(ScalarValue left, ScalarValue right)
     {
         if (left is ErrorValue errL) return errL;
         if (right is ErrorValue errR) return errR;
         var cmp = CompareValues(left, right);
-        return new BoolValue(cmp != expected);
+        return new BoolValue(cmp == 0);
+    }
+
+    private static ScalarValue CompareOpNotEqual(ScalarValue left, ScalarValue right)
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return CompareScalarOpNotEqual(left, right);
+
+        return ElementwiseOp(left, right, CompareScalarOpNotEqual);
+    }
+
+    private static ScalarValue CompareScalarOpNotEqual(ScalarValue left, ScalarValue right)
+    {
+        if (left is ErrorValue errL) return errL;
+        if (right is ErrorValue errR) return errR;
+        var cmp = CompareValues(left, right);
+        return new BoolValue(cmp != 0);
+    }
+
+    private static ScalarValue CompareOpLessThan(ScalarValue left, ScalarValue right)
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return CompareScalarOpLessThan(left, right);
+
+        return ElementwiseOp(left, right, CompareScalarOpLessThan);
+    }
+
+    private static ScalarValue CompareScalarOpLessThan(ScalarValue left, ScalarValue right)
+    {
+        if (left is ErrorValue errL) return errL;
+        if (right is ErrorValue errR) return errR;
+        var cmp = CompareValues(left, right);
+        return new BoolValue(cmp < 0);
+    }
+
+    private static ScalarValue CompareOpGreaterThan(ScalarValue left, ScalarValue right)
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return CompareScalarOpGreaterThan(left, right);
+
+        return ElementwiseOp(left, right, CompareScalarOpGreaterThan);
+    }
+
+    private static ScalarValue CompareScalarOpGreaterThan(ScalarValue left, ScalarValue right)
+    {
+        if (left is ErrorValue errL) return errL;
+        if (right is ErrorValue errR) return errR;
+        var cmp = CompareValues(left, right);
+        return new BoolValue(cmp > 0);
     }
 
     private static ScalarValue CompareOpLessOrEqual(ScalarValue left, ScalarValue right)
-        => ElementwiseOp(left, right, CompareScalarOpLessOrEqual);
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return CompareScalarOpLessOrEqual(left, right);
+
+        return ElementwiseOp(left, right, CompareScalarOpLessOrEqual);
+    }
 
     private static ScalarValue CompareScalarOpLessOrEqual(ScalarValue left, ScalarValue right)
     {
@@ -497,7 +614,12 @@ public sealed class FormulaEvaluator
     }
 
     private static ScalarValue CompareOpGreaterOrEqual(ScalarValue left, ScalarValue right)
-        => ElementwiseOp(left, right, CompareScalarOpGreaterOrEqual);
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return CompareScalarOpGreaterOrEqual(left, right);
+
+        return ElementwiseOp(left, right, CompareScalarOpGreaterOrEqual);
+    }
 
     private static ScalarValue CompareScalarOpGreaterOrEqual(ScalarValue left, ScalarValue right)
     {

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -47,12 +48,23 @@ public static class CommentNavigationPlanner
 
     public static string FormatThreadedComment(ThreadedComment thread)
     {
-        var parts = new List<string> { FormatCommentPart(thread.Author, thread.Text, thread.CreatedAtUtc) };
-        parts.AddRange(thread.Replies.Select(reply => FormatCommentPart(reply.Author, reply.Text, reply.CreatedAtUtc)));
-        if (thread.IsResolved)
-            parts.Add("Resolved");
+        var formattedRoot = FormatCommentPart(thread.Author, thread.Text, thread.CreatedAtUtc);
+        if (thread.Replies.Count == 0)
+            return thread.IsResolved
+                ? string.Concat(formattedRoot, " | Resolved")
+                : formattedRoot;
 
-        return string.Join(" | ", parts);
+        var builder = new StringBuilder(formattedRoot);
+        foreach (var reply in thread.Replies)
+        {
+            builder.Append(" | ");
+            builder.Append(FormatCommentPart(reply.Author, reply.Text, reply.CreatedAtUtc));
+        }
+
+        if (thread.IsResolved)
+            builder.Append(" | Resolved");
+
+        return builder.ToString();
     }
 
     public static string? FormatCellCommentPreview(
@@ -60,13 +72,15 @@ public static class CommentNavigationPlanner
         IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments,
         CellAddress address)
     {
-        var parts = new List<string>();
-        if (comments.TryGetValue(address, out var note))
-            parts.Add($"Note: {note}");
-        if (threadedComments.TryGetValue(address, out var thread))
-            parts.Add(FormatThreadedComment(thread));
+        if (!comments.TryGetValue(address, out var note))
+            return threadedComments.TryGetValue(address, out var threadOnly)
+                ? FormatThreadedComment(threadOnly)
+                : null;
 
-        return parts.Count == 0 ? null : string.Join(Environment.NewLine, parts);
+        if (!threadedComments.TryGetValue(address, out var thread))
+            return $"Note: {note}";
+
+        return string.Concat("Note: ", note, Environment.NewLine, FormatThreadedComment(thread));
     }
 
     private static IEnumerable<string> GetCommentListLines(

@@ -1100,6 +1100,67 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Benchmark_ColumnValueFilterAndSort_ReportsTimingAndAllocatedBytes()
+    {
+        const int rowCount = 12_000;
+        const int columnItemCount = 240;
+        const int iterations = 3;
+
+        var workbook = new Workbook("PivotRefreshPerfTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedPivotRefreshPerformanceData(sheet, rowCount, columnItemCount);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTablePerf",
+            CacheId = 1,
+            SourceRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, (uint)rowCount + 1, 3)),
+            TargetRange = new GridRange(
+                new CellAddress(sheet.Id, 2, 5),
+                new CellAddress(sheet.Id, 3, 5 + (uint)columnItemCount + 1))
+        };
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        pivot.ValueFilters.Add(new PivotValueFilterModel(
+            0,
+            PivotValueFilterKind.GreaterThanOrEqual,
+            ComparisonValue: 0,
+            SourceFieldIndex: 1));
+        pivot.Sorts.Add(new PivotSortModel(
+            PivotSortTarget.Value,
+            PivotSortDirection.Descending,
+            DataFieldIndex: 0,
+            FieldIndex: 1));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = System.Diagnostics.Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var step = System.Diagnostics.Stopwatch.StartNew();
+            PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var meanMs = total.Elapsed.TotalMilliseconds / iterations;
+        Console.WriteLine(
+            $"PERF PIVOT_REFRESH_COLUMN_VALUE_FILTER_SORT rows={rowCount} column_items={columnItemCount} iterations={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={meanMs:F2} max_ms={timings.Max():F2} allocated_bytes={allocatedBytes}");
+
+        Text(sheet, "E2").Should().NotBeEmpty();
+        total.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Refresh_EvaluatesCommonSummaryFunctions()
     {
         var workbook = new Workbook("PivotRefreshTest");
@@ -2719,6 +2780,22 @@ public sealed class PivotTableRefreshServiceTests
         sheet.SetCell(Addr(sheet, "A5"), new TextValue("West"));
         sheet.SetCell(Addr(sheet, "B5"), new TextValue("Q2"));
         sheet.SetCell(Addr(sheet, "C5"), new NumberValue(25));
+    }
+
+    private static void SeedPivotRefreshPerformanceData(Sheet sheet, int rowCount, int columnItemCount)
+    {
+        sheet.SetCell(Addr(sheet, "A1"), new TextValue("Region"));
+        sheet.SetCell(Addr(sheet, "B1"), new TextValue("Bucket"));
+        sheet.SetCell(Addr(sheet, "C1"), new TextValue("Amount"));
+
+        for (var index = 0; index < rowCount; index++)
+        {
+            var row = (uint)index + 2;
+            var bucketIndex = index % columnItemCount;
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"Region {index % 16:00}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue($"Bucket {bucketIndex:000}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue((bucketIndex % 23) + 1));
+        }
     }
 
     private static void SeedSparseSalesData(Sheet sheet)

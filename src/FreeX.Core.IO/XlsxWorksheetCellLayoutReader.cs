@@ -15,13 +15,13 @@ internal static class XlsxWorksheetCellLayoutReader
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
         var cachedFormulaErrors = new Dictionary<(uint Row, uint Col), ErrorValue>();
 
-        ReadSheetDataCells(
+        var hasStyleOnlyCells = ReadSheetDataCells(
             worksheetXml.Root?.Element(worksheetNs + "sheetData"),
             worksheetNs,
             explicitStyleOnlyCells,
             cachedFormulaErrors);
 
-        return new XlsxWorksheetCellLayout(cachedFormulaErrors, explicitStyleOnlyCells);
+        return new XlsxWorksheetCellLayout(cachedFormulaErrors, explicitStyleOnlyCells, hasStyleOnlyCells);
     }
 
     public static IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ReadExplicitStyleOnlyCells(
@@ -34,35 +34,40 @@ internal static class XlsxWorksheetCellLayoutReader
         XNamespace worksheetNs)
         => Read(worksheetXml, worksheetNs).CachedFormulaErrors;
 
-    internal static void ReadSheetDataCells(
+    internal static bool ReadSheetDataCells(
         XElement? sheetData,
         XNamespace worksheetNs,
         List<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
         Dictionary<(uint Row, uint Col), ErrorValue> cachedFormulaErrors)
     {
         if (sheetData is null)
-            return;
+            return false;
 
         var rowName = worksheetNs + "row";
         var cellName = worksheetNs + "c";
         var formulaName = worksheetNs + "f";
         var valueName = worksheetNs + "v";
         var inlineStringName = worksheetNs + "is";
+        var hasStyleOnlyCells = false;
 
         foreach (var row in sheetData.Elements(rowName))
         {
             foreach (var cell in row.Elements(cellName))
-                ReadCell(
+            {
+                hasStyleOnlyCells |= ReadCell(
                     cell,
                     formulaName,
                     valueName,
                     inlineStringName,
                     explicitStyleOnlyCells,
                     cachedFormulaErrors);
+            }
         }
+
+        return hasStyleOnlyCells;
     }
 
-    internal static void ReadCell(
+    internal static bool ReadCell(
         XElement cell,
         XNamespace worksheetNs,
         List<(uint Row, uint Col, int StyleIndex)> explicitStyleOnlyCells,
@@ -75,7 +80,7 @@ internal static class XlsxWorksheetCellLayoutReader
             explicitStyleOnlyCells,
             cachedFormulaErrors);
 
-    internal static void ReadCell(
+    internal static bool ReadCell(
         XElement cell,
         XName formulaName,
         XName valueName,
@@ -91,7 +96,7 @@ internal static class XlsxWorksheetCellLayoutReader
         var isErrorType = string.Equals(cell.Attribute("t")?.Value, "e", StringComparison.OrdinalIgnoreCase);
 
         if (!hasStyle && !isErrorType)
-            return;
+            return false;
 
         var formula = cell.Element(formulaName);
         var value = cell.Element(valueName);
@@ -101,17 +106,19 @@ internal static class XlsxWorksheetCellLayoutReader
         var rawValue = value?.Value;
         var hasCachedFormulaError = isErrorType && formula is not null && !string.IsNullOrWhiteSpace(rawValue);
         if (!isStyleOnly && !hasCachedFormulaError)
-            return;
+            return false;
 
         var reference = cell.Attribute("r")?.Value;
         if (string.IsNullOrWhiteSpace(reference) || !CellAddress.TryParse(reference, ParseOnlySheetId, out var address))
-            return;
+            return isStyleOnly;
 
         if (isStyleOnly)
             explicitStyleOnlyCells.Add((address.Row, address.Col, styleIndex));
 
         if (hasCachedFormulaError)
             cachedFormulaErrors[(address.Row, address.Col)] = MapCachedFormulaError(rawValue!);
+
+        return isStyleOnly;
     }
 
     private static ErrorValue MapCachedFormulaError(string rawValue) =>
@@ -132,4 +139,5 @@ internal static class XlsxWorksheetCellLayoutReader
 
 internal sealed record XlsxWorksheetCellLayout(
     Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
-    IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells);
+    IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
+    bool HasStyleOnlyCells);

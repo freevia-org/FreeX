@@ -326,14 +326,14 @@ internal static partial class DelimitedTextWorkbookReader
             return error;
         if (TryParsePercentage(trimmed, out var percentage))
             return new NumberValue(percentage);
-        if (TryParseIsoDateTime(trimmed, out var dateTime))
-            return DateTimeValue.FromDateTime(dateTime);
-        if (TryParseTime(trimmed, out var time))
-            return new DateTimeValue(time.TotalDays);
         if (TryParseCurrency(trimmed, out var currency))
             return new NumberValue(currency);
         if (double.TryParse(trimmed, NumberStyles.Any, CultureInfo.InvariantCulture, out var number))
             return new NumberValue(number);
+        if (TryParseIsoDateTime(trimmed, out var dateTime))
+            return DateTimeValue.FromDateTime(dateTime);
+        if (TryParseTime(trimmed, out var time))
+            return new DateTimeValue(time.TotalDays);
 
         return new TextValue(field);
     }

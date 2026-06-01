@@ -158,20 +158,46 @@ public sealed class GridViewRenderPerformanceTests
     public void RenderHeaders_AvoidsPerHeaderLinqSelectionScans()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
-        var renderHeaders = source[
-            source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("internal static string FormatColumnHeader", StringComparison.Ordinal)];
+        var renderSelectedHeaders = source[
+            source.IndexOf("private void RenderSelectedHeaders(", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawColumnHeader(", StringComparison.Ordinal)];
         var renderFreezeDivider = source[
             source.IndexOf("private void RenderFreezeDivider(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)];
 
-        renderHeaders.Should().Contain("IsColumnHeaderSelected(col.Col, selectedRanges, selRange)");
-        renderHeaders.Should().Contain("IsRowHeaderSelected(row.Row, selectedRanges, selRange)");
-        renderHeaders.Should().Contain("foreach (var range in selectedRanges)");
-        renderHeaders.Should().NotContain(".Any(");
+        renderSelectedHeaders.Should().Contain("IsColumnHeaderSelected(col.Col, selectedRanges, selRange)");
+        renderSelectedHeaders.Should().Contain("IsRowHeaderSelected(row.Row, selectedRanges, selRange)");
+        source.Should().Contain("foreach (var range in selectedRanges)");
+        renderSelectedHeaders.Should().NotContain(".Any(");
         renderFreezeDivider.Should().Contain("FindRowMetric(Viewport.RowMetrics, fp.Rows)");
         renderFreezeDivider.Should().Contain("FindColMetric(Viewport.ColMetrics, fp.Cols)");
         renderFreezeDivider.Should().NotContain("FirstOrDefault");
+    }
+
+    [Fact]
+    public void RenderHeaders_CachesUnselectedHeaderLayerAcrossSelectionRepaints()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var renderHeaders = source[
+            source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderHeaderBaseLayer(", StringComparison.Ordinal)];
+        var renderHeaderBaseLayer = source[
+            source.IndexOf("private void RenderHeaderBaseLayer(", StringComparison.Ordinal)..
+            source.IndexOf("private DrawingGroup BuildHeaderBaseLayerCache(", StringComparison.Ordinal)];
+        var buildHeaderBaseLayer = source[
+            source.IndexOf("private DrawingGroup BuildHeaderBaseLayerCache(", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderHeaderBase(", StringComparison.Ordinal)];
+
+        source.Should().Contain("private DrawingGroup? _headerBaseLayerCache;");
+        source.Should().Contain("private HeaderBaseLayerCacheKey _headerBaseLayerCacheKey;");
+        renderHeaders.Should().Contain("RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
+        renderHeaders.Should().Contain("RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
+        renderHeaderBaseLayer.Should().Contain("_headerBaseLayerCache is { } cached && _headerBaseLayerCacheKey == key");
+        renderHeaderBaseLayer.Should().Contain("dc.DrawDrawing(cached);");
+        renderHeaderBaseLayer.Should().NotContain("SelectedRange");
+        renderHeaderBaseLayer.Should().NotContain("SelectedRanges");
+        buildHeaderBaseLayer.Should().Contain("RenderHeaderBase(groupContext, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
+        buildHeaderBaseLayer.Should().Contain("group.Freeze();");
     }
 
     [Fact]
@@ -337,6 +363,34 @@ public sealed class GridViewRenderPerformanceTests
             .Should().BeLessThan(onRender.IndexOf("RenderFormulaTraceArrows(dc);", StringComparison.Ordinal));
         onRender.IndexOf("if (ObjectDisplayMode == GridObjectDisplayMode.Placeholders)", StringComparison.Ordinal)
             .Should().BeGreaterThan(onRender.LastIndexOf("if (!skipHeavyLayers)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void SelectionOnlyInvalidations_ReusePreSelectionLayerCache()
+    {
+        var properties = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var dispatch = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
+        var cache = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderSurfaceCache.cs"));
+        var onRender = dispatch[
+            dispatch.IndexOf("protected override void OnRender", StringComparison.Ordinal)..
+            dispatch.IndexOf("private void RenderPreSelectionLayers", StringComparison.Ordinal)];
+
+        properties.Should().Contain("OnSelectionVisualPropertyChanged");
+        properties.Should().Contain("grid.MarkSelectionVisualOnlyChange();");
+        dispatch.Should().Contain("RenderPreSelectionLayersWithCache(dc, skipHeavyLayers, isLiveResizing);");
+        cache.Should().Contain("RenderPreSelectionLayers(dc, skipHeavyLayers, isLiveResizing);");
+        cache.Should().Contain("_selectionVisualOnlyChangePending &&");
+        cache.Should().Contain("dc.DrawDrawing(cached);");
+        cache.Should().Contain("BuildPreSelectionLayerCache(skipHeavyLayers, isLiveResizing)");
+        cache.Should().NotContain("SelectedRange");
+        cache.Should().NotContain("SelectedRanges");
+
+        onRender.IndexOf("RenderHeaders(dc);", StringComparison.Ordinal)
+            .Should().BeLessThan(onRender.IndexOf("RenderPreSelectionLayersWithCache", StringComparison.Ordinal));
+        onRender.IndexOf("RenderPreSelectionLayersWithCache", StringComparison.Ordinal)
+            .Should().BeLessThan(onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal));
+        onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal)
+            .Should().BeLessThan(onRender.IndexOf("RenderPostSelectionLayers", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -936,6 +990,25 @@ public sealed class GridViewRenderPerformanceTests
         loop.Should().NotContain("GetSplitPaneClipRectForCell");
         rendering.Should().Contain("geometry.Freeze();");
         splitPanes.Should().Contain("public sealed record SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region)");
+    }
+
+    [Fact]
+    public void RenderSplitPaneCells_UsesWrappedTextLayoutCacheForDefaultWrappedCells()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderSplitPaneCells = rendering[
+            rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+
+        renderSplitPaneCells.Should().Contain("var wrapText = style?.WrapText == true;");
+        renderSplitPaneCells.Should().Contain("var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);");
+        renderSplitPaneCells.Should().Contain("var useDefaultWrappedTextLayout = !useDefaultTextLayout && wrapText && CanUseDefaultWrappedFormattedText(style);");
+        renderSplitPaneCells.Should().Contain("GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)");
+        renderSplitPaneCells.Should().Contain("text.MaxTextWidth = wrapMaxTextWidth;");
+        renderSplitPaneCells.Should().Contain("text.TextAlignment = wrapTextAlignment;");
+        renderSplitPaneCells.Should().Contain("if (style?.ShrinkToFit == true && !wrapText)");
+        renderSplitPaneCells.Should().NotContain("CanUseDefaultFormattedText(style, wrapText: false)");
+        renderSplitPaneCells.Should().NotContain("style.WrapText != true");
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)

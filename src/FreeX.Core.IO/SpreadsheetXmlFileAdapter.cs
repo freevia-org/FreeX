@@ -218,7 +218,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         if (tableElement is null)
             return;
 
-        ReadColumns(sheet, tableElement);
+        var columnStyles = ReadColumns(sheet, tableElement, styles);
 
         var rowIndex = 1u;
         foreach (var rowElement in tableElement.Elements(SpreadsheetNs + "Row"))
@@ -227,7 +227,14 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             if (rowIndex > CellAddress.MaxRow)
                 break;
 
-            ReadRowLayout(sheet, rowElement, rowIndex);
+            var rowSpan = ReadSpan(rowElement);
+            var lastRowIndex = rowSpan > CellAddress.MaxRow - rowIndex
+                ? CellAddress.MaxRow
+                : rowIndex + rowSpan;
+            for (var currentRowIndex = rowIndex; currentRowIndex <= lastRowIndex; currentRowIndex++)
+                ReadRowLayout(sheet, rowElement, currentRowIndex);
+
+            var rowStyleId = ReadStyleId(rowElement, styles);
 
             var columnIndex = 1u;
             foreach (var cellElement in rowElement.Elements(SpreadsheetNs + "Cell"))
@@ -237,7 +244,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                     break;
 
                 var address = new CellAddress(sheet.Id, rowIndex, columnIndex);
-                var cell = ReadCell(cellElement, styles);
+                columnStyles.TryGetValue(columnIndex, out var columnStyleId);
+                var cell = ReadCell(cellElement, styles, rowStyleId, columnStyleId);
                 var hyperlinkTarget = cellElement.Attribute(SpreadsheetHrefAttribute)?.Value;
                 if (cell.Value is not BlankValue || cell.FormulaText is not null || !string.IsNullOrWhiteSpace(hyperlinkTarget))
                 {
@@ -267,7 +275,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 columnIndex = AdvanceColumnIndex(columnIndex, mergeAcross);
             }
 
-            rowIndex++;
+            rowIndex = lastRowIndex + 1;
         }
     }
 
@@ -292,24 +300,35 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         }
     }
 
-    private static void ReadColumns(Sheet sheet, XElement tableElement)
+    private static Dictionary<uint, StyleId> ReadColumns(
+        Sheet sheet,
+        XElement tableElement,
+        IReadOnlyDictionary<string, StyleId> styles)
     {
+        var columnStyles = new Dictionary<uint, StyleId>();
         var columnIndex = 1u;
         foreach (var columnElement in tableElement.Elements(SpreadsheetNs + "Column"))
         {
             columnIndex = ReadIndex(columnElement, columnIndex);
             if (columnIndex > CellAddress.MaxCol)
-                break;
+                return columnStyles;
 
             var span = ReadSpan(columnElement);
             var lastColumnIndex = span > CellAddress.MaxCol - columnIndex
                 ? CellAddress.MaxCol
                 : columnIndex + span;
             for (var currentColumnIndex = columnIndex; currentColumnIndex <= lastColumnIndex; currentColumnIndex++)
+            {
                 ReadColumnLayout(sheet, columnElement, currentColumnIndex);
+                var styleId = ReadStyleId(columnElement, styles);
+                if (styleId != StyleId.Default)
+                    columnStyles[currentColumnIndex] = styleId;
+            }
 
             columnIndex = lastColumnIndex + 1;
         }
+
+        return columnStyles;
     }
 
     private static void ReadColumnLayout(Sheet sheet, XElement columnElement, uint columnIndex)
@@ -344,11 +363,17 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             sheet.HiddenRows.Add(rowIndex);
     }
 
-    private static Cell ReadCell(XElement cellElement, IReadOnlyDictionary<string, StyleId> styles)
+    private static Cell ReadCell(
+        XElement cellElement,
+        IReadOnlyDictionary<string, StyleId> styles,
+        StyleId rowStyleId = default,
+        StyleId columnStyleId = default)
     {
         var value = ReadValue(cellElement.Element(SpreadsheetNs + "Data"));
         var formula = cellElement.Attribute(SpreadsheetFormulaAttribute)?.Value;
         var styleId = ReadStyleId(cellElement, styles);
+        if (styleId == StyleId.Default)
+            styleId = rowStyleId != StyleId.Default ? rowStyleId : columnStyleId;
         if (string.IsNullOrWhiteSpace(formula))
             return new Cell { Value = value, StyleId = styleId };
 
