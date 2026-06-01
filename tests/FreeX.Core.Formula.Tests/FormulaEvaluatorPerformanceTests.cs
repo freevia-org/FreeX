@@ -265,6 +265,50 @@ public sealed class FormulaEvaluatorPerformanceTests
         AssertLargeRangeSelectionPerformance(formula, expected, maxAllocatedBytes);
     }
 
+    public static IEnumerable<object[]> AggregateNonSelectionStreamingCases()
+    {
+        yield return ["=AGGREGATE(1,4,A1:A100000)", 50_000.5d, false, 1_000_000];
+        yield return ["=AGGREGATE(2,4,A1:A100000)", 100_000d, false, 1_000_000];
+        yield return ["=AGGREGATE(3,4,A1:A100000)", 100_000d, false, 1_000_000];
+        yield return ["=AGGREGATE(4,4,A1:A100000)", 100_000d, false, 1_000_000];
+        yield return ["=AGGREGATE(5,4,A1:A100000)", 1d, false, 1_000_000];
+        yield return ["=AGGREGATE(6,4,A1:A100000)", 2d, true, 1_000_000];
+        yield return ["=AGGREGATE(7,4,A1:A100000)", Math.Sqrt((double)RowCount * (RowCount + 1) / 12), false, 1_000_000];
+        yield return ["=AGGREGATE(8,4,A1:A100000)", Math.Sqrt(((double)RowCount * RowCount - 1) / 12), false, 1_000_000];
+        yield return ["=AGGREGATE(9,4,A1:A100000)", 5_000_050_000d, false, 1_000_000];
+        yield return ["=AGGREGATE(10,4,A1:A100000)", (double)RowCount * (RowCount + 1) / 12, false, 1_000_000];
+        yield return ["=AGGREGATE(11,4,A1:A100000)", ((double)RowCount * RowCount - 1) / 12, false, 1_000_000];
+    }
+
+    [Theory]
+    [MemberData(nameof(AggregateNonSelectionStreamingCases))]
+    public void AggregateNonSelectionLargeRanges_AvoidNumericListMaterialization(
+        string formula,
+        double expected,
+        bool useProductSheet,
+        long maxAllocatedBytes)
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = useProductSheet ? MakeAggregateProductSheet() : MakeNumericSheet();
+
+        ((NumberValue)evaluator.Evaluate(formula, sheet)).Value.Should().BeApproximately(expected, 1e-7);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        ((NumberValue)result).Value.Should().BeApproximately(expected, 1e-7);
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(maxAllocatedBytes);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
     [Fact]
     public void AggregateModeLargeRange_AvoidsGroupByMaterialization()
     {
@@ -550,6 +594,15 @@ public sealed class FormulaEvaluatorPerformanceTests
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(value));
         }
 
+        return sheet;
+    }
+
+    private static Sheet MakeAggregateProductSheet()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
+        for (uint row = 2; row <= RowCount; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(1));
         return sheet;
     }
 
