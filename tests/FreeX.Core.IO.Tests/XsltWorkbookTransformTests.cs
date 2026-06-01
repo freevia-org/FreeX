@@ -899,6 +899,51 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_ResultTreeVariable_CopiesReusableSpreadsheetMlRows()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row label="Alpha" amount="42.5" />
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <xsl:variable name="headerRow">
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="String">Name</ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="String">Amount</ss:Data></ss:Cell>
+                  </ss:Row>
+                </xsl:variable>
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Reusable">
+                    <ss:Table>
+                      <xsl:copy-of select="$headerRow" />
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@label" /></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@amount" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var document = XDocument.Load(transformed);
+        var rows = document.Root!.Descendants(ss + "Row").ToArray();
+
+        rows.Should().HaveCount(2);
+        rows[0].Descendants(ss + "Data").Select(cell => cell.Value).Should().Equal("Name", "Amount");
+        rows[1].Descendants(ss + "Data").Select(cell => cell.Value).Should().Equal("Alpha", "42.5");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NumberInstruction_GeneratesFormattedSequenceCells()
     {
         using var source = StreamFromString("""
