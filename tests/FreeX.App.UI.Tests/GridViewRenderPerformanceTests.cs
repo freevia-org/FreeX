@@ -748,6 +748,10 @@ public sealed class GridViewRenderPerformanceTests
         source.Should().Contain("private static readonly Pen OutlinePen");
         source.Should().Contain("private static readonly Pen WhiteThinPen");
         source.Should().Contain("private static readonly ConcurrentDictionary<ConditionalIconAppearanceKey, ConditionalIconAppearance> AppearanceCache");
+        drawMethod.Should().Contain("if (rect.Width <= 0 || rect.Height <= 0)");
+        drawMethod.IndexOf("if (rect.Width <= 0 || rect.Height <= 0)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(drawMethod.IndexOf("var appearance = ResolveAppearance(icon);", StringComparison.Ordinal));
         drawMethod.Should().Contain("var appearance = ResolveAppearance(icon);");
         drawMethod.Should().NotContain("ResolveColor(icon)");
         drawMethod.Should().NotContain("ResolveGlyphKind(icon)");
