@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -339,11 +340,102 @@ public sealed class RowColumnShiftAddressStateTests
         sheet.AutoFilter.FilterColumns.Select(column => column.ColumnId).Should().Equal(1, 3);
     }
 
+    [Fact]
+    public void Benchmark_InsertRowsWithStyleOnlyCells_ReportsTiming()
+    {
+        const int iterations = 5;
+        var (workbook, sheet, ctx) = SetupStyleOnlyShiftWorkbook();
+
+        var warmup = new InsertRowsCommand(sheet.Id, beforeRow: 20);
+        warmup.Apply(ctx).Success.Should().BeTrue();
+        warmup.Revert(ctx);
+        sheet.GetStyleOnlyEntries().Should().HaveCount(StyleOnlyShiftRows * StyleOnlyShiftColumns);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var command = new InsertRowsCommand(sheet.Id, beforeRow: 20);
+            var step = Stopwatch.StartNew();
+            command.Apply(ctx).Success.Should().BeTrue();
+            command.Revert(ctx);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        sheet.GetStyleOnlyEntries().Should().HaveCount(StyleOnlyShiftRows * StyleOnlyShiftColumns);
+        workbook.SheetCount.Should().Be(1);
+        Console.WriteLine(
+            "PERF STYLE_ONLY_ROW_SHIFT " +
+            $"rows={StyleOnlyShiftRows} cols={StyleOnlyShiftColumns} " +
+            $"style_only_cells={StyleOnlyShiftRows * StyleOnlyShiftColumns} steps={iterations} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void AddressStateStyleOnlyClear_UsesSheetClearAllPath()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Commands", "RowColumnShiftHelpers.AddressState.cs"));
+
+        source.Should().Contain("sheet.ClearStyleOnlyEntries();");
+        source.Should().NotContain("GetStyleOnlyEntries().ToList()");
+    }
+
     private static (Workbook Workbook, Sheet Sheet, ICommandContext Context) Setup()
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         return (workbook, sheet, new SimpleCtx(workbook));
+    }
+
+    private const int StyleOnlyShiftRows = 800;
+    private const int StyleOnlyShiftColumns = 80;
+
+    private static (Workbook Workbook, Sheet Sheet, ICommandContext Context) SetupStyleOnlyShiftWorkbook()
+    {
+        var workbook = new Workbook("style-only shift perf");
+        var sheet = workbook.AddSheet("Sheet1");
+        var style = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            FillColor = CellColor.FromArgb(225, 239, 218)
+        });
+
+        for (uint row = 1; row <= StyleOnlyShiftRows; row++)
+        {
+            for (uint col = 1; col <= StyleOnlyShiftColumns; col++)
+                sheet.SetStyleOnly(row, col, style);
+        }
+
+        return (workbook, sheet, new SimpleCtx(workbook));
+    }
+
+    private static string FindRepoFile(params string[] relativeParts)
+    {
+        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = dir.Parent;
+        }
+
+        return Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(relativeParts).ToArray());
     }
 
     private static CellAddress Addr(Sheet sheet, uint row, uint col) => new(sheet.Id, row, col);
