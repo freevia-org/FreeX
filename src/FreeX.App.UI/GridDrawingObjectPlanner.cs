@@ -133,6 +133,9 @@ internal static class GridDrawingObjectPlanner
 
         foreach (var metric in metrics)
         {
+            if (metric.Col > toColumn)
+                break;
+
             if (foundFrom is null && metric.Col == fromColumn)
                 foundFrom = metric;
 
@@ -164,6 +167,9 @@ internal static class GridDrawingObjectPlanner
 
         foreach (var metric in metrics)
         {
+            if (metric.Row > toRow)
+                break;
+
             if (foundFrom is null && metric.Row == fromRow)
                 foundFrom = metric;
 
@@ -187,6 +193,9 @@ internal static class GridDrawingObjectPlanner
     {
         foreach (var metric in metrics)
         {
+            if (metric.Row > row)
+                break;
+
             if (metric.Row == row)
             {
                 rowMetric = metric;
@@ -202,6 +211,9 @@ internal static class GridDrawingObjectPlanner
     {
         foreach (var metric in metrics)
         {
+            if (metric.Col > column)
+                break;
+
             if (metric.Col == column)
             {
                 columnMetric = metric;

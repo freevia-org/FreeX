@@ -159,6 +159,9 @@ public sealed class GridViewDrawingObjectThemeTests
         anchorHelpers.Should().Contain("TryFindAnchorColumns(viewport.ColMetrics");
         anchorHelpers.Should().Contain("TryFindAnchorRows(viewport.RowMetrics");
         anchorHelpers.Should().Contain("foreach (var metric in metrics)");
+        anchorHelpers.Should().Contain("if (metric.Col > toColumn)");
+        anchorHelpers.Should().Contain("if (metric.Row > toRow)");
+        anchorHelpers.Should().Contain("break;");
         anchorHelpers.Should().NotContain("FirstOrDefault");
         anchorHelpers.Should().NotContain(".Where(");
         anchorHelpers.Should().NotContain(".ToList()");
@@ -176,6 +179,9 @@ public sealed class GridViewDrawingObjectThemeTests
         var plannerMethod = planner[
             planner.IndexOf("public static bool TryCreateAnchoredObjectRect", StringComparison.Ordinal)..
             planner.IndexOf("public static string GetNativeControlCaption", StringComparison.Ordinal)];
+        var anchorHelpers = planner[
+            planner.IndexOf("private static bool TryFindAnchorRow", StringComparison.Ordinal)..
+            planner.IndexOf("private static double EmusToPixels", StringComparison.Ordinal)];
         var renderTextBoxes = drawingObjects[
             drawingObjects.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)..
             drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
@@ -189,6 +195,9 @@ public sealed class GridViewDrawingObjectThemeTests
         plannerMethod.Should().Contain("TryFindAnchorRow(viewport.RowMetrics, anchor.Row");
         plannerMethod.Should().Contain("TryFindAnchorColumn(viewport.ColMetrics, anchor.Col");
         plannerMethod.Should().NotContain("FirstOrDefault");
+        anchorHelpers.Should().Contain("if (metric.Row > row)");
+        anchorHelpers.Should().Contain("if (metric.Col > column)");
+        anchorHelpers.Should().Contain("break;");
         renderTextBoxes.Should().Contain("TryCreateAnchoredObjectRect(textBox.Anchor");
         renderTextBoxes.Should().NotContain("FirstOrDefault");
         renderDrawingShapes.Should().Contain("TryCreateAnchoredObjectRect(shape.Anchor");
