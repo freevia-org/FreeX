@@ -1626,7 +1626,7 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void ArrangeAllMenu_ReflectsStoredWorkbookArrangement()
+    public void ArrangeAllMenu_ReflectsStoredWorkbookArrangementAndAppliesLiveLayout()
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
@@ -1636,6 +1636,7 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("ArrangeAllContextMenu_Opened");
         source.Should().Contain("ArrangeAllMenuPlanner.IsChecked(item.Tag, _workbook.WindowArrangement)");
         source.Should().Contain("ArrangeAllMenuPlanner.TryParseArrangement");
+        source.Should().Contain("_windowRegistry?.ArrangeVisibleWindows(arrangement, workArea.Width, workArea.Height)");
     }
 
     [Fact]

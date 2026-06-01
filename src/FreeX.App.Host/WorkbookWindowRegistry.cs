@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
@@ -35,7 +36,7 @@ public interface IWorkbookWindow
     /// <summary>Applies a worksheet scroll position pushed from the paired window.</summary>
     void SetScrollOffset(WorkbookScrollOffset offset);
 
-    /// <summary>Restores this window to Normal state and positions it at the given work-area bounds (View Side by Side tiling).</summary>
+    /// <summary>Restores this window to Normal state and positions it at the given work-area bounds.</summary>
     void TileToWorkArea(Rect bounds);
 }
 
@@ -44,7 +45,7 @@ public interface IWorkbookWindow
 /// "New Window"). The registry is a thin coordinator: every ordering decision (which window to
 /// switch to, how to number titles, which windows to refresh) is delegated to the pure, unit-tested
 /// <see cref="WorkbookWindowOrdering"/> helper; geometry decisions are delegated to
-/// <see cref="WindowResetPositionPlanner"/> and <see cref="SideBySideLayoutPlanner"/>.
+/// <see cref="WindowResetPositionPlanner"/>, <see cref="ArrangeAllLayoutPlanner"/>, and <see cref="SideBySideLayoutPlanner"/>.
 ///
 /// Registered as a DI singleton so all windows over the shared workbook see the same registry.
 /// </summary>
@@ -184,7 +185,40 @@ public sealed class WorkbookWindowRegistry
             _windows[index].RefreshFromSharedWorkbook();
     }
 
-    // ── View Side by Side / Synchronous Scrolling ─────────────────────────────
+    // Arrange All
+
+    /// <summary>
+    /// Applies an Arrange All layout to every visible workbook window. Hidden windows are left as-is,
+    /// matching Excel's distinction between Hide/Unhide and live window arrangement.
+    /// </summary>
+    public bool ArrangeVisibleWindows(
+        WorkbookWindowArrangement arrangement,
+        double workAreaWidth,
+        double workAreaHeight)
+    {
+        if (!Enum.IsDefined(arrangement))
+            return false;
+
+        var visibleWindows = _windows.Where(w => !_hidden.Contains(w)).ToList();
+        if (visibleWindows.Count == 0)
+            return false;
+
+        var bounds = ArrangeAllLayoutPlanner.Arrange(
+            arrangement,
+            workAreaWidth,
+            workAreaHeight,
+            visibleWindows.Count);
+        if (bounds.Count != visibleWindows.Count)
+            return false;
+
+        DisableSideBySide();
+        for (var index = 0; index < visibleWindows.Count; index++)
+            visibleWindows[index].TileToWorkArea(bounds[index]);
+
+        return true;
+    }
+
+    // View Side by Side / Synchronous Scrolling
 
     /// <summary>
     /// Tiles <paramref name="primary"/> and the next visible window into the two halves of the work
