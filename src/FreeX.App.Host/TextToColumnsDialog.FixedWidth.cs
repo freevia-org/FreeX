@@ -25,8 +25,14 @@ public sealed partial class TextToColumnsDialog
 
     private void FixedWidthRuler_MouseMove(object sender, MouseEventArgs e)
     {
-        if (_dragBreakIndex is not { } index || e.LeftButton != MouseButtonState.Pressed)
+        if (_dragBreakIndex is not { } index)
             return;
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            CancelFixedWidthRulerDrag();
+            e.Handled = true;
+            return;
+        }
 
         var positions = ParseFixedWidthBreakPositions(_fixedWidthBreaksBox.Text);
         UpdateFixedWidthBreakPositions(MoveFixedWidthBreakPosition(
@@ -40,9 +46,13 @@ public sealed partial class TextToColumnsDialog
 
     private void FixedWidthRuler_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        _dragBreakIndex = null;
-        _fixedWidthRuler.ReleaseMouseCapture();
+        CancelFixedWidthRulerDrag();
         e.Handled = true;
+    }
+
+    private void FixedWidthRuler_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        _dragBreakIndex = null;
     }
 
     private void FixedWidthRuler_MouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -64,6 +74,13 @@ public sealed partial class TextToColumnsDialog
         var updated = AddFixedWidthBreakPosition(positions, position, FixedWidthMaxLength());
         UpdateFixedWidthBreakPositions(updated);
         return updated.ToList().IndexOf(position);
+    }
+
+    private void CancelFixedWidthRulerDrag()
+    {
+        _dragBreakIndex = null;
+        if (_fixedWidthRuler.IsMouseCaptured)
+            _fixedWidthRuler.ReleaseMouseCapture();
     }
 
     private int FindNearestBreakIndex(IReadOnlyList<int> positions, double x, double tolerance)

@@ -103,6 +103,7 @@ public sealed partial class TextToColumnsDialog : Window
         _fixedWidthRuler.MouseLeftButtonDown += FixedWidthRuler_MouseLeftButtonDown;
         _fixedWidthRuler.MouseMove += FixedWidthRuler_MouseMove;
         _fixedWidthRuler.MouseLeftButtonUp += FixedWidthRuler_MouseLeftButtonUp;
+        _fixedWidthRuler.LostMouseCapture += FixedWidthRuler_LostMouseCapture;
         _fixedWidthRuler.MouseRightButtonDown += FixedWidthRuler_MouseRightButtonDown;
         _formatColumnBox.SelectionChanged += (_, _) => SyncColumnFormatControls();
         _formatGeneralButton.Checked += (_, _) => StoreSelectedColumnFormat(TextToColumnsColumnFormat.General);
