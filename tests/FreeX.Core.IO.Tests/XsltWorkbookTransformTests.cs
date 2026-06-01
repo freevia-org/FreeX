@@ -1098,6 +1098,50 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_NamedRangeAttributeValueTemplate_GeneratesSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <report sheet="Q1 Bob's Team" range="='Q1 Bob''s Team'!$A$1:$B$2">
+              <row name="Alpha" amount="12.5"/>
+              <row name="Beta" amount="7.25"/>
+            </report>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/report">
+                <ss:Workbook>
+                  <ss:Names>
+                    <ss:NamedRange ss:Name="GeneratedRows" ss:RefersTo="{@range}"/>
+                  </ss:Names>
+                  <ss:Worksheet ss:Name="{@sheet}">
+                    <ss:Table>
+                      <xsl:for-each select="row">
+                        <ss:Row>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@name"/></ss:Data></ss:Cell>
+                          <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="@amount"/></ss:Data></ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var document = XDocument.Load(transformed);
+        var namedRange = document.Descendants(ss + "NamedRange").Single();
+
+        namedRange.Attribute(ss + "Name")!.Value.Should().Be("GeneratedRows");
+        namedRange.Attribute(ss + "RefersTo")!.Value.Should().Be("='Q1 Bob''s Team'!$A$1:$B$2");
+        document.Descendants(ss + "Worksheet").Single().Attribute(ss + "Name")!.Value.Should().Be("Q1 Bob's Team");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NumberInstruction_GeneratesFormattedSequenceCells()
     {
         using var source = StreamFromString("""
