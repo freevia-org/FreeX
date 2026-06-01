@@ -225,6 +225,30 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarEnter_CommitsFormulaMovesSelectionAndRefreshesEditors()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=SUM(B1:C1)");
+
+            harness.PressFormulaBarKey(Key.Enter).Should().BeTrue();
+
+            harness.CellFormula(1, 1).Should().Be("SUM(B1:C1)");
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 2, 1),
+                new CellAddress(harness.CurrentSheetId, 2, 1)));
+            harness.CellAddressBoxText.Should().Be("A2");
+            harness.FormulaBarText.Should().BeEmpty();
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void FormulaBarTab_CommitsEditMovesSelectionRightAndRefreshesEditors()
     {
         StaTestRunner.Run(() =>
