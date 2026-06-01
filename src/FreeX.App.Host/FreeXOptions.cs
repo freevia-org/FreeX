@@ -33,6 +33,8 @@ public sealed class FreeXOptions
     public int    DefaultFontSize  { get; set; } = 11;
     public int    DefaultSheetCount{ get; set; } = 1;
     public string UserName         { get; set; } = Environment.UserName;
+    public bool CollapseRibbonAutomatically { get; set; }
+    public bool ShowScreenTips { get; set; } = true;
 
     // Language
     public string AppLanguage { get; set; } = AppLanguageCatalog.SystemDefaultCultureName;

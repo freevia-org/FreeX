@@ -88,6 +88,55 @@ public sealed class NativeJsonAdapterPerformanceTests
     }
 
     [Fact]
+    public void Benchmark_LoadDenseWorkbook_ReportsTimingAndAllocatedBytes()
+    {
+        const int iterations = 3;
+        var adapter = new NativeJsonAdapter();
+        byte[] payload;
+        using (var source = new MemoryStream())
+        {
+            adapter.Save(CreateDenseWorkbook(), source);
+            payload = source.ToArray();
+        }
+
+        using (var warmup = new MemoryStream(payload, writable: false))
+            adapter.Load(warmup).SheetCount.Should().Be(DenseSheetCount);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream(payload, writable: false);
+            var step = Stopwatch.StartNew();
+            var loaded = adapter.Load(stream);
+            step.Stop();
+            loaded.SheetCount.Should().Be(DenseSheetCount);
+            loaded.GetSheetAt(0).CellCount.Should().Be(DenseRowsPerSheet * DenseColumnsPerSheet);
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF NATIVE_JSON_LOAD_DENSE " +
+            $"sheets={DenseSheetCount} rows={DenseRowsPerSheet} cols={DenseColumnsPerSheet} " +
+            $"steps={iterations} bytes={payload.Length:N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+        allocatedBytes.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Benchmark_LoadRepeatedCustomStyles_ReportsTimingAndAllocatedBytes()
     {
         const int iterations = 3;
