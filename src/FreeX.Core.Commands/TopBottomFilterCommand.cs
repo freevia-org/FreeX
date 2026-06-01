@@ -62,30 +62,27 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         }
 
         var filterCol = _range.Start.Col + _filterColOffset;
-        var rankedRows = new List<(uint Row, double Value)>();
-        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
-        {
-            if (sheet.GetValue(row, filterCol) is NumberValue number)
-                rankedRows.Add((row, number.Value));
-        }
+        var firstDataRow = _range.Start.Row + 1;
+        var lastDataRow = _range.End.Row;
+        if (firstDataRow > lastDataRow)
+            return new CommandOutcome(true);
 
+        var dataRowCount = (int)Math.Min(lastDataRow - firstDataRow + 1, (uint)int.MaxValue);
         var keepCount = _percent
-            ? (uint)Math.Ceiling(rankedRows.Count * Math.Min(_count, 100u) / 100.0)
-            : _count;
-        var keptRows = rankedRows
-            .OrderBy(item => _top ? -item.Value : item.Value)
-            .ThenBy(item => item.Row)
-            .Take((int)Math.Min(keepCount, (uint)rankedRows.Count))
-            .Select(item => item.Row)
-            .ToHashSet();
+            ? GetPercentKeepCount(sheet, filterCol, firstDataRow, lastDataRow)
+            : (int)Math.Min(_count, (uint)dataRowCount);
 
-        FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
-
-        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
+        if (keepCount >= dataRowCount)
         {
-            if (!keptRows.Contains(row))
-                sheet.FilterHiddenRows.Add(row);
+            ApplyNumericVisibility(sheet, filterCol, firstDataRow, lastDataRow);
+            return new CommandOutcome(true);
         }
+
+        var keptRows = keepCount == 0
+            ? new HashSet<uint>()
+            : SelectBestRows(sheet, filterCol, firstDataRow, lastDataRow, keepCount, _top);
+
+        ApplyKeptRowVisibility(sheet.FilterHiddenRows, firstDataRow, lastDataRow, keptRows);
 
         return new CommandOutcome(true);
     }
@@ -101,5 +98,90 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         sheet.FilterHiddenRows.Clear();
         if (_previousFilterHiddenRows is not null)
             sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
+    }
+
+    private int GetPercentKeepCount(Sheet sheet, uint filterCol, uint firstDataRow, uint lastDataRow)
+    {
+        var numericCount = 0;
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+        {
+            if (sheet.GetValue(row, filterCol) is NumberValue)
+                numericCount++;
+        }
+
+        return (int)Math.Ceiling(numericCount * (Math.Min(_count, 100u) / 100.0));
+    }
+
+    private static HashSet<uint> SelectBestRows(
+        Sheet sheet,
+        uint filterCol,
+        uint firstDataRow,
+        uint lastDataRow,
+        int keepCount,
+        bool top)
+    {
+        var comparer = new RankedFilterRowWorstFirstComparer(top);
+        var queue = new PriorityQueue<RankedFilterRow, RankedFilterRow>(keepCount, comparer);
+
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+        {
+            if (sheet.GetValue(row, filterCol) is not NumberValue number)
+                continue;
+
+            var candidate = new RankedFilterRow(row, number.Value);
+            if (queue.Count < keepCount)
+            {
+                queue.Enqueue(candidate, candidate);
+            }
+            else if (queue.TryPeek(out _, out var worst) && comparer.Compare(candidate, worst) > 0)
+            {
+                queue.Dequeue();
+                queue.Enqueue(candidate, candidate);
+            }
+        }
+
+        var keptRows = new HashSet<uint>(queue.Count);
+        while (queue.TryDequeue(out var row, out _))
+            keptRows.Add(row.Row);
+
+        return keptRows;
+    }
+
+    private static void ApplyNumericVisibility(
+        Sheet sheet,
+        uint filterCol,
+        uint firstDataRow,
+        uint lastDataRow)
+    {
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+            FilterHiddenRowUpdater.SetVisible(sheet.FilterHiddenRows, row, sheet.GetValue(row, filterCol) is NumberValue);
+    }
+
+    private static void ApplyKeptRowVisibility(
+        HashSet<uint> filterHiddenRows,
+        uint firstDataRow,
+        uint lastDataRow,
+        HashSet<uint> keptRows)
+    {
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+            FilterHiddenRowUpdater.SetVisible(filterHiddenRows, row, keptRows.Contains(row));
+    }
+
+    private readonly record struct RankedFilterRow(uint Row, double Value);
+
+    private sealed class RankedFilterRowWorstFirstComparer(bool top) : IComparer<RankedFilterRow>
+    {
+        public int Compare(RankedFilterRow x, RankedFilterRow y) =>
+            -CompareBestFirst(x, y, top);
+
+        private static int CompareBestFirst(RankedFilterRow x, RankedFilterRow y, bool top)
+        {
+            var valueComparison = top
+                ? Comparer<double>.Default.Compare(-x.Value, -y.Value)
+                : Comparer<double>.Default.Compare(x.Value, y.Value);
+            return valueComparison != 0
+                ? valueComparison
+                : x.Row.CompareTo(y.Row);
+        }
     }
 }

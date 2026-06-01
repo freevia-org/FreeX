@@ -36,7 +36,8 @@ internal static partial class XlsxChartXmlWriter
                         : ToChartExTitleXml(chart, chartExNs, drawingNs),
                     new XElement(chartExNs + "plotArea",
                         new XElement(chartExNs + "plotAreaRegion",
-                            BuildChartExSeries(chart, chartExNs, chartData.Count))),
+                            BuildChartExSeries(chart, chartExNs, chartData.Count)),
+                        BuildChartExPlotAreaAxes(chart, chartExNs)),
                     ToChartExLegendXml(chart, chartExNs))));
     }
 
@@ -118,22 +119,27 @@ internal static partial class XlsxChartXmlWriter
             yield return new XElement(chartExNs + "series",
                 new XAttribute("layoutId", ToChartExSeriesLayoutId(chart.Type)),
                 new XElement(chartExNs + "dataId", new XAttribute("val", dataId)),
-                BuildChartExSeriesLayoutPr(chart, chartExNs));
+                BuildChartExSeriesLayoutPr(chart, chartExNs),
+                chart.Type == ChartType.Pareto
+                    ? new XElement(chartExNs + "axisId", "1")
+                    : null);
 
             if (chart.Type == ChartType.Pareto)
             {
                 yield return new XElement(chartExNs + "series",
                     new XAttribute("layoutId", "paretoLine"),
-                    new XElement(chartExNs + "dataId", new XAttribute("val", dataId)));
+                    new XAttribute("ownerIdx", seriesIndex.ToString(CultureInfo.InvariantCulture)),
+                    new XElement(chartExNs + "axisId", "2"));
             }
         }
     }
 
     /// <summary>
     /// Optional per-series layout properties for chartEx families. Histogram emits Excel's default
-    /// empty binning element so desktop Excel treats the data as bins, but custom <c>cx:binCount</c>
-    /// and <c>cx:binSize</c> values remain intentionally suppressed because Excel rejects otherwise
-    /// valid chartEx packages that contain them.
+    /// empty binning element so desktop Excel treats the data as bins, and Pareto emits Excel's
+    /// aggregation marker so the primary column series is sorted/grouped by value. Custom
+    /// <c>cx:binCount</c> and <c>cx:binSize</c> values remain intentionally suppressed because Excel
+    /// rejects otherwise valid chartEx packages that contain them.
     /// </summary>
     private static XElement? BuildChartExSeriesLayoutPr(ChartModel chart, XNamespace chartExNs)
     {
@@ -143,10 +149,36 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartExNs + "binning", new XAttribute("intervalClosed", "r")));
         }
 
+        if (chart.Type == ChartType.Pareto)
+            return new XElement(chartExNs + "layoutPr", new XElement(chartExNs + "aggregation"));
+
         var subtotals = BuildChartExSubtotals(chart, chartExNs);
         return subtotals is null
             ? null
             : new XElement(chartExNs + "layoutPr", subtotals);
+    }
+
+    private static IEnumerable<XElement> BuildChartExPlotAreaAxes(ChartModel chart, XNamespace chartExNs)
+    {
+        if (chart.Type != ChartType.Pareto)
+            yield break;
+
+        yield return new XElement(chartExNs + "axis",
+            new XAttribute("id", "0"),
+            new XElement(chartExNs + "catScaling", new XAttribute("gapWidth", "2.19000006")),
+            new XElement(chartExNs + "tickLabels"));
+        yield return new XElement(chartExNs + "axis",
+            new XAttribute("id", "1"),
+            new XElement(chartExNs + "valScaling"),
+            new XElement(chartExNs + "majorGridlines"),
+            new XElement(chartExNs + "tickLabels"));
+        yield return new XElement(chartExNs + "axis",
+            new XAttribute("id", "2"),
+            new XElement(chartExNs + "valScaling",
+                new XAttribute("max", "1"),
+                new XAttribute("min", "0")),
+            new XElement(chartExNs + "units", new XAttribute("unit", "percentage")),
+            new XElement(chartExNs + "tickLabels"));
     }
 
     private static XElement? BuildChartExSubtotals(ChartModel chart, XNamespace chartExNs)
