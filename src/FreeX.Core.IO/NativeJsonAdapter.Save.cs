@@ -108,6 +108,7 @@ public sealed partial class NativeJsonAdapter
                 .Where(cache => cache.CacheId > 0)
                 .Select(ToPivotCacheDto)
                 .ToList(),
+            CellStyles = ToCellStyleTable(workbook, styleDtoCache),
             Sheets = workbook.Sheets.Select(s => new SheetDto
             {
                 Name = s.Name,
@@ -328,7 +329,7 @@ public sealed partial class NativeJsonAdapter
                 ValueType = NativeJsonScalarValueMapper.GetValueType(cell.Value),
                 Formula = cell.HasFormula ? NormalizeNativeFormulaText(cell.FormulaText!) : null,
                 IgnoreFormulaError = cell.IgnoreFormulaError,
-                Style = GetCachedCellStyleDto(workbook, styleDtoCache, cell.StyleId)
+                StyleId = GetNativeStyleId(cell.StyleId)
             });
         }
 
@@ -354,11 +355,25 @@ public sealed partial class NativeJsonAdapter
             result.Add(new StyleOnlyCellDto
             {
                 Address = new CellAddress(sheet.Id, row, col).ToA1(),
-                Style = GetCachedCellStyleDto(workbook, styleDtoCache, entry.StyleId, includeDefault: true)
+                StyleId = GetNativeStyleId(entry.StyleId, includeDefault: true)
             });
         }
 
         return result;
+    }
+
+    private static List<CellStyleDto>? ToCellStyleTable(
+        Workbook workbook,
+        Dictionary<StyleId, CellStyleDto?> styleDtoCache)
+    {
+        if (workbook.StyleCount <= 1)
+            return null;
+
+        var styles = new List<CellStyleDto>(workbook.StyleCount);
+        for (var i = 0; i < workbook.StyleCount; i++)
+            styles.Add(GetCachedCellStyleDto(workbook, styleDtoCache, new StyleId(i), includeDefault: true)!);
+
+        return styles;
     }
 
     private static CellStyleDto? GetCachedCellStyleDto(
@@ -378,6 +393,9 @@ public sealed partial class NativeJsonAdapter
 
         return dto;
     }
+
+    private static int? GetNativeStyleId(StyleId styleId, bool includeDefault = false) =>
+        styleId == StyleId.Default && !includeDefault ? null : Math.Max(0, styleId.Value);
 
     private static bool IsValidAddressOnSheet(CellAddress address, SheetId sheetId) =>
         address.Sheet == sheetId &&

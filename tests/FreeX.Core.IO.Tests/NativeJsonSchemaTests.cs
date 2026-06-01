@@ -62,6 +62,78 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_WritesRepeatedCellStylesThroughWorkbookStyleTable()
+    {
+        var workbook = new Workbook("Styles");
+        var sheet = workbook.AddSheet("Sheet1");
+        var styleId = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            NumberFormat = "$#,##0.00"
+        });
+        var first = Cell.FromValue(new NumberValue(1));
+        first.StyleId = styleId;
+        var second = Cell.FromValue(new NumberValue(2));
+        second.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), first);
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), second);
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var root = document.RootElement;
+        root.GetProperty("CellStyles").GetArrayLength().Should().BeGreaterThan(1);
+        var cells = root.GetProperty("Sheets")[0].GetProperty("Cells");
+        cells[0].GetProperty("StyleId").GetInt32().Should().Be(styleId.Value);
+        cells[1].GetProperty("StyleId").GetInt32().Should().Be(styleId.Value);
+        cells[0].TryGetProperty("Style", out _).Should().BeFalse();
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedStyle = loaded.GetStyle(loadedSheet.GetCell(1, 1)!.StyleId);
+        loadedStyle.Bold.Should().BeTrue();
+        loadedStyle.NumberFormat.Should().Be("$#,##0.00");
+        loadedSheet.GetCell(2, 1)!.StyleId.Should().Be(loadedSheet.GetCell(1, 1)!.StyleId);
+    }
+
+    [Fact]
+    public void Load_AcceptsLegacyInlineCellStylesWithoutWorkbookStyleTable()
+    {
+        const string legacyJson = """
+            {
+              "Name": "LegacyInlineStyle",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Cells": [
+                    {
+                      "Address": "A1",
+                      "Value": "1",
+                      "ValueType": "n",
+                      "Style": {
+                        "Bold": true,
+                        "NumberFormat": "0.00"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(legacyJson));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        var style = workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId);
+        style.Bold.Should().BeTrue();
+        style.NumberFormat.Should().Be("0.00");
+    }
+
+    [Fact]
     public void Load_AcceptsLegacyUnversionedNativeJsonAndMigratesOnSave()
     {
         const string legacyJson = """

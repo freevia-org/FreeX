@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using FreeX.Core.Model;
 
@@ -40,6 +41,8 @@ public sealed partial class NativeJsonAdapter
         public List<WatchedCellDto> WatchedCells { get; set; } = [];
         public List<ScenarioDto> Scenarios { get; set; } = [];
         public List<PivotCacheDto> PivotCaches { get; set; } = [];
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<CellStyleDto>? CellStyles { get; set; }
         public List<SheetDto> Sheets { get; set; } = [];
     }
 
@@ -1051,6 +1054,7 @@ public sealed partial class NativeJsonAdapter
         public int FieldIndex { get; set; }
     }
 
+    [JsonConverter(typeof(CellDtoJsonConverter))]
     private class CellDto
     {
         public string Address { get; set; } = "";
@@ -1058,12 +1062,190 @@ public sealed partial class NativeJsonAdapter
         public string? ValueType { get; set; }
         public string? Formula { get; set; }
         public bool IgnoreFormulaError { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? StyleId { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public CellStyleDto? Style { get; set; }
     }
 
+    [JsonConverter(typeof(StyleOnlyCellDtoJsonConverter))]
     private class StyleOnlyCellDto
     {
         public string? Address { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? StyleId { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public CellStyleDto? Style { get; set; }
+    }
+
+    private sealed class CellDtoJsonConverter : JsonConverter<CellDto>
+    {
+        private static ReadOnlySpan<byte> AddressProperty => "Address"u8;
+        private static ReadOnlySpan<byte> ValueProperty => "Value"u8;
+        private static ReadOnlySpan<byte> ValueTypeProperty => "ValueType"u8;
+        private static ReadOnlySpan<byte> FormulaProperty => "Formula"u8;
+        private static ReadOnlySpan<byte> IgnoreFormulaErrorProperty => "IgnoreFormulaError"u8;
+        private static ReadOnlySpan<byte> StyleIdProperty => "StyleId"u8;
+        private static ReadOnlySpan<byte> StyleProperty => "Style"u8;
+        private static readonly JsonEncodedText AddressName = JsonEncodedText.Encode(nameof(CellDto.Address));
+        private static readonly JsonEncodedText ValueName = JsonEncodedText.Encode(nameof(CellDto.Value));
+        private static readonly JsonEncodedText ValueTypeName = JsonEncodedText.Encode(nameof(CellDto.ValueType));
+        private static readonly JsonEncodedText FormulaName = JsonEncodedText.Encode(nameof(CellDto.Formula));
+        private static readonly JsonEncodedText IgnoreFormulaErrorName = JsonEncodedText.Encode(nameof(CellDto.IgnoreFormulaError));
+        private static readonly JsonEncodedText StyleIdName = JsonEncodedText.Encode(nameof(CellDto.StyleId));
+        private static readonly JsonEncodedText StyleName = JsonEncodedText.Encode(nameof(CellDto.Style));
+
+        public override CellDto Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var dto = new CellDto();
+            if (reader.TokenType != JsonTokenType.StartObject)
+                throw new JsonException();
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndObject)
+                    return dto;
+                if (reader.TokenType != JsonTokenType.PropertyName)
+                    throw new JsonException();
+
+                if (reader.ValueTextEquals(AddressProperty))
+                {
+                    reader.Read();
+                    dto.Address = reader.TokenType == JsonTokenType.Null ? "" : reader.GetString() ?? "";
+                }
+                else if (reader.ValueTextEquals(ValueProperty))
+                {
+                    reader.Read();
+                    dto.Value = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
+                }
+                else if (reader.ValueTextEquals(ValueTypeProperty))
+                {
+                    reader.Read();
+                    dto.ValueType = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
+                }
+                else if (reader.ValueTextEquals(FormulaProperty))
+                {
+                    reader.Read();
+                    dto.Formula = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
+                }
+                else if (reader.ValueTextEquals(IgnoreFormulaErrorProperty))
+                {
+                    reader.Read();
+                    if (reader.TokenType is JsonTokenType.True or JsonTokenType.False)
+                        dto.IgnoreFormulaError = reader.GetBoolean();
+                    else
+                        reader.Skip();
+                }
+                else if (reader.ValueTextEquals(StyleIdProperty))
+                {
+                    reader.Read();
+                    dto.StyleId = reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var styleId)
+                        ? styleId
+                        : null;
+                    if (reader.TokenType is not (JsonTokenType.Number or JsonTokenType.Null))
+                        reader.Skip();
+                }
+                else if (reader.ValueTextEquals(StyleProperty))
+                {
+                    reader.Read();
+                    dto.Style = reader.TokenType == JsonTokenType.Null
+                        ? null
+                        : JsonSerializer.Deserialize<CellStyleDto>(ref reader, options);
+                }
+                else
+                {
+                    reader.Read();
+                    reader.Skip();
+                }
+            }
+
+            throw new JsonException();
+        }
+
+        public override void Write(Utf8JsonWriter writer, CellDto value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WriteString(AddressName, value.Address);
+            writer.WriteString(ValueName, value.Value);
+            writer.WriteString(ValueTypeName, value.ValueType);
+            writer.WriteString(FormulaName, value.Formula);
+            writer.WriteBoolean(IgnoreFormulaErrorName, value.IgnoreFormulaError);
+            if (value.StyleId is { } styleId)
+                writer.WriteNumber(StyleIdName, styleId);
+            if (value.Style is not null)
+            {
+                writer.WritePropertyName(StyleName);
+                JsonSerializer.Serialize(writer, value.Style, options);
+            }
+            writer.WriteEndObject();
+        }
+    }
+
+    private sealed class StyleOnlyCellDtoJsonConverter : JsonConverter<StyleOnlyCellDto>
+    {
+        private static ReadOnlySpan<byte> AddressProperty => "Address"u8;
+        private static ReadOnlySpan<byte> StyleIdProperty => "StyleId"u8;
+        private static ReadOnlySpan<byte> StyleProperty => "Style"u8;
+        private static readonly JsonEncodedText AddressName = JsonEncodedText.Encode(nameof(StyleOnlyCellDto.Address));
+        private static readonly JsonEncodedText StyleIdName = JsonEncodedText.Encode(nameof(StyleOnlyCellDto.StyleId));
+        private static readonly JsonEncodedText StyleName = JsonEncodedText.Encode(nameof(StyleOnlyCellDto.Style));
+
+        public override StyleOnlyCellDto Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var dto = new StyleOnlyCellDto();
+            if (reader.TokenType != JsonTokenType.StartObject)
+                throw new JsonException();
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndObject)
+                    return dto;
+                if (reader.TokenType != JsonTokenType.PropertyName)
+                    throw new JsonException();
+
+                if (reader.ValueTextEquals(AddressProperty))
+                {
+                    reader.Read();
+                    dto.Address = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
+                }
+                else if (reader.ValueTextEquals(StyleIdProperty))
+                {
+                    reader.Read();
+                    dto.StyleId = reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var styleId)
+                        ? styleId
+                        : null;
+                    if (reader.TokenType is not (JsonTokenType.Number or JsonTokenType.Null))
+                        reader.Skip();
+                }
+                else if (reader.ValueTextEquals(StyleProperty))
+                {
+                    reader.Read();
+                    dto.Style = reader.TokenType == JsonTokenType.Null
+                        ? null
+                        : JsonSerializer.Deserialize<CellStyleDto>(ref reader, options);
+                }
+                else
+                {
+                    reader.Read();
+                    reader.Skip();
+                }
+            }
+
+            throw new JsonException();
+        }
+
+        public override void Write(Utf8JsonWriter writer, StyleOnlyCellDto value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WriteString(AddressName, value.Address);
+            if (value.StyleId is { } styleId)
+                writer.WriteNumber(StyleIdName, styleId);
+            if (value.Style is not null)
+            {
+                writer.WritePropertyName(StyleName);
+                JsonSerializer.Serialize(writer, value.Style, options);
+            }
+            writer.WriteEndObject();
+        }
     }
 }
