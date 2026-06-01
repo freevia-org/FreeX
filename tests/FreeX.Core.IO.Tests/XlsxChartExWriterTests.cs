@@ -144,15 +144,15 @@ public sealed class XlsxChartExWriterTests
 
             var styleXml = LoadPackageXml(archive.GetEntry("xl/charts/style1.xml")!);
             styleXml.Root!.Name.Should().Be(ChartStyleNs + "chartStyle");
-            styleXml.Root.Attribute("id")!.Value.Should().Be("410");
-            styleXml.Root.Elements(ChartStyleNs + "legend").Should().ContainSingle();
-            styleXml.Root.Elements(ChartStyleNs + "valueAxis").Should().ContainSingle();
+            AssertExcelNativeChartExStyle(styleXml);
 
             var colorsXml = LoadPackageXml(archive.GetEntry("xl/charts/colors1.xml")!);
             colorsXml.Root!.Name.Should().Be(ChartStyleNs + "colorStyle");
             colorsXml.Root.Attribute("meth")!.Value.Should().Be("cycle");
+            colorsXml.Root.Attribute("id")!.Value.Should().Be("10");
             colorsXml.Root.Elements(DrawingNs + "schemeClr").Select(element => element.Attribute("val")!.Value)
                 .Should().Equal("accent1", "accent2", "accent3", "accent4", "accent5", "accent6");
+            AssertExcelNativeChartExColorStyle(colorsXml);
 
             var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
             drawingXml.Root!.Elements(SpreadsheetDrawingNs + "twoCellAnchor").Should().ContainSingle();
@@ -723,6 +723,110 @@ public sealed class XlsxChartExWriterTests
             .Value
             .Should()
             .Be("exclusive");
+    }
+
+    private static void AssertExcelNativeChartExStyle(XDocument styleXml)
+    {
+        styleXml.Root!.Attribute("id")!.Value.Should().Be("201");
+        styleXml.Root.Elements().Select(element => element.Name.LocalName).Should().Equal(
+            "axisTitle",
+            "categoryAxis",
+            "chartArea",
+            "dataLabel",
+            "dataLabelCallout",
+            "dataPoint",
+            "dataPoint3D",
+            "dataPointLine",
+            "dataPointMarker",
+            "dataPointMarkerLayout",
+            "dataPointWireframe",
+            "dataTable",
+            "downBar",
+            "dropLine",
+            "errorBar",
+            "floor",
+            "gridlineMajor",
+            "gridlineMinor",
+            "hiLoLine",
+            "leaderLine",
+            "legend",
+            "plotArea",
+            "plotArea3D",
+            "seriesAxis",
+            "seriesLine",
+            "title",
+            "trendline",
+            "trendlineLabel",
+            "upBar",
+            "valueAxis",
+            "wall");
+
+        var dataPoint = styleXml.Root.Elements(ChartStyleNs + "dataPoint").Should().ContainSingle().Subject;
+        dataPoint.Element(ChartStyleNs + "fillRef")!.Attribute("idx")!.Value.Should().Be("1");
+        dataPoint.Element(ChartStyleNs + "fillRef")!.Element(ChartStyleNs + "styleClr")!
+            .Attribute("val")!.Value.Should().Be("auto");
+        dataPoint.Elements(ChartStyleNs + "spPr").Should().BeEmpty();
+
+        var chartArea = styleXml.Root.Elements(ChartStyleNs + "chartArea").Should().ContainSingle().Subject;
+        chartArea.Element(ChartStyleNs + "spPr")!
+            .Element(DrawingNs + "solidFill")!
+            .Element(DrawingNs + "schemeClr")!
+            .Attribute("val")!.Value.Should().Be("bg1");
+        chartArea.Attribute("mods")!.Value.Should().Be("allowNoFillOverride allowNoLineOverride");
+
+        var categoryAxisLine = styleXml.Root.Elements(ChartStyleNs + "categoryAxis").Should().ContainSingle().Subject
+            .Element(ChartStyleNs + "spPr")!
+            .Element(DrawingNs + "ln")!;
+        categoryAxisLine.Attribute("cap")!.Value.Should().Be("flat");
+        categoryAxisLine.Attribute("cmpd")!.Value.Should().Be("sng");
+        categoryAxisLine.Attribute("algn")!.Value.Should().Be("ctr");
+
+        var gridlineMajorLine = styleXml.Root.Elements(ChartStyleNs + "gridlineMajor").Should().ContainSingle().Subject
+            .Element(ChartStyleNs + "spPr")!
+            .Element(DrawingNs + "ln")!;
+        gridlineMajorLine.Attribute("cap")!.Value.Should().Be("flat");
+        gridlineMajorLine.Attribute("cmpd")!.Value.Should().Be("sng");
+        gridlineMajorLine.Attribute("algn")!.Value.Should().Be("ctr");
+
+        var titleDefaultRunProperties = styleXml.Root.Elements(ChartStyleNs + "title").Should().ContainSingle().Subject
+            .Element(ChartStyleNs + "defRPr")!;
+        titleDefaultRunProperties.Attribute("sz")!.Value.Should().Be("1400");
+        titleDefaultRunProperties.Attribute("kern")!.Value.Should().Be("1200");
+        titleDefaultRunProperties.Attribute("b")!.Value.Should().Be("0");
+
+        var dataPointMarkerLayout = styleXml.Root.Elements(ChartStyleNs + "dataPointMarkerLayout")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        dataPointMarkerLayout.Attribute("symbol")!.Value.Should().Be("circle");
+        dataPointMarkerLayout.Attribute("size")!.Value.Should().Be("5");
+
+        styleXml.Root.Elements(ChartStyleNs + "plotArea").Should().ContainSingle().Subject
+            .Attribute("mods")!.Value.Should().Be("allowNoFillOverride allowNoLineOverride");
+        styleXml.Root.Elements(ChartStyleNs + "plotArea3D").Should().ContainSingle().Subject
+            .Attribute("mods")!.Value.Should().Be("allowNoFillOverride allowNoLineOverride");
+    }
+
+    private static void AssertExcelNativeChartExColorStyle(XDocument colorsXml)
+    {
+        colorsXml.Root!.Elements(ChartStyleNs + "variation")
+            .Select(variation =>
+            {
+                var lumMod = variation.Element(DrawingNs + "lumMod")?.Attribute("val")?.Value ?? string.Empty;
+                var lumOff = variation.Element(DrawingNs + "lumOff")?.Attribute("val")?.Value ?? string.Empty;
+                return $"{lumMod}:{lumOff}";
+            })
+            .Should()
+            .Equal(
+                ":",
+                "60000:",
+                "80000:20000",
+                "80000:",
+                "60000:40000",
+                "50000:",
+                "70000:30000",
+                "70000:",
+                "50000:50000");
     }
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
