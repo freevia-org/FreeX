@@ -348,6 +348,12 @@ public sealed class FormulaEvaluator
 
     private ScalarValue EvaluateBinaryOp(BinaryOpNode node, IEvalContext context)
     {
+        if (IsArithmeticOperator(node.Operator) &&
+            TryEvaluateNumericScalar(node, context, out var numericResult, out var numericError) != NumericScalarEvaluationState.Unsupported)
+        {
+            return numericError is not null ? numericError : new NumberValue(numericResult);
+        }
+
         var left = EvaluateArrayOperand(node.Left, context);
         var right = EvaluateArrayOperand(node.Right, context);
 
@@ -371,6 +377,161 @@ public sealed class FormulaEvaluator
             BinaryOperator.GreaterOrEqual => CompareOpGreaterOrEqual(left, right),
             _ => throw new FormulaEvalException("#VALUE!", $"Unknown operator: {node.Operator}")
         };
+    }
+
+    private static bool IsArithmeticOperator(BinaryOperator op) =>
+        op is BinaryOperator.Add
+            or BinaryOperator.Subtract
+            or BinaryOperator.Multiply
+            or BinaryOperator.Divide
+            or BinaryOperator.Power;
+
+    private static NumericScalarEvaluationState TryEvaluateNumericScalar(
+        FormulaNode node,
+        IEvalContext context,
+        out double value,
+        out ErrorValue? error)
+    {
+        value = 0;
+        error = null;
+
+        switch (node)
+        {
+            case NumberNode number:
+                value = number.Value;
+                return NumericScalarEvaluationState.Value;
+            case BooleanNode boolean:
+                value = boolean.Value ? 1 : 0;
+                return NumericScalarEvaluationState.Value;
+            case StringNode text:
+                if (ExcelTextNumberParser.TryParse(text.Value, out value))
+                    return NumericScalarEvaluationState.Value;
+
+                return NumericScalarEvaluationState.Unsupported;
+            case ErrorNode errorNode:
+                error = errorNode.Error;
+                return NumericScalarEvaluationState.Error;
+            case CellRefNode cell:
+                return TryGetNumericCellValue(cell, context, out value, out error);
+            case UnaryOpNode unary:
+                return TryEvaluateNumericUnaryScalar(unary, context, out value, out error);
+            case BinaryOpNode binary when IsArithmeticOperator(binary.Operator):
+                return TryEvaluateNumericBinaryScalar(binary, context, out value, out error);
+            default:
+                return NumericScalarEvaluationState.Unsupported;
+        }
+    }
+
+    private static NumericScalarEvaluationState TryGetNumericCellValue(
+        CellRefNode cell,
+        IEvalContext context,
+        out double value,
+        out ErrorValue? error)
+    {
+        var scalar = cell.SheetName is not null
+            ? context.GetCellValue(cell.SheetName, cell.Row, cell.ColumnNumber)
+            : context.GetCellValue(cell.Row, cell.ColumnNumber);
+
+        if (scalar is ErrorValue cellError)
+        {
+            value = 0;
+            error = cellError;
+            return NumericScalarEvaluationState.Error;
+        }
+
+        if (TryCoerceToNumberValue(scalar, out value))
+        {
+            error = null;
+            return NumericScalarEvaluationState.Value;
+        }
+
+        error = null;
+        return NumericScalarEvaluationState.Unsupported;
+    }
+
+    private static NumericScalarEvaluationState TryEvaluateNumericUnaryScalar(
+        UnaryOpNode node,
+        IEvalContext context,
+        out double value,
+        out ErrorValue? error)
+    {
+        var operandState = TryEvaluateNumericScalar(node.Operand, context, out value, out error);
+        if (operandState != NumericScalarEvaluationState.Value)
+            return operandState;
+
+        switch (node.Operator)
+        {
+            case UnaryOperator.Negate:
+                value = -value;
+                return NumericScalarEvaluationState.Value;
+            case UnaryOperator.Percent:
+                value /= 100.0;
+                return NumericScalarEvaluationState.Value;
+            default:
+                return NumericScalarEvaluationState.Unsupported;
+        }
+    }
+
+    private static NumericScalarEvaluationState TryEvaluateNumericBinaryScalar(
+        BinaryOpNode node,
+        IEvalContext context,
+        out double value,
+        out ErrorValue? error)
+    {
+        value = 0;
+        var leftState = TryEvaluateNumericScalar(node.Left, context, out var left, out var leftError);
+        var rightState = TryEvaluateNumericScalar(node.Right, context, out var right, out var rightError);
+
+        if (leftState == NumericScalarEvaluationState.Unsupported ||
+            rightState == NumericScalarEvaluationState.Unsupported)
+        {
+            error = null;
+            return NumericScalarEvaluationState.Unsupported;
+        }
+
+        if (leftState == NumericScalarEvaluationState.Error)
+        {
+            error = leftError;
+            return NumericScalarEvaluationState.Error;
+        }
+
+        if (rightState == NumericScalarEvaluationState.Error)
+        {
+            error = rightError;
+            return NumericScalarEvaluationState.Error;
+        }
+
+        if (node.Operator == BinaryOperator.Divide && right == 0)
+        {
+            error = ErrorValue.DivByZero;
+            return NumericScalarEvaluationState.Error;
+        }
+
+        value = node.Operator switch
+        {
+            BinaryOperator.Add => left + right,
+            BinaryOperator.Subtract => left - right,
+            BinaryOperator.Multiply => left * right,
+            BinaryOperator.Divide => left / right,
+            BinaryOperator.Power => Math.Pow(left, right),
+            _ => 0
+        };
+
+        if (double.IsFinite(value))
+        {
+            error = null;
+            return NumericScalarEvaluationState.Value;
+        }
+
+        error = ErrorValue.Num;
+        return NumericScalarEvaluationState.Error;
+    }
+
+    private enum NumericScalarEvaluationState
+    {
+        Unsupported,
+        Value,
+        Error
     }
 
     private ScalarValue EvaluateArrayOperand(FormulaNode node, IEvalContext context)
