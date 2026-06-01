@@ -1408,15 +1408,19 @@ public sealed class MainWindowSourceHygieneTests
         var cacheSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ToolbarVisualStateCache.cs"));
 
         source.Should().Contain("RefreshQuickAccessToolbarCommandStates();");
+        source.Should().Contain("RefreshQuickAccessToolbarCommandStatesAfterSelectionChange();");
         qatSource.Should().Contain("private void RefreshQuickAccessToolbarCommandStates(bool force = false)");
-        qatSource.Should().Contain("var state = new QuickAccessCommandState(");
+        qatSource.Should().Contain("private void RefreshQuickAccessToolbarCommandStatesAfterSelectionChange()");
+        qatSource.Should().Contain("private QuickAccessCommandState CreateQuickAccessCommandState()");
         qatSource.Should().Contain("_commandBus.CanUndo(_workbook.Id)");
         qatSource.Should().Contain("_commandBus.CanRedo(_workbook.Id)");
-        qatSource.Should().Contain("_workbook.GetSheet(_currentSheetId) is not null");
-        qatSource.Should().Contain("SheetGrid.SelectedRange is not null");
-        qatSource.Should().Contain("if (!force && _lastQuickAccessCommandState == state)");
+        qatSource.Should().Contain("HasActiveWorksheetForQuickAccessCommandState()");
+        qatSource.Should().Contain("HasSelectionForQuickAccessCommandState()");
+        qatSource.Should().Contain("state.WithSelectionContext(");
+        qatSource.Should().Contain("_lastQuickAccessCommandStateWorkbookId == _workbook.Id");
         qatSource.Should().Contain("RibbonMetadata.TryGetCatalogId(button, out var commandId)");
         qatSource.Should().Contain("QuickAccessCommandStateResolver.CanExecute(commandId, state)");
+        qatStateSource.Should().Contain("WithSelectionContext(bool hasActiveWorksheet, bool hasSelection)");
         qatStateSource.Should().Contain("QuickAccessToolbarCommandIds.Undo => state.CanUndo");
         qatStateSource.Should().Contain("QuickAccessToolbarCommandIds.Redo => state.CanRedo");
         toolbarSource.Should().NotContain("bool CanUndo");
@@ -1428,10 +1432,11 @@ public sealed class MainWindowSourceHygieneTests
     public void RefreshToolbar_AvoidsRepeatedDependencyPropertyWrites()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorkbookUiState.cs"));
-        var refreshToolbar = ExtractMethodSource(source, "private void RefreshToolbar()");
+        var refreshToolbar = ExtractMethodSource(source, "private void RefreshToolbarVisualState()");
 
         source.Should().Contain("private static void SetToggleCheckedIfChanged(");
         source.Should().Contain("private static void SetSelectedItemIfChanged(");
+        source.Should().Contain("private void RefreshToolbarAfterSelectionChange()");
         refreshToolbar.Should().Contain("SetToggleCheckedIfChanged(BoldButton, state.Bold)");
         refreshToolbar.Should().Contain("SetSelectedItemIfChanged(FontNameBox, state.FontName)");
         refreshToolbar.Should().NotContain("BoldButton.IsChecked = state.Bold");

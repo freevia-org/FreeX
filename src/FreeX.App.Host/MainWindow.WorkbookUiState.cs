@@ -155,7 +155,17 @@ public partial class MainWindow
     private void RefreshToolbar()
     {
         RefreshQuickAccessToolbarCommandStates();
+        RefreshToolbarVisualState();
+    }
 
+    private void RefreshToolbarAfterSelectionChange()
+    {
+        RefreshQuickAccessToolbarCommandStatesAfterSelectionChange();
+        RefreshToolbarVisualState();
+    }
+
+    private void RefreshToolbarVisualState()
+    {
         if (SheetGrid.SelectedRange is not { } range)
         {
             InvalidateToolbarVisualState();
