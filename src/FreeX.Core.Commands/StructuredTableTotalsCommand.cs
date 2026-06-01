@@ -74,31 +74,52 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
         if (string.IsNullOrWhiteSpace(column.TotalsRowFunction))
             return null;
 
-        var values = ReadColumnValues(sheet, table, columnIndex).ToList();
-        var numbers = values
-            .Select(TryGetNumber)
-            .Where(value => value.HasValue)
-            .Select(value => value!.Value)
-            .ToList();
+        var function = column.TotalsRowFunction.Trim();
+        if (string.Equals(function, "count", StringComparison.OrdinalIgnoreCase))
+            return new NumberValue(CountNonBlankColumnValues(sheet, table, columnIndex));
 
-        return column.TotalsRowFunction.Trim().ToLowerInvariant() switch
-        {
-            "sum" => new NumberValue(numbers.Sum()),
-            "average" or "avg" => new NumberValue(numbers.Count == 0 ? 0 : numbers.Average()),
-            "count" => new NumberValue(values.Count(IsNonBlank)),
-            "countnums" or "countNums" => new NumberValue(numbers.Count),
-            "min" => new NumberValue(numbers.Count == 0 ? 0 : numbers.Min()),
-            "max" => new NumberValue(numbers.Count == 0 ? 0 : numbers.Max()),
-            _ => null
-        };
+        var aggregate = CalculateColumnNumbers(sheet, table, columnIndex);
+        if (string.Equals(function, "sum", StringComparison.OrdinalIgnoreCase))
+            return new NumberValue(aggregate.Sum);
+        if (string.Equals(function, "average", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(function, "avg", StringComparison.OrdinalIgnoreCase))
+            return new NumberValue(aggregate.Count == 0 ? 0 : aggregate.Sum / aggregate.Count);
+        if (string.Equals(function, "countnums", StringComparison.OrdinalIgnoreCase))
+            return new NumberValue(aggregate.Count);
+        if (string.Equals(function, "min", StringComparison.OrdinalIgnoreCase))
+            return new NumberValue(aggregate.Count == 0 ? 0 : aggregate.Min);
+        if (string.Equals(function, "max", StringComparison.OrdinalIgnoreCase))
+            return new NumberValue(aggregate.Count == 0 ? 0 : aggregate.Max);
+
+        return null;
     }
 
-    private static IEnumerable<ScalarValue> ReadColumnValues(Sheet sheet, StructuredTableModel table, int columnIndex)
+    private static NumberAggregate CalculateColumnNumbers(Sheet sheet, StructuredTableModel table, int columnIndex)
     {
         var col = table.Range.Start.Col + (uint)columnIndex;
         var lastDataRow = table.TotalsRowShown ? table.Range.End.Row - 1 : table.Range.End.Row;
+        var aggregate = new NumberAggregate();
         for (var row = table.Range.Start.Row + 1; row <= lastDataRow; row++)
-            yield return sheet.GetValue(row, col);
+        {
+            if (TryGetNumber(sheet.GetValue(row, col)) is { } value)
+                aggregate.Add(value);
+        }
+
+        return aggregate;
+    }
+
+    private static int CountNonBlankColumnValues(Sheet sheet, StructuredTableModel table, int columnIndex)
+    {
+        var col = table.Range.Start.Col + (uint)columnIndex;
+        var lastDataRow = table.TotalsRowShown ? table.Range.End.Row - 1 : table.Range.End.Row;
+        var count = 0;
+        for (var row = table.Range.Start.Row + 1; row <= lastDataRow; row++)
+        {
+            if (sheet.GetValue(row, col) is not BlankValue)
+                count++;
+        }
+
+        return count;
     }
 
     private static double? TryGetNumber(ScalarValue value) =>
@@ -110,7 +131,32 @@ public sealed class RefreshStructuredTableTotalsCommand : IWorkbookCommand
             _ => null
         };
 
-    private static bool IsNonBlank(ScalarValue value) => value is not BlankValue;
+    private struct NumberAggregate
+    {
+        public double Sum { get; private set; }
+        public int Count { get; private set; }
+        public double Min { get; private set; }
+        public double Max { get; private set; }
+
+        public void Add(double value)
+        {
+            if (Count == 0)
+            {
+                Min = value;
+                Max = value;
+            }
+            else
+            {
+                if (value < Min)
+                    Min = value;
+                if (value > Max)
+                    Max = value;
+            }
+
+            Sum += value;
+            Count++;
+        }
+    }
 }
 
 public sealed class SetStructuredTableTotalsRowCommand : IWorkbookCommand
