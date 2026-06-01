@@ -212,6 +212,17 @@ public sealed class InsertFunctionDialogTests
     }
 
     [Fact]
+    public void InsertFunctionDialog_FunctionListDoubleClickInvokesOkAndHandlesMouseEvent()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "InsertFunctionDialog.cs"));
+
+        source.Should().Contain("_listBox.MouseDoubleClick += ListBox_MouseDoubleClick;");
+        source.Should().Contain("private void ListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
+        source.Should().Contain("Ok_Click(sender, e);");
+        source.Should().Contain("e.Handled = true;");
+    }
+
+    [Fact]
     public void DialogCommands_ExposeOnlyOkAsTheDefaultAction()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "InsertFunctionDialog.cs"));
