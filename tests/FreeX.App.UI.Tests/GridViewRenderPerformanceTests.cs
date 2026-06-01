@@ -934,6 +934,9 @@ public sealed class GridViewRenderPerformanceTests
         var buildOccupiedCells = source[
             source.IndexOf("private static HashSet<(uint Row, uint Col)> BuildOccupiedCells", StringComparison.Ordinal)..
             source.IndexOf("private static double SumEmptyOverflowColumnWidths", StringComparison.Ordinal)];
+        var mergeRangeIndex = source[
+            source.IndexOf("public static MergeRangeIndex Create", StringComparison.Ordinal)..
+            source.IndexOf("public GridRange? Find", StringComparison.Ordinal)];
 
         calculateLayouts.Should().Contain("BuildRowLookup(topRows)");
         calculateLayouts.Should().Contain("BuildRowLookup(bottomLeftRows)");
@@ -946,6 +949,9 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("foreach (var cell in cells)");
         calculateLayouts.Should().NotContain("occupied.Add((cell.Row, cell.Col))");
         buildOccupiedCells.Should().Contain("occupied.Add((cell.Row, cell.Col))");
+        mergeRangeIndex.Should().Contain("var queryRows = BuildQueryRows(cells);");
+        mergeRangeIndex.Should().Contain("if (mergedRegion.End.Row < queryRows.MinRow || mergedRegion.Start.Row > queryRows.MaxRow)");
+        mergeRangeIndex.Should().Contain("foreach (var row in queryRows.Rows)");
         calculateLayouts.Should().NotContain(".ToDictionary(");
         calculateLayouts.Should().NotContain(".Where(");
         calculateLayouts.Should().NotContain(".Select(");

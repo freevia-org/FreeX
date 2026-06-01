@@ -201,7 +201,6 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.O, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenWorkbook)]
     [InlineData(Key.S, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SaveWorkbook)]
     [InlineData(Key.C, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Copy)]
-    [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.Copy)]
     [InlineData(Key.Insert, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Copy)]
     [InlineData(Key.X, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Cut)]
     [InlineData(Key.Delete, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.Cut)]
@@ -333,6 +332,7 @@ public sealed class KeyboardShortcutMatcherTests
 
     [Theory]
     [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.C, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
     [InlineData(Key.System, Key.C, ModifierKeys.Control | ModifierKeys.Alt)]
     [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
     [InlineData(Key.X, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
