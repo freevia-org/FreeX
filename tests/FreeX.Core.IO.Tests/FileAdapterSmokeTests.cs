@@ -7311,6 +7311,40 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_SaveLoadSave_KeepsProtectionPasswordHashesStable()
+    {
+        var workbook = new Workbook("ProtectionNativeHashStabilityTest");
+        workbook.IsStructureProtected = true;
+        workbook.StructureProtectionPassword = "workbook-secret";
+        var sheet = workbook.AddSheet("S1");
+        sheet.IsProtected = true;
+        sheet.ProtectionPassword = "sheet-secret";
+
+        var adapter = new NativeJsonAdapter();
+        using var first = new MemoryStream();
+        adapter.Save(workbook, first);
+        var firstBytes = first.ToArray();
+        first.Position = 0;
+
+        var loaded = adapter.Load(first);
+        using var second = new MemoryStream();
+        adapter.Save(loaded, second);
+        var secondBytes = second.ToArray();
+
+        using var firstJson = JsonDocument.Parse(firstBytes);
+        using var secondJson = JsonDocument.Parse(secondBytes);
+        var firstWorkbookHash = firstJson.RootElement.GetProperty("StructureProtectionPassword").GetString();
+        var secondWorkbookHash = secondJson.RootElement.GetProperty("StructureProtectionPassword").GetString();
+        var firstSheetHash = firstJson.RootElement.GetProperty("Sheets")[0].GetProperty("ProtectionPassword").GetString();
+        var secondSheetHash = secondJson.RootElement.GetProperty("Sheets")[0].GetProperty("ProtectionPassword").GetString();
+
+        secondWorkbookHash.Should().Be(firstWorkbookHash);
+        secondSheetHash.Should().Be(firstSheetHash);
+        NativePasswordHelper.VerifyPassword(secondWorkbookHash!, "workbook-secret").Should().BeTrue();
+        NativePasswordHelper.VerifyPassword(secondSheetHash!, "sheet-secret").Should().BeTrue();
+    }
+
+    [Fact]
     public void NativeJsonAdapter_Load_SkipsInvalidAllowEditRanges()
     {
         const string json = """

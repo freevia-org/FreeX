@@ -23,6 +23,15 @@ public sealed class NativePasswordHelperTests
     }
 
     [Fact]
+    public void HashPassword_IsIdempotentForStoredSha256Hashes()
+    {
+        var stored = NativePasswordHelper.HashPassword("hello");
+
+        NativePasswordHelper.HashPassword(stored).Should().Be(stored);
+        NativePasswordHelper.HashPassword(stored.ToLowerInvariant()).Should().Be(stored);
+    }
+
+    [Fact]
     public void HashPassword_DifferentInputsProduceDifferentHashes()
     {
         var a = NativePasswordHelper.HashPassword("password1");
