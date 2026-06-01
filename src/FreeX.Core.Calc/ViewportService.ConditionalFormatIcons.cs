@@ -20,7 +20,7 @@ public sealed partial class ViewportService
 
             var style = string.IsNullOrWhiteSpace(rule.IconSetStyle) ? "3TrafficLights1" : rule.IconSetStyle!;
             var iconCount = GetIconSetCount(style);
-            var bucketIndex = ResolveIconSetIndex(rule, cellValue, cache, sheet, workbook, addr, iconCount);
+            var bucketIndex = ResolveIconSetIndex(rule, cellValue, cache, sheet, workbook, addr, iconCount, cfContext);
 
             if (rule.IconOverrides.Count == iconCount)
             {
@@ -44,9 +44,10 @@ public sealed partial class ViewportService
         Sheet sheet,
         Workbook workbook,
         CellAddress addr,
-        int iconCount)
+        int iconCount,
+        CfEvaluationContext cfContext)
     {
-        if (TryResolveIconSetThresholds(rule, cache, sheet, workbook, addr, iconCount, out var thresholds))
+        if (TryResolveIconSetThresholds(rule, cache, sheet, workbook, addr, iconCount, cfContext, out var thresholds))
         {
             var index = 0;
             foreach (var threshold in thresholds)
@@ -79,6 +80,7 @@ public sealed partial class ViewportService
         Workbook workbook,
         CellAddress addr,
         int iconCount,
+        CfEvaluationContext cfContext,
         out (double Value, bool GreaterThanOrEqual)[] thresholds)
     {
         thresholds = [];
@@ -96,6 +98,11 @@ public sealed partial class ViewportService
                     sheet,
                     workbook,
                     addr,
+                    ViewportConditionalFormatEvaluator.GetThresholdFormula(
+                        cfContext,
+                        rule,
+                        CfThresholdFormulaSlot.IconSet,
+                        i),
                     out var value))
                 return false;
 
