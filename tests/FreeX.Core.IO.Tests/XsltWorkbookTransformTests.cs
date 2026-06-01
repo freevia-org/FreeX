@@ -436,6 +436,40 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_DefaultParameters_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("<rows><row amount=\"18.75\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:param name="sheetName" select="'Default Parameters'" />
+              <xsl:param name="label" select="'Default label'" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="{$sheetName}">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="$label" /></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@amount" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .Contain("ss:Name=\"Default Parameters\"")
+            .And.Contain("<ss:Data ss:Type=\"String\">Default label</ss:Data>")
+            .And.Contain("<ss:Data ss:Type=\"Number\">18.75</ss:Data>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NamespacedParameters_AreAvailableToStylesheet()
     {
         using var source = StreamFromString("<rows />");
