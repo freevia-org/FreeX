@@ -70,6 +70,8 @@ internal static partial class XlsxChartXmlWriter
     private static bool UsesSeriesAxis(ChartType chartType) =>
         chartType is ChartType.Surface
             or ChartType.ThreeDSurface
+            or ChartType.ThreeDColumn
+            or ChartType.ThreeDBar
             or ChartType.ThreeDLine
             or ChartType.ThreeDArea;
 
