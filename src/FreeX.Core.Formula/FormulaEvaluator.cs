@@ -507,6 +507,12 @@ public sealed class FormulaEvaluator
             return NumericScalarEvaluationState.Error;
         }
 
+        if (node.Operator == BinaryOperator.Power && left == 0 && right <= 0)
+        {
+            error = right == 0 ? ErrorValue.Num : ErrorValue.DivByZero;
+            return NumericScalarEvaluationState.Error;
+        }
+
         value = node.Operator switch
         {
             BinaryOperator.Add => left + right,
