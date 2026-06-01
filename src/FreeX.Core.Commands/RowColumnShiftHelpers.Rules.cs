@@ -5,13 +5,17 @@ namespace FreeX.Core.Commands;
 internal static partial class RowColumnShiftHelpers
 {
     internal static (
-        List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)> DataValidations,
-        List<(ConditionalFormat Rule, GridRange AppliesTo)> ConditionalFormats)
+        List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? DataValidations,
+        List<(ConditionalFormat Rule, GridRange AppliesTo)>? ConditionalFormats)
         CaptureRuleRanges(Sheet sheet)
     {
         return (
-            sheet.DataValidations.Select(rule => (rule, rule.AppliesTo, rule.AdditionalRanges.ToList())).ToList(),
-            sheet.ConditionalFormats.Select(rule => (rule, rule.AppliesTo)).ToList());
+            sheet.DataValidations.Count == 0
+                ? null
+                : sheet.DataValidations.Select(rule => (rule, rule.AppliesTo, rule.AdditionalRanges.ToList())).ToList(),
+            sheet.ConditionalFormats.Count == 0
+                ? null
+                : sheet.ConditionalFormats.Select(rule => (rule, rule.AppliesTo)).ToList());
     }
 
     internal static void RestoreRuleRanges(
@@ -61,29 +65,35 @@ internal static partial class RowColumnShiftHelpers
 
     internal static void ShiftRuleRowsUp(Sheet sheet, uint start, uint count)
     {
-        foreach (var rule in sheet.DataValidations)
+        if (sheet.DataValidations.Count != 0)
         {
-            rule.AppliesTo = ShiftRangeRowsUp(rule.AppliesTo, start, count);
-            ShiftAdditionalRanges(rule, range => ShiftRangeRowsUp(range, start, count));
+            foreach (var rule in sheet.DataValidations)
+            {
+                rule.AppliesTo = ShiftRangeRowsUp(rule.AppliesTo, start, count);
+                ShiftAdditionalRanges(rule, range => ShiftRangeRowsUp(range, start, count));
+            }
+            sheet.DataValidations.NotifyRulesChanged();
         }
-        sheet.DataValidations.NotifyRulesChanged();
         foreach (var rule in sheet.ConditionalFormats)
             rule.AppliesTo = ShiftRangeRowsUp(rule.AppliesTo, start, count);
     }
 
     internal static void ShiftRuleRowsDown(Sheet sheet, uint start, uint count)
     {
-        for (int i = sheet.DataValidations.Count - 1; i >= 0; i--)
+        if (sheet.DataValidations.Count != 0)
         {
-            var shifted = ShiftRangeRowsDown(sheet.DataValidations[i].AppliesTo, start, count);
-            if (shifted is null) sheet.DataValidations.RemoveAt(i);
-            else
+            for (int i = sheet.DataValidations.Count - 1; i >= 0; i--)
             {
-                sheet.DataValidations[i].AppliesTo = shifted.Value;
-                ShiftAdditionalRanges(sheet.DataValidations[i], range => ShiftRangeRowsDown(range, start, count));
+                var shifted = ShiftRangeRowsDown(sheet.DataValidations[i].AppliesTo, start, count);
+                if (shifted is null) sheet.DataValidations.RemoveAt(i);
+                else
+                {
+                    sheet.DataValidations[i].AppliesTo = shifted.Value;
+                    ShiftAdditionalRanges(sheet.DataValidations[i], range => ShiftRangeRowsDown(range, start, count));
+                }
             }
+            sheet.DataValidations.NotifyRulesChanged();
         }
-        sheet.DataValidations.NotifyRulesChanged();
         for (int i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
         {
             var shifted = ShiftRangeRowsDown(sheet.ConditionalFormats[i].AppliesTo, start, count);
@@ -94,29 +104,35 @@ internal static partial class RowColumnShiftHelpers
 
     internal static void ShiftRuleColumnsUp(Sheet sheet, uint start, uint count)
     {
-        foreach (var rule in sheet.DataValidations)
+        if (sheet.DataValidations.Count != 0)
         {
-            rule.AppliesTo = ShiftRangeColumnsUp(rule.AppliesTo, start, count);
-            ShiftAdditionalRanges(rule, range => ShiftRangeColumnsUp(range, start, count));
+            foreach (var rule in sheet.DataValidations)
+            {
+                rule.AppliesTo = ShiftRangeColumnsUp(rule.AppliesTo, start, count);
+                ShiftAdditionalRanges(rule, range => ShiftRangeColumnsUp(range, start, count));
+            }
+            sheet.DataValidations.NotifyRulesChanged();
         }
-        sheet.DataValidations.NotifyRulesChanged();
         foreach (var rule in sheet.ConditionalFormats)
             rule.AppliesTo = ShiftRangeColumnsUp(rule.AppliesTo, start, count);
     }
 
     internal static void ShiftRuleColumnsDown(Sheet sheet, uint start, uint count)
     {
-        for (int i = sheet.DataValidations.Count - 1; i >= 0; i--)
+        if (sheet.DataValidations.Count != 0)
         {
-            var shifted = ShiftRangeColumnsDown(sheet.DataValidations[i].AppliesTo, start, count);
-            if (shifted is null) sheet.DataValidations.RemoveAt(i);
-            else
+            for (int i = sheet.DataValidations.Count - 1; i >= 0; i--)
             {
-                sheet.DataValidations[i].AppliesTo = shifted.Value;
-                ShiftAdditionalRanges(sheet.DataValidations[i], range => ShiftRangeColumnsDown(range, start, count));
+                var shifted = ShiftRangeColumnsDown(sheet.DataValidations[i].AppliesTo, start, count);
+                if (shifted is null) sheet.DataValidations.RemoveAt(i);
+                else
+                {
+                    sheet.DataValidations[i].AppliesTo = shifted.Value;
+                    ShiftAdditionalRanges(sheet.DataValidations[i], range => ShiftRangeColumnsDown(range, start, count));
+                }
             }
+            sheet.DataValidations.NotifyRulesChanged();
         }
-        sheet.DataValidations.NotifyRulesChanged();
         for (int i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
         {
             var shifted = ShiftRangeColumnsDown(sheet.ConditionalFormats[i].AppliesTo, start, count);

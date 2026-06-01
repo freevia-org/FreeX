@@ -55,13 +55,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         foreach (var (addr, cell) in _movedSnapshot)
             sheet.SetCell(new CellAddress(addr.Sheet, addr.Row + _count, addr.Col), cell.Clone());
 
-        var hiddenToShift = sheet.HiddenRows.Where(r => r >= _beforeRow).ToList();
-        foreach (var r in hiddenToShift) sheet.HiddenRows.Remove(r);
-        foreach (var r in hiddenToShift) sheet.HiddenRows.Add(r + _count);
-
-        var filterHiddenToShift = sheet.FilterHiddenRows.Where(r => r >= _beforeRow).ToList();
-        foreach (var r in filterHiddenToShift) sheet.FilterHiddenRows.Remove(r);
-        foreach (var r in filterHiddenToShift) sheet.FilterHiddenRows.Add(r + _count);
+        RowColumnShiftHelpers.ShiftSetUpFrom(sheet.HiddenRows, _beforeRow, _count);
+        RowColumnShiftHelpers.ShiftSetUpFrom(sheet.FilterHiddenRows, _beforeRow, _count);
 
         _rowHeightSnapshot = new Dictionary<uint, double>(sheet.RowHeights);
         RowColumnShiftHelpers.ShiftIndexesUp(sheet.RowHeights, _beforeRow, _count);
@@ -121,13 +116,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         foreach (var (addr, cell) in _movedSnapshot)
             sheet.SetCell(addr, cell.Clone());
 
-        var shifted = sheet.HiddenRows.Where(r => r >= _beforeRow + _count).ToList();
-        foreach (var r in shifted) sheet.HiddenRows.Remove(r);
-        foreach (var r in shifted) sheet.HiddenRows.Add(r - _count);
-
-        var filterShifted = sheet.FilterHiddenRows.Where(r => r >= _beforeRow + _count).ToList();
-        foreach (var r in filterShifted) sheet.FilterHiddenRows.Remove(r);
-        foreach (var r in filterShifted) sheet.FilterHiddenRows.Add(r - _count);
+        RowColumnShiftHelpers.ShiftSetDownFrom(sheet.HiddenRows, _beforeRow + _count, _count);
+        RowColumnShiftHelpers.ShiftSetDownFrom(sheet.FilterHiddenRows, _beforeRow + _count, _count);
 
         if (_mergeSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergeSnapshot);
