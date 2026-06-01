@@ -824,7 +824,7 @@ public sealed class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(stylesXml)");
         adapterSource.Should().Contain("XlsxIndexedColorPaletteMapper.Load(stylesXml)");
         adapterSource.Should().Contain("XlsxPivotTableStyleMetadataReader.Load(stylesXml)");
-        adapterSource.Should().Contain("LoadSheetXmlLayout(packageStream, stylesXml, warnings)");
+        adapterSource.Should().Contain("LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, warnings)");
         adapterSource.Should().NotContain("XlsxStylesheetReader.Load(packageStream)");
         adapterSource.Should().NotContain("LoadNumberFormatCatalog(packageStream)");
         adapterSource.Should().NotContain("XlsxIndexedColorPaletteMapper.Load(packageStream)");

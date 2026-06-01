@@ -70,10 +70,15 @@ internal static partial class XlsxChartXmlWriter
     private static bool UsesSeriesAxis(ChartType chartType) =>
         chartType is ChartType.Surface
             or ChartType.ThreeDSurface
-            or ChartType.ThreeDColumn
-            or ChartType.ThreeDBar
             or ChartType.ThreeDLine
             or ChartType.ThreeDArea;
+
+    private static int? AdditionalPlotAxisId(ChartType chartType) =>
+        UsesSeriesAxis(chartType)
+            ? SeriesAxisId
+            : chartType is ChartType.ThreeDColumn or ChartType.ThreeDBar
+                ? 0
+                : null;
 
     private static IEnumerable<XElement> ToPlotChartXml(
         ChartModel chart,
@@ -429,8 +434,8 @@ internal static partial class XlsxChartXmlWriter
         plotChart.Add(
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
             new XElement(chartNs + "axId", new XAttribute("val", usesSecondaryAxis ? SecondaryValueAxisId : ValueAxisId)),
-            UsesSeriesAxis(chart.Type)
-                ? new XElement(chartNs + "axId", new XAttribute("val", SeriesAxisId))
+            AdditionalPlotAxisId(chart.Type) is { } additionalAxisId
+                ? new XElement(chartNs + "axId", new XAttribute("val", additionalAxisId))
                 : null);
     }
 

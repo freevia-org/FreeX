@@ -155,6 +155,9 @@ internal static class QuickAnalysisPreviewLayoutPlanner
             if (row.Row > range.End.Row)
                 break;
 
+            if (row.Height < 4)
+                continue;
+
             var height = Math.Max(4, Math.Floor(row.Height / 3));
             var width = col.Width - 12;
             if (width < 6)

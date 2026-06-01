@@ -162,6 +162,31 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_RoundTripsNativeJsonDateTimeValues()
+    {
+        var workbook = new Workbook("DateTimes");
+        var sheet = workbook.AddSheet("Sheet1");
+        var dateTime = DateTimeValue.FromDateTime(new DateTime(2026, 5, 31, 8, 15, 30));
+        var timeOnly = new DateTimeValue(new TimeSpan(9, 30, 0).TotalDays);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), dateTime);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), timeOnly);
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var cells = document.RootElement.GetProperty("Sheets")[0].GetProperty("Cells");
+        cells[0].GetProperty("ValueType").GetString().Should().Be("d");
+        cells[1].GetProperty("ValueType").GetString().Should().Be("d");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.GetCell(1, 1)!.Value.Should().Be(dateTime);
+        loaded.GetCell(1, 2)!.Value.Should().Be(timeOnly);
+    }
+
+    [Fact]
     public void Load_AcceptsLegacyInlineCellStylesWithoutWorkbookStyleTable()
     {
         const string legacyJson = """
