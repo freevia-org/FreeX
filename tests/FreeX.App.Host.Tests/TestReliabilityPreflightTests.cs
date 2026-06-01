@@ -15,7 +15,8 @@ public sealed class TestReliabilityPreflightTests
         preconditions.Should().Contain("FREEX_UIE2E");
         preconditions.Should().Contain("SkipException.ForSkip");
         formulaE2e.Should().Contain("UiE2ePreconditions.SkipUnlessEnabled();");
-        uiaSnapshot.Should().Contain("UiE2ePreconditions.SkipUnlessEnabled();");
+        formulaE2e.Should().Contain("UiAutomationCatalogSnapshotHarness.Run(run)");
+        uiaSnapshot.Should().NotContain("UiE2ePreconditions.SkipUnlessEnabled();");
         formulaE2e.Should().NotMatchRegex(@"if \(!OperatingSystem\.IsWindows\(\)\)\s*return;");
         uiaSnapshot.Should().NotMatchRegex(@"!Environment\.UserInteractive\)\s*return;");
     }
