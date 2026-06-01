@@ -794,6 +794,12 @@ public partial class MainWindow
             _selectionAnchor = target;
 
         var anchor = _selectionAnchor ?? target;
+        if (anchor.Sheet != target.Sheet)
+        {
+            anchor = target;
+            _selectionAnchor = target;
+        }
+
         _selectionCursor = target;
         var activeRange = new GridRange(anchor, target);
 
