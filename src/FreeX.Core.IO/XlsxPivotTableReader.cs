@@ -75,20 +75,16 @@ internal static partial class XlsxPivotTableReader
             if (worksheetEntry is null)
                 continue;
 
-            var pivotRelIds = ReadWorksheetRelationshipIds(
-                worksheetEntry,
-                "pivotTableDefinition",
-                "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
-                relNs.NamespaceName);
-            if (pivotRelIds.Count == 0)
-                continue;
+            // Pivot tables are linked to a worksheet purely through worksheet-rels relationships of the
+            // pivotTable type (the schema-valid mechanism that real Excel files use). Discover them by
+            // scanning those relationships; fall back to a legacy worksheet-embedded pivotTableDefinition
+            // r:id reference for older FreeX saves that wrote that (non-schema) element.
+            var pivotPaths = ReadWorksheetPivotTableTargets(archive, worksheetPath, packageRelNs);
+            if (pivotPaths.Count == 0)
+                pivotPaths = ReadLegacyEmbeddedPivotTableTargets(archive, worksheetEntry, worksheetPath, relNs, packageRelNs);
 
-            var worksheetRels = XlsxRelationshipReader.LoadTargets(archive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
-            foreach (var pivotRelId in pivotRelIds)
+            foreach (var pivotPath in pivotPaths)
             {
-                if (!worksheetRels.TryGetValue(pivotRelId, out var pivotPath))
-                    continue;
-
                 var pivotEntry = archive.GetEntry(pivotPath);
                 if (pivotEntry is null)
                     continue;
@@ -108,6 +104,63 @@ internal static partial class XlsxPivotTableReader
         }
 
         return result;
+    }
+
+    private const string PivotTableRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable";
+
+    private static List<string> ReadWorksheetPivotTableTargets(
+        ZipArchive archive,
+        string worksheetPath,
+        XNamespace packageRelNs)
+    {
+        var relsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
+        if (relsEntry is null)
+            return [];
+
+        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+        var targets = new List<string>();
+        foreach (var relationship in relsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+        {
+            if (!string.Equals(relationship.Attribute("Type")?.Value, PivotTableRelationshipType, StringComparison.Ordinal))
+                continue;
+
+            var target = relationship.Attribute("Target")?.Value;
+            if (string.IsNullOrWhiteSpace(target) ||
+                string.Equals(relationship.Attribute("TargetMode")?.Value, "External", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            targets.Add(XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target));
+        }
+
+        return targets;
+    }
+
+    private static List<string> ReadLegacyEmbeddedPivotTableTargets(
+        ZipArchive archive,
+        ZipArchiveEntry worksheetEntry,
+        string worksheetPath,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var pivotRelIds = ReadWorksheetRelationshipIds(
+            worksheetEntry,
+            "pivotTableDefinition",
+            "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+            relNs.NamespaceName);
+        if (pivotRelIds.Count == 0)
+            return [];
+
+        var worksheetRels = XlsxRelationshipReader.LoadTargets(archive, XlsxPackagePath.GetRelationshipPartPath(worksheetPath), worksheetPath, packageRelNs);
+        var targets = new List<string>();
+        foreach (var pivotRelId in pivotRelIds)
+        {
+            if (worksheetRels.TryGetValue(pivotRelId, out var pivotPath))
+                targets.Add(pivotPath);
+        }
+
+        return targets;
     }
 
     private static Dictionary<string, string> LoadRelationshipTargets(
@@ -204,12 +257,20 @@ internal static partial class XlsxPivotTableReader
             XlsxXmlAttributeReader.ReadBoolAttribute(root.Element(workbookNs + "pivotFields")?.Elements(workbookNs + "pivotField").FirstOrDefault(), "subtotalTop")
                 ? PivotSubtotalPlacement.Top
                 : PivotSubtotalPlacement.Bottom,
-            XlsxXmlAttributeReader.ReadBoolAttribute(root, "showGrandTotals", defaultValue: true),
-            XlsxXmlAttributeReader.ReadBoolAttribute(root, "showRowGrandTotals", XlsxXmlAttributeReader.ReadBoolAttribute(root, "showGrandTotals", defaultValue: true)),
-            XlsxXmlAttributeReader.ReadBoolAttribute(root, "showColumnGrandTotals", XlsxXmlAttributeReader.ReadBoolAttribute(root, "showGrandTotals", defaultValue: true)),
-            XlsxXmlAttributeReader.ReadBoolAttribute(root, "repeatItemLabels", defaultValue: true),
-            XlsxXmlAttributeReader.ReadBoolAttribute(root, "blankLineAfterItems"),
-            ReadPivotReportLayout(root.Attribute("reportLayout")?.Value),
+            // OOXML CT_pivotTableDefinition spells grand-total visibility as rowGrandTotals / colGrandTotals
+            // (both default true). Older FreeX saves used the non-schema showRowGrandTotals /
+            // showColumnGrandTotals / showGrandTotals names, so fall back to those for backward compatibility.
+            ReadGrandTotal(root, "rowGrandTotals", "showRowGrandTotals") || ReadGrandTotal(root, "colGrandTotals", "showColumnGrandTotals"),
+            ReadGrandTotal(root, "rowGrandTotals", "showRowGrandTotals"),
+            ReadGrandTotal(root, "colGrandTotals", "showColumnGrandTotals"),
+            // repeatItemLabels has no base-schema home (x14-only), so FreeX persists it in a tableProps
+            // extLst extension. Prefer that; fall back to the legacy definition-level attribute. insertBlankRow
+            // is a per-pivotField OOXML flag, so read it from any field (legacy fallback to blankLineAfterItems).
+            ReadFreeXTableBool(root, workbookNs, "repeatItemLabels")
+                ?? XlsxXmlAttributeReader.ReadBoolAttribute(root, "repeatItemLabels", defaultValue: true),
+            ReadAnyPivotFieldBool(root, workbookNs, "insertBlankRow")
+                ?? XlsxXmlAttributeReader.ReadBoolAttribute(root, "blankLineAfterItems"),
+            ReadPivotReportLayout(root),
             Math.Clamp(XlsxXmlAttributeReader.ReadIntAttribute(root, "indent") ?? 1, 0, 15),
             styleInfo?.Attribute("name")?.Value ?? "PivotStyleLight16",
             XlsxXmlAttributeReader.ReadBoolAttribute(styleInfo, "showRowHeaders", defaultValue: true),
@@ -229,9 +290,15 @@ internal static partial class XlsxPivotTableReader
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableDrill", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "asteriskTotals"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "multipleFieldFilters", defaultValue: true),
-            XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableFieldDialog", defaultValue: true),
+            // OOXML expresses these as disableFieldList (inverse) and editData; prefer those, then fall back
+            // to the legacy enableFieldDialog / enableDataValueEditing names FreeX previously wrote.
+            root.Attribute("disableFieldList") is not null
+                ? !XlsxXmlAttributeReader.ReadBoolAttribute(root, "disableFieldList")
+                : XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableFieldDialog", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableFieldProperties", defaultValue: true),
-            XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableDataValueEditing"),
+            root.Attribute("editData") is not null
+                ? XlsxXmlAttributeReader.ReadBoolAttribute(root, "editData")
+                : XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableDataValueEditing"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "applyNumberFormats", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "applyBorderFormats", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "applyFontFormats", defaultValue: true),
@@ -256,6 +323,19 @@ internal static partial class XlsxPivotTableReader
             labelFilters,
             sorts);
         return true;
+    }
+
+    // Reads a grand-total flag, preferring the OOXML attribute name (rowGrandTotals / colGrandTotals) and
+    // falling back to the legacy non-schema FreeX names (showRowGrandTotals / showColumnGrandTotals /
+    // showGrandTotals). All grand-total attributes default to true (visible) per the OOXML schema.
+    private static bool ReadGrandTotal(XElement root, string ooxmlName, string legacyName)
+    {
+        if (root.Attribute(ooxmlName) is not null)
+            return XlsxXmlAttributeReader.ReadBoolAttribute(root, ooxmlName, defaultValue: true);
+        if (root.Attribute(legacyName) is not null)
+            return XlsxXmlAttributeReader.ReadBoolAttribute(root, legacyName, defaultValue: true);
+
+        return XlsxXmlAttributeReader.ReadBoolAttribute(root, "showGrandTotals", defaultValue: true);
     }
 
 }

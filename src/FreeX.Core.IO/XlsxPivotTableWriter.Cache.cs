@@ -29,13 +29,15 @@ internal static partial class XlsxPivotTableWriter
             new XAttribute("refreshOnLoad", cache.RefreshOnLoad ? "1" : "0"),
             new XAttribute("saveData", cache.SaveData ? "1" : "0"),
             new XAttribute("enableRefresh", cache.EnableRefresh ? "1" : "0"),
-            new XAttribute("preserveSourceSortFilter", cache.PreserveSourceSortFilter ? "1" : "0"),
+            // 'preserveSourceSortFilter' and 'refreshedDateIso' are NOT CT_PivotCacheDefinition attributes
+            // in the OOXML schema (refreshedDate is an xsd:double serial date, not an ISO string), so they
+            // are persisted in a FreeX extLst extension instead — see FreeXPivotCacheExtension below. This
+            // keeps the cache part schema-valid (Excel accepts it) while still round-tripping the flags.
             cache.MissingItemsLimit is { } missingItemsLimit ? new XAttribute("missingItemsLimit", missingItemsLimit.ToString(CultureInfo.InvariantCulture)) : null,
             cache.CreatedVersion is { } createdVersion ? new XAttribute("createdVersion", createdVersion.ToString(CultureInfo.InvariantCulture)) : null,
             cache.MinRefreshableVersion is { } minRefreshableVersion ? new XAttribute("minRefreshableVersion", minRefreshableVersion.ToString(CultureInfo.InvariantCulture)) : null,
             cache.RefreshedVersion is { } refreshedVersion ? new XAttribute("refreshedVersion", refreshedVersion.ToString(CultureInfo.InvariantCulture)) : null,
             !string.IsNullOrWhiteSpace(cache.RefreshedBy) ? new XAttribute("refreshedBy", cache.RefreshedBy) : null,
-            !string.IsNullOrWhiteSpace(cache.RefreshedDateIso) ? new XAttribute("refreshedDateIso", cache.RefreshedDateIso) : null,
             new XAttribute("recordCount", (cache.RecordCount ?? 0).ToString(CultureInfo.InvariantCulture)),
             cacheSource,
             new XElement(
@@ -45,7 +47,36 @@ internal static partial class XlsxPivotTableWriter
                     workbookNs + "cacheField",
                     new XAttribute("name", string.IsNullOrWhiteSpace(field.Name) ? "Field" : field.Name),
                     field.NumberFormatId is { } numFmtId ? new XAttribute("numFmtId", numFmtId.ToString(CultureInfo.InvariantCulture)) : null,
-                    ToPivotCacheSharedItemsXml(field, workbookNs))))));
+                    ToPivotCacheSharedItemsXml(field, workbookNs)))),
+            FreeXPivotCacheExtension(cache, workbookNs)));
+    }
+
+    // FreeX-private namespace + extension URI for pivot flags that have no home in the base OOXML schema.
+    private const string FreeXPivotExtensionNamespace = "urn:freex:pivot:2026";
+    private const string FreeXPivotCacheExtensionUri = "{FREEX-PIVOT-CACHE-EXT}";
+    private const string FreeXPivotTableExtensionUri = "{FREEX-PIVOT-TABLE-EXT}";
+
+    // Persists pivot-cache flags with no base-schema attribute (preserveSourceSortFilter, the ISO refreshed
+    // date) inside a schema-valid extLst/ext block. Returns null when nothing needs preserving.
+    private static XElement? FreeXPivotCacheExtension(PivotCacheModel cache, XNamespace workbookNs)
+    {
+        XNamespace freeXNs = FreeXPivotExtensionNamespace;
+        var payload = new XElement(freeXNs + "cacheProps");
+        if (!cache.PreserveSourceSortFilter)
+            payload.SetAttributeValue("preserveSourceSortFilter", "0");
+        if (!string.IsNullOrWhiteSpace(cache.RefreshedDateIso))
+            payload.SetAttributeValue("refreshedDateIso", cache.RefreshedDateIso);
+
+        if (!payload.HasAttributes)
+            return null;
+
+        return new XElement(
+            workbookNs + "extLst",
+            new XElement(
+                workbookNs + "ext",
+                new XAttribute("uri", FreeXPivotCacheExtensionUri),
+                new XAttribute(XNamespace.Xmlns + "fx", FreeXPivotExtensionNamespace),
+                payload));
     }
 
     private static XElement ToPivotCacheSharedItemsXml(PivotCacheFieldModel field, XNamespace workbookNs) =>

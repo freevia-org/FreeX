@@ -1,9 +1,46 @@
+using System.Linq;
+using System.Xml.Linq;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
 
 internal static partial class XlsxPivotTableReader
 {
+    private const string FreeXPivotExtensionNamespace = "urn:freex:pivot:2026";
+
+    // Reads a boolean from the FreeX tableProps extLst extension on a pivotTableDefinition; null when absent
+    // so callers can fall back to a legacy definition-level attribute. Values are "0"/"1" (default true).
+    private static bool? ReadFreeXTableBool(XElement root, XNamespace workbookNs, string attributeName)
+    {
+        XNamespace freeXNs = FreeXPivotExtensionNamespace;
+        var props = root.Element(workbookNs + "extLst")?
+            .Elements(workbookNs + "ext")
+            .Select(ext => ext.Element(freeXNs + "tableProps"))
+            .FirstOrDefault(element => element is not null);
+        if (props?.Attribute(attributeName) is not { } attribute)
+            return null;
+
+        return !string.Equals(attribute.Value, "0", StringComparison.Ordinal);
+    }
+
+    // True if any pivotField sets the named boolean attribute; null when no field carries it (so callers
+    // can fall back to a legacy definition-level attribute).
+    private static bool? ReadAnyPivotFieldBool(XElement root, XNamespace workbookNs, string attributeName)
+    {
+        var pivotFields = root.Element(workbookNs + "pivotFields");
+        if (pivotFields is null)
+            return null;
+
+        var fieldsWithAttribute = pivotFields
+            .Elements(workbookNs + "pivotField")
+            .Where(field => field.Attribute(attributeName) is not null)
+            .ToList();
+        if (fieldsWithAttribute.Count == 0)
+            return null;
+
+        return fieldsWithAttribute.Any(field => XlsxXmlAttributeReader.ReadBoolAttribute(field, attributeName));
+    }
+
     private static IReadOnlyList<string>? ReadCsvAttribute(string? value) =>
         string.IsNullOrWhiteSpace(value)
             ? null
@@ -19,6 +56,28 @@ internal static partial class XlsxPivotTableReader
             "range" or "numberrange" or "number-range" or "number" => PivotFieldGrouping.NumberRange,
             _ => defaultValue
         };
+
+    // Derives the report layout from the OOXML CT_pivotTableDefinition layout flags (compact / outline /
+    // outlineData / gridDropZones). Falls back to the legacy FreeX 'reportLayout' attribute when present
+    // (older saves), and finally to the text-based mapping.
+    private static PivotReportLayout ReadPivotReportLayout(XElement root)
+    {
+        if (root.Attribute("compact") is not null ||
+            root.Attribute("outline") is not null ||
+            root.Attribute("gridDropZones") is not null)
+        {
+            var compact = XlsxXmlAttributeReader.ReadBoolAttribute(root, "compact", defaultValue: true);
+            var outline = XlsxXmlAttributeReader.ReadBoolAttribute(root, "outline");
+            if (compact)
+                return PivotReportLayout.Compact;
+            if (outline)
+                return PivotReportLayout.Outline;
+
+            return PivotReportLayout.Tabular;
+        }
+
+        return ReadPivotReportLayout(root.Attribute("reportLayout")?.Value);
+    }
 
     private static PivotReportLayout ReadPivotReportLayout(string? value) =>
         value?.Trim().ToLowerInvariant() switch
