@@ -114,7 +114,7 @@ public sealed class InsertFunctionDialog : Window
                 ? $"{selected.Name}()"
                 : "";
         };
-        _listBox.MouseDoubleClick += (_, _) => Ok_Click(null!, null!);
+        _listBox.MouseDoubleClick += ListBox_MouseDoubleClick;
 
         outer.Children.Add(searchPanel);
         outer.Children.Add(btnRow);
@@ -171,6 +171,12 @@ public sealed class InsertFunctionDialog : Window
             SelectedFormula = argumentsDialog.ResultFormula;
             DialogResult = true;
         }
+    }
+
+    private void ListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        Ok_Click(sender, e);
+        e.Handled = true;
     }
 
     private void ShowFunctionHelp()

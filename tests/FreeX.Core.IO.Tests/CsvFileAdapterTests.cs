@@ -599,6 +599,27 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Save_TruncatesSeekableOutputStreamBeforeWritingCsv()
+    {
+        var largeWorkbook = new Workbook("Large");
+        var largeSheet = largeWorkbook.AddSheet("Sheet1");
+        largeSheet.SetCell(new CellAddress(largeSheet.Id, 1, 1), new TextValue("long stale value"));
+        largeSheet.SetCell(new CellAddress(largeSheet.Id, 1, 2), new TextValue("tail"));
+        var smallWorkbook = new Workbook("Small");
+        var smallSheet = smallWorkbook.AddSheet("Sheet1");
+        smallSheet.SetCell(new CellAddress(smallSheet.Id, 1, 1), new TextValue("ok"));
+
+        var adapter = new CsvFileAdapter();
+        using var stream = new MemoryStream();
+        adapter.Save(largeWorkbook, stream);
+        stream.Position = 0;
+
+        adapter.Save(smallWorkbook, stream);
+
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("ok\r\n");
+    }
+
+    [Fact]
     public void Save_PreservesFractionalSecondsInDateTimeValues()
     {
         var workbook = new Workbook("Book1");
