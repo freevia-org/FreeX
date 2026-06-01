@@ -150,6 +150,33 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Save_WritesOutOfRangeSpreadsheetMlDateTimesAsTextCells()
+    {
+        var workbook = new Workbook("OutOfRangeDates");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new DateTimeValue(double.MaxValue));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new DateTimeValue(double.MinValue));
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+
+        stream.Position = 0;
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var data = document.Descendants(ss + "Data").ToArray();
+        data.Select(element => element.Attribute(ss + "Type")!.Value).Should().Equal("String", "String");
+        data.Select(element => element.Value).Should().Equal(
+            double.MaxValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+            double.MinValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.GetCell(1, 1)!.Value.Should().Be(new TextValue(double.MaxValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
+        loaded.GetCell(1, 2)!.Value.Should().Be(new TextValue(double.MinValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
+    }
+
+    [Fact]
     public void Load_TrimsSpreadsheetMlBooleanText()
     {
         using var stream = StreamFromString("""
