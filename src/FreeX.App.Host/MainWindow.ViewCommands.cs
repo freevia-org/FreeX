@@ -146,7 +146,12 @@ public partial class MainWindow
                 out var arrangement))
             return;
 
-        TryExecuteCommand(new SetWorkbookWindowArrangementCommand(arrangement), "Arrange Windows");
+        if (!TryExecuteCommand(new SetWorkbookWindowArrangementCommand(arrangement), "Arrange Windows"))
+            return;
+
+        var workArea = SystemParameters.WorkArea;
+        _windowRegistry?.ArrangeVisibleWindows(arrangement, workArea.Width, workArea.Height);
+        RefreshViewWindowCommandState();
     }
 
     private void RefreshViewWindowCommandState()
