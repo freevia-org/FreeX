@@ -100,6 +100,39 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_OmitsDefaultNativeJsonCellFields()
+    {
+        var workbook = new Workbook("CompactCells");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(42));
+        sheet.SetFormula(new CellAddress(sheet.Id, 2, 1), "A1*2");
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var cells = document.RootElement.GetProperty("Sheets")[0].GetProperty("Cells");
+        var literal = cells.EnumerateArray().Single(cell => cell.GetProperty("Address").GetString() == "A1");
+        literal.GetProperty("Value").GetString().Should().Be("42");
+        literal.GetProperty("ValueType").GetString().Should().Be("n");
+        literal.TryGetProperty("Formula", out _).Should().BeFalse();
+        literal.TryGetProperty("IgnoreFormulaError", out _).Should().BeFalse();
+
+        var formula = cells.EnumerateArray().Single(cell => cell.GetProperty("Address").GetString() == "A2");
+        formula.GetProperty("Formula").GetString().Should().Be("A1*2");
+        formula.TryGetProperty("Value", out _).Should().BeFalse();
+        formula.TryGetProperty("ValueType", out _).Should().BeFalse();
+        formula.TryGetProperty("IgnoreFormulaError", out _).Should().BeFalse();
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.GetCell(1, 1)!.Value.Should().Be(new NumberValue(42));
+        loaded.GetCell(2, 1)!.FormulaText.Should().Be("A1*2");
+        loaded.GetCell(2, 1)!.IgnoreFormulaError.Should().BeFalse();
+    }
+
+    [Fact]
     public void Load_AcceptsLegacyInlineCellStylesWithoutWorkbookStyleTable()
     {
         const string legacyJson = """
