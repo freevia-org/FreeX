@@ -966,6 +966,25 @@ public sealed class GridViewRenderPerformanceTests
         splitPanes.Should().Contain("public sealed record SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region)");
     }
 
+    [Fact]
+    public void RenderSplitPaneCells_UsesWrappedTextLayoutCacheForDefaultWrappedCells()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderSplitPaneCells = rendering[
+            rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+
+        renderSplitPaneCells.Should().Contain("var wrapText = style?.WrapText == true;");
+        renderSplitPaneCells.Should().Contain("var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);");
+        renderSplitPaneCells.Should().Contain("var useDefaultWrappedTextLayout = !useDefaultTextLayout && wrapText && CanUseDefaultWrappedFormattedText(style);");
+        renderSplitPaneCells.Should().Contain("GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)");
+        renderSplitPaneCells.Should().Contain("text.MaxTextWidth = wrapMaxTextWidth;");
+        renderSplitPaneCells.Should().Contain("text.TextAlignment = wrapTextAlignment;");
+        renderSplitPaneCells.Should().Contain("if (style?.ShrinkToFit == true && !wrapText)");
+        renderSplitPaneCells.Should().NotContain("CanUseDefaultFormattedText(style, wrapText: false)");
+        renderSplitPaneCells.Should().NotContain("style.WrapText != true");
+    }
+
     private static string FindWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
