@@ -771,6 +771,32 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void ResolveSplitPaneWheelTarget_PrefersMiniScrollbarAxisOverCellRegionFallback()
+    {
+        var sheetId = SheetId.New();
+        var viewport = SplitViewport();
+        var chrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
+
+        GridView.ResolveSplitPaneWheelTarget(
+                viewport,
+                sheetId,
+                new Point(chrome.HorizontalTopRight!.Track.Left + 2, chrome.HorizontalTopRight.Track.Top + 2),
+                actualWidth: 500,
+                actualHeight: 300,
+                requestedHorizontal: false)
+            .Should().Be(new SplitPaneWheelTarget(SplitPaneRegion.TopRight, Horizontal: true));
+
+        GridView.ResolveSplitPaneWheelTarget(
+                viewport,
+                sheetId,
+                new Point(chrome.VerticalBottomLeft!.Track.Left + 2, chrome.VerticalBottomLeft.Track.Top + 2),
+                actualWidth: 500,
+                actualHeight: 300,
+                requestedHorizontal: true)
+            .Should().Be(new SplitPaneWheelTarget(SplitPaneRegion.BottomLeft, Horizontal: false));
+    }
+
+    [Fact]
     public void CalculateSplitPaneClipRects_ConstrainsEachPaneToItsDividerBand()
     {
         var viewport = SplitViewport();
