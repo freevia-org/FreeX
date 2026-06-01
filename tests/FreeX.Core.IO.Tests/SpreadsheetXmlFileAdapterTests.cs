@@ -1408,6 +1408,47 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesQuotedSpreadsheetMlNamedRanges()
+    {
+        using var source = StreamFromString("""
+            <report sheet="Q1 Bob's Team">
+              <row name="Alpha"/>
+              <row name="Beta"/>
+            </report>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/report">
+                <ss:Workbook>
+                  <ss:Names>
+                    <ss:NamedRange ss:Name="TeamRows" ss:RefersTo="='Q1 Bob''s Team'!$A$1:$A$2"/>
+                  </ss:Names>
+                  <ss:Worksheet ss:Name="{@sheet}">
+                    <ss:Table>
+                      <xsl:for-each select="row">
+                        <ss:Row>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@name"/></ss:Data></ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Q1 Bob's Team");
+        workbook.NamedRanges["TeamRows"].Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 1)));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlColumnSpanLayout()
     {
         using var source = StreamFromString("""
