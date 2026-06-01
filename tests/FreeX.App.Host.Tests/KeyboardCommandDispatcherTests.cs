@@ -50,6 +50,17 @@ public sealed class KeyboardCommandDispatcherTests
     }
 
     [Fact]
+    public void Register_RejectsNullShortcutRouteHandler()
+    {
+        var dispatcher = new KeyboardCommandDispatcher();
+
+        var act = () => dispatcher.Register(KeyboardCommandShortcut.SaveWorkbook, null!);
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("handler");
+    }
+
+    [Fact]
     public void RegisteredShortcuts_ReturnsRegisteredShortcutSnapshot()
     {
         var dispatcher = new KeyboardCommandDispatcher();
@@ -112,5 +123,16 @@ public sealed class KeyboardCommandDispatcherTests
 
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*OpenWorkbook, SaveWorkbook, InsertFunction*");
+    }
+
+    [Fact]
+    public void EnsureRegistered_RejectsNullRequiredShortcutSet()
+    {
+        var dispatcher = new KeyboardCommandDispatcher();
+
+        var act = () => dispatcher.EnsureRegistered(null!);
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithParameterName("requiredShortcuts");
     }
 }
