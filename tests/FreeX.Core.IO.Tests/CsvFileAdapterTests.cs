@@ -57,6 +57,20 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_CoercesPlainNumbersBeforeExpensiveDateTimeProbes()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "DelimitedTextWorkbookReader.cs"));
+        var start = source.IndexOf("private static ScalarValue CoerceValue", StringComparison.Ordinal);
+        var end = source.IndexOf("private static bool TryReadError", start, StringComparison.Ordinal);
+        var coerceValue = source[start..end];
+
+        coerceValue.IndexOf("double.TryParse(trimmed", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(coerceValue.IndexOf("TryParseIsoDateTime(trimmed", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Save_DenseSyntheticSheet_ReportsThroughputAndAllocatedBytes()
     {
         const int rowCount = 300;
@@ -371,6 +385,19 @@ public sealed class CsvFileAdapterTests
     public void Load_HonorsCommaSeparatorDirective()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=,\r\nName,Amount\r\nAlice,3.5\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("Amount"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Alice"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(3.5));
+    }
+
+    [Fact]
+    public void Load_HonorsTabSeparatorDirective()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=\t\r\nName\tAmount\r\nAlice\t3.5\r\n"));
         var workbook = new CsvFileAdapter().Load(stream);
         var sheet = workbook.Sheets.Single();
 

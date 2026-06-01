@@ -8,7 +8,6 @@ internal static partial class RowColumnShiftHelpers
     {
         var shifted = comments
             .Where(p => p.Key.Row >= start)
-            .OrderByDescending(p => p.Key.Row)
             .ToList();
 
         foreach (var (addr, _) in shifted)
@@ -20,25 +19,34 @@ internal static partial class RowColumnShiftHelpers
     internal static void ShiftCommentRowsDown<TValue>(Dictionary<CellAddress, TValue> comments, uint start, uint count)
     {
         var end = start + count - 1;
-        var removed = comments.Keys.Where(addr => addr.Row >= start && addr.Row <= end).ToList();
-        var shifted = comments
-            .Where(p => p.Key.Row > end)
-            .OrderBy(p => p.Key.Row)
-            .ToList();
+        List<CellAddress>? removed = null;
+        List<KeyValuePair<CellAddress, TValue>>? shifted = null;
+        foreach (var pair in comments)
+        {
+            if (pair.Key.Row > end)
+                (shifted ??= new List<KeyValuePair<CellAddress, TValue>>(comments.Count)).Add(pair);
+            else if (pair.Key.Row >= start)
+                (removed ??= []).Add(pair.Key);
+        }
 
-        foreach (var addr in removed)
-            comments.Remove(addr);
-        foreach (var (addr, _) in shifted)
-            comments.Remove(addr);
-        foreach (var (addr, comment) in shifted)
-            comments[new CellAddress(addr.Sheet, addr.Row - count, addr.Col)] = comment;
+        if (removed is not null)
+        {
+            foreach (var addr in removed)
+                comments.Remove(addr);
+        }
+        if (shifted is not null)
+        {
+            foreach (var (addr, _) in shifted)
+                comments.Remove(addr);
+            foreach (var (addr, comment) in shifted)
+                comments[new CellAddress(addr.Sheet, addr.Row - count, addr.Col)] = comment;
+        }
     }
 
     internal static void ShiftCommentColumnsUp<TValue>(Dictionary<CellAddress, TValue> comments, uint start, uint count)
     {
         var shifted = comments
             .Where(p => p.Key.Col >= start)
-            .OrderByDescending(p => p.Key.Col)
             .ToList();
 
         foreach (var (addr, _) in shifted)
@@ -50,17 +58,27 @@ internal static partial class RowColumnShiftHelpers
     internal static void ShiftCommentColumnsDown<TValue>(Dictionary<CellAddress, TValue> comments, uint start, uint count)
     {
         var end = start + count - 1;
-        var removed = comments.Keys.Where(addr => addr.Col >= start && addr.Col <= end).ToList();
-        var shifted = comments
-            .Where(p => p.Key.Col > end)
-            .OrderBy(p => p.Key.Col)
-            .ToList();
+        List<CellAddress>? removed = null;
+        List<KeyValuePair<CellAddress, TValue>>? shifted = null;
+        foreach (var pair in comments)
+        {
+            if (pair.Key.Col > end)
+                (shifted ??= new List<KeyValuePair<CellAddress, TValue>>(comments.Count)).Add(pair);
+            else if (pair.Key.Col >= start)
+                (removed ??= []).Add(pair.Key);
+        }
 
-        foreach (var addr in removed)
-            comments.Remove(addr);
-        foreach (var (addr, _) in shifted)
-            comments.Remove(addr);
-        foreach (var (addr, comment) in shifted)
-            comments[new CellAddress(addr.Sheet, addr.Row, addr.Col - count)] = comment;
+        if (removed is not null)
+        {
+            foreach (var addr in removed)
+                comments.Remove(addr);
+        }
+        if (shifted is not null)
+        {
+            foreach (var (addr, _) in shifted)
+                comments.Remove(addr);
+            foreach (var (addr, comment) in shifted)
+                comments[new CellAddress(addr.Sheet, addr.Row, addr.Col - count)] = comment;
+        }
     }
 }
