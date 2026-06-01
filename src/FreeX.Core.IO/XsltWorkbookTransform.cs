@@ -75,13 +75,35 @@ public static class XsltWorkbookTransform
         var arguments = new XsltArgumentList();
         foreach (var (name, value) in parameters)
         {
-            if (string.IsNullOrWhiteSpace(name))
-                throw new ArgumentException("XSLT parameter names cannot be empty.", nameof(parameters));
-
-            arguments.AddParam(XmlConvert.VerifyNCName(name), namespaceUri: "", value ?? "");
+            var (localName, namespaceUri) = ParseParameterName(name, nameof(parameters));
+            arguments.AddParam(localName, namespaceUri, value ?? "");
         }
 
         return arguments;
+    }
+
+    private static (string LocalName, string NamespaceUri) ParseParameterName(string name, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("XSLT parameter names cannot be empty.", parameterName);
+
+        try
+        {
+            if (name[0] != '{')
+                return (XmlConvert.VerifyNCName(name), NamespaceUri: "");
+
+            var namespaceEnd = name.IndexOf('}', StringComparison.Ordinal);
+            if (namespaceEnd <= 1 || namespaceEnd == name.Length - 1)
+                throw new ArgumentException("Namespaced XSLT parameters must use {namespaceUri}localName notation.", parameterName);
+
+            var namespaceUri = name[1..namespaceEnd];
+            var localName = XmlConvert.VerifyNCName(name[(namespaceEnd + 1)..]);
+            return (localName, namespaceUri);
+        }
+        catch (XmlException ex)
+        {
+            throw new ArgumentException("XSLT parameter names must be valid XML NCNames, or {namespaceUri}localName for namespaced parameters.", parameterName, ex);
+        }
     }
 
     private static XslCompiledTransform LoadStylesheet(Stream stylesheet, long maxInputCharacters)
