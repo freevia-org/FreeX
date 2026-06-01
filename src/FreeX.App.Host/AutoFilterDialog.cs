@@ -127,7 +127,7 @@ public sealed partial class AutoFilterDialog : Window
             _datePresetBox.Visibility = Visibility.Visible;
 
         var colorOptions = menuPlan.ColorOptions ?? [];
-        if (colorOptions.Count > 0)
+        if (colorOptions.Count > 0 && HasFilterByColorEntry(menuPlan))
             PopulateColorChoices(colorOptions);
     }
 
