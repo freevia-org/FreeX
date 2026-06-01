@@ -117,6 +117,7 @@ public sealed class GridViewTextDecorationTests
         layout.IconRect.Width.Should().Be(0);
         layout.IconRect.Height.Should().Be(0);
         layout.TextRect.Width.Should().Be(0);
+        layout.ShouldDrawText.Should().BeFalse();
     }
 
     [Fact]
