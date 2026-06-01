@@ -402,7 +402,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         var type = dataElement.Attribute(SpreadsheetTypeAttribute)?.Value;
         return type switch
         {
-            "Number" when double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) =>
+            "Number" when double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) &&
+                          double.IsFinite(number) =>
                 new NumberValue(number),
             "Boolean" when ReadBoolean(text, out var boolean) =>
                 new BoolValue(boolean),

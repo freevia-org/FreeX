@@ -69,6 +69,32 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_KeepsNonFiniteSpreadsheetMlNumbersAsText()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Numbers">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="Number">NaN</ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Number">Infinity</ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Number">-Infinity</ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Number">42.5</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("NaN"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new TextValue("Infinity"));
+        sheet.GetCell(1, 3)!.Value.Should().Be(new TextValue("-Infinity"));
+        sheet.GetCell(1, 4)!.Value.Should().Be(new NumberValue(42.5));
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsMultipleSheetsAndValueTypes()
     {
         var workbook = new Workbook("XmlRoundTrip");
@@ -1405,6 +1431,47 @@ public sealed class SpreadsheetXmlFileAdapterTests
         workbook.NamedRanges["GeneratedData"].Should().Be(new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, 3, 2)));
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesQuotedSpreadsheetMlNamedRanges()
+    {
+        using var source = StreamFromString("""
+            <report sheet="Q1 Bob's Team">
+              <row name="Alpha"/>
+              <row name="Beta"/>
+            </report>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/report">
+                <ss:Workbook>
+                  <ss:Names>
+                    <ss:NamedRange ss:Name="TeamRows" ss:RefersTo="='Q1 Bob''s Team'!$A$1:$A$2"/>
+                  </ss:Names>
+                  <ss:Worksheet ss:Name="{@sheet}">
+                    <ss:Table>
+                      <xsl:for-each select="row">
+                        <ss:Row>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@name"/></ss:Data></ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Q1 Bob's Team");
+        workbook.NamedRanges["TeamRows"].Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 1)));
     }
 
     [Fact]

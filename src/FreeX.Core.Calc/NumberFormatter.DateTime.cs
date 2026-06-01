@@ -258,6 +258,12 @@ public static partial class NumberFormatter
 
     private static bool TryResolveSpecialDateTimeLocaleToken(string format, out SpecialDateTimeLocaleToken token)
     {
+        if (format.IndexOf('[') < 0)
+        {
+            token = SpecialDateTimeLocaleToken.LongDate;
+            return false;
+        }
+
         var match = SpecialDateTimeLocaleTokenRegex.Match(format);
         if (!match.Success)
         {
@@ -304,6 +310,9 @@ public static partial class NumberFormatter
     // Detect date/time format: has date/time tokens and no digit-only tokens
     private static bool IsDateTimeFormat(string format)
     {
+        if (format.IndexOfAny(['y', 'Y', 'd', 'D', 'h', 'H', 's', 'S', 'm', 'M']) < 0)
+            return false;
+
         // Strip quoted strings before checking
         var stripped = QuotedNumberFormatTextRegex.Replace(format, "");
         stripped = FractionalSecondPrecisionRegex.Replace(stripped, "");
