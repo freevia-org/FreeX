@@ -533,8 +533,8 @@ public sealed partial class NativeJsonAdapter
         public List<PivotTableDto> PivotTables { get; set; } = [];
         public List<DataValidationDto> DataValidations { get; set; } = [];
         public List<ConditionalFormatDto> ConditionalFormats { get; set; } = [];
-        public List<CellDto> Cells { get; set; } = [];
-        public List<StyleOnlyCellDto> StyleOnlyCells { get; set; } = [];
+        public CellDtoSequence Cells { get; set; } = CellDtoSequence.Empty;
+        public StyleOnlyCellDtoSequence StyleOnlyCells { get; set; } = StyleOnlyCellDtoSequence.Empty;
     }
 
     private class WorksheetProtectionMetadataDto
@@ -1078,6 +1078,156 @@ public sealed partial class NativeJsonAdapter
         public CellStyleDto? Style { get; set; }
     }
 
+    [JsonConverter(typeof(CellDtoSequenceJsonConverter))]
+    private sealed class CellDtoSequence : IEnumerable<CellDto?>
+    {
+        public static CellDtoSequence Empty { get; } = new([]);
+
+        private readonly IReadOnlyList<CellDto?>? _items;
+
+        public CellDtoSequence(Sheet sourceSheet)
+        {
+            SourceSheet = sourceSheet;
+        }
+
+        private CellDtoSequence(IReadOnlyList<CellDto?> items)
+        {
+            _items = items;
+        }
+
+        public Sheet? SourceSheet { get; }
+
+        public static CellDtoSequence FromItems(List<CellDto?> items)
+            => items.Count == 0 ? Empty : new CellDtoSequence(items);
+
+        public IEnumerator<CellDto?> GetEnumerator()
+            => (_items ?? []).GetEnumerator();
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+            => GetEnumerator();
+    }
+
+    [JsonConverter(typeof(StyleOnlyCellDtoSequenceJsonConverter))]
+    private sealed class StyleOnlyCellDtoSequence : IEnumerable<StyleOnlyCellDto?>
+    {
+        public static StyleOnlyCellDtoSequence Empty { get; } = new([]);
+
+        private readonly IReadOnlyList<StyleOnlyCellDto?>? _items;
+
+        public StyleOnlyCellDtoSequence(Sheet sourceSheet)
+        {
+            SourceSheet = sourceSheet;
+        }
+
+        private StyleOnlyCellDtoSequence(IReadOnlyList<StyleOnlyCellDto?> items)
+        {
+            _items = items;
+        }
+
+        public Sheet? SourceSheet { get; }
+
+        public static StyleOnlyCellDtoSequence FromItems(List<StyleOnlyCellDto?> items)
+            => items.Count == 0 ? Empty : new StyleOnlyCellDtoSequence(items);
+
+        public IEnumerator<StyleOnlyCellDto?> GetEnumerator()
+            => (_items ?? []).GetEnumerator();
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+            => GetEnumerator();
+    }
+
+    private sealed class CellDtoSequenceJsonConverter : JsonConverter<CellDtoSequence>
+    {
+        public override CellDtoSequence Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+                return CellDtoSequence.Empty;
+            if (reader.TokenType != JsonTokenType.StartArray)
+                throw new JsonException();
+
+            var cells = new List<CellDto?>();
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndArray)
+                    return CellDtoSequence.FromItems(cells);
+                if (reader.TokenType == JsonTokenType.Null)
+                {
+                    cells.Add(null);
+                    continue;
+                }
+
+                cells.Add(JsonSerializer.Deserialize<CellDto>(ref reader, options));
+            }
+
+            throw new JsonException();
+        }
+
+        public override void Write(Utf8JsonWriter writer, CellDtoSequence value, JsonSerializerOptions options)
+        {
+            writer.WriteStartArray();
+            if (value.SourceSheet is { } sheet)
+                WriteCellDtos(writer, sheet, options);
+            else
+            {
+                foreach (var cell in value)
+                {
+                    if (cell is null)
+                        writer.WriteNullValue();
+                    else
+                        CellDtoJsonConverter.WriteCell(writer, cell, options);
+                }
+            }
+
+            writer.WriteEndArray();
+        }
+    }
+
+    private sealed class StyleOnlyCellDtoSequenceJsonConverter : JsonConverter<StyleOnlyCellDtoSequence>
+    {
+        public override StyleOnlyCellDtoSequence Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+                return StyleOnlyCellDtoSequence.Empty;
+            if (reader.TokenType != JsonTokenType.StartArray)
+                throw new JsonException();
+
+            var cells = new List<StyleOnlyCellDto?>();
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndArray)
+                    return StyleOnlyCellDtoSequence.FromItems(cells);
+                if (reader.TokenType == JsonTokenType.Null)
+                {
+                    cells.Add(null);
+                    continue;
+                }
+
+                cells.Add(JsonSerializer.Deserialize<StyleOnlyCellDto>(ref reader, options));
+            }
+
+            throw new JsonException();
+        }
+
+        public override void Write(Utf8JsonWriter writer, StyleOnlyCellDtoSequence value, JsonSerializerOptions options)
+        {
+            writer.WriteStartArray();
+            if (value.SourceSheet is { } sheet)
+                WriteStyleOnlyCellDtos(writer, sheet, options);
+            else
+            {
+                foreach (var cell in value)
+                {
+                    if (cell is null)
+                        writer.WriteNullValue();
+                    else
+                        StyleOnlyCellDtoJsonConverter.WriteCell(writer, cell, options);
+                }
+            }
+
+            writer.WriteEndArray();
+        }
+    }
+
     private sealed class CellDtoJsonConverter : JsonConverter<CellDto>
     {
         private static ReadOnlySpan<byte> AddressProperty => "Address"u8;
@@ -1163,6 +1313,9 @@ public sealed partial class NativeJsonAdapter
         }
 
         public override void Write(Utf8JsonWriter writer, CellDto value, JsonSerializerOptions options)
+            => WriteCell(writer, value, options);
+
+        public static void WriteCell(Utf8JsonWriter writer, CellDto value, JsonSerializerOptions options)
         {
             writer.WriteStartObject();
             writer.WriteString(AddressName, value.Address);
@@ -1239,6 +1392,9 @@ public sealed partial class NativeJsonAdapter
         }
 
         public override void Write(Utf8JsonWriter writer, StyleOnlyCellDto value, JsonSerializerOptions options)
+            => WriteCell(writer, value, options);
+
+        public static void WriteCell(Utf8JsonWriter writer, StyleOnlyCellDto value, JsonSerializerOptions options)
         {
             writer.WriteStartObject();
             writer.WriteString(AddressName, value.Address);

@@ -750,10 +750,26 @@ public sealed class RemainingDialogTests
         source.Should().Contain("private readonly ListBox _issueList");
         source.Should().Contain("private readonly Button _goToButton");
         source.Should().Contain("Content = UiText.Get(\"AccessibilityChecker_GoToButton\")");
-        source.Should().Contain("_issueList.MouseDoubleClick +=");
+        source.Should().Contain("_issueList.MouseDoubleClick += IssueList_MouseDoubleClick;");
         source.Should().Contain("private void GoToSelectedIssue()");
         reviewSource.Should().Contain("if (dialog.ShowDialog() == true)");
         reviewSource.Should().Contain("NavigateToCell(AccessibilityCheckerDialog.GetNavigationTarget(dialog.Result!.Issue));");
+    }
+
+    [Fact]
+    public void AccessibilityCheckerDialog_DoubleClickGoToHandlesMouseEvent()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
+        var doubleClick = source[
+            source.IndexOf("private void IssueList_MouseDoubleClick", StringComparison.Ordinal)..
+            source.IndexOf("private void UpdateGoToButtonState", StringComparison.Ordinal)];
+
+        doubleClick.Should().Contain("_issueList.SelectedItem is null");
+        doubleClick.Should().Contain("GoToSelectedIssue();");
+        doubleClick.Should().Contain("e.Handled = true;");
+        doubleClick.IndexOf("GoToSelectedIssue();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(doubleClick.IndexOf("e.Handled = true;", StringComparison.Ordinal));
     }
 
     [Fact]
