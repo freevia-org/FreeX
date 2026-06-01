@@ -325,7 +325,7 @@ public static class AccessibilityCheckerService
     private static void AddLowContrastCellTextIssues(List<AccessibilityIssue> issues, Workbook workbook, Sheet sheet)
     {
         var occupiedCells = sheet.GetOccupiedCellMap();
-        var conditionalContrastRules = GetConditionalContrastRules(sheet);
+        var conditionalContrastRules = GetConditionalContrastRules(sheet, occupiedCells);
         Dictionary<StyleId, CellStyle>? workbookStyleCache = null;
         Dictionary<CellStyle, CellContrastCheck>? contrastCache = null;
         foreach (var entry in occupiedCells)
@@ -355,7 +355,9 @@ public static class AccessibilityCheckerService
         }
     }
 
-    private static ConditionalContrastRuleSet? GetConditionalContrastRules(Sheet sheet)
+    private static ConditionalContrastRuleSet? GetConditionalContrastRules(
+        Sheet sheet,
+        IReadOnlyDictionary<(uint Row, uint Col), Cell> occupiedCells)
     {
         List<ConditionalFormat>? rules = null;
         foreach (var rule in sheet.ConditionalFormats)
@@ -376,7 +378,8 @@ public static class AccessibilityCheckerService
             rules,
             hasSharedAppliesToRange,
             sharedAppliesToRange,
-            hasSharedAppliesToRange ? GetAlwaysTrueTextValueStyle(rules) : null);
+            hasSharedAppliesToRange ? GetAlwaysTrueTextValueStyle(rules) : null,
+            new ConditionalFormatEvaluationCache(sheet, occupiedCells));
     }
 
     private static bool TryGetSharedAppliesToRange(IReadOnlyList<ConditionalFormat> rules, out GridRange range)
@@ -414,7 +417,8 @@ public static class AccessibilityCheckerService
         IReadOnlyList<ConditionalFormat> Rules,
         bool HasSharedAppliesToRange,
         GridRange SharedAppliesToRange,
-        CellStyle? AlwaysTrueTextValueStyle);
+        CellStyle? AlwaysTrueTextValueStyle,
+        ConditionalFormatEvaluationCache EvaluationCache);
 
     private static CellStyle GetEffectiveContrastStyle(
         Workbook workbook,
@@ -435,7 +439,10 @@ public static class AccessibilityCheckerService
             if (conditionalContrastRules.AlwaysTrueTextValueStyle is { } alwaysTrueTextValueStyle)
                 return alwaysTrueTextValueStyle;
 
-            return GetEffectiveContrastStyleForApplicableRules(conditionalContrastRules.Rules, cell) ??
+            return GetEffectiveContrastStyleForApplicableRules(
+                    conditionalContrastRules.Rules,
+                    cell,
+                    conditionalContrastRules.EvaluationCache) ??
                 GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
         }
 
@@ -444,7 +451,7 @@ public static class AccessibilityCheckerService
             if (!rule.AppliesTo.Contains(address))
                 continue;
 
-            if (!IsConditionalFormatTrue(rule, cell.Value))
+            if (!IsConditionalFormatTrue(rule, cell.Value, conditionalContrastRules.EvaluationCache))
                 continue;
 
             style = rule.FormatIfTrue!;
@@ -457,12 +464,13 @@ public static class AccessibilityCheckerService
 
     private static CellStyle? GetEffectiveContrastStyleForApplicableRules(
         IReadOnlyList<ConditionalFormat> rules,
-        Cell cell)
+        Cell cell,
+        ConditionalFormatEvaluationCache evaluationCache)
     {
         CellStyle? style = null;
         foreach (var rule in rules)
         {
-            if (!IsConditionalFormatTrue(rule, cell.Value))
+            if (!IsConditionalFormatTrue(rule, cell.Value, evaluationCache))
                 continue;
 
             style = rule.FormatIfTrue!;
@@ -505,13 +513,18 @@ public static class AccessibilityCheckerService
         return check;
     }
 
-    private static bool IsConditionalFormatTrue(ConditionalFormat rule, ScalarValue value) =>
+    private static bool IsConditionalFormatTrue(
+        ConditionalFormat rule,
+        ScalarValue value,
+        ConditionalFormatEvaluationCache evaluationCache) =>
         rule.RuleType switch
         {
             CfRuleType.NoBlanks => value is not BlankValue,
             CfRuleType.Blanks => value is BlankValue,
             CfRuleType.Errors => value is ErrorValue,
             CfRuleType.NoErrors => value is not ErrorValue,
+            CfRuleType.DuplicateValues => evaluationCache.HasDuplicateValue(rule, value),
+            CfRuleType.UniqueValues => evaluationCache.HasUniqueValue(rule, value),
             CfRuleType.ContainsText => ValueText(value).Contains(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
             CfRuleType.NotContainsText => !ValueText(value).Contains(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
             CfRuleType.BeginsWith => ValueText(value).StartsWith(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
@@ -839,6 +852,54 @@ public static class AccessibilityCheckerService
             : $"{range.Start.ToA1()}:{range.End.ToA1()}";
 
     private readonly record struct CellContrastCheck(double MinimumContrastRatio, bool HasSufficientContrast);
+
+    private sealed class ConditionalFormatEvaluationCache(
+        Sheet sheet,
+        IReadOnlyDictionary<(uint Row, uint Col), Cell> occupiedCells)
+    {
+        private readonly Dictionary<ConditionalFormat, Dictionary<string, int>> _valueCounts = new();
+
+        public bool HasDuplicateValue(ConditionalFormat rule, ScalarValue value) =>
+            TryGetValueCount(rule, value, out var count) && count > 1;
+
+        public bool HasUniqueValue(ConditionalFormat rule, ScalarValue value) =>
+            TryGetValueCount(rule, value, out var count) && count == 1;
+
+        private bool TryGetValueCount(ConditionalFormat rule, ScalarValue value, out int count)
+        {
+            var key = ValueText(value);
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                count = 0;
+                return false;
+            }
+
+            return GetValueCounts(rule).TryGetValue(key, out count);
+        }
+
+        private Dictionary<string, int> GetValueCounts(ConditionalFormat rule)
+        {
+            if (_valueCounts.TryGetValue(rule, out var counts))
+                return counts;
+
+            counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (entry, cell) in occupiedCells)
+            {
+                var key = ValueText(cell.Value);
+                if (string.IsNullOrWhiteSpace(key))
+                    continue;
+
+                var address = new CellAddress(sheet.Id, entry.Row, entry.Col);
+                if (!rule.AppliesTo.Contains(address))
+                    continue;
+
+                counts[key] = counts.TryGetValue(key, out var current) ? current + 1 : 1;
+            }
+
+            _valueCounts[rule] = counts;
+            return counts;
+        }
+    }
 
     private sealed class CellStyleReferenceComparer : IEqualityComparer<CellStyle>
     {
