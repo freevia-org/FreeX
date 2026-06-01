@@ -10,9 +10,12 @@ public sealed partial class XlsxFileAdapter
         private const int FingerprintCellLimit = 10_000;
 
         public static XlsxSourcePackage Capture(Stream stream, Workbook workbook)
+            => Capture(stream, workbook, allowBufferReuse: false);
+
+        public static XlsxSourcePackage Capture(Stream stream, Workbook workbook, bool allowBufferReuse)
         {
             if (stream is MemoryStream memoryStream)
-                return Capture(memoryStream, workbook);
+                return Capture(memoryStream, workbook, allowBufferReuse);
 
             var fingerprint = ShouldCaptureModelFingerprint(workbook)
                 ? CreateModelFingerprint(workbook)
@@ -22,12 +25,24 @@ public sealed partial class XlsxFileAdapter
         }
 
         public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook)
+            => Capture(stream, workbook, allowBufferReuse: false);
+
+        public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook, bool allowBufferReuse)
         {
             var fingerprint = ShouldCaptureModelFingerprint(workbook)
                 ? CreateModelFingerprint(workbook)
                 : null;
             if (stream.TryGetBuffer(out var buffer))
             {
+                if (allowBufferReuse &&
+                    buffer.Array is not null &&
+                    stream.Length <= int.MaxValue &&
+                    buffer.Offset >= 0 &&
+                    buffer.Offset + (int)stream.Length <= buffer.Array.Length)
+                {
+                    return new XlsxSourcePackage(buffer.Array, buffer.Offset, (int)stream.Length, fingerprint);
+                }
+
                 var copiedBytes = buffer.Array is not null &&
                     stream.Length <= int.MaxValue &&
                     buffer.Offset >= 0 &&
