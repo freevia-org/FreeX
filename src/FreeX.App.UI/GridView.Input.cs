@@ -494,6 +494,13 @@ public partial class GridView
             return;
         }
 
+        if (HitTestWaterfallChartPoint(Charts, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight) is { } waterfallPoint)
+        {
+            WaterfallChartPointContextMenuRequested?.Invoke(waterfallPoint.Chart, waterfallPoint.PointIndex, pos);
+            e.Handled = true;
+            return;
+        }
+
         var objectHit = HitTestDrawingObject(pos);
         if (objectHit.Id != Guid.Empty)
         {
