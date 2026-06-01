@@ -16,6 +16,7 @@ public sealed class SolutionProjectsPreflightTests
         script.Should().Contain("SelectNodes(\"//*[local-name()='Project']\")");
         script.Should().Contain("*_wpftmp.csproj");
         script.Should().Contain("$segments -contains \".worktrees\"");
+        script.Should().Contain("$segments -contains \".claude\"");
         script.Should().Contain("Duplicate solution project entry");
         script.Should().Contain("Solution project path escapes solution root");
         script.Should().Contain("Project missing from solution");
@@ -70,12 +71,13 @@ public sealed class SolutionProjectsPreflightTests
     }
 
     [Fact]
-    public void SolutionProjectsPreflight_IgnoresTransientAndNestedWorktreeProjects()
+    public void SolutionProjectsPreflight_IgnoresTransientAndNestedAgentWorktreeProjects()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-solution-project-preflight-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Included"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "FreeX.App.Host"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Scratch"));
 
         try
         {
@@ -91,6 +93,7 @@ public sealed class SolutionProjectsPreflightTests
             File.WriteAllText(Path.Combine(tempDirectory, "src", "Included", "Included.csproj"), "<Project />");
             File.WriteAllText(Path.Combine(tempDirectory, "src", "FreeX.App.Host", "FreeX.App.Host_abc123_wpftmp.csproj"), "<Project />");
             File.WriteAllText(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project />");
+            File.WriteAllText(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project />");
 
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-SolutionProjects.ps1");
 

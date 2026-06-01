@@ -31,10 +31,13 @@ public sealed class ToolScriptsPreflightTests
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-ToolScripts.ps1");
 
             var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ScriptDirectory \"{tempDirectory}\"");
+            var combinedOutput = (result.Output + result.Error)
+                .Replace("\r", string.Empty, StringComparison.Ordinal)
+                .Replace("\n", string.Empty, StringComparison.Ordinal);
 
             result.ExitCode.Should().NotBe(0);
             (result.Output + result.Error).Should().Contain("PowerShell fail-fast validation failed");
-            (result.Output + result.Error).Should().Contain("Test-MissingFailFast.ps1");
+            combinedOutput.Should().Contain("Test-MissingFailFast.ps1");
         }
         finally
         {

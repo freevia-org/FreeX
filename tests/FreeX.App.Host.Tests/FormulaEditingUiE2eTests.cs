@@ -15,8 +15,7 @@ public sealed class FreeXUiE2eTests
     [Trait("Category", "UIE2E")]
     public void SharedAppInstance_CoversLiveUiScenarios()
     {
-        if (!OperatingSystem.IsWindows())
-            return;
+        UiE2ePreconditions.SkipUnlessEnabled();
 
         using var run = FreeXUiRun.Start();
 

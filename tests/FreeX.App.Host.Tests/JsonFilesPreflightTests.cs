@@ -11,7 +11,9 @@ public sealed class JsonFilesPreflightTests
     {
         var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-JsonFiles.ps1"));
 
-        script.Should().Contain("[string[]]$JsonRoots = @(\"docs\", \"release\")");
+        script.Should().Contain("[string[]]$JsonRoots = @(\"global.json\", \"docs\", \"release\")");
+        script.Should().Contain("JSON path was not found");
+        script.Should().Contain("$rootItem -is [System.IO.FileInfo]");
         script.Should().Contain("ConvertFrom-Json");
         script.Should().Contain("JSON validation failed");
         script.Should().Contain("Validated $($jsonFiles.Count) JSON file(s).");

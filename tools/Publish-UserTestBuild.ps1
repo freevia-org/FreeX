@@ -64,6 +64,47 @@ function Assert-MsixSigningOptions {
     }
 }
 
+function Import-MsixSigningCertificate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CertificatePath,
+        [string]$CertificatePassword
+    )
+
+    $importArguments = @{
+        FilePath = $CertificatePath
+        CertStoreLocation = "Cert:\CurrentUser\My"
+        Exportable = $false
+    }
+    if (-not [string]::IsNullOrWhiteSpace($CertificatePassword)) {
+        $importArguments.Password = ConvertTo-SecureString -String $CertificatePassword -AsPlainText -Force
+    }
+
+    $certificates = @(Import-PfxCertificate @importArguments)
+    $signingCertificate = $certificates |
+        Where-Object { $_.HasPrivateKey } |
+        Select-Object -First 1
+
+    if ($null -eq $signingCertificate) {
+        throw "MSIX signing certificate import did not produce a certificate with a private key."
+    }
+
+    return $signingCertificate
+}
+
+function Remove-MsixSigningCertificate {
+    param([object]$Certificate)
+
+    if ($null -eq $Certificate -or [string]::IsNullOrWhiteSpace($Certificate.Thumbprint)) {
+        return
+    }
+
+    $storePath = Join-Path "Cert:\CurrentUser\My" $Certificate.Thumbprint
+    if (Test-Path -LiteralPath $storePath) {
+        Remove-Item -LiteralPath $storePath -Force
+    }
+}
+
 Assert-SafeArtifactToken -Value $RuntimeIdentifier -Label "RuntimeIdentifier"
 Assert-SafeTimestampUrl -Value $MsixTimestampUrl
 Assert-MsixCertificatePath -Value $MsixCertificatePath
@@ -298,6 +339,7 @@ if ($PublishMode -eq "Msix") {
         throw "makeappx did not create $artifactMsixPath"
     }
 
+    $importedSigningCertificate = $null
     if (-not [string]::IsNullOrWhiteSpace($MsixCertificatePath)) {
         if (-not (Test-Path -LiteralPath $MsixCertificatePath)) {
             throw "MSIX signing certificate was not found at $MsixCertificatePath"
@@ -317,18 +359,20 @@ if ($PublishMode -eq "Msix") {
             throw "signtool.exe was not found. Install the Windows SDK to sign MSIX packages."
         }
 
-        $signArgs = @("sign", "/fd", "SHA256", "/f", $MsixCertificatePath)
-        if (-not [string]::IsNullOrWhiteSpace($MsixCertificatePassword)) {
-            $signArgs += @("/p", $MsixCertificatePassword)
-        }
-        if (-not [string]::IsNullOrWhiteSpace($MsixTimestampUrl)) {
-            $signArgs += @("/tr", $MsixTimestampUrl, "/td", "SHA256")
-        }
-        $signArgs += $artifactMsixPath
+        try {
+            $importedSigningCertificate = Import-MsixSigningCertificate -CertificatePath $MsixCertificatePath -CertificatePassword $MsixCertificatePassword
+            $signArgs = @("sign", "/fd", "SHA256", "/sha1", $importedSigningCertificate.Thumbprint, "/s", "My")
+            if (-not [string]::IsNullOrWhiteSpace($MsixTimestampUrl)) {
+                $signArgs += @("/tr", $MsixTimestampUrl, "/td", "SHA256")
+            }
+            $signArgs += $artifactMsixPath
 
-        & $signToolPath @signArgs
-        if ($LASTEXITCODE -ne 0) {
-            throw "signtool sign failed with exit code $LASTEXITCODE"
+            & $signToolPath @signArgs
+            if ($LASTEXITCODE -ne 0) {
+                throw "signtool sign failed with exit code $LASTEXITCODE"
+            }
+        } finally {
+            Remove-MsixSigningCertificate -Certificate $importedSigningCertificate
         }
         Write-Host "Signed $artifactMsixPath"
     } else {

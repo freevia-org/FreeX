@@ -110,6 +110,59 @@ public sealed class RepositoryPreflightTests
     }
 
     [Fact]
+    public void DotNetSdkReadinessPreflight_IgnoresNestedClaudeWorktreeProjects()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-dotnet-sdk-preflight-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, ".github", "workflows"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Current"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Future"));
+
+        try
+        {
+            var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "tester-release.yml");
+            File.WriteAllText(
+                workflowPath,
+                """
+                name: Tester Release
+                jobs:
+                  build:
+                    steps:
+                      - uses: actions/setup-dotnet@v5
+                        with:
+                          dotnet-version: 10.0.x
+                """);
+            File.WriteAllText(
+                Path.Combine(tempDirectory, "src", "Current", "Current.csproj"),
+                """
+                <Project>
+                  <PropertyGroup>
+                    <TargetFramework>net10.0</TargetFramework>
+                  </PropertyGroup>
+                </Project>
+                """);
+            File.WriteAllText(
+                Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Future", "Future.csproj"),
+                """
+                <Project>
+                  <PropertyGroup>
+                    <TargetFramework>net11.0</TargetFramework>
+                  </PropertyGroup>
+                </Project>
+                """);
+
+            var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetSdkReadiness.ps1");
+            var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\" -WorkflowPath \"{workflowPath}\"");
+
+            result.ExitCode.Should().Be(0, result.Error);
+            result.Output.Should().Contain("across 1 project file(s).");
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void DotNetSdkReadinessPreflight_FailsWhenProjectTargetsNewerFrameworkThanWorkflowSdk()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-dotnet-sdk-preflight-" + Guid.NewGuid().ToString("N"));
