@@ -298,7 +298,7 @@ public class ConditionalFormatTests
             "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
         var buildContext = source[
             source.IndexOf("public static CfEvaluationContext BuildContext", StringComparison.Ordinal)..
-            source.IndexOf("public static CellStyle? Evaluate", StringComparison.Ordinal)];
+            source.IndexOf("public static CfStyleResult? Evaluate", StringComparison.Ordinal)];
 
         buildContext.Should().Contain("CopyRulesByPriority(sheet.ConditionalFormats)");
         buildContext.Should().Contain("CopyIconRulesByPriority(rulesByPriority)");
@@ -985,6 +985,34 @@ public class ConditionalFormatTests
         a1.Style!.Bold.Should().BeTrue("CF bold overrides base non-bold");
         // Base fill should be preserved (CF style has no fill)
         a1.Style!.FillColor.Should().Be(new CellColor(200, 200, 200), "base fill preserved when CF has none");
+    }
+
+    [Fact]
+    public void ConditionalFormats_DefaultBaseStyleKeepsDifferentialMergeSemantics()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, Cell.FromValue(new NumberValue(99)));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(address, address),
+            Priority = 1,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0",
+            FormatIfTrue = new CellStyle
+            {
+                FillColor = new CellColor(255, 199, 206),
+                NumberFormat = "$0.00"
+            }
+        });
+
+        var vp = GetViewport(wb, sheet);
+        var style = GetCell(vp, 1, 1).Style!;
+
+        style.FillColor.Should().Be(new CellColor(255, 199, 206));
+        style.NumberFormat.Should().Be("General", "viewport CF style merging only applies supported differential style fields");
     }
 
     [Fact]

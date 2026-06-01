@@ -275,6 +275,7 @@ public sealed partial class ViewportService : IViewportService
                 cell.Value,
                 workbook,
                 cfContext,
+                cell.StyleId == StyleId.Default,
                 hasConditionalStyles,
                 hasConditionalIcons,
                 hasAnyCellComments,
@@ -322,6 +323,7 @@ public sealed partial class ViewportService : IViewportService
         ScalarValue value,
         Workbook workbook,
         CfEvaluationContext cfContext,
+        bool baseStyleIsDefault,
         bool hasConditionalStyles,
         bool hasConditionalIcons,
         bool hasAnyCellComments,
@@ -336,8 +338,12 @@ public sealed partial class ViewportService : IViewportService
         if (hasConditionalStyles)
         {
             var cfStyle = EvaluateConditionalFormats(sheet, addr, value, workbook, cfContext);
-            if (cfStyle != null)
-                style = MergeStyles(style, cfStyle);
+            if (cfStyle is { } result)
+            {
+                style = baseStyleIsDefault && result.CanUseAsDefaultMergedStyle
+                    ? result.Style
+                    : MergeStyles(style, result.Style);
+            }
         }
 
         if (hasConditionalIcons)
@@ -551,6 +557,7 @@ public sealed partial class ViewportService : IViewportService
                     BlankValue.Instance,
                     workbook,
                     cfContext,
+                    styleOnlyId.Value == StyleId.Default,
                     hasConditionalStyles,
                     hasConditionalIcons,
                     hasAnyCellComments,
