@@ -1893,6 +1893,37 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromNamespaceAlias()
+    {
+        using var source = StreamFromString("<rows><row label=\"Aliased\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:proto="urn:placeholder-spreadsheetml"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:namespace-alias stylesheet-prefix="proto" result-prefix="ss" />
+              <xsl:template match="/rows">
+                <proto:Workbook>
+                  <proto:Worksheet proto:Name="Aliased">
+                    <proto:Table>
+                      <proto:Row>
+                        <proto:Cell><proto:Data proto:Type="String"><xsl:value-of select="row/@label" /></proto:Data></proto:Cell>
+                      </proto:Row>
+                    </proto:Table>
+                  </proto:Worksheet>
+                </proto:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Aliased");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Aliased"));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlScalarValueTypesAndIndexes()
     {
         using var source = StreamFromString("""
