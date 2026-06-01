@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using System.Diagnostics;
 
 namespace FreeX.Core.Model.Tests;
 
@@ -326,6 +327,58 @@ public sealed class AdvancedFilterCommandTests
         command.Apply(ctx).Success.Should().BeFalse();
     }
 
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Benchmark_AdvancedFilterCopyUniqueDenseRows_ReportsTimingAndAllocatedBytes()
+    {
+        const uint rows = 12000;
+        const uint cols = 12;
+        const int steps = 5;
+
+        var (wb, sheet, ctx) = Setup();
+        SeedDenseList(sheet, rows, cols);
+        SeedDenseCriteria(sheet, rows + 4);
+
+        var listRange = ListRange(sheet, 1, 1, rows + 1, cols);
+        var criteriaRange = ListRange(sheet, rows + 4, 1, rows + 8, 3);
+        var copyTo = Addr(sheet, rows + 12, 1);
+
+        ApplyDenseAdvancedFilter(ctx, sheet, listRange, criteriaRange, copyTo)
+            .Should()
+            .Be(2240);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var timings = new double[steps];
+        var total = Stopwatch.StartNew();
+        var copiedRows = 0;
+
+        for (var step = 0; step < steps; step++)
+        {
+            var stepWatch = Stopwatch.StartNew();
+            copiedRows = ApplyDenseAdvancedFilter(ctx, sheet, listRange, criteriaRange, copyTo);
+            stepWatch.Stop();
+            timings[step] = stepWatch.Elapsed.TotalMilliseconds;
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        copiedRows.Should().Be(2240);
+        Console.WriteLine(
+            "PERF ADVANCED_FILTER_COPY_UNIQUE_DENSE " +
+            $"rows={rows} cols={cols} steps={steps} " +
+            $"copied_rows={copiedRows} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={timings.Average():F2} " +
+            $"p95_ms={timings.OrderBy(x => x).ElementAt((int)Math.Ceiling(steps * 0.95) - 1):F2} " +
+            $"max_ms={timings.Max():F2} " +
+            $"allocated_bytes={allocatedBytes}");
+    }
+
     private static (Workbook Wb, Sheet Sheet, ICommandContext Ctx) Setup()
     {
         var wb = new Workbook("test");
@@ -350,6 +403,95 @@ public sealed class AdvancedFilterCommandTests
         Set(sheet, 5, 1, "West");
         Set(sheet, 5, 2, 80);
         Set(sheet, 5, 3, "Cy");
+    }
+
+    private static void SeedDenseList(Sheet sheet, uint rows, uint cols)
+    {
+        var headers = new[]
+        {
+            "Region",
+            "Sales",
+            "Rep",
+            "Segment",
+            "Product",
+            "Quarter",
+            "Year",
+            "Status",
+            "Score",
+            "Channel",
+            "Priority",
+            "Notes"
+        };
+
+        for (uint col = 1; col <= cols; col++)
+            Set(sheet, 1, col, headers[col - 1]);
+
+        for (uint row = 2; row <= rows + 1; row++)
+        {
+            var item = row - 2;
+            Set(sheet, row, 1, item % 3 == 0 ? "East" : item % 3 == 1 ? "West" : "South");
+            Set(sheet, row, 2, 50 + item % 250);
+            Set(sheet, row, 3, item % 2 == 0 ? "Ana" : "Ben");
+            Set(sheet, row, 4, item % 4 == 0 ? "Enterprise" : "Retail");
+            Set(sheet, row, 5, "SKU-" + (item % 500).ToString("000"));
+            Set(sheet, row, 6, "Q" + (1 + item % 4).ToString());
+            Set(sheet, row, 7, 2020 + item % 5);
+            Set(sheet, row, 8, item % 6 == 0 ? "Closed" : "Open");
+            Set(sheet, row, 9, item % 100);
+            Set(sheet, row, 10, item % 2 == 0 ? "Online" : "Field");
+            Set(sheet, row, 11, item % 5 == 0 ? "High" : "Normal");
+            Set(sheet, row, 12, "Batch-" + (item % 2000).ToString("0000"));
+        }
+    }
+
+    private static void SeedDenseCriteria(Sheet sheet, uint startRow)
+    {
+        Set(sheet, startRow, 1, "Region");
+        Set(sheet, startRow, 2, "Sales");
+        Set(sheet, startRow, 3, "Status");
+
+        Set(sheet, startRow + 1, 1, "East");
+        Set(sheet, startRow + 1, 2, ">125");
+        Set(sheet, startRow + 1, 3, "Open");
+
+        Set(sheet, startRow + 2, 1, "West");
+        Set(sheet, startRow + 2, 2, ">180");
+
+        Set(sheet, startRow + 3, 1, "South");
+        Set(sheet, startRow + 3, 2, "<80");
+        Set(sheet, startRow + 3, 3, "Open");
+
+        Set(sheet, startRow + 4, 1, "East");
+        Set(sheet, startRow + 4, 2, ">210");
+    }
+
+    private static int ApplyDenseAdvancedFilter(
+        ICommandContext ctx,
+        Sheet sheet,
+        GridRange listRange,
+        GridRange criteriaRange,
+        CellAddress copyTo)
+    {
+        var command = new AdvancedFilterCommand(
+            listRange,
+            criteriaRange,
+            copyTo,
+            UniqueRecordsOnly: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.GetUsedRange().Should().NotBeNull();
+        var usedRange = sheet.GetUsedRange()!.Value;
+        var copiedRows = 0;
+        for (var row = copyTo.Row + 1; row <= usedRange.End.Row; row++)
+        {
+            if (sheet.GetCell(row, copyTo.Col) is null)
+                break;
+
+            copiedRows++;
+        }
+
+        return copiedRows;
     }
 
     private static GridRange ListRange(Sheet sheet, uint r1, uint c1, uint r2, uint c2) => new(Addr(sheet, r1, c1), Addr(sheet, r2, c2));
