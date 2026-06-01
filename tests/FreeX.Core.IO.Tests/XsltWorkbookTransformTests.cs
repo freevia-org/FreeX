@@ -1024,6 +1024,41 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_CommentsAndProcessingInstructions_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("<rows><row label=\"Alpha\" amount=\"42.5\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <xsl:processing-instruction name="freex">source="xslt"</xsl:processing-instruction>
+                  <ss:Worksheet ss:Name="Noise">
+                    <xsl:comment>generated worksheet metadata</xsl:comment>
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@label" /></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@amount" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .Contain("<?freex source=\"xslt\"?>")
+            .And.Contain("<!--generated worksheet metadata-->")
+            .And.Contain("<ss:Data ss:Type=\"String\">Alpha</ss:Data>")
+            .And.Contain("<ss:Data ss:Type=\"Number\">42.5</ss:Data>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NumberInstruction_GeneratesFormattedSequenceCells()
     {
         using var source = StreamFromString("""
