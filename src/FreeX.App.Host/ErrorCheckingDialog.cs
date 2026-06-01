@@ -238,7 +238,14 @@ public sealed class ErrorCheckingDialog : Window
             _traceError(issue);
     }
 
-    private void ListView_MouseDoubleClick(object sender, MouseButtonEventArgs e) => NavigateSelected();
+    private void ListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (_listView.SelectedItem is not FormulaErrorIssue issue)
+            return;
+
+        _navigateTo(issue.Address);
+        e.Handled = true;
+    }
 
     private void ListView_KeyDown(object sender, KeyEventArgs e)
     {

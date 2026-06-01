@@ -70,6 +70,19 @@ public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper outpu
     }
 
     [Theory]
+    [InlineData(ModifierKeys.Shift)]
+    [InlineData(ModifierKeys.Control)]
+    [InlineData(ModifierKeys.Alt)]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Shift)]
+    public void TryToggleEndMode_RequiresPlainEndKey(ModifierKeys modifiers)
+    {
+        var handled = ExcelWorksheetNavigationPlanner.TryToggleEndMode(Key.End, modifiers, current: false, out var next);
+
+        handled.Should().BeFalse();
+        next.Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData(Key.Right, true)]
     [InlineData(Key.Left, true)]
     [InlineData(Key.Up, true)]
@@ -124,7 +137,9 @@ public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper outpu
     [InlineData(Key.Home, Key.None, ModifierKeys.Control | ModifierKeys.Shift, false, true)]
     [InlineData(Key.Home, Key.None, ModifierKeys.Control | ModifierKeys.Alt, false, false)]
     [InlineData(Key.PageDown, Key.None, ModifierKeys.Shift, false, true)]
+    [InlineData(Key.PageDown, Key.None, ModifierKeys.Control, false, false)]
     [InlineData(Key.PageDown, Key.None, ModifierKeys.Control | ModifierKeys.Alt, false, false)]
+    [InlineData(Key.PageUp, Key.None, ModifierKeys.Control, false, false)]
     [InlineData(Key.System, Key.PageDown, ModifierKeys.Alt, false, true)]
     [InlineData(Key.System, Key.PageDown, ModifierKeys.Alt | ModifierKeys.Shift, false, true)]
     [InlineData(Key.Tab, Key.None, ModifierKeys.Control, false, false)]

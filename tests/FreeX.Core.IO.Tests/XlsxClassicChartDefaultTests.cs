@@ -14,15 +14,16 @@ public sealed class XlsxClassicChartDefaultTests
     private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
     [Theory]
-    [InlineData(ChartType.StackedColumn, "col", "b", "l")]
-    [InlineData(ChartType.PercentStackedColumn, "col", "b", "l")]
-    [InlineData(ChartType.StackedBar, "bar", "l", "b")]
-    [InlineData(ChartType.PercentStackedBar, "bar", "l", "b")]
+    [InlineData(ChartType.StackedColumn, "col", "b", "l", "General")]
+    [InlineData(ChartType.PercentStackedColumn, "col", "b", "l", "0%")]
+    [InlineData(ChartType.StackedBar, "bar", "l", "b", "General")]
+    [InlineData(ChartType.PercentStackedBar, "bar", "l", "b", "0%")]
     public void XlsxAdapter_Save_WritesExcelNativeStackedBarColumnDefaults(
         ChartType chartType,
         string expectedDirection,
         string expectedCategoryAxisPosition,
-        string expectedValueAxisPosition)
+        string expectedValueAxisPosition,
+        string expectedValueAxisNumberFormat)
     {
         var chartXml = SaveChartXml(chartType, chart =>
         {
@@ -40,6 +41,25 @@ public sealed class XlsxClassicChartDefaultTests
             .Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be(expectedCategoryAxisPosition);
         chartXml.Descendants(ChartNs + "valAx").Single()
             .Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be(expectedValueAxisPosition);
+        chartXml.Descendants(ChartNs + "valAx").Single()
+            .Element(ChartNs + "numFmt")!.Should().Match<XElement>(element =>
+                element.Attribute("formatCode")!.Value == expectedValueAxisNumberFormat &&
+                element.Attribute("sourceLinked")!.Value == "1");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_PreservesExplicitPercentStackedValueAxisNumberFormat()
+    {
+        var chartXml = SaveChartXml(ChartType.PercentStackedColumn, chart =>
+        {
+            chart.YAxisNumberFormat = ChartDataLabelNumberFormat.Currency;
+            chart.YAxisNumberFormatSourceLinked = false;
+        });
+
+        chartXml.Descendants(ChartNs + "valAx").Single()
+            .Element(ChartNs + "numFmt")!.Should().Match<XElement>(element =>
+                element.Attribute("formatCode")!.Value == "$#,##0.00" &&
+                element.Attribute("sourceLinked")!.Value == "0");
     }
 
     [Theory]
