@@ -166,6 +166,38 @@ public sealed class RibbonKeyTipOverlayPlacementTests
     }
 
     [Fact]
+    public void PlaceBadge_ComboBoxKindCentersBadgeBelowSelectorWithGap()
+    {
+        // Combo-box keytips sit below the selector frame so the badge does not
+        // cover the editable value or drop-down arrow.
+        var elementBounds = new Rect(300, 96, 116, 22);
+        var overlaySize = new Size(1280, 720);
+        var badgeSize = new Size(18, 16);
+
+        var point = RibbonKeyTipOverlayPlacement.PlaceBadge(
+            elementBounds, overlaySize, badgeSize, RibbonKeyTipBadgeKind.ComboBox);
+
+        point.X.Should().Be(349);
+        point.Y.Should().Be(120);
+    }
+
+    [Fact]
+    public void PlaceBadge_ComboBoxKindDiffersFromCommandKindVertically()
+    {
+        var elementBounds = new Rect(300, 96, 116, 22);
+        var overlaySize = new Size(1280, 720);
+        var badgeSize = new Size(18, 16);
+
+        var command = RibbonKeyTipOverlayPlacement.PlaceBadge(
+            elementBounds, overlaySize, badgeSize, RibbonKeyTipBadgeKind.Command);
+        var comboBox = RibbonKeyTipOverlayPlacement.PlaceBadge(
+            elementBounds, overlaySize, badgeSize, RibbonKeyTipBadgeKind.ComboBox);
+
+        comboBox.X.Should().Be(command.X);
+        comboBox.Y.Should().BeGreaterThan(command.Y);
+    }
+
+    [Fact]
     public void PlaceBadge_TabKindCentersBadgeBelowTabWithGap()
     {
         // Tab keytips sit centered just below the tab label rather than straddling

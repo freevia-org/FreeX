@@ -160,11 +160,7 @@ public partial class MainWindow
             var badge = CreateKeyTipBadge(keyTip.Trim().ToUpperInvariant());
             badge.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             var badgeSize = badge.DesiredSize;
-            var badgeKind = element is TabItem
-                ? RibbonKeyTipBadgeKind.Tab
-                : RibbonMetadata.IsCollapsedGroupButton(element)
-                    ? RibbonKeyTipBadgeKind.CollapsedGroup
-                : RibbonKeyTipBadgeKind.Command;
+            var badgeKind = GetKeyTipBadgeKind(element);
             var point = RibbonKeyTipOverlayPlacement.PlaceBadge(
                 new Rect(origin, new Size(element.ActualWidth, element.ActualHeight)),
                 new Size(RootGrid.ActualWidth, RootGrid.ActualHeight),
@@ -180,6 +176,15 @@ public partial class MainWindow
             ? Visibility.Collapsed
             : Visibility.Visible;
     }
+
+    private static RibbonKeyTipBadgeKind GetKeyTipBadgeKind(FrameworkElement element) =>
+        element switch
+        {
+            TabItem => RibbonKeyTipBadgeKind.Tab,
+            _ when RibbonMetadata.IsCollapsedGroupButton(element) => RibbonKeyTipBadgeKind.CollapsedGroup,
+            ComboBox => RibbonKeyTipBadgeKind.ComboBox,
+            _ => RibbonKeyTipBadgeKind.Command
+        };
 
     private bool ShouldShowKeyTipElement(FrameworkElement element, RibbonKeyTipScope scope)
     {

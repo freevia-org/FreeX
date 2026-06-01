@@ -1118,6 +1118,25 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
+    public void KeyTipOverlay_PlacesComboBoxBadgesBelowSelectorFrame()
+    {
+        RunSta(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.EnterKeyTipScope("TopLevel");
+            harness.HandleKeyTip(Key.H);
+
+            var selectorBounds = harness.ElementBounds("NumberFormatBox");
+            var badgeBounds = harness.OverlayBadgeBounds("N");
+
+            badgeBounds.Top.Should().BeGreaterThan(selectorBounds.Bottom);
+            badgeBounds.Top.Should().Be(
+                Math.Round(selectorBounds.Bottom + 2, MidpointRounding.AwayFromZero));
+        });
+    }
+
+    [Fact]
     public void HomeFormatKeyTip_OpensRowAndColumnSizingMenu()
     {
         RunSta(() =>
@@ -1416,6 +1435,32 @@ public sealed class MainWindowRibbonKeyTipTests
                 .Where(text => !string.IsNullOrWhiteSpace(text))
                 .Cast<string>()
                 .ToList() ?? [];
+
+        public Rect OverlayBadgeBounds(string text)
+        {
+            var overlay = (_window.FindName("KeyTipOverlay") as Canvas)
+                ?? throw new InvalidOperationException("KeyTipOverlay was not found.");
+            var badges = overlay.Children
+                .OfType<Border>()
+                .Where(border => string.Equals((border.Child as TextBlock)?.Text, text, StringComparison.Ordinal))
+                .ToList();
+            badges.Should().ContainSingle($"the overlay should contain one {text} badge");
+
+            var badge = badges[0];
+            var width = badge.ActualWidth > 0 ? badge.ActualWidth : badge.DesiredSize.Width;
+            var height = badge.ActualHeight > 0 ? badge.ActualHeight : badge.DesiredSize.Height;
+            return new Rect(Canvas.GetLeft(badge), Canvas.GetTop(badge), width, height);
+        }
+
+        public Rect ElementBounds(string name)
+        {
+            var root = (_window.FindName("RootGrid") as FrameworkElement)
+                ?? throw new InvalidOperationException("RootGrid was not found.");
+            var element = (_window.FindName(name) as FrameworkElement)
+                ?? throw new InvalidOperationException($"{name} was not found.");
+            return element.TransformToAncestor(root)
+                .TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+        }
 
         public bool ActiveMenuIsOpen => ActiveMenu?.IsOpen == true;
 
