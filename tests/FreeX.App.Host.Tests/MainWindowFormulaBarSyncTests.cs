@@ -399,6 +399,26 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void UseInFormulaInsertion_ReplacesDisplayedActiveCellValueWithFormulaSeed()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+
+            harness.InsertDefinedNameIntoFormula("SalesData");
+
+            harness.FormulaBarText.Should().Be("=SalesData");
+            harness.FormulaBarCaretIndex.Should().Be("=SalesData".Length);
+            harness.InlineEditorVisible.Should().BeFalse();
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.CellText(1, 1).Should().Be("original");
+        });
+    }
+
+    [Fact]
     public void UseInFormulaInsertion_EnterCommitsFormulaToActiveCell()
     {
         StaTestRunner.Run(() =>

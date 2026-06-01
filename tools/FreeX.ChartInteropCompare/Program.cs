@@ -848,6 +848,9 @@ internal static class ChartInteropCompare
                 result.HashDistanceNativeVsRoundTrip = HashDistance(native.AverageHash, roundTrip.AverageHash);
             if (native is not null && freexRenderer is not null)
                 result.HashDistanceNativeVsFreeXRenderer = HashDistance(native.AverageHash, freexRenderer.AverageHash);
+            result.ExcelNativeRoundTripXlsxByteIdentical = FilesByteEqual(
+                result.ExcelNativeXlsxPath,
+                result.ExcelRoundTripXlsxPath);
 
             var failures = new List<string>();
             AddImageFailure(failures, "Excel-native PNG", native);
@@ -858,7 +861,11 @@ internal static class ChartInteropCompare
             if (result.HashDistanceNativeVsRoundTrip is int roundTripDistance &&
                 roundTripDistance > options.RoundTripVisualHashThreshold)
             {
-                if (expectation.KnownGapReason is not null && roundTripDistance <= expectation.RoundTripHashThreshold)
+                if (result.ExcelNativeRoundTripXlsxByteIdentical)
+                {
+                    result.AddNote($"Round-trip PNG hash distance {roundTripDistance} ignored because the Excel-native and FreeX round-tripped XLSX packages are byte-identical.");
+                }
+                else if (expectation.KnownGapReason is not null && roundTripDistance <= expectation.RoundTripHashThreshold)
                 {
                     usedKnownGapAllowance = true;
                     result.AddNote($"Known visual gap tolerated: {expectation.KnownGapReason} (round-trip distance {roundTripDistance}, threshold {options.RoundTripVisualHashThreshold}, known-gap threshold {expectation.RoundTripHashThreshold}).");
@@ -991,10 +998,40 @@ internal static class ChartInteropCompare
         return distance;
     }
 
+    private static bool FilesByteEqual(string? leftPath, string? rightPath)
+    {
+        if (string.IsNullOrWhiteSpace(leftPath) ||
+            string.IsNullOrWhiteSpace(rightPath) ||
+            !File.Exists(leftPath) ||
+            !File.Exists(rightPath))
+        {
+            return false;
+        }
+
+        using var left = File.OpenRead(leftPath);
+        using var right = File.OpenRead(rightPath);
+        if (left.Length != right.Length)
+            return false;
+
+        Span<byte> leftBuffer = stackalloc byte[8192];
+        Span<byte> rightBuffer = stackalloc byte[8192];
+        while (true)
+        {
+            var leftRead = left.Read(leftBuffer);
+            var rightRead = right.Read(rightBuffer);
+            if (leftRead != rightRead)
+                return false;
+            if (leftRead == 0)
+                return true;
+            if (!leftBuffer[..leftRead].SequenceEqual(rightBuffer[..rightRead]))
+                return false;
+        }
+    }
+
     private static void WriteVisualMetrics(string path, IReadOnlyList<ChartCompareResult> results)
     {
         var csv = new StringBuilder();
-        csv.AppendLine("Chart,Family,VisualStatus,KnownVisualGap,VisualThreshold,KnownGapThreshold,RoundTripThreshold,FreeXRendererNonWhite,ExcelNativeNonWhite,ExcelFreeXXlsxNonWhite,ExcelRoundTripNonWhite,HashDistance_Native_vs_FreeXXlsx,HashDistance_Native_vs_RoundTrip,HashDistance_Native_vs_FreeXRenderer,NativeSize,FreeXXlsxExcelSize,RoundTripSize,FreeXRendererSize,VisualFailure,KnownGapReason");
+        csv.AppendLine("Chart,Family,VisualStatus,KnownVisualGap,VisualThreshold,KnownGapThreshold,RoundTripThreshold,NativeRoundTripXlsxByteIdentical,FreeXRendererNonWhite,ExcelNativeNonWhite,ExcelFreeXXlsxNonWhite,ExcelRoundTripNonWhite,HashDistance_Native_vs_FreeXXlsx,HashDistance_Native_vs_RoundTrip,HashDistance_Native_vs_FreeXRenderer,NativeSize,FreeXXlsxExcelSize,RoundTripSize,FreeXRendererSize,VisualFailure,KnownGapReason");
         foreach (var result in results)
         {
             csv.AppendCsvRow(
@@ -1005,6 +1042,7 @@ internal static class ChartInteropCompare
                 result.VisualHashThreshold,
                 result.KnownVisualGapThreshold,
                 result.RoundTripVisualHashThreshold,
+                result.ExcelNativeRoundTripXlsxByteIdentical,
                 result.FreeXRendererNonWhiteRatio,
                 result.ExcelNativeNonWhiteRatio,
                 result.FreeXXlsxExcelNonWhiteRatio,
@@ -1206,6 +1244,7 @@ internal static class ChartInteropCompare
         builder.AppendLine($"| Visual gate | {results.Count(result => result.VisualGatePassed)}/{results.Count(result => result.OpenabilityPassed)} evaluated |");
         builder.AppendLine($"| Known visual gap charts | {results.Count(result => result.KnownVisualGap)} |");
         builder.AppendLine($"| Known-gap threshold allowances used | {results.Count(result => result.VisualStatus == VisualStatuses.KnownGap)} |");
+        builder.AppendLine($"| Byte-identical round-trip packages | {results.Count(result => result.ExcelNativeRoundTripXlsxByteIdentical)}/{results.Count(result => result.ExcelNativeCreated && result.ExcelLoadedByFreeX)} |");
         builder.AppendLine($"| Full pass | {results.Count(result => result.Passed)}/{results.Count} |");
         builder.AppendLine();
         builder.AppendLine("Visual status values: `pass` is within the family hash threshold; `known-gap` exceeds the normal threshold but is inside the known-gap allowance; `fail` is a blocking visual mismatch or blank/missing image; `skipped-openability` means Excel open/export did not pass first.");
@@ -1492,16 +1531,10 @@ internal sealed record PngMetrics(int Width, int Height, double NonWhiteRatio, I
 internal sealed record VisualExpectation(int HashThreshold, int RoundTripHashThreshold, string? KnownGapReason)
 {
     private static readonly IReadOnlyDictionary<string, string> KnownGaps =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["ThreeDColumn"] = "Excel-native -> FreeX -> Excel 3-D column round-trip chart export has minor raster variance."
-        };
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     private static readonly IReadOnlySet<string> KnownRoundTripGaps =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "ThreeDColumn"
-        };
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     public static VisualExpectation For(ChartCompareResult result, CompareOptions options)
     {
@@ -1565,6 +1598,7 @@ internal sealed class ChartCompareResult(string chart, string type, string famil
     public string? ExcelNativeImageSize { get; set; }
     public string? FreeXXlsxExcelImageSize { get; set; }
     public string? ExcelRoundTripImageSize { get; set; }
+    public bool ExcelNativeRoundTripXlsxByteIdentical { get; set; }
     public string? VisualFailure { get; set; }
     public string Notes => string.Join("; ", _notes);
     public string SummaryNote => string.Join(
