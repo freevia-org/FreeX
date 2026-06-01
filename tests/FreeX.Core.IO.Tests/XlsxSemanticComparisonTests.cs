@@ -28,6 +28,33 @@ public sealed class XlsxSemanticComparisonTests
     }
 
     [Fact]
+    public void Compare_CatchesExternalWorkbookLinkDifferenceAndReportsUsefulPath()
+    {
+        var expected = CreateSingleValueWorkbook(42);
+        expected.ExternalLinks.Add(new ExternalLinkModel
+        {
+            PackagePart = "xl/externalLinks/externalLink1.xml",
+            TargetUri = "file:///C:/FreeX/Expected.xlsx",
+            TargetMode = "External"
+        });
+        var actual = CreateSingleValueWorkbook(42);
+        actual.ExternalLinks.Add(new ExternalLinkModel
+        {
+            PackagePart = "xl/externalLinks/externalLink1.xml",
+            TargetUri = "file:///C:/FreeX/Actual.xlsx",
+            TargetMode = "External"
+        });
+
+        var result = XlsxSemanticWorkbookComparer.Compare(expected, actual);
+
+        result.AreEquivalent.Should().BeFalse();
+        result.Differences.Should().Contain(difference =>
+            difference.Contains("Workbook.ExternalLinks[0]") &&
+            difference.Contains("Expected.xlsx") &&
+            difference.Contains("Actual.xlsx"));
+    }
+
+    [Fact]
     public void AssertEquivalent_FreeXCreatedXlsxSaveLoadSaveLoad_PassesForRepresentativeWorkbook()
     {
         var original = CreateRepresentativeFreeXWorkbook();
@@ -45,6 +72,29 @@ public sealed class XlsxSemanticComparisonTests
         var loadedTwice = adapter.Load(secondSave);
 
         XlsxSemanticWorkbookComparer.AssertEquivalent(original, loadedTwice);
+    }
+
+    [Fact]
+    public void AssertEquivalent_GeneratedExternalLinkPackageLoadEditSaveLoad_PassesAgainstMutatedModel()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-external-links-001");
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(package);
+        loaded.ExternalLinks.Should().ContainSingle(link =>
+            link.PackagePart == "xl/externalLinks/externalLink1.xml" &&
+            link.TargetUri == "file:///C:/FreeX/ExternalWorkbook.xlsx" &&
+            link.TargetMode == "External");
+
+        var sheet = loaded.GetSheetAt(0);
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("FreeX external-link semantic edit"));
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        var reloaded = adapter.Load(saved);
+
+        XlsxSemanticWorkbookComparer.AssertEquivalent(loaded, reloaded);
     }
 
     [Fact]

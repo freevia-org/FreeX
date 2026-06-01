@@ -38,7 +38,7 @@ public sealed partial class NativeJsonAdapter
 
         var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
         var watchNativeAttributes = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in model.WatchNativeAttributes)
+        foreach (var pair in model.WatchNativeAttributes ?? [])
         {
             if (string.IsNullOrWhiteSpace(pair.Key))
                 continue;
@@ -92,7 +92,7 @@ public sealed partial class NativeJsonAdapter
 
         var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
         var errorNativeAttributes = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in model.ErrorNativeAttributes)
+        foreach (var pair in model.ErrorNativeAttributes ?? [])
         {
             if (string.IsNullOrWhiteSpace(pair.Key))
                 continue;
