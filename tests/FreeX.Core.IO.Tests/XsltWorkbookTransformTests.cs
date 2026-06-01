@@ -566,6 +566,43 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_DynamicElementsAndAttributes_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("<rows><row sheet=\"Dynamic\" label=\"Alpha\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <xsl:element name="ss:Workbook">
+                  <xsl:element name="ss:Worksheet">
+                    <xsl:attribute name="ss:Name"><xsl:value-of select="row/@sheet" /></xsl:attribute>
+                    <xsl:element name="ss:Table">
+                      <xsl:element name="ss:Row">
+                        <xsl:element name="ss:Cell">
+                          <xsl:element name="ss:Data">
+                            <xsl:attribute name="ss:Type">String</xsl:attribute>
+                            <xsl:value-of select="row/@label" />
+                          </xsl:element>
+                        </xsl:element>
+                      </xsl:element>
+                    </xsl:element>
+                  </xsl:element>
+                </xsl:element>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .Contain("<ss:Workbook")
+            .And.Contain("ss:Name=\"Dynamic\"")
+            .And.Contain("<ss:Data ss:Type=\"String\">Alpha</ss:Data>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetHtmlOutput_PreservesHtmlSerialization()
     {
         using var source = StreamFromString("<rows><row name=\"April\" /></rows>");
