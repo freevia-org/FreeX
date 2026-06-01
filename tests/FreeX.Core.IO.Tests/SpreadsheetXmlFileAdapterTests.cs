@@ -1679,6 +1679,51 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromVariablesAndAggregates()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row label="Alpha" amount="42.5" />
+              <row label="Beta" amount="7.25" />
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:variable name="sheetName" select="'Variable Summary'" />
+              <xsl:template match="/rows">
+                <xsl:variable name="rowCount" select="count(row)" />
+                <xsl:variable name="total" select="sum(row/@amount)" />
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="{$sheetName}">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String">Rows</ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="$rowCount" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String">Total</ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="$total" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Variable Summary");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Rows"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(2));
+        sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("Total"));
+        sheet.GetCell(2, 2)!.Value.Should().Be(new NumberValue(49.75));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlScalarValueTypesAndIndexes()
     {
         using var source = StreamFromString("""
