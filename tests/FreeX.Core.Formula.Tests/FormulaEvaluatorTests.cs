@@ -116,6 +116,15 @@ public class FormulaEvaluatorTests
         _evaluator.Evaluate("=2^10", sheet).Should().Be(new NumberValue(1024));
     }
 
+    [Theory]
+    [InlineData("=0^0", "#NUM!")]
+    [InlineData("=0^(-1)", "#DIV/0!")]
+    public void PowerOperator_ZeroBaseInvalidExponents_ReturnsExcelErrors(string formula, string errorCode)
+    {
+        var sheet = new Sheet(SheetId.New(), "S");
+        _evaluator.Evaluate(formula, sheet).Should().Be(new ErrorValue(errorCode));
+    }
+
     // ── Operator precedence ──
 
     [Fact]

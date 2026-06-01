@@ -310,6 +310,9 @@ public sealed class MainWindowFormulaBarSyncTests
         {
             using var harness = MainWindowHarness.Create();
 
+            if (harness.FormulaBarAcceptsReturn)
+                harness.ToggleFormulaBarExpansion();
+
             harness.FormulaBarAcceptsReturn.Should().BeFalse();
             harness.FormulaBarHeight.Should().Be(double.NaN);
             harness.FormulaBarExpandButtonAutomationName.Should().Be(UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));
