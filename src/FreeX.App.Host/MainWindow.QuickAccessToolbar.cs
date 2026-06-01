@@ -129,6 +129,15 @@ public partial class MainWindow
         _lastQuickAccessCommandState = state;
     }
 
+    private bool IsQuickAccessToolbarCommandStateStableForSelectionDrag()
+    {
+        if (_lastQuickAccessCommandState is not { } state)
+            return false;
+
+        return state.HasActiveWorksheet == (_workbook.GetSheet(_currentSheetId) is not null) &&
+            state.HasSelection == (SheetGrid.SelectedRange is not null);
+    }
+
     private Button? GetQuickAccessToolbarButton(string commandId)
     {
         if (!QuickAccessToolbarCatalog.TryGet(commandId, out var command))
