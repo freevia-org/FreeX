@@ -95,7 +95,11 @@ public sealed class RibbonResizeCoordinatorTests
             crossedBand.PostedCount.Should().Be(1);
             crossedBand.ExecutedCount.Should().Be(1);
             crossedBand.ForcedCompactCount.Should().Be(1);
+            crossedBand.SkippedCompactLayoutCount.Should().Be(1);
             crossedBand.LastRequestedWork.Should().Be("CompactOnly");
+            harness.AdaptiveDiagnostics.AppliedStateSkipCount.Should().Be(
+                0,
+                "the render fallback should trust the compact state applied during resize instead of re-running the planner");
         });
     }
 

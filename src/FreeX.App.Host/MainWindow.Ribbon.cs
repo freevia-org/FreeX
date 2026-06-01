@@ -1005,6 +1005,9 @@ public partial class MainWindow
         _lastRibbonFallbackRequestedWork = work;
         _ribbonFallbackWork = MergeRibbonFallbackWork(_ribbonFallbackWork, work);
         _lastRibbonFallbackMergedWork = _ribbonFallbackWork;
+        _queuedRibbonCompactFallbackStateKey = _ribbonFallbackWork == RibbonFallbackWork.CompactOnly
+            ? _lastRibbonAdaptiveAppliedStateKey
+            : null;
         if (_ribbonFallbackPending)
             return;
 
@@ -1014,7 +1017,9 @@ public partial class MainWindow
             (Action)(() =>
             {
                 var pendingWork = _ribbonFallbackWork;
+                var compactFallbackStateKey = _queuedRibbonCompactFallbackStateKey;
                 _ribbonFallbackWork = RibbonFallbackWork.None;
+                _queuedRibbonCompactFallbackStateKey = null;
                 _ribbonFallbackPending = false;
                 _ribbonFallbackExecutedCount++;
                 _lastRibbonFallbackExecutedWork = pendingWork;
@@ -1028,6 +1033,12 @@ public partial class MainWindow
                 else if (pendingWork == RibbonFallbackWork.CompactOnly)
                 {
                     _ribbonFallbackForcedCompactCount++;
+                    if (CanSkipQueuedRibbonCompactFallback(compactFallbackStateKey))
+                    {
+                        _ribbonFallbackSkippedCompactLayoutCount++;
+                        return;
+                    }
+
                     var result = UpdateRibbonCompactMode(force: false);
                     if (RibbonCompactUpdateRequiresLayout(result))
                         UpdateActiveRibbonLayoutBeforeFirstFrame();
@@ -1065,6 +1076,7 @@ public partial class MainWindow
         _lastRibbonFallbackRequestedWork = RibbonFallbackWork.None;
         _lastRibbonFallbackMergedWork = RibbonFallbackWork.None;
         _lastRibbonFallbackExecutedWork = RibbonFallbackWork.None;
+        _queuedRibbonCompactFallbackStateKey = null;
     }
 
     private static RibbonFallbackWork MergeRibbonFallbackWork(RibbonFallbackWork current, RibbonFallbackWork requested) =>
@@ -1076,6 +1088,11 @@ public partial class MainWindow
 
     private static bool RibbonCompactUpdateRequiresLayout(RibbonCompactUpdateResult result) =>
         result is RibbonCompactUpdateResult.AppliedVisualChange or RibbonCompactUpdateResult.MeasuredCorrectionApplied;
+
+    private bool CanSkipQueuedRibbonCompactFallback(RibbonAppliedStateKey? queuedStateKey) =>
+        queuedStateKey is not null &&
+        !_ribbonAdaptiveStateDiffInvalidated &&
+        _lastRibbonAdaptiveAppliedStateKey == queuedStateKey;
 
     private void CompleteRibbonResizeCompaction()
     {

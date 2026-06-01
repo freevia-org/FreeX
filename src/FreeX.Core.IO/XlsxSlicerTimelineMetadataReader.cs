@@ -9,11 +9,23 @@ internal static class XlsxSlicerTimelineMetadataReader
 {
     public static SlicerTimelinePackageMetadata Load(Stream xlsxStream)
     {
+        try
+        {
+            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            return Load(archive);
+        }
+        catch
+        {
+            return SlicerTimelinePackageMetadata.Empty;
+        }
+    }
+
+    internal static SlicerTimelinePackageMetadata Load(ZipArchive archive)
+    {
         var slicers = new List<SlicerModel>();
         var timelines = new List<TimelineModel>();
         try
         {
-            using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
             var slicerCaches = archive.Entries
                 .Where(entry => entry.FullName.Replace('\\', '/').StartsWith("xl/slicerCaches/", StringComparison.OrdinalIgnoreCase))
                 .Select(entry => (Path: entry.FullName.Replace('\\', '/'), Xml: LoadXml(entry)))
@@ -235,7 +247,10 @@ internal static class XlsxSlicerTimelineMetadataReader
 
 internal sealed record SlicerTimelinePackageMetadata(
     IReadOnlyList<SlicerModel> Slicers,
-    IReadOnlyList<TimelineModel> Timelines);
+    IReadOnlyList<TimelineModel> Timelines)
+{
+    public static SlicerTimelinePackageMetadata Empty { get; } = new([], []);
+}
 
 internal sealed record SlicerCacheMetadata(
     string Name,

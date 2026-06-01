@@ -594,10 +594,11 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void CloneWithPriority_PreservesAdvancedConditionalFormatFields()
     {
+        var sourceSheet = SheetId.New();
         var source = new ConditionalFormat
         {
             Id = Guid.NewGuid(),
-            AppliesTo = new GridRange(new CellAddress(SheetId.New(), 2, 2), new CellAddress(SheetId.New(), 5, 4)),
+            AppliesTo = new GridRange(new CellAddress(sourceSheet, 2, 2), new CellAddress(sourceSheet, 5, 4)),
             Priority = 7,
             RuleType = CfRuleType.IconSet,
             Operator = CfOperator.Between,
@@ -657,10 +658,11 @@ public sealed class ManageConditionalFormatsDialogTests
     [Fact]
     public void CloneWithPriority_WithNewId_DropsExistingX14IdNativeChild()
     {
+        var sourceSheet = SheetId.New();
         var source = new ConditionalFormat
         {
             Id = Guid.NewGuid(),
-            AppliesTo = new GridRange(new CellAddress(SheetId.New(), 1, 1), new CellAddress(SheetId.New(), 5, 1)),
+            AppliesTo = new GridRange(new CellAddress(sourceSheet, 1, 1), new CellAddress(sourceSheet, 5, 1)),
             RuleType = CfRuleType.DataBar,
             NativeChildXmls =
             [

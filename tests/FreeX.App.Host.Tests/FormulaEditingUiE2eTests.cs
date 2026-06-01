@@ -11,7 +11,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class FreeXUiE2eTests
 {
-    [Fact]
+    [UiE2eFact]
     [Trait("Category", "UIE2E")]
     public void SharedAppInstance_CoversLiveUiScenarios()
     {
@@ -141,6 +141,8 @@ internal static class FormulaEditingUiE2eHarness
 
 internal sealed class FreeXUiRun : IDisposable
 {
+    public const string AppExecutableName = "FreeX.App.Host.exe";
+
     private const int WindowWidth = 1280;
     private const int WindowHeight = 720;
     private const int GridLeft = 53;
@@ -339,11 +341,11 @@ internal sealed class FreeXUiRun : IDisposable
     private static string ResolveAppExecutable()
     {
         var assemblyDirectory = Path.GetDirectoryName(typeof(MainWindow).Assembly.Location)!;
-        var appExe = Path.Combine(assemblyDirectory, "FreeX.App.Host.exe");
+        var appExe = Path.Combine(assemblyDirectory, AppExecutableName);
         if (File.Exists(appExe))
             return appExe;
 
-        throw new FileNotFoundException("Could not find FreeX.App.Host.exe in test output.", appExe);
+        throw new FileNotFoundException($"Could not find {AppExecutableName} in test output.", appExe);
     }
 
     private static DirectoryInfo CreateArtifactDirectory()
