@@ -113,7 +113,7 @@ internal static partial class ExportPlanner
     public static ExportRequest PlanExport(string path, ExportOptions options)
     {
         var format = InferExportFormat(path);
-        var normalizedPath = NormalizeExportPath(path, format, forceMatchingExtension: false);
+        var normalizedPath = NormalizeExportPath(path, format, forceMatchingExtension: format == ExportFormat.Pdf);
         return new ExportRequest(normalizedPath, format, options, null);
     }
 
