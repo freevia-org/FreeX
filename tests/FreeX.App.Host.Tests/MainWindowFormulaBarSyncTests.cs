@@ -304,6 +304,26 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void EditInFormulaBar_LoadsActiveCellFormulaAndFocusesFormulaBar()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellFormula(1, 1, "SUM(B1:C1)");
+            harness.SelectActiveCell(1, 1);
+
+            harness.EditActiveCellInFormulaBar();
+
+            harness.FormulaBarText.Should().Be("=SUM(B1:C1)");
+            harness.FormulaBarCaretIndex.Should().Be(harness.FormulaBarText.Length);
+            harness.InlineEditorVisible.Should().BeFalse();
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.CellFormula(1, 1).Should().Be("SUM(B1:C1)");
+        });
+    }
+
+    [Fact]
     public void FormulaBarExpandButton_TogglesMultilineEntryAndAccessibilityName()
     {
         StaTestRunner.Run(() =>
@@ -370,6 +390,30 @@ public sealed class MainWindowFormulaBarSyncTests
                 new CellAddress(harness.CurrentSheetId, 3, 3)));
             harness.CellAddressBoxText.Should().Be("B2:C3");
             harness.FormulaBarText.Should().Be("range start");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void NameBoxEnter_WithDefinedName_SelectsNamedRangeAndRefreshesFormulaBarFromStartCell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var expectedRange = new GridRange(
+                new CellAddress(harness.CurrentSheetId, 2, 2),
+                new CellAddress(harness.CurrentSheetId, 3, 3));
+
+            harness.SetCellText(2, 2, "named range start");
+            harness.DefineNamedRange("SalesData", expectedRange);
+            harness.SelectActiveCell(1, 1);
+            harness.SetCellAddressBoxText("SalesData");
+
+            harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
+
+            harness.SelectedRange.Should().Be(expectedRange);
+            harness.CellAddressBoxText.Should().Be("B2:C3");
+            harness.FormulaBarText.Should().Be("named range start");
             harness.SheetGridFocused.Should().BeTrue();
         });
     }
@@ -456,6 +500,7 @@ public sealed class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _insertFormulaFunction;
         private readonly MethodInfo _insertDefinedNameIntoFormula;
         private readonly MethodInfo _formulaBarExpandButtonClick;
+        private readonly MethodInfo _editActiveCellInFormulaBar;
 
         private MainWindowHarness(MainWindow window)
         {
@@ -505,6 +550,9 @@ public sealed class MainWindowFormulaBarSyncTests
             _formulaBarExpandButtonClick = typeof(MainWindow)
                 .GetMethod("FormulaBarExpandBtn_Click", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "FormulaBarExpandBtn_Click");
+            _editActiveCellInFormulaBar = typeof(MainWindow)
+                .GetMethod("EditActiveCellInFormulaBar", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "EditActiveCellInFormulaBar");
         }
 
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
@@ -525,6 +573,8 @@ public sealed class MainWindowFormulaBarSyncTests
 
         public bool FormulaBarAcceptsReturn => ((TextBox)_window.FindName("FormulaBar")).AcceptsReturn;
 
+        public int FormulaBarCaretIndex => ((TextBox)_window.FindName("FormulaBar")).CaretIndex;
+
         public double FormulaBarHeight => ((TextBox)_window.FindName("FormulaBar")).Height;
 
         public string FormulaBarExpandButtonAutomationName =>
@@ -534,6 +584,12 @@ public sealed class MainWindowFormulaBarSyncTests
         {
             var sheet = Workbook.Sheets[0];
             sheet.SetCell(new CellAddress(sheet.Id, row, col), Cell.FromValue(new TextValue(text)));
+        }
+
+        public void SetCellFormula(uint row, uint col, string formulaText)
+        {
+            var sheet = Workbook.Sheets[0];
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), Cell.FromFormula(formulaText));
         }
 
         public string? CellText(uint row, uint col) => CellText(row, col, Workbook.Sheets[0].Id);
@@ -557,6 +613,11 @@ public sealed class MainWindowFormulaBarSyncTests
         {
             Workbook.TryGetNamedRange(name, out var range).Should().BeTrue();
             return range;
+        }
+
+        public void DefineNamedRange(string name, GridRange range)
+        {
+            Workbook.DefineNamedRange(name, range);
         }
 
         public void SelectActiveCell(uint row, uint col)
@@ -628,6 +689,12 @@ public sealed class MainWindowFormulaBarSyncTests
         {
             var button = (Button)_window.FindName("FormulaBarExpandBtn");
             _formulaBarExpandButtonClick.Invoke(_window, [button, new RoutedEventArgs()]);
+            PumpDispatcher();
+        }
+
+        public void EditActiveCellInFormulaBar()
+        {
+            _editActiveCellInFormulaBar.Invoke(_window, null);
             PumpDispatcher();
         }
 
