@@ -35,6 +35,7 @@ public sealed partial class ViewportService : IViewportService
             sheet,
             hasAnyCellComments,
             hasAnyStyleOnlyCells));
+        var styleCache = new ViewportStyleCache();
 
         // Calculate Row Metrics — iterate until we've filled the available height, skipping hidden rows
         // Calculate Column Metrics — iterate until we've filled the available width
@@ -46,7 +47,7 @@ public sealed partial class ViewportService : IViewportService
                 var cell = sheet.GetCell(rowMetric.Row, colMetric.Col);
                 if (cell != null)
                 {
-                    var style = workbook.GetStyle(cell.StyleId);
+                    var style = styleCache.Get(workbook, cell.StyleId);
                     ConditionalFormatIcon? cfIcon = null;
                     var hasComment = false;
 
@@ -90,7 +91,7 @@ public sealed partial class ViewportService : IViewportService
                     var styleOnlyId = sheet.GetStyleOnly(rowMetric.Row, colMetric.Col);
                     if (styleOnlyId.HasValue)
                     {
-                        var style = workbook.GetStyle(styleOnlyId.Value);
+                        var style = styleCache.Get(workbook, styleOnlyId.Value);
                         ConditionalFormatIcon? cfIcon = null;
                         var hasComment = false;
 
@@ -133,7 +134,7 @@ public sealed partial class ViewportService : IViewportService
                             null,
                             StyleId.Default,
                             null,
-                            workbook.GetStyle(StyleId.Default),
+                            styleCache.Get(workbook, StyleId.Default),
                             null,
                             true));
                     }
@@ -162,13 +163,13 @@ public sealed partial class ViewportService : IViewportService
                 sheet.SplitColumn,
                 splitTopRows,
                 splitLeftColumns,
-                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas, cfContext, hasAnyCellComments),
+                BuildSplitPaneCells(workbook, sheet, sheetId, splitTopRows, splitLeftColumns, bottomLeftRows, topRightColumns, request.IncludeFormulas, cfContext, hasAnyCellComments, ref styleCache),
                 topRightColumns,
                 bottomLeftRows)
             : null;
 
         var chartDataCells = request.IncludeObjects
-            ? BuildChartDataCells(workbook, sheet)
+            ? BuildChartDataCells(workbook, sheet, ref styleCache)
             : [];
 
         return new ViewportModel(cells, rowMetrics, colMetrics, frozenPanes, [], splitPanes, chartDataCells);
@@ -213,6 +214,21 @@ public sealed partial class ViewportService : IViewportService
     private static int ClampCapacityHint(int capacity) =>
         Math.Clamp(capacity, 0, MaxViewportListCapacityHint);
 
+    private struct ViewportStyleCache
+    {
+        private Dictionary<StyleId, CellStyle>? _styles;
+
+        public CellStyle Get(Workbook workbook, StyleId styleId)
+        {
+            if (_styles is not null && _styles.TryGetValue(styleId, out var style))
+                return style;
+
+            style = workbook.GetStyle(styleId);
+            (_styles ??= new Dictionary<StyleId, CellStyle>(4)).Add(styleId, style);
+            return style;
+        }
+    }
+
     private static void ApplyConditionalVisualsAndComments(
         Sheet sheet,
         SheetId sheetId,
@@ -245,7 +261,10 @@ public sealed partial class ViewportService : IViewportService
             hasComment = HasCellComment(sheet, addr, hasAnyCellComments);
     }
 
-    private static IReadOnlyList<ChartDataCell> BuildChartDataCells(Workbook workbook, Sheet sheet)
+    private static IReadOnlyList<ChartDataCell> BuildChartDataCells(
+        Workbook workbook,
+        Sheet sheet,
+        ref ViewportStyleCache styleCache)
     {
         if (sheet.Charts.Count == 0)
             return [];
@@ -285,7 +304,7 @@ public sealed partial class ViewportService : IViewportService
                         continue;
                     }
 
-                    var style = workbook.GetStyle(cell.StyleId);
+                    var style = styleCache.Get(workbook, cell.StyleId);
                     chartCells.Add(new ChartDataCell(
                         sourceSheet.Id,
                         row,
@@ -315,7 +334,8 @@ public sealed partial class ViewportService : IViewportService
         IReadOnlyList<ColMetric> topRightColumns,
         bool includeFormulas,
         CfEvaluationContext cfContext,
-        bool hasAnyCellComments)
+        bool hasAnyCellComments,
+        ref ViewportStyleCache styleCache)
     {
         var dedupeCells = SplitPaneRegionsCanOverlap(topRows, leftColumns, bottomLeftRows, topRightColumns);
         HashSet<(uint Row, uint Col)>? seen = null;
@@ -334,15 +354,15 @@ public sealed partial class ViewportService : IViewportService
         foreach (var row in topRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalFormats, hasConditionalIcons);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalFormats, hasConditionalIcons, ref styleCache);
             foreach (var column in topRightColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalFormats, hasConditionalIcons);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalFormats, hasConditionalIcons, ref styleCache);
         }
 
         foreach (var row in bottomLeftRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalFormats, hasConditionalIcons);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalFormats, hasConditionalIcons, ref styleCache);
         }
 
         return cells;
@@ -388,7 +408,8 @@ public sealed partial class ViewportService : IViewportService
         bool hasAnyCellComments,
         bool hasAnyStyleOnlyCells,
         bool hasConditionalFormats,
-        bool hasConditionalIcons)
+        bool hasConditionalIcons,
+        ref ViewportStyleCache styleCache)
     {
         if (dedupeCells && !AddSeenCell(ref seen, row, col))
             return;
@@ -413,7 +434,7 @@ public sealed partial class ViewportService : IViewportService
                         null,
                         StyleId.Default,
                         null,
-                        workbook.GetStyle(StyleId.Default),
+                        styleCache.Get(workbook, StyleId.Default),
                         null,
                         true));
                 }
@@ -421,7 +442,7 @@ public sealed partial class ViewportService : IViewportService
                 return;
             }
 
-            var style = workbook.GetStyle(styleOnlyId.Value);
+            var style = styleCache.Get(workbook, styleOnlyId.Value);
             ConditionalFormatIcon? cfIcon = null;
             var hasComment = false;
             if (hasConditionalFormats || hasAnyCellComments)
@@ -455,7 +476,7 @@ public sealed partial class ViewportService : IViewportService
         }
 
         {
-        var style = workbook.GetStyle(cell.StyleId);
+        var style = styleCache.Get(workbook, cell.StyleId);
         ConditionalFormatIcon? cfIcon = null;
         var hasComment = false;
         if (hasConditionalFormats || hasAnyCellComments)
@@ -575,7 +596,13 @@ public sealed partial class ViewportService : IViewportService
             workbook.IndexedColors,
             workbook.Theme);
         if (TryParseHexColor(result.ColorHex, out var color))
-            style.FontColor = color;
+        {
+            if (style.FontColor != color)
+            {
+                style = style.Clone();
+                style.FontColor = color;
+            }
+        }
 
         return result.Text;
     }
