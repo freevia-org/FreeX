@@ -23,10 +23,11 @@ public sealed class GroupedSheetRangePlannerTests
     [Fact]
     public void CloneConditionalFormatForSheet_RemapsRangeAndClonesFormatDiff()
     {
+        var sourceSheet = SheetId.New();
         var targetSheet = SheetId.New();
         var source = new ConditionalFormat
         {
-            AppliesTo = new GridRange(new CellAddress(SheetId.New(), 1, 1), new CellAddress(SheetId.New(), 4, 2)),
+            AppliesTo = new GridRange(new CellAddress(sourceSheet, 1, 1), new CellAddress(sourceSheet, 4, 2)),
             Priority = 3,
             RuleType = CfRuleType.CellValue,
             Operator = CfOperator.GreaterThan,
@@ -52,10 +53,11 @@ public sealed class GroupedSheetRangePlannerTests
     [Fact]
     public void CloneConditionalFormatForSheet_PreservesAdvancedFields()
     {
+        var sourceSheet = SheetId.New();
         var targetSheet = SheetId.New();
         var source = new ConditionalFormat
         {
-            AppliesTo = new GridRange(new CellAddress(SheetId.New(), 1, 1), new CellAddress(SheetId.New(), 4, 2)),
+            AppliesTo = new GridRange(new CellAddress(sourceSheet, 1, 1), new CellAddress(sourceSheet, 4, 2)),
             Priority = 3,
             RuleType = CfRuleType.IconSet,
             MinThresholdType = CfThresholdType.Number,
@@ -95,10 +97,11 @@ public sealed class GroupedSheetRangePlannerTests
     [Fact]
     public void CloneConditionalFormatForSheet_DropsExistingX14IdNativeChild()
     {
+        var sourceSheet = SheetId.New();
         var targetSheet = SheetId.New();
         var source = new ConditionalFormat
         {
-            AppliesTo = new GridRange(new CellAddress(SheetId.New(), 1, 1), new CellAddress(SheetId.New(), 4, 2)),
+            AppliesTo = new GridRange(new CellAddress(sourceSheet, 1, 1), new CellAddress(sourceSheet, 4, 2)),
             RuleType = CfRuleType.DataBar,
             NativeChildXmls =
             [
