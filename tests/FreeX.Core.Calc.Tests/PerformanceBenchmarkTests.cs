@@ -436,10 +436,13 @@ public class PerformanceBenchmarkTests
         Console.WriteLine(
             $"Single-section number format: {iterations:N0} iterations, {sw.Elapsed.TotalMilliseconds:F2}ms, " +
             $"{allocated:N0} bytes allocated, {allocated / iterations:N0} bytes/iteration");
+        Console.WriteLine(
+            $"PERF NUMBERFORMAT_SINGLE_SECTION iterations={iterations:N0} total_ms={sw.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={allocated:N0} bytes_per_iteration={allocated / iterations:N0}");
 
         (allocated / iterations).Should().BeLessThan(
-            760,
-            "single-section number formats should reuse cached split-section arrays");
+            360,
+            "single-section number formats should skip no-op normalization allocations");
     }
 
     [Fact]

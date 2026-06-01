@@ -197,14 +197,18 @@ public static partial class NumberFormatter
 
         // Elapsed-time brackets: [h], [m], [s] represent total elapsed hours/minutes/seconds
         // and must be handled before the generic bracket-stripping pass.
-        var elapsedMatch = NumericElapsedTokenRegex.Match(format);
-        if (elapsedMatch.Success)
+        if (format.IndexOf('[') >= 0)
         {
-            return NativeDigits(FormatElapsedTime(value, RemoveSpacingAndFillDirectives(format), elapsedMatch));
+            var elapsedMatch = NumericElapsedTokenRegex.Match(format);
+            if (elapsedMatch.Success)
+            {
+                return NativeDigits(FormatElapsedTime(value, RemoveSpacingAndFillDirectives(format), elapsedMatch));
+            }
+
+            // Remove any remaining bracket content (conditions, locale, etc.)
+            format = NumericBracketDirectiveRegex.Replace(format, "");
         }
 
-        // Remove any remaining bracket content (conditions, locale, etc.)
-        format = NumericBracketDirectiveRegex.Replace(format, "");
         format = PreserveAccountingFillSpace(format);
         format = RemoveSpacingAndFillDirectives(format);
         (format, value) = ApplyTrailingCommaScaling(format, value);
@@ -243,7 +247,9 @@ public static partial class NumberFormatter
             return NativeDigits(FormatScientific(value, format, numberFormat));
 
         // Accounting / text literals — strip quoted strings to expose the numeric pattern
-        var stripped = NumericQuotedTextRegex.Replace(format, "");
+        var stripped = format.IndexOf('"') >= 0
+            ? NumericQuotedTextRegex.Replace(format, "")
+            : format;
         var prefix = "";
         var suffix = "";
 
@@ -332,6 +338,9 @@ public static partial class NumberFormatter
 
     private static (string Format, double Value) ApplyTrailingCommaScaling(string format, double value)
     {
+        if (CountTrailingScaleCommas(format) == 0)
+            return (format, value);
+
         var sb = new System.Text.StringBuilder(format);
         bool inQuote = false;
         int scaleCommas = 0;
@@ -364,10 +373,51 @@ public static partial class NumberFormatter
             break;
         }
 
-        if (scaleCommas == 0)
-            return (format, value);
-
         return (sb.ToString(), value / Math.Pow(1000, scaleCommas));
+    }
+
+    private static int CountTrailingScaleCommas(string format)
+    {
+        bool inQuote = false;
+        int scaleCommas = 0;
+
+        for (int i = format.Length - 1; i >= 0; i--)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (inQuote)
+                continue;
+
+            if (char.IsWhiteSpace(c))
+                continue;
+
+            if (c == ',')
+            {
+                if (IsEscaped(format, i))
+                    break;
+
+                scaleCommas++;
+                continue;
+            }
+
+            break;
+        }
+
+        return scaleCommas;
+    }
+
+    private static bool IsEscaped(string text, int index)
+    {
+        int slashCount = 0;
+        for (int i = index - 1; i >= 0 && text[i] == '\\'; i--)
+            slashCount++;
+
+        return slashCount % 2 == 1;
     }
 
     private static bool IsEscaped(System.Text.StringBuilder text, int index)
