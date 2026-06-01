@@ -55,6 +55,25 @@ public static class XlsxColorReader
         return false;
     }
 
+    public static bool TryReadRgbColor(
+        XElement? element,
+        WorkbookTheme theme,
+        WorkbookIndexedColorPalette indexedColors,
+        out RgbColor color)
+    {
+        if (TryReadRgbColor(element, theme, out color))
+            return true;
+
+        if (TryReadIndexedColor(element, indexedColors, out var cellColor))
+        {
+            color = RgbColor.FromCellColor(cellColor);
+            return true;
+        }
+
+        color = default;
+        return false;
+    }
+
     public static bool TryReadCellColor(XElement? element, out CellColor color)
     {
         color = default;
@@ -87,13 +106,55 @@ public static class XlsxColorReader
             return false;
         }
 
-        var tint = 0d;
-        var tintText = element.Attribute("tint")?.Value;
-        if (!string.IsNullOrWhiteSpace(tintText))
-            double.TryParse(tintText, NumberStyles.Float, CultureInfo.InvariantCulture, out tint);
-
-        color = theme.ResolveColor(slot, tint);
+        color = theme.ResolveColor(slot, ReadTint(element));
         return true;
+    }
+
+    private static bool TryReadIndexedColor(XElement? element, WorkbookIndexedColorPalette indexedColors, out CellColor color)
+    {
+        color = default;
+        if (element is null)
+            return false;
+
+        var indexedText = element.Attribute("indexed")?.Value;
+        // OOXML indexed colors are zero-based; WorkbookIndexedColorPalette stores Excel ColorIndex values one-based.
+        if (string.IsNullOrWhiteSpace(indexedText) ||
+            !int.TryParse(indexedText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index) ||
+            !indexedColors.TryResolveColor(index + 1, out var indexedColor))
+        {
+            return false;
+        }
+
+        color = ApplyTint(indexedColor, ReadTint(element));
+        return true;
+    }
+
+    private static double ReadTint(XElement element)
+    {
+        var tintText = element.Attribute("tint")?.Value;
+        return !string.IsNullOrWhiteSpace(tintText) &&
+            double.TryParse(tintText, NumberStyles.Float, CultureInfo.InvariantCulture, out var tint)
+            ? tint
+            : 0d;
+    }
+
+    private static CellColor ApplyTint(CellColor color, double tint)
+    {
+        if (Math.Abs(tint) < 0.000001)
+            return color;
+
+        return new CellColor(
+            ApplyTint(color.R, tint),
+            ApplyTint(color.G, tint),
+            ApplyTint(color.B, tint));
+    }
+
+    private static byte ApplyTint(byte channel, double tint)
+    {
+        var value = tint < 0
+            ? channel * (1.0 + tint)
+            : channel + ((255 - channel) * tint);
+        return (byte)Math.Clamp(Math.Round(value), 0, 255);
     }
 
     private static bool TryMapThemeColorSlot(int themeIndex, out WorkbookThemeColorSlot slot)

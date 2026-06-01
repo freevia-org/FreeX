@@ -796,8 +796,16 @@ internal static class XlsxCorpusFixtureFactory
             ("xl/model/item.xml", "<dataModel/>")),
         "generated-linked-data-types-001" => CreatePackage(
             ("xl/richData/rdrichvalue.xml", "<rvData/>"),
+            ("xl/richData/rdRichValueStructure.xml", "<rvStructures/>"),
             ("xl/richData/rdRichValueTypes.xml", "<rvTypes/>"),
-            ("xl/richData/richValueRel.xml", "<richValueRels/>")),
+            ("xl/richData/richValueRel.xml", "<richValueRels/>"),
+            ("xl/richData/_rels/rdrichvalue.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdRichValueStructure"
+                                Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure"
+                                Target="rdRichValueStructure.xml"/>
+                </Relationships>
+                """)),
         "generated-slicers-001" => CreatePackage(
             ("xl/slicers/slicer1.xml", "<slicer/>"),
             ("xl/slicerCaches/slicerCache1.xml", "<slicerCacheDefinition/>")),
@@ -1174,6 +1182,7 @@ internal static class XlsxCorpusFixtureFactory
             "xl/model/item.xml" => "application/xml",
             "xl/model/item.data" => "application/vnd.ms-excel.model",
             "xl/richData/rdrichvalue.xml" => "application/vnd.ms-excel.rdrichvalue+xml",
+            "xl/richData/rdRichValueStructure.xml" => "application/vnd.ms-excel.rdRichValueStructure+xml",
             "xl/richData/rdRichValueTypes.xml" => "application/vnd.ms-excel.rdrichvaluetypes+xml",
             "xl/richData/richValueRel.xml" => "application/vnd.ms-excel.richvaluerel+xml",
             "xl/slicers/slicer1.xml" => "application/vnd.ms-excel.slicer+xml",

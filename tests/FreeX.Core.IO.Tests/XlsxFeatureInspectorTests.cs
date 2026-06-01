@@ -262,6 +262,22 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_RelationshipOnlyRichValueStructureReference_DetectsLinkedDataTypes()
+    {
+        using var package = CreatePackageWithContent(("xl/richData/_rels/rdrichvalue.xml.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdRichValueStructure"
+                            Type="http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure"
+                            Target="metadata/richValueStructurePayload.xml"/>
+            </Relationships>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Select(f => f.Kind).Should().Contain(XlsxUnsupportedFeatureKind.LinkedDataTypes);
+    }
+
+    [Fact]
     public void Inspect_RelationshipOnlyRichDataReference_MatchesTypeAndTargetWithoutLowercaseCopies()
     {
         using var package = CreatePackageWithContent(("xl/_rels/workbook.xml.rels", """

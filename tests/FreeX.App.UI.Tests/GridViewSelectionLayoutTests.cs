@@ -217,6 +217,32 @@ public sealed class GridViewSelectionLayoutTests
     }
 
     [Fact]
+    public void CalculateQuickAnalysisDataBarPreviewRects_SkipsCellsTooSmallForInsetPreview()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 2, 2));
+        var viewport = new ViewportModel(
+            [
+                new DisplayCell(1, 1, new NumberValue(10), "10", null, StyleId.Default, null),
+                new DisplayCell(1, 2, new NumberValue(20), "20", null, StyleId.Default, null),
+                new DisplayCell(2, 1, new NumberValue(30), "30", null, StyleId.Default, null),
+                new DisplayCell(2, 2, new NumberValue(0), "0", null, StyleId.Default, null)
+            ],
+            [new RowMetric(1, 8, 0), new RowMetric(2, 20, 8)],
+            [new ColMetric(1, 6, 0), new ColMetric(2, 66, 6)]);
+
+        var rects = GridView.CalculateQuickAnalysisDataBarPreviewRects(
+            viewport,
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18);
+
+        rects.Should().Equal(new Rect(39, 30, 0, 12));
+    }
+
+    [Fact]
     public void CalculateQuickAnalysisDataBarPreviewRects_CalculatesMaxWithoutNumericCellList()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
