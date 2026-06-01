@@ -6,18 +6,39 @@ namespace FreeX.App.Host;
 public static class RibbonKeyTipRouting
 {
     public static FrameworkElement? ResolveKeyTipElement(IEnumerable<FrameworkElement> elements, string keyTip) =>
-        ResolveSingle(elements, keyTip, preferLongerPrefix: false);
+        ResolveSingle(
+            elements,
+            keyTip,
+            preferLongerPrefix: false,
+            element => NormalizeKeyTip(RibbonTooltip.GetKeyTip(element)));
 
     public static bool HasKeyTipPrefix(IEnumerable<FrameworkElement> elements, string keyTipPrefix) =>
-        HasPrefix(elements, keyTipPrefix);
+        HasPrefix(elements, keyTipPrefix, element => NormalizeKeyTip(RibbonTooltip.GetKeyTip(element)));
 
     public static MenuItem? ResolveMenuItem(IEnumerable<MenuItem> menuItems, string keyTip) =>
-        ResolveSingle(FlattenMenuItems(menuItems), keyTip, preferLongerPrefix: true);
+        ResolveMenuItem(menuItems, keyTip, scopePrefix: null);
+
+    public static MenuItem? ResolveMenuItem(IEnumerable<MenuItem> menuItems, string keyTip, string? scopePrefix) =>
+        ResolveSingle(
+            FlattenMenuItems(menuItems),
+            keyTip,
+            preferLongerPrefix: true,
+            item => RibbonMenuKeyTipScopePlanner.GetScopedKeyTip(item, scopePrefix));
 
     public static bool HasMenuItemKeyTipPrefix(IEnumerable<MenuItem> menuItems, string keyTipPrefix) =>
-        HasPrefix(FlattenMenuItems(menuItems), keyTipPrefix);
+        HasMenuItemKeyTipPrefix(menuItems, keyTipPrefix, scopePrefix: null);
 
-    private static T? ResolveSingle<T>(IEnumerable<T> elements, string keyTip, bool preferLongerPrefix)
+    public static bool HasMenuItemKeyTipPrefix(IEnumerable<MenuItem> menuItems, string keyTipPrefix, string? scopePrefix) =>
+        HasPrefix(
+            FlattenMenuItems(menuItems),
+            keyTipPrefix,
+            item => RibbonMenuKeyTipScopePlanner.GetScopedKeyTip(item, scopePrefix));
+
+    private static T? ResolveSingle<T>(
+        IEnumerable<T> elements,
+        string keyTip,
+        bool preferLongerPrefix,
+        Func<T, string?> keyTipSelector)
         where T : DependencyObject
     {
         if (string.IsNullOrWhiteSpace(keyTip))
@@ -26,7 +47,7 @@ public static class RibbonKeyTipRouting
         var normalizedKeyTip = keyTip.Trim();
         var candidates = elements.ToList();
         var matches = candidates
-            .Where(element => string.Equals(NormalizeKeyTip(RibbonTooltip.GetKeyTip(element)), normalizedKeyTip, StringComparison.OrdinalIgnoreCase))
+            .Where(element => string.Equals(keyTipSelector(element), normalizedKeyTip, StringComparison.OrdinalIgnoreCase))
             .Take(2)
             .ToList();
 
@@ -34,7 +55,7 @@ public static class RibbonKeyTipRouting
             return matches[0];
 
         var longerMatchExists = candidates.Any(element =>
-            NormalizeKeyTip(RibbonTooltip.GetKeyTip(element)) is { } candidate &&
+            keyTipSelector(element) is { } candidate &&
             candidate.Length > normalizedKeyTip.Length &&
             candidate.StartsWith(normalizedKeyTip, StringComparison.OrdinalIgnoreCase));
 
@@ -44,7 +65,7 @@ public static class RibbonKeyTipRouting
         return matches.Count == 1 ? matches[0] : null;
     }
 
-    private static bool HasPrefix<T>(IEnumerable<T> elements, string keyTipPrefix)
+    private static bool HasPrefix<T>(IEnumerable<T> elements, string keyTipPrefix, Func<T, string?> keyTipSelector)
         where T : DependencyObject
     {
         if (string.IsNullOrWhiteSpace(keyTipPrefix))
@@ -52,7 +73,7 @@ public static class RibbonKeyTipRouting
 
         var normalizedPrefix = keyTipPrefix.Trim();
         return elements.Any(element =>
-            NormalizeKeyTip(RibbonTooltip.GetKeyTip(element)) is { } keyTip &&
+            keyTipSelector(element) is { } keyTip &&
             keyTip.StartsWith(normalizedPrefix, StringComparison.OrdinalIgnoreCase));
     }
 
