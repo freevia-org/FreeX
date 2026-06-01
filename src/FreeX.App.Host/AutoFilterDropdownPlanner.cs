@@ -148,20 +148,22 @@ public static class AutoFilterDropdownPlanner
 
         var filterKind = DetectFilterKind(sheet, plan);
         var filterEntry = AutoFilterMenuCatalog.CreateFilterFamilyEntry(filterKind);
+        var colorOptions = CollectColorOptions(workbook, sheet, plan);
 
         var entries = new List<AutoFilterMenuEntry>
         {
             new(UiText.Get("AutoFilter_SortAscending"), AutoFilterMenuEntryKind.SortAscending),
             new(UiText.Get("AutoFilter_SortDescending"), AutoFilterMenuEntryKind.SortDescending),
             new(string.Empty, AutoFilterMenuEntryKind.Separator),
-            new(UiText.Format("AutoFilter_ClearFilterFrom", headerText), AutoFilterMenuEntryKind.ClearFilter),
-            new(UiText.Get("AutoFilter_FilterByColor"), AutoFilterMenuEntryKind.FilterByColor),
-            filterEntry,
-            new(string.Empty, AutoFilterMenuEntryKind.Separator),
-            new(UiText.Get("AutoFilter_Search"), AutoFilterMenuEntryKind.Search),
-            new(UiText.Get("AutoFilter_SelectAll"), AutoFilterMenuEntryKind.SelectAll),
-            new(string.Empty, AutoFilterMenuEntryKind.Separator)
+            new(UiText.Format("AutoFilter_ClearFilterFrom", headerText), AutoFilterMenuEntryKind.ClearFilter)
         };
+        if (colorOptions.Count > 0)
+            entries.Add(new AutoFilterMenuEntry(UiText.Get("AutoFilter_FilterByColor"), AutoFilterMenuEntryKind.FilterByColor));
+        entries.Add(filterEntry);
+        entries.Add(new AutoFilterMenuEntry(string.Empty, AutoFilterMenuEntryKind.Separator));
+        entries.Add(new AutoFilterMenuEntry(UiText.Get("AutoFilter_Search"), AutoFilterMenuEntryKind.Search));
+        entries.Add(new AutoFilterMenuEntry(UiText.Get("AutoFilter_SelectAll"), AutoFilterMenuEntryKind.SelectAll));
+        entries.Add(new AutoFilterMenuEntry(string.Empty, AutoFilterMenuEntryKind.Separator));
 
         entries.AddRange(CreateChecklistItems(sheet, plan)
             .Select(item => new AutoFilterMenuEntry(item)));
@@ -170,7 +172,7 @@ public static class AutoFilterDropdownPlanner
             headerText,
             filterKind,
             entries,
-            CollectColorOptions(workbook, sheet, plan),
+            colorOptions,
             AutoFilterMenuCatalog.CreateSections(entries));
     }
 
