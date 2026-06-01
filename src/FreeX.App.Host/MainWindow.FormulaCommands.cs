@@ -134,8 +134,30 @@ public partial class MainWindow
 
     private void InsertDefinedNameIntoFormula(string name)
     {
-        var result = FormulaInsertionService.InsertDefinedName(FormulaBar.Text, FormulaBar.CaretIndex, name);
+        var formulaText = FormulaBar.Text;
+        var caretIndex = FormulaBar.CaretIndex;
+        if (ShouldSeedDefinedNameFormula(formulaText))
+        {
+            formulaText = "";
+            caretIndex = 0;
+        }
+
+        var result = FormulaInsertionService.InsertDefinedName(formulaText, caretIndex, name);
         BeginFormulaBarFormulaEdit(result.Text, result.CaretIndex);
+    }
+
+    private bool ShouldSeedDefinedNameFormula(string formulaText)
+    {
+        if (_formulaEditCell is not null ||
+            _inlineEditor?.IsVisible == true ||
+            FormulaEditInteractionPlanner.IsFormulaText(formulaText) ||
+            SheetGrid.SelectedRange?.Start is not { } address)
+        {
+            return false;
+        }
+
+        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(address);
+        return string.Equals(formulaText, FormatFormulaBarText(cell, address), StringComparison.Ordinal);
     }
 
     private void TracePrecedentsBtn_Click(object sender, RoutedEventArgs e)
