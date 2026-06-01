@@ -8,10 +8,10 @@ namespace FreeX.Core.IO;
 public sealed partial class XlsxFileAdapter
 {
     // Source package snapshot and native package-part preservation for loaded workbook saves.
-    private static void PreserveSourcePackageParts(Workbook workbook, Stream generatedPackage)
+    private static SourcePackagePartSummary PreserveSourcePackageParts(Workbook workbook, Stream generatedPackage)
     {
         if (!SourcePackages.TryGetValue(workbook, out var sourcePackage))
-            return;
+            return default;
 
         using var sourceStream = sourcePackage.OpenRead();
         using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: false);
@@ -50,11 +50,14 @@ public sealed partial class XlsxFileAdapter
         if (sourceParts.HasPrinterSettings)
             XlsxWorksheetPrinterSettingsReferencePreserver.Preserve(sourceArchive, generatedArchive);
         XlsxWorksheetMetadataPreserver.Preserve(sourceArchive, generatedArchive, workbook, context);
-        XlsxLegacyCommentPreserver.Preserve(sourceArchive, generatedArchive, workbook);
+        if (sourceParts.HasLegacyComments)
+            XlsxLegacyCommentPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         if (sourceParts.HasSharedStrings)
             XlsxSharedStringMetadataPreserver.PreserveRichTextAndPhonetics(sourceArchive, generatedArchive);
         if (HasUnsupportedConditionalFormatting(sourceArchive))
             XlsxUnsupportedConditionalFormattingPreserver.Preserve(sourceArchive, generatedArchive);
+
+        return sourceParts;
     }
 
     private struct SourcePackagePartSummary
@@ -66,6 +69,7 @@ public sealed partial class XlsxFileAdapter
         public bool HasDrawings;
         public bool HasPrinterSettings;
         public bool HasSharedStrings;
+        public bool HasLegacyComments;
     }
 
     private static SourcePackagePartSummary InspectSourcePackageParts(ZipArchive archive)
@@ -86,6 +90,7 @@ public sealed partial class XlsxFileAdapter
             summary.HasDrawings |= fullName.StartsWith("xl/drawings/", StringComparison.OrdinalIgnoreCase);
             summary.HasPrinterSettings |= fullName.StartsWith("xl/printerSettings/", StringComparison.OrdinalIgnoreCase);
             summary.HasSharedStrings |= fullName.Equals("xl/sharedStrings.xml", StringComparison.OrdinalIgnoreCase);
+            summary.HasLegacyComments |= fullName.StartsWith("xl/comments", StringComparison.OrdinalIgnoreCase);
 
             if (summary.HasPivotPackageParts &&
                 summary.HasStructuredTables &&
@@ -93,7 +98,8 @@ public sealed partial class XlsxFileAdapter
                 summary.HasUnsupportedSheetParts &&
                 summary.HasDrawings &&
                 summary.HasPrinterSettings &&
-                summary.HasSharedStrings)
+                summary.HasSharedStrings &&
+                summary.HasLegacyComments)
             {
                 break;
             }

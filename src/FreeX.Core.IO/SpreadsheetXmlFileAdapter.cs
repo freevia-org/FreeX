@@ -227,7 +227,13 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             if (rowIndex > CellAddress.MaxRow)
                 break;
 
-            ReadRowLayout(sheet, rowElement, rowIndex);
+            var rowSpan = ReadSpan(rowElement);
+            var lastRowIndex = rowSpan > CellAddress.MaxRow - rowIndex
+                ? CellAddress.MaxRow
+                : rowIndex + rowSpan;
+            for (var currentRowIndex = rowIndex; currentRowIndex <= lastRowIndex; currentRowIndex++)
+                ReadRowLayout(sheet, rowElement, currentRowIndex);
+
             var rowStyleId = ReadStyleId(rowElement, styles);
 
             var columnIndex = 1u;
@@ -269,7 +275,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 columnIndex = AdvanceColumnIndex(columnIndex, mergeAcross);
             }
 
-            rowIndex++;
+            rowIndex = lastRowIndex + 1;
         }
     }
 
@@ -396,7 +402,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         var type = dataElement.Attribute(SpreadsheetTypeAttribute)?.Value;
         return type switch
         {
-            "Number" when double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) =>
+            "Number" when double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) &&
+                          double.IsFinite(number) =>
                 new NumberValue(number),
             "Boolean" when ReadBoolean(text, out var boolean) =>
                 new BoolValue(boolean),

@@ -69,6 +69,32 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_KeepsNonFiniteSpreadsheetMlNumbersAsText()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Numbers">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="Number">NaN</ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Number">Infinity</ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Number">-Infinity</ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Number">42.5</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("NaN"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new TextValue("Infinity"));
+        sheet.GetCell(1, 3)!.Value.Should().Be(new TextValue("-Infinity"));
+        sheet.GetCell(1, 4)!.Value.Should().Be(new NumberValue(42.5));
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsMultipleSheetsAndValueTypes()
     {
         var workbook = new Workbook("XmlRoundTrip");
@@ -259,6 +285,34 @@ public sealed class SpreadsheetXmlFileAdapterTests
         sheet.HiddenRows.Should().Contain(3u);
         sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Tall"));
         sheet.GetCell(3, 1)!.Value.Should().Be(new TextValue("Hidden"));
+    }
+
+    [Fact]
+    public void Load_ReadsSpreadsheetMlRowSpanLayout()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Layout">
+                <ss:Table>
+                  <ss:Row ss:Index="2" ss:Span="2" ss:Height="24.5" ss:Hidden="1">
+                    <ss:Cell><ss:Data ss:Type="String">Spanned row</ss:Data></ss:Cell>
+                  </ss:Row>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="String">After span</ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.RowHeights[2].Should().Be(24.5);
+        sheet.RowHeights[3].Should().Be(24.5);
+        sheet.RowHeights[4].Should().Be(24.5);
+        sheet.HiddenRows.Should().Contain([2u, 3u, 4u]);
+        sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("Spanned row"));
+        sheet.GetCell(5, 1)!.Value.Should().Be(new TextValue("After span"));
     }
 
     [Fact]
@@ -1380,6 +1434,47 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesQuotedSpreadsheetMlNamedRanges()
+    {
+        using var source = StreamFromString("""
+            <report sheet="Q1 Bob's Team">
+              <row name="Alpha"/>
+              <row name="Beta"/>
+            </report>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/report">
+                <ss:Workbook>
+                  <ss:Names>
+                    <ss:NamedRange ss:Name="TeamRows" ss:RefersTo="='Q1 Bob''s Team'!$A$1:$A$2"/>
+                  </ss:Names>
+                  <ss:Worksheet ss:Name="{@sheet}">
+                    <ss:Table>
+                      <xsl:for-each select="row">
+                        <ss:Row>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@name"/></ss:Data></ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Q1 Bob's Team");
+        workbook.NamedRanges["TeamRows"].Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 1)));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlColumnSpanLayout()
     {
         using var source = StreamFromString("""
@@ -1412,6 +1507,44 @@ public sealed class SpreadsheetXmlFileAdapterTests
         sheet.ColumnWidths.Should().Contain(new KeyValuePair<uint, double>(4, 21.25));
         sheet.HiddenCols.Should().Contain([2u, 3u, 4u]);
         sheet.GetCell(1, 4)!.Value.Should().Be(new TextValue("After span"));
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlRowSpanLayout()
+    {
+        using var source = StreamFromString("""
+            <layout height="24.5"/>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/layout">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Layout">
+                    <ss:Table>
+                      <ss:Row ss:Index="2" ss:Span="2" ss:Height="{@height}" ss:Hidden="1">
+                        <ss:Cell><ss:Data ss:Type="String">Spanned row</ss:Data></ss:Cell>
+                      </ss:Row>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String">After span</ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.RowHeights.Should().Contain(new KeyValuePair<uint, double>(2, 24.5));
+        sheet.RowHeights.Should().Contain(new KeyValuePair<uint, double>(3, 24.5));
+        sheet.RowHeights.Should().Contain(new KeyValuePair<uint, double>(4, 24.5));
+        sheet.HiddenRows.Should().Contain([2u, 3u, 4u]);
+        sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("Spanned row"));
+        sheet.GetCell(5, 1)!.Value.Should().Be(new TextValue("After span"));
     }
 
     [Fact]

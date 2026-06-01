@@ -2,6 +2,7 @@ using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
+using System.Diagnostics;
 
 namespace FreeX.Core.Model.Tests;
 
@@ -455,6 +456,60 @@ public sealed class ScenarioManagerCommandTests
         outcome.ErrorMessage.Should().Contain("protected");
         workbook.Sheets.Should().NotContain(s => s.Name == "Scenario Summary");
         sheet.GetValue(price).Should().Be(new NumberValue(10));
+    }
+
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Benchmark_ScenarioSummaryManySharedChangingCells_ReportsTimingAndAllocatedBytes()
+    {
+        const int scenarioCount = 60;
+        const int changingCellCount = 300;
+        var workbook = new Workbook("scenario");
+        var sheet = workbook.AddSheet("Inputs");
+        var ctx = new SimpleCtx(workbook);
+        var changingCells = new List<CellAddress>(changingCellCount);
+
+        for (uint row = 1; row <= changingCellCount; row++)
+        {
+            var address = new CellAddress(sheet.Id, row, 1);
+            changingCells.Add(address);
+            sheet.SetCell(address, new NumberValue(row));
+        }
+
+        for (var scenarioIndex = 0; scenarioIndex < scenarioCount; scenarioIndex++)
+        {
+            workbook.Scenarios.Add(new WorkbookScenario(
+                $"Scenario {scenarioIndex + 1}",
+                changingCells
+                    .Select((address, cellIndex) => new ScenarioCellValue(
+                        address,
+                        new NumberValue((scenarioIndex + 1) * 1000 + cellIndex)))
+                    .ToList()));
+        }
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var command = new ScenarioSummaryReportCommand();
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var outcome = command.Apply(ctx);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            "PERF SCENARIO_SUMMARY_SHARED_CHANGES " +
+            $"scenarios={scenarioCount} changing_cells={changingCellCount} " +
+            $"total_ms={stopwatch.Elapsed.TotalMilliseconds:F2} allocated_bytes={allocatedBytes:N0}");
+
+        outcome.Success.Should().BeTrue();
+        var report = workbook.Sheets.Should().Contain(s => s.Name == "Scenario Summary").Which;
+        report.GetValue(4, 1).Should().Be(new TextValue("Inputs!A1"));
+        report.GetValue(4, 2).Should().Be(new NumberValue(1000));
+        report.GetValue((uint)changingCellCount + 3, (uint)scenarioCount + 1)
+            .Should()
+            .Be(new NumberValue(scenarioCount * 1000 + changingCellCount - 1));
     }
 
     private sealed class SimpleCtx(Workbook workbook) : ICommandContext

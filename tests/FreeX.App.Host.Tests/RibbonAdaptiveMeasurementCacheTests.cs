@@ -168,7 +168,7 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
         {
             using var harness = RibbonAdaptiveDiagnosticsHarness.Create();
 
-            harness.SelectRibbonTab("Home", 1280);
+            harness.SelectRibbonTab("Draw", 1280);
             harness.UpdateCompact(force: true);
             harness.SetWidth(1279);
             harness.ResetDiagnostics();

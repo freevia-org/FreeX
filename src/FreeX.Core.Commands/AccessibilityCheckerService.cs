@@ -325,6 +325,8 @@ public static class AccessibilityCheckerService
     private static void AddLowContrastCellTextIssues(List<AccessibilityIssue> issues, Workbook workbook, Sheet sheet)
     {
         var conditionalContrastRules = GetConditionalContrastRules(sheet);
+        Dictionary<StyleId, CellStyle>? workbookStyleCache = null;
+        Dictionary<CellStyle, CellContrastCheck>? contrastCache = null;
         foreach (var entry in sheet.GetOccupiedCellMap())
         {
             var (row, col) = entry.Key;
@@ -333,9 +335,14 @@ public static class AccessibilityCheckerService
                 continue;
 
             var address = new CellAddress(sheet.Id, row, col);
-            var style = GetEffectiveContrastStyle(workbook, conditionalContrastRules, address, cell);
-            var minimumContrastRatio = MinimumTextContrastRatio(style);
-            if (EffectiveCellTextBackgrounds(style).All(background => ContrastRatio(style.FontColor, background) >= minimumContrastRatio))
+            var style = GetEffectiveContrastStyle(
+                workbook,
+                conditionalContrastRules,
+                address,
+                cell,
+                ref workbookStyleCache);
+            var contrast = GetCellContrastCheck(style, ref contrastCache);
+            if (contrast.HasSufficientContrast)
                 continue;
 
             issues.Add(new AccessibilityIssue(
@@ -343,7 +350,7 @@ public static class AccessibilityCheckerService
                 sheet.Id,
                 sheet.Name,
                 address.ToA1(),
-                $"Cell text should have at least {minimumContrastRatio:0.0}:1 contrast against its fill."));
+                $"Cell text should have at least {contrast.MinimumContrastRatio:0.0}:1 contrast against its fill."));
         }
     }
 
@@ -370,11 +377,12 @@ public static class AccessibilityCheckerService
         Workbook workbook,
         IReadOnlyList<ConditionalFormat>? conditionalContrastRules,
         CellAddress address,
-        Cell cell)
+        Cell cell,
+        ref Dictionary<StyleId, CellStyle>? workbookStyleCache)
     {
-        var style = workbook.GetStyle(cell.StyleId);
+        CellStyle? style = null;
         if (conditionalContrastRules is null)
-            return style;
+            return GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
 
         foreach (var rule in conditionalContrastRules)
         {
@@ -389,7 +397,39 @@ public static class AccessibilityCheckerService
                 break;
         }
 
+        return style ?? GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
+    }
+
+    private static CellStyle GetCachedWorkbookStyle(
+        Workbook workbook,
+        ref Dictionary<StyleId, CellStyle>? styleCache,
+        StyleId styleId)
+    {
+        styleCache ??= [];
+        if (!styleCache.TryGetValue(styleId, out var style))
+        {
+            style = workbook.GetStyle(styleId);
+            styleCache[styleId] = style;
+        }
+
         return style;
+    }
+
+    private static CellContrastCheck GetCellContrastCheck(
+        CellStyle style,
+        ref Dictionary<CellStyle, CellContrastCheck>? contrastCache)
+    {
+        contrastCache ??= new Dictionary<CellStyle, CellContrastCheck>(CellStyleReferenceComparer.Instance);
+        if (!contrastCache.TryGetValue(style, out var check))
+        {
+            var minimumContrastRatio = MinimumTextContrastRatio(style);
+            check = new CellContrastCheck(
+                minimumContrastRatio,
+                HasSufficientCellTextContrast(style, minimumContrastRatio));
+            contrastCache[style] = check;
+        }
+
+        return check;
     }
 
     private static bool IsConditionalFormatTrue(ConditionalFormat rule, ScalarValue value) =>
@@ -540,6 +580,17 @@ public static class AccessibilityCheckerService
 
     private static void AddHiddenContentIssues(List<AccessibilityIssue> issues, Sheet sheet)
     {
+        if (!sheet.IsHidden &&
+            !sheet.IsVeryHidden &&
+            sheet.HiddenRows.Count == 0 &&
+            sheet.FilterHiddenRows.Count == 0 &&
+            sheet.GroupHiddenRows.Count == 0 &&
+            sheet.HiddenCols.Count == 0 &&
+            sheet.GroupHiddenCols.Count == 0)
+        {
+            return;
+        }
+
         var hasContent = false;
         HashSet<uint>? hiddenRows = null;
         HashSet<uint>? hiddenCols = null;
@@ -658,22 +709,20 @@ public static class AccessibilityCheckerService
             ? 3.0
             : 4.5;
 
-    private static IEnumerable<CellColor> EffectiveCellTextBackgrounds(CellStyle style)
+    private static bool HasSufficientCellTextContrast(CellStyle style, double minimumContrastRatio)
     {
         var baseFill = style.FillColor ?? CellColor.White;
-        yield return baseFill;
+        if (ContrastRatio(style.FontColor, baseFill) < minimumContrastRatio)
+            return false;
 
         if (style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
-            yield break;
+            return true;
 
         var patternColor = style.FillPatternColor ?? CellColor.Black;
         if (TryGetGrayPatternOpacity(style.FillPatternStyle, out var opacity))
-        {
-            yield return Blend(patternColor, baseFill, opacity);
-            yield break;
-        }
+            return ContrastRatio(style.FontColor, Blend(patternColor, baseFill, opacity)) >= minimumContrastRatio;
 
-        yield return patternColor;
+        return ContrastRatio(style.FontColor, patternColor) >= minimumContrastRatio;
     }
 
     private static bool TryGetGrayPatternOpacity(CellFillPatternStyle patternStyle, out double opacity)
@@ -715,4 +764,15 @@ public static class AccessibilityCheckerService
         range.Start == range.End
             ? range.Start.ToA1()
             : $"{range.Start.ToA1()}:{range.End.ToA1()}";
+
+    private readonly record struct CellContrastCheck(double MinimumContrastRatio, bool HasSufficientContrast);
+
+    private sealed class CellStyleReferenceComparer : IEqualityComparer<CellStyle>
+    {
+        public static readonly CellStyleReferenceComparer Instance = new();
+
+        public bool Equals(CellStyle? x, CellStyle? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(CellStyle obj) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
+    }
 }

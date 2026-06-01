@@ -32,6 +32,21 @@ public sealed class XlsxWorksheetCellLayoutReaderTests
     }
 
     [Fact]
+    public void Read_TracksStyleOnlyCellsEvenWhenAddressCannotBeMapped()
+    {
+        var worksheet = new XDocument(
+            new XElement(WorksheetNs + "worksheet",
+                new XElement(WorksheetNs + "sheetData",
+                    new XElement(WorksheetNs + "row",
+                        Cell("NotARef", style: "8")))));
+
+        var layout = XlsxWorksheetCellLayoutReader.Read(worksheet, WorksheetNs);
+
+        layout.HasStyleOnlyCells.Should().BeTrue();
+        layout.ExplicitStyleOnlyCells.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ReadCachedFormulaErrors_MapsFormulaErrorCellsOnly()
     {
         var worksheet = new XDocument(

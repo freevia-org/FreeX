@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Reflection;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -336,6 +338,62 @@ public sealed class SubtotalCommandTests
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("protected");
         sheet.GetValue(2, 1).Should().Be(new TextValue("East Total"));
+    }
+
+    [Fact]
+    public void Benchmark_SubtotalPlanManyGroupsWithPageBreaks_ReportsTimingAndAllocatedBytes()
+    {
+        const int groups = 2_500;
+        const int steps = 5;
+
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        for (uint row = 2; row <= groups + 1; row++)
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"Group {row - 1}"));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new NumberValue(row));
+        }
+
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, (uint)groups + 1, 2));
+        var build = typeof(SubtotalCommand).Assembly
+            .GetType("FreeX.Core.Commands.SubtotalPlanBuilder")!
+            .GetMethod("Build", BindingFlags.Public | BindingFlags.Static)!;
+
+        build.Invoke(null, [sheet, range, 0u, true, true]).Should().NotBeNull();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var timings = new double[steps];
+        var total = Stopwatch.StartNew();
+        var checksum = 0;
+
+        for (var i = 0; i < steps; i++)
+        {
+            var step = Stopwatch.StartNew();
+            var plan = build.Invoke(null, [sheet, range, 0u, true, true]);
+            step.Stop();
+
+            checksum += plan?.GetHashCode() ?? 0;
+            timings[i] = step.Elapsed.TotalMilliseconds;
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        checksum.Should().NotBe(0);
+        Console.WriteLine(
+            "PERF SUBTOTAL_PLAN_MANY_GROUPS_PAGEBREAKS " +
+            $"groups={groups} steps={steps} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={timings.Average():F2} " +
+            $"p95_ms={timings.OrderBy(x => x).ElementAt((int)Math.Ceiling(steps * 0.95) - 1):F2} " +
+            $"max_ms={timings.Max():F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
     }
 
     private sealed class SimpleCtx(Workbook workbook) : ICommandContext

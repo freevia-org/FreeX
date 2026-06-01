@@ -60,7 +60,7 @@ public sealed class XlsxFileAdapterFormatTests
         var sourcePackageSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackage.cs"))
             .ReplaceLineEndings("\n");
         var preserveSourcePackageParts = sourcePackageSource[
-            sourcePackageSource.IndexOf("private static void PreserveSourcePackageParts", StringComparison.Ordinal)..
+            sourcePackageSource.IndexOf("private static SourcePackagePartSummary PreserveSourcePackageParts", StringComparison.Ordinal)..
             sourcePackageSource.IndexOf("private struct SourcePackagePartSummary", StringComparison.Ordinal)];
         var legacyDrawingHfDependencies = sourcePackageSource[
             sourcePackageSource.IndexOf("private static IEnumerable<string> GetLegacyDrawingHfDependencyPaths", StringComparison.Ordinal)..
@@ -76,7 +76,10 @@ public sealed class XlsxFileAdapterFormatTests
         adapterSource.Should().Contain("CreateLoadPackageStream(stream)");
         sanitizerSource.Should().NotContain("sourcePackage.ToArray()");
         sanitizerSource.Should().Contain("GetSanitizationRequirements(sourcePackage, removeUnsupportedConditionalFormatting)");
-        adapterSource.Should().Contain("OpenClosedXmlWorkbookWithSanitizationFallback(packageStream)");
+        adapterSource.Should().Contain("var sheetXmlLayoutWarningCount = warnings.Count;");
+        adapterSource.Should().Contain("var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, warnings);");
+        adapterSource.Should().Contain("warnings.Count != sheetXmlLayoutWarningCount");
+        adapterSource.Should().Contain("OpenClosedXmlWorkbookWithSanitizationFallback(packageStream, shouldStripStyleOnlyCells)");
         sanitizerSource.Should().Contain("removeUnsupportedConditionalFormatting");
         sanitizerSource.Should().Contain("return sourcePackage;");
         worksheetMetadataSource.Should().NotContain(".Descendants(workbookNs + \"c\")\n                .Where(cell => !string.IsNullOrWhiteSpace(cell.Attribute(\"r\")?.Value))\n                .ToList();");
@@ -90,6 +93,7 @@ public sealed class XlsxFileAdapterFormatTests
         pivotReferencePreserverSource.Should().Contain("PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, context, pivotWorksheetPaths)");
         tableReferencePreserverSource.Should().Contain("GetWorksheetPathsWithTableRelationships(sourceArchive, context)");
         adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream)");
+        adapterSource.Should().Contain("stripStyleOnlyCells");
         styleOnlyStripperSource.Should().Contain("sheetData.Elements(rowName)");
         styleOnlyStripperSource.Should().Contain("cell.HasElements");
         styleOnlyStripperSource.Should().Contain("seenStyleIndexes.Add(styleIndex)");
@@ -195,7 +199,7 @@ public sealed class XlsxFileAdapterFormatTests
             "if (!hasSourcePackage)\n        {\n            SaveSourcePackageIndependentPostProcessingMetadata();\n            return;\n        }",
             StringComparison.Ordinal);
         var sourceReplay = savePostProcessingSource.IndexOf(
-            "PreserveSourcePackageParts(workbook, packageStream);",
+            "var sourceParts = PreserveSourcePackageParts(workbook, packageStream);",
             StringComparison.Ordinal);
 
         sourcePackageCheck.Should().BeGreaterThanOrEqualTo(0);

@@ -83,6 +83,7 @@ public sealed partial class XlsxFileAdapter
         WorksheetPageBreaksMetadataModel? RowPageBreaksMetadata,
         WorksheetPageBreaksMetadataModel? ColumnPageBreaksMetadata,
         Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
+        bool HasStyleOnlyCells,
         IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
         string? CodeName);
 
@@ -325,6 +326,7 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetPageBreaksMetadataReader.Read(rowBreaks, CellAddress.MaxRow),
             XlsxWorksheetPageBreaksMetadataReader.Read(colBreaks, CellAddress.MaxCol),
             cellLayout.CachedFormulaErrors,
+            cellLayout.HasStyleOnlyCells,
             cellLayout.ExplicitStyleOnlyCells,
             codeName);
     }

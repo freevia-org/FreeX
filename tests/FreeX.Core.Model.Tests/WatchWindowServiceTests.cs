@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using System.Diagnostics;
 
 namespace FreeX.Core.Model.Tests;
 
@@ -127,5 +128,133 @@ public sealed class WatchWindowServiceTests
 
         WatchWindowService.GetDeleteTargets([], fallback)
             .Should().ContainSingle().Which.Should().Be(fallback);
+    }
+
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Benchmark_AddWatchesDenseSelection_ReportsTimingAndAllocatedBytes()
+    {
+        var workbook = new Workbook("watch");
+        var sheet = workbook.AddSheet("Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 120, 120));
+
+        var warmup = new Workbook("warmup");
+        var warmupSheet = warmup.AddSheet("Sheet1");
+        WatchWindowService.AddWatches(warmup, new GridRange(
+            new CellAddress(warmupSheet.Id, 1, 1),
+            new CellAddress(warmupSheet.Id, 1, 1)));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var added = WatchWindowService.AddWatches(workbook, range);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            "PERF WATCHWINDOW_ADD_DENSE_SELECTION " +
+            $"rows={range.RowCount} cols={range.ColCount} total_ms={stopwatch.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={allocatedBytes:N0} added={added}");
+
+        added.Should().Be((int)range.CellCount);
+    }
+
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Benchmark_RemoveWatchesSparseSelection_ReportsTimingAndAllocatedBytes()
+    {
+        var workbook = new Workbook("watch");
+        var sheet = workbook.AddSheet("Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 240, 240));
+
+        for (uint row = 1; row <= 240; row += 2)
+        {
+            for (uint col = 1; col <= 8; col++)
+                workbook.WatchedCells.Add(new CellAddress(sheet.Id, row, col));
+        }
+
+        var watched = workbook.WatchedCells.Count;
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var removed = WatchWindowService.RemoveWatches(workbook, range);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            "PERF WATCHWINDOW_REMOVE_SPARSE_SELECTION " +
+            $"rows={range.RowCount} cols={range.ColCount} watched={watched} total_ms={stopwatch.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={allocatedBytes:N0} removed={removed}");
+
+        removed.Should().Be(watched);
+        workbook.WatchedCells.Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Benchmark_GetEntriesManyWatches_ReportsTimingAndAllocatedBytes()
+    {
+        const int sheetCount = 8;
+        const int rowsPerSheet = 250;
+        const int columnsPerSheet = 6;
+        const int iterations = 5;
+        var workbook = new Workbook("watch");
+
+        for (var sheetIndex = 0; sheetIndex < sheetCount; sheetIndex++)
+        {
+            var sheet = workbook.AddSheet($"Sheet{sheetIndex + 1}");
+            for (uint row = 1; row <= rowsPerSheet; row++)
+            {
+                for (uint col = 1; col <= columnsPerSheet; col++)
+                {
+                    var address = new CellAddress(sheet.Id, row, col);
+                    sheet.SetCell(address, new NumberValue(row * 1000 + col));
+                    workbook.WatchedCells.Add(address);
+                }
+            }
+        }
+
+        workbook.WatchedCells.Reverse();
+        WatchWindowService.GetEntries(workbook).Should().HaveCount(workbook.WatchedCells.Count);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        IReadOnlyList<WatchWindowEntry> entries = [];
+        for (var iteration = 0; iteration < iterations; iteration++)
+        {
+            var step = Stopwatch.StartNew();
+            entries = WatchWindowService.GetEntries(workbook);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF WATCHWINDOW_GET_ENTRIES_MANY " +
+            $"sheets={sheetCount} watched={workbook.WatchedCells.Count} steps={iterations} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} p95_ms={p95:F2} max_ms={ordered[^1]:F2} " +
+            $"allocated_bytes={allocatedBytes:N0} entries={entries.Count}");
+
+        entries.Should().HaveCount(workbook.WatchedCells.Count);
     }
 }

@@ -22,6 +22,37 @@ public sealed partial class NativeJsonAdapter
         return styleId;
     }
 
+    private static List<StyleId>? LoadCellStyleTable(Workbook workbook, IReadOnlyList<CellStyleDto>? styles)
+    {
+        if (styles is null || styles.Count == 0)
+            return null;
+
+        var styleIds = new List<StyleId>(styles.Count);
+        foreach (var style in styles)
+            styleIds.Add(style is null ? StyleId.Default : workbook.RegisterStyle(ToCellStyle(style)!));
+
+        return styleIds;
+    }
+
+    private static StyleId? ResolveCellStyleId(
+        Workbook workbook,
+        IReadOnlyList<StyleId>? cellStyleTable,
+        ref Dictionary<CellStyleDto, StyleId>? styleIdCache,
+        int? styleId,
+        CellStyleDto? inlineStyle)
+    {
+        if (styleId is { } id)
+        {
+            if (id == StyleId.Default.Value)
+                return StyleId.Default;
+
+            if (cellStyleTable is not null && id > 0 && id < cellStyleTable.Count)
+                return cellStyleTable[id];
+        }
+
+        return GetCachedStyleId(workbook, ref styleIdCache, inlineStyle);
+    }
+
     private static CellStyle? ToCellStyle(CellStyleDto? dto)
     {
         if (dto is null)

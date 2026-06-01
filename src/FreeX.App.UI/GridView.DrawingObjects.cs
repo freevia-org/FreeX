@@ -262,7 +262,8 @@ public partial class GridView
 
     private void RenderNativeSlicerTimelineControls(DrawingContext dc)
     {
-        if (Viewport == null)
+        if (Viewport == null ||
+            (NativeSlicers is not { Count: > 0 } && NativeTimelines is not { Count: > 0 }))
             return;
 
         var visibleRight = GetDrawingViewportRight();

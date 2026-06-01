@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
+using System.Reflection;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using FluentAssertions;
@@ -133,6 +134,15 @@ public sealed class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("CanReuseBufferForSnapshot: true");
         snapshotSource.Should().Contain("allowBufferReuse &&");
         snapshotSource.Should().Contain("return new XlsxSourcePackage(buffer.Array, buffer.Offset, (int)stream.Length, fingerprint);");
+    }
+
+    [Fact]
+    public void LoadSourcePackageCapture_FingerprintsDenseSaveBenchmarkForCopyFastPath()
+    {
+        var snapshotSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
+
+        snapshotSource.Should().Contain("private const int FingerprintCellLimit = 25_000;");
+        (DenseSheetCount * DenseRowsPerSheet * DenseColumnsPerSheet).Should().BeLessThan(25_000);
     }
 
     [Fact]
@@ -329,6 +339,58 @@ public sealed class XlsxFileAdapterPerformanceTests
 
         Console.WriteLine(
             "PERF XLSX_SAVE_LOADED_DENSE " +
+            $"sheets={DenseSheetCount} rows={DenseRowsPerSheet} cols={DenseColumnsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_SaveLoadedDensePostProcessing_ReportsTiming()
+    {
+        const int iterations = 3;
+        var sourcePackage = CreateDenseXlsxPackage();
+        var generatedPackage = CreateDenseXlsxPackage();
+        var adapter = new XlsxFileAdapter();
+        var workbooks = new List<Workbook>(iterations + 1);
+        for (var i = 0; i <= iterations; i++)
+        {
+            using var loadStream = new MemoryStream(sourcePackage, writable: false);
+            var workbook = adapter.Load(loadStream);
+            workbook.Sheets[0].SetCell(new CellAddress(workbook.Sheets[0].Id, 1, 1), new NumberValue(42 + i));
+            workbooks.Add(workbook);
+        }
+
+        using (var warmup = CreateWritablePackageStream(generatedPackage))
+            InvokeSavePostProcessing(workbooks[0], warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = CreateWritablePackageStream(generatedPackage);
+            var step = Stopwatch.StartNew();
+            InvokeSavePostProcessing(workbooks[i + 1], stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_LOADED_DENSE_POSTPROCESSING " +
             $"sheets={DenseSheetCount} rows={DenseRowsPerSheet} cols={DenseColumnsPerSheet} " +
             $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
             $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
@@ -963,6 +1025,23 @@ public sealed class XlsxFileAdapterPerformanceTests
         }
 
         return workbook;
+    }
+
+    private static MemoryStream CreateWritablePackageStream(byte[] package)
+    {
+        var stream = new MemoryStream(package.Length * 2);
+        stream.Write(package, 0, package.Length);
+        stream.Position = 0;
+        return stream;
+    }
+
+    private static void InvokeSavePostProcessing(Workbook workbook, Stream stream)
+    {
+        var method = typeof(XlsxFileAdapter).GetMethod(
+            "ApplyPackagePostProcessing",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        method.Should().NotBeNull();
+        method!.Invoke(null, [workbook, stream]);
     }
 
     private static Workbook CreateStyleOnlyModelWorkbook()

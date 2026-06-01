@@ -72,8 +72,9 @@ public partial class MainWindow
             adaptiveGroups,
             fixedChromeWidth,
             selectedTabHeader);
-        var layoutStates = layout.States;
-        var plannedStatesSource = layoutStates;
+        var layoutStates = layout.States.ToArray();
+        ApplyRibbonVisualStateOverridesInPlace(adaptiveGroups, layoutStates, availableWidth, selectedTabHeader);
+        IReadOnlyList<RibbonAdaptiveGroupState> plannedStatesSource = layoutStates;
 
         var correctionCacheKey = CreateRibbonCorrectionCacheKey(cacheKey, availableWidth, plannedStatesSource);
         var hasCachedCorrection = _ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates);
@@ -103,12 +104,22 @@ public partial class MainWindow
             availableWidth);
         var visualStateChanged = changedGroupCount > 0;
         visualStateChanged |= SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
+        var shouldApplyMeasuredCorrection = ShouldApplyRibbonMeasuredCorrection(
+            layout.RequiresMeasuredCorrection,
+            adaptiveGroups,
+            availableWidth,
+            selectedTabHeader);
+        var needsMeasuredPrimaryCorrection = shouldApplyMeasuredCorrection &&
+            NeedsDataPrimaryGroupCorrection(adaptiveGroups, plannedStates, availableWidth, selectedTabHeader);
         var requiresMeasuredCorrection = cachedCorrectionNeedsExpansion ||
-            layout.RequiresMeasuredCorrection &&
-            (!hasCachedCorrection || RibbonRowOverflowsMeasuredCached(activePanel, cacheKey, availableWidth, plannedStates));
+            shouldApplyMeasuredCorrection &&
+            (needsMeasuredPrimaryCorrection ||
+             !hasCachedCorrection ||
+             RibbonRowOverflowsMeasuredCached(activePanel, cacheKey, availableWidth, plannedStates));
         var measuredCorrectionApplied = false;
         if (requiresMeasuredCorrection)
         {
+            measuredCorrectionApplied |= ApplyRibbonMeasuredPrimaryFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
             measuredCorrectionApplied |= ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
             measuredCorrectionApplied |= ApplyRibbonMeasuredExpansionFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
         }
@@ -145,6 +156,90 @@ public partial class MainWindow
 
         return false;
     }
+
+    private static void ApplyRibbonVisualStateOverridesInPlace(
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        RibbonAdaptiveGroupState[] plannedStates,
+        double availableWidth,
+        string? selectedTabHeader)
+    {
+        if (!IsDataRibbonAdaptiveSurface(adaptiveGroups, selectedTabHeader))
+            return;
+
+        if (availableWidth <= 1300 &&
+            TryFindRibbonAdaptiveGroupIndex(adaptiveGroups, "DataSortFilterGroup", "Sort & Filter", out var sortFilterIndex) &&
+            sortFilterIndex < plannedStates.Length &&
+            plannedStates[sortFilterIndex] != RibbonAdaptiveGroupState.Collapsed)
+        {
+            plannedStates[sortFilterIndex] = RibbonAdaptiveGroupState.Collapsed;
+        }
+
+        if (availableWidth > 760 &&
+            TryFindRibbonAdaptiveGroupIndex(adaptiveGroups, "DataToolsGroup", "Data Tools", out var dataToolsIndex) &&
+            dataToolsIndex < plannedStates.Length &&
+            plannedStates[dataToolsIndex] == RibbonAdaptiveGroupState.IconOnly)
+        {
+            plannedStates[dataToolsIndex] = RibbonAdaptiveGroupState.Full;
+        }
+    }
+
+    private static bool ShouldApplyRibbonMeasuredCorrection(
+        bool requiresMeasuredCorrection,
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        double availableWidth,
+        string? selectedTabHeader)
+    {
+        if (!requiresMeasuredCorrection)
+            return false;
+
+        return !IsHomeRibbonAdaptiveSurface(adaptiveGroups, selectedTabHeader) ||
+            availableWidth <= 1366;
+    }
+
+    private bool ApplyRibbonMeasuredPrimaryFallback(
+        StackPanel activePanel,
+        IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
+        IReadOnlyList<Button> collapsedButtons,
+        RibbonAdaptiveGroupState[] plannedStates,
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        string measurementCacheKey,
+        double availableWidth,
+        string? selectedTabHeader)
+    {
+        if (!NeedsDataPrimaryGroupCorrection(adaptiveGroups, plannedStates, availableWidth, selectedTabHeader) ||
+            !TryFindRibbonAdaptiveGroupIndex(adaptiveGroups, "DataGetTransformGroup", "Get & Transform Data", out var primaryIndex))
+        {
+            return false;
+        }
+
+        var appliedCorrection = false;
+        var previousStates = plannedStates.ToArray();
+        plannedStates[primaryIndex] = RibbonAdaptiveGroupState.Full;
+        appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
+
+        var protectedGroupIndexes = GetMeasuredRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
+        while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
+        {
+            previousStates = plannedStates.ToArray();
+            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: primaryIndex == 0, protectedGroupIndexes))
+                break;
+
+            appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
+        }
+
+        return appliedCorrection;
+    }
+
+    private static bool NeedsDataPrimaryGroupCorrection(
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates,
+        double availableWidth,
+        string? selectedTabHeader) =>
+        availableWidth > 760 &&
+        IsDataRibbonAdaptiveSurface(adaptiveGroups, selectedTabHeader) &&
+        TryFindRibbonAdaptiveGroupIndex(adaptiveGroups, "DataGetTransformGroup", "Get & Transform Data", out var primaryIndex) &&
+        primaryIndex < plannedStates.Count &&
+        plannedStates[primaryIndex] == RibbonAdaptiveGroupState.Collapsed;
 
     private static IReadOnlyList<FrameworkElement> GetRibbonAdaptiveGroups(StackPanel activePanel) =>
         activePanel.Children
@@ -362,9 +457,8 @@ public partial class MainWindow
         string? selectedTabHeader)
     {
         var appliedCorrection = false;
-        var protectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetFallbackProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
-        var runtimeVisibilityProtectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
-        protectedGroupIndexes.UnionWith(runtimeVisibilityProtectedGroupIndexes);
+        var protectedGroupIndexes = GetMeasuredOverflowProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
+        var runtimeVisibilityProtectedGroupIndexes = GetMeasuredRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
         {
             var previousStates = plannedStates.ToArray();
@@ -387,6 +481,86 @@ public partial class MainWindow
         }
 
         return appliedCorrection;
+    }
+
+    private static HashSet<int> GetMeasuredOverflowProtectedGroupIndexes(
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        double availableWidth,
+        string? selectedTabHeader)
+    {
+        var protectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetFallbackProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
+        protectedGroupIndexes.UnionWith(GetMeasuredRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader));
+        RelaxMeasuredDataOverflowProtection(protectedGroupIndexes, adaptiveGroups, availableWidth, selectedTabHeader);
+        return protectedGroupIndexes;
+    }
+
+    private static HashSet<int> GetMeasuredRuntimeVisibilityProtectedGroupIndexes(
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        double availableWidth,
+        string? selectedTabHeader)
+    {
+        var protectedGroupIndexes = RibbonAdaptiveLayoutEngine.GetRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
+        RelaxMeasuredDataOverflowProtection(protectedGroupIndexes, adaptiveGroups, availableWidth, selectedTabHeader);
+        return protectedGroupIndexes;
+    }
+
+    private static void RelaxMeasuredDataOverflowProtection(
+        HashSet<int> protectedGroupIndexes,
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        double availableWidth,
+        string? selectedTabHeader)
+    {
+        if (!IsDataRibbonAdaptiveSurface(adaptiveGroups, selectedTabHeader))
+            return;
+
+        RemoveProtectedRibbonGroup(protectedGroupIndexes, adaptiveGroups, "DataSortFilterGroup", "Sort & Filter");
+        if (availableWidth <= 760)
+            RemoveProtectedRibbonGroup(protectedGroupIndexes, adaptiveGroups, "DataToolsGroup", "Data Tools");
+    }
+
+    private static bool IsDataRibbonAdaptiveSurface(
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        string? selectedTabHeader) =>
+        string.Equals(selectedTabHeader, "Data", StringComparison.Ordinal) ||
+        string.Equals(selectedTabHeader, "DataTab", StringComparison.Ordinal) ||
+        adaptiveGroups.Any(group =>
+            string.Equals(group.CatalogId, "DataToolsGroup", StringComparison.Ordinal) ||
+            string.Equals(group.Name, "Data Tools", StringComparison.Ordinal));
+
+    private static bool IsHomeRibbonAdaptiveSurface(
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        string? selectedTabHeader) =>
+        string.Equals(selectedTabHeader, "Home", StringComparison.Ordinal) ||
+        string.Equals(selectedTabHeader, "HomeTab", StringComparison.Ordinal) ||
+        adaptiveGroups.Any(group =>
+            string.Equals(group.CatalogId, "HomeClipboardGroup", StringComparison.Ordinal) ||
+            string.Equals(group.Name, "Clipboard", StringComparison.Ordinal));
+
+    private static void RemoveProtectedRibbonGroup(
+        HashSet<int> protectedGroupIndexes,
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        string catalogId,
+        string name)
+    {
+        if (TryFindRibbonAdaptiveGroupIndex(adaptiveGroups, catalogId, name, out var index))
+            protectedGroupIndexes.Remove(index);
+    }
+
+    private static bool TryFindRibbonAdaptiveGroupIndex(
+        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
+        string catalogId,
+        string name,
+        out int index)
+    {
+        for (index = 0; index < adaptiveGroups.Count; index++)
+        {
+            if (string.Equals(adaptiveGroups[index].CatalogId, catalogId, StringComparison.Ordinal) ||
+                string.Equals(adaptiveGroups[index].Name, name, StringComparison.Ordinal))
+                return true;
+        }
+
+        index = -1;
+        return false;
     }
 
     private bool ApplyRibbonMeasuredExpansionFallback(
@@ -604,7 +778,9 @@ public partial class MainWindow
         var catalogId = GetRibbonGroupCatalogId(snapshot.Group);
         var fullWidth = MeasureRibbonGroupWidth(snapshot, RibbonCompactLevel.Full);
         var smallWidth = MeasureRibbonGroupWidth(snapshot, RibbonCompactLevel.SmallWithLabels);
-        var iconWidth = RibbonAdaptiveStateApplicator.ShouldUseSmallWithLabelsForIconOnlyGroup(catalogId)
+        var iconWidth = RibbonAdaptiveStateApplicator.ShouldUseFullLayoutForIconOnlyGroup(catalogId, availableWidth: double.PositiveInfinity)
+            ? fullWidth
+            : RibbonAdaptiveStateApplicator.ShouldUseSmallWithLabelsForIconOnlyGroup(catalogId)
             ? smallWidth
             : MeasureRibbonGroupWidth(snapshot, RibbonCompactLevel.IconOnly);
         collapsedButton.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));

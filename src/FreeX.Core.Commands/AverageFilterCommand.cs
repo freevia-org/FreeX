@@ -8,8 +8,8 @@ public sealed class AverageFilterCommand : IWorkbookCommand
     private readonly GridRange _range;
     private readonly uint _filterColOffset;
     private readonly bool _above;
-    private HashSet<uint>? _previousHiddenRows;
-    private HashSet<uint>? _previousFilterHiddenRows;
+    private uint[]? _previousHiddenRows;
+    private uint[]? _previousFilterHiddenRows;
 
     public string Label => _above ? "Above Average Filter" : "Below Average Filter";
 
@@ -33,29 +33,30 @@ public sealed class AverageFilterCommand : IWorkbookCommand
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
 
         var filterCol = _range.Start.Col + _filterColOffset;
-        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
-            sheet.FilterHiddenRows.Remove(row);
-
-        var numericRows = new List<(uint Row, double Value)>();
+        var numericCount = 0;
+        var sum = 0d;
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {
             if (sheet.GetValue(row, filterCol) is NumberValue number)
-                numericRows.Add((row, number.Value));
+            {
+                numericCount++;
+                sum += number.Value;
+            }
         }
 
-        if (numericRows.Count == 0)
+        if (numericCount == 0)
+        {
+            FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
             return new CommandOutcome(true);
+        }
 
-        var average = numericRows.Average(item => item.Value);
-        var keptRows = numericRows
-            .Where(item => _above ? item.Value > average : item.Value < average)
-            .Select(item => item.Row)
-            .ToHashSet();
+        var average = sum / numericCount;
 
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {
-            if (!keptRows.Contains(row))
-                sheet.FilterHiddenRows.Add(row);
+            var visible = sheet.GetValue(row, filterCol) is NumberValue number &&
+                (_above ? number.Value > average : number.Value < average);
+            FilterHiddenRowUpdater.SetVisible(sheet.FilterHiddenRows, row, visible);
         }
 
         return new CommandOutcome(true);

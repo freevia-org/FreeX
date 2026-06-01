@@ -30,6 +30,108 @@ public sealed class FormulaEvaluatorPerformanceTests
         classificationHelpers.Should().NotContain("private static bool IsStructuredRangeFunction(string name) =>\r\n        name is");
     }
 
+    [Fact]
+    public void RepeatedFormulaTextEvaluation_ReusesParsedAst()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(3));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new NumberValue(8));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 5), new NumberValue(4));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 6), new NumberValue(5));
+
+        const string formula = "=A1+B1*C1-D1/E1+F1^2";
+        const int iterations = 20_000;
+        var expected = new NumberValue(30d);
+
+        evaluator.Evaluate(formula, sheet).Should().Be(expected);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        ScalarValue result = BlankValue.Instance;
+        for (var iteration = 0; iteration < iterations; iteration++)
+            result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(expected);
+        _output.WriteLine(
+            $"PERF repeated formula text eval iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(4_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Fact]
+    public void RepeatedComparisonFormulaTextEvaluation_AvoidsDelegateChurn()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
+
+        const string formula = "=A1<B1";
+        const int iterations = 100_000;
+        var expected = new BoolValue(true);
+
+        evaluator.Evaluate(formula, sheet).Should().Be(expected);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        ScalarValue result = BlankValue.Instance;
+        for (var iteration = 0; iteration < iterations; iteration++)
+            result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(expected);
+        _output.WriteLine(
+            $"PERF repeated comparison formula text eval iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_024);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Fact]
+    public void RepeatedBooleanCoercionFormulaTextEvaluation_AvoidsCoercedNumberChurn()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new BoolValue(true));
+
+        const string formula = "=A1+A1+A1+A1";
+        const int iterations = 100_000;
+        var expected = new NumberValue(4d);
+
+        evaluator.Evaluate(formula, sheet).Should().Be(expected);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        ScalarValue result = BlankValue.Instance;
+        for (var iteration = 0; iteration < iterations; iteration++)
+            result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(expected);
+        _output.WriteLine(
+            $"PERF repeated boolean coercion formula text eval iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(10_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
     [Theory]
     [InlineData("=SUM(A1:A100000)", 5_000_050_000d)]
     [InlineData("=AVERAGE(A1:A100000)", 50_000.5d)]

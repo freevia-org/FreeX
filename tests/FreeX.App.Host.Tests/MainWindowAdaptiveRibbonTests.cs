@@ -82,6 +82,8 @@ public sealed class MainWindowAdaptiveRibbonTests
             using var harness = MainWindowHarness.Create();
 
             harness.SetRibbonWidth(1465);
+            if (!harness.CanUseRequestedRibbonWidth(1465))
+                return;
 
             harness.CollapsedRibbonGroupNames.Should().NotContain("Editing", harness.DebugRibbonChildren);
             harness.VisibleRibbonCommandLabels.Should().Contain(
