@@ -226,10 +226,10 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         {
             case NumberValue number:
                 value = number.Value;
-                return true;
+                return double.IsFinite(value);
             case DateTimeValue dateTime:
                 value = dateTime.Value;
-                return true;
+                return double.IsFinite(value);
             default:
                 value = 0;
                 return false;

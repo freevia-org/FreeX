@@ -255,7 +255,7 @@ internal static partial class DelimitedTextWorkbookReader
         var trimmedCandidate = candidate.Trim();
         if (!IsBooleanLikeText(candidate) &&
             !TryReadError(trimmedCandidate, out _) &&
-            !TryParseIsoDateTime(candidate, out _) &&
+            !TryParseDateTime(candidate, out _) &&
             !TryParseTime(candidate, out _) &&
             !TryParsePercentage(trimmedCandidate, out _) &&
             !TryParseCurrency(candidate, out _) &&
@@ -370,7 +370,7 @@ internal static partial class DelimitedTextWorkbookReader
         {
             return new NumberValue(number);
         }
-        if (TryParseIsoDateTime(trimmed, out var dateTime))
+        if (TryParseDateTime(trimmed, out var dateTime))
             return DateTimeValue.FromDateTime(dateTime);
         if (TryParseTime(trimmed, out var time))
             return new DateTimeValue(time.TotalDays);
@@ -383,16 +383,83 @@ internal static partial class DelimitedTextWorkbookReader
         return ErrorValues.TryGetValue(field, out error!);
     }
 
-    private static bool TryParseIsoDateTime(string field, out DateTime dateTime)
+    private static bool TryParseDateTime(string field, out DateTime dateTime)
     {
         var trimmed = field.Trim();
+        if (TryParseIsoDateTimeOffset(trimmed, out dateTime))
+        {
+            return true;
+        }
+
+        if (TryParseCurrentCultureDateTime(trimmed, out dateTime))
+        {
+            return true;
+        }
+
         return DateTime.TryParseExact(
             trimmed,
             DateTimeFormats,
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
-            out dateTime) ||
-            TryParseIsoDateTimeOffset(trimmed, out dateTime);
+            out dateTime);
+    }
+
+    private static bool TryParseCurrentCultureDateTime(string field, out DateTime dateTime)
+    {
+        dateTime = default;
+        if (field.Length == 0 ||
+            string.IsNullOrEmpty(CultureInfo.CurrentCulture.Name) ||
+            !LooksLikeCurrentCultureDateCandidate(field))
+        {
+            return false;
+        }
+
+        return DateTime.TryParse(
+            field,
+            CultureInfo.CurrentCulture,
+            DateTimeStyles.NoCurrentDateDefault,
+            out dateTime) &&
+            dateTime.Date != DateTime.MinValue.Date;
+    }
+
+    private static bool LooksLikeCurrentCultureDateCandidate(string field)
+    {
+        var digitGroups = 0;
+        var inDigitGroup = false;
+        var hasDateSeparator = false;
+        var hasLetter = false;
+        var hasColon = false;
+
+        foreach (var c in field)
+        {
+            if (char.IsDigit(c))
+            {
+                if (!inDigitGroup)
+                {
+                    digitGroups++;
+                    inDigitGroup = true;
+                }
+
+                continue;
+            }
+
+            inDigitGroup = false;
+            hasDateSeparator |= c is '/' or '-' or '.';
+            hasLetter |= char.IsLetter(c);
+            hasColon |= c == ':';
+        }
+
+        if (digitGroups < 2)
+        {
+            return false;
+        }
+
+        if (hasColon && !hasDateSeparator && digitGroups <= 2)
+        {
+            return false;
+        }
+
+        return (hasDateSeparator && digitGroups >= 3) || hasLetter;
     }
 
     private static bool TryParseIsoDateTimeOffset(string field, out DateTime dateTime)
