@@ -7,10 +7,14 @@ namespace FreeX.Core.IO;
 internal static class XlsxWorksheetPostProcessingMetadataBatchWriter
 {
     public static bool HasReplayMetadata(Sheet sheet) =>
-        HasWorksheetElementMetadata(sheet) ||
+        HasReplayWorksheetElementMetadata(sheet) ||
         XlsxWorksheetPageSetupMetadataWriter.HasModeledPrinterAttributes(sheet);
 
     public static bool HasWorksheetElementMetadata(Sheet sheet) =>
+        HasReplayWorksheetElementMetadata(sheet) ||
+        sheet.SingleXmlCells is not null;
+
+    private static bool HasReplayWorksheetElementMetadata(Sheet sheet) =>
         sheet.SmartTags is not null ||
         sheet.SortState is not null ||
         sheet.AdditionalViews is not null ||
@@ -48,5 +52,6 @@ internal static class XlsxWorksheetPostProcessingMetadataBatchWriter
         XlsxWorksheetSortStateMapper.Save(session, workbook);
         XlsxWorksheetAdditionalViewMapper.Save(session, workbook);
         XlsxWorksheetDataConsolidationMapper.Save(session, workbook);
+        XlsxWorksheetSingleXmlCellMapper.Save(session, workbook);
     }
 }
