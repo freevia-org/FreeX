@@ -22,81 +22,207 @@ public static partial class BuiltInFunctions
     /// </summary>
     private static bool MatchesCriteria(ScalarValue cellValue, ScalarValue criteria)
     {
-        if (criteria is BlankValue)
-            criteria = new TextValue("");
-
-        if (criteria is NumberValue cn)
-            return TryCellNumber(cellValue, out double cellNumber) && cellNumber == cn.Value;
-
-        if (criteria is DateTimeValue cdt)
-            return TryCellNumber(cellValue, out double cellDateNum) && cellDateNum == cdt.Value;
-
-        if (criteria is BoolValue cb)
-            return cellValue is BoolValue cvb && cvb.Value == cb.Value;
-
-        if (criteria is not TextValue ct) return false;
-        var crit = ct.Value;
-
-        if (crit.StartsWith(">=") || crit.StartsWith("<=") || crit.StartsWith("<>"))
-        {
-            var op = crit[..2];
-            var rhs = crit[2..];
-            return ApplyComparisonCriteria(cellValue, op, rhs);
-        }
-
-        if (crit.StartsWith(">") || crit.StartsWith("<") || crit.StartsWith("="))
-        {
-            var op = crit[..1];
-            var rhs = crit[1..];
-            return ApplyComparisonCriteria(cellValue, op, rhs);
-        }
-
-        if (IsWildcardCriteria(crit))
-            return cellValue is TextValue tv && WildcardMatch(tv.Value, crit, ignoreCase: true);
-
-        if (TryParseCriteriaNumber(crit, out var numericCriteria)
-            && TryCellNumber(cellValue, out double comparableNumber))
-            return comparableNumber == numericCriteria;
-
-        var cellText = CriteriaComparableText(cellValue);
-        return string.Equals(cellText, crit, StringComparison.OrdinalIgnoreCase);
+        var matcher = CompileCriteria(criteria);
+        return matcher.Matches(cellValue);
     }
 
-    private static bool ApplyComparisonCriteria(ScalarValue cellValue, string op, string rhs)
+    private static CriteriaMatcher CompileCriteria(ScalarValue criteria) =>
+        CriteriaMatcher.Create(criteria);
+
+    private enum CriteriaMatcherKind : byte
     {
-        if (TryParseCriteriaNumber(rhs, out var rhsNum))
+        AlwaysFalse,
+        NumberEquals,
+        BoolEquals,
+        TextEquals,
+        NumericOrTextEquals,
+        WildcardText,
+        NumericComparison,
+        TextComparison,
+        WildcardComparison
+    }
+
+    private enum CriteriaComparisonOp : byte
+    {
+        None,
+        GreaterThan,
+        GreaterThanOrEqual,
+        LessThan,
+        LessThanOrEqual,
+        Equal,
+        NotEqual
+    }
+
+    private readonly struct CriteriaMatcher
+    {
+        private readonly CriteriaMatcherKind _kind;
+        private readonly CriteriaComparisonOp _op;
+        private readonly string _text;
+        private readonly double _number;
+        private readonly bool _bool;
+
+        private CriteriaMatcher(CriteriaMatcherKind kind, CriteriaComparisonOp op = CriteriaComparisonOp.None, string? text = null, double number = 0, bool boolean = false)
+        {
+            _kind = kind;
+            _op = op;
+            _text = text ?? string.Empty;
+            _number = number;
+            _bool = boolean;
+        }
+
+        public static CriteriaMatcher Create(ScalarValue criteria)
+        {
+            if (criteria is BlankValue)
+                return new CriteriaMatcher(CriteriaMatcherKind.TextEquals, text: string.Empty);
+
+            if (criteria is NumberValue cn)
+                return new CriteriaMatcher(CriteriaMatcherKind.NumberEquals, number: cn.Value);
+
+            if (criteria is DateTimeValue cdt)
+                return new CriteriaMatcher(CriteriaMatcherKind.NumberEquals, number: cdt.Value);
+
+            if (criteria is BoolValue cb)
+                return new CriteriaMatcher(CriteriaMatcherKind.BoolEquals, boolean: cb.Value);
+
+            if (criteria is not TextValue ct)
+                return new CriteriaMatcher(CriteriaMatcherKind.AlwaysFalse);
+
+            var crit = ct.Value;
+            if (TrySplitCriteriaComparison(crit, out var op, out var rhs))
+            {
+                if (TryParseCriteriaNumber(rhs, out var rhsNum))
+                    return new CriteriaMatcher(CriteriaMatcherKind.NumericComparison, op, number: rhsNum);
+
+                return IsWildcardCriteria(rhs) && op is CriteriaComparisonOp.Equal or CriteriaComparisonOp.NotEqual
+                    ? new CriteriaMatcher(CriteriaMatcherKind.WildcardComparison, op, rhs)
+                    : new CriteriaMatcher(CriteriaMatcherKind.TextComparison, op, rhs);
+            }
+
+            if (IsWildcardCriteria(crit))
+                return new CriteriaMatcher(CriteriaMatcherKind.WildcardText, text: crit);
+
+            if (TryParseCriteriaNumber(crit, out var numericCriteria))
+                return new CriteriaMatcher(CriteriaMatcherKind.NumericOrTextEquals, text: crit, number: numericCriteria);
+
+            return new CriteriaMatcher(CriteriaMatcherKind.TextEquals, text: crit);
+        }
+
+        public bool Matches(ScalarValue cellValue) => _kind switch
+        {
+            CriteriaMatcherKind.NumberEquals =>
+                TryCellNumber(cellValue, out double cellNumber) && cellNumber == _number,
+
+            CriteriaMatcherKind.BoolEquals =>
+                cellValue is BoolValue cvb && cvb.Value == _bool,
+
+            CriteriaMatcherKind.TextEquals =>
+                string.Equals(CriteriaComparableText(cellValue), _text, StringComparison.OrdinalIgnoreCase),
+
+            CriteriaMatcherKind.NumericOrTextEquals =>
+                TryCellNumber(cellValue, out double comparableNumber)
+                    ? comparableNumber == _number
+                    : string.Equals(CriteriaComparableText(cellValue), _text, StringComparison.OrdinalIgnoreCase),
+
+            CriteriaMatcherKind.WildcardText =>
+                cellValue is TextValue tv && WildcardMatch(tv.Value, _text, ignoreCase: true),
+
+            CriteriaMatcherKind.NumericComparison =>
+                MatchesNumericComparison(cellValue),
+
+            CriteriaMatcherKind.TextComparison =>
+                MatchesTextComparison(cellValue),
+
+            CriteriaMatcherKind.WildcardComparison =>
+                MatchesWildcardComparison(cellValue),
+
+            _ => false
+        };
+
+        private bool MatchesNumericComparison(ScalarValue cellValue)
         {
             if (!TryCellNumber(cellValue, out double value)) return false;
-            return op switch
+            return _op switch
             {
-                ">" => value > rhsNum,
-                ">=" => value >= rhsNum,
-                "<" => value < rhsNum,
-                "<=" => value <= rhsNum,
-                "=" => value == rhsNum,
-                "<>" => value != rhsNum,
+                CriteriaComparisonOp.GreaterThan => value > _number,
+                CriteriaComparisonOp.GreaterThanOrEqual => value >= _number,
+                CriteriaComparisonOp.LessThan => value < _number,
+                CriteriaComparisonOp.LessThanOrEqual => value <= _number,
+                CriteriaComparisonOp.Equal => value == _number,
+                CriteriaComparisonOp.NotEqual => value != _number,
                 _ => false
             };
         }
 
-        if (IsWildcardCriteria(rhs) && op is "=" or "<>")
+        private bool MatchesTextComparison(ScalarValue cellValue)
         {
-            bool matches = cellValue is TextValue textValue && WildcardMatch(textValue.Value, rhs, ignoreCase: true);
-            return op == "=" ? matches : !matches;
+            var cellText = cellValue is TextValue tv ? tv.Value : ToText(cellValue);
+            int cmp = string.Compare(cellText, _text, StringComparison.OrdinalIgnoreCase);
+            return _op switch
+            {
+                CriteriaComparisonOp.GreaterThan => cmp > 0,
+                CriteriaComparisonOp.GreaterThanOrEqual => cmp >= 0,
+                CriteriaComparisonOp.LessThan => cmp < 0,
+                CriteriaComparisonOp.LessThanOrEqual => cmp <= 0,
+                CriteriaComparisonOp.Equal => cmp == 0,
+                CriteriaComparisonOp.NotEqual => cmp != 0,
+                _ => false
+            };
         }
 
-        var cellText = cellValue is TextValue tv ? tv.Value : ToText(cellValue);
-        int cmp = string.Compare(cellText, rhs, StringComparison.OrdinalIgnoreCase);
-        return op switch
+        private bool MatchesWildcardComparison(ScalarValue cellValue)
         {
-            ">" => cmp > 0,
-            ">=" => cmp >= 0,
-            "<" => cmp < 0,
-            "<=" => cmp <= 0,
-            "=" => cmp == 0,
-            "<>" => cmp != 0,
-            _ => false
-        };
+            bool matches = cellValue is TextValue textValue && WildcardMatch(textValue.Value, _text, ignoreCase: true);
+            return _op == CriteriaComparisonOp.Equal ? matches : !matches;
+        }
+    }
+
+    private static bool TrySplitCriteriaComparison(string criteria, out CriteriaComparisonOp op, out string rhs)
+    {
+        if (criteria.StartsWith(">="))
+        {
+            op = CriteriaComparisonOp.GreaterThanOrEqual;
+            rhs = criteria[2..];
+            return true;
+        }
+
+        if (criteria.StartsWith("<="))
+        {
+            op = CriteriaComparisonOp.LessThanOrEqual;
+            rhs = criteria[2..];
+            return true;
+        }
+
+        if (criteria.StartsWith("<>"))
+        {
+            op = CriteriaComparisonOp.NotEqual;
+            rhs = criteria[2..];
+            return true;
+        }
+
+        if (criteria.StartsWith(">"))
+        {
+            op = CriteriaComparisonOp.GreaterThan;
+            rhs = criteria[1..];
+            return true;
+        }
+
+        if (criteria.StartsWith("<"))
+        {
+            op = CriteriaComparisonOp.LessThan;
+            rhs = criteria[1..];
+            return true;
+        }
+
+        if (criteria.StartsWith("="))
+        {
+            op = CriteriaComparisonOp.Equal;
+            rhs = criteria[1..];
+            return true;
+        }
+
+        op = CriteriaComparisonOp.None;
+        rhs = string.Empty;
+        return false;
     }
 
     private static bool TryParseCriteriaNumber(string text, out double number) =>
