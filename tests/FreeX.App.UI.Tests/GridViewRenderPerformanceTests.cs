@@ -183,6 +183,8 @@ public sealed class GridViewRenderPerformanceTests
         renderSelectedHeaders.Should().Contain("BuildRowHeaderSelectionIntervals(selectedRanges, selRange)");
         renderSelectedHeaders.Should().Contain("IsHeaderSelected(col.Col, columnIntervals, ref columnIntervalIndex)");
         renderSelectedHeaders.Should().Contain("IsHeaderSelected(row.Row, rowIntervals, ref rowIntervalIndex)");
+        buildSelectionIntervals.Should().Contain("if (selectedRanges.Count == 1)");
+        buildSelectionIntervals.Should().Contain("return [selector(selectedRanges[0])];");
         buildSelectionIntervals.Should().Contain("intervals.Sort");
         isHeaderSelected.Should().Contain("while (intervalIndex < intervals.Count && index > intervals[intervalIndex].End)");
         renderSelectedHeaders.Should().NotContain(".Any(");
