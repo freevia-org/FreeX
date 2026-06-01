@@ -178,7 +178,10 @@ public sealed class WatchWindowDialog : Window
     private void ListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (_listView.SelectedItem is WatchWindowRow row)
+        {
             _navigateTo(row.Address);
+            e.Handled = true;
+        }
     }
 
     private void ListView_KeyDown(object sender, KeyEventArgs e)

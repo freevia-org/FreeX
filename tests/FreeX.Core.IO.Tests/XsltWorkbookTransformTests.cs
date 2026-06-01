@@ -777,6 +777,52 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_VariablesAndAggregates_GenerateSummaryCells()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row label="Alpha" amount="42.5" />
+              <row label="Beta" amount="7.25" />
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:variable name="sheetName" select="'Variable Summary'" />
+              <xsl:template match="/rows">
+                <xsl:variable name="rowCount" select="count(row)" />
+                <xsl:variable name="total" select="sum(row/@amount)" />
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="{$sheetName}">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String">Rows</ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="$rowCount" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String">Total</ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="$total" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .Contain("<ss:Worksheet ss:Name=\"Variable Summary\">")
+            .And.Contain("<ss:Data ss:Type=\"String\">Rows</ss:Data>")
+            .And.Contain("<ss:Data ss:Type=\"Number\">2</ss:Data>")
+            .And.Contain("<ss:Data ss:Type=\"String\">Total</ss:Data>")
+            .And.Contain("<ss:Data ss:Type=\"Number\">49.75</ss:Data>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetHtmlOutput_PreservesHtmlSerialization()
     {
         using var source = StreamFromString("<rows><row name=\"April\" /></rows>");
