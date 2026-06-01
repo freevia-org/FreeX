@@ -1359,6 +1359,32 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_KnownOrganizationSuffixes_RemovesVariableLegalSuffixesFromMultiTokenNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Traders LLC", "Northwind Traders"),
+                ("Adventure Works Inc.", "Adventure Works")
+            ],
+            ["Contoso Ltd", "Fabrikam Research Corporation"]);
+
+        result.Should().BeEquivalentTo(["Contoso", "Fabrikam Research"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_KnownOrganizationSuffixes_ReturnsNullForUnsuffixedRemainingNames()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Northwind Traders LLC", "Northwind Traders"),
+                ("Adventure Works Inc.", "Adventure Works")
+            ],
+            ["Contoso Retail"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_ThreePartNames_ReturnsNullForAmbiguousTokenCounts()
     {
         var result = FlashFillService.Fill(

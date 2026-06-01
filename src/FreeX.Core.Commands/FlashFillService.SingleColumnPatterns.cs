@@ -65,6 +65,29 @@ public static partial class FlashFillService
         "D.V.M",
         "Esq"
     };
+    private static readonly HashSet<string> KnownOrganizationSuffixes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Inc",
+        "Incorporated",
+        "LLC",
+        "L.L.C",
+        "Ltd",
+        "Limited",
+        "Corp",
+        "Corporation",
+        "Co",
+        "Company",
+        "PLC",
+        "LLP",
+        "LP",
+        "GmbH",
+        "AG",
+        "SA",
+        "S.A",
+        "BV",
+        "NV",
+        "Pty"
+    };
 
     private static readonly (char Open, char Close)[] PairedDelimiters =
         [('(', ')'), ('[', ']'), ('{', '}'), ('"', '"'), ('\'', '\''), ('<', '>')];
@@ -1042,6 +1065,31 @@ public static partial class FlashFillService
 
         var suffix = tokens[^1].TrimEnd('.');
         if (!KnownNameSuffixes.Contains(suffix))
+            return false;
+
+        var nameTokens = tokens[..^1];
+        nameTokens[^1] = nameTokens[^1].TrimEnd(',');
+        name = string.Join(' ', nameTokens);
+        return name.Length > 0;
+    }
+
+    private static Func<string, string?>? TryKnownOrganizationSuffixRemoval(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryRemoveKnownOrganizationSuffix(e.Source, out var name) && name == e.Expected))
+            return null;
+
+        return source => TryRemoveKnownOrganizationSuffix(source, out var name) ? name : null;
+    }
+
+    private static bool TryRemoveKnownOrganizationSuffix(string source, out string name)
+    {
+        name = string.Empty;
+        var tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length < 2)
+            return false;
+
+        var suffix = tokens[^1].TrimEnd('.');
+        if (!KnownOrganizationSuffixes.Contains(suffix))
             return false;
 
         var nameTokens = tokens[..^1];

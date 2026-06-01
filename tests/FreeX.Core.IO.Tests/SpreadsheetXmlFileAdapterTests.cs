@@ -1561,6 +1561,48 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromNamespaceUriDynamicElements()
+    {
+        using var source = StreamFromString("<rows><row sheet=\"UriDynamic\" label=\"Bravo\" amount=\"18.75\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:variable name="spreadsheetml" select="'urn:schemas-microsoft-com:office:spreadsheet'" />
+              <xsl:template match="/rows">
+                <xsl:element name="Workbook" namespace="{$spreadsheetml}">
+                  <xsl:element name="Worksheet" namespace="{$spreadsheetml}">
+                    <xsl:attribute name="Name" namespace="{$spreadsheetml}"><xsl:value-of select="row/@sheet" /></xsl:attribute>
+                    <xsl:element name="Table" namespace="{$spreadsheetml}">
+                      <xsl:element name="Row" namespace="{$spreadsheetml}">
+                        <xsl:element name="Cell" namespace="{$spreadsheetml}">
+                          <xsl:element name="Data" namespace="{$spreadsheetml}">
+                            <xsl:attribute name="Type" namespace="{$spreadsheetml}">String</xsl:attribute>
+                            <xsl:value-of select="row/@label" />
+                          </xsl:element>
+                        </xsl:element>
+                        <xsl:element name="Cell" namespace="{$spreadsheetml}">
+                          <xsl:element name="Data" namespace="{$spreadsheetml}">
+                            <xsl:attribute name="Type" namespace="{$spreadsheetml}">Number</xsl:attribute>
+                            <xsl:value-of select="row/@amount" />
+                          </xsl:element>
+                        </xsl:element>
+                      </xsl:element>
+                    </xsl:element>
+                  </xsl:element>
+                </xsl:element>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("UriDynamic");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Bravo"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(18.75));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlCopiedFromSourceTemplate()
     {
         using var source = StreamFromString("""
