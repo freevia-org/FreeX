@@ -82,6 +82,13 @@ public class FormulaRewriterTests
         result.Should().Be("SUM(A4:A11)");
     }
 
+    [Fact]
+    public void InsertRows_FullRowRange_ShiftsAffectedEndpoint()
+    {
+        var result = FormulaRewriter.Rewrite("SUM(1:3)", new InsertRowsOp("Sheet1", 2, 1), "Sheet1");
+        result.Should().Be("SUM(1:4)");
+    }
+
     // ── DeleteRowsOp ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -122,6 +129,13 @@ public class FormulaRewriterTests
         result.Should().Be("SUM(#REF!)");
     }
 
+    [Fact]
+    public void DeleteRows_FullRowRange_DeletedEndpointBecomesRef()
+    {
+        var result = FormulaRewriter.Rewrite("SUM(1:3)", new DeleteRowsOp("Sheet1", 1, 1), "Sheet1");
+        result.Should().Be("SUM(#REF!)");
+    }
+
     // ── InsertColsOp ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -139,6 +153,13 @@ public class FormulaRewriterTests
         result.Should().Be("$C1");
     }
 
+    [Fact]
+    public void InsertCols_FullColumnRange_ShiftsAffectedEndpoint()
+    {
+        var result = FormulaRewriter.Rewrite("SUM(A:C)", new InsertColsOp("Sheet1", 2, 1), "Sheet1");
+        result.Should().Be("SUM(A:D)");
+    }
+
     // ── DeleteColsOp ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -153,6 +174,13 @@ public class FormulaRewriterTests
     {
         var result = FormulaRewriter.Rewrite("D1", new DeleteColsOp("Sheet1", 2, 1), "Sheet1");
         result.Should().Be("C1");
+    }
+
+    [Fact]
+    public void DeleteCols_FullColumnRange_DeletedEndpointBecomesRef()
+    {
+        var result = FormulaRewriter.Rewrite("SUM(A:C)", new DeleteColsOp("Sheet1", 1, 1), "Sheet1");
+        result.Should().Be("SUM(#REF!)");
     }
 
     // ── PasteOffsetOp ─────────────────────────────────────────────────────────
@@ -195,6 +223,20 @@ public class FormulaRewriterTests
     }
 
     [Fact]
+    public void PasteOffset_FullColumnRange_ShiftsRelativeColumns()
+    {
+        var result = FormulaRewriter.Rewrite("SUM(A:B)", new PasteOffsetOp(5, 2), "Sheet1");
+        result.Should().Be("SUM(C:D)");
+    }
+
+    [Fact]
+    public void PasteOffset_FullRowRange_ShiftsRelativeRows()
+    {
+        var result = FormulaRewriter.Rewrite("SUM(1:2)", new PasteOffsetOp(3, 5), "Sheet1");
+        result.Should().Be("SUM(4:5)");
+    }
+
+    [Fact]
     public void PasteOffset_DynamicArrayFormulaWithOmittedArgument_PreservesOmittedSlot()
     {
         var result = FormulaRewriter.Rewrite("EXPAND(A1:B1,,3)", new PasteOffsetOp(1, 1), "Sheet1");
@@ -233,5 +275,37 @@ public class FormulaRewriterTests
             "Host");
 
         result.Should().Be("SUM('New Sheet'!A1:B2)");
+    }
+
+    [Fact]
+    public void RenameSheet_FullColumnAndFullRowRanges_RewriteSheetName()
+    {
+        FormulaRewriter.Rewrite(
+                "SUM('Old Sheet'!A:B)",
+                new RenameSheetOp("Old Sheet", "New Sheet"),
+                "Host")
+            .Should().Be("SUM('New Sheet'!A:B)");
+
+        FormulaRewriter.Rewrite(
+                "SUM('Old Sheet'!1:2)",
+                new RenameSheetOp("Old Sheet", "New Sheet"),
+                "Host")
+            .Should().Be("SUM('New Sheet'!1:2)");
+    }
+
+    [Fact]
+    public void DeleteSheet_FullColumnAndFullRowRanges_BecomeRef()
+    {
+        FormulaRewriter.Rewrite(
+                "SUM(Sheet1!A:B)",
+                new DeleteSheetOp("Sheet1"),
+                "Host")
+            .Should().Be("SUM(#REF!)");
+
+        FormulaRewriter.Rewrite(
+                "SUM(Sheet1!1:2)",
+                new DeleteSheetOp("Sheet1"),
+                "Host")
+            .Should().Be("SUM(#REF!)");
     }
 }

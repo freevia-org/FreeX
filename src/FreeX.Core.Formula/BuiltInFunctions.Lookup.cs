@@ -8,6 +8,13 @@ public static partial class BuiltInFunctions
 {
     // Lookup and reference functions.
 
+    internal readonly record struct IndirectRangeReference(
+        string? SheetName,
+        uint StartRow,
+        uint StartCol,
+        uint EndRow,
+        uint EndCol);
+
     private static ScalarValue Row(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count == 0) return ctx.CurrentCellAddress is { } cell
@@ -505,46 +512,20 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue IndirectCore(IReadOnlyList<ScalarValue> args, IEvalContext ctx, bool unwrapSingleCell)
     {
-        if (args[0] is ErrorValue e) return e;
-        if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
-        var refText = ToText(args[0]).Trim();
-        bool useA1 = args.Count < 2 || args[1] is BlankValue || ToBool(args[1]);
-        string? sheetName = null;
-        int bangIdx = refText.IndexOf('!');
-        if (bangIdx >= 0)
-        {
-            var sheetPart = refText[..bangIdx];
-            if (sheetPart.StartsWith('\'') && sheetPart.EndsWith('\'') && sheetPart.Length >= 2)
-                sheetName = sheetPart[1..^1].Replace("''", "'");   // strip outer quotes and unescape ''→'
-            else
-            {
-                if (!IsSimpleSheetQualifier(sheetPart)) return ErrorValue.Ref;
-                sheetName = sheetPart;
-            }
-            refText = refText[(bangIdx + 1)..];
-        }
-        if (useA1 && TryParseA1RangeRef(refText, out var startRow, out var startCol, out var endRow, out var endCol))
-            return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
-        if (useA1 && TryParseA1FullRowRangeRef(refText, out startRow, out endRow))
-            return BuildIndirectRange(ctx, sheetName, startRow, 1, endRow, CellAddress.MaxCol);
-        if (useA1 && TryParseA1FullColumnRangeRef(refText, out startCol, out endCol))
-            return BuildIndirectRange(ctx, sheetName, 1, startCol, CellAddress.MaxRow, endCol);
-        if (!useA1 && TryParseR1C1RangeRef(refText, ctx.CurrentCellAddress, out startRow, out startCol, out endRow, out endCol))
-            return BuildIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol);
+        if (!TryGetIndirectReferenceParts(args, out var refText, out var useA1, out var sheetName, out var error))
+            return error ?? ErrorValue.Value;
 
-        if (sheetName is null && ctx.TryResolveNamedRange(refText) is { } namedRange)
-        {
-            var namedSheetName = ctx.TryGetSheetName(namedRange.Start.Sheet);
-            return namedSheetName is null
-                ? ErrorValue.Ref
-                : BuildIndirectRange(
-                    ctx,
-                    namedSheetName,
-                    namedRange.Start.Row,
-                    namedRange.Start.Col,
-                    namedRange.End.Row,
-                    namedRange.End.Col);
-        }
+        if (TryResolveIndirectRangeReference(refText, useA1, sheetName, ctx, out var rangeReference, out error))
+            return BuildIndirectRange(
+                ctx,
+                rangeReference.SheetName,
+                rangeReference.StartRow,
+                rangeReference.StartCol,
+                rangeReference.EndRow,
+                rangeReference.EndCol);
+
+        if (error is not null)
+            return error;
 
         if (useA1
                 ? !TryParseA1Ref(refText, out uint row, out uint col)
@@ -556,6 +537,139 @@ public static partial class BuiltInFunctions
                 ? ctx.GetCellValue(sheetName, row, col)
                 : ctx.GetCellValue(row, col)
             : BuildIndirectRange(ctx, sheetName, row, col, row, col);
+    }
+
+    internal static bool TryResolveIndirectRangeReference(
+        IReadOnlyList<ScalarValue> args,
+        IEvalContext ctx,
+        out IndirectRangeReference range,
+        out ScalarValue? error)
+    {
+        range = default;
+        if (!TryGetIndirectReferenceParts(args, out var refText, out var useA1, out var sheetName, out error))
+            return false;
+
+        return TryResolveIndirectRangeReference(refText, useA1, sheetName, ctx, out range, out error);
+    }
+
+    private static bool TryResolveIndirectRangeReference(
+        string refText,
+        bool useA1,
+        string? sheetName,
+        IEvalContext ctx,
+        out IndirectRangeReference range,
+        out ScalarValue? error)
+    {
+        range = default;
+        error = null;
+
+        if (useA1 && TryParseA1RangeRef(refText, out var startRow, out var startCol, out var endRow, out var endCol))
+            return CompleteIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol, out range, out error);
+        if (useA1 && TryParseA1FullRowRangeRef(refText, out startRow, out endRow))
+            return CompleteIndirectRange(ctx, sheetName, startRow, 1, endRow, CellAddress.MaxCol, out range, out error);
+        if (useA1 && TryParseA1FullColumnRangeRef(refText, out startCol, out endCol))
+            return CompleteIndirectRange(ctx, sheetName, 1, startCol, CellAddress.MaxRow, endCol, out range, out error);
+        if (!useA1 && TryParseR1C1RangeRef(refText, ctx.CurrentCellAddress, out startRow, out startCol, out endRow, out endCol))
+            return CompleteIndirectRange(ctx, sheetName, startRow, startCol, endRow, endCol, out range, out error);
+
+        if (sheetName is null && ctx.TryResolveNamedRange(refText) is { } namedRange)
+        {
+            var namedSheetName = ctx.TryGetSheetName(namedRange.Start.Sheet);
+            if (namedSheetName is null)
+            {
+                error = ErrorValue.Ref;
+                return false;
+            }
+
+            return CompleteIndirectRange(
+                ctx,
+                namedSheetName,
+                namedRange.Start.Row,
+                namedRange.Start.Col,
+                namedRange.End.Row,
+                namedRange.End.Col,
+                out range,
+                out error);
+        }
+
+        return false;
+    }
+
+    private static bool CompleteIndirectRange(
+        IEvalContext ctx,
+        string? sheetName,
+        uint startRow,
+        uint startCol,
+        uint endRow,
+        uint endCol,
+        out IndirectRangeReference range,
+        out ScalarValue? error)
+    {
+        range = default;
+        error = null;
+        if (sheetName is not null && !ctx.SheetExists(sheetName))
+        {
+            error = ErrorValue.Ref;
+            return false;
+        }
+
+        range = new IndirectRangeReference(sheetName, startRow, startCol, endRow, endCol);
+        return true;
+    }
+
+    private static bool TryGetIndirectReferenceParts(
+        IReadOnlyList<ScalarValue> args,
+        out string refText,
+        out bool useA1,
+        out string? sheetName,
+        out ScalarValue? error)
+    {
+        refText = "";
+        useA1 = true;
+        sheetName = null;
+        error = null;
+
+        if (args.Count is < 1 or > 2)
+        {
+            error = ErrorValue.Value;
+            return false;
+        }
+
+        if (args[0] is ErrorValue e)
+        {
+            error = e;
+            return false;
+        }
+
+        if (args.Count > 1 && args[1] is ErrorValue e1)
+        {
+            error = e1;
+            return false;
+        }
+
+        refText = ToText(args[0]).Trim();
+        useA1 = args.Count < 2 || args[1] is BlankValue || ToBool(args[1]);
+        int bangIdx = refText.IndexOf('!');
+        if (bangIdx >= 0)
+        {
+            var sheetPart = refText[..bangIdx];
+            if (sheetPart.StartsWith('\'') && sheetPart.EndsWith('\'') && sheetPart.Length >= 2)
+                sheetName = sheetPart[1..^1].Replace("''", "'");
+            else
+            {
+                if (!IsSimpleSheetQualifier(sheetPart))
+                {
+                    error = ErrorValue.Ref;
+                    return false;
+                }
+
+                sheetName = sheetPart;
+            }
+
+            refText = refText[(bangIdx + 1)..];
+        }
+
+        return true;
     }
 
     private static ScalarValue BuildIndirectRange(
@@ -572,6 +686,9 @@ public static partial class BuiltInFunctions
         uint r1 = Math.Max(startRow, endRow);
         uint c0 = Math.Min(startCol, endCol);
         uint c1 = Math.Max(startCol, endCol);
+        if (FormulaSafetyLimits.GetRangeCellCount(r0, c0, r1, c1) > FormulaSafetyLimits.MaxMaterializedRangeCells)
+            return ErrorValue.Ref;
+
         var cells = new ScalarValue[r1 - r0 + 1, c1 - c0 + 1];
         for (uint r = r0; r <= r1; r++)
             for (uint c = c0; c <= c1; c++)

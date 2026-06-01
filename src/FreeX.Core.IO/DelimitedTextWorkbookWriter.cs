@@ -206,10 +206,14 @@ internal static class DelimitedTextWorkbookWriter
         IsErrorLikeText(value);
 
     private static bool ShouldWriteTextMarker(string value) =>
+        IsFormulaInjectionLikeText(value) ||
         IsBooleanLikeText(value) ||
         IsDateTimeLikeText(value) ||
         IsUnsignedCurrencyText(value) ||
         IsNumericLikeText(value);
+
+    private static bool IsFormulaInjectionLikeText(string value) =>
+        value[0] is '=' or '+' or '-' or '@';
 
     private static bool IsSeparatorDirectiveLikeText(string value) =>
         value is { Length: 4 } or { Length: 5 } &&

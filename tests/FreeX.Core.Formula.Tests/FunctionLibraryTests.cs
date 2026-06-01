@@ -462,6 +462,19 @@ public class FunctionLibraryTests
     }
 
     [Fact]
+    public void Index_FullColumnScalarLookup_DoesNotMaterializeEntireRange()
+    {
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(10)),
+            (2, 1, new NumberValue(20)),
+            (1, 2, new NumberValue(99)));
+
+        _eval.Evaluate("=INDEX(A:A,2)", sheet).Should().Be(new NumberValue(20));
+        _eval.Evaluate("=INDEX(A:B,1,2)", sheet).Should().Be(new NumberValue(99));
+        _eval.Evaluate("=INDEX(A:A,0)", sheet).Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
     public void Index_ZeroRow_ReturnsEntireColumn()
     {
         var sheet = MakeSheet(
@@ -6548,6 +6561,31 @@ public class FunctionLibraryTests
 
         _eval.Evaluate("=SUM(INDIRECT(\"B:B\"))", sheet)
             .Should().Be(new NumberValue(3));
+    }
+
+    [Theory]
+    [InlineData("=INDIRECT(\"A:A\")")]
+    [InlineData("=INDIRECT(\"A:XFD\")")]
+    [InlineData("=INDIRECT(\"1:1048576\")")]
+    public void Indirect_HostileLargeRanges_ReturnRefWithoutMaterializing(string formula)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Ref);
+    }
+
+    [Theory]
+    [InlineData("=COUNTA(A:A)")]
+    [InlineData("=AND(A:A)")]
+    [InlineData("=CONCAT(A:A)")]
+    [InlineData("=STDEV(A:A)")]
+    public void NonFastPathFullColumnRanges_ReturnRefWithoutMaterializing(string formula)
+    {
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Ref);
+    }
+
+    [Fact]
+    public void RangeMaterializationLimit_ReturnsCatchableError()
+    {
+        _eval.Evaluate("=IFERROR(COUNTA(A:A),0)", MakeSheet()).Should().Be(new NumberValue(0));
     }
 
     [Fact] public void Offset_A1FullColumnReferenceWithExplicitHeight_ReturnsRangeValue()

@@ -245,6 +245,17 @@ public sealed class FileDialogFilterBuilderTests
         format.Should().BeNull();
     }
 
+    [Fact]
+    public void FindAdapters_RealAdaptersRejectOdsUntilAdapterIsImplemented()
+    {
+        var adapters = new IFileAdapter[] { new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new SpreadsheetXmlFileAdapter(), new NativeJsonAdapter() };
+
+        FileFormatResolver.FindOpenAdapter(adapters, ".ods", out var openFormat).Should().BeNull();
+        openFormat.Should().BeNull();
+        FileFormatResolver.FindSaveAdapter(adapters, ".ods", out var saveFormat).Should().BeNull();
+        saveFormat.Should().BeNull();
+    }
+
     private sealed class FakeAdapter(IReadOnlyList<FileFormatDescriptor> formats) : IFileAdapter
     {
         public string Extension => formats[0].Extension;
