@@ -133,6 +133,22 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
+    public void SheetTabLabelDoubleClick_RenamesOnlyForLeftButton()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var labelMouseDown = source[
+            source.IndexOf("private void SheetTab_LabelMouseDown", StringComparison.Ordinal)..
+            source.IndexOf("private void RenameSheetFromTab", StringComparison.Ordinal)];
+
+        labelMouseDown.Should().Contain("e.ChangedButton != MouseButton.Left");
+        labelMouseDown.Should().Contain("e.ClickCount != 2");
+        labelMouseDown.Should().Contain("RenameSheetFromTab(tab);");
+        labelMouseDown.IndexOf("e.ChangedButton != MouseButton.Left", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(labelMouseDown.IndexOf("RenameSheetFromTab(tab);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SheetTabChrome_ReusesRenderedPathsAcrossRepeatedManyTabNavigationUpdates()
     {
         StaTestRunner.Run(() =>

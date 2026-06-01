@@ -204,11 +204,31 @@ public static partial class XlsxChartPartReader
 
     private static void ApplyBarChartMetadata(XElement barChart, ChartModel chart)
     {
-        chart.BarGapWidth = XlsxChartScalarReader.ReadOptionalInt(barChart.Element(ChartNs + "gapWidth")?.Attribute("val")?.Value);
-        chart.BarOverlap = XlsxChartScalarReader.ReadOptionalInt(barChart.Element(ChartNs + "overlap")?.Attribute("val")?.Value);
+        chart.BarGapWidth = NormalizeExcelNativeDefaultBarGapWidth(
+            chart.Type,
+            XlsxChartScalarReader.ReadOptionalInt(barChart.Element(ChartNs + "gapWidth")?.Attribute("val")?.Value));
+        chart.BarOverlap = NormalizeExcelNativeDefaultBarOverlap(
+            chart.Type,
+            XlsxChartScalarReader.ReadOptionalInt(barChart.Element(ChartNs + "overlap")?.Attribute("val")?.Value));
         chart.VaryColorsByPoint = XlsxChartScalarReader.ReadOptionalBool(barChart.Element(ChartNs + "varyColors")?.Attribute("val")?.Value);
         XlsxChartTrendlineErrorBarReader.ApplyChartGuideLineMetadata(barChart, chart);
     }
+
+    private static int? NormalizeExcelNativeDefaultBarGapWidth(ChartType chartType, int? gapWidth) =>
+        gapWidth == 219 && chartType is (ChartType.StackedColumn
+            or ChartType.PercentStackedColumn
+            or ChartType.StackedBar
+            or ChartType.PercentStackedBar)
+                ? null
+                : gapWidth;
+
+    private static int? NormalizeExcelNativeDefaultBarOverlap(ChartType chartType, int? overlap) =>
+        overlap == -27 && chartType is (ChartType.StackedColumn
+            or ChartType.PercentStackedColumn
+            or ChartType.StackedBar
+            or ChartType.PercentStackedBar)
+                ? null
+                : overlap;
 
     private static ChartType ReadBarChartType(XElement barChart, string? barDirection)
     {

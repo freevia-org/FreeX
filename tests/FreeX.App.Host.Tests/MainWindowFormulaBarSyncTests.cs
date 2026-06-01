@@ -204,6 +204,30 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarTab_CommitsEditMovesSelectionRightAndRefreshesEditors()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("tabbed from formula bar");
+
+            harness.PressFormulaBarKey(Key.Tab).Should().BeTrue();
+
+            harness.CellText(1, 1).Should().Be("tabbed from formula bar");
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 2),
+                new CellAddress(harness.CurrentSheetId, 1, 2)));
+            harness.CellAddressBoxText.Should().Be("B1");
+            harness.FormulaBarText.Should().BeEmpty();
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void CtrlEnterFormulaBarEdit_FillsSelectedRangeWhenNotChoosingFormulaReferences()
     {
         StaTestRunner.Run(() =>

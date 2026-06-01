@@ -183,25 +183,60 @@ public static class SplitPaneCellLayoutPlanner
             var mergesByRow = new Dictionary<uint, List<GridRange>>();
             foreach (var mergedRegion in mergedRegions)
             {
-                if (mergedRegion.End.Row < queryRows.MinRow || mergedRegion.Start.Row > queryRows.MaxRow)
+                var startRow = Math.Max(mergedRegion.Start.Row, queryRows.MinRow);
+                var endRow = Math.Min(mergedRegion.End.Row, queryRows.MaxRow);
+                if (startRow > endRow)
                     continue;
 
-                foreach (var row in queryRows.Rows)
-                {
-                    if (row < mergedRegion.Start.Row || row > mergedRegion.End.Row)
-                        continue;
-
-                    if (!mergesByRow.TryGetValue(row, out var rowMerges))
-                    {
-                        rowMerges = [];
-                        mergesByRow[row] = rowMerges;
-                    }
-
-                    rowMerges.Add(mergedRegion);
-                }
+                AddMergeRows(mergesByRow, queryRows, mergedRegion, startRow, endRow);
             }
 
             return new MergeRangeIndex(mergesByRow);
+        }
+
+        private static void AddMergeRows(
+            Dictionary<uint, List<GridRange>> mergesByRow,
+            QueryRows queryRows,
+            GridRange mergedRegion,
+            uint startRow,
+            uint endRow)
+        {
+            var intersectedRowSpan = endRow - startRow + 1;
+            if (intersectedRowSpan <= queryRows.Rows.Count)
+            {
+                var row = startRow;
+                while (true)
+                {
+                    if (queryRows.Rows.Contains(row))
+                        AddMergeRow(mergesByRow, row, mergedRegion);
+
+                    if (row == endRow)
+                        break;
+                    row++;
+                }
+
+                return;
+            }
+
+            foreach (var row in queryRows.Rows)
+            {
+                if (row >= startRow && row <= endRow)
+                    AddMergeRow(mergesByRow, row, mergedRegion);
+            }
+        }
+
+        private static void AddMergeRow(
+            Dictionary<uint, List<GridRange>> mergesByRow,
+            uint row,
+            GridRange mergedRegion)
+        {
+            if (!mergesByRow.TryGetValue(row, out var rowMerges))
+            {
+                rowMerges = [];
+                mergesByRow[row] = rowMerges;
+            }
+
+            rowMerges.Add(mergedRegion);
         }
 
         private static QueryRows BuildQueryRows(IReadOnlyList<DisplayCell> cells)

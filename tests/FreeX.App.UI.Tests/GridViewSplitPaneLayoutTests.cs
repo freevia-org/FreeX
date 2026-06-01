@@ -173,6 +173,21 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void SplitPaneCellLayoutPlanner_IndexesMergeRowsBySmallerIntersectedSide()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
+        var addMergeRows = source[
+            source.IndexOf("private static void AddMergeRows", StringComparison.Ordinal)..
+            source.IndexOf("private static void AddMergeRow(", StringComparison.Ordinal)];
+
+        addMergeRows.Should().Contain("var intersectedRowSpan = endRow - startRow + 1;");
+        addMergeRows.Should().Contain("if (intersectedRowSpan <= queryRows.Rows.Count)");
+        addMergeRows.Should().Contain("queryRows.Rows.Contains(row)");
+        addMergeRows.Should().Contain("foreach (var row in queryRows.Rows)");
+    }
+
+    [Fact]
     public void CalculateSplitPaneCellLayouts_AllowsTextOverflowAcrossEmptyCellsWithinSamePane()
     {
         var viewport = new ViewportModel(
