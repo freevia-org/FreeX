@@ -36,6 +36,18 @@ public sealed class ExcelTextEditorPlannerTests
     }
 
     [Fact]
+    public void TryCycleFormulaReference_ClampsCaretPastEndToCycleTrailingReference()
+    {
+        ExcelTextEditorPlanner.TryCycleFormulaReference("=A1", caretIndex: 20, out var edit)
+            .Should()
+            .BeTrue();
+
+        edit.Text.Should().Be("=$A$1");
+        edit.SelectionStart.Should().Be(1);
+        edit.SelectionLength.Should().Be(4);
+    }
+
+    [Fact]
     public void TryCycleFormulaReference_CyclesR1C1ReferenceWhenReferenceStyleIsEnabled()
     {
         var anchor = new CellAddress(SheetId.New(), 3, 3);
@@ -50,6 +62,25 @@ public sealed class ExcelTextEditorPlannerTests
             .BeTrue();
 
         edit.Text.Should().Be("=R1C2+R[1]C");
+        edit.SelectionStart.Should().Be(1);
+        edit.SelectionLength.Should().Be(4);
+    }
+
+    [Fact]
+    public void TryCycleFormulaReference_ClampsR1C1CaretPastEndToCycleTrailingReference()
+    {
+        var anchor = new CellAddress(SheetId.New(), 3, 3);
+
+        ExcelTextEditorPlanner.TryCycleFormulaReference(
+                "=R[-2]C[-1]",
+                caretIndex: 20,
+                anchor,
+                useR1C1ReferenceStyle: true,
+                out var edit)
+            .Should()
+            .BeTrue();
+
+        edit.Text.Should().Be("=R1C2");
         edit.SelectionStart.Should().Be(1);
         edit.SelectionLength.Should().Be(4);
     }
