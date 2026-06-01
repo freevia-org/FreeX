@@ -84,19 +84,28 @@ public class DependencyGraphTests
     }
 
     [Fact]
-    public void RecalcEngine_DetectsVolatileFunctionArgumentsWithoutLinqIterators()
+    public void RecalcEngine_CollectsReferencesAndVolatileFunctionsInSingleAstWalk()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.Core.Calc", "RecalcEngine.cs"));
-        var volatileDetection = source[
-            source.IndexOf("private static bool ContainsVolatileFunction", StringComparison.Ordinal)..
-            source.IndexOf("private static void CollectReferences", StringComparison.Ordinal)];
+        var registration = source[
+            source.IndexOf("public void RegisterFormulaDependencies", StringComparison.Ordinal)..
+            source.IndexOf("public void ClearFormulaDependencies", StringComparison.Ordinal)];
+        var referenceCollection = source[
+            source.IndexOf("private static bool CollectReferences", StringComparison.Ordinal)..
+            source.IndexOf("private static GridRange CreateGridRange", StringComparison.Ordinal)];
 
-        volatileDetection.Should().Contain("BuiltInFunctions.IsVolatile(f.FunctionName)");
-        volatileDetection.Should().Contain("ContainsVolatileFunctionArgument(f.Arguments)");
-        volatileDetection.Should().Contain("for (var i = 0; i < arguments.Count; i++)");
-        volatileDetection.Should().Contain("ContainsVolatileFunction(arguments[i])");
-        volatileDetection.Should().NotContain(
+        registration.Should().Contain("var containsVolatileFunction = CollectReferences(");
+        source.Should().NotContain(
+            "ContainsVolatileFunction(ast)",
+            "formula dependency registration should not walk the AST a second time just to detect volatility");
+        source.Should().NotContain(
+            "private static bool ContainsVolatileFunction",
+            "volatile detection should stay fused with reference collection on the registration hot path");
+        referenceCollection.Should().Contain("BuiltInFunctions.IsVolatile(func.FunctionName)");
+        referenceCollection.Should().Contain("for (var i = 0; i < arguments.Count; i++)");
+        referenceCollection.Should().Contain("CollectReferences(arguments[i]");
+        referenceCollection.Should().NotContain(
             ".Any(",
             "volatile formula registration should avoid LINQ iterator/delegate work while walking function arguments");
     }
@@ -892,6 +901,26 @@ public class AstCacheTests
         report.RecalculatedCells.Should().Contain(b1);
         sheet.GetValue(a1).Should().BeOfType<DateTimeValue>();
         sheet.GetValue(b1).Should().Be(sheet.GetValue(a1));
+    }
+
+    [Fact]
+    public void RegisterFormulaDependencies_VolatileFormulaStillCollectsSiblingReferences()
+    {
+        var wb = new Workbook("T");
+        var sheet = wb.AddSheet("S");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        var ast = new Parser(new Lexer("=NOW()+A1").Tokenize()).Parse();
+
+        sheet.SetCell(a1, new NumberValue(5));
+        sheet.SetFormula(b1, "NOW()+A1");
+        engine.RegisterFormulaDependencies(b1, ast, sheet.Id, wb);
+
+        graph.GetDirectPrecedents(b1).Should().Contain(a1);
+        graph.GetDirectDependents(a1).Should().Contain(b1);
+        engine.Recalculate(wb, []).RecalculatedCells.Should().Contain(b1);
     }
 
     [Fact]
