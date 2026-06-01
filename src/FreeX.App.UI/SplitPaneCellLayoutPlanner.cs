@@ -183,7 +183,10 @@ public static class SplitPaneCellLayoutPlanner
             var mergesByRow = new Dictionary<uint, List<GridRange>>();
             foreach (var mergedRegion in mergedRegions)
             {
-                foreach (var row in queryRows)
+                if (mergedRegion.End.Row < queryRows.MinRow || mergedRegion.Start.Row > queryRows.MaxRow)
+                    continue;
+
+                foreach (var row in queryRows.Rows)
                 {
                     if (row < mergedRegion.Start.Row || row > mergedRegion.End.Row)
                         continue;
@@ -201,13 +204,23 @@ public static class SplitPaneCellLayoutPlanner
             return new MergeRangeIndex(mergesByRow);
         }
 
-        private static HashSet<uint> BuildQueryRows(IReadOnlyList<DisplayCell> cells)
+        private static QueryRows BuildQueryRows(IReadOnlyList<DisplayCell> cells)
         {
             var rows = new HashSet<uint>();
+            var minRow = uint.MaxValue;
+            var maxRow = uint.MinValue;
+
             foreach (var cell in cells)
+            {
                 rows.Add(cell.Row);
 
-            return rows;
+                if (cell.Row < minRow)
+                    minRow = cell.Row;
+                if (cell.Row > maxRow)
+                    maxRow = cell.Row;
+            }
+
+            return new QueryRows(rows, minRow, maxRow);
         }
 
         public GridRange? Find(uint row, uint col)
@@ -223,5 +236,10 @@ public static class SplitPaneCellLayoutPlanner
 
             return null;
         }
+
+        private readonly record struct QueryRows(
+            HashSet<uint> Rows,
+            uint MinRow,
+            uint MaxRow);
     }
 }

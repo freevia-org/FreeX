@@ -616,6 +616,12 @@ public partial class MainWindow
                 _workbook.NamedRanges,
                 out var selectedRange))
         {
+            if (TryDefineNameFromNameBox())
+            {
+                e.Handled = true;
+                return;
+            }
+
             CellAddressBox.Focus();
             CellAddressBox.SelectAll();
             e.Handled = true;
@@ -629,6 +635,26 @@ public partial class MainWindow
         RefreshValidationDropdown();
         FocusSheetGridIfNeeded();
         e.Handled = true;
+    }
+
+    private bool TryDefineNameFromNameBox()
+    {
+        var name = CellAddressBox.Text.Trim();
+        if (_workbook.ValidateNamedRangeName(name) is not null)
+            return false;
+        if (SheetGrid.SelectedRange is not { } range)
+            return false;
+
+        var command = new DefineNamedRangeCommand(name, range);
+        if (!TryExecuteCommand(command, UiText.Get("MainWindow_Content_DefineName")))
+            return false;
+
+        CellAddressBox.Text = name;
+        CellAddressBox.SelectAll();
+        RefreshToolbar();
+        RefreshStatusBar();
+        FocusSheetGridIfNeeded();
+        return true;
     }
 
     private void RestoreCellAddressBoxText()
