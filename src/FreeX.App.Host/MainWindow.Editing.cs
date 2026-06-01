@@ -39,9 +39,16 @@ public partial class MainWindow
 
     private void FocusFormulaBarAtEnd()
     {
-        FormulaBar.Focus();
+        FocusFormulaBar();
         FormulaBar.CaretIndex = FormulaBar.Text.Length;
         SetStatusBarModeText(UiText.Get("StatusBar_EditMode"));
+    }
+
+    private void FocusFormulaBar()
+    {
+        FocusManager.SetFocusedElement(this, FormulaBar);
+        FormulaBar.Focus();
+        Keyboard.Focus(FormulaBar);
     }
 
     private void ShowInlineEditor(CellAddress addr)
@@ -622,7 +629,9 @@ public partial class MainWindow
                 return;
             }
 
+            FocusManager.SetFocusedElement(this, CellAddressBox);
             CellAddressBox.Focus();
+            Keyboard.Focus(CellAddressBox);
             CellAddressBox.SelectAll();
             e.Handled = true;
             return;
