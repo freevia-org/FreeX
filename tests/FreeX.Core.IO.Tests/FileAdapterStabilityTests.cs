@@ -17,6 +17,13 @@ public sealed class FileAdapterStabilityTests
         yield return [".fxl", new NativeJsonAdapter()];
     }
 
+    public static IEnumerable<object[]> StructuredSaveAdapters()
+    {
+        yield return [".xlsx", new XlsxFileAdapter()];
+        yield return [".xml", new SpreadsheetXmlFileAdapter()];
+        yield return [".fxl", new NativeJsonAdapter()];
+    }
+
     [Theory]
     [MemberData(nameof(SaveCapableAdapters))]
     public void LoadThenSave_WithoutEdits_PreservesSupportedSaveFormatBytes(string extension, IFileAdapter adapter)
@@ -27,6 +34,21 @@ public sealed class FileAdapterStabilityTests
         var resavedBytes = SaveToBytes(adapter, loaded);
 
         resavedBytes.Should().Equal(originalBytes, $"opening and saving {extension} without edits must be file-stable");
+    }
+
+    [Theory]
+    [MemberData(nameof(StructuredSaveAdapters))]
+    public void Save_ToWritableNonSeekableStream_ProducesReloadableWorkbook(string extension, IFileAdapter adapter)
+    {
+        using var stream = new NonSeekableWriteStream();
+
+        adapter.Save(CreateStableWorkbook(extension), stream);
+
+        var bytes = stream.ToArray();
+        bytes.Should().NotBeEmpty();
+        var loaded = adapter.Load(new MemoryStream(bytes, writable: false));
+        loaded.GetSheetAt(0).GetCell(1, 1)!.Value.Should().Be(new TextValue("Name"));
+        loaded.GetSheetAt(0).GetCell(2, 2)!.Value.Should().Be(new NumberValue(12.5));
     }
 
     [Fact]
@@ -146,5 +168,47 @@ public sealed class FileAdapterStabilityTests
         sheet.SetFormula(new CellAddress(sheet.Id, 5, 2), "SUM(B2:B2)");
         sheet.SetCell(new CellAddress(sheet.Id, 6, 1), new TextValue(Encoding.UTF8.GetString([0xE2, 0x9C, 0x93])));
         return workbook;
+    }
+
+    private sealed class NonSeekableWriteStream : Stream
+    {
+        private readonly MemoryStream inner = new();
+
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public byte[] ToArray() => inner.ToArray();
+
+        public override void Flush() => inner.Flush();
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
+
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            inner.Write(buffer, offset, count);
+
+        public override void Write(ReadOnlySpan<byte> buffer) =>
+            inner.Write(buffer);
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                inner.Dispose();
+
+            base.Dispose(disposing);
+        }
     }
 }

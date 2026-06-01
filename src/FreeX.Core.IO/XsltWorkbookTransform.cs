@@ -11,6 +11,12 @@ public static class XsltWorkbookTransform
     public static MemoryStream TransformToSpreadsheetXml(Stream sourceXml, Stream stylesheet)
         => TransformToSpreadsheetXml(sourceXml, stylesheet, DefaultMaxOutputBytes, DefaultMaxInputCharacters);
 
+    public static MemoryStream TransformToSpreadsheetXml(
+        Stream sourceXml,
+        Stream stylesheet,
+        IReadOnlyDictionary<string, string?> parameters)
+        => TransformToSpreadsheetXml(sourceXml, stylesheet, DefaultMaxOutputBytes, DefaultMaxInputCharacters, parameters);
+
     internal static MemoryStream TransformToSpreadsheetXml(Stream sourceXml, Stream stylesheet, long maxOutputBytes)
         => TransformToSpreadsheetXml(sourceXml, stylesheet, maxOutputBytes, DefaultMaxInputCharacters);
 
@@ -19,6 +25,14 @@ public static class XsltWorkbookTransform
         Stream stylesheet,
         long maxOutputBytes,
         long maxInputCharacters)
+        => TransformToSpreadsheetXml(sourceXml, stylesheet, maxOutputBytes, maxInputCharacters, parameters: null);
+
+    internal static MemoryStream TransformToSpreadsheetXml(
+        Stream sourceXml,
+        Stream stylesheet,
+        long maxOutputBytes,
+        long maxInputCharacters,
+        IReadOnlyDictionary<string, string?>? parameters)
     {
         ArgumentNullException.ThrowIfNull(sourceXml);
         ArgumentNullException.ThrowIfNull(stylesheet);
@@ -26,11 +40,12 @@ public static class XsltWorkbookTransform
         ArgumentOutOfRangeException.ThrowIfLessThan(maxInputCharacters, 1);
 
         var transform = LoadStylesheet(stylesheet, maxInputCharacters);
+        var arguments = CreateArguments(parameters);
         var output = new BoundedMemoryStream(maxOutputBytes);
         try
         {
             using var sourceReader = CreateSecureReader(sourceXml, maxInputCharacters);
-            transform.Transform(sourceReader, arguments: null, output);
+            transform.Transform(sourceReader, arguments, output);
         }
         catch (XmlException ex)
         {
@@ -50,6 +65,23 @@ public static class XsltWorkbookTransform
 
         output.Position = 0;
         return output;
+    }
+
+    private static XsltArgumentList? CreateArguments(IReadOnlyDictionary<string, string?>? parameters)
+    {
+        if (parameters is null || parameters.Count == 0)
+            return null;
+
+        var arguments = new XsltArgumentList();
+        foreach (var (name, value) in parameters)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("XSLT parameter names cannot be empty.", nameof(parameters));
+
+            arguments.AddParam(XmlConvert.VerifyNCName(name), namespaceUri: "", value ?? "");
+        }
+
+        return arguments;
     }
 
     private static XslCompiledTransform LoadStylesheet(Stream stylesheet, long maxInputCharacters)

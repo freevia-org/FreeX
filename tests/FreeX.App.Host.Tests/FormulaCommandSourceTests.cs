@@ -72,7 +72,7 @@ public sealed class FormulaCommandSourceTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.FormulaCommands.cs"));
 
         source.Should().Contain("var dlg = new InsertFunctionDialog();");
-        source.Should().Contain("FormulaBar.Text = \"=\" + dlg.SelectedFormula;");
+        source.Should().Contain("BeginFormulaBarFunctionEdit(\"=\" + dlg.SelectedFormula);");
         source.Should().Contain("new NamedRangeDialog(");
         source.Should().Contain("new CreateNamesFromSelectionDialog { Owner = this }");
         source.Should().Contain("new CreateNamedRangesFromSelectionCommand(");
@@ -80,7 +80,8 @@ public sealed class FormulaCommandSourceTests
         source.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>())");
         source.Should().Contain("FormulaFinancialBtn_Click(object sender, RoutedEventArgs e) => OpenFormulaFunctionMenu(sender, [\"PMT\", \"NPV\", \"IRR\", \"RATE\", \"PV\", \"FV\"]);");
         source.Should().Contain("FormulaMoreBtn_Click(object sender, RoutedEventArgs e)    => InsertFunctionBtn_Click(sender, e);");
-        source.Should().Contain("FormulaBar.Text = $\"={funcName}(\";");
+        source.Should().Contain("BeginFormulaBarFunctionEdit($\"={funcName}(\");");
+        source.Should().Contain("private void BeginFormulaBarFunctionEdit(string text)");
     }
 
     private static string ReadMainWindowXaml() =>
