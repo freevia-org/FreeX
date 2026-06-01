@@ -1,4 +1,5 @@
 using System.Globalization;
+using static FreeX.Core.Commands.FlashFillTextPrimitives;
 
 namespace FreeX.Core.Commands;
 
@@ -315,58 +316,6 @@ public static partial class FlashFillService
             start = delimiterIndex + 1;
             currentPartIndex++;
         }
-    }
-
-    private static bool TrimmedSegmentEquals(string source, int start, int endExclusive, string expected)
-    {
-        var trimStart = start;
-        var trimEnd = endExclusive - 1;
-        TrimSegment(source, ref trimStart, ref trimEnd);
-
-        var length = trimStart <= trimEnd ? trimEnd - trimStart + 1 : 0;
-        return length == expected.Length &&
-               source.AsSpan(trimStart, length).SequenceEqual(expected.AsSpan());
-    }
-
-    private static string SliceTrimmedSegment(string source, int start, int endExclusive)
-    {
-        var trimStart = start;
-        var trimEnd = endExclusive - 1;
-        TrimSegment(source, ref trimStart, ref trimEnd);
-        return trimStart <= trimEnd
-            ? SliceSegment(source, trimStart, trimEnd + 1)
-            : string.Empty;
-    }
-
-    private static string SliceSegment(string source, int start, int endExclusive) =>
-        start == 0 && endExclusive == source.Length
-            ? source
-            : source[start..endExclusive];
-
-    private static void TrimSegment(string source, ref int start, ref int end)
-    {
-        while (start <= end && char.IsWhiteSpace(source[start]))
-            start++;
-
-        while (end >= start && char.IsWhiteSpace(source[end]))
-            end--;
-    }
-
-    private static void TrimTrailingWhitespace(string source, ref int end)
-    {
-        while (end >= 0 && char.IsWhiteSpace(source[end]))
-            end--;
-    }
-
-    private static bool HasNonEmptyPartBeforeDelimiter(string source, int delimiterIndex, char delimiter)
-    {
-        for (var i = 0; i < delimiterIndex; i++)
-        {
-            if (source[i] != delimiter && !char.IsWhiteSpace(source[i]))
-                return true;
-        }
-
-        return false;
     }
 
     private static bool TryGetFinalDelimitedToken(string source, char delimiter, out string token)
@@ -1378,26 +1327,6 @@ public static partial class FlashFillService
         return tokens.Length >= 2 && tokens.All(token => token.Length > 0);
     }
 
-    private static string ExtractDigits(string value) =>
-        string.Concat(value.Where(char.IsDigit));
-
-    private static string CreateDigitMask(string value) =>
-        new(value.Select(c => char.IsDigit(c) ? '#' : c).ToArray());
-
-    private static string ApplyDigitMask(string digits, string mask)
-    {
-        var index = 0;
-        var chars = new char[mask.Length];
-        for (var i = 0; i < mask.Length; i++)
-        {
-            chars[i] = mask[i] == '#'
-                ? digits[index++]
-                : mask[i];
-        }
-
-        return new string(chars);
-    }
-
     private static Func<string, string?>? TryInitials(IReadOnlyList<(string Source, string Expected)> examples)
     {
         foreach (var delimiter in Delimiters)
@@ -1528,13 +1457,6 @@ public static partial class FlashFillService
             : null;
     }
 
-    private static string ToProperCase(string s)
-    {
-        if (string.IsNullOrEmpty(s)) return s;
-        var textInfo = CultureInfo.InvariantCulture.TextInfo;
-        return textInfo.ToTitleCase(s.ToLowerInvariant());
-    }
-
     private static bool TryGetDelimitedInitials(string source, char delimiter, out string initials)
     {
         var parts = source.Split(delimiter, StringSplitOptions.RemoveEmptyEntries);
@@ -1654,7 +1576,4 @@ public static partial class FlashFillService
 
     private static string GetFirstInitial(string value) =>
         string.IsNullOrEmpty(value) ? string.Empty : value[0].ToString();
-
-    private static string GetUpperInitial(string value) =>
-        string.IsNullOrEmpty(value) ? string.Empty : char.ToUpperInvariant(value[0]).ToString();
 }
