@@ -978,6 +978,52 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_TextInstruction_GeneratesLiteralCellText()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row first="Alpha" second="Beta" amount="42.5" />
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Text">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell>
+                          <ss:Data ss:Type="String">
+                            <xsl:value-of select="row/@first" />
+                            <xsl:text> - </xsl:text>
+                            <xsl:value-of select="row/@second" />
+                          </ss:Data>
+                        </ss:Cell>
+                        <ss:Cell>
+                          <ss:Data ss:Type="String">
+                            <xsl:text>Total: </xsl:text>
+                            <xsl:value-of select="row/@amount" />
+                          </ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var values = XDocument.Load(transformed).Descendants(ss + "Data").Select(cell => cell.Value).ToArray();
+
+        values.Should().Equal("Alpha - Beta", "Total: 42.5");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NumberInstruction_GeneratesFormattedSequenceCells()
     {
         using var source = StreamFromString("""
