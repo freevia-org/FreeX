@@ -390,6 +390,10 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.System, Key.Right, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift)]
     [InlineData(Key.System, Key.Left, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift)]
     [InlineData(Key.System, Key.Oem1, ModifierKeys.Alt | ModifierKeys.Shift)]
+    [InlineData(Key.F10, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.Apps, Key.None, ModifierKeys.Shift)]
+    [InlineData(Key.Apps, Key.None, ModifierKeys.Control)]
+    [InlineData(Key.Apps, Key.None, ModifierKeys.Alt)]
     public void TryGetCommandShortcut_DoesNotStealExtraModifierCombinations(Key key, Key systemKey, ModifierKeys modifiers)
     {
         var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out _);
