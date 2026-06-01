@@ -94,7 +94,11 @@ public sealed partial class SymbolPickerDialog
                 if (s is Button { Tag: string symbol })
                     SelectSymbolText(symbol);
             };
-            button.MouseDoubleClick += (_, _) => AcceptSelectedSymbol();
+            button.MouseDoubleClick += (_, e) =>
+            {
+                AcceptSelectedSymbol();
+                e.Handled = true;
+            };
             return button;
         }
 
@@ -195,7 +199,11 @@ public sealed partial class SymbolPickerDialog
             if (specialList.SelectedItem is ListBoxItem { Tag: string symbol })
                 selectSymbolText(symbol);
         };
-        specialList.MouseDoubleClick += (_, _) => acceptSelectedSymbol();
+        specialList.MouseDoubleClick += (_, e) =>
+        {
+            acceptSelectedSymbol();
+            e.Handled = true;
+        };
         return specialList;
     }
 

@@ -133,7 +133,8 @@ public static class SparklineLayoutPlanner
 
         var axis = rect.Top + rect.Height / 2;
         var slot = rect.Width / values.Count;
-        var barWidth = Math.Max(1, slot * 0.65);
+        var barWidth = Math.Min(slot, Math.Max(1, slot * 0.65));
+        var maxBarHeight = rect.Height / 2;
 
         for (var i = 0; i < values.Count; i++)
         {
@@ -144,9 +145,10 @@ public static class SparklineLayoutPlanner
             var height = winLoss
                 ? rect.Height / 2
                 : Math.Abs(value) / maxAbs * rect.Height / 2;
+            height = Math.Min(maxBarHeight, Math.Max(1, height));
             var x = rect.Left + i * slot + (slot - barWidth) / 2;
             var y = value >= 0 ? axis - height : axis;
-            consumer.AcceptBar(new Rect(x, y, barWidth, Math.Max(1, height)), value < 0);
+            consumer.AcceptBar(new Rect(x, y, barWidth, height), value < 0);
         }
     }
 
