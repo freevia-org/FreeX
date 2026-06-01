@@ -388,6 +388,21 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesLiveWebQueryPackageReferenceCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/live-web-queries-001.xlsx" &&
+            row.FeatureTags.Contains("live-web-queries", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("web-publish", StringComparison.Ordinal));
+        const string reportLine = "| Live web query package references | Web publishing items and web-query connection metadata are exercised by generated known-gap retention coverage |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
+    }
+
+    [Fact]
     public void CorpusReport_StatesSmartArtPackageReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();

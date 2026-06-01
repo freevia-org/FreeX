@@ -228,7 +228,15 @@ internal static class XlsxCorpusFixtureFactory
         "generated-office-addins-001" => CreatePackage(
             ("xl/webextensions/taskpanes.xml", "<taskpanes/>"),
             ("xl/webextensions/webextension1.xml", "<webextension/>")),
-        "generated-live-web-queries-001" => CreatePackage(("xl/webPublishItems.xml", "<webPublishItems/>")),
+        "generated-live-web-queries-001" => CreatePackage(
+            ("xl/webPublishItems.xml", "<webPublishItems/>"),
+            ("xl/connections.xml", """
+                <connections xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+                  <connection id="1" name="FreeX Web Query" type="4" refreshedVersion="6">
+                    <webPr sourceData="1" parsePre="1" consecutive="1" firstRow="1" url="https://example.com/freex-web-query.html"/>
+                  </connection>
+                </connections>
+                """)),
         "generated-sensitivity-labels-001" => CreatePackage(("docProps/custom.xml", """
             <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"
                         xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
