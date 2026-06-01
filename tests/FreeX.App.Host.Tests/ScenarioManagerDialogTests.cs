@@ -502,10 +502,12 @@ public sealed class ScenarioManagerDialogTests
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ScenarioManagerDialog.cs"));
 
-        source.Should().Contain("_scenarioList.MouseDoubleClick += (_, _) => AcceptSelectedScenario();");
+        source.Should().Contain("_scenarioList.MouseDoubleClick += ScenarioList_MouseDoubleClick;");
         source.Should().Contain("_showButton = AddActionButton(sideButtons, UiText.Get(\"ScenarioManager_Show\"), ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null, isDefault: _scenarioList.SelectedItem is not null);");
         source.Should().Contain("private void AcceptSelectedScenario()");
         source.Should().Contain("Accept(ScenarioManagerAction.Show);");
+        source.Should().Contain("private void ScenarioList_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
+        source.Should().Contain("e.Handled = true;");
         source.Should().Contain("_showButton.IsDefault = hasSelection;");
     }
 
