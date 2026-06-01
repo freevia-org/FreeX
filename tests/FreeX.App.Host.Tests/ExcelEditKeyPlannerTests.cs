@@ -312,4 +312,39 @@ public sealed class ExcelEditKeyPlannerTests
         intent.Action.Should().Be(ExcelEditKeyAction.CommitSelection);
         intent.Target.Should().BeNull();
     }
+
+    [Theory]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    public void GetIntent_DoesNotTreatExtraModifiedEnterAsCommitSelection(ModifierKeys modifiers)
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            Key.Enter,
+            modifiers,
+            Current,
+            pageSize: 20,
+            allowFormulaBarNavigationKeys: false);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.None);
+        intent.Target.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(ModifierKeys.Shift | ModifierKeys.Alt)]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Shift | ModifierKeys.Alt)]
+    public void GetIntent_DoesNotTreatExtraModifiedEnterAsLineBreakInsertion(ModifierKeys modifiers)
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            Key.System,
+            modifiers,
+            Current,
+            pageSize: 20,
+            allowFormulaBarNavigationKeys: false,
+            systemKey: Key.Enter);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.None);
+        intent.Target.Should().BeNull();
+    }
 }

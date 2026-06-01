@@ -1,5 +1,8 @@
 using FluentAssertions;
+using FreeX.App.UI;
+using FreeX.Core.Model;
 using System.IO;
+using System.Windows;
 
 namespace FreeX.App.UI.Tests;
 
@@ -14,13 +17,62 @@ public sealed class GridViewContextMenuTests
             "src", "FreeX.App.UI", "GridView.Events.cs"));
 
         eventsSource.Should().Contain("HeaderContextMenuRequested");
-        inputSource.Should().Contain("HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Column, cm.Col, pos)");
-        inputSource.Should().Contain("HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Row, rm.Row, pos)");
-        inputSource.Should().Contain("if (pos.Y <= EffectiveColHeaderHeight && pos.X >= ActualRowHeaderWidth)");
-        inputSource.Should().Contain("if (pos.X <= ActualRowHeaderWidth && pos.Y >= EffectiveColHeaderHeight)");
-        inputSource.Should().Contain("if (pos.X < left)");
-        inputSource.Should().Contain("if (pos.Y < top)");
-        inputSource.Should().Contain("break;");
+        inputSource.Should().Contain("GridHeaderContextMenuHitPlanner.HitTest(Viewport, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight)");
+        inputSource.Should().Contain("HeaderContextMenuRequested?.Invoke(headerHit.Target, headerHit.Index, pos)");
+        inputSource.Should().NotContain("HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Column, cm.Col, pos)");
+        inputSource.Should().NotContain("HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Row, rm.Row, pos)");
+    }
+
+    [Fact]
+    public void HeaderContextMenuHitPlanner_ReturnsColumnOrRowHeaderTargets()
+    {
+        var viewport = CreateViewport();
+
+        GridHeaderContextMenuHitPlanner.HitTest(
+                viewport,
+                new Point(30 + 40 + 5, 8),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .Be(new GridHeaderContextMenuHit(GridHeaderContextMenuTarget.Column, 2));
+
+        GridHeaderContextMenuHitPlanner.HitTest(
+                viewport,
+                new Point(12, 18 + 20 + 5),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .Be(new GridHeaderContextMenuHit(GridHeaderContextMenuTarget.Row, 2));
+    }
+
+    [Fact]
+    public void HeaderContextMenuHitPlanner_ReturnsNullOutsideHeadersOrBeforeVisibleMetrics()
+    {
+        var viewport = CreateViewport();
+
+        GridHeaderContextMenuHitPlanner.HitTest(
+                viewport,
+                new Point(80, 40),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeNull();
+
+        GridHeaderContextMenuHitPlanner.HitTest(
+                viewport,
+                new Point(155, 8),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeNull();
+
+        GridHeaderContextMenuHitPlanner.HitTest(
+                viewport: null,
+                new Point(70, 8),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeNull();
     }
 
     [Fact]
@@ -99,6 +151,20 @@ public sealed class GridViewContextMenuTests
         resizeStart.Should().Contain("ColumnAutoFitRequested?.Invoke(index)");
         resizeStart.Should().Contain("RowAutoFitRequested?.Invoke(index)");
     }
+
+    private static ViewportModel CreateViewport() =>
+        new(
+            [],
+            [
+                new RowMetric(1, 20, 0),
+                new RowMetric(2, 20, 20),
+                new RowMetric(3, 20, 40)
+            ],
+            [
+                new ColMetric(1, 40, 0),
+                new ColMetric(2, 40, 40),
+                new ColMetric(3, 40, 80)
+            ]);
 
     private static string FindWorkspaceFile(params string[] relativeParts)
     {
