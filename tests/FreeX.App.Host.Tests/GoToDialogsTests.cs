@@ -157,10 +157,12 @@ public sealed class GoToDialogsTests
             {
                 historyList.SelectedItem = "D10";
 
-                historyList.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
                 {
                     RoutedEvent = Control.MouseDoubleClickEvent
-                });
+                };
+                historyList.RaiseEvent(doubleClick);
+                doubleClick.Handled.Should().BeTrue();
             }, DispatcherPriority.ApplicationIdle);
 
             dialog.ShowDialog().Should().BeTrue();
