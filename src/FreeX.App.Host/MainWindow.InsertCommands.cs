@@ -131,18 +131,22 @@ public partial class MainWindow
         var prefill = HyperlinkDialogPrefill.FromCell(_workbook.GetSheet(_currentSheetId), selectedRange.Start);
         var dialog = new HyperlinkDialog(prefill.Target, prefill.DisplayText) { Owner = this };
         if (dialog.ShowDialog() != true) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Insert Link",
-                selectedRange,
-                currentRange => new SetHyperlinkCommand(
-                    _currentSheetId,
-                    currentRange.Start,
-                    dialog.Result.Target,
-                    dialog.Result.DisplayText,
-                    new HyperlinkMetadata(
-                        ToCoreHyperlinkTargetKind(dialog.Result.LinkType),
-                        dialog.Result.ScreenTip,
-                        dialog.Result.Bookmark))))
+                sheetId =>
+                {
+                    var currentRange = SheetGrid.SelectedRange ?? selectedRange;
+                    var address = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId).Start;
+                    return new SetHyperlinkCommand(
+                        sheetId,
+                        address,
+                        dialog.Result.Target,
+                        dialog.Result.DisplayText,
+                        new HyperlinkMetadata(
+                            ToCoreHyperlinkTargetKind(dialog.Result.LinkType),
+                            dialog.Result.ScreenTip,
+                            dialog.Result.Bookmark));
+                }))
             return;
         UpdateViewport();
     }
