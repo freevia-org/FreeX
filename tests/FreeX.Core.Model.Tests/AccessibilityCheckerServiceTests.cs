@@ -337,6 +337,81 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastTextBoxText_WithExplicitFill()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Text = "Revenue slipped in April",
+            AltText = "April revenue annotation",
+            FillColor = new CellColor(20, 20, 20)
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastObjectText).Subject;
+
+        issue.Location.Should().Be("A2");
+        issue.Message.Should().Be("Text box text should have at least 4.5:1 contrast against its fill.");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastTextBoxText_WithThemeFill()
+    {
+        var workbook = new Workbook("Accessibility")
+        {
+            Theme = WorkbookTheme.Office
+                .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(245, 245, 245))
+                .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(240, 240, 240))
+                .WithSupplementalMetadata(
+                    [],
+                    hasObjectDefaults: true,
+                    objectDefaults: new WorkbookThemeObjectDefaults(
+                        Text: new WorkbookThemeTextObjectDefault(
+                            TextThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.1))))
+        };
+        var sheet = workbook.AddSheet("Objects");
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            Text = "Theme-colored callout",
+            AltText = "Theme-colored callout annotation",
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastObjectText).Subject;
+
+        issue.Location.Should().Be("B3");
+        issue.Message.Should().Be("Text box text should have at least 4.5:1 contrast against its fill.");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresTextBoxTextWithSufficientContrastOrNoText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Text = "Readable annotation",
+            AltText = "Readable annotation",
+            FillColor = CellColor.White
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Text = "   ",
+            AltText = "Blank annotation shape",
+            FillColor = new CellColor(20, 20, 20)
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastObjectText);
+    }
+
+    [Fact]
     public void FindIssues_IgnoresHiddenDrawingObjectsForAltTextChecks()
     {
         var workbook = new Workbook("Accessibility");
@@ -379,6 +454,7 @@ public sealed class AccessibilityCheckerServiceTests
             Anchor = new CellAddress(sheet.Id, 6, 1),
             Text = "Hidden annotation",
             AltText = "Text box",
+            FillColor = new CellColor(20, 20, 20),
             IsVisible = false
         });
 
@@ -386,7 +462,8 @@ public sealed class AccessibilityCheckerServiceTests
 
         issues.Where(i =>
                 i.Kind == AccessibilityIssueKind.MissingAltText ||
-                i.Kind == AccessibilityIssueKind.GenericAltText)
+                i.Kind == AccessibilityIssueKind.GenericAltText ||
+                i.Kind == AccessibilityIssueKind.LowContrastObjectText)
             .Should()
             .BeEmpty();
     }
