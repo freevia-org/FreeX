@@ -92,14 +92,15 @@ public sealed class RibbonResizeCoordinatorTests
 
             var crossedBand = harness.Diagnostics;
             crossedBand.RequestCount.Should().Be(1);
-            crossedBand.PostedCount.Should().Be(1);
-            crossedBand.ExecutedCount.Should().Be(1);
-            crossedBand.ForcedCompactCount.Should().Be(1);
+            crossedBand.PostedCount.Should().Be(0);
+            crossedBand.ExecutedCount.Should().Be(0);
+            crossedBand.ForcedCompactCount.Should().Be(0);
             crossedBand.SkippedCompactLayoutCount.Should().Be(1);
             crossedBand.LastRequestedWork.Should().Be("CompactOnly");
+            crossedBand.LastMergedWork.Should().Be("CompactOnly");
             harness.AdaptiveDiagnostics.AppliedStateSkipCount.Should().Be(
                 0,
-                "the render fallback should trust the compact state applied during resize instead of re-running the planner");
+                "resize should apply the compact state once and suppress the redundant render fallback");
         });
     }
 
@@ -160,18 +161,18 @@ public sealed class RibbonResizeCoordinatorTests
             var queued = harness.Diagnostics;
             queued.ResizeCompactionPendingOnExit.Should().BeFalse();
             queued.RequestCount.Should().Be(1);
-            queued.PostedCount.Should().Be(1);
+            queued.PostedCount.Should().Be(0);
             queued.LastMergedWork.Should().Be("CompactOnly");
             queued.FirstFrameLayoutUpdateCount.Should().BeGreaterThan(
                 0,
-                "native resize exit should settle the compacted ribbon before the queued render fallback is visible");
+                "native resize exit should settle the compacted ribbon without posting a redundant render fallback");
 
             harness.PumpDispatcher();
 
             var executed = harness.Diagnostics;
-            executed.ExecutedCount.Should().Be(1);
-            executed.ForcedCompactCount.Should().Be(1);
-            executed.LastExecutedWork.Should().Be("CompactOnly");
+            executed.ExecutedCount.Should().Be(0);
+            executed.ForcedCompactCount.Should().Be(0);
+            executed.LastExecutedWork.Should().Be("None");
         });
     }
 
@@ -202,7 +203,7 @@ public sealed class RibbonResizeCoordinatorTests
             var queued = harness.Diagnostics;
             queued.ResizeCompactionPendingOnExit.Should().BeFalse();
             queued.RequestCount.Should().Be(1);
-            queued.PostedCount.Should().Be(1);
+            queued.PostedCount.Should().Be(0);
             queued.ExecutedCount.Should().Be(0);
             queued.LastMergedWork.Should().Be("CompactOnly");
 
@@ -210,10 +211,10 @@ public sealed class RibbonResizeCoordinatorTests
 
             var executed = harness.Diagnostics;
             executed.RequestCount.Should().Be(1);
-            executed.PostedCount.Should().Be(1);
-            executed.ExecutedCount.Should().Be(1);
-            executed.ForcedCompactCount.Should().Be(1);
-            executed.LastExecutedWork.Should().Be("CompactOnly");
+            executed.PostedCount.Should().Be(0);
+            executed.ExecutedCount.Should().Be(0);
+            executed.ForcedCompactCount.Should().Be(0);
+            executed.LastExecutedWork.Should().Be("None");
         });
     }
 
@@ -237,20 +238,21 @@ public sealed class RibbonResizeCoordinatorTests
             var queued = harness.Diagnostics;
             queued.ResizeCompactionPendingOnExit.Should().BeFalse();
             queued.RequestCount.Should().Be(1);
-            queued.PostedCount.Should().Be(1);
+            queued.PostedCount.Should().Be(0);
             queued.LastMergedWork.Should().Be("CompactOnly");
             queued.FirstFrameLayoutUpdateCount.Should().Be(
                 0,
-                "explicit resize completion should not force a layout pass when the compact state is already current");
+                "explicit resize completion should not force a layout pass or post a fallback when the compact state is already current");
+            queued.SkippedCompactLayoutCount.Should().Be(1);
 
             harness.PumpDispatcher();
 
             var executed = harness.Diagnostics;
-            executed.ExecutedCount.Should().Be(1);
+            executed.ExecutedCount.Should().Be(0);
             executed.ForcedNormalizeCount.Should().Be(0);
-            executed.ForcedCompactCount.Should().Be(1);
+            executed.ForcedCompactCount.Should().Be(0);
             executed.SkippedCompactLayoutCount.Should().Be(1);
-            executed.LastExecutedWork.Should().Be("CompactOnly");
+            executed.LastExecutedWork.Should().Be("None");
         });
     }
 

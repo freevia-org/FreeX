@@ -1003,6 +1003,9 @@ public partial class MainWindow
 
         _ribbonFallbackRequestCount++;
         _lastRibbonFallbackRequestedWork = work;
+        if (TrySkipRedundantCompactFallbackPost(work))
+            return;
+
         _ribbonFallbackWork = MergeRibbonFallbackWork(_ribbonFallbackWork, work);
         _lastRibbonFallbackMergedWork = _ribbonFallbackWork;
         _queuedRibbonCompactFallbackStateKey = _ribbonFallbackWork == RibbonFallbackWork.CompactOnly
@@ -1085,6 +1088,21 @@ public partial class MainWindow
             : current == RibbonFallbackWork.CompactOnly || requested == RibbonFallbackWork.CompactOnly
                 ? RibbonFallbackWork.CompactOnly
                 : RibbonFallbackWork.None;
+
+    private bool TrySkipRedundantCompactFallbackPost(RibbonFallbackWork work)
+    {
+        if (work != RibbonFallbackWork.CompactOnly ||
+            _ribbonFallbackPending ||
+            _ribbonFallbackWork != RibbonFallbackWork.None ||
+            !CanSkipQueuedRibbonCompactFallback(_lastRibbonAdaptiveAppliedStateKey))
+        {
+            return false;
+        }
+
+        _lastRibbonFallbackMergedWork = RibbonFallbackWork.CompactOnly;
+        _ribbonFallbackSkippedCompactLayoutCount++;
+        return true;
+    }
 
     private static bool RibbonCompactUpdateRequiresLayout(RibbonCompactUpdateResult result) =>
         result is RibbonCompactUpdateResult.AppliedVisualChange or RibbonCompactUpdateResult.MeasuredCorrectionApplied;
