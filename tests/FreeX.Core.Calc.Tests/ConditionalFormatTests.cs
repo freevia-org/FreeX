@@ -159,6 +159,71 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void Benchmark_ConditionalFormatIconSetThresholds_ReportsTiming()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        for (uint row = 1; row <= 120; row++)
+        {
+            for (uint col = 1; col <= 40; col++)
+            {
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), Cell.FromValue(new NumberValue(row * col)));
+            }
+        }
+
+        var iconRule = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 120, 40)),
+            Priority = 1,
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "5Arrows"
+        };
+        iconRule.IconSetThresholds.AddRange([
+            new CfThresholdModel(CfThresholdType.Number, "500"),
+            new CfThresholdModel(CfThresholdType.Number, "1500"),
+            new CfThresholdModel(CfThresholdType.Number, "2500"),
+            new CfThresholdModel(CfThresholdType.Number, "3500")
+        ]);
+        sheet.ConditionalFormats.Add(iconRule);
+
+        var service = new ViewportService();
+        var request = new ViewportRequest(1, 1, 2_600, 3_000);
+        for (var i = 0; i < 2; i++)
+            service.GetViewport(wb, sheet.Id, request);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(10);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        ViewportModel? viewport = null;
+        for (var i = 0; i < 10; i++)
+        {
+            var step = Stopwatch.StartNew();
+            viewport = service.GetViewport(wb, sheet.Id, request);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        timings.Sort();
+        var mean = timings.Sum() / timings.Count;
+        var p95 = timings[(int)Math.Min(timings.Count - 1, Math.Ceiling(timings.Count * 0.95) - 1)];
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            "PERF CF_ICONSET_THRESHOLDS " +
+            $"steps={timings.Count} cells={viewport!.Cells.Count:N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={mean:F2} " +
+            $"p95_ms={p95:F2} max_ms={timings[^1]:F2} allocated_bytes={allocated:N0}");
+
+        viewport.Cells.Should().HaveCount(4_800);
+        GetCell(viewport, 120, 40).ConditionalIcon.Should().Be(new ConditionalFormatIcon("5Arrows", 4, 5, true));
+        total.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void ConditionalFormatAggregates_DoNotEnumerateEveryCellInLargeAppliesToRanges()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
@@ -255,6 +320,18 @@ public class ConditionalFormatTests
         source.Should().NotContain(
             ".Where(cf => cf.RuleType == CfRuleType.IconSet && cf.AppliesTo.Contains(addr))",
             "icon-set lookup runs for each displayed cell and should reuse preordered icon rules");
+    }
+
+    [Fact]
+    public void IconSetThresholdResolution_UsesStackAllocatedThresholdBuffers()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportService.ConditionalFormatIcons.cs"));
+
+        source.Should().Contain("stackalloc double[thresholdCount]");
+        source.Should().Contain("stackalloc bool[thresholdCount]");
+        source.Should().NotContain("new List<(double Value, bool GreaterThanOrEqual)>");
+        source.Should().NotContain("resolved.ToArray()");
     }
 
     [Fact]

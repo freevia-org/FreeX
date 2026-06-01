@@ -47,12 +47,24 @@ public sealed partial class ViewportService
         int iconCount,
         CfEvaluationContext cfContext)
     {
-        if (TryResolveIconSetThresholds(rule, cache, sheet, workbook, addr, iconCount, cfContext, out var thresholds))
+        var thresholdCount = iconCount - 1;
+        Span<double> thresholdValues = stackalloc double[thresholdCount];
+        Span<bool> thresholdComparisons = stackalloc bool[thresholdCount];
+        if (TryResolveIconSetThresholds(
+                rule,
+                cache,
+                sheet,
+                workbook,
+                addr,
+                iconCount,
+                cfContext,
+                thresholdValues,
+                thresholdComparisons))
         {
             var index = 0;
-            foreach (var threshold in thresholds)
+            for (var i = 0; i < thresholdCount; i++)
             {
-                if (threshold.GreaterThanOrEqual ? value >= threshold.Value : value > threshold.Value)
+                if (thresholdComparisons[i] ? value >= thresholdValues[i] : value > thresholdValues[i])
                     index++;
             }
 
@@ -81,13 +93,12 @@ public sealed partial class ViewportService
         CellAddress addr,
         int iconCount,
         CfEvaluationContext cfContext,
-        out (double Value, bool GreaterThanOrEqual)[] thresholds)
+        Span<double> thresholdValues,
+        Span<bool> thresholdComparisons)
     {
-        thresholds = [];
         if (rule.IconSetThresholds.Count < iconCount - 1)
             return false;
 
-        var resolved = new List<(double Value, bool GreaterThanOrEqual)>(iconCount - 1);
         for (var i = 0; i < iconCount - 1; i++)
         {
             var threshold = rule.IconSetThresholds[i];
@@ -106,11 +117,11 @@ public sealed partial class ViewportService
                     out var value))
                 return false;
 
-            resolved.Add((value, threshold.GreaterThanOrEqual ?? true));
+            thresholdValues[i] = value;
+            thresholdComparisons[i] = threshold.GreaterThanOrEqual ?? true;
         }
 
-        thresholds = resolved.ToArray();
-        return thresholds.Length == iconCount - 1;
+        return true;
     }
 
     private static int GetIconSetCount(string style) =>
