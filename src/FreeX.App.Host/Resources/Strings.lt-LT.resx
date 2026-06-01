@@ -4597,6 +4597,12 @@ Siųsti šios bandytojo versijos strigčių ataskaitas?</value>
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Pašalinti iš sąrašo</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Įtraukti į sparčiosios prieigos įrankių juostą</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Pašalinti iš sparčiosios prieigos įrankių juostos</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Pašalinti puslapio pertrauką</value>
   </data>

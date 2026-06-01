@@ -4597,6 +4597,12 @@ Enviar relat?rios de falhas para esta compila??o de teste?</value>
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Remover da lista</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Adicionar à Barra de Ferramentas de Acesso Rápido</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Remover da Barra de Ferramentas de Acesso Rápido</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Remover Quebra de Página</value>
   </data>

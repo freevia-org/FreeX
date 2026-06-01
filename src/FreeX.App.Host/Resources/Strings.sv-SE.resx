@@ -4597,6 +4597,12 @@ Skicka kraschrapporter för den här testaren?</value>
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Ta bort från lista</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Lägg till i verktygsfältet Snabbåtkomst</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Ta bort från verktygsfältet Snabbåtkomst</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Ta bort sidbrytning</value>
   </data>

@@ -4597,6 +4597,12 @@ Vai nosūtīt avāriju pārskatus šim testētāja būvējumam?</value>
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Noņemt no saraksta</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Pievienot ātrās piekļuves rīkjoslai</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Noņemt no ātrās piekļuves rīkjoslas</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Noņemt lappuses pārtraukumu</value>
   </data>

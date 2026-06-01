@@ -4587,6 +4587,12 @@
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Supprimer de la liste</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Ajouter à la barre d’outils Accès rapide</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Supprimer de la barre d’outils Accès rapide</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Supprimer le saut de page</value>
   </data>

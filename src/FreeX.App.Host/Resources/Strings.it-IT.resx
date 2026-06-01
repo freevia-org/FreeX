@@ -4597,6 +4597,12 @@ Continuare a salvare?</value>
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Rimuovi dall'elenco</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Aggiungi alla barra di accesso rapido</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Rimuovi dalla barra di accesso rapido</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Rimuovi interruzione di pagina</value>
   </data>

@@ -4597,6 +4597,12 @@ Lähetetäänkö tämän testausversion kaatumisraportit?</value>
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Poista luettelosta</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Lisää pikatyökaluriville</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Poista pikatyökaluriviltä</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Poista sivunvaihto</value>
   </data>
