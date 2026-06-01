@@ -99,6 +99,63 @@ public sealed class DataValidationServiceTests
             $"allocated_bytes={allocatedBytes:N0}");
     }
 
+    [Fact]
+    public void Benchmark_GetInputPromptManyRules_ReportsTimingAndAllocatedBytes()
+    {
+        const int ruleCount = 10_000;
+        const int steps = 100;
+
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= ruleCount; row++)
+        {
+            sheet.DataValidations.Add(new DataValidation
+            {
+                AppliesTo = new GridRange(
+                    new CellAddress(sheet.Id, row, 1),
+                    new CellAddress(sheet.Id, row, 1)),
+                ShowInputMessage = true,
+                PromptTitle = "Input",
+                PromptMessage = $"Rule {row}"
+            });
+        }
+
+        var target = new CellAddress(sheet.Id, ruleCount, 1);
+        DataValidationService.GetInputPrompt(sheet, target)
+            .Should()
+            .Be(new DataValidationService.InputPrompt("Input", $"Rule {ruleCount}"));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var timings = new double[steps];
+        var total = Stopwatch.StartNew();
+        DataValidationService.InputPrompt? prompt = null;
+
+        for (var i = 0; i < steps; i++)
+        {
+            var step = Stopwatch.StartNew();
+            prompt = DataValidationService.GetInputPrompt(sheet, target);
+            step.Stop();
+            timings[i] = step.Elapsed.TotalMilliseconds;
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        Console.WriteLine(
+            "PERF DATAVALIDATION_INPUT_PROMPT_LOOKUP " +
+            $"rules={ruleCount} steps={steps} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={timings.Average():F2} " +
+            $"p95_ms={timings.OrderBy(x => x).ElementAt((int)Math.Ceiling(steps * 0.95) - 1):F2} " +
+            $"max_ms={timings.Max():F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        prompt.Should().Be(new DataValidationService.InputPrompt("Input", $"Rule {ruleCount}"));
+    }
+
     private static DataValidation NewListRule(SheetId sheetId, string formula1) =>
         new()
         {
