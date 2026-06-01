@@ -1,5 +1,6 @@
 param(
-    [string]$Widths = $env:FREEX_SS_TOUR_WIDTHS
+    [string]$Widths = $env:FREEX_SS_TOUR_WIDTHS,
+    [string]$ExePath = $env:FREEX_RIBBON_EXE_PATH
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -151,15 +152,45 @@ function Resolve-CaptureWidths($requestedWidths) {
 
 $captureWidths = @(Resolve-CaptureWidths $Widths)
 
+function Resolve-FreeXExecutablePath($requestedExePath) {
+    if (-not [string]::IsNullOrWhiteSpace($requestedExePath)) {
+        $resolvedRequestedExePath = if ([System.IO.Path]::IsPathRooted($requestedExePath)) {
+            $requestedExePath
+        } else {
+            Join-Path (Get-Location) $requestedExePath
+        }
+
+        if (Test-Path -LiteralPath $resolvedRequestedExePath -PathType Leaf) {
+            return [System.IO.Path]::GetFullPath($resolvedRequestedExePath)
+        }
+
+        throw "FreeX executable was not found at $resolvedRequestedExePath. Pass -ExePath with an existing FreeX.App.Host.exe or build the host before running tools\screenshot_ribbon.ps1."
+    }
+
+    $releaseExe = Join-Path $repoRoot "src\FreeX.App.Host\bin\Release\net10.0-windows10.0.19041.0\FreeX.App.Host.exe"
+    if (Test-Path -LiteralPath $releaseExe -PathType Leaf) {
+        return $releaseExe
+    }
+
+    $binRoot = Join-Path $repoRoot "src\FreeX.App.Host\bin"
+    if (Test-Path -LiteralPath $binRoot -PathType Container) {
+        $discoveredExe = Get-ChildItem -LiteralPath $binRoot -Recurse -Filter "FreeX.App.Host.exe" -File |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+        if ($null -ne $discoveredExe) {
+            return $discoveredExe.FullName
+        }
+    }
+
+    throw "FreeX executable was not found. Pass -ExePath with an existing FreeX.App.Host.exe or build the Release host before running tools\screenshot_ribbon.ps1."
+}
+
 # Get screen DPI to calculate physical pixels for a 300px logical capture
 $dpi   = [Win32c]::GetScreenDpi()
 $scale = $dpi / 96.0
 Write-Host "Screen DPI: $dpi  Scale: $scale"
 
-$exe = Join-Path $repoRoot "src\FreeX.App.Host\bin\Release\net10.0-windows10.0.19041.0\FreeX.App.Host.exe"
-if (-not (Test-Path -LiteralPath $exe)) {
-    throw "FreeX executable was not found at $exe. Build the Release host before running tools\screenshot_ribbon.ps1."
-}
+$exe = Resolve-FreeXExecutablePath $ExePath
 
 $proc = Start-Process -FilePath $exe -PassThru
 Write-Host "Launched PID $($proc.Id)"

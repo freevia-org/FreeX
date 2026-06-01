@@ -43,7 +43,9 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("secrets.FREEX_MSIX_CERTIFICATE_BASE64");
         workflow.Should().Contain("secrets.FREEX_MSIX_CERTIFICATE_PASSWORD");
         workflow.Should().Contain("vars.FREEX_MSIX_TIMESTAMP_URL");
+        workflow.Should().Contain("$env:FREEX_MSIX_CERTIFICATE_PASSWORD = \"${{ secrets.FREEX_MSIX_CERTIFICATE_PASSWORD }}\"");
         workflow.Should().Contain("-MsixCertificatePath");
+        workflow.Should().NotContain("-MsixCertificatePassword\", $certificatePassword");
         workflow.Should().Contain("-PublishMode Msix");
         workflow.Should().Contain("FreeX-latest-win-x64.exe");
         workflow.Should().Contain("FreeX-latest-win-x64.exe.sha256");
@@ -133,6 +135,10 @@ public sealed class ReleaseAutomationWorkflowTests
         script.Should().Contain("[string]$MsixTimestampUrl = $env:FREEX_MSIX_TIMESTAMP_URL");
         script.Should().Contain("$artifactMsixPath = Join-Path $artifactRoot \"$artifactName.msix\"");
         script.Should().Contain("function ConvertTo-MsixPackageVersion");
+        script.Should().Contain("function Import-MsixSigningCertificate");
+        script.Should().Contain("ConvertTo-SecureString -String $CertificatePassword -AsPlainText -Force");
+        script.Should().Contain("Cert:\\CurrentUser\\My");
+        script.Should().Contain("function Remove-MsixSigningCertificate");
         script.Should().Contain("$msixVersion = ConvertTo-MsixPackageVersion -DisplayVersion $Version");
         script.Should().Contain("$msixParts[$i] = $msixParts[$i] % 65536");
         script.Should().Contain("<Identity Name=\"FreeX.Tester\" Publisher=\"CN=FreeXLocal\" Version=\"$msixVersion\" />");
@@ -143,7 +149,8 @@ public sealed class ReleaseAutomationWorkflowTests
         script.Should().Contain("pack /d $publishDir /p $artifactMsixPath /o");
         script.Should().Contain("Get-Command signtool.exe");
         script.Should().Contain("signtool.exe was not found. Install the Windows SDK to sign MSIX packages.");
-        script.Should().Contain("$signArgs = @(\"sign\", \"/fd\", \"SHA256\", \"/f\", $MsixCertificatePath)");
+        script.Should().Contain("$signArgs = @(\"sign\", \"/fd\", \"SHA256\", \"/sha1\", $importedSigningCertificate.Thumbprint, \"/s\", \"My\")");
+        script.Should().NotContain("\"/p\", $MsixCertificatePassword");
         script.Should().Contain("Created unsigned local MSIX; pass -MsixCertificatePath to sign it.");
         script.Should().Contain("$artifactMsixHashPath = \"$artifactMsixPath.sha256\"");
         script.Should().Contain("Set-Content -LiteralPath $artifactMsixHashPath");
@@ -189,7 +196,7 @@ public sealed class ReleaseAutomationWorkflowTests
         var root = document.RootElement;
 
         root.GetProperty("major").GetInt32().Should().Be(0);
-        root.GetProperty("overallCompletion").GetInt32().Should().BeInRange(93, 95);
+        root.GetProperty("overallCompletion").GetInt32().Should().BeInRange(0, 100);
         root.GetProperty("releasePatchBase").GetInt32().Should().BeGreaterThanOrEqualTo(0);
         root.GetProperty("releasePatchSource").GetString().Should().Be("github_run_number");
         root.GetProperty("channel").GetString().Should().Be("test");

@@ -12,8 +12,7 @@ public sealed class UiAutomationCatalogSnapshotTests
     [Trait("Category", "UIE2E")]
     public void VisibleControls_MatchCatalogSnapshotExpectations()
     {
-        if (!OperatingSystem.IsWindows() || !Environment.UserInteractive)
-            return;
+        UiE2ePreconditions.SkipUnlessEnabled();
 
         using var run = FreeXUiRun.Start();
 
@@ -52,8 +51,7 @@ public sealed class UiAutomationCatalogSnapshotTests
     [Trait("Category", "UIE2E")]
     public void VisibleDialogEntryPointControls_ExposeInvokePattern()
     {
-        if (!OperatingSystem.IsWindows() || !Environment.UserInteractive)
-            return;
+        UiE2ePreconditions.SkipUnlessEnabled();
 
         using var run = FreeXUiRun.Start();
         var root = AutomationElement.FromHandle(run.WindowHandle)
@@ -71,8 +69,7 @@ public sealed class UiAutomationCatalogSnapshotTests
     [Trait("Category", "UIE2E")]
     public void VisibleShellControls_ExposeExpectedAutomationPatterns()
     {
-        if (!OperatingSystem.IsWindows() || !Environment.UserInteractive)
-            return;
+        UiE2ePreconditions.SkipUnlessEnabled();
 
         using var run = FreeXUiRun.Start();
         var root = AutomationElement.FromHandle(run.WindowHandle)

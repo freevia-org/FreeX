@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using FluentAssertions;
 using FreeX.Core.IO;
+using Xunit.Sdk;
 
 namespace FreeX.App.Host.Tests;
 
@@ -15,7 +16,7 @@ public sealed class HeavyWorkbookRetestTests
     {
         var sourcePath = ResolveHeavyWorkbookPath();
         if (sourcePath is null)
-            return;
+            throw SkipException.ForSkip("Heavy workbook retest requires FREEX_HEAVY_WORKBOOK_PATH or the documented local workbook path.");
 
         var adapter = new XlsxFileAdapter();
         var loader = new OpenWorkbookLoader(_ => { });
@@ -64,6 +65,8 @@ public sealed class HeavyWorkbookRetestTests
         var configured = Environment.GetEnvironmentVariable("FREEX_HEAVY_WORKBOOK_PATH");
         if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
             return configured;
+        if (!string.IsNullOrWhiteSpace(configured))
+            throw new FileNotFoundException("FREEX_HEAVY_WORKBOOK_PATH does not point to an existing workbook.", configured);
 
         return File.Exists(DefaultHeavyWorkbookPath) ? DefaultHeavyWorkbookPath : null;
     }
