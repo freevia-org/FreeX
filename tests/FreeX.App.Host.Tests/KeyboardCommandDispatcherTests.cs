@@ -96,4 +96,21 @@ public sealed class KeyboardCommandDispatcherTests
         act.Should().Throw<InvalidOperationException>()
             .WithMessage("*OpenWorkbook*InsertFunction*");
     }
+
+    [Fact]
+    public void EnsureRegistered_DeduplicatesAndSortsMissingShortcutRoutes()
+    {
+        var dispatcher = new KeyboardCommandDispatcher();
+
+        var act = () => dispatcher.EnsureRegistered(
+            [
+                KeyboardCommandShortcut.InsertFunction,
+                KeyboardCommandShortcut.SaveWorkbook,
+                KeyboardCommandShortcut.InsertFunction,
+                KeyboardCommandShortcut.OpenWorkbook
+            ]);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*OpenWorkbook, SaveWorkbook, InsertFunction*");
+    }
 }
