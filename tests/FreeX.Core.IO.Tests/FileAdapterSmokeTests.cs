@@ -2704,6 +2704,40 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_Load_SkipsNullPictureCellSnapshots()
+    {
+        const string json = """
+            {
+              "Name": "PictureSnapshotNulls",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Pictures": [
+                    {
+                      "Anchor": "B2",
+                      "SourceRowCount": 2,
+                      "SourceColumnCount": 2,
+                      "Cells": [
+                        null,
+                        { "RowOffset": 1, "ColumnOffset": 1, "Text": "D" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var loaded = new NativeJsonAdapter().Load(stream);
+
+        var picture = loaded.GetSheetAt(0).Pictures.Should().ContainSingle().Subject;
+        picture.Anchor.ToA1().Should().Be("B2");
+        picture.Cells.Should().ContainSingle()
+            .Which.Should().Be(new PictureCellSnapshot(1, 1, "D"));
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_ImagePicture()
     {
         var workbook = new Workbook("ImagePictureTest");
