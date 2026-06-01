@@ -77,17 +77,7 @@ public static partial class FormulaAuditingService
         if (!workbook.DisabledFormulaErrorCodes.Contains(TwoDigitYearTextDateErrorCode))
             result.AddRange(FindTwoDigitYearTextDateIssues(workbook, sheetId));
 
-        if (!workbook.DisabledFormulaErrorCodes.Contains(FormulaRefersToBlankCellsErrorCode))
-            result.AddRange(FindFormulaRefersToBlankCellsIssues(workbook, sheetId));
-
-        if (!workbook.DisabledFormulaErrorCodes.Contains(InconsistentFormulaErrorCode))
-            result.AddRange(FindInconsistentFormulaIssues(workbook, sheetId));
-
-        if (!workbook.DisabledFormulaErrorCodes.Contains(FormulaOmitsAdjacentCellsErrorCode))
-            result.AddRange(FindFormulaOmitsAdjacentCellsIssues(workbook, sheetId));
-
-        if (!workbook.DisabledFormulaErrorCodes.Contains(UnlockedFormulaCellsErrorCode))
-            result.AddRange(FindUnlockedFormulaCellIssues(workbook, sheetId));
+        result.AddRange(FindFormulaCellIssues(workbook, sheetId));
 
         if (result.Count <= 1)
             return result;
@@ -175,6 +165,89 @@ public static partial class FormulaAuditingService
                     cell.FormulaText is null ? null : "=" + cell.FormulaText,
                     "The formula refers to one or more blank cells.");
             }
+        }
+    }
+
+    private static IEnumerable<FormulaErrorIssue> FindFormulaCellIssues(Workbook workbook, SheetId? sheetId)
+    {
+        var checkBlankReferences = !workbook.DisabledFormulaErrorCodes.Contains(FormulaRefersToBlankCellsErrorCode);
+        var checkInconsistentFormulas = !workbook.DisabledFormulaErrorCodes.Contains(InconsistentFormulaErrorCode);
+        var checkOmittedAdjacentCells = !workbook.DisabledFormulaErrorCodes.Contains(FormulaOmitsAdjacentCellsErrorCode);
+        var checkUnlockedFormulaCells = !workbook.DisabledFormulaErrorCodes.Contains(UnlockedFormulaCellsErrorCode);
+        if (!checkBlankReferences &&
+            !checkInconsistentFormulas &&
+            !checkOmittedAdjacentCells &&
+            !checkUnlockedFormulaCells)
+        {
+            yield break;
+        }
+
+        var flaggedInconsistentFormulas = checkInconsistentFormulas ? new HashSet<CellAddress>() : null;
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            if (sheet.FormulaCellCount == 0)
+                continue;
+
+            List<FormulaPattern>? formulas = checkInconsistentFormulas
+                ? new List<FormulaPattern>(sheet.FormulaCellCount)
+                : null;
+
+            foreach (var (address, cell) in EnumerateFormulaIssueCandidates(sheet))
+            {
+                if (cell.IgnoreFormulaError)
+                    continue;
+
+                if (checkBlankReferences && FormulaRefersToBlankCells(workbook, sheet.Id, cell))
+                {
+                    yield return new FormulaErrorIssue(
+                        sheet.Id,
+                        sheet.Name,
+                        address,
+                        address.ToA1(),
+                        FormulaRefersToBlankCellsErrorCode,
+                        cell.FormulaText is null ? null : "=" + cell.FormulaText,
+                        "The formula refers to one or more blank cells.");
+                }
+
+                if (formulas is not null && !string.IsNullOrWhiteSpace(cell.FormulaText))
+                    formulas.Add(new FormulaPattern(address, cell.FormulaText!, NormalizeFormulaPattern(address, cell.FormulaText!)));
+
+                if (checkOmittedAdjacentCells && FormulaOmitsAdjacentCells(workbook, sheet.Id, cell))
+                {
+                    yield return new FormulaErrorIssue(
+                        sheet.Id,
+                        sheet.Name,
+                        address,
+                        address.ToA1(),
+                        FormulaOmitsAdjacentCellsErrorCode,
+                        cell.FormulaText is null ? null : "=" + cell.FormulaText,
+                        "The formula omits adjacent cells in the region.");
+                }
+
+                if (checkUnlockedFormulaCells && IsUnlockedFormulaCell(workbook, cell))
+                {
+                    yield return new FormulaErrorIssue(
+                        sheet.Id,
+                        sheet.Name,
+                        address,
+                        address.ToA1(),
+                        UnlockedFormulaCellsErrorCode,
+                        cell.FormulaText is null ? null : "=" + cell.FormulaText,
+                        "The formula cell is unlocked and may be changed when the worksheet is protected.");
+                }
+            }
+
+            if (formulas is null || formulas.Count == 0 || flaggedInconsistentFormulas is null)
+                continue;
+
+            foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas.GroupBy(item => item.Address.Row), flaggedInconsistentFormulas))
+                yield return issue;
+
+            foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas.GroupBy(item => item.Address.Col), flaggedInconsistentFormulas))
+                yield return issue;
         }
     }
 

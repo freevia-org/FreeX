@@ -104,11 +104,7 @@ public partial class MainWindow
             availableWidth);
         var visualStateChanged = changedGroupCount > 0;
         visualStateChanged |= SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
-        var shouldApplyMeasuredCorrection = ShouldApplyRibbonMeasuredCorrection(
-            layout.RequiresMeasuredCorrection,
-            adaptiveGroups,
-            availableWidth,
-            selectedTabHeader);
+        var shouldApplyMeasuredCorrection = layout.RequiresMeasuredCorrection;
         var needsMeasuredPrimaryCorrection = shouldApplyMeasuredCorrection &&
             NeedsDataPrimaryGroupCorrection(adaptiveGroups, plannedStates, availableWidth, selectedTabHeader);
         var requiresMeasuredCorrection = cachedCorrectionNeedsExpansion ||
@@ -181,19 +177,6 @@ public partial class MainWindow
         {
             plannedStates[dataToolsIndex] = RibbonAdaptiveGroupState.Full;
         }
-    }
-
-    private static bool ShouldApplyRibbonMeasuredCorrection(
-        bool requiresMeasuredCorrection,
-        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
-        double availableWidth,
-        string? selectedTabHeader)
-    {
-        if (!requiresMeasuredCorrection)
-            return false;
-
-        return !IsHomeRibbonAdaptiveSurface(adaptiveGroups, selectedTabHeader) ||
-            availableWidth <= 1366;
     }
 
     private bool ApplyRibbonMeasuredPrimaryFallback(
@@ -526,15 +509,6 @@ public partial class MainWindow
         adaptiveGroups.Any(group =>
             string.Equals(group.CatalogId, "DataToolsGroup", StringComparison.Ordinal) ||
             string.Equals(group.Name, "Data Tools", StringComparison.Ordinal));
-
-    private static bool IsHomeRibbonAdaptiveSurface(
-        IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
-        string? selectedTabHeader) =>
-        string.Equals(selectedTabHeader, "Home", StringComparison.Ordinal) ||
-        string.Equals(selectedTabHeader, "HomeTab", StringComparison.Ordinal) ||
-        adaptiveGroups.Any(group =>
-            string.Equals(group.CatalogId, "HomeClipboardGroup", StringComparison.Ordinal) ||
-            string.Equals(group.Name, "Clipboard", StringComparison.Ordinal));
 
     private static void RemoveProtectedRibbonGroup(
         HashSet<int> protectedGroupIndexes,

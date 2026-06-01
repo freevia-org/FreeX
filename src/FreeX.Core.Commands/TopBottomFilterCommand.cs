@@ -10,8 +10,8 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
     private readonly uint _count;
     private readonly bool _top;
     private readonly bool _percent;
-    private HashSet<uint>? _previousHiddenRows;
-    private HashSet<uint>? _previousFilterHiddenRows;
+    private uint[]? _previousHiddenRows;
+    private uint[]? _previousFilterHiddenRows;
 
     public string Label => (_top, _percent) switch
     {
@@ -55,13 +55,13 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         _previousHiddenRows = [.. sheet.HiddenRows];
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
 
-        var filterCol = _range.Start.Col + _filterColOffset;
-        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
-            sheet.FilterHiddenRows.Remove(row);
-
         if (_count == 0)
+        {
+            FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
             return new CommandOutcome(true);
+        }
 
+        var filterCol = _range.Start.Col + _filterColOffset;
         var rankedRows = new List<(uint Row, double Value)>();
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {
@@ -78,6 +78,8 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
             .Take((int)Math.Min(keepCount, (uint)rankedRows.Count))
             .Select(item => item.Row)
             .ToHashSet();
+
+        FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
 
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {

@@ -16,12 +16,15 @@ internal static class RibbonAdaptiveTabProfiles
                 Rule(900, collapseFromGroup: "Alignment"),
                 Rule(1300, collapseFromGroup: "Styles"),
                 Rule(1366, collapseFromGroup: "Editing"),
-                Rule(1500, states: [State("Editing", RibbonAdaptiveGroupState.Full)])
+                Rule(
+                    1500,
+                    states: [State("Editing", RibbonAdaptiveGroupState.Full)],
+                    collapseGroups: ["Styles"])
             ],
             ProtectedGroups:
             [
                 Protected(1366, []),
-                Protected(1500, ["Editing"])
+                Protected(double.PositiveInfinity, ["Editing"])
             ],
             RequiresMeasuredCorrection: true),
         new(
