@@ -86,9 +86,17 @@ public sealed class XlsxChartExWriterTests
 
             if (expectParetoLine)
             {
+                var columnLayoutPr = series.Elements(ChartExNs + "layoutPr").Should().ContainSingle().Subject;
+                columnLayoutPr.Elements(ChartExNs + "aggregation").Should().ContainSingle();
+                series.Elements(ChartExNs + "axisId").Should().ContainSingle()
+                    .Which.Value.Should().Be("1");
+
                 var paretoLine = regionSeries[1];
                 paretoLine.Attribute("layoutId")!.Value.Should().Be("paretoLine");
-                paretoLine.Element(ChartExNs + "dataId")!.Attribute("val")!.Value.Should().Be("0");
+                paretoLine.Attribute("ownerIdx")!.Value.Should().Be("0");
+                paretoLine.Elements(ChartExNs + "dataId").Should().BeEmpty();
+                paretoLine.Elements(ChartExNs + "axisId").Should().ContainSingle()
+                    .Which.Value.Should().Be("2");
             }
 
             var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
@@ -291,6 +299,54 @@ public sealed class XlsxChartExWriterTests
         binning.Attribute("intervalClosed")!.Value.Should().Be("r");
         chartXml.Descendants(ChartExNs + "binCount").Should().BeEmpty();
         chartXml.Descendants(ChartExNs + "binSize").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Save_WritesNativeLikeParetoAggregationLineAndPercentageAxes()
+    {
+        var saved = SaveWorkbookWithChart(ChartType.Pareto);
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var plotArea = chartXml.Root!
+            .Element(ChartExNs + "chart")!
+            .Element(ChartExNs + "plotArea")!;
+        var regionSeries = plotArea
+            .Element(ChartExNs + "plotAreaRegion")!
+            .Elements(ChartExNs + "series")
+            .ToList();
+
+        var columnSeries = regionSeries[0];
+        columnSeries.Attribute("layoutId")!.Value.Should().Be("clusteredColumn");
+        columnSeries.Elements(ChartExNs + "dataId").Should().ContainSingle()
+            .Which.Attribute("val")!.Value.Should().Be("0");
+        columnSeries.Elements(ChartExNs + "layoutPr").Should().ContainSingle()
+            .Which.Elements(ChartExNs + "aggregation").Should().ContainSingle();
+        columnSeries.Elements(ChartExNs + "axisId").Should().ContainSingle()
+            .Which.Value.Should().Be("1");
+
+        var paretoLine = regionSeries[1];
+        paretoLine.Attribute("layoutId")!.Value.Should().Be("paretoLine");
+        paretoLine.Attribute("ownerIdx")!.Value.Should().Be("0");
+        paretoLine.Elements(ChartExNs + "dataId").Should().BeEmpty();
+        paretoLine.Elements(ChartExNs + "axisId").Should().ContainSingle()
+            .Which.Value.Should().Be("2");
+
+        var axes = plotArea.Elements(ChartExNs + "axis").ToList();
+        axes.Select(axis => axis.Attribute("id")!.Value).Should().Equal("0", "1", "2");
+        axes[0].Elements(ChartExNs + "catScaling").Should().ContainSingle()
+            .Which.Attribute("gapWidth")!.Value.Should().Be("2.19000006");
+        axes[0].Elements(ChartExNs + "tickLabels").Should().ContainSingle();
+        axes[1].Elements(ChartExNs + "valScaling").Should().ContainSingle();
+        axes[1].Elements(ChartExNs + "majorGridlines").Should().ContainSingle();
+        axes[1].Elements(ChartExNs + "tickLabels").Should().ContainSingle();
+        axes[2].Elements(ChartExNs + "valScaling").Should().ContainSingle()
+            .Which.Should().Match<XElement>(element =>
+                element.Attribute("min")!.Value == "0" &&
+                element.Attribute("max")!.Value == "1");
+        axes[2].Elements(ChartExNs + "units").Should().ContainSingle()
+            .Which.Attribute("unit")!.Value.Should().Be("percentage");
+        axes[2].Elements(ChartExNs + "tickLabels").Should().ContainSingle();
     }
 
     [Fact]
