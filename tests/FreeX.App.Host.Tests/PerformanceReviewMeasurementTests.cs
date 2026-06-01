@@ -145,6 +145,7 @@ public sealed class PerformanceReviewMeasurementTests
 
         source.Should().Contain("ApplyRibbonAdaptiveStateAt(");
         source.Should().Contain("out var changedIndex");
+        source.Should().NotContain("var appliedStates = plannedStates.ToArray();");
         source.Should().NotContain("var previousStates = plannedStates.ToArray();");
         source.Should().NotContain("previousStates = plannedStates.ToArray();");
         source.Should().NotContain("var expandedStates = plannedStates.ToArray();");

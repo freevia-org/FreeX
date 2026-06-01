@@ -121,7 +121,7 @@ public partial class MainWindow
 
         visualStateChanged |= SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
         appliedStateKey = CreateRibbonAppliedStateKey(availableWidth, plannedStates);
-        var appliedStates = plannedStates.ToArray();
+        var appliedStates = plannedStates;
         if (!hasCachedCorrection || requiresMeasuredCorrection)
             _ribbonCorrectedStateCache[correctionCacheKey] = appliedStates;
         _lastRibbonAdaptiveAppliedStateKey = appliedStateKey;
@@ -260,13 +260,14 @@ public partial class MainWindow
         if (ReferenceEquals(_ribbonAdaptiveControlCachePanel, activePanel) &&
             _ribbonAdaptiveGroupControlCache is not null)
         {
-            _ribbonAdaptiveScrollViewerCache ??= FindVisualAncestor<ScrollViewer>(activePanel);
+            _ribbonAdaptiveScrollViewerCache ??= GetOrCacheRibbonActivePanelScrollViewer(activePanel);
             return _ribbonAdaptiveGroupControlCache;
         }
 
         var groups = GetRibbonAdaptiveGroups(activePanel);
         _ribbonAdaptiveControlCachePanel = activePanel;
-        _ribbonAdaptiveScrollViewerCache = FindVisualAncestor<ScrollViewer>(activePanel);
+        _ribbonAdaptiveControlCacheTab = RibbonTabs?.SelectedItem as TabItem;
+        _ribbonAdaptiveScrollViewerCache = GetOrCacheRibbonActivePanelScrollViewer(activePanel);
         _ribbonAdaptiveGroupControlCache = groups;
         _ribbonAdaptiveControlCacheKey = null;
         _ribbonAdaptiveCollapsedButtonCache = null;
@@ -294,6 +295,7 @@ public partial class MainWindow
 
         var collapsedButtons = EnsureRibbonCollapsedGroupButtons(activePanel, groups);
         _ribbonAdaptiveControlCachePanel = activePanel;
+        _ribbonAdaptiveControlCacheTab = RibbonTabs?.SelectedItem as TabItem;
         _ribbonAdaptiveControlCacheKey = controlCacheKey;
         _ribbonAdaptiveCollapsedButtonCache = collapsedButtons;
         _lastRibbonAdaptiveAppliedStateKey = null;
@@ -429,7 +431,7 @@ public partial class MainWindow
         var ribbonScrollViewer = ReferenceEquals(_ribbonAdaptiveControlCachePanel, activePanel)
             ? _ribbonAdaptiveScrollViewerCache
             : null;
-        ribbonScrollViewer ??= FindVisualAncestor<ScrollViewer>(activePanel);
+        ribbonScrollViewer ??= GetOrCacheRibbonActivePanelScrollViewer(activePanel);
         _ribbonAdaptiveScrollViewerCache = ribbonScrollViewer;
         var availableWidth = ribbonScrollViewer?.ActualWidth > 0
             ? ribbonScrollViewer.ActualWidth
@@ -442,11 +444,22 @@ public partial class MainWindow
         return Math.Max(0, availableWidth ?? 0);
     }
 
-    private static string GetRibbonAdaptiveTabIdentity(DependencyObject element)
+    private string GetRibbonAdaptiveTabIdentity(DependencyObject element)
     {
+        if (element is StackPanel activePanel &&
+            TryGetSelectedRibbonActivePanelCache(activePanel, out var cachedTab, out _))
+        {
+            return GetRibbonAdaptiveTabIdentity(cachedTab);
+        }
+
         if (FindVisualAncestor<TabItem>(element) is not { } tab)
             return "";
 
+        return GetRibbonAdaptiveTabIdentity(tab);
+    }
+
+    private static string GetRibbonAdaptiveTabIdentity(TabItem tab)
+    {
         if (RibbonMetadata.TryGetCatalogId(tab, out var catalogId))
             return catalogId;
 
@@ -868,7 +881,7 @@ public partial class MainWindow
         return fixedWidth;
     }
 
-    private static string CreateRibbonAdaptiveMeasurementCacheKey(StackPanel activePanel, IReadOnlyList<FrameworkElement> groups)
+    private string CreateRibbonAdaptiveMeasurementCacheKey(StackPanel activePanel, IReadOnlyList<FrameworkElement> groups)
     {
         var tabName = GetRibbonAdaptiveTabIdentity(activePanel);
         return string.Join(
@@ -1280,11 +1293,13 @@ public partial class MainWindow
 
     private bool TryGetCachedActiveRibbonPanel(TabItem tabItem, out StackPanel? activePanel)
     {
-        if (_ribbonAdaptiveActivePanelCacheByTab.TryGetValue(tabItem, out var cachedPanel) &&
-            cachedPanel.IsVisible &&
-            ReferenceEquals(FindVisualAncestor<TabItem>(cachedPanel), tabItem))
+        if (_ribbonAdaptiveActivePanelCacheByTab.TryGetValue(tabItem, out var cached) &&
+            cached.Panel.IsVisible)
         {
-            activePanel = cachedPanel;
+            activePanel = cached.Panel;
+            _ribbonAdaptiveControlCacheTab = tabItem;
+            if (ReferenceEquals(_ribbonAdaptiveControlCachePanel, activePanel))
+                _ribbonAdaptiveScrollViewerCache ??= cached.ScrollViewer;
             return true;
         }
 
@@ -1301,8 +1316,49 @@ public partial class MainWindow
             return null;
         }
 
-        _ribbonAdaptiveActivePanelCacheByTab[tabItem] = activePanel;
+        var scrollViewer = FindVisualAncestor<ScrollViewer>(activePanel);
+        _ribbonAdaptiveActivePanelCacheByTab[tabItem] = new RibbonActivePanelCacheEntry(activePanel, scrollViewer);
+        _ribbonAdaptiveControlCacheTab = tabItem;
+        if (ReferenceEquals(_ribbonAdaptiveControlCachePanel, activePanel))
+            _ribbonAdaptiveScrollViewerCache = scrollViewer;
         return activePanel;
+    }
+
+    private ScrollViewer? GetOrCacheRibbonActivePanelScrollViewer(StackPanel activePanel)
+    {
+        if (TryGetSelectedRibbonActivePanelCache(activePanel, out var selectedTab, out var cached) &&
+            cached.ScrollViewer is { } cachedScrollViewer)
+        {
+            return cachedScrollViewer;
+        }
+
+        var scrollViewer = FindVisualAncestor<ScrollViewer>(activePanel);
+        if (scrollViewer is not null &&
+            TryGetSelectedRibbonActivePanelCache(activePanel, out selectedTab, out cached))
+        {
+            _ribbonAdaptiveActivePanelCacheByTab[selectedTab] = cached with { ScrollViewer = scrollViewer };
+        }
+
+        return scrollViewer;
+    }
+
+    private bool TryGetSelectedRibbonActivePanelCache(
+        StackPanel activePanel,
+        out TabItem selectedTab,
+        out RibbonActivePanelCacheEntry cached)
+    {
+        if (RibbonTabs?.SelectedItem is TabItem tabItem &&
+            _ribbonAdaptiveActivePanelCacheByTab.TryGetValue(tabItem, out var entry) &&
+            ReferenceEquals(entry.Panel, activePanel))
+        {
+            selectedTab = tabItem;
+            cached = entry;
+            return true;
+        }
+
+        selectedTab = null!;
+        cached = null!;
+        return false;
     }
 
     private static DependencyObject GetRibbonTabContentRoot(TabItem tabItem) =>
@@ -1335,6 +1391,8 @@ public partial class MainWindow
         int FixedChromeWidthTenths,
         string SelectedTabHeader,
         RibbonCollapsedGroupFootprintMode FootprintMode);
+
+    private sealed record RibbonActivePanelCacheEntry(StackPanel Panel, ScrollViewer? ScrollViewer);
 
     private readonly record struct RibbonStateSignature(
         int Count,
