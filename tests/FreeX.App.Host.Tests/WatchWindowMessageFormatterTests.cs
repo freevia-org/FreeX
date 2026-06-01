@@ -204,6 +204,21 @@ public sealed class WatchWindowMessageFormatterTests
         source.Should().Contain("_listView.SelectedItems.Add(row);");
     }
 
+    [Fact]
+    public void WatchWindowDialog_DoubleClickNavigateHandlesMouseEvent()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WatchWindowDialog.cs"));
+        var doubleClick = source[
+            source.IndexOf("private void ListView_MouseDoubleClick", StringComparison.Ordinal)..
+            source.IndexOf("private void ListView_KeyDown", StringComparison.Ordinal)];
+
+        doubleClick.Should().Contain("_navigateTo(row.Address);");
+        doubleClick.Should().Contain("e.Handled = true;");
+        doubleClick.IndexOf("_navigateTo(row.Address);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(doubleClick.IndexOf("e.Handled = true;", StringComparison.Ordinal));
+    }
+
     private static IEnumerable<T> FindLogicalDescendants<T>(DependencyObject root)
     {
         foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
