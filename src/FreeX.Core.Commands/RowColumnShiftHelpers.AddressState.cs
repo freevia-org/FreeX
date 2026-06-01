@@ -209,10 +209,7 @@ internal static partial class RowColumnShiftHelpers
     }
 
     private static void ClearStyleOnlyEntries(Sheet sheet)
-    {
-        foreach (var (key, _) in sheet.GetStyleOnlyEntries().ToList())
-            sheet.ClearStyleOnly(key.Row, key.Col);
-    }
+        => sheet.ClearStyleOnlyEntries();
 
     private static void ShiftOutlineAndGroupCollections(
         Sheet sheet,
