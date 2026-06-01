@@ -109,6 +109,31 @@ public class ViewportStyleTests
     }
 
     [Fact]
+    public void GetViewport_ReusedStyleIdKeepsNumberFormatColorsPerCell()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var styleId = workbook.RegisterStyle(new CellStyle { NumberFormat = "[Red][<0]0.00;[Blue]0.00" });
+
+        var negativeCell = Cell.FromValue(new NumberValue(-2.5));
+        negativeCell.StyleId = styleId;
+        var positiveCell = Cell.FromValue(new NumberValue(2.5));
+        positiveCell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), negativeCell);
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), positiveCell);
+
+        var viewport = new ViewportService().GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
+
+        var negative = viewport.Cells.Single(c => c.Row == 1 && c.Col == 1);
+        var positive = viewport.Cells.Single(c => c.Row == 1 && c.Col == 2);
+        negative.DisplayText.Should().Be("-2.50");
+        positive.DisplayText.Should().Be("2.50");
+        negative.Style!.FontColor.Should().Be(CellColor.FromArgb(255, 0, 0));
+        positive.Style!.FontColor.Should().Be(CellColor.FromArgb(0, 112, 192));
+        negative.Style.Should().NotBeSameAs(positive.Style);
+    }
+
+    [Fact]
     public void GetViewport_CommentOnlyCell_PopulatesDisplayCellWithCommentIndicator()
     {
         var workbook = new Workbook("test");
