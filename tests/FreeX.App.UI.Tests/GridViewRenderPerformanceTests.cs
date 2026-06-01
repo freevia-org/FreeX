@@ -394,6 +394,42 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void SelectionOnlyInvalidations_SkipEmptyPostSelectionLayers()
+    {
+        var dispatch = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
+        var splitPanes = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var renderPostSelectionLayers = dispatch[
+            dispatch.IndexOf("private void RenderPostSelectionLayers", StringComparison.Ordinal)..
+            dispatch.IndexOf("private bool HasPostSelectionLayerWork", StringComparison.Ordinal)];
+        var hasPostSelectionLayerWork = dispatch[
+            dispatch.IndexOf("private bool HasPostSelectionLayerWork", StringComparison.Ordinal)..
+            dispatch.IndexOf("private bool HasDrawingObjectLayerWork", StringComparison.Ordinal)];
+        var hasDrawingObjectLayerWork = dispatch[
+            dispatch.IndexOf("private bool HasDrawingObjectLayerWork", StringComparison.Ordinal)..];
+        var renderSplitDivider = splitPanes[
+            splitPanes.IndexOf("private void RenderSplitDivider", StringComparison.Ordinal)..
+            splitPanes.IndexOf("private void RenderSplitDividerHandles", StringComparison.Ordinal)];
+        var renderNativeControls = drawingObjects[
+            drawingObjects.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)];
+
+        renderPostSelectionLayers.Should().Contain("if (!HasPostSelectionLayerWork(skipHeavyLayers))");
+        hasPostSelectionLayerWork.Should().Contain("Viewport?.FrozenPanes is not null");
+        hasPostSelectionLayerWork.Should().Contain("Viewport?.SplitPanes is not null");
+        hasPostSelectionLayerWork.Should().Contain("_resizeTarget != ResizeTarget.None");
+        hasPostSelectionLayerWork.Should().Contain("FormulaTraceArrows is { Count: > 0 }");
+        hasPostSelectionLayerWork.Should().Contain("ClipboardRange is not null");
+        hasPostSelectionLayerWork.Should().Contain("HasDrawingObjectLayerWork()");
+        hasDrawingObjectLayerWork.Should().Contain("SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None");
+        hasDrawingObjectLayerWork.Should().Contain("ObjectDisplayMode == GridObjectDisplayMode.Nothing");
+        hasDrawingObjectLayerWork.Should().Contain("Charts is { Count: > 0 }");
+        hasDrawingObjectLayerWork.Should().Contain("TextBoxes is { Count: > 0 }");
+        renderSplitDivider.Should().Contain("if (Viewport?.SplitPanes is null) return;");
+        renderNativeControls.Should().Contain("NativeSlicers is not { Count: > 0 } && NativeTimelines is not { Count: > 0 }");
+    }
+
+    [Fact]
     public void LiveResizeContinuation_PaintsExpandedGridWithoutViewportRefresh()
     {
         var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));

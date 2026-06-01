@@ -43,6 +43,9 @@ public partial class GridView
 
     private void RenderPostSelectionLayers(DrawingContext dc, bool skipHeavyLayers)
     {
+        if (!HasPostSelectionLayerWork(skipHeavyLayers))
+            return;
+
         if (!skipHeavyLayers)
         {
             RenderFormulaTraceArrows(dc);
@@ -78,5 +81,39 @@ public partial class GridView
                     DrawObjectSelectionHandles(dc, selectedRect);
             }
         }
+    }
+
+    private bool HasPostSelectionLayerWork(bool skipHeavyLayers)
+    {
+        if (Viewport?.FrozenPanes is not null ||
+            Viewport?.SplitPanes is not null ||
+            _resizeTarget != ResizeTarget.None)
+        {
+            return true;
+        }
+
+        if (skipHeavyLayers)
+            return false;
+
+        return FormulaTraceArrows is { Count: > 0 } ||
+            (_autofillDragging && _autofillSourceRange.HasValue && _autofillTarget.HasValue) ||
+            ClipboardRange is not null ||
+            HasDrawingObjectLayerWork();
+    }
+
+    private bool HasDrawingObjectLayerWork()
+    {
+        if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
+            return true;
+
+        if (ObjectDisplayMode == GridObjectDisplayMode.Nothing)
+            return false;
+
+        return Charts is { Count: > 0 } ||
+            DrawingShapes is { Count: > 0 } ||
+            NativeSlicers is { Count: > 0 } ||
+            NativeTimelines is { Count: > 0 } ||
+            Pictures is { Count: > 0 } ||
+            TextBoxes is { Count: > 0 };
     }
 }
