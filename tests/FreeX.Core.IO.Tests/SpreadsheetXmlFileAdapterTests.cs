@@ -1596,6 +1596,24 @@ public sealed class SpreadsheetXmlFileAdapterTests
         act.Should().Throw<XmlException>();
     }
 
+    [Fact]
+    public void Load_RejectsXmlAboveCharacterLimit()
+    {
+        using var stream = StreamFromString($"""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Large">
+                <ss:Table>
+                  <ss:Row><ss:Cell><ss:Data ss:Type="String">{new string('A', 1024)}</ss:Data></ss:Cell></ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var act = () => new SpreadsheetXmlFileAdapter().Load(stream, maxCharactersInDocument: 256);
+
+        act.Should().Throw<XmlException>();
+    }
+
     private static MemoryStream StreamFromString(string value) =>
         new(Encoding.UTF8.GetBytes(value));
 

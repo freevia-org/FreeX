@@ -739,7 +739,7 @@ public partial class MainWindow
                             DvAlertStyle.Warning => MessageBoxImage.Warning,
                             _ => MessageBoxImage.Error
                         };
-                        MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
+                        ShowOwnedMessage(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
                             MessageBoxButton.OK, icon);
                         RefreshValidationDropdown();
                         return false;
@@ -756,7 +756,7 @@ public partial class MainWindow
                         var buttons = dvRule.AlertStyle == DvAlertStyle.Information
                             ? MessageBoxButton.OKCancel
                             : MessageBoxButton.YesNo;
-                        var result = MessageBox.Show(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
+                        var result = ShowOwnedMessage(violationMsg, dvRule.ErrorTitle ?? "Validation Error",
                             buttons, icon);
                         if (result is MessageBoxResult.No or MessageBoxResult.Cancel)
                         {

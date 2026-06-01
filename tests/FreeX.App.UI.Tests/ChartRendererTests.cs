@@ -44,6 +44,53 @@ public sealed class ChartRendererTests
     }
 
     [Fact]
+    public void ColumnRenderer_UsesRawChartDataValuesInsteadOfDisplayText()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [],
+            [],
+            [],
+            ChartDataCells:
+            [
+                ChartCell(sheetId, 1, 1, "Category", new TextValue("Category")),
+                ChartCell(sheetId, 1, 2, "Sales", new TextValue("Sales")),
+                ChartCell(sheetId, 2, 1, "Currency", new TextValue("Currency")),
+                ChartCell(sheetId, 2, 2, "1.234,50 EUR", new NumberValue(1234.5)),
+                ChartCell(sheetId, 3, 1, "Percent", new TextValue("Percent")),
+                ChartCell(sheetId, 3, 2, "25%", new NumberValue(0.25)),
+                ChartCell(sheetId, 4, 1, "Date", new TextValue("Date")),
+                ChartCell(sheetId, 4, 2, "01.01.2024", new DateTimeValue(45292))
+            ]));
+
+        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+
+        series.Items.Should().HaveCount(3);
+        Math.Max(series.Items[0].Y0, series.Items[0].Y1).Should().BeApproximately(1234.5, 0.001);
+        Math.Max(series.Items[1].Y0, series.Items[1].Y1).Should().BeApproximately(0.25, 0.001);
+        Math.Max(series.Items[2].Y0, series.Items[2].Y1).Should().BeApproximately(45292, 0.001);
+    }
+
+    [Fact]
+    public void Render_ExportsAtRequestedRenderScale()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "ChartRenderer.cs"));
+        var render = source[
+            source.IndexOf("public static ImageSource? Render(ChartModel chart, ViewportModel viewport, WorkbookTheme? theme, double renderScale)", StringComparison.Ordinal)..
+            source.IndexOf("private static PlotModel? BuildPlotModel", StringComparison.Ordinal)];
+
+        render.Should().Contain("Math.Clamp(renderScale, 0.25, 4.0)");
+        render.Should().Contain("chart.Width * renderScale");
+        render.Should().Contain("chart.Height * renderScale");
+    }
+
+    [Fact]
     public void ChartRenderer_DoesNotRenderMapChart()
     {
         var sheetId = SheetId.New();
@@ -2900,6 +2947,9 @@ public sealed class ChartRendererTests
 
     private static ChartDataCell ChartCell(SheetId sheetId, uint row, uint col, string text) =>
         new(sheetId, row, col, text);
+
+    private static ChartDataCell ChartCell(SheetId sheetId, uint row, uint col, string text, ScalarValue rawValue) =>
+        new(sheetId, row, col, text, rawValue);
 
     private static string FindWorkspaceFile(params string[] relativeParts)
     {

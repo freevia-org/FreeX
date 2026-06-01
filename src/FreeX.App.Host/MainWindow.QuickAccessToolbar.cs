@@ -73,6 +73,7 @@ public partial class MainWindow
         RibbonTooltip.SetKeyTip(button, FormatQuickAccessToolbarKeyTip(visibleIndex));
         RibbonTooltip.SetDescription(button, UiText.Get(command.DescriptionResourceKey));
         RibbonMetadata.SetCommandName(button, command.CommandName);
+        RibbonMetadata.SetCatalogId(button, command.Id);
         button.Click += (_, args) => ExecuteQuickAccessToolbarCommand(command.Id, button, args);
         return button;
     }
@@ -109,21 +110,18 @@ public partial class MainWindow
     {
         var state = new QuickAccessCommandState(
             _commandBus.CanUndo(_workbook.Id),
-            _commandBus.CanRedo(_workbook.Id));
+            _commandBus.CanRedo(_workbook.Id),
+            _workbook.GetSheet(_currentSheetId) is not null,
+            SheetGrid.SelectedRange is not null);
         if (!force && _lastQuickAccessCommandState == state)
             return;
 
         foreach (var button in _quickAccessToolbarButtons)
         {
-            if (!RibbonMetadata.TryGetCommandName(button, out var commandName))
+            if (!RibbonMetadata.TryGetCatalogId(button, out var commandId))
                 continue;
 
-            var isEnabled = commandName switch
-            {
-                "Undo" => state.CanUndo,
-                "Redo" => state.CanRedo,
-                _ => true
-            };
+            var isEnabled = QuickAccessCommandStateResolver.CanExecute(commandId, state);
             if (button.IsEnabled != isEnabled)
                 button.IsEnabled = isEnabled;
         }

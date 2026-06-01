@@ -381,6 +381,80 @@ public class ViewportLayoutTests
     }
 
     [Fact]
+    public void GetViewport_ChartDataCellsCarryRawValues()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var styleId = workbook.RegisterStyle(new CellStyle { NumberFormat = "$#,##0.00" });
+        var valueCell = Cell.FromValue(new NumberValue(1234.5));
+        valueCell.StyleId = styleId;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), valueCell);
+        sheet.Charts.Add(new ChartModel
+        {
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1))
+        });
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 100, 300));
+
+        var chartCell = viewport.ChartDataCells.Should().ContainSingle().Subject;
+        chartCell.DisplayText.Should().Be("$1,234.50");
+        chartCell.RawValue.Should().Be(new NumberValue(1234.5));
+    }
+
+    [Fact]
+    public void GetViewport_ChartDataCellsSkipHiddenRowsAndColumnsUnlessChartOptsIn()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.HiddenRows.Add(2);
+        sheet.Charts.Add(new ChartModel
+        {
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1))
+        });
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 100, 300));
+
+        viewport.ChartDataCells.Select(cell => cell.Row).Should().Equal(1u, 3u);
+
+        sheet.Charts[0].ShowDataInHiddenRowsAndColumns = true;
+        var includeHiddenViewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 100, 300));
+
+        includeHiddenViewport.ChartDataCells.Select(cell => cell.Row).Should().Equal(1u, 2u, 3u);
+    }
+
+    [Fact]
+    public void GetViewport_ChartDataCellsCapsHugeRanges()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Charts.Add(new ChartModel
+        {
+            DataRange = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, CellAddress.MaxRow, 1))
+        });
+
+        var viewport = new ViewportService().GetViewport(
+            workbook,
+            sheet.Id,
+            new ViewportRequest(1, 1, 100, 300));
+
+        viewport.ChartDataCells.Should().HaveCount(10_000);
+    }
+
+    [Fact]
     public void HitTest_UniformRowAndColumnSizes_FastPathMatchesExpectedCell()
     {
         // DefaultRowHeight = 20.0 px, DefaultColumnWidth = 8.43 chars → 8.43*8 = 67.44 px.

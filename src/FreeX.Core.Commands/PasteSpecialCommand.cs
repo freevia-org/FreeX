@@ -59,6 +59,15 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
             return new CommandOutcome(false, "Paste destination must be on the target sheet.");
         if (!Enum.IsDefined(_options.Operation))
             return new CommandOutcome(false, "Paste Special operation is not supported.");
+        if (PasteCommandValidator.ValidateInternalPaste(
+                _sheetId,
+                _sourceRange,
+                _sourceCells.Select(c => c.Address),
+                _destination,
+                _options.Transpose) is { } validationError)
+        {
+            return new CommandOutcome(false, validationError);
+        }
 
         var sheet = ctx.GetSheet(_sheetId);
         var cells = BuildDestinationCells(ctx.Workbook, sheet).ToList();
@@ -109,11 +118,13 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
             if (_options.SkipBlanks && IsBlank(sourceCell))
                 continue;
 
-            var rowOffset = sourceAddress.Row - _sourceRange.Start.Row;
-            var colOffset = sourceAddress.Col - _sourceRange.Start.Col;
             var destination = _options.Transpose
-                ? new CellAddress(_sheetId, _destination.Row + colOffset, _destination.Col + rowOffset)
-                : new CellAddress(_sheetId, _destination.Row + rowOffset, _destination.Col + colOffset);
+                ? PasteCommandCellFactory.TransposeDestination(_sourceRange, sourceAddress, _sheetId, _destination)
+                : PasteCommandCellFactory.Shift(
+                    sourceAddress,
+                    _sheetId,
+                    (int)_destination.Row - (int)_sourceRange.Start.Row,
+                    (int)_destination.Col - (int)_sourceRange.Start.Col);
 
             var cell = sourceCell.Clone();
             if (_options.Operation != PasteSpecialOperation.None)

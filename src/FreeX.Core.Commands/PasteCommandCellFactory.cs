@@ -71,7 +71,10 @@ internal static class PasteCommandCellFactory
     {
         var rowOffset = source.Row - sourceRange.Start.Row;
         var colOffset = source.Col - sourceRange.Start.Col;
-        return new CellAddress(targetSheetId, destination.Row + colOffset, destination.Col + rowOffset);
+        if (!WorksheetBounds.TryOffset(destination, targetSheetId, colOffset, rowOffset, out var address))
+            throw new ArgumentOutOfRangeException(nameof(destination), "Paste destination is outside the worksheet bounds.");
+
+        return address;
     }
 
     public static StyleId GetDestinationStyle(Sheet? targetSheet, CellAddress destinationAddress) =>
@@ -81,13 +84,10 @@ internal static class PasteCommandCellFactory
 
     public static CellAddress Shift(CellAddress source, SheetId targetSheetId, int rowDelta, int colDelta)
     {
-        int newRow = (int)source.Row + rowDelta;
-        int newCol = (int)source.Col + colDelta;
-        if (newRow < 1) newRow = 1;
-        if (newCol < 1) newCol = 1;
-        if (newRow > (int)CellAddress.MaxRow) newRow = (int)CellAddress.MaxRow;
-        if (newCol > (int)CellAddress.MaxCol) newCol = (int)CellAddress.MaxCol;
-        return new(targetSheetId, (uint)newRow, (uint)newCol);
+        if (!WorksheetBounds.TryShift(source, targetSheetId, rowDelta, colDelta, out var address))
+            throw new ArgumentOutOfRangeException(nameof(source), "Paste destination is outside the worksheet bounds.");
+
+        return address;
     }
 
     private static Cell BuildFormulaOrValueCell(

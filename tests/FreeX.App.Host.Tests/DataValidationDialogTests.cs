@@ -347,6 +347,74 @@ public sealed class DataValidationDialogTests
         betweenError.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("WholeNumber", "Equal", "1.5", "", "Whole number")]
+    [InlineData("Decimal", "GreaterThan", "one", "", "Decimal")]
+    [InlineData("Date", "Equal", "not-a-date", "", "Date")]
+    [InlineData("Time", "Equal", "25:00", "", "Time")]
+    [InlineData("TextLength", "Equal", "2.5", "", "Text length")]
+    [InlineData("List", "Between", "=\"unterminated", "", "Source")]
+    [InlineData("Custom", "Between", "=SUM(", "", "Formula")]
+    [InlineData("WholeNumber", "Between", "1", "two", "Whole number")]
+    public void ValidateCriteriaInputs_RejectsMalformedTypeSpecificCriteria(
+        string typeTag,
+        string operatorTag,
+        string formula1,
+        string formula2,
+        string expectedMessageFragment)
+    {
+        DataValidationDialog.TryValidateCriteriaInputs(
+                typeTag,
+                operatorTag,
+                formula1,
+                formula2,
+                out var error)
+            .Should()
+            .BeFalse();
+
+        error.Should().Contain(expectedMessageFragment);
+    }
+
+    [Theory]
+    [InlineData("WholeNumber", "Between", "1", "10")]
+    [InlineData("WholeNumber", "Equal", "=A1", "")]
+    [InlineData("Decimal", "GreaterThan", "-1.5", "")]
+    [InlineData("Date", "Equal", "2026-05-01", "")]
+    [InlineData("Time", "Equal", "09:30", "")]
+    [InlineData("TextLength", "LessThanOrEqual", "12", "")]
+    [InlineData("List", "Between", "Red,\"Blue, Green\"", "")]
+    [InlineData("List", "Between", "=$A$1:$A$5", "")]
+    [InlineData("Custom", "Between", "=MOD(A1,2)=0", "")]
+    public void ValidateCriteriaInputs_AllowsWellFormedTypeSpecificCriteria(
+        string typeTag,
+        string operatorTag,
+        string formula1,
+        string formula2)
+    {
+        DataValidationDialog.TryValidateCriteriaInputs(
+                typeTag,
+                operatorTag,
+                formula1,
+                formula2,
+                out var error)
+            .Should()
+            .BeTrue();
+
+        error.Should().BeNull();
+    }
+
+    [Fact]
+    public void DataValidationViolationMessages_UseOwnedMainWindowMessageHelper()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Editing.cs"));
+        var method = source[
+            source.IndexOf("private bool TryCreateCellFromEntryText(", StringComparison.Ordinal)..
+            source.IndexOf("private bool CommitPreparedEdits(", StringComparison.Ordinal)];
+
+        method.Should().Contain("ShowOwnedMessage(violationMsg");
+        method.Should().NotContain("MessageBox.Show(");
+    }
+
     [Fact]
     public void MainWindow_AppliesDataValidationToMatchingSettingsWhenRequested()
     {

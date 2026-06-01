@@ -12,10 +12,19 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         Workbook workbook,
         XNamespace workbookNs)
     {
-        var rules = workbook.Sheets
-            .SelectMany(sheet => sheet.ConditionalFormats)
-            .Where(cf => XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(cf) && cf.FormatIfTrue is not null)
-            .ToList();
+        var rules = new List<ConditionalFormat>();
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var conditionalFormat in sheet.ConditionalFormats)
+            {
+                if (conditionalFormat.FormatIfTrue is not null &&
+                    XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(conditionalFormat))
+                {
+                    rules.Add(conditionalFormat);
+                }
+            }
+        }
+
         if (rules.Count == 0)
             return new Dictionary<Guid, int>();
 
@@ -109,25 +118,32 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
         MergeDifferentialStyleElementNativeMetadata(dxf, style, workbookNs);
 
-        foreach (var (name, value) in style.NativeDifferentialAttributes ?? new Dictionary<string, string>())
+        if (style.NativeDifferentialAttributes is { } attributes)
         {
-            TrySetNativeAttributeIfMissing(dxf, name, value);
+            foreach (var (name, value) in attributes)
+                TrySetNativeAttributeIfMissing(dxf, name, value);
         }
 
-        foreach (var nativeChildXml in (style.NativeDifferentialChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        if (style.NativeDifferentialChildXmls is { } childXmls)
         {
-            try
+            foreach (var nativeChildXml in childXmls)
             {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == workbookNs &&
-                    nativeChild.Name.LocalName is not "font" and not "numFmt" and not "fill" and not "alignment" and not "border" and not "protection")
+                if (string.IsNullOrWhiteSpace(nativeChildXml))
+                    continue;
+
+                try
                 {
-                    dxf.Add(nativeChild);
+                    var nativeChild = XElement.Parse(nativeChildXml);
+                    if (nativeChild.Name.Namespace == workbookNs &&
+                        nativeChild.Name.LocalName is not "font" and not "numFmt" and not "fill" and not "alignment" and not "border" and not "protection")
+                    {
+                        dxf.Add(nativeChild);
+                    }
                 }
-            }
-            catch
-            {
-                // Ignore malformed native differential-style payloads from older saves.
+                catch
+                {
+                    // Ignore malformed native differential-style payloads from older saves.
+                }
             }
         }
 
@@ -139,7 +155,10 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         CellStyle style,
         XNamespace workbookNs)
     {
-        foreach (var (localName, sourceXml) in style.NativeDifferentialElementXmls ?? new Dictionary<string, string>())
+        if (style.NativeDifferentialElementXmls is null)
+            return;
+
+        foreach (var (localName, sourceXml) in style.NativeDifferentialElementXmls)
         {
             if (string.IsNullOrWhiteSpace(localName) || string.IsNullOrWhiteSpace(sourceXml))
                 continue;

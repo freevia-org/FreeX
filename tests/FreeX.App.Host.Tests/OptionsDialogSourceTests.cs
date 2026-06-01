@@ -241,6 +241,17 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_SurfacePersistenceFailuresInsteadOfClosingSilently()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
+
+        source.Should().Contain("if (!opts.Save())");
+        source.Should().Contain("DialogMessageHelper.ShowError(this, opts.LastPersistenceError, Title);");
+        source.Should().Contain("return;");
+        source.Should().Contain("DialogResult = true;");
+    }
+
+    [Fact]
     public void OptionsDialog_MoveAfterEnterToggleControlsDirectionEnabledState()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");

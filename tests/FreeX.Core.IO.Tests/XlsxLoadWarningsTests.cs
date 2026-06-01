@@ -13,10 +13,12 @@ public sealed class XlsxLoadWarningsTests
     private static readonly string[] ExpectedLoadWarningPrefixes =
     [
         "[print-area]",
+        "[hyperlinks]",
         "[conditional-format]",
         "[data-validation]",
         "[merged-regions]",
-        "[named-ranges]"
+        "[named-ranges]",
+        "[worksheet-xml-metadata]"
     ];
 
     [Fact]
@@ -108,10 +110,12 @@ public sealed class XlsxLoadWarningsTests
     [Fact]
     public void XlsxFileAdapterSource_ContainsExpectedWarningCategories()
     {
-        var adapterSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var adapterSource =
+            File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs")) +
+            File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SheetXmlLayout.cs"));
 
         foreach (var prefix in ExpectedLoadWarningPrefixes)
-            adapterSource.Should().Contain($"warnings.Add($\"{prefix}");
+            adapterSource.Should().Contain($"\"{prefix}");
     }
 
     private static byte[] SaveWorkbookToBytes(IFileAdapter adapter, Workbook workbook)
