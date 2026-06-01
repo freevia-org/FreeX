@@ -78,13 +78,20 @@ internal static class XlsxWorksheetThreadedCommentMapper
     private static IReadOnlyDictionary<string, string> CreateAuthorIds(Workbook workbook)
     {
         var authors = workbook.Sheets
-            .SelectMany(sheet => sheet.ThreadedComments.Values.Select(comment => NormalizeAuthor(comment.Author)))
+            .SelectMany(sheet => sheet.ThreadedComments.Values.SelectMany(GetThreadAuthors))
             .Where(author => author.Length > 0)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToDictionary(author => author, author => CreateStableGuid("person", author), StringComparer.Ordinal);
 
         return authors;
+    }
+
+    private static IEnumerable<string> GetThreadAuthors(ThreadedComment comment)
+    {
+        yield return NormalizeAuthor(comment.Author);
+        foreach (var reply in comment.Replies)
+            yield return NormalizeAuthor(reply.Author);
     }
 
     private static IReadOnlyList<string> ReadThreadedCommentPartPaths(ZipArchive archive, string worksheetPath)
@@ -181,17 +188,17 @@ internal static class XlsxWorksheetThreadedCommentMapper
         try
         {
             var commentsXml = XlsxPackageXmlEditor.LoadXml(entry);
+            var parsedComments = new List<ParsedThreadedComment>();
             foreach (var comment in commentsXml.Root?.Elements(ThreadedCommentNs + "threadedComment") ?? [])
             {
-                if (comment.Attribute("parentId") is not null)
-                    continue;
-
                 var reference = comment.Attribute("ref")?.Value;
-                if (string.IsNullOrWhiteSpace(reference) ||
-                    !CellAddress.TryParse(reference, SheetId.New(), out var address))
-                {
+                var address = default(CellAddress);
+                var hasAddress = !string.IsNullOrWhiteSpace(reference) &&
+                    CellAddress.TryParse(reference, SheetId.New(), out address);
+
+                var parentId = NormalizeId(comment.Attribute("parentId")?.Value);
+                if (parentId is null && !hasAddress)
                     continue;
-                }
 
                 var text = comment.Element(ThreadedCommentNs + "text")?.Value ?? "";
                 if (string.IsNullOrWhiteSpace(text))
@@ -201,12 +208,42 @@ internal static class XlsxWorksheetThreadedCommentMapper
                 var author = authorsByPersonId.TryGetValue(personId, out var displayName)
                     ? displayName
                     : "FreeX";
-                comments.Add((address.Row, address.Col, new ThreadedComment(text, author)
+                parsedComments.Add(new ParsedThreadedComment(
+                    hasAddress ? address.Row : null,
+                    hasAddress ? address.Col : null,
+                    NormalizeId(comment.Attribute("id")?.Value),
+                    parentId,
+                    text,
+                    author,
+                    ParseDateTimeOffset(comment.Attribute("dT")?.Value),
+                    XlsxWorksheetXmlValueParser.IsTruthy(comment.Attribute("done")?.Value)));
+            }
+
+            var repliesByParentId = parsedComments
+                .Where(comment => comment.ParentId is not null)
+                .GroupBy(comment => comment.ParentId!, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var root in parsedComments.Where(comment => comment.ParentId is null))
+            {
+                if (root.Row is not { } row || root.Col is not { } col)
+                    continue;
+
+                var replies = root.Id is not null &&
+                    repliesByParentId.TryGetValue(root.Id, out var parsedReplies)
+                    ? parsedReplies.Select(ToCommentReply).ToList()
+                    : [];
+
+                var threadedComment = new ThreadedComment(root.Text, root.Author)
                 {
-                    CreatedAtUtc = ParseDateTimeOffset(comment.Attribute("dT")?.Value),
-                    ModifiedAtUtc = ParseDateTimeOffset(comment.Attribute("dT")?.Value),
-                    IsResolved = XlsxWorksheetXmlValueParser.IsTruthy(comment.Attribute("done")?.Value)
-                }));
+                    CreatedAtUtc = root.TimestampUtc,
+                    ModifiedAtUtc = GetThreadModifiedAt(root.TimestampUtc, replies),
+                    IsResolved = root.IsResolved
+                };
+                if (replies.Count > 0)
+                    threadedComment = threadedComment with { Replies = replies };
+
+                comments.Add((row, col, threadedComment));
             }
         }
         catch
@@ -258,31 +295,74 @@ internal static class XlsxWorksheetThreadedCommentMapper
                 sheet.ThreadedComments
                     .OrderBy(pair => pair.Key.Row)
                     .ThenBy(pair => pair.Key.Col)
-                    .Select(pair => ToThreadedCommentElement(sheet, pair.Key, pair.Value, authorsByName))));
+                    .SelectMany(pair => ToThreadedCommentElements(sheet, pair.Key, pair.Value, authorsByName))));
 
         XlsxPackageXmlEditor.ReplaceXml(archive, threadedCommentPath, commentsXml);
         XlsxPackageXmlEditor.EnsureSpecificContentType(archive, threadedCommentPath, ThreadedCommentsContentType);
     }
 
-    private static XElement ToThreadedCommentElement(
+    private static IEnumerable<XElement> ToThreadedCommentElements(
         Sheet sheet,
         CellAddress address,
         ThreadedComment comment,
         IReadOnlyDictionary<string, string> authorsByName)
+    {
+        var parentId = CreateStableGuid("comment", $"{sheet.Name}!{address.ToA1()}:{comment.Text}");
+        yield return ToThreadedCommentElement(address, comment, authorsByName, parentId);
+
+        for (var replyIndex = 0; replyIndex < comment.Replies.Count; replyIndex++)
+        {
+            yield return ToThreadedCommentReplyElement(
+                sheet,
+                address,
+                comment.Replies[replyIndex],
+                replyIndex,
+                authorsByName,
+                parentId);
+        }
+    }
+
+    private static XElement ToThreadedCommentElement(
+        CellAddress address,
+        ThreadedComment comment,
+        IReadOnlyDictionary<string, string> authorsByName,
+        string id)
     {
         var author = NormalizeAuthor(comment.Author);
         var element = new XElement(
             ThreadedCommentNs + "threadedComment",
             new XAttribute("ref", address.ToA1()),
             new XAttribute("personId", authorsByName[author]),
-            new XAttribute("id", CreateStableGuid("comment", $"{sheet.Name}!{address.ToA1()}:{comment.Text}")),
+            new XAttribute("id", id),
             new XElement(ThreadedCommentNs + "text", comment.Text));
 
-        if (comment.CreatedAtUtc is { } createdAt)
-            element.SetAttributeValue("dT", FormatDateTimeOffset(createdAt));
+        SetDateTimeAttribute(element, comment.CreatedAtUtc ?? comment.ModifiedAtUtc);
         if (comment.IsResolved)
             element.SetAttributeValue("done", "1");
 
+        return element;
+    }
+
+    private static XElement ToThreadedCommentReplyElement(
+        Sheet sheet,
+        CellAddress address,
+        CommentReply reply,
+        int replyIndex,
+        IReadOnlyDictionary<string, string> authorsByName,
+        string parentId)
+    {
+        var author = NormalizeAuthor(reply.Author);
+        var element = new XElement(
+            ThreadedCommentNs + "threadedComment",
+            new XAttribute("ref", address.ToA1()),
+            new XAttribute("personId", authorsByName[author]),
+            new XAttribute("id", CreateStableGuid(
+                "comment-reply",
+                $"{sheet.Name}!{address.ToA1()}:{parentId}:{replyIndex}:{author}:{reply.Text}")),
+            new XAttribute("parentId", parentId),
+            new XElement(ThreadedCommentNs + "text", reply.Text));
+
+        SetDateTimeAttribute(element, reply.CreatedAtUtc ?? reply.ModifiedAtUtc);
         return element;
     }
 
@@ -309,6 +389,9 @@ internal static class XlsxWorksheetThreadedCommentMapper
     private static string NormalizeAuthor(string? author) =>
         string.IsNullOrWhiteSpace(author) ? "FreeX" : author.Trim();
 
+    private static string? NormalizeId(string? id) =>
+        string.IsNullOrWhiteSpace(id) ? null : id.Trim();
+
     private static string CreateStableGuid(string scope, string value)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"FreeX:{scope}:{value}"));
@@ -330,4 +413,42 @@ internal static class XlsxWorksheetThreadedCommentMapper
             out var parsed)
             ? parsed.ToUniversalTime()
             : null;
+
+    private static CommentReply ToCommentReply(ParsedThreadedComment comment) =>
+        new(comment.Text, comment.Author)
+        {
+            CreatedAtUtc = comment.TimestampUtc,
+            ModifiedAtUtc = comment.TimestampUtc
+        };
+
+    private static DateTimeOffset? GetThreadModifiedAt(
+        DateTimeOffset? rootTimestampUtc,
+        IReadOnlyList<CommentReply> replies)
+    {
+        var latest = rootTimestampUtc;
+        foreach (var reply in replies)
+        {
+            var candidate = reply.ModifiedAtUtc ?? reply.CreatedAtUtc;
+            if (candidate is not null && (latest is null || candidate > latest))
+                latest = candidate;
+        }
+
+        return latest;
+    }
+
+    private static void SetDateTimeAttribute(XElement element, DateTimeOffset? timestampUtc)
+    {
+        if (timestampUtc is { } value)
+            element.SetAttributeValue("dT", FormatDateTimeOffset(value));
+    }
+
+    private sealed record ParsedThreadedComment(
+        uint? Row,
+        uint? Col,
+        string? Id,
+        string? ParentId,
+        string Text,
+        string Author,
+        DateTimeOffset? TimestampUtc,
+        bool IsResolved);
 }
