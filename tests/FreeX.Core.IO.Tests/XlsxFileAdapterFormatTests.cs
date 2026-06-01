@@ -60,7 +60,7 @@ public sealed class XlsxFileAdapterFormatTests
         var sourcePackageSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackage.cs"))
             .ReplaceLineEndings("\n");
         var preserveSourcePackageParts = sourcePackageSource[
-            sourcePackageSource.IndexOf("private static void PreserveSourcePackageParts", StringComparison.Ordinal)..
+            sourcePackageSource.IndexOf("private static SourcePackagePartSummary PreserveSourcePackageParts", StringComparison.Ordinal)..
             sourcePackageSource.IndexOf("private struct SourcePackagePartSummary", StringComparison.Ordinal)];
         var legacyDrawingHfDependencies = sourcePackageSource[
             sourcePackageSource.IndexOf("private static IEnumerable<string> GetLegacyDrawingHfDependencyPaths", StringComparison.Ordinal)..
@@ -199,7 +199,7 @@ public sealed class XlsxFileAdapterFormatTests
             "if (!hasSourcePackage)\n        {\n            SaveSourcePackageIndependentPostProcessingMetadata();\n            return;\n        }",
             StringComparison.Ordinal);
         var sourceReplay = savePostProcessingSource.IndexOf(
-            "PreserveSourcePackageParts(workbook, packageStream);",
+            "var sourceParts = PreserveSourcePackageParts(workbook, packageStream);",
             StringComparison.Ordinal);
 
         sourcePackageCheck.Should().BeGreaterThanOrEqualTo(0);

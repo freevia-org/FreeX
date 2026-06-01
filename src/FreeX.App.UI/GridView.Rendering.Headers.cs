@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
@@ -19,6 +20,8 @@ public partial class GridView
         bool UseR1C1ReferenceStyle,
         string CultureName,
         double PixelsPerDip);
+
+    private readonly record struct HeaderSelectionInterval(uint Start, uint End);
 
     private void RenderFreezeDivider(DrawingContext dc)
     {
@@ -134,15 +137,20 @@ public partial class GridView
         if (selectedRanges is not { Count: > 0 } && selRange is null)
             return;
 
+        var columnIntervals = BuildColumnHeaderSelectionIntervals(selectedRanges, selRange);
+        var rowIntervals = BuildRowHeaderSelectionIntervals(selectedRanges, selRange);
+        var columnIntervalIndex = 0;
+        var rowIntervalIndex = 0;
+
         foreach (var col in viewport.ColMetrics)
         {
-            if (IsColumnHeaderSelected(col.Col, selectedRanges, selRange))
+            if (IsHeaderSelected(col.Col, columnIntervals, ref columnIntervalIndex))
                 DrawColumnHeader(dc, col, rowHeaderWidth, columnHeaderHeight, HeaderHighlightBrush, pixelsPerDip);
         }
 
         foreach (var row in viewport.RowMetrics)
         {
-            if (IsRowHeaderSelected(row.Row, selectedRanges, selRange))
+            if (IsHeaderSelected(row.Row, rowIntervals, ref rowIntervalIndex))
                 DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, HeaderHighlightBrush, pixelsPerDip);
         }
     }
@@ -189,40 +197,47 @@ public partial class GridView
             rect.Top + (rect.Height - text.Height) / 2));
     }
 
-    private static bool IsColumnHeaderSelected(uint column, IReadOnlyList<GridRange>? selectedRanges, GridRange? selectedRange)
+    private static IReadOnlyList<HeaderSelectionInterval> BuildColumnHeaderSelectionIntervals(
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridRange? selectedRange) =>
+        BuildHeaderSelectionIntervals(selectedRanges, selectedRange, static range => new HeaderSelectionInterval(range.Start.Col, range.End.Col));
+
+    private static IReadOnlyList<HeaderSelectionInterval> BuildRowHeaderSelectionIntervals(
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridRange? selectedRange) =>
+        BuildHeaderSelectionIntervals(selectedRanges, selectedRange, static range => new HeaderSelectionInterval(range.Start.Row, range.End.Row));
+
+    private static IReadOnlyList<HeaderSelectionInterval> BuildHeaderSelectionIntervals(
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridRange? selectedRange,
+        Func<GridRange, HeaderSelectionInterval> selector)
     {
         if (selectedRanges is { Count: > 0 })
         {
+            var intervals = new List<HeaderSelectionInterval>(selectedRanges.Count);
             foreach (var range in selectedRanges)
-            {
-                if (column >= range.Start.Col && column <= range.End.Col)
-                    return true;
-            }
+                intervals.Add(selector(range));
 
-            return false;
+            intervals.Sort(static (left, right) => left.Start.CompareTo(right.Start));
+            return intervals;
         }
 
-        return selectedRange.HasValue &&
-            column >= selectedRange.Value.Start.Col &&
-            column <= selectedRange.Value.End.Col;
+        return selectedRange.HasValue
+            ? [selector(selectedRange.Value)]
+            : [];
     }
 
-    private static bool IsRowHeaderSelected(uint row, IReadOnlyList<GridRange>? selectedRanges, GridRange? selectedRange)
+    private static bool IsHeaderSelected(
+        uint index,
+        IReadOnlyList<HeaderSelectionInterval> intervals,
+        ref int intervalIndex)
     {
-        if (selectedRanges is { Count: > 0 })
-        {
-            foreach (var range in selectedRanges)
-            {
-                if (row >= range.Start.Row && row <= range.End.Row)
-                    return true;
-            }
+        while (intervalIndex < intervals.Count && index > intervals[intervalIndex].End)
+            intervalIndex++;
 
-            return false;
-        }
-
-        return selectedRange.HasValue &&
-            row >= selectedRange.Value.Start.Row &&
-            row <= selectedRange.Value.End.Row;
+        return intervalIndex < intervals.Count &&
+            index >= intervals[intervalIndex].Start &&
+            index <= intervals[intervalIndex].End;
     }
 
     internal static string FormatColumnHeader(uint column, bool useR1C1ReferenceStyle) =>

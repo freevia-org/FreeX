@@ -52,6 +52,14 @@ internal static class XlsxWorkbookMetadataWriter
             return changed;
         });
 
+    public static bool HasSourcePackageReplayMetadata(Workbook workbook) =>
+        workbook.AdditionalViews is not null ||
+        workbook.FileVersion is not null ||
+        workbook.FunctionGroups is not null ||
+        workbook.SmartTags is not null ||
+        workbook.FileSharing is not null ||
+        workbook.FileRecoveryProperties.Count > 0;
+
     public static void SaveWorkbookProperties(Stream xlsxStream, Workbook workbook)
     {
         SaveWorkbookXml(xlsxStream, workbook, static (_, root, model) => ApplyWorkbookProperties(root, model));

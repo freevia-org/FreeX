@@ -181,15 +181,17 @@ public static class SelectionRangeService
                 return null;
             }
 
-            var colsByRow = new Dictionary<uint, List<uint>>();
-            var rowsByCol = new Dictionary<uint, List<uint>>();
-            foreach (var (address, cell) in sheet.EnumerateCells())
+            var rowCapacity = GetDictionaryCapacity(sheet.CellCount, usedRange.RowCount);
+            var colCapacity = GetDictionaryCapacity(sheet.CellCount, usedRange.ColCount);
+            var colsByRow = new Dictionary<uint, List<uint>>(rowCapacity);
+            var rowsByCol = new Dictionary<uint, List<uint>>(colCapacity);
+            foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
             {
                 if (!HasCellContent(cell))
                     continue;
 
-                Add(colsByRow, address.Row, address.Col);
-                Add(rowsByCol, address.Col, address.Row);
+                Add(colsByRow, row, col);
+                Add(rowsByCol, col, row);
             }
 
             if (colsByRow.Count == 0)
@@ -206,11 +208,14 @@ public static class SelectionRangeService
         public bool ColumnHasContent(uint col, uint startRow, uint endRow) =>
             _rowsByCol.TryGetValue(col, out var rows) && HasAnyInRange(rows, startRow, endRow);
 
+        private static int GetDictionaryCapacity(int cellCount, uint axisLength) =>
+            (int)Math.Min((uint)cellCount, axisLength);
+
         private static void Add(Dictionary<uint, List<uint>> valuesByKey, uint key, uint value)
         {
             if (!valuesByKey.TryGetValue(key, out var values))
             {
-                values = [];
+                values = new List<uint>(1);
                 valuesByKey[key] = values;
             }
 
@@ -220,7 +225,10 @@ public static class SelectionRangeService
         private static void SortValues(Dictionary<uint, List<uint>> valuesByKey)
         {
             foreach (var values in valuesByKey.Values)
-                values.Sort();
+            {
+                if (values.Count > 1)
+                    values.Sort();
+            }
         }
 
         private static bool HasAnyInRange(List<uint> sortedValues, uint start, uint end)

@@ -35,6 +35,9 @@ public sealed record GoToSpecialOptions(GoToSpecialValueTypes ValueTypes = GoToS
 
 public static class GoToSpecialService
 {
+    private const int MinimumRuleRangesForIndex = 8;
+    private const long MaximumIndexedRuleCells = 250_000;
+
     public static IReadOnlyList<CellAddress> Find(
         Sheet sheet,
         GridRange range,
@@ -54,7 +57,9 @@ public static class GoToSpecialService
         options ??= new GoToSpecialOptions();
 
         if (kind == GoToSpecialKind.CurrentRegion)
-            return SelectionRangeService.GetCurrentRegion(sheet, activeCell ?? range.Start)?.AllCells().ToList() ?? [];
+            return SelectionRangeService.GetCurrentRegion(sheet, activeCell ?? range.Start) is { } currentRegion
+                ? MaterializeCells(currentRegion)
+                : [];
 
         if (kind == GoToSpecialKind.LastCell)
             return sheet.GetUsedRange() is { } usedRange ? [usedRange.End] : [];
@@ -73,6 +78,10 @@ public static class GoToSpecialService
             return FindRowDifferences(sheet, range);
         if (kind == GoToSpecialKind.ColumnDifferences)
             return FindColumnDifferences(sheet, range);
+        if (kind == GoToSpecialKind.DataValidation)
+            return FindDataValidations(sheet.DataValidations, range);
+        if (kind == GoToSpecialKind.ConditionalFormats)
+            return FindConditionalFormats(sheet.ConditionalFormats, range);
 
         foreach (var address in range.AllCells())
         {
@@ -104,12 +113,6 @@ public static class GoToSpecialService
                 case GoToSpecialKind.Comments when sheet.Comments.ContainsKey(address) || sheet.ThreadedComments.ContainsKey(address):
                     result.Add(address);
                     break;
-                case GoToSpecialKind.DataValidation when sheet.DataValidations.Any(rule => DataValidationService.AppliesTo(rule, address)):
-                    result.Add(address);
-                    break;
-                case GoToSpecialKind.ConditionalFormats when sheet.ConditionalFormats.Any(rule => rule.AppliesTo.Contains(address)):
-                    result.Add(address);
-                    break;
             }
         }
 
@@ -119,12 +122,257 @@ public static class GoToSpecialService
     private static bool MatchesValueType(ScalarValue value, GoToSpecialValueTypes valueTypes) =>
         value switch
         {
-            NumberValue or DateTimeValue => valueTypes.HasFlag(GoToSpecialValueTypes.Numbers),
-            TextValue => valueTypes.HasFlag(GoToSpecialValueTypes.Text),
-            BoolValue => valueTypes.HasFlag(GoToSpecialValueTypes.Logicals),
-            ErrorValue => valueTypes.HasFlag(GoToSpecialValueTypes.Errors),
+            NumberValue or DateTimeValue => (valueTypes & GoToSpecialValueTypes.Numbers) != 0,
+            TextValue => (valueTypes & GoToSpecialValueTypes.Text) != 0,
+            BoolValue => (valueTypes & GoToSpecialValueTypes.Logicals) != 0,
+            ErrorValue => (valueTypes & GoToSpecialValueTypes.Errors) != 0,
             _ => false
         };
+
+    private static List<CellAddress> MaterializeCells(GridRange range)
+    {
+        var capacity = range.CellCount <= int.MaxValue ? (int)range.CellCount : 0;
+        var cells = capacity > 0 ? new List<CellAddress>(capacity) : [];
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            for (var col = range.Start.Col; col <= range.End.Col; col++)
+                cells.Add(new CellAddress(range.Start.Sheet, row, col));
+        }
+
+        return cells;
+    }
+
+    private static bool HasConditionalFormatAt(List<ConditionalFormat> rules, CellAddress address)
+    {
+        for (var i = 0; i < rules.Count; i++)
+        {
+            if (rules[i].AppliesTo.Contains(address))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasDataValidationAt(List<DataValidation> rules, CellAddress address)
+    {
+        for (var i = 0; i < rules.Count; i++)
+        {
+            var rule = rules[i];
+            if (rule.AppliesTo.Contains(address))
+                return true;
+
+            var additionalRanges = rule.AdditionalRanges;
+            for (var rangeIndex = 0; rangeIndex < additionalRanges.Count; rangeIndex++)
+            {
+                if (additionalRanges[rangeIndex].Contains(address))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IReadOnlyList<CellAddress> FindConditionalFormats(List<ConditionalFormat> rules, GridRange range)
+    {
+        if (rules.Count == 0)
+            return [];
+
+        var (coversRange, coveredCells, rangeCount) = AnalyzeConditionalFormatRanges(rules, range);
+        if (coversRange)
+            return MaterializeCells(range);
+
+        if (ShouldIndexRuleRanges(rangeCount, coveredCells))
+        {
+            var matches = BuildConditionalFormatAddressSet(rules, range, coveredCells);
+            return MaterializeMatches(range, matches);
+        }
+
+        var result = new List<CellAddress>();
+        foreach (var address in range.AllCells())
+        {
+            if (HasConditionalFormatAt(rules, address))
+                result.Add(address);
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<CellAddress> FindDataValidations(List<DataValidation> rules, GridRange range)
+    {
+        if (rules.Count == 0)
+            return [];
+
+        var (coversRange, coveredCells, rangeCount) = AnalyzeDataValidationRanges(rules, range);
+        if (coversRange)
+            return MaterializeCells(range);
+
+        if (ShouldIndexRuleRanges(rangeCount, coveredCells))
+        {
+            var matches = BuildDataValidationAddressSet(rules, range, coveredCells);
+            return MaterializeMatches(range, matches);
+        }
+
+        var result = new List<CellAddress>();
+        foreach (var address in range.AllCells())
+        {
+            if (HasDataValidationAt(rules, address))
+                result.Add(address);
+        }
+
+        return result;
+    }
+
+    private static bool ShouldIndexRuleRanges(int rangeCount, long coveredCells) =>
+        rangeCount >= MinimumRuleRangesForIndex &&
+        coveredCells > 0 &&
+        coveredCells <= MaximumIndexedRuleCells;
+
+    private static (bool CoversRange, long CoveredCells, int RangeCount) AnalyzeConditionalFormatRanges(
+        List<ConditionalFormat> rules,
+        GridRange searchRange)
+    {
+        long coveredCells = 0;
+        for (var i = 0; i < rules.Count; i++)
+        {
+            var ruleRange = rules[i].AppliesTo;
+            if (ContainsRange(ruleRange, searchRange))
+                return (true, coveredCells, i + 1);
+
+            if (TryIntersect(ruleRange, searchRange, out var intersection))
+                coveredCells += intersection.CellCount;
+        }
+
+        return (false, coveredCells, rules.Count);
+    }
+
+    private static (bool CoversRange, long CoveredCells, int RangeCount) AnalyzeDataValidationRanges(
+        List<DataValidation> rules,
+        GridRange searchRange)
+    {
+        long coveredCells = 0;
+        var rangeCount = 0;
+        for (var i = 0; i < rules.Count; i++)
+        {
+            var rule = rules[i];
+            rangeCount++;
+            if (ContainsRange(rule.AppliesTo, searchRange))
+                return (true, coveredCells, rangeCount);
+
+            if (TryIntersect(rule.AppliesTo, searchRange, out var intersection))
+                coveredCells += intersection.CellCount;
+
+            var additionalRanges = rule.AdditionalRanges;
+            for (var rangeIndex = 0; rangeIndex < additionalRanges.Count; rangeIndex++)
+            {
+                rangeCount++;
+                var additionalRange = additionalRanges[rangeIndex];
+                if (ContainsRange(additionalRange, searchRange))
+                    return (true, coveredCells, rangeCount);
+
+                if (TryIntersect(additionalRange, searchRange, out intersection))
+                    coveredCells += intersection.CellCount;
+            }
+        }
+
+        return (false, coveredCells, rangeCount);
+    }
+
+    private static HashSet<(uint Row, uint Col)> BuildConditionalFormatAddressSet(
+        List<ConditionalFormat> rules,
+        GridRange searchRange,
+        long coveredCells)
+    {
+        var matches = new HashSet<(uint Row, uint Col)>(GetHashSetCapacity(coveredCells));
+        for (var i = 0; i < rules.Count; i++)
+        {
+            if (TryIntersect(rules[i].AppliesTo, searchRange, out var intersection))
+                AddCells(matches, intersection);
+        }
+
+        return matches;
+    }
+
+    private static HashSet<(uint Row, uint Col)> BuildDataValidationAddressSet(
+        List<DataValidation> rules,
+        GridRange searchRange,
+        long coveredCells)
+    {
+        var matches = new HashSet<(uint Row, uint Col)>(GetHashSetCapacity(coveredCells));
+        for (var i = 0; i < rules.Count; i++)
+        {
+            var rule = rules[i];
+            if (TryIntersect(rule.AppliesTo, searchRange, out var intersection))
+                AddCells(matches, intersection);
+
+            var additionalRanges = rule.AdditionalRanges;
+            for (var rangeIndex = 0; rangeIndex < additionalRanges.Count; rangeIndex++)
+            {
+                if (TryIntersect(additionalRanges[rangeIndex], searchRange, out intersection))
+                    AddCells(matches, intersection);
+            }
+        }
+
+        return matches;
+    }
+
+    private static int GetHashSetCapacity(long coveredCells) =>
+        coveredCells <= int.MaxValue ? (int)coveredCells : 0;
+
+    private static void AddCells(HashSet<(uint Row, uint Col)> matches, GridRange range)
+    {
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            for (var col = range.Start.Col; col <= range.End.Col; col++)
+                matches.Add((row, col));
+        }
+    }
+
+    private static IReadOnlyList<CellAddress> MaterializeMatches(
+        GridRange range,
+        HashSet<(uint Row, uint Col)> matches)
+    {
+        if (matches.Count == 0)
+            return [];
+
+        var result = new List<CellAddress>(matches.Count);
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            for (var col = range.Start.Col; col <= range.End.Col; col++)
+            {
+                if (matches.Contains((row, col)))
+                    result.Add(new CellAddress(range.Start.Sheet, row, col));
+            }
+        }
+
+        return result;
+    }
+
+    private static bool ContainsRange(GridRange outer, GridRange inner) =>
+        outer.Start.Sheet == inner.Start.Sheet &&
+        outer.Start.Row <= inner.Start.Row &&
+        outer.End.Row >= inner.End.Row &&
+        outer.Start.Col <= inner.Start.Col &&
+        outer.End.Col >= inner.End.Col;
+
+    private static bool TryIntersect(GridRange first, GridRange second, out GridRange intersection)
+    {
+        if (!first.Overlaps(second))
+        {
+            intersection = default;
+            return false;
+        }
+
+        intersection = new GridRange(
+            new CellAddress(
+                first.Start.Sheet,
+                Math.Max(first.Start.Row, second.Start.Row),
+                Math.Max(first.Start.Col, second.Start.Col)),
+            new CellAddress(
+                first.Start.Sheet,
+                Math.Min(first.End.Row, second.End.Row),
+                Math.Min(first.End.Col, second.End.Col)));
+        return true;
+    }
 
     private static IReadOnlyList<CellAddress> FindObjects(Sheet sheet, GridRange range)
     {
