@@ -167,27 +167,39 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
     private static bool StripRedundantStyleOnlyCells(XDocument worksheetXml)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var changed = false;
+        var sheetData = worksheetXml.Root?.Element(worksheetNs + "sheetData");
+        if (sheetData is null)
+            return false;
+
+        var rowName = worksheetNs + "row";
+        var cellName = worksheetNs + "c";
         var seenStyleIndexes = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var cell in worksheetXml.Descendants(worksheetNs + "c").ToList())
+        List<XElement>? cellsToRemove = null;
+        foreach (var row in sheetData.Elements(rowName))
         {
-            var styleIndex = cell.Attribute("s");
-            if (styleIndex is null ||
-                cell.Element(worksheetNs + "f") is not null ||
-                cell.Element(worksheetNs + "v") is not null ||
-                cell.Element(worksheetNs + "is") is not null ||
-                cell.Elements().Any())
+            foreach (var cell in row.Elements(cellName))
             {
-                continue;
+                if (cell.HasElements)
+                    continue;
+
+                var styleIndex = cell.Attribute("s")?.Value;
+                if (string.IsNullOrEmpty(styleIndex))
+                    continue;
+
+                if (seenStyleIndexes.Add(styleIndex))
+                    continue;
+
+                cellsToRemove ??= new List<XElement>();
+                cellsToRemove.Add(cell);
             }
-
-            if (seenStyleIndexes.Add(styleIndex.Value))
-                continue;
-
-            cell.Remove();
-            changed = true;
         }
 
-        return changed;
+        if (cellsToRemove is null)
+            return false;
+
+        foreach (var cell in cellsToRemove)
+            cell.Remove();
+
+        return true;
     }
 }
