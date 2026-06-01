@@ -48,28 +48,19 @@ public sealed class FilterCommand : IWorkbookCommand
         uint startRow   = _range.Start.Row;
         uint endRow     = _range.End.Row;
 
-        // Remove only the previous filter-hidden rows within this filter's range.
-        // Manual/imported hidden rows stay in Sheet.HiddenRows and remain hidden.
-        for (uint r = startRow + 1; r <= endRow; r++)
-            sheet.FilterHiddenRows.Remove(r);
-
         if (_allowedValues.Count == 0)
         {
-            // No allowed values = clear filter — rows in range are now all visible
+            FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
             return new CommandOutcome(true);
         }
 
-        // Build a case-insensitive lookup of allowed values
-        var allowed = new HashSet<string>(_allowedValues, StringComparer.OrdinalIgnoreCase);
+        var allowed = FilterAllowedValueMatcher.Create(_allowedValues);
 
-        // Skip the first row of the range — treat it as a header row
         for (uint row = startRow + 1; row <= endRow; row++)
         {
             var value = sheet.GetValue(row, filterCol);
             var text  = FilterValueFormatter.ToText(value);
-
-            if (!allowed.Contains(text))
-                sheet.FilterHiddenRows.Add(row);
+            FilterHiddenRowUpdater.SetVisible(sheet.FilterHiddenRows, row, allowed.Contains(text));
         }
 
         return new CommandOutcome(true);
@@ -124,16 +115,12 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
 
         var filterCol = _range.Start.Col + _filterColOffset;
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
-            sheet.FilterHiddenRows.Remove(row);
-
-        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {
             var styleId = sheet.GetCell(row, filterCol)?.StyleId ??
                 sheet.GetStyleOnly(row, filterCol) ??
                 StyleId.Default;
             var fillColor = ctx.Workbook.GetStyle(styleId).FillColor;
-            if (fillColor != _fillColor)
-                sheet.FilterHiddenRows.Add(row);
+            FilterHiddenRowUpdater.SetVisible(sheet.FilterHiddenRows, row, fillColor == _fillColor);
         }
 
         return new CommandOutcome(true);
@@ -186,16 +173,12 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
 
         var filterCol = _range.Start.Col + _filterColOffset;
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
-            sheet.FilterHiddenRows.Remove(row);
-
-        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {
             var styleId = sheet.GetCell(row, filterCol)?.StyleId ??
                 sheet.GetStyleOnly(row, filterCol) ??
                 StyleId.Default;
             var fillColor = ctx.Workbook.GetStyle(styleId).FillColor;
-            if (fillColor is not null)
-                sheet.FilterHiddenRows.Add(row);
+            FilterHiddenRowUpdater.SetVisible(sheet.FilterHiddenRows, row, fillColor is null);
         }
 
         return new CommandOutcome(true);
@@ -251,16 +234,12 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
 
         var filterCol = _range.Start.Col + _filterColOffset;
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
-            sheet.FilterHiddenRows.Remove(row);
-
-        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {
             var styleId = sheet.GetCell(row, filterCol)?.StyleId ??
                 sheet.GetStyleOnly(row, filterCol) ??
                 StyleId.Default;
             var fontColor = ctx.Workbook.GetStyle(styleId).FontColor;
-            if (fontColor != _fontColor)
-                sheet.FilterHiddenRows.Add(row);
+            FilterHiddenRowUpdater.SetVisible(sheet.FilterHiddenRows, row, fontColor == _fontColor);
         }
 
         return new CommandOutcome(true);
@@ -277,6 +256,63 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
         sheet.FilterHiddenRows.Clear();
         if (_previousFilterHiddenRows is not null)
             sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
+    }
+}
+
+internal readonly struct FilterAllowedValueMatcher
+{
+    private readonly string? _singleValue;
+    private readonly HashSet<string>? _values;
+
+    private FilterAllowedValueMatcher(string singleValue)
+    {
+        _singleValue = singleValue;
+        _values = null;
+    }
+
+    private FilterAllowedValueMatcher(HashSet<string> values)
+    {
+        _singleValue = null;
+        _values = values;
+    }
+
+    public static FilterAllowedValueMatcher Create(IReadOnlyList<string> values) =>
+        values.Count == 1
+            ? new FilterAllowedValueMatcher(values[0])
+            : new FilterAllowedValueMatcher(new HashSet<string>(values, StringComparer.OrdinalIgnoreCase));
+
+    public bool Contains(string text) =>
+        _values is not null
+            ? _values.Contains(text)
+            : string.Equals(text, _singleValue, StringComparison.OrdinalIgnoreCase);
+}
+
+internal static class FilterHiddenRowUpdater
+{
+    public static void SetVisible(HashSet<uint> filterHiddenRows, uint row, bool visible)
+    {
+        if (visible)
+            filterHiddenRows.Remove(row);
+        else
+            filterHiddenRows.Add(row);
+    }
+
+    public static void ClearRange(HashSet<uint> filterHiddenRows, GridRange range)
+    {
+        var firstDataRow = range.Start.Row + 1;
+        var lastDataRow = range.End.Row;
+        if (filterHiddenRows.Count == 0 || firstDataRow > lastDataRow)
+            return;
+
+        var dataRowCount = lastDataRow - firstDataRow + 1;
+        if ((uint)filterHiddenRows.Count < dataRowCount)
+        {
+            filterHiddenRows.RemoveWhere(row => row >= firstDataRow && row <= lastDataRow);
+            return;
+        }
+
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+            filterHiddenRows.Remove(row);
     }
 }
 
