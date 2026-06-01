@@ -1463,6 +1463,7 @@ public class XlsxCorpusRunnerTests
     {
         using var source = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-worksheet-sort-state-001");
         AssertWorksheetSortState(source, "generated-worksheet-sort-state-001 source");
+        var before = CaptureWorksheetSortFilterPackageSummary(source);
 
         source.Position = 0;
         var adapter = new XlsxFileAdapter();
@@ -1474,6 +1475,11 @@ public class XlsxCorpusRunnerTests
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-sort-state-001");
         AssertWorksheetSortState(saved, "generated-worksheet-sort-state-001 saved");
+        var after = CaptureWorksheetSortFilterPackageSummary(saved);
+        after.Should().BeEquivalentTo(
+            before,
+            options => options.WithStrictOrdering(),
+            "worksheet AutoFilter and sortState XML semantics should survive ordinary model edits");
     }
 
     [Fact]
@@ -4703,6 +4709,50 @@ public class XlsxCorpusRunnerTests
         }
     }
 
+    private static WorksheetSortFilterPackageXmlSummary CaptureWorksheetSortFilterPackageSummary(Stream stream)
+    {
+        var originalPosition = stream.CanSeek ? stream.Position : 0;
+        if (stream.CanSeek)
+            stream.Position = 0;
+
+        try
+        {
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml");
+            worksheetEntry.Should().NotBeNull("generated-worksheet-sort-state-001 must contain xl/worksheets/sheet1.xml");
+
+            var worksheetXml = LoadPackageXml(worksheetEntry!);
+            XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var autoFilter = worksheetXml.Root!.Element(sheetNs + "autoFilter");
+            var sortState = worksheetXml.Root.Element(sheetNs + "sortState");
+
+            autoFilter.Should().NotBeNull("generated-worksheet-sort-state-001 must include worksheet AutoFilter metadata");
+            sortState.Should().NotBeNull("generated-worksheet-sort-state-001 must include worksheet sortState metadata");
+
+            return new WorksheetSortFilterPackageXmlSummary(
+                CaptureXmlElementSummary(autoFilter!),
+                CaptureXmlElementSummary(sortState!));
+        }
+        finally
+        {
+            if (stream.CanSeek)
+                stream.Position = originalPosition;
+        }
+    }
+
+    private static WorksheetElementXmlSummary CaptureXmlElementSummary(XElement element) =>
+        new(
+            element.Name.ToString(),
+            element.Attributes()
+                .Where(attribute => !attribute.IsNamespaceDeclaration)
+                .OrderBy(attribute => attribute.Name.ToString(), StringComparer.Ordinal)
+                .Select(attribute => new NativeAttributeSummary(attribute.Name.ToString(), attribute.Value))
+                .ToArray(),
+            element.Elements().Any() ? "" : element.Value.Trim(),
+            element.Elements()
+                .Select(CaptureXmlElementSummary)
+                .ToArray());
+
     private static string NormalizeDataValidationOperator(string type, string op)
     {
         if (type is "list" or "custom" && string.Equals(op, "between", StringComparison.OrdinalIgnoreCase))
@@ -5823,6 +5873,16 @@ public class XlsxCorpusRunnerTests
         IReadOnlyList<string> CriticalRelationshipTargets,
         IReadOnlyList<string> CriticalRelationshipDetails,
         IReadOnlyList<string> CriticalContentTypeOverrides);
+
+    private sealed record WorksheetSortFilterPackageXmlSummary(
+        WorksheetElementXmlSummary AutoFilter,
+        WorksheetElementXmlSummary SortState);
+
+    private sealed record WorksheetElementXmlSummary(
+        string Name,
+        IReadOnlyList<NativeAttributeSummary> Attributes,
+        string Text,
+        IReadOnlyList<WorksheetElementXmlSummary> Children);
 
     private sealed record DataValidationPackageXmlSummary(
         string CountAttribute,
