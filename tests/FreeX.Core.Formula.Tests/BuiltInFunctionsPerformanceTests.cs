@@ -88,7 +88,7 @@ public sealed class BuiltInFunctionsPerformanceTests
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         result.RowCount.Should().Be(20_000);
         _output.WriteLine($"UNIQUE large single-column allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(8_000_000);
+        allocatedBytes.Should().BeLessThan(2_000_000);
     }
 
     [Fact]

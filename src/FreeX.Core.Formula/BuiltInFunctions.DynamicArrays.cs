@@ -903,6 +903,9 @@ public static partial class BuiltInFunctions
 
         if (!byCol)
         {
+            if (arr.ColCount == 1)
+                return UniqueSingleColumn(arr, exactlyOnce);
+
             var keyIndex  = new Dictionary<string, int>();
             var keyCounts = new List<int>();
             var rowOfKey  = new List<int>();
@@ -995,6 +998,103 @@ public static partial class BuiltInFunctions
                 }
             }
             return new RangeValue(result);
+        }
+    }
+
+    private static ScalarValue UniqueSingleColumn(RangeValue arr, bool exactlyOnce)
+    {
+        var keyIndex  = new Dictionary<ScalarValue, int>(arr.RowCount, UniqueScalarComparer.Instance);
+        var rowOfKey  = new List<int>();
+        List<int>? keyCounts = exactlyOnce ? new List<int>() : null;
+
+        for (int r = 0; r < arr.RowCount; r++)
+        {
+            var value = arr.Cells[r, 0];
+            if (keyIndex.TryGetValue(value, out int idx))
+            {
+                if (keyCounts is not null)
+                    keyCounts[idx]++;
+            }
+            else
+            {
+                keyIndex[value] = rowOfKey.Count;
+                rowOfKey.Add(r);
+                keyCounts?.Add(1);
+            }
+        }
+
+        int selectedCount = exactlyOnce ? 0 : rowOfKey.Count;
+        if (keyCounts is not null)
+        {
+            for (int i = 0; i < keyCounts.Count; i++)
+                if (keyCounts[i] == 1) selectedCount++;
+        }
+
+        if (selectedCount == 0) return ErrorValue.Calc;
+        var result = new ScalarValue[selectedCount, 1];
+        for (int i = 0, ri = 0; i < rowOfKey.Count; i++)
+        {
+            if (keyCounts is not null && keyCounts[i] != 1) continue;
+            result[ri, 0] = arr.Cells[rowOfKey[i], 0];
+            ri++;
+        }
+
+        return new RangeValue(result);
+    }
+
+    private sealed class UniqueScalarComparer : IEqualityComparer<ScalarValue>
+    {
+        internal static readonly UniqueScalarComparer Instance = new();
+
+        private UniqueScalarComparer()
+        {
+        }
+
+        public bool Equals(ScalarValue? x, ScalarValue? y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (x is null || y is null) return false;
+
+            return x switch
+            {
+                BlankValue => y is BlankValue,
+                NumberValue n => TryGetUniqueNumber(y, out double value) && n.Value.Equals(value),
+                DateTimeValue dt => TryGetUniqueNumber(y, out double value) && dt.Value.Equals(value),
+                TextValue t => y is TextValue other && string.Equals(t.Value, other.Value, StringComparison.OrdinalIgnoreCase),
+                BoolValue b => y is BoolValue other && b.Value == other.Value,
+                ErrorValue e => y is ErrorValue other && e.Code == other.Code,
+                _ => x.Equals(y)
+            };
+        }
+
+        public int GetHashCode(ScalarValue obj)
+        {
+            return obj switch
+            {
+                BlankValue => HashCode.Combine(nameof(BlankValue)),
+                NumberValue n => HashCode.Combine("number", n.Value),
+                DateTimeValue dt => HashCode.Combine("number", dt.Value),
+                TextValue t => HashCode.Combine("text", StringComparer.OrdinalIgnoreCase.GetHashCode(t.Value)),
+                BoolValue b => HashCode.Combine("bool", b.Value),
+                ErrorValue e => HashCode.Combine("error", e.Code),
+                _ => obj.GetHashCode()
+            };
+        }
+
+        private static bool TryGetUniqueNumber(ScalarValue value, out double number)
+        {
+            switch (value)
+            {
+                case NumberValue n:
+                    number = n.Value;
+                    return true;
+                case DateTimeValue dt:
+                    number = dt.Value;
+                    return true;
+                default:
+                    number = 0d;
+                    return false;
+            }
         }
     }
 
