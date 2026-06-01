@@ -11,30 +11,39 @@ public sealed record TableStyleGalleryOption(
 public static class TableStyleGalleryPlanner
 {
     public static IReadOnlyList<TableStyleGalleryOption> GetOptions() =>
+        GetOptions(WorkbookTheme.Office);
+
+    public static IReadOnlyList<TableStyleGalleryOption> GetOptions(WorkbookTheme theme) =>
     [
-        ..CreateLightStyles(),
-        ..CreateMediumStyles(),
-        ..CreateDarkStyles()
+        ..CreateLightStyles(theme),
+        ..CreateMediumStyles(theme),
+        ..CreateDarkStyles(theme)
     ];
 
     public static TableStyleGalleryOption GetOption(int index)
+        => GetOption(index, WorkbookTheme.Office);
+
+    public static TableStyleGalleryOption GetOption(int index, WorkbookTheme theme)
     {
-        var options = GetOptions();
+        var options = GetOptions(theme);
         return options[Math.Clamp(index, 0, options.Count - 1)];
     }
 
     public static bool TryGetOption(string? styleName, out TableStyleGalleryOption option)
+        => TryGetOption(styleName, WorkbookTheme.Office, out option);
+
+    public static bool TryGetOption(string? styleName, WorkbookTheme theme, out TableStyleGalleryOption option)
     {
         option = null!;
         if (string.IsNullOrWhiteSpace(styleName))
             return false;
 
-        option = GetOptions().FirstOrDefault(candidate =>
+        option = GetOptions(theme).FirstOrDefault(candidate =>
             string.Equals(candidate.StyleName, styleName, StringComparison.OrdinalIgnoreCase))!;
         return option is not null;
     }
 
-    private static IEnumerable<TableStyleGalleryOption> CreateLightStyles()
+    private static IEnumerable<TableStyleGalleryOption> CreateLightStyles(WorkbookTheme theme)
     {
         var accents = new[]
         {
@@ -47,10 +56,10 @@ public static class TableStyleGalleryPlanner
             (new CellColor(112, 173, 71), new CellColor(226, 239, 218), CellColor.White)
         };
 
-        return CreateStyleGroup("Light", 21, accents, useDarkRows: false);
+        return CreateStyleGroup("Light", 21, accents, useDarkRows: false, theme);
     }
 
-    private static IEnumerable<TableStyleGalleryOption> CreateMediumStyles()
+    private static IEnumerable<TableStyleGalleryOption> CreateMediumStyles(WorkbookTheme theme)
     {
         var accents = new[]
         {
@@ -63,10 +72,10 @@ public static class TableStyleGalleryPlanner
             (new CellColor(75, 172, 198), new CellColor(218, 238, 243), CellColor.White)
         };
 
-        return CreateStyleGroup("Medium", 28, accents, useDarkRows: false);
+        return CreateStyleGroup("Medium", 28, accents, useDarkRows: false, theme);
     }
 
-    private static IEnumerable<TableStyleGalleryOption> CreateDarkStyles()
+    private static IEnumerable<TableStyleGalleryOption> CreateDarkStyles(WorkbookTheme theme)
     {
         var accents = new[]
         {
@@ -78,14 +87,15 @@ public static class TableStyleGalleryPlanner
             (new CellColor(68, 84, 106), new CellColor(84, 105, 132), CellColor.White)
         };
 
-        return CreateStyleGroup("Dark", 11, accents, useDarkRows: true);
+        return CreateStyleGroup("Dark", 11, accents, useDarkRows: true, theme);
     }
 
     private static IEnumerable<TableStyleGalleryOption> CreateStyleGroup(
         string family,
         int count,
         IReadOnlyList<(CellColor Header, CellColor Band, CellColor Font)> accents,
-        bool useDarkRows)
+        bool useDarkRows,
+        WorkbookTheme theme)
     {
         for (var index = 1; index <= count; index++)
         {
@@ -97,12 +107,33 @@ public static class TableStyleGalleryPlanner
                 ? accent.Band
                 : Lighten(accent.Band, ((index - 1) / accents.Count) * 8);
 
-            yield return new TableStyleGalleryOption(
-                $"{family} {index}",
-                $"TableStyle{family}{index}",
-                new StructuredTableStyleBanding(accent.Header, oddFill, evenFill, accent.Font));
+            var styleName = $"TableStyle{family}{index}";
+            var banding = ResolveThemeBanding(styleName, theme) ??
+                new StructuredTableStyleBanding(accent.Header, oddFill, evenFill, accent.Font);
+            yield return new TableStyleGalleryOption($"{family} {index}", styleName, banding);
         }
     }
+
+    private static StructuredTableStyleBanding? ResolveThemeBanding(string styleName, WorkbookTheme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        if (ReferenceEquals(theme, WorkbookTheme.Office))
+            return null;
+
+        if (string.Equals(styleName, "TableStyleMedium2", StringComparison.OrdinalIgnoreCase))
+            return CreateThemedMediumBanding(theme, WorkbookThemeColorSlot.Accent1);
+
+        return null;
+    }
+
+    private static StructuredTableStyleBanding CreateThemedMediumBanding(
+        WorkbookTheme theme,
+        WorkbookThemeColorSlot slot) =>
+        new(
+            HeaderFill: theme.ResolveColor(slot),
+            OddRowFill: theme.ResolveColor(slot, 0.8),
+            EvenRowFill: CellColor.White,
+            HeaderFontColor: CellColor.White);
 
     private static CellColor Lighten(CellColor color, int amount) =>
         new(
