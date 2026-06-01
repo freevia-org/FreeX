@@ -95,14 +95,16 @@ public sealed partial class NativeJsonAdapter
                 ChangingCells = scenario.ChangingCells.Select(change =>
                 {
                     var sheet = workbook.Sheets.FirstOrDefault(s => s.Id.Equals(change.Address.Sheet));
-                    return sheet is null || !IsValidAddressOnSheet(change.Address, sheet.Id)
-                        ? null
-                        : new ScenarioCellDto
-                        {
-                            SheetName = sheet.Name,
-                            Address = change.Address.ToA1(),
-                            Value = NativeJsonScalarValueMapper.Serialize(change.Value),
-                            ValueType = NativeJsonScalarValueMapper.GetValueType(change.Value)
+                    if (sheet is null || !IsValidAddressOnSheet(change.Address, sheet.Id))
+                        return null;
+
+                    var serializedValue = NativeJsonScalarValueMapper.SerializeWithType(change.Value);
+                    return new ScenarioCellDto
+                    {
+                        SheetName = sheet.Name,
+                        Address = change.Address.ToA1(),
+                        Value = serializedValue.Value,
+                        ValueType = serializedValue.ValueType
                     };
                 }).OfType<ScenarioCellDto>().ToList()
             }).Where(scenario => scenario.ChangingCells.Count > 0).ToList(),
@@ -324,11 +326,12 @@ public sealed partial class NativeJsonAdapter
 
             var address = new CellAddress(sheet.Id, row, col);
             var cell = entry.Value;
+            var serializedValue = NativeJsonScalarValueMapper.SerializeWithType(cell.Value);
             result.Add(new CellDto
             {
                 Address = address.ToA1(),
-                Value = NativeJsonScalarValueMapper.Serialize(cell.Value),
-                ValueType = NativeJsonScalarValueMapper.GetValueType(cell.Value),
+                Value = serializedValue.Value,
+                ValueType = serializedValue.ValueType,
                 Formula = cell.HasFormula ? NormalizeNativeFormulaText(cell.FormulaText!) : null,
                 IgnoreFormulaError = cell.IgnoreFormulaError,
                 StyleId = GetNativeStyleId(cell.StyleId)

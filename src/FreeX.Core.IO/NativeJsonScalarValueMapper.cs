@@ -5,6 +5,28 @@ namespace FreeX.Core.IO;
 
 internal static class NativeJsonScalarValueMapper
 {
+    public readonly struct SerializedScalarValue
+    {
+        public SerializedScalarValue(string? value, string? valueType)
+        {
+            Value = value;
+            ValueType = valueType;
+        }
+
+        public string? Value { get; }
+        public string? ValueType { get; }
+    }
+
+    public static SerializedScalarValue SerializeWithType(ScalarValue value) => value switch
+    {
+        BlankValue => default,
+        NumberValue n => new SerializedScalarValue(n.Value.ToString(CultureInfo.InvariantCulture), "n"),
+        BoolValue b => new SerializedScalarValue(b.Value ? "TRUE" : "FALSE", "b"),
+        TextValue t => new SerializedScalarValue(t.Value, "t"),
+        ErrorValue e => new SerializedScalarValue(e.Code, "e"),
+        _ => default,
+    };
+
     public static string? Serialize(ScalarValue value) => value switch
     {
         BlankValue => null,
@@ -56,7 +78,12 @@ internal static class NativeJsonScalarValueMapper
         };
     }
 
-    private static bool TryParseFiniteNumber(string value, out double number) =>
-        double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out number) &&
-        double.IsFinite(number);
+    private static bool TryParseFiniteNumber(string value, out double number)
+    {
+        if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out number))
+            return double.IsFinite(number);
+
+        return double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out number) &&
+            double.IsFinite(number);
+    }
 }
