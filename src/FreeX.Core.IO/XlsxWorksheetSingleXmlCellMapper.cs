@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -52,29 +51,37 @@ internal static class XlsxWorksheetSingleXmlCellMapper
         if (worksheetPathMap is null)
             return;
 
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
-        foreach (var sheet in workbook.Sheets.Where(sheet => sheet.SingleXmlCells is not null))
+        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
+        Save(session, workbook);
+    }
+
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
         {
-            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+            var singleXmlCells = sheet.SingleXmlCells;
+            if (singleXmlCells is null)
                 continue;
 
-            var entry = archive.GetEntry(worksheetPath);
-            if (entry is null)
+            if (!session.TryGetWorksheet(sheet, out var edit))
                 continue;
 
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
-            root.Elements(WorksheetNs + "singleXmlCells").Remove();
-            var xml = ToXml(sheet.SingleXmlCells);
-            if (xml is not null)
+            var changed = false;
+            while (edit.Root.Element(WorksheetNs + "singleXmlCells") is { } existingElement)
             {
-                InsertSingleXmlCells(root, xml);
+                existingElement.Remove();
+                changed = true;
             }
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            var xml = ToXml(singleXmlCells);
+            if (xml is not null)
+            {
+                InsertSingleXmlCells(edit.Root, xml);
+                changed = true;
+            }
+
+            if (changed)
+                session.MarkDirty(edit);
         }
     }
 

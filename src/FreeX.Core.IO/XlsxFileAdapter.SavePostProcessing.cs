@@ -137,12 +137,6 @@ public sealed partial class XlsxFileAdapter
                 GetWorksheetPathMap());
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.SingleXmlCells is not null))
-        {
-            packageStream.Position = 0;
-            XlsxWorksheetSingleXmlCellMapper.Save(packageStream, workbook, GetWorksheetPathMap());
-        }
-
         packageStream.Position = 0;
         XlsxWorkbookThemeWriter.Save(packageStream, workbook.Theme);
 
