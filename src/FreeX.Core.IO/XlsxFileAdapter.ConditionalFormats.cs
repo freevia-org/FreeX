@@ -9,7 +9,8 @@ public sealed partial class XlsxFileAdapter
     private static IReadOnlyList<ConditionalFormat> ReadAdvancedConditionalFormats(
         XDocument worksheetXml,
         XNamespace worksheetNs,
-        IReadOnlyList<CellStyle> differentialStyles)
+        IReadOnlyList<CellStyle> differentialStyles,
+        WorkbookTheme workbookTheme)
     {
         var result = new List<ConditionalFormat>();
         var dataBarGuids = new Dictionary<string, ConditionalFormat>(StringComparer.OrdinalIgnoreCase);
@@ -45,7 +46,7 @@ public sealed partial class XlsxFileAdapter
                 if (string.Equals(type, "colorScale", StringComparison.OrdinalIgnoreCase) &&
                     rule.Element(worksheetNs + "colorScale") is { } colorScale)
                 {
-                    var format = ReadColorScaleConditionalFormat(colorScale, appliesTo, priority, worksheetNs);
+                    var format = ReadColorScaleConditionalFormat(colorScale, appliesTo, priority, worksheetNs, workbookTheme);
                     format.FormatIfTrue = formatIfTrue;
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
@@ -224,7 +225,8 @@ public sealed partial class XlsxFileAdapter
         XElement colorScale,
         GridRange appliesTo,
         int priority,
-        XNamespace worksheetNs)
+        XNamespace worksheetNs,
+        WorkbookTheme workbookTheme)
     {
         var thresholds = colorScale.Elements(worksheetNs + "cfvo").ToList();
         var colors = colorScale.Elements(worksheetNs + "color").ToList();
@@ -267,11 +269,11 @@ public sealed partial class XlsxFileAdapter
             });
         }
 
-        if (XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(0), out var minColor))
+        if (XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(0), workbookTheme, out var minColor))
             format.MinColor = minColor;
-        if (format.UseThreeColorScale && XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(1), out var midColor))
+        if (format.UseThreeColorScale && XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(1), workbookTheme, out var midColor))
             format.MidColor = midColor;
-        if (XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(format.UseThreeColorScale ? 2 : 1), out var maxColor))
+        if (XlsxColorReader.TryReadRgbColor(colors.ElementAtOrDefault(format.UseThreeColorScale ? 2 : 1), workbookTheme, out var maxColor))
             format.MaxColor = maxColor;
 
         ApplyNativeConditionalFormatPayloadMetadata(format, colorScale, worksheetNs);
