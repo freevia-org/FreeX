@@ -1489,10 +1489,8 @@ internal sealed record VisualExpectation(int HashThreshold, int RoundTripHashThr
             ["StackedBar"] = "FreeX-authored stacked bar defaults differ from Excel-native stacked bar layout/styling.",
             ["PercentStackedBar"] = "FreeX-authored percent stacked bar defaults differ from Excel-native percent stacked layout/styling.",
             ["ThreeDBar"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
-            ["Scatter"] = "FreeX-authored scatter exports as a connected/multiseries-looking chart instead of Excel's marker-only default.",
             ["ThreeDArea"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
             ["ThreeDSurface"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
-            ["Pareto"] = "Pareto lacks Excel-native aggregation, owner-linked Pareto line, and secondary percentage-axis metadata.",
             ["BoxAndWhisker"] = "Box-and-whisker lacks Excel-native per-series statistics layout metadata for multi-column sample data.",
             ["Waterfall"] = "Waterfall total/subtotal and connector defaults are not fully Excel-equivalent yet."
         };

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using FreeX.Core.Model;
 
@@ -12,6 +13,9 @@ public sealed record WatchWindowEntry(
 
 public static class WatchWindowService
 {
+    private const int ColumnKeyBits = 15;
+    private const int RowAndColumnKeyBits = 36;
+
     public static bool AddWatch(Workbook workbook, CellAddress address)
     {
         if (workbook.WatchedCells.Contains(address))
@@ -101,30 +105,58 @@ public static class WatchWindowService
             return [];
 
         var entries = new List<WatchWindowEntry>(workbook.WatchedCells.Count);
-        var sheetOrder = workbook.Sheets
-            .Select((sheet, index) => (sheet.Id, index))
-            .ToDictionary(item => item.Id, item => item.index);
-
-        foreach (var address in workbook.WatchedCells
-                     .OrderBy(address => sheetOrder.GetValueOrDefault(address.Sheet, int.MaxValue))
-                     .ThenBy(address => address.Row)
-                     .ThenBy(address => address.Col))
+        var sheetIndexes = new Dictionary<SheetId, int>(workbook.Sheets.Count);
+        for (var index = 0; index < workbook.Sheets.Count; index++)
         {
-            var sheet = workbook.GetSheet(address.Sheet);
-            if (sheet is null)
-                continue;
-
-            var cell = sheet.GetCell(address);
-            entries.Add(new WatchWindowEntry(
-                sheet.Id,
-                sheet.Name,
-                address,
-                FormatValue(cell?.Value ?? BlankValue.Instance),
-                cell?.HasFormula == true ? "=" + cell.FormulaText : null));
+            var sheet = workbook.Sheets[index];
+            sheetIndexes[sheet.Id] = index;
         }
 
-        return entries;
+        var sortKeys = ArrayPool<ulong>.Shared.Rent(workbook.WatchedCells.Count);
+        var addresses = ArrayPool<CellAddress>.Shared.Rent(workbook.WatchedCells.Count);
+        try
+        {
+            var validCount = 0;
+            foreach (var address in workbook.WatchedCells)
+            {
+                if (!sheetIndexes.TryGetValue(address.Sheet, out var sheetIndex))
+                    continue;
+
+                sortKeys[validCount] = CreateSortKey(sheetIndex, address);
+                addresses[validCount] = address;
+                validCount++;
+            }
+
+            Array.Sort(sortKeys, addresses, 0, validCount);
+
+            for (var index = 0; index < validCount; index++)
+            {
+                var address = addresses[index];
+                var sheet = workbook.Sheets[GetSheetIndex(sortKeys[index])];
+                var cell = sheet.GetCell(address);
+                entries.Add(new WatchWindowEntry(
+                    sheet.Id,
+                    sheet.Name,
+                    address,
+                    FormatValue(cell?.Value ?? BlankValue.Instance),
+                    cell?.HasFormula == true ? "=" + cell.FormulaText : null));
+            }
+
+            return entries;
+        }
+        finally
+        {
+            ArrayPool<ulong>.Shared.Return(sortKeys);
+            ArrayPool<CellAddress>.Shared.Return(addresses);
+        }
     }
+
+    private static ulong CreateSortKey(int sheetIndex, CellAddress address) =>
+        ((ulong)sheetIndex << RowAndColumnKeyBits) |
+        ((ulong)address.Row << ColumnKeyBits) |
+        address.Col;
+
+    private static int GetSheetIndex(ulong sortKey) => (int)(sortKey >> RowAndColumnKeyBits);
 
     private static string FormatValue(ScalarValue value) => value switch
     {
