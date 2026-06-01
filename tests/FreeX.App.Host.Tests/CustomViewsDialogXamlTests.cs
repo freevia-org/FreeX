@@ -51,10 +51,12 @@ public sealed class CustomViewsDialogXamlTests
             dialog.Dispatcher.BeginInvoke(() =>
             {
                 viewsList.SelectedIndex = 0;
-                viewsList.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
                 {
                     RoutedEvent = Control.MouseDoubleClickEvent
-                });
+                };
+                viewsList.RaiseEvent(doubleClick);
+                doubleClick.Handled.Should().BeTrue();
 
                 dialog.Dispatcher.BeginInvoke(() =>
                 {
