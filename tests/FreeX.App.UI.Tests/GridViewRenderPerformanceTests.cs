@@ -121,9 +121,17 @@ public sealed class GridViewRenderPerformanceTests
         renderCells.Should().Contain("var visibleRight = ActualWidth;");
         renderCells.Should().Contain("var visibleBottom = ActualHeight;");
         source.Should().Contain("private static bool IntersectsVisibleGrid");
+        renderCells.Should().Contain("var cellTop = rowMetric.TopOffset + columnHeaderHeight;");
+        renderCells.Should().Contain("if (cellTop >= visibleBottom) continue;");
+        renderCells.Should().Contain("var cellLeft = colMetric.LeftOffset + rowHeaderWidth;");
+        renderCells.Should().Contain("if (cellLeft >= visibleRight) continue;");
+        renderCells.Should().Contain("var hasMergedText = _mergeLookup.Count > 0;");
+        renderCells.Should().Contain("var cellMerge = hasMergedText ? FindMerge(cell.Row, cell.Col) : null;");
         renderCells.Should().Contain("rect.Left >= visibleRight");
         renderCells.Should().Contain("if (!IntersectsVisibleGrid(clipRect, visibleLeft, visibleTop, visibleRight, visibleBottom))");
 
+        renderCells.IndexOf("if (cellTop >= visibleBottom) continue;", StringComparison.Ordinal)
+            .Should().BeLessThan(renderCells.IndexOf("if (!colLookup.TryGetValue(cell.Col, out var colMetric)) continue;", StringComparison.Ordinal));
         renderCells.IndexOf("rect.Left >= visibleRight", StringComparison.Ordinal)
             .Should().BeLessThan(renderCells.IndexOf("var typefaceKey = CreateCellTypefaceKey(style);", StringComparison.Ordinal));
         renderCells.IndexOf("if (!IntersectsVisibleGrid(clipRect, visibleLeft, visibleTop, visibleRight, visibleBottom))", StringComparison.Ordinal)
@@ -506,6 +514,7 @@ public sealed class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<DefaultWrappedTextLayoutKey, FormattedText> _defaultWrappedTextLayoutCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<TextWidthLayoutKey, double> _textWidthLayoutCache = new();");
+        gridViewSource.Should().Contain("private readonly Dictionary<ShrinkTextLayoutKey, double> _shrinkTextLayoutCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<Rect, RectangleGeometry> _cellClipGeometryCache = new();");
         gridViewSource.Should().Contain("private RenderCellLookupCache? _renderCellLookupCache;");
         gridViewSource.Should().Contain("private OccupiedCellLookupCache? _occupiedCellLookupCache;");
@@ -540,10 +549,14 @@ public sealed class GridViewRenderPerformanceTests
         var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
 
         cacheSource.Should().Contain("private double MeasureCellTextWidth");
+        cacheSource.Should().Contain("private double ResolveCachedShrinkFontSize");
         cacheSource.Should().Contain("_textWidthLayoutCache.TryGetValue");
         cacheSource.Should().Contain("_textWidthLayoutCache.Count >= TextWidthLayoutCacheLimit");
+        cacheSource.Should().Contain("_shrinkTextLayoutCache.TryGetValue");
+        cacheSource.Should().Contain("_shrinkTextLayoutCache.Count >= ShrinkTextLayoutCacheLimit");
         rendering.Should().Contain("var typefaceKey = CreateCellTypefaceKey(style);");
-        rendering.Should().Contain("MeasureCellTextWidth(cell.DisplayText, typefaceKey, typeface, size, pixelsPerDip)");
+        rendering.Should().Contain("ResolveCachedShrinkFontSize(");
+        cacheSource.Should().Contain("MeasureCellTextWidth(text, typefaceKey, typeface, size, pixelsPerDip)");
         rendering.Should().NotContain("size => new FormattedText(");
     }
 

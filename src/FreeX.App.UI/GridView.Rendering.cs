@@ -256,11 +256,14 @@ public partial class GridView
             if (style?.ShrinkToFit == true && !wrapText)
             {
                 var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
-                fontSize = ResolveShrinkFontSize(
+                fontSize = ResolveCachedShrinkFontSize(
+                    cell.DisplayText,
+                    typefaceKey,
+                    typeface,
                     fontSize,
                     availableWidth,
-                    size => MeasureCellTextWidth(cell.DisplayText, typefaceKey, typeface, size, pixelsPerDip),
-                    ToDisplayFontSize(6));
+                    ToDisplayFontSize(6),
+                    pixelsPerDip);
             }
 
             var wrapMaxTextWidth = Math.Max(1, rect.Width - 4);
@@ -459,16 +462,23 @@ public partial class GridView
         // Pass 3: text
         var rowLookup = rowLookupAll;
         var colLookup = colLookupAll;
+        var hasMergedText = _mergeLookup.Count > 0;
 
         HashSet<(uint Row, uint Col)>? occupied = null;
 
         foreach (var cell in viewport.Cells)
         {
             if (!rowLookup.TryGetValue(cell.Row, out var rowMetric)) continue;
+            var cellTop = rowMetric.TopOffset + columnHeaderHeight;
+            if (cellTop >= visibleBottom) continue;
+
             if (!colLookup.TryGetValue(cell.Col, out var colMetric)) continue;
+            var cellLeft = colMetric.LeftOffset + rowHeaderWidth;
+            if (cellLeft >= visibleRight) continue;
+
             if (!ShouldDrawCellContent(cell, EditingCell)) continue;
 
-            var cellMerge = FindMerge(cell.Row, cell.Col);
+            var cellMerge = hasMergedText ? FindMerge(cell.Row, cell.Col) : null;
             if (cellMerge.HasValue && (cell.Row != cellMerge.Value.Start.Row || cell.Col != cellMerge.Value.Start.Col))
                 continue;
 
@@ -484,8 +494,7 @@ public partial class GridView
                     if (rowLookup.TryGetValue(r2, out var rm2)) h += rm2.Height;
             }
 
-            var rect = new Rect(
-                colMetric.LeftOffset + rowHeaderWidth, rowMetric.TopOffset + columnHeaderHeight, w, h);
+            var rect = new Rect(cellLeft, cellTop, w, h);
             if (rect.Bottom <= visibleTop ||
                 rect.Top >= visibleBottom ||
                 rect.Left >= visibleRight)
@@ -523,47 +532,65 @@ public partial class GridView
                 }
             }
 
-            var typefaceKey = CreateCellTypefaceKey(style);
-            var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
-
             // Excel font sizes are typographic points; WPF measures in DIPs (96 DPI).
             // Snap to whole display DIPs so ClearType does not soften 11pt as 14.667 DIP text.
             double fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
 
             Brush textBrush = TextBrush;
-            if (style?.FontColor is { } fc && !fc.IsBlack)
-                textBrush = BrushForCellColor(fc, _brushCache);
-
             double indentPx = (style?.IndentLevel ?? 0) * 8.0;
             if (style?.ShrinkToFit == true && !wrapText)
             {
+                var typefaceKey = CreateCellTypefaceKey(style);
+                var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
                 var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
-                fontSize = ResolveShrinkFontSize(
+                fontSize = ResolveCachedShrinkFontSize(
+                    cell.DisplayText,
+                    typefaceKey,
+                    typeface,
                     fontSize,
                     availableWidth,
-                    size => MeasureCellTextWidth(cell.DisplayText, typefaceKey, typeface, size, pixelsPerDip),
-                    ToDisplayFontSize(6));
+                    ToDisplayFontSize(6),
+                    pixelsPerDip);
             }
 
-            var wrapMaxTextWidth = Math.Max(1, rect.Width - 4);
-            var wrapTextAlignment = hAlign switch
-            {
-                CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
-                CellHAlign.Right => TextAlignment.Right,
-                _ => TextAlignment.Left
-            };
             var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);
-            var useDefaultWrappedTextLayout = !useDefaultTextLayout && wrapText && CanUseDefaultWrappedFormattedText(style);
-            var text = useDefaultTextLayout
-                ? GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)
-                : useDefaultWrappedTextLayout
-                    ? GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)
-                    : new FormattedText(
+            var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
+            var wrapTextAlignment = TextAlignment.Left;
+            var useDefaultWrappedTextLayout = false;
+            if (!useDefaultTextLayout && wrapText)
+            {
+                wrapTextAlignment = hAlign switch
+                {
+                    CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
+                    CellHAlign.Right => TextAlignment.Right,
+                    _ => TextAlignment.Left
+                };
+                useDefaultWrappedTextLayout = CanUseDefaultWrappedFormattedText(style);
+            }
+
+            FormattedText text;
+            if (useDefaultTextLayout)
+            {
+                text = GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip);
+            }
+            else if (useDefaultWrappedTextLayout)
+            {
+                text = GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip);
+            }
+            else
+            {
+                var typefaceKey = CreateCellTypefaceKey(style);
+                var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
+                if (style?.FontColor is { } fc && !fc.IsBlack)
+                    textBrush = BrushForCellColor(fc, _brushCache);
+
+                text = new FormattedText(
                         cell.DisplayText,
                         CultureInfo.CurrentCulture,
                         FlowDirection.LeftToRight,
                         typeface, fontSize, textBrush,
                         pixelsPerDip);
+            }
 
             if (!useDefaultTextLayout && !useDefaultWrappedTextLayout && BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);
