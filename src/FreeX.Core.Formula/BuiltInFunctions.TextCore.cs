@@ -623,11 +623,17 @@ public static partial class BuiltInFunctions
                 : ErrorValue.Value;
         if (startIdx >= withinText.Length) return ErrorValue.Value;
 
-        var regex = SearchCache.GetOrAdd(findText, pattern =>
+        var regex = GetSearchRegex(findText);
+        Match match;
+        try
         {
-            return new Regex(WildcardToRegexPattern(pattern, anchored: false), RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        });
-        var match = regex.Match(withinText, startIdx);
+            match = regex.Match(withinText, startIdx);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return ErrorValue.Value;
+        }
+
         if (!match.Success) return ErrorValue.Value;
         return new NumberValue(hasSurrogatePair ? OneBasedTextPositionFromUtf16Index(withinText, match.Index) : match.Index + 1);
     }
@@ -650,12 +656,33 @@ public static partial class BuiltInFunctions
 
         int startIdx = DbcsByteOffsetToUtf16Index(withinText, startByte - 1);
         if (startIdx >= withinText.Length) return ErrorValue.Value;
-        var regex = SearchCache.GetOrAdd(findText, pattern =>
+        var regex = GetSearchRegex(findText);
+        Match match;
+        try
         {
-            return new Regex(WildcardToRegexPattern(pattern, anchored: false), RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        });
-        var match = regex.Match(withinText, startIdx);
+            match = regex.Match(withinText, startIdx);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return ErrorValue.Value;
+        }
+
         return match.Success ? new NumberValue(DbcsBytePositionFromUtf16Index(withinText, match.Index)) : ErrorValue.Value;
+    }
+
+    private static Regex GetSearchRegex(string findText)
+    {
+        if (!SearchCache.ContainsKey(findText) &&
+            SearchCache.Count >= FormulaSafetyLimits.MaxRegexCacheEntries)
+        {
+            SearchCache.Clear();
+        }
+
+        return SearchCache.GetOrAdd(findText, pattern =>
+            new Regex(
+                WildcardToRegexPattern(pattern, anchored: false),
+                RegexOptions.IgnoreCase | RegexOptions.Compiled,
+                FormulaSafetyLimits.RegexTimeout));
     }
 
     private static ScalarValue Mid(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

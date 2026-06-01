@@ -172,13 +172,20 @@ public sealed class FormulaEvaluator
         FreeX.Core.Model.Workbook? workbook = null,
         FreeX.Core.Model.CellAddress? currentCell = null)
     {
-        _evalDepth = 0;
-        var lexer = new Lexer(formulaText);
-        var tokens = lexer.Tokenize();
-        var parser = new Parser(tokens);
-        var ast = parser.Parse();
-        var context = new SheetEvalContext(sheet, workbook, this, currentCell);
-        return NormalizeTopLevelResult(EvaluateNode(ast, context));
+        try
+        {
+            _evalDepth = 0;
+            var lexer = new Lexer(formulaText);
+            var tokens = lexer.Tokenize();
+            var parser = new Parser(tokens);
+            var ast = parser.Parse();
+            var context = new SheetEvalContext(sheet, workbook, this, currentCell);
+            return NormalizeTopLevelResult(EvaluateNode(ast, context));
+        }
+        catch (FormulaEvalException ex)
+        {
+            return ErrorFromCode(ex.ErrorCode);
+        }
     }
 
     /// <summary>
@@ -190,9 +197,16 @@ public sealed class FormulaEvaluator
         FreeX.Core.Model.Workbook? workbook = null,
         FreeX.Core.Model.CellAddress? currentCell = null)
     {
-        _evalDepth = 0;
-        var context = new SheetEvalContext(sheet, workbook, this, currentCell);
-        return NormalizeTopLevelResult(EvaluateNode(ast, context));
+        try
+        {
+            _evalDepth = 0;
+            var context = new SheetEvalContext(sheet, workbook, this, currentCell);
+            return NormalizeTopLevelResult(EvaluateNode(ast, context));
+        }
+        catch (FormulaEvalException ex)
+        {
+            return ErrorFromCode(ex.ErrorCode);
+        }
     }
 
     private static ScalarValue NormalizeTopLevelResult(ScalarValue value) =>
@@ -264,7 +278,7 @@ public sealed class FormulaEvaluator
         // Bare named range reference outside a function: return top-left cell value.
         // For 2D named ranges this is intentionally lossy — full implicit-intersection
         // semantics (Excel 365 spill behaviour) are a Phase 5 enhancement.
-        return BuildRangeValue(range.Value, context);
+        return BuildRangeValueOrError(range.Value, context);
     }
 
     private static ScalarValue EvaluateRange(RangeRefNode range, IEvalContext context)
@@ -306,7 +320,7 @@ public sealed class FormulaEvaluator
     private ScalarValue EvaluateArrayOperand(FormulaNode node, IEvalContext context)
     {
         if (node is RangeRefNode range)
-            return BuildRangeValue(range, context);
+            return BuildRangeValueOrError(range, context);
 
         if (node is NamedRangeNode named)
         {
@@ -317,7 +331,7 @@ public sealed class FormulaEvaluator
             var resolvedRange = context.TryResolveNamedRange(named.Name);
             return resolvedRange is null
                 ? ErrorValue.Name
-                : BuildRangeValue(resolvedRange.Value, context);
+                : BuildRangeValueOrError(resolvedRange.Value, context);
         }
 
         if (node is StructuredReferenceNode structured)
@@ -325,7 +339,7 @@ public sealed class FormulaEvaluator
             var resolvedRange = TryResolveStructuredReferenceRange(structured, context);
             return resolvedRange is null
                 ? ErrorValue.Name
-                : BuildRangeValue(resolvedRange.Value, context);
+                : BuildRangeValueOrError(resolvedRange.Value, context);
         }
 
         if (node is StructuredCurrentRowReferenceNode currentRow)
@@ -340,7 +354,7 @@ public sealed class FormulaEvaluator
         var range = TryResolveStructuredReferenceRange(node, context);
         return range is null
             ? ErrorValue.Name
-            : BuildRangeValue(range.Value, context);
+            : BuildRangeValueOrError(range.Value, context);
     }
 
     private static ScalarValue EvaluateCurrentRowReference(StructuredCurrentRowReferenceNode node, IEvalContext context)
@@ -599,6 +613,10 @@ public sealed class FormulaEvaluator
 
         var (func, minArgs, maxArgs) = entry;
 
+        if (functionName == "INDEX" &&
+            TryEvaluateIndexDirectRange(node, context, out var directIndexResult))
+            return directIndexResult;
+
         if (TryEvaluateReferenceDimensionFunction(functionName, node, context, out var dimensionResult))
             return dimensionResult;
 
@@ -632,8 +650,7 @@ public sealed class FormulaEvaluator
                 if (isStructured)
                 {
                     // Build a 2-D RangeValue for structured functions
-                    var rv = BuildRangeValue(range, context);
-                    expandedArgs.Add(rv);
+                    expandedArgs.Add(BuildRangeValueOrError(range, context));
                 }
                 else
                 {
@@ -659,7 +676,7 @@ public sealed class FormulaEvaluator
                     continue;
                 }
 
-                expandedArgs.Add(BuildRangeValue(new RangeRefNode(structuredCell, structuredCell, structuredCell.SheetName), context));
+                expandedArgs.Add(BuildRangeValueOrError(new RangeRefNode(structuredCell, structuredCell, structuredCell.SheetName), context));
             }
             else if (arg is CellRefNode aggregateCell && IsSingleCellReferenceProvenanceArgument(functionName, argIndex, preservesReferenceProvenance))
             {
@@ -682,7 +699,7 @@ public sealed class FormulaEvaluator
                     continue;
                 }
 
-                expandedArgs.Add(BuildRangeValue(new RangeRefNode(cell, cell, cell.SheetName), context));
+                expandedArgs.Add(BuildRangeValueOrError(new RangeRefNode(cell, cell, cell.SheetName), context));
             }
             else if (arg is NamedRangeNode named)
             {
@@ -709,7 +726,7 @@ public sealed class FormulaEvaluator
                         var r = resolvedRange.Value;
                         if (isStructured)
                         {
-                            expandedArgs.Add(BuildRangeValue(r, context));
+                            expandedArgs.Add(BuildRangeValueOrError(r, context));
                         }
                         else
                         {
@@ -735,6 +752,12 @@ public sealed class FormulaEvaluator
                 else
                     expandedArgs.Add(value);
             }
+        }
+
+        foreach (var expandedArg in expandedArgs)
+        {
+            if (expandedArg is RangeMaterializationErrorValue rangeError)
+                return rangeError.Error;
         }
 
         // Always enforce minimum arg count for every function, including aggregates.
@@ -785,6 +808,12 @@ public sealed class FormulaEvaluator
         IReadOnlyList<ScalarValue> values,
         bool preservesReferenceProvenance)
     {
+        if (values.Count == 1 && values[0] is RangeMaterializationErrorValue)
+        {
+            expandedArgs.Add(values[0]);
+            return;
+        }
+
         var finalCount = (long)expandedArgs.Count + values.Count;
         if (finalCount <= int.MaxValue)
             expandedArgs.EnsureCapacity((int)finalCount);
@@ -1180,12 +1209,46 @@ public sealed class FormulaEvaluator
                 return FastAggregateRangeResolution.Error;
             }
 
-            range = new FastAggregateRange(
+            var resolvedRange = new FastAggregateRange(
                 rangeRef.SheetName,
                 Math.Min(rangeRef.Start.Row, rangeRef.End.Row),
                 Math.Min(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber),
                 Math.Max(rangeRef.Start.Row, rangeRef.End.Row),
                 Math.Max(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber));
+
+            if (!TryAcceptFastAggregateRange(resolvedRange, out error))
+                return FastAggregateRangeResolution.Error;
+
+            range = resolvedRange;
+            return FastAggregateRangeResolution.Range;
+        }
+
+        if (argument is FunctionCallNode { FunctionName: "INDIRECT" } indirect)
+        {
+            if (!TryBuildLiteralIndirectArguments(indirect, out var indirectArgs, out error))
+                return error is null
+                    ? FastAggregateRangeResolution.Unsupported
+                    : FastAggregateRangeResolution.Error;
+
+            if (!BuiltInFunctions.TryResolveIndirectRangeReference(indirectArgs, context, out var indirectRange, out var indirectError))
+            {
+                error = indirectError as ErrorValue;
+                return error is null
+                    ? FastAggregateRangeResolution.Unsupported
+                    : FastAggregateRangeResolution.Error;
+            }
+
+            var resolvedRange = new FastAggregateRange(
+                indirectRange.SheetName,
+                Math.Min(indirectRange.StartRow, indirectRange.EndRow),
+                Math.Min(indirectRange.StartCol, indirectRange.EndCol),
+                Math.Max(indirectRange.StartRow, indirectRange.EndRow),
+                Math.Max(indirectRange.StartCol, indirectRange.EndCol));
+
+            if (!TryAcceptFastAggregateRange(resolvedRange, out error))
+                return FastAggregateRangeResolution.Error;
+
+            range = resolvedRange;
             return FastAggregateRangeResolution.Range;
         }
 
@@ -1194,21 +1257,99 @@ public sealed class FormulaEvaluator
             if (context.TryResolveLambdaBinding(named.Name) is not null)
                 return FastAggregateRangeResolution.Unsupported;
 
-            var resolvedRange = context.TryResolveNamedRange(named.Name);
-            if (resolvedRange is null)
+            var resolvedNamedRange = context.TryResolveNamedRange(named.Name);
+            if (resolvedNamedRange is null)
                 return FastAggregateRangeResolution.Unsupported;
 
-            var gridRange = resolvedRange.Value;
-            range = new FastAggregateRange(
+            var gridRange = resolvedNamedRange.Value;
+            var resolvedRange = new FastAggregateRange(
                 context.TryGetSheetName(gridRange.Start.Sheet),
                 gridRange.Start.Row,
                 gridRange.Start.Col,
                 gridRange.End.Row,
                 gridRange.End.Col);
+
+            if (!TryAcceptFastAggregateRange(resolvedRange, out error))
+                return FastAggregateRangeResolution.Error;
+
+            range = resolvedRange;
             return FastAggregateRangeResolution.Range;
         }
 
         return FastAggregateRangeResolution.Unsupported;
+    }
+
+    private static bool TryAcceptFastAggregateRange(FastAggregateRange range, out ErrorValue? error)
+    {
+        error = null;
+        var cellCount = FormulaSafetyLimits.GetRangeCellCount(
+            range.StartRow,
+            range.StartCol,
+            range.EndRow,
+            range.EndCol);
+        if (cellCount <= FormulaSafetyLimits.MaxStreamingRangeCells)
+            return true;
+
+        error = ErrorValue.Ref;
+        return false;
+    }
+
+    private static bool TryBuildLiteralIndirectArguments(
+        FunctionCallNode node,
+        out IReadOnlyList<ScalarValue> args,
+        out ErrorValue? error)
+    {
+        args = [];
+        error = null;
+        if (node.Arguments.Count is < 1 or > 2)
+        {
+            error = ErrorValue.Value;
+            return false;
+        }
+
+        if (!TryBuildLiteralIndirectArgument(node.Arguments[0], out var refText, out error))
+            return false;
+
+        if (node.Arguments.Count == 1)
+        {
+            args = [refText];
+            return true;
+        }
+
+        if (!TryBuildLiteralIndirectArgument(node.Arguments[1], out var useA1, out error))
+            return false;
+
+        args = [refText, useA1];
+        return true;
+    }
+
+    private static bool TryBuildLiteralIndirectArgument(
+        FormulaNode node,
+        out ScalarValue value,
+        out ErrorValue? error)
+    {
+        value = BlankValue.Instance;
+        error = null;
+        switch (node)
+        {
+            case StringNode text:
+                value = new TextValue(text.Value);
+                return true;
+            case BooleanNode boolean:
+                value = new BoolValue(boolean.Value);
+                return true;
+            case NumberNode number:
+                value = new NumberValue(number.Value);
+                return true;
+            case OmittedArgumentNode:
+                value = BlankValue.Instance;
+                return true;
+            case ErrorNode errorNode:
+                error = errorNode.Error;
+                return false;
+            default:
+                return false;
+        }
     }
 
     private static bool TryGetFastAggregateKind(string functionName, out FastAggregateKind kind)
@@ -1293,7 +1434,7 @@ public sealed class FormulaEvaluator
         uint c1 = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
         long rows = r1 - r0 + 1;
         long cols = c1 - c0 + 1;
-        if (rows * cols > 1_000_000L)
+        if (rows * cols > FormulaSafetyLimits.MaxMaterializedRangeCells)
             throw new FormulaEvalException("#REF!", "Range contains more than 1,000,000 cells");
         var cells = new ScalarValue[(int)rows, (int)cols];
         for (int ri = 0; ri < rows; ri++)
@@ -1304,6 +1445,18 @@ public sealed class FormulaEvaluator
                     : context.GetCellValue(r0 + (uint)ri, c0 + (uint)ci);
             }
         return new RangeValue(cells, r0, c0) { SheetName = range.SheetName };
+    }
+
+    private static ScalarValue BuildRangeValueOrError(RangeRefNode range, IEvalContext context)
+    {
+        try
+        {
+            return BuildRangeValue(range, context);
+        }
+        catch (FormulaEvalException ex)
+        {
+            return ErrorFromCode(ex.ErrorCode);
+        }
     }
 
     private static RangeValue BuildRangeValue(FreeX.Core.Model.GridRange range, IEvalContext context)
@@ -1318,6 +1471,18 @@ public sealed class FormulaEvaluator
             range.End.Row,
             SheetName: sheetName);
         return BuildRangeValue(new RangeRefNode(start, end, sheetName), context);
+    }
+
+    private static ScalarValue BuildRangeValueOrError(FreeX.Core.Model.GridRange range, IEvalContext context)
+    {
+        try
+        {
+            return BuildRangeValue(range, context);
+        }
+        catch (FormulaEvalException ex)
+        {
+            return ErrorFromCode(ex.ErrorCode);
+        }
     }
 
     private static FreeX.Core.Model.GridRange? TryResolveStructuredReferenceRange(
@@ -1375,6 +1540,137 @@ public sealed class FormulaEvaluator
             ? new NumberValue(r1 - r0 + 1)
             : new NumberValue(c1 - c0 + 1);
         return true;
+    }
+
+    private bool TryEvaluateIndexDirectRange(FunctionCallNode node, IEvalContext context, out ScalarValue result)
+    {
+        result = BlankValue.Instance;
+        if (!TryAsRangeRef(node.Arguments.Count > 0 ? node.Arguments[0] : new OmittedArgumentNode(), out var range))
+            return false;
+
+        if (node.Arguments.Count is < 2 or > 3)
+        {
+            result = ErrorValue.Value;
+            return true;
+        }
+
+        if (TryAsRangeRef(node.Arguments[1], out _) ||
+            (node.Arguments.Count > 2 && TryAsRangeRef(node.Arguments[2], out _)))
+            return false;
+
+        if (range.SheetName is not null && !context.SheetExists(range.SheetName))
+        {
+            result = ErrorValue.Ref;
+            return true;
+        }
+
+        var rowValue = EvaluateNode(node.Arguments[1], context);
+        if (rowValue is ErrorValue rowError)
+        {
+            result = rowError;
+            return true;
+        }
+
+        var columnValue = node.Arguments.Count > 2
+            ? EvaluateNode(node.Arguments[2], context)
+            : BlankValue.Instance;
+        if (columnValue is ErrorValue columnError)
+        {
+            result = columnError;
+            return true;
+        }
+
+        var rowCoerced = CoerceToNumber(rowValue);
+        if (rowCoerced is ErrorValue rowCoerceError)
+        {
+            result = rowCoerceError;
+            return true;
+        }
+
+        var columnCoerced = columnValue is BlankValue ? new NumberValue(1) : CoerceToNumber(columnValue);
+        if (columnCoerced is ErrorValue columnCoerceError)
+        {
+            result = columnCoerceError;
+            return true;
+        }
+
+        var rawRow = ((NumberValue)rowCoerced).Value;
+        var rawColumn = ((NumberValue)columnCoerced).Value;
+        if (!double.IsFinite(rawRow) || rawRow < int.MinValue || rawRow > int.MaxValue ||
+            !double.IsFinite(rawColumn) || rawColumn < int.MinValue || rawColumn > int.MaxValue)
+        {
+            result = ErrorValue.Value;
+            return true;
+        }
+
+        int rowIndex = (int)rawRow;
+        int columnIndex = (int)rawColumn;
+
+        uint startRow = Math.Min(range.Start.Row, range.End.Row);
+        uint endRow = Math.Max(range.Start.Row, range.End.Row);
+        uint startCol = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+        uint endCol = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+        long rowCount = endRow - startRow + 1L;
+        long colCount = endCol - startCol + 1L;
+
+        if (node.Arguments.Count == 2)
+        {
+            if (rowCount == 1)
+            {
+                columnIndex = rowIndex;
+                rowIndex = 1;
+            }
+            else if (colCount == 1)
+            {
+                columnIndex = 1;
+            }
+        }
+
+        if (rowIndex < 0 || columnIndex < 0)
+        {
+            result = ErrorValue.Value;
+            return true;
+        }
+
+        if (rowIndex > rowCount || columnIndex > colCount)
+        {
+            result = ErrorValue.Ref;
+            return true;
+        }
+
+        if (rowIndex == 0 && columnIndex == 0)
+        {
+            result = BuildRangeValueOrError(CreateRangeRef(startRow, startCol, endRow, endCol, range.SheetName), context);
+            return true;
+        }
+
+        if (rowIndex == 0)
+        {
+            var targetCol = startCol + (uint)columnIndex - 1;
+            result = BuildRangeValueOrError(CreateRangeRef(startRow, targetCol, endRow, targetCol, range.SheetName), context);
+            return true;
+        }
+
+        if (columnIndex == 0)
+        {
+            var targetRow = startRow + (uint)rowIndex - 1;
+            result = BuildRangeValueOrError(CreateRangeRef(targetRow, startCol, targetRow, endCol, range.SheetName), context);
+            return true;
+        }
+
+        var row = startRow + (uint)rowIndex - 1;
+        var col = startCol + (uint)columnIndex - 1;
+        result = range.SheetName is not null
+            ? context.GetCellValue(range.SheetName, row, col)
+            : context.GetCellValue(row, col);
+        return true;
+    }
+
+    private static RangeRefNode CreateRangeRef(uint startRow, uint startCol, uint endRow, uint endCol, string? sheetName)
+    {
+        var start = new CellRefNode(CellAddress.NumberToColumnName(startCol), startRow, SheetName: sheetName);
+        var end = new CellRefNode(CellAddress.NumberToColumnName(endCol), endRow);
+        return new RangeRefNode(start, end, sheetName);
     }
 
     private static RangeRefNode ToRangeRef(FullColumnRangeRefNode range)
@@ -1863,20 +2159,20 @@ public sealed class FormulaEvaluator
         {
             if (range.SheetName is not null && !context.SheetExists(range.SheetName))
                 return ErrorValue.Ref;
-            return BuildRangeValue(range, context);
+            return BuildRangeValueOrError(range, context);
         }
 
         if (node is CellRefNode cellRef)
         {
             if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
                 return ErrorValue.Ref;
-            return BuildRangeValue(new RangeRefNode(cellRef, cellRef, cellRef.SheetName), context);
+            return BuildRangeValueOrError(new RangeRefNode(cellRef, cellRef, cellRef.SheetName), context);
         }
 
         if (node is NamedRangeNode named)
         {
             var rangeRef = context.TryResolveNamedRange(named.Name);
-            return rangeRef is null ? ErrorValue.Name : BuildRangeValue(rangeRef.Value, context);
+            return rangeRef is null ? ErrorValue.Name : BuildRangeValueOrError(rangeRef.Value, context);
         }
 
         if (node is FunctionCallNode fn && fn.FunctionName is "OFFSET" or "INDIRECT")
@@ -2049,7 +2345,7 @@ public sealed class FormulaEvaluator
 
         int rowSpan = (int)(r1Final - r0Final + 1);
         int colSpan = (int)(c1Final - c0Final + 1);
-        if ((long)rowSpan * colSpan > 1_000_000L) return ErrorValue.Ref;
+        if ((long)rowSpan * colSpan > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Ref;
 
         var cells = new ScalarValue[rowSpan, colSpan];
         for (int ri = 0; ri < rowSpan; ri++)
@@ -2368,6 +2664,7 @@ public sealed class FormulaEvaluator
             var r0 = Math.Min(startRow, endRow); var r1 = Math.Max(startRow, endRow);
             var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
             var values = CreateRangeValueList(r0, c0, r1, c1);
+            if (values is null) return [new RangeMaterializationErrorValue(ErrorValue.Ref)];
             for (var r = r0; r <= r1; r++)
                 for (var c = c0; c <= c1; c++)
                     values.Add(_sheet.GetValue(r, c));
@@ -2381,18 +2678,19 @@ public sealed class FormulaEvaluator
             var r0 = Math.Min(startRow, endRow); var r1 = Math.Max(startRow, endRow);
             var c0 = Math.Min(startCol, endCol); var c1 = Math.Max(startCol, endCol);
             var values = CreateRangeValueList(r0, c0, r1, c1);
+            if (values is null) return [new RangeMaterializationErrorValue(ErrorValue.Ref)];
             for (var r = r0; r <= r1; r++)
                 for (var c = c0; c <= c1; c++)
                     values.Add(target.GetValue(r, c));
             return values;
         }
 
-        private static List<ScalarValue> CreateRangeValueList(uint startRow, uint startCol, uint endRow, uint endCol)
+        private static List<ScalarValue>? CreateRangeValueList(uint startRow, uint startCol, uint endRow, uint endCol)
         {
-            var count = ((long)endRow - startRow + 1) * ((long)endCol - startCol + 1);
-            return count <= int.MaxValue
+            var count = FormulaSafetyLimits.GetRangeCellCount(startRow, startCol, endRow, endCol);
+            return count <= FormulaSafetyLimits.MaxMaterializedRangeCells
                 ? new List<ScalarValue>((int)count)
-                : [];
+                : null;
         }
 
         public FreeX.Core.Model.GridRange? TryResolveNamedRange(string name)
