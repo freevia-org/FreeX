@@ -158,15 +158,38 @@ internal static class RibbonAdaptiveLayoutEngine
         RibbonAdaptiveGroupState[] states,
         bool preserveFirstGroup,
         IReadOnlySet<int>? protectedGroupIndexes = null)
-    {
-        var rollbackCount = 0;
-        return TryCollapseOneMoreGroupCore(
+        => TryCollapseOneMoreGroup(
             states,
             preserveFirstGroup,
             protectedGroupIndexes,
-            rollbackIndexes: null,
-            rollbackStates: null,
-            ref rollbackCount);
+            out _,
+            out _);
+
+    public static bool TryCollapseOneMoreGroup(
+        RibbonAdaptiveGroupState[] states,
+        bool preserveFirstGroup,
+        IReadOnlySet<int>? protectedGroupIndexes,
+        out int changedIndex,
+        out RibbonAdaptiveGroupState previousState)
+    {
+        changedIndex = -1;
+        previousState = default;
+        var firstCollapsibleIndex = preserveFirstGroup ? 1 : 0;
+        for (var i = states.Length - 1; i >= firstCollapsibleIndex; i--)
+        {
+            if (states[i] == RibbonAdaptiveGroupState.Collapsed)
+                continue;
+
+            if (protectedGroupIndexes?.Contains(i) == true)
+                continue;
+
+            changedIndex = i;
+            previousState = states[i];
+            states[i] = RibbonAdaptiveGroupState.Collapsed;
+            return true;
+        }
+
+        return false;
     }
 
     private static bool TryCollapseOneMoreGroupCore(

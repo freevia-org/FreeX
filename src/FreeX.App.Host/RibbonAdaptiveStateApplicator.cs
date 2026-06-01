@@ -16,45 +16,34 @@ internal static class RibbonAdaptiveStateApplicator
         var changedGroupCount = 0;
         for (var i = 0; i < groupSnapshots.Count; i++)
         {
-            var plannedState = NormalizePlannedState(groupSnapshots[i], plannedStates[i], availableWidth);
-            var previousState = previousStates is not null && i < previousStates.Count
-                ? NormalizePlannedState(groupSnapshots[i], previousStates[i], availableWidth)
-                : (RibbonAdaptiveGroupState?)null;
-
-            if (previousState is not null &&
-                previousState == plannedState &&
-                !ShouldKeepRibbonGroupLabelsAtIconWidth(groupSnapshots[i], plannedState, availableWidth))
-            {
-                continue;
-            }
-
-            changedGroupCount++;
-            SetIfChanged(collapsedButtons[i], UIElement.VisibilityProperty, Visibility.Collapsed);
-            SetIfChanged(groupSnapshots[i].Group, UIElement.VisibilityProperty, Visibility.Visible);
-
-            switch (plannedState)
-            {
-                case RibbonAdaptiveGroupState.Full:
-                    ApplyGroup(groupSnapshots[i], MainWindow.RibbonCompactLevel.Full);
-                    break;
-                case RibbonAdaptiveGroupState.SmallWithLabels:
-                    ApplyGroup(groupSnapshots[i], MainWindow.RibbonCompactLevel.SmallWithLabels);
-                    break;
-                case RibbonAdaptiveGroupState.IconOnly:
-                    ApplyGroup(
-                        groupSnapshots[i],
-                        ShouldKeepRibbonGroupLabelsAtIconWidth(groupSnapshots[i], plannedStates[i], availableWidth)
-                            ? MainWindow.RibbonCompactLevel.SmallWithLabels
-                            : MainWindow.RibbonCompactLevel.IconOnly);
-                    break;
-                case RibbonAdaptiveGroupState.Collapsed:
-                    SetIfChanged(groupSnapshots[i].Group, UIElement.VisibilityProperty, Visibility.Collapsed);
-                    SetIfChanged(collapsedButtons[i], UIElement.VisibilityProperty, Visibility.Visible);
-                    break;
-            }
+            changedGroupCount += ApplyState(
+                groupSnapshots[i],
+                collapsedButtons[i],
+                plannedStates[i],
+                previousStates is not null && i < previousStates.Count ? previousStates[i] : null,
+                availableWidth);
         }
 
         return changedGroupCount;
+    }
+
+    public static int ApplyStateAt(
+        IReadOnlyList<MainWindow.RibbonCompactGroupSnapshot> groupSnapshots,
+        IReadOnlyList<Button> collapsedButtons,
+        int index,
+        RibbonAdaptiveGroupState plannedState,
+        RibbonAdaptiveGroupState? previousState,
+        double availableWidth = 0)
+    {
+        if ((uint)index >= (uint)groupSnapshots.Count || index >= collapsedButtons.Count)
+            return 0;
+
+        return ApplyState(
+            groupSnapshots[index],
+            collapsedButtons[index],
+            plannedState,
+            previousState,
+            availableWidth);
     }
 
     public static void SetCollapsedButtonFootprint(IReadOnlyList<Button> collapsedButtons, double availableWidth)
@@ -281,6 +270,52 @@ internal static class RibbonAdaptiveStateApplicator
         return ShouldUseSmallWithLabelsForIconOnlyGroup(catalogId)
             ? RibbonAdaptiveGroupState.SmallWithLabels
             : plannedState;
+    }
+
+    private static int ApplyState(
+        MainWindow.RibbonCompactGroupSnapshot groupSnapshot,
+        Button collapsedButton,
+        RibbonAdaptiveGroupState plannedState,
+        RibbonAdaptiveGroupState? previousState,
+        double availableWidth)
+    {
+        var normalizedPlannedState = NormalizePlannedState(groupSnapshot, plannedState, availableWidth);
+        var normalizedPreviousState = previousState is not null
+            ? NormalizePlannedState(groupSnapshot, previousState.Value, availableWidth)
+            : (RibbonAdaptiveGroupState?)null;
+
+        if (normalizedPreviousState is not null &&
+            normalizedPreviousState == normalizedPlannedState &&
+            !ShouldKeepRibbonGroupLabelsAtIconWidth(groupSnapshot, normalizedPlannedState, availableWidth))
+        {
+            return 0;
+        }
+
+        SetIfChanged(collapsedButton, UIElement.VisibilityProperty, Visibility.Collapsed);
+        SetIfChanged(groupSnapshot.Group, UIElement.VisibilityProperty, Visibility.Visible);
+
+        switch (normalizedPlannedState)
+        {
+            case RibbonAdaptiveGroupState.Full:
+                ApplyGroup(groupSnapshot, MainWindow.RibbonCompactLevel.Full);
+                break;
+            case RibbonAdaptiveGroupState.SmallWithLabels:
+                ApplyGroup(groupSnapshot, MainWindow.RibbonCompactLevel.SmallWithLabels);
+                break;
+            case RibbonAdaptiveGroupState.IconOnly:
+                ApplyGroup(
+                    groupSnapshot,
+                    ShouldKeepRibbonGroupLabelsAtIconWidth(groupSnapshot, normalizedPlannedState, availableWidth)
+                        ? MainWindow.RibbonCompactLevel.SmallWithLabels
+                        : MainWindow.RibbonCompactLevel.IconOnly);
+                break;
+            case RibbonAdaptiveGroupState.Collapsed:
+                SetIfChanged(groupSnapshot.Group, UIElement.VisibilityProperty, Visibility.Collapsed);
+                SetIfChanged(collapsedButton, UIElement.VisibilityProperty, Visibility.Visible);
+                break;
+        }
+
+        return 1;
     }
 
     private static bool ShouldCollapseIconOnlyGroup(string? catalogId, double availableWidth) =>
