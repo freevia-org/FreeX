@@ -313,6 +313,31 @@ public partial class MainWindow
                 };
     }
 
+    private readonly record struct TableContextRefreshKey(
+        Sheet? Sheet,
+        GridRange? SelectedRange,
+        ulong NavigationRevision,
+        Visibility TableDesignVisibility);
+
+    private readonly record struct PivotFieldListRefreshKey(
+        Sheet? Sheet,
+        GridRange? SelectedRange,
+        ulong NavigationRevision,
+        Visibility PaneVisibility,
+        bool HasPendingLayout);
+
+    private readonly record struct SlicerTimelineRefreshKey(
+        Workbook Workbook,
+        ulong NavigationRevision,
+        bool Dismissed,
+        Visibility PaneVisibility,
+        int SlicerCount,
+        int TimelineCount);
+
+    private TableContextRefreshKey? _lastViewportTableContextRefreshKey;
+    private PivotFieldListRefreshKey? _lastViewportPivotFieldListRefreshKey;
+    private SlicerTimelineRefreshKey? _lastViewportSlicerTimelineRefreshKey;
+
     // ── Navigation helpers ────────────────────────────────────────────────────
 
     private void UpdateViewport()
@@ -420,12 +445,84 @@ public partial class MainWindow
         HorizontalScroll.ViewportSize = scrollableColumnCount;
         VerticalScroll.LargeChange    = Math.Max(1, scrollableRowCount);
         HorizontalScroll.LargeChange  = Math.Max(1, scrollableColumnCount);
-        RefreshValidationDropdown();
-        RefreshFormulaReferenceHighlights();
-        RefreshTableContextualTab();
-        RefreshPivotFieldListPane();
-        RefreshSlicerTimelinePane();
+        RefreshViewportValidationDropdown(sheet);
+        RefreshViewportFormulaReferenceHighlights();
+        RefreshViewportTableContextualTab(sheet);
+        RefreshViewportPivotFieldListPane(sheet);
+        RefreshViewportSlicerTimelinePane();
     }
+
+    private void RefreshViewportValidationDropdown(Sheet? sheet)
+    {
+        if (_validationDropdown?.Visibility == Visibility.Visible ||
+            sheet?.DataValidations.Count > 0)
+        {
+            RefreshValidationDropdown();
+        }
+    }
+
+    private void RefreshViewportFormulaReferenceHighlights()
+    {
+        if (GetFormulaReferenceHighlightEditor() is not null ||
+            _formulaReferenceGridOverlays.Count != 0)
+        {
+            RefreshFormulaReferenceHighlights();
+        }
+    }
+
+    private void RefreshViewportTableContextualTab(Sheet? sheet)
+    {
+        var key = CreateTableContextRefreshKey(sheet);
+        if (_lastViewportTableContextRefreshKey == key)
+            return;
+
+        RefreshTableContextualTab();
+        _lastViewportTableContextRefreshKey = CreateTableContextRefreshKey(sheet);
+    }
+
+    private TableContextRefreshKey CreateTableContextRefreshKey(Sheet? sheet) =>
+        new(
+            sheet,
+            SheetGrid.SelectedRange,
+            _navigationCacheRevision,
+            TableDesignTab?.Visibility ?? Visibility.Collapsed);
+
+    private void RefreshViewportPivotFieldListPane(Sheet? sheet)
+    {
+        var key = CreatePivotFieldListRefreshKey(sheet);
+        if (_lastViewportPivotFieldListRefreshKey == key)
+            return;
+
+        RefreshPivotFieldListPane();
+        _lastViewportPivotFieldListRefreshKey = CreatePivotFieldListRefreshKey(sheet);
+    }
+
+    private PivotFieldListRefreshKey CreatePivotFieldListRefreshKey(Sheet? sheet) =>
+        new(
+            sheet,
+            SheetGrid.SelectedRange,
+            _navigationCacheRevision,
+            PivotFieldListPane?.Visibility ?? Visibility.Collapsed,
+            _pendingPivotLayout is not null);
+
+    private void RefreshViewportSlicerTimelinePane()
+    {
+        var key = CreateSlicerTimelineRefreshKey();
+        if (_lastViewportSlicerTimelineRefreshKey == key)
+            return;
+
+        RefreshSlicerTimelinePane();
+        _lastViewportSlicerTimelineRefreshKey = CreateSlicerTimelineRefreshKey();
+    }
+
+    private SlicerTimelineRefreshKey CreateSlicerTimelineRefreshKey() =>
+        new(
+            _workbook,
+            _navigationCacheRevision,
+            _slicerTimelinePaneDismissed,
+            SlicerTimelinePane?.Visibility ?? Visibility.Collapsed,
+            _workbook.Slicers.Count,
+            _workbook.Timelines.Count);
 
     private ViewportModel CreateViewport(Sheet? sheet, uint topRow, uint leftCol, double rowHeaderWidth)
     {
