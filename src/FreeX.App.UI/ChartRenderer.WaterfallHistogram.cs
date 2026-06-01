@@ -36,29 +36,25 @@ public static partial class ChartRenderer
             ? CreateWaterfallConnectorSeries(chart, theme)
             : null;
 
-        double running = 0;
-        for (int i = 0; i < n; i++)
+        // Column geometry/classification (increase / decrease / total anchor) is decided by the pure,
+        // unit-tested WaterfallBarPlanner; the renderer only draws the resulting bars and connectors.
+        var plan = WaterfallBarPlanner.Compute(values, chart.WaterfallTotalPointIndices);
+        for (int i = 0; i < plan.Count; i++)
         {
-            double bottom = running;
-            double top    = running + values[i];
-            bool isTotal  = i == n - 1;
-            bool isPos    = values[i] >= 0;
-
-            var color = isTotal ? WaterfallTotalColor
-                      : isPos   ? WaterfallPositiveColor
-                                : WaterfallNegativeColor;
-
-            var rectItem = new RectangleBarItem(i - 0.35, Math.Min(bottom, top), i + 0.35, Math.Max(bottom, top))
+            var bar = plan[i];
+            var color = bar.Kind switch
             {
-                Color = color
+                WaterfallBarKind.Total    => WaterfallTotalColor,
+                WaterfallBarKind.Increase => WaterfallPositiveColor,
+                _                         => WaterfallNegativeColor,
             };
-            bars.Items.Add(rectItem);
 
-            if (!isTotal)
-            {
-                AddWaterfallConnector(connectors, i, top);
-                running = top;
-            }
+            bars.Items.Add(new RectangleBarItem(i - 0.35, bar.Bottom, i + 0.35, bar.Top) { Color = color });
+
+            // Connect each column to the next at the running-cumulative level (no connector after the
+            // final column). Totals are anchors but the running total still flows through them.
+            if (i < plan.Count - 1)
+                AddWaterfallConnector(connectors, i, bar.CumulativeAfter);
         }
 
         model.Series.Add(bars);
