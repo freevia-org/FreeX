@@ -10,58 +10,11 @@ internal static class DuplicateSheetDrawingCloner
         foreach (var chart in source.Charts)
             copy.Charts.Add(CloneChart(chart, copyId));
         foreach (var textBox in source.TextBoxes)
-            copy.TextBoxes.Add(new TextBoxModel
-            {
-                Name = textBox.Name,
-                Anchor = RemapAddress(textBox.Anchor, copyId),
-                Text = textBox.Text,
-                Width = textBox.Width,
-                Height = textBox.Height,
-                RotationDegrees = textBox.RotationDegrees,
-                IsVisible = textBox.IsVisible,
-                FillColor = textBox.FillColor,
-                OutlineColor = textBox.OutlineColor,
-                Title = textBox.Title,
-                AltText = textBox.AltText
-            });
+            copy.TextBoxes.Add(CloneTextBox(textBox, copyId));
         foreach (var shape in source.DrawingShapes)
-            copy.DrawingShapes.Add(new DrawingShapeModel
-            {
-                Name = shape.Name,
-                Anchor = RemapAddress(shape.Anchor, copyId),
-                Kind = shape.Kind,
-                Width = shape.Width,
-                Height = shape.Height,
-                RotationDegrees = shape.RotationDegrees,
-                IsVisible = shape.IsVisible,
-                FillColor = shape.FillColor,
-                OutlineColor = shape.OutlineColor,
-                Title = shape.Title,
-                AltText = shape.AltText
-            });
+            copy.DrawingShapes.Add(CloneDrawingShape(shape, copyId));
         foreach (var picture in source.Pictures)
-        {
-            var copiedPicture = new PictureModel
-            {
-                Name = picture.Name,
-                Anchor = RemapAddress(picture.Anchor, copyId),
-                Kind = picture.Kind,
-                SourceRowCount = picture.SourceRowCount,
-                SourceColumnCount = picture.SourceColumnCount,
-                ImageBytes = picture.ImageBytes?.ToArray(),
-                ContentType = picture.ContentType,
-                Width = picture.Width,
-                Height = picture.Height,
-                LockAspectRatio = picture.LockAspectRatio,
-                RotationDegrees = picture.RotationDegrees,
-                IsVisible = picture.IsVisible,
-                Title = picture.Title,
-                AltText = picture.AltText
-            };
-            foreach (var cell in picture.Cells)
-                copiedPicture.Cells.Add(cell);
-            copy.Pictures.Add(copiedPicture);
-        }
+            copy.Pictures.Add(ClonePicture(picture, source.Id, source.Name, copy.Name, copyId));
         foreach (var sparkline in source.Sparklines)
             copy.Sparklines.Add(new SparklineModel
             {
@@ -69,6 +22,91 @@ internal static class DuplicateSheetDrawingCloner
                 Location = RemapAddress(sparkline.Location, copyId),
                 Kind = sparkline.Kind
             });
+    }
+
+    private static TextBoxModel CloneTextBox(TextBoxModel textBox, SheetId copyId) =>
+        new()
+        {
+            Name = textBox.Name,
+            Anchor = RemapAddress(textBox.Anchor, copyId),
+            Text = textBox.Text,
+            Title = textBox.Title,
+            AltText = textBox.AltText,
+            Width = textBox.Width,
+            Height = textBox.Height,
+            RotationDegrees = textBox.RotationDegrees,
+            IsVisible = textBox.IsVisible,
+            FillColor = textBox.FillColor,
+            OutlineColor = textBox.OutlineColor,
+            FillThemeColor = textBox.FillThemeColor,
+            OutlineThemeColor = textBox.OutlineThemeColor,
+            IsSourceLoaded = textBox.IsSourceLoaded
+        };
+
+    private static DrawingShapeModel CloneDrawingShape(DrawingShapeModel shape, SheetId copyId) =>
+        new()
+        {
+            Name = shape.Name,
+            Anchor = RemapAddress(shape.Anchor, copyId),
+            Kind = shape.Kind,
+            Width = shape.Width,
+            Height = shape.Height,
+            RotationDegrees = shape.RotationDegrees,
+            IsVisible = shape.IsVisible,
+            Title = shape.Title,
+            AltText = shape.AltText,
+            FillColor = shape.FillColor,
+            OutlineColor = shape.OutlineColor,
+            GradientFillEndColor = shape.GradientFillEndColor,
+            FillThemeColor = shape.FillThemeColor,
+            OutlineThemeColor = shape.OutlineThemeColor,
+            HasShadowEffect = shape.HasShadowEffect,
+            EffectPreset = shape.EffectPreset,
+            IsSourceLoaded = shape.IsSourceLoaded
+        };
+
+    private static PictureModel ClonePicture(
+        PictureModel picture,
+        SheetId sourceSheetId,
+        string sourceSheetName,
+        string copySheetName,
+        SheetId copyId)
+    {
+        var copiedPicture = new PictureModel
+        {
+            Name = picture.Name,
+            Anchor = RemapAddress(picture.Anchor, copyId),
+            Kind = picture.Kind,
+            SourceRowCount = picture.SourceRowCount,
+            SourceColumnCount = picture.SourceColumnCount,
+            IsLinkedToSourceRange = picture.IsLinkedToSourceRange,
+            LinkedSourceRange = picture.LinkedSourceRange is { } linkedSourceRange &&
+                linkedSourceRange.Start.Sheet == sourceSheetId
+                    ? RemapRange(linkedSourceRange, copyId)
+                    : picture.LinkedSourceRange,
+            LinkedSourceSheetName = picture.LinkedSourceSheetName == sourceSheetName
+                ? copySheetName
+                : picture.LinkedSourceSheetName,
+            ImageBytes = picture.ImageBytes?.ToArray(),
+            ContentType = picture.ContentType,
+            Title = picture.Title,
+            AltText = picture.AltText,
+            Width = picture.Width,
+            Height = picture.Height,
+            LockAspectRatio = picture.LockAspectRatio,
+            RotationDegrees = picture.RotationDegrees,
+            IsVisible = picture.IsVisible,
+            CropLeft = picture.CropLeft,
+            CropTop = picture.CropTop,
+            CropRight = picture.CropRight,
+            CropBottom = picture.CropBottom,
+            IsSourceLoaded = picture.IsSourceLoaded
+        };
+
+        foreach (var cell in picture.Cells)
+            copiedPicture.Cells.Add(cell);
+
+        return copiedPicture;
     }
 
     private static ChartModel CloneChart(ChartModel chart, SheetId copyId) =>

@@ -29,10 +29,15 @@ public class SheetTabCommandTests
             Anchor = a1,
             SourceRowCount = 1,
             SourceColumnCount = 1,
+            IsLinkedToSourceRange = true,
+            LinkedSourceRange = new GridRange(a1, a1),
+            LinkedSourceSheetName = "Sheet1",
             Width = 80,
             Height = 20,
             Kind = PictureKind.CellRangeSnapshot,
+            Title = "Snapshot title",
             AltText = "Copied range",
+            IsSourceLoaded = true,
             Cells = { new PictureCellSnapshot(0, 0, "hello") }
         });
         sheet.Pictures.Add(new PictureModel
@@ -46,7 +51,13 @@ public class SheetTabCommandTests
             Height = 60,
             LockAspectRatio = false,
             RotationDegrees = 45,
-            AltText = "Embedded image"
+            Title = "Logo title",
+            AltText = "Embedded image",
+            CropLeft = 0.1,
+            CropTop = 0.2,
+            CropRight = 0.3,
+            CropBottom = 0.4,
+            IsSourceLoaded = true
         });
         sheet.Charts.Add(new ChartModel
         {
@@ -91,7 +102,11 @@ public class SheetTabCommandTests
             RotationDegrees = 25,
             FillColor = new CellColor(240, 250, 255),
             OutlineColor = new CellColor(70, 80, 90),
-            AltText = "Text box note"
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25),
+            Title = "Narrative title",
+            AltText = "Text box note",
+            IsSourceLoaded = true
         });
         sheet.DrawingShapes.Add(new DrawingShapeModel
         {
@@ -103,7 +118,14 @@ public class SheetTabCommandTests
             RotationDegrees = 35,
             FillColor = new CellColor(200, 210, 220),
             OutlineColor = new CellColor(30, 40, 50),
-            AltText = "Process box"
+            GradientFillEndColor = new CellColor(220, 230, 240),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.1),
+            OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.1),
+            HasShadowEffect = true,
+            EffectPreset = DrawingShapeEffectPreset.Glow,
+            Title = "Process title",
+            AltText = "Process box",
+            IsSourceLoaded = true
         });
 
         var command = new DuplicateSheetCommand(sheet.Id);
@@ -129,7 +151,14 @@ public class SheetTabCommandTests
         var copiedPicture = copy.Pictures[0];
         copiedPicture.Name.Should().Be("Range Snapshot");
         copiedPicture.Anchor.Should().Be(new CellAddress(copy.Id, 1, 1));
+        copiedPicture.IsLinkedToSourceRange.Should().BeTrue();
+        copiedPicture.LinkedSourceRange.Should().Be(new GridRange(
+            new CellAddress(copy.Id, 1, 1),
+            new CellAddress(copy.Id, 1, 1)));
+        copiedPicture.LinkedSourceSheetName.Should().Be(copy.Name);
+        copiedPicture.Title.Should().Be("Snapshot title");
         copiedPicture.AltText.Should().Be("Copied range");
+        copiedPicture.IsSourceLoaded.Should().BeTrue();
         copiedPicture.Cells.Should().ContainSingle().Which.Text.Should().Be("hello");
         var copiedImage = copy.Pictures[1];
         copiedImage.Name.Should().Be("Logo");
@@ -138,7 +167,13 @@ public class SheetTabCommandTests
         copiedImage.ImageBytes.Should().Equal(1, 2, 3);
         copiedImage.LockAspectRatio.Should().BeFalse();
         copiedImage.RotationDegrees.Should().Be(45);
+        copiedImage.Title.Should().Be("Logo title");
         copiedImage.AltText.Should().Be("Embedded image");
+        copiedImage.CropLeft.Should().Be(0.1);
+        copiedImage.CropTop.Should().Be(0.2);
+        copiedImage.CropRight.Should().Be(0.3);
+        copiedImage.CropBottom.Should().Be(0.4);
+        copiedImage.IsSourceLoaded.Should().BeTrue();
         var copiedChart = copy.Charts.Should().ContainSingle().Subject;
         copiedChart.Name.Should().Be("Sales Trend");
         copiedChart.Type.Should().Be(ChartType.Line);
@@ -175,15 +210,26 @@ public class SheetTabCommandTests
         copiedTextBox.RotationDegrees.Should().Be(25);
         copiedTextBox.FillColor.Should().Be(new CellColor(240, 250, 255));
         copiedTextBox.OutlineColor.Should().Be(new CellColor(70, 80, 90));
+        copiedTextBox.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.25));
+        copiedTextBox.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25));
+        copiedTextBox.Title.Should().Be("Narrative title");
         copiedTextBox.AltText.Should().Be("Text box note");
+        copiedTextBox.IsSourceLoaded.Should().BeTrue();
         var copiedShape = copy.DrawingShapes.Should().ContainSingle().Subject;
         copiedShape.Name.Should().Be("Process Step");
         copiedShape.Anchor.Should().Be(new CellAddress(copy.Id, 4, 2));
         copiedShape.Kind.Should().Be(DrawingShapeKind.Rectangle);
         copiedShape.RotationDegrees.Should().Be(35);
+        copiedShape.Title.Should().Be("Process title");
         copiedShape.AltText.Should().Be("Process box");
         copiedShape.FillColor.Should().Be(new CellColor(200, 210, 220));
         copiedShape.OutlineColor.Should().Be(new CellColor(30, 40, 50));
+        copiedShape.GradientFillEndColor.Should().Be(new CellColor(220, 230, 240));
+        copiedShape.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.1));
+        copiedShape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.1));
+        copiedShape.HasShadowEffect.Should().BeTrue();
+        copiedShape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Glow);
+        copiedShape.IsSourceLoaded.Should().BeTrue();
 
         command.Revert(ctx);
 
