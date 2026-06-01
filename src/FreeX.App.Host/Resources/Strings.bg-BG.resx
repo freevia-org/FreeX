@@ -13482,6 +13482,9 @@
   <data name="MainWindowMessage_SaveChangesBeforeCreatingWorkbook" xml:space="preserve">
     <value>Да се запазят ли промените преди създаване на нова работна книга?</value>
   </data>
+  <data name="MainWindowMessage_SaveChangesBeforeOpeningWorkbook" xml:space="preserve">
+    <value>Да се запазят ли промените преди отваряне на друга работна книга?</value>
+  </data>
   <data name="MainWindowMessage_SaveChangesTitle" xml:space="preserve">
     <value>FreeX</value>
   </data>

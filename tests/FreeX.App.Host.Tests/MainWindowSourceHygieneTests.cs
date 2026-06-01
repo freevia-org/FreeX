@@ -260,6 +260,15 @@ public sealed class MainWindowSourceHygieneTests
         newMethod.Should().Contain("CreateNewWorkbook();");
         newMethod.Should().Contain("HideStartScreen();");
 
+        var openMethod = ExtractMethodSource(backstageSource, "private async Task OpenFileAsync(");
+        openMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeOpeningWorkbook\"))");
+        openMethod.IndexOf("ConfirmSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(openMethod.IndexOf("var loader = new OpenWorkbookLoader", StringComparison.Ordinal));
+        openMethod.IndexOf("ConfirmSaveBeforeDestructiveActionAsync", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(openMethod.IndexOf("_workbook = result.Workbook;", StringComparison.Ordinal));
+
         var saveButtonMethod = ExtractMethodSource(backstageSource, "private async void SaveButton_Click(");
         saveButtonMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
         saveButtonMethod.Should().Contain("await SaveWorkbookToTargetAsync(target!)");

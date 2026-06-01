@@ -14369,6 +14369,9 @@ Saved XPS file:
   <data name="MainWindowMessage_SaveChangesBeforeCreatingWorkbook" xml:space="preserve">
     <value>Save changes before creating a new workbook?</value>
   </data>
+  <data name="MainWindowMessage_SaveChangesBeforeOpeningWorkbook" xml:space="preserve">
+    <value>Save changes before opening another workbook?</value>
+  </data>
   <data name="MainWindowMessage_SaveChangesTitle" xml:space="preserve">
     <value>FreeX</value>
   </data>
