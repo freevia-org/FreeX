@@ -13,6 +13,9 @@ public sealed class SelectionMarqueeLayoutPlannerPerformanceTests
 
         source.Should().Contain("foreach (var row in viewport.RowMetrics)");
         source.Should().Contain("foreach (var column in viewport.ColMetrics)");
+        source.Should().Contain("if (row.Row > range.End.Row)");
+        source.Should().Contain("if (column.Col > range.End.Col)");
+        source.Should().Contain("break;");
         source.Should().NotContain(".Where(");
         source.Should().NotContain(".ToList()");
         source.Should().NotContain(".Min(");

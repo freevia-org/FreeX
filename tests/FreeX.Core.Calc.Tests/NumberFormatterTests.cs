@@ -304,6 +304,20 @@ public class NumberFormatterTests
     }
 
     [Fact]
+    public void CustomNumberSubset_IndexedColorPaletteChangesBypassParsedSectionCache()
+    {
+        var palette = new WorkbookIndexedColorPalette();
+        const string format = "[Color 5]0.0";
+
+        var initial = NumberFormatter.FormatWithColor(new NumberValue(12.5), format, palette);
+        palette.SetColor(5, CellColor.FromArgb(4, 5, 6));
+        var updated = NumberFormatter.FormatWithColor(new NumberValue(12.5), format, palette);
+
+        Assert.Equal("#0070C0", initial.ColorHex);
+        Assert.Equal("#040506", updated.ColorHex);
+    }
+
+    [Fact]
     public void CustomNumberSubset_ResolvesThemeColorDirectivesWithWorkbookTheme()
     {
         var theme = WorkbookTheme.Office.WithColor(
