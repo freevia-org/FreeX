@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using FreeX.Core.Model;
@@ -14,8 +15,16 @@ public static partial class NumberFormatter
 
     private const int SplitSectionsCacheSize = 1024;
     private static readonly SplitSectionsCacheEntry?[] SplitSectionsCache = new SplitSectionsCacheEntry[SplitSectionsCacheSize];
+    private const int ParsedSectionsCacheSize = 1024;
+    private static readonly ParsedSectionsCacheEntry?[] ParsedSectionsCache = new ParsedSectionsCacheEntry[ParsedSectionsCacheSize];
 
     private sealed record SplitSectionsCacheEntry(string Format, string[] Sections);
+    private sealed record ParsedSectionsCacheEntry(
+        string[] Sections,
+        WorkbookIndexedColorPalette? IndexedColors,
+        WorkbookTheme? Theme,
+        ParsedSection[] ParsedSections,
+        bool HasConditions);
 
     private sealed record FormatCondition(string Operator, double Value)
     {
@@ -124,6 +133,9 @@ public static partial class NumberFormatter
         WorkbookTheme? theme,
         out bool hasConditions)
     {
+        if (TryGetCachedParsedSections(sections, indexedColors, theme, out var cachedSections, out hasConditions))
+            return cachedSections;
+
         var parsedSections = new ParsedSection[sections.Length];
         hasConditions = false;
 
@@ -134,7 +146,121 @@ public static partial class NumberFormatter
             hasConditions |= parsedSection.Condition is not null;
         }
 
+        if (CanCacheParsedSections(sections, indexedColors))
+            StoreCachedParsedSections(sections, indexedColors, theme, parsedSections, hasConditions);
+
         return parsedSections;
+    }
+
+    private static bool TryGetCachedParsedSections(
+        string[] sections,
+        WorkbookIndexedColorPalette? indexedColors,
+        WorkbookTheme? theme,
+        out ParsedSection[] parsedSections,
+        out bool hasConditions)
+    {
+        var slot = GetParsedSectionsCacheSlot(sections, indexedColors, theme);
+        var cached = Volatile.Read(ref ParsedSectionsCache[slot]);
+        if (cached is not null &&
+            ReferenceEquals(cached.Sections, sections) &&
+            ReferenceEquals(cached.IndexedColors, indexedColors) &&
+            ReferenceEquals(cached.Theme, theme))
+        {
+            parsedSections = cached.ParsedSections;
+            hasConditions = cached.HasConditions;
+            return true;
+        }
+
+        parsedSections = [];
+        hasConditions = false;
+        return false;
+    }
+
+    private static void StoreCachedParsedSections(
+        string[] sections,
+        WorkbookIndexedColorPalette? indexedColors,
+        WorkbookTheme? theme,
+        ParsedSection[] parsedSections,
+        bool hasConditions)
+    {
+        var slot = GetParsedSectionsCacheSlot(sections, indexedColors, theme);
+        Volatile.Write(
+            ref ParsedSectionsCache[slot],
+            new ParsedSectionsCacheEntry(sections, indexedColors, theme, parsedSections, hasConditions));
+    }
+
+    private static int GetParsedSectionsCacheSlot(
+        string[] sections,
+        WorkbookIndexedColorPalette? indexedColors,
+        WorkbookTheme? theme)
+        => HashCode.Combine(
+            RuntimeHelpers.GetHashCode(sections),
+            indexedColors is null ? 0 : RuntimeHelpers.GetHashCode(indexedColors),
+            theme is null ? 0 : RuntimeHelpers.GetHashCode(theme)) & (ParsedSectionsCacheSize - 1);
+
+    private static bool CanCacheParsedSections(string[] sections, WorkbookIndexedColorPalette? indexedColors)
+        => indexedColors is null || !ContainsIndexedColorDirective(sections);
+
+    private static bool ContainsIndexedColorDirective(string[] sections)
+    {
+        for (var sectionIndex = 0; sectionIndex < sections.Length; sectionIndex++)
+        {
+            var section = sections[sectionIndex];
+            for (var i = 0; i < section.Length; i++)
+            {
+                if (section[i] != '[')
+                    continue;
+
+                var close = section.IndexOf(']', i + 1);
+                if (close < 0)
+                    break;
+
+                if (IsIndexedColorDirective(section, i + 1, close))
+                    return true;
+
+                i = close;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsIndexedColorDirective(string section, int tokenStart, int tokenEnd)
+    {
+        while (tokenStart < tokenEnd && char.IsWhiteSpace(section[tokenStart]))
+            tokenStart++;
+        while (tokenEnd > tokenStart && char.IsWhiteSpace(section[tokenEnd - 1]))
+            tokenEnd--;
+
+        const string colorPrefix = "Color";
+        if (tokenEnd - tokenStart <= colorPrefix.Length ||
+            string.Compare(
+                section,
+                tokenStart,
+                colorPrefix,
+                0,
+                colorPrefix.Length,
+                StringComparison.OrdinalIgnoreCase) != 0)
+        {
+            return false;
+        }
+
+        var index = tokenStart + colorPrefix.Length;
+        while (index < tokenEnd && char.IsWhiteSpace(section[index]))
+            index++;
+
+        if (index == tokenEnd)
+            return false;
+
+        while (index < tokenEnd)
+        {
+            if (section[index] is < '0' or > '9')
+                return false;
+
+            index++;
+        }
+
+        return true;
     }
 
     private static ParsedSection ParseSection(
