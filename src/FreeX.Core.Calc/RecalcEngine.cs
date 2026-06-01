@@ -45,43 +45,37 @@ public sealed class RecalcEngine
 
         var recalculated = new List<CellAddress>();
         var errors = new List<(CellAddress Cell, string Error)>();
+        var cyclicCells = new List<CellAddress>();
+        var seenCyclicCells = new HashSet<CellAddress>();
 
         // Mark cyclic cells with error
         foreach (var cyclic in plan.CyclicCells)
-        {
-            var sheet = workbook.GetSheet(cyclic.Sheet);
-            if (sheet is null) continue;
+            AddCyclicCell(workbook, cyclic, cyclicCells, seenCyclicCells, errors);
 
-            var cell = sheet.GetCell(cyclic);
-            if (cell is not null)
-            {
-                cell.Value = ErrorValue.Circular;
-                errors.Add((cyclic, "#CIRCULAR!"));
-            }
-        }
-
-        // Directly-changed formula cells must evaluate first (they are NOT included in
-        // plan.OrderedCells, which only contains downstream dependents). Then volatile cells,
-        // then the topological dependent order.
-        var toEvaluate = new List<CellAddress>(
-            changedCells.Count + _volatileCells.Count + plan.OrderedCells.Count);
-        var seen = new HashSet<CellAddress>();
+        // Directly-changed formula cells, volatile cells, and downstream dependents all
+        // share one dirty set. Topologically order that set so changed formula roots do
+        // not run before dirty formula precedents.
+        var dirtyCells = new HashSet<CellAddress>();
 
         foreach (var addr in changedCells)
         {
             var sheet = workbook.GetSheet(addr.Sheet);
             var cell = sheet?.GetCell(addr);
             if (cell?.HasFormula == true)
-                AddIfNew(addr, toEvaluate, seen);
+                dirtyCells.Add(addr);
         }
 
         foreach (var addr in _volatileCells)
-            AddIfNew(addr, toEvaluate, seen);
+            dirtyCells.Add(addr);
 
         foreach (var addr in plan.OrderedCells)
-            AddIfNew(addr, toEvaluate, seen);
+            dirtyCells.Add(addr);
 
-        foreach (var addr in toEvaluate)
+        var evaluationPlan = _graph.GetEvaluationOrder(dirtyCells);
+        foreach (var cyclic in evaluationPlan.CyclicCells)
+            AddCyclicCell(workbook, cyclic, cyclicCells, seenCyclicCells, errors);
+
+        foreach (var addr in evaluationPlan.OrderedCells)
         {
             var sheet = workbook.GetSheet(addr.Sheet);
             if (sheet is null) continue;
@@ -124,6 +118,9 @@ public sealed class RecalcEngine
             }
             catch (FormulaParseException)
             {
+                cell.CachedAst = null;
+                sheet.ClearSpillRange(addr);
+                ClearFormulaDependencies(addr);
                 cell.Value = ErrorValue.Value;
                 errors.Add((addr, "#VALUE!"));
             }
@@ -147,7 +144,7 @@ public sealed class RecalcEngine
             }
         }
 
-        return new RecalcReport(recalculated, errors, plan.CyclicCells);
+        return new RecalcReport(recalculated, errors, cyclicCells);
     }
 
     private IEnumerable<CellAddress> BuildChangedSetForTraversal(IReadOnlyList<CellAddress> changedCells)
@@ -176,13 +173,26 @@ public sealed class RecalcEngine
         return false;
     }
 
-    private static void AddIfNew(
-        CellAddress addr,
-        List<CellAddress> orderedCells,
-        HashSet<CellAddress> seen)
+    private static void AddCyclicCell(
+        Workbook workbook,
+        CellAddress cyclic,
+        List<CellAddress> cyclicCells,
+        HashSet<CellAddress> seenCyclicCells,
+        List<(CellAddress Cell, string Error)> errors)
     {
-        if (seen.Add(addr))
-            orderedCells.Add(addr);
+        if (!seenCyclicCells.Add(cyclic))
+            return;
+
+        cyclicCells.Add(cyclic);
+
+        var sheet = workbook.GetSheet(cyclic.Sheet);
+        if (sheet is null) return;
+
+        var cell = sheet.GetCell(cyclic);
+        if (cell is null) return;
+
+        cell.Value = ErrorValue.Circular;
+        errors.Add((cyclic, "#CIRCULAR!"));
     }
 
     /// <summary>
