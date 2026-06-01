@@ -32,8 +32,10 @@ internal static class DelimitedTextWorkbookWriter
         if (workbook.Sheets.Count == 0) return;
 
         var sheet = workbook.Sheets[0];
-        var rowLookup = new Dictionary<uint, DelimitedTextRowBucket>();
-        var rows = new List<DelimitedTextRowBucket>();
+        var rowCapacity = EstimateRowCapacity(sheet);
+        var cellsPerRowCapacity = EstimateCellsPerRowCapacity(sheet, rowCapacity);
+        var rowLookup = new Dictionary<uint, DelimitedTextRowBucket>(rowCapacity);
+        var rows = new List<DelimitedTextRowBucket>(rowCapacity);
         var endRow = 0u;
         var endCol = 0u;
         foreach (var (address, cell) in sheet.EnumerateCells())
@@ -43,7 +45,7 @@ internal static class DelimitedTextWorkbookWriter
 
             if (!rowLookup.TryGetValue(address.Row, out var row))
             {
-                row = new DelimitedTextRowBucket(address.Row);
+                row = new DelimitedTextRowBucket(address.Row, cellsPerRowCapacity);
                 rowLookup[address.Row] = row;
                 rows.Add(row);
             }
@@ -84,11 +86,30 @@ internal static class DelimitedTextWorkbookWriter
         row is >= 1 and <= CellAddress.MaxRow &&
         col is >= 1 and <= CellAddress.MaxCol;
 
-    private sealed class DelimitedTextRowBucket(uint row)
+    private static int EstimateRowCapacity(Sheet sheet)
+    {
+        if (sheet.CellCount == 0 ||
+            sheet.GetUsedRange() is not { } usedRange)
+        {
+            return 0;
+        }
+
+        return (int)Math.Min(sheet.CellCount, usedRange.RowCount);
+    }
+
+    private static int EstimateCellsPerRowCapacity(Sheet sheet, int rowCapacity)
+    {
+        if (rowCapacity <= 0)
+            return 0;
+
+        return Math.Max(1, (sheet.CellCount + rowCapacity - 1) / rowCapacity);
+    }
+
+    private sealed class DelimitedTextRowBucket(uint row, int cellCapacity)
     {
         public uint Row { get; } = row;
 
-        public List<(uint Col, Cell Cell)> Cells { get; } = [];
+        public List<(uint Col, Cell Cell)> Cells { get; } = new(cellCapacity);
     }
 
     private static void WriteRow(TextWriter writer, char delimiter, List<(uint Col, Cell Cell)> cells, uint endCol)
