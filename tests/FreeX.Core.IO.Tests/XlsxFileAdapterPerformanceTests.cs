@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Compression;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using FluentAssertions;
@@ -100,6 +101,49 @@ public sealed class XlsxFileAdapterPerformanceTests
         Console.WriteLine(
             "PERF XLSX_LOAD_DENSE " +
             $"sheets={DenseSheetCount} rows={DenseRowsPerSheet} cols={DenseColumnsPerSheet} " +
+            $"steps={iterations} package_bytes={package.Length:N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_LoadIgnoredErrorAndStyleOnlyMetadataWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var package = CreateIgnoredErrorAndStyleOnlyMetadataPackage();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream(package, writable: false))
+            AssertIgnoredErrorAndStyleOnlyMetadata(adapter.Load(warmup));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream(package, writable: false);
+            var step = Stopwatch.StartNew();
+            var workbook = adapter.Load(stream);
+            step.Stop();
+            AssertIgnoredErrorAndStyleOnlyMetadata(workbook);
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_LOAD_IGNORED_ERROR_STYLE_ONLY_METADATA " +
+            $"rows={IgnoredErrorStyleOnlyRows} value_cols={IgnoredErrorStyleOnlyValueColumns} " +
+            $"style_only_cols={IgnoredErrorStyleOnlyStyleColumns} ignored_ranges={IgnoredErrorStyleOnlyIgnoredRanges} " +
             $"steps={iterations} package_bytes={package.Length:N0} " +
             $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
             $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
@@ -676,6 +720,10 @@ public sealed class XlsxFileAdapterPerformanceTests
     private const int WorksheetReplayMetadataRowsPerSheet = 40;
     private const int AdvancedConditionalFormatRulesPerSheet = 40;
     private const int WorksheetSingleXmlCellsPerSheet = 40;
+    private const int IgnoredErrorStyleOnlyRows = 800;
+    private const int IgnoredErrorStyleOnlyValueColumns = 30;
+    private const int IgnoredErrorStyleOnlyStyleColumns = 10;
+    private const int IgnoredErrorStyleOnlyIgnoredRanges = 800;
 
     private static byte[] CreateDenseXlsxPackage()
     {
@@ -701,6 +749,72 @@ public sealed class XlsxFileAdapterPerformanceTests
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         return stream.ToArray();
+    }
+
+    private static byte[] CreateIgnoredErrorAndStyleOnlyMetadataPackage()
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.Worksheets.Add("Metadata");
+        for (var row = 1; row <= IgnoredErrorStyleOnlyRows; row++)
+        {
+            for (var col = 1; col <= IgnoredErrorStyleOnlyValueColumns; col++)
+                sheet.Cell(row, col).Value = row * col;
+
+            for (var col = IgnoredErrorStyleOnlyValueColumns + 2;
+                 col < IgnoredErrorStyleOnlyValueColumns + 2 + IgnoredErrorStyleOnlyStyleColumns;
+                 col++)
+            {
+                var styleOnlyCell = sheet.Cell(row, col);
+                styleOnlyCell.Style.Fill.BackgroundColor = XLColor.FromArgb(221, 235, 247);
+                styleOnlyCell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+            }
+        }
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+
+        {
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
+            var worksheetEntry = archive.GetEntry("xl/worksheets/sheet1.xml")!;
+            XDocument worksheetXml;
+            using (var worksheetStream = worksheetEntry.Open())
+                worksheetXml = XDocument.Load(worksheetStream);
+            XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            worksheetXml.Root!.Element(ns + "ignoredErrors")?.Remove();
+
+            var ignoredErrors = new XElement(ns + "ignoredErrors");
+            for (var rangeIndex = 1; rangeIndex <= IgnoredErrorStyleOnlyIgnoredRanges; rangeIndex++)
+            {
+                ignoredErrors.Add(new XElement(
+                    ns + "ignoredError",
+                    new XAttribute("sqref", $"A{rangeIndex}:AD{rangeIndex + 999}"),
+                    new XAttribute("numberStoredAsText", "1")));
+            }
+
+            worksheetXml.Root.Add(ignoredErrors);
+            ReplaceZipEntryXml(archive, worksheetEntry.FullName, worksheetXml);
+        }
+
+        return stream.ToArray();
+    }
+
+    private static void AssertIgnoredErrorAndStyleOnlyMetadata(Workbook workbook)
+    {
+        workbook.SheetCount.Should().Be(1);
+        var sheet = workbook.Sheets[0];
+        sheet.EnumerateCells().Count(pair => pair.Cell.IgnoreFormulaError)
+            .Should().Be(IgnoredErrorStyleOnlyRows * IgnoredErrorStyleOnlyValueColumns);
+        sheet.GetStyleOnlyEntries().Count()
+            .Should().Be(IgnoredErrorStyleOnlyRows * IgnoredErrorStyleOnlyStyleColumns);
+    }
+
+    private static void ReplaceZipEntryXml(ZipArchive archive, string entryName, XDocument document)
+    {
+        archive.GetEntry(entryName)?.Delete();
+        var entry = archive.CreateEntry(entryName);
+        using var stream = entry.Open();
+        document.Save(stream, System.Xml.Linq.SaveOptions.DisableFormatting);
     }
 
     private static Workbook CreateDenseModelWorkbook()
