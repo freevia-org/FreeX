@@ -240,6 +240,9 @@ public static partial class NumberFormatter
 
     private static string RemoveSpacingAndFillDirectives(string format)
     {
+        if (!HasSpacingOrFillDirective(format))
+            return format;
+
         var sb = new System.Text.StringBuilder(format.Length);
         bool inQuote = false;
 
@@ -278,8 +281,37 @@ public static partial class NumberFormatter
         return sb.ToString();
     }
 
+    private static bool HasSpacingOrFillDirective(string format)
+    {
+        bool inQuote = false;
+
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && c == '\\' && i + 1 < format.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (!inQuote && c is '_' or '*')
+                return true;
+        }
+
+        return false;
+    }
+
     private static string PreserveAccountingFillSpace(string format)
     {
+        if (!HasAccountingFillDirective(format))
+            return format;
+
         var sb = new System.Text.StringBuilder(format.Length);
         bool inQuote = false;
 
@@ -305,6 +337,26 @@ public static partial class NumberFormatter
         }
 
         return sb.ToString();
+    }
+
+    private static bool HasAccountingFillDirective(string format)
+    {
+        bool inQuote = false;
+
+        for (int i = 0; i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && TryReadAccountingFillSymbol(format, i, out _, out _))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool IsCurrencySymbol(char c)

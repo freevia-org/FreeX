@@ -139,6 +139,9 @@ public static partial class NumberFormatter
     private static bool TryResolveCjkNativeNumberSpec(string format, out CjkNativeNumberSpec spec)
     {
         spec = null!;
+        if (format.IndexOf('[') < 0)
+            return false;
+
         var match = NativeDigitDirectiveRegex.Match(format);
         if (!match.Success ||
             !int.TryParse(match.Groups["variant"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var variant))
@@ -517,6 +520,14 @@ public static partial class NumberFormatter
         out int variant,
         out string? locale)
     {
+        if (format.IndexOf('[') < 0)
+        {
+            kind = "";
+            variant = 0;
+            locale = null;
+            return false;
+        }
+
         var match = NativeDigitDirectiveRegex.Match(format);
         if (!match.Success ||
             !int.TryParse(match.Groups["variant"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out variant))
