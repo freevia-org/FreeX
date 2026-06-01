@@ -54,6 +54,59 @@ public sealed class DataValidationServiceTests
     }
 
     [Fact]
+    public void GetInputPrompt_RebuildsLookupAfterSameCountRuleReplacement()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var firstAddress = new CellAddress(sheet.Id, 1, 1);
+        var secondAddress = new CellAddress(sheet.Id, 2, 1);
+        sheet.DataValidations.Add(NewPromptRule(firstAddress, "First"));
+
+        DataValidationService.GetInputPrompt(sheet, firstAddress)
+            .Should()
+            .Be(new DataValidationService.InputPrompt("Input", "First"));
+
+        sheet.DataValidations[0] = NewPromptRule(secondAddress, "Second");
+
+        DataValidationService.GetInputPrompt(sheet, firstAddress).Should().BeNull();
+        DataValidationService.GetInputPrompt(sheet, secondAddress)
+            .Should()
+            .Be(new DataValidationService.InputPrompt("Input", "Second"));
+    }
+
+    [Fact]
+    public void GetApplicable_PreservesRuleOrderAcrossExactAndRangeRules()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var exact = NewPromptRule(new CellAddress(sheet.Id, 5, 1), "Exact");
+        var range = NewPromptRule(
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 10, 1)),
+            "Range");
+        sheet.DataValidations.Add(exact);
+        sheet.DataValidations.Add(range);
+
+        DataValidationService.GetApplicable(sheet, new CellAddress(sheet.Id, 5, 1))
+            .Should()
+            .Equal(exact, range);
+    }
+
+    [Fact]
+    public void GetInputPrompt_MatchesAdditionalRanges()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var rule = NewPromptRule(new CellAddress(sheet.Id, 1, 1), "Additional");
+        rule.AdditionalRanges.Add(new GridRange(
+            new CellAddress(sheet.Id, 3, 2),
+            new CellAddress(sheet.Id, 5, 2)));
+        sheet.DataValidations.Add(rule);
+
+        DataValidationService.GetInputPrompt(sheet, new CellAddress(sheet.Id, 4, 2))
+            .Should()
+            .Be(new DataValidationService.InputPrompt("Input", "Additional"));
+    }
+
+    [Fact]
     public void Benchmark_ValidateLargeRangeListMatch_ReportsTimingAndAllocatedBytes()
     {
         const int itemCount = 5_000;
@@ -162,5 +215,17 @@ public sealed class DataValidationServiceTests
             Type = DvType.List,
             Formula1 = formula1,
             AppliesTo = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 10, 1)),
+        };
+
+    private static DataValidation NewPromptRule(CellAddress address, string message) =>
+        NewPromptRule(new GridRange(address, address), message);
+
+    private static DataValidation NewPromptRule(GridRange range, string message) =>
+        new()
+        {
+            AppliesTo = range,
+            ShowInputMessage = true,
+            PromptTitle = "Input",
+            PromptMessage = message
         };
 }
