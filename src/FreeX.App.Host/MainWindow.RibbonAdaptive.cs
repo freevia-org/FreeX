@@ -72,8 +72,7 @@ public partial class MainWindow
             adaptiveGroups,
             fixedChromeWidth,
             selectedTabHeader);
-        var layoutStates = layout.States.ToArray();
-        ApplyRibbonVisualStateOverridesInPlace(adaptiveGroups, layoutStates, availableWidth, selectedTabHeader);
+        var layoutStates = ApplyRibbonVisualStateOverrides(adaptiveGroups, layout.States, availableWidth, selectedTabHeader);
         IReadOnlyList<RibbonAdaptiveGroupState> plannedStatesSource = layoutStates;
 
         var correctionCacheKey = CreateRibbonCorrectionCacheKey(cacheKey, availableWidth, plannedStatesSource);
@@ -153,30 +152,37 @@ public partial class MainWindow
         return false;
     }
 
-    private static void ApplyRibbonVisualStateOverridesInPlace(
+    private static IReadOnlyList<RibbonAdaptiveGroupState> ApplyRibbonVisualStateOverrides(
         IReadOnlyList<RibbonAdaptiveGroup> adaptiveGroups,
-        RibbonAdaptiveGroupState[] plannedStates,
+        IReadOnlyList<RibbonAdaptiveGroupState> plannedStates,
         double availableWidth,
         string? selectedTabHeader)
     {
         if (!IsDataRibbonAdaptiveSurface(adaptiveGroups, selectedTabHeader))
-            return;
+            return plannedStates;
+
+        RibbonAdaptiveGroupState[]? mutableStates = null;
 
         if (availableWidth <= 1300 &&
             TryFindRibbonAdaptiveGroupIndex(adaptiveGroups, "DataSortFilterGroup", "Sort & Filter", out var sortFilterIndex) &&
-            sortFilterIndex < plannedStates.Length &&
+            sortFilterIndex < plannedStates.Count &&
             plannedStates[sortFilterIndex] != RibbonAdaptiveGroupState.Collapsed)
         {
-            plannedStates[sortFilterIndex] = RibbonAdaptiveGroupState.Collapsed;
+            mutableStates = plannedStates.ToArray();
+            mutableStates[sortFilterIndex] = RibbonAdaptiveGroupState.Collapsed;
         }
 
+        var currentStates = mutableStates ?? plannedStates;
         if (availableWidth > 760 &&
             TryFindRibbonAdaptiveGroupIndex(adaptiveGroups, "DataToolsGroup", "Data Tools", out var dataToolsIndex) &&
-            dataToolsIndex < plannedStates.Length &&
-            plannedStates[dataToolsIndex] == RibbonAdaptiveGroupState.IconOnly)
+            dataToolsIndex < currentStates.Count &&
+            currentStates[dataToolsIndex] == RibbonAdaptiveGroupState.IconOnly)
         {
-            plannedStates[dataToolsIndex] = RibbonAdaptiveGroupState.Full;
+            mutableStates ??= plannedStates.ToArray();
+            mutableStates[dataToolsIndex] = RibbonAdaptiveGroupState.Full;
         }
+
+        return mutableStates ?? plannedStates;
     }
 
     private bool ApplyRibbonMeasuredPrimaryFallback(

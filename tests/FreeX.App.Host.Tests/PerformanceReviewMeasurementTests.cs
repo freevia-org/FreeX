@@ -103,6 +103,39 @@ public sealed class PerformanceReviewMeasurementTests
     }
 
     [Fact]
+    public void Benchmark_RibbonForcedCompactSkipPath_ReportsTimingAndAllocatedBytes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = RibbonResizeHarness.Create();
+            const double width = 1280d;
+            const int iterations = 300;
+
+            harness.SelectRibbonTab("Home", width);
+            harness.MeasureRepeatedForcedCompact(width, iterations: 10);
+            harness.ResetAdaptiveDiagnostics();
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var result = harness.MeasureRepeatedForcedCompact(width, iterations);
+            var diagnostics = harness.AdaptiveDiagnostics;
+            Console.WriteLine(
+                "PERF RIBBON_FORCE_COMPACT_SKIP " +
+                $"steps={result.StepCount} total_ms={result.TotalMilliseconds:F2} " +
+                $"mean_ms={result.MeanMilliseconds:F4} p95_ms={result.P95Milliseconds:F4} " +
+                $"max_ms={result.MaxMilliseconds:F4} allocated_bytes={result.AllocatedBytes:N0} " +
+                $"applied_state_skips={diagnostics.AppliedStateSkipCount:N0} " +
+                $"state_applies={diagnostics.StateApplyCount:N0}");
+
+            result.StepCount.Should().Be(iterations);
+            diagnostics.AppliedStateSkipCount.Should().Be(iterations);
+            diagnostics.StateApplyCount.Should().Be(0);
+        });
+    }
+
+    [Fact]
     public void Benchmark_RibbonCollapsedButtonFootprint_ReportsTimingAndAllocatedBytes()
     {
         StaTestRunner.Run(() =>
@@ -531,9 +564,33 @@ public sealed class PerformanceReviewMeasurementTests
             return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
         }
 
+        public MeasurementResult MeasureRepeatedForcedCompact(double width, int iterations)
+        {
+            _window.Width = width;
+            _window.UpdateLayout();
+            PumpDispatcher();
+
+            var timings = new List<double>(iterations);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            for (var iteration = 0; iteration < iterations; iteration++)
+            {
+                var step = Stopwatch.StartNew();
+                _updateRibbonCompactMode.Invoke(_window, [true]);
+                PumpDispatcher();
+                step.Stop();
+                timings.Add(step.Elapsed.TotalMilliseconds);
+            }
+
+            total.Stop();
+            return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+        }
+
         public RibbonFallbackDiagnosticsSnapshot FallbackDiagnostics => _window.GetRibbonFallbackDiagnosticsForTests();
 
         public RibbonAdaptiveDiagnosticsSnapshot AdaptiveDiagnostics => _window.GetRibbonAdaptiveDiagnosticsForTests();
+
+        public void ResetAdaptiveDiagnostics() => _window.ResetRibbonAdaptiveDiagnosticsForTests();
 
         public static RibbonResizeHarness Create()
         {
