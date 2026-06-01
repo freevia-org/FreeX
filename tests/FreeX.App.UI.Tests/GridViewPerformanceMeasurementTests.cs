@@ -486,6 +486,84 @@ public sealed class GridViewPerformanceMeasurementTests
         });
     }
 
+    [Fact]
+    public void Benchmark_FormulaTraceLayoutVisitor_ReportsTimingAndAllocatedBytes()
+    {
+        const int iterations = 160;
+        const int arrowCount = 2_500;
+        var sheetId = SheetId.New();
+        var otherSheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            Enumerable.Range(1, 160)
+                .Select(row => new RowMetric((uint)row, 20, (row - 1) * 20))
+                .ToArray(),
+            Enumerable.Range(1, 80)
+                .Select(col => new ColMetric((uint)col, 72, (col - 1) * 72))
+                .ToArray());
+        var arrows = Enumerable.Range(0, arrowCount)
+            .Select(index =>
+            {
+                var from = new CellAddress(
+                    sheetId,
+                    (uint)(index % 160 + 1),
+                    (uint)(index % 80 + 1));
+                var to = (index % 3) switch
+                {
+                    0 => new CellAddress(sheetId, (uint)((index + 17) % 160 + 1), (uint)((index + 11) % 80 + 1)),
+                    1 => new CellAddress(sheetId, (uint)(400 + index), (uint)(index % 80 + 1)),
+                    _ => new CellAddress(otherSheetId, (uint)(index % 160 + 1), (uint)(index % 80 + 1))
+                };
+                return new FormulaTraceArrow(from, to);
+            })
+            .ToArray();
+
+        FormulaTraceLayoutPlanner.CalculateLayouts(viewport, arrows, sheetId).Count.Should().Be(arrowCount);
+        var warmupConsumer = new CountingFormulaTraceArrowLayoutConsumer();
+        FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, sheetId, ref warmupConsumer);
+        warmupConsumer.Count.Should().Be(arrowCount);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var materializedCount = 0;
+        var materializedAllocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var materialized = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+            materializedCount += FormulaTraceLayoutPlanner.CalculateLayouts(viewport, arrows, sheetId).Count;
+        materialized.Stop();
+        var materializedAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - materializedAllocatedBefore;
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var visitedCount = 0;
+        var visitedAllocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var visited = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var consumer = new CountingFormulaTraceArrowLayoutConsumer();
+            FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, sheetId, ref consumer);
+            visitedCount += consumer.Count;
+        }
+        visited.Stop();
+        var visitedAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - visitedAllocatedBefore;
+
+        Console.WriteLine(
+            "PERF FORMULA_TRACE_LAYOUT_VISITOR " +
+            $"arrows={arrowCount} steps={iterations} " +
+            $"materialized_total_ms={materialized.Elapsed.TotalMilliseconds:F2} " +
+            $"visitor_total_ms={visited.Elapsed.TotalMilliseconds:F2} " +
+            $"materialized_allocated_bytes={materializedAllocatedBytes:N0} " +
+            $"visitor_allocated_bytes={visitedAllocatedBytes:N0}");
+
+        materializedCount.Should().Be(arrowCount * iterations);
+        visitedCount.Should().Be(materializedCount);
+        visitedAllocatedBytes.Should().BeLessThan(materializedAllocatedBytes);
+    }
+
     private static GridView CreateTextHeavyGrid(double width, double height)
         => CreateTextHeavyGrid(width, height, null);
 
@@ -1122,6 +1200,18 @@ public sealed class GridViewPerformanceMeasurementTests
         var field = typeof(GridView).GetField("_resizeTarget", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new MissingFieldException(nameof(GridView), "_resizeTarget");
         field.SetValue(grid, Enum.Parse(field.FieldType, target));
+    }
+
+    private struct CountingFormulaTraceArrowLayoutConsumer : IFormulaTraceArrowLayoutConsumer
+    {
+        public int Count { get; private set; }
+
+        public void AcceptLayout(
+            Point start,
+            Point end,
+            FormulaTraceArrowLayoutKind kind,
+            CellAddress? navigationTarget) =>
+            Count++;
     }
 
     private static class StaTestRunner
