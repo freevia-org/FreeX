@@ -157,6 +157,54 @@ public sealed class PerformanceReviewMeasurementTests
     }
 
     [Fact]
+    public void Benchmark_RepeatedSelectionDragTargetNoOps_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var dragHarness = SelectionDragHarness.Create();
+            dragHarness.MeasureRepeatedDragSelectionTarget(iterations: 10);
+
+            using var additionalHarness = SelectionDragHarness.Create();
+            additionalHarness.MeasureRepeatedAdditionalSelectionTarget(iterations: 10);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var dragResult = dragHarness.MeasureRepeatedDragSelectionTarget(iterations: 2_000);
+            var additionalResult = additionalHarness.MeasureRepeatedAdditionalSelectionTarget(iterations: 2_000);
+            Console.WriteLine(
+                "PERF SELECTION_DRAG_REPEATED_TARGET " +
+                $"steps={dragResult.StepCount} total_ms={dragResult.TotalMilliseconds:F2} " +
+                $"mean_ms={dragResult.MeanMilliseconds:F2} p95_ms={dragResult.P95Milliseconds:F2} " +
+                $"max_ms={dragResult.MaxMilliseconds:F2} allocated_bytes={dragResult.AllocatedBytes:N0}");
+            Console.WriteLine(
+                "PERF ADDITIONAL_SELECTION_DRAG_REPEATED_TARGET " +
+                $"steps={additionalResult.StepCount} total_ms={additionalResult.TotalMilliseconds:F2} " +
+                $"mean_ms={additionalResult.MeanMilliseconds:F2} p95_ms={additionalResult.P95Milliseconds:F2} " +
+                $"max_ms={additionalResult.MaxMilliseconds:F2} allocated_bytes={additionalResult.AllocatedBytes:N0}");
+
+            dragResult.StepCount.Should().Be(2_000);
+            additionalResult.StepCount.Should().Be(2_000);
+            dragResult.TotalMilliseconds.Should().BeGreaterThan(0);
+            additionalResult.TotalMilliseconds.Should().BeGreaterThan(0);
+        });
+    }
+
+    [Fact]
+    public void RepeatedSelectionDragTargetNoOps_DoNotQueueDeferredRefresh()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var dragHarness = SelectionDragHarness.Create();
+            dragHarness.RepeatedDragSelectionTargetLeavesStatusPendingClear().Should().BeTrue();
+
+            using var additionalHarness = SelectionDragHarness.Create();
+            additionalHarness.RepeatedAdditionalSelectionTargetLeavesPendingRefreshClear().Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void Benchmark_ViewportNoCommentsFastPath_ReportsTiming()
     {
         var workbook = new Workbook("Book1");
@@ -579,31 +627,47 @@ public sealed class PerformanceReviewMeasurementTests
     private sealed class SelectionDragHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _extendSelection;
-        private readonly MethodInfo _addOrMoveAdditionalSelection;
-        private readonly MethodInfo _completeDragSelectionStatusRefresh;
-        private readonly MethodInfo? _completeDragSelectionToolbarRefresh;
+        private readonly Action<CellAddress, CellAddress> _extendSelection;
+        private readonly Action<CellAddress, bool> _addOrMoveAdditionalSelection;
+        private readonly Action _completeDragSelectionStatusRefresh;
+        private readonly Action? _completeDragSelectionToolbarRefresh;
         private readonly FieldInfo _dragSelectActive;
+        private readonly FieldInfo _dragSelectStatusRefreshPending;
+        private readonly FieldInfo _dragSelectToolbarRefreshPending;
         private readonly CellAddress _anchor;
 
         private SelectionDragHarness(MainWindow window, SheetId sheetId)
         {
             _window = window;
             _anchor = new CellAddress(sheetId, 1, 1);
-            _extendSelection = typeof(MainWindow)
+            var extendSelection = typeof(MainWindow)
                 .GetMethod("ExtendSelection", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ExtendSelection");
-            _addOrMoveAdditionalSelection = typeof(MainWindow)
+            _extendSelection = extendSelection.CreateDelegate<Action<CellAddress, CellAddress>>(window);
+
+            var addOrMoveAdditionalSelection = typeof(MainWindow)
                 .GetMethod("AddOrMoveAdditionalSelection", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "AddOrMoveAdditionalSelection");
-            _completeDragSelectionStatusRefresh = typeof(MainWindow)
+            _addOrMoveAdditionalSelection = addOrMoveAdditionalSelection.CreateDelegate<Action<CellAddress, bool>>(window);
+
+            var completeDragSelectionStatusRefresh = typeof(MainWindow)
                 .GetMethod("CompleteDragSelectionStatusRefresh", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "CompleteDragSelectionStatusRefresh");
-            _completeDragSelectionToolbarRefresh = typeof(MainWindow)
+            _completeDragSelectionStatusRefresh = completeDragSelectionStatusRefresh.CreateDelegate<Action>(window);
+
+            var completeDragSelectionToolbarRefresh = typeof(MainWindow)
                 .GetMethod("CompleteDragSelectionToolbarRefresh", BindingFlags.Instance | BindingFlags.NonPublic);
+            _completeDragSelectionToolbarRefresh =
+                completeDragSelectionToolbarRefresh?.CreateDelegate<Action>(window);
             _dragSelectActive = typeof(MainWindow)
                 .GetField("_dragSelectActive", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_dragSelectActive");
+            _dragSelectStatusRefreshPending = typeof(MainWindow)
+                .GetField("_dragSelectStatusRefreshPending", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_dragSelectStatusRefreshPending");
+            _dragSelectToolbarRefreshPending = typeof(MainWindow)
+                .GetField("_dragSelectToolbarRefreshPending", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_dragSelectToolbarRefreshPending");
         }
 
         public MeasurementResult MeasureDragSelection(int iterations)
@@ -618,7 +682,7 @@ public sealed class PerformanceReviewMeasurementTests
                 {
                     var row = (uint)(20 + i * 6);
                     var step = Stopwatch.StartNew();
-                    _extendSelection.Invoke(_window, [_anchor, new CellAddress(_anchor.Sheet, row, 40)]);
+                    _extendSelection(_anchor, new CellAddress(_anchor.Sheet, row, 40));
                     PumpDispatcher();
                     step.Stop();
                     timings.Add(step.Elapsed.TotalMilliseconds);
@@ -636,7 +700,7 @@ public sealed class PerformanceReviewMeasurementTests
         public MeasurementResult MeasureAdditionalSelectionDrag(int iterations)
         {
             var timings = new List<double>(iterations);
-            _addOrMoveAdditionalSelection.Invoke(_window, [_anchor, false]);
+            _addOrMoveAdditionalSelection(_anchor, false);
             PumpDispatcher();
             _dragSelectActive.SetValue(_window, true);
             var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
@@ -647,7 +711,7 @@ public sealed class PerformanceReviewMeasurementTests
                 {
                     var row = (uint)(20 + i * 6);
                     var step = Stopwatch.StartNew();
-                    _addOrMoveAdditionalSelection.Invoke(_window, [new CellAddress(_anchor.Sheet, row, 40), true]);
+                    _addOrMoveAdditionalSelection(new CellAddress(_anchor.Sheet, row, 40), true);
                     PumpDispatcher();
                     step.Stop();
                     timings.Add(step.Elapsed.TotalMilliseconds);
@@ -656,23 +720,129 @@ public sealed class PerformanceReviewMeasurementTests
             finally
             {
                 _dragSelectActive.SetValue(_window, false);
-                _completeDragSelectionToolbarRefresh?.Invoke(_window, []);
-                _completeDragSelectionStatusRefresh.Invoke(_window, []);
+                _completeDragSelectionToolbarRefresh?.Invoke();
+                _completeDragSelectionStatusRefresh();
             }
 
             total.Stop();
             return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
         }
 
+        public MeasurementResult MeasureRepeatedDragSelectionTarget(int iterations)
+        {
+            var target = new CellAddress(_anchor.Sheet, 120, 40);
+            _extendSelection(_anchor, target);
+            PumpDispatcher();
+
+            var timings = new List<double>(iterations);
+            _dragSelectActive.SetValue(_window, true);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            try
+            {
+                for (var i = 0; i < iterations; i++)
+                {
+                    var stepStarted = Stopwatch.GetTimestamp();
+                    _extendSelection(_anchor, target);
+                    timings.Add(Stopwatch.GetElapsedTime(stepStarted).TotalMilliseconds);
+                }
+            }
+            finally
+            {
+                _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionStatusRefresh();
+            }
+
+            total.Stop();
+            return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+        }
+
+        public MeasurementResult MeasureRepeatedAdditionalSelectionTarget(int iterations)
+        {
+            var target = new CellAddress(_anchor.Sheet, 120, 40);
+            _addOrMoveAdditionalSelection(_anchor, false);
+            PumpDispatcher();
+            _dragSelectActive.SetValue(_window, true);
+            _addOrMoveAdditionalSelection(target, true);
+            PumpDispatcher();
+
+            var timings = new List<double>(iterations);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            try
+            {
+                for (var i = 0; i < iterations; i++)
+                {
+                    var stepStarted = Stopwatch.GetTimestamp();
+                    _addOrMoveAdditionalSelection(target, true);
+                    timings.Add(Stopwatch.GetElapsedTime(stepStarted).TotalMilliseconds);
+                }
+            }
+            finally
+            {
+                _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionToolbarRefresh?.Invoke();
+                _completeDragSelectionStatusRefresh();
+            }
+
+            total.Stop();
+            return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+        }
+
+        public bool RepeatedDragSelectionTargetLeavesStatusPendingClear()
+        {
+            var target = new CellAddress(_anchor.Sheet, 120, 40);
+            _extendSelection(_anchor, target);
+            PumpDispatcher();
+            _dragSelectActive.SetValue(_window, true);
+            _dragSelectStatusRefreshPending.SetValue(_window, false);
+
+            try
+            {
+                _extendSelection(_anchor, target);
+                return IsStatusRefreshPending() is false;
+            }
+            finally
+            {
+                _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionStatusRefresh();
+            }
+        }
+
+        public bool RepeatedAdditionalSelectionTargetLeavesPendingRefreshClear()
+        {
+            var target = new CellAddress(_anchor.Sheet, 120, 40);
+            _addOrMoveAdditionalSelection(_anchor, false);
+            PumpDispatcher();
+            _dragSelectActive.SetValue(_window, true);
+            _addOrMoveAdditionalSelection(target, true);
+            PumpDispatcher();
+            _dragSelectStatusRefreshPending.SetValue(_window, false);
+            _dragSelectToolbarRefreshPending.SetValue(_window, false);
+
+            try
+            {
+                _addOrMoveAdditionalSelection(target, true);
+                return IsStatusRefreshPending() is false && IsToolbarRefreshPending() is false;
+            }
+            finally
+            {
+                _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionToolbarRefresh?.Invoke();
+                _completeDragSelectionStatusRefresh();
+            }
+        }
+
+        private bool IsStatusRefreshPending() =>
+            _dragSelectStatusRefreshPending.GetValue(_window) is true;
+
+        private bool IsToolbarRefreshPending() =>
+            _dragSelectToolbarRefreshPending.GetValue(_window) is true;
+
         public static SelectionDragHarness Create()
         {
             var workbook = new Workbook("Book1");
-            var sheet = workbook.AddSheet("Sheet1");
-            for (uint row = 1; row <= 600; row++)
-            {
-                for (uint col = 1; col <= 40; col++)
-                    sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * col));
-            }
+            workbook.AddSheet("Sheet1");
 
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
@@ -692,6 +862,13 @@ public sealed class PerformanceReviewMeasurementTests
             };
 
             window.Show();
+            var sheet = workbookRef.Current.Sheets[0];
+            for (uint row = 1; row <= 600; row++)
+            {
+                for (uint col = 1; col <= 40; col++)
+                    sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * col));
+            }
+
             window.UpdateLayout();
             PumpDispatcher();
             return new SelectionDragHarness(window, sheet.Id);
