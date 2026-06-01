@@ -339,6 +339,35 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesCurrentCultureForDateTimesWithInvariantFallback()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+        try
+        {
+            var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(
+                "17/05/2026\t17/05/2026 09:30\t17 mai 2026 21:45\tMay 17, 2026 9:30 AM\r\n"));
+
+            var workbook = adapter.Load(stream);
+            var sheet = workbook.Sheets.Single();
+
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+                .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17)));
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+                .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 3))
+                .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 21, 45, 0)));
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 4))
+                .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
+    [Fact]
     public void Load_KeepsNonFiniteNumericTextAsText()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
@@ -794,6 +823,28 @@ public sealed class DelimitedTextFileAdapterTests
 
         loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 1)).Should().Be(new TextValue(""));
         loadedSheet.GetValue(new CellAddress(loadedSheet.Id, 1, 2)).Should().Be(new TextValue("tail"));
+    }
+
+    [Fact]
+    public void Save_WritesNonFiniteDateTimeValuesAsText()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new DateTimeValue(double.NaN));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new DateTimeValue(double.PositiveInfinity));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new DateTimeValue(double.NegativeInfinity));
+
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be("NaN\tInfinity\t-Infinity\r\n");
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.GetCell(1, 1)!.Value.Should().Be(new TextValue("NaN"));
+        loaded.GetCell(1, 2)!.Value.Should().Be(new TextValue("Infinity"));
+        loaded.GetCell(1, 3)!.Value.Should().Be(new TextValue("-Infinity"));
     }
 
     [Fact]

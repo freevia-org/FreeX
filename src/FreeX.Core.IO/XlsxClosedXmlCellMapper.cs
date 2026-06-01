@@ -61,7 +61,8 @@ internal static class XlsxClosedXmlCellMapper
         NumberValue n => n.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
         TextValue t => t.Value,
         BoolValue b => b.Value,
-        DateTimeValue dt => DateTime.FromOADate(dt.Value),
+        DateTimeValue dt when double.IsFinite(dt.Value) => DateTime.FromOADate(dt.Value),
+        DateTimeValue dt => dt.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
         ErrorValue e => MapErrorValueInverse(e),
         _ => Blank.Value
     };

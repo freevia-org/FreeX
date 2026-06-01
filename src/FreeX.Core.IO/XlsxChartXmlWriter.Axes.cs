@@ -145,6 +145,7 @@ internal static partial class XlsxChartXmlWriter
         }
 
         yield return ToCategoryAxisXml(chart, chartNs, drawingNs);
+        var valueAxisNumberFormat = ToEffectiveValueAxisNumberFormat(chart);
         yield return ToValueAxisXml(
             chart.YAxisTitle,
             chart.YAxisTitleLayout,
@@ -159,9 +160,9 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisLogScale,
             chart.YAxisLogBase,
             chart.YAxisReverseOrder,
-            chart.YAxisNumberFormat,
-            chart.YAxisNumberFormatCode,
-            chart.YAxisNumberFormatSourceLinked,
+            valueAxisNumberFormat.Format,
+            valueAxisNumberFormat.FormatCode,
+            valueAxisNumberFormat.SourceLinked,
             chart.ShowYAxisMajorGridlines,
             chart.ShowYAxisMinorGridlines,
             chart.YAxisMajorGridlineColor,
@@ -205,9 +206,9 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisLogScale,
                 chart.YAxisLogBase,
                 chart.YAxisReverseOrder,
-                chart.YAxisNumberFormat,
-                chart.YAxisNumberFormatCode,
-                chart.YAxisNumberFormatSourceLinked,
+                valueAxisNumberFormat.Format,
+                valueAxisNumberFormat.FormatCode,
+                valueAxisNumberFormat.SourceLinked,
                 false,
                 false,
                 null,
@@ -420,6 +421,20 @@ internal static partial class XlsxChartXmlWriter
             or ChartType.StackedBar
             or ChartType.PercentStackedBar
             or ChartType.ThreeDBar;
+
+    private static (ChartDataLabelNumberFormat Format, string? FormatCode, bool? SourceLinked)
+        ToEffectiveValueAxisNumberFormat(ChartModel chart)
+    {
+        if (chart.Type is (ChartType.PercentStackedColumn or ChartType.PercentStackedBar) &&
+            chart.YAxisNumberFormat == ChartDataLabelNumberFormat.General &&
+            string.IsNullOrWhiteSpace(chart.YAxisNumberFormatCode) &&
+            chart.YAxisNumberFormatSourceLinked is null)
+        {
+            return (ChartDataLabelNumberFormat.Percent, null, true);
+        }
+
+        return (chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisNumberFormatSourceLinked);
+    }
 
     private static string ToXlsxTickLabelPosition(bool showLabels, ChartAxisTickLabelPosition position)
     {

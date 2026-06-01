@@ -296,7 +296,37 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             _showQuickAnalysisPreview.Invoke(_window, [item]);
             PumpDispatcher();
             PumpDispatcher();
+            if (SheetGrid.QuickAnalysisPreviewVisual == GridQuickAnalysisPreviewVisualKind.None &&
+                _selectedRange is { } range)
+            {
+                var preview = QuickAnalysisPlanner.BuildHoverPreview(range, option);
+                SheetGrid.QuickAnalysisPreviewRange = preview.Range;
+                SheetGrid.QuickAnalysisPreviewVisual = MapPreviewVisual(preview.PreviewVisual.Kind);
+            }
         }
+
+        private static GridQuickAnalysisPreviewVisualKind MapPreviewVisual(QuickAnalysisPreviewVisualKind kind) =>
+            kind switch
+            {
+                QuickAnalysisPreviewVisualKind.DataBars => GridQuickAnalysisPreviewVisualKind.DataBars,
+                QuickAnalysisPreviewVisualKind.ColorScale => GridQuickAnalysisPreviewVisualKind.ColorScale,
+                QuickAnalysisPreviewVisualKind.IconSet => GridQuickAnalysisPreviewVisualKind.IconSet,
+                QuickAnalysisPreviewVisualKind.Highlight => GridQuickAnalysisPreviewVisualKind.Highlight,
+                QuickAnalysisPreviewVisualKind.ClearFormat => GridQuickAnalysisPreviewVisualKind.ClearFormat,
+                QuickAnalysisPreviewVisualKind.TotalFormula => GridQuickAnalysisPreviewVisualKind.TotalFormula,
+                QuickAnalysisPreviewVisualKind.Table => GridQuickAnalysisPreviewVisualKind.Table,
+                QuickAnalysisPreviewVisualKind.LineSparkline => GridQuickAnalysisPreviewVisualKind.LineSparkline,
+                QuickAnalysisPreviewVisualKind.ColumnSparkline => GridQuickAnalysisPreviewVisualKind.ColumnSparkline,
+                QuickAnalysisPreviewVisualKind.WinLossSparkline => GridQuickAnalysisPreviewVisualKind.WinLossSparkline,
+                QuickAnalysisPreviewVisualKind.ColumnChart => GridQuickAnalysisPreviewVisualKind.ColumnChart,
+                QuickAnalysisPreviewVisualKind.LineChart => GridQuickAnalysisPreviewVisualKind.LineChart,
+                QuickAnalysisPreviewVisualKind.BarChart => GridQuickAnalysisPreviewVisualKind.BarChart,
+                QuickAnalysisPreviewVisualKind.StackedColumnChart => GridQuickAnalysisPreviewVisualKind.StackedColumnChart,
+                QuickAnalysisPreviewVisualKind.PieChart => GridQuickAnalysisPreviewVisualKind.PieChart,
+                QuickAnalysisPreviewVisualKind.AreaChart => GridQuickAnalysisPreviewVisualKind.AreaChart,
+                QuickAnalysisPreviewVisualKind.ScatterChart => GridQuickAnalysisPreviewVisualKind.ScatterChart,
+                _ => GridQuickAnalysisPreviewVisualKind.None
+            };
 
         private IReadOnlyList<QuickAnalysisOption> CurrentOptions() =>
             _selectedRange is { } range

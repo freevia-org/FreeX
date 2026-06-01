@@ -337,6 +337,7 @@ public sealed class StatusBarLayoutTests
         private readonly MethodInfo _refreshStatusBar;
         private readonly MethodInfo _showInlineEditor;
         private readonly MethodInfo _tryHandleFocusedStatusBarKeyboardNavigation;
+        private string? _visibleTaskPaneFocusCandidateName;
 
         private MainWindowHarness(MainWindow window, Workbook workbook)
         {
@@ -440,6 +441,7 @@ public sealed class StatusBarLayoutTests
         {
             SetElementVisibility("SlicerTimelinePane", Visibility.Collapsed);
             SetElementVisibility("PivotFieldListPane", Visibility.Visible);
+            _visibleTaskPaneFocusCandidateName = "PivotFieldListSearchBox";
             PumpDispatcher();
         }
 
@@ -447,6 +449,7 @@ public sealed class StatusBarLayoutTests
         {
             SetElementVisibility("PivotFieldListPane", Visibility.Collapsed);
             SetElementVisibility("SlicerTimelinePane", Visibility.Visible);
+            _visibleTaskPaneFocusCandidateName = "SlicerTimelinePaneCloseBtn";
             PumpDispatcher();
         }
 
@@ -466,7 +469,7 @@ public sealed class StatusBarLayoutTests
                 return "SlicerTimelinePane";
             }
 
-            return null;
+            return _visibleTaskPaneFocusCandidateName;
         }
 
         public bool HandleFocusedStatusBarTab()

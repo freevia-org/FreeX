@@ -339,7 +339,8 @@ internal static class DelimitedTextWorkbookWriter
     private static string FormatValue(ScalarValue value) => value switch
     {
         NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
-        DateTimeValue dt => FormatDateTimeValue(dt),
+        DateTimeValue dt when double.IsFinite(dt.Value) => FormatDateTimeValue(dt),
+        DateTimeValue dt => dt.Value.ToString("R", CultureInfo.InvariantCulture),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         TextValue t => t.Value,
         ErrorValue e => e.Code,

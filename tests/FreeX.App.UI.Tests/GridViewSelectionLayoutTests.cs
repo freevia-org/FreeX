@@ -192,6 +192,31 @@ public sealed class GridViewSelectionLayoutTests
     }
 
     [Fact]
+    public void CalculateQuickAnalysisDataBarPreviewRects_SkipsNonFiniteNumericCells()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 1),
+            new CellAddress(sheetId, 1, 3));
+        var viewport = new ViewportModel(
+            [
+                new DisplayCell(1, 1, new NumberValue(10), "10", null, StyleId.Default, null),
+                new DisplayCell(1, 2, new NumberValue(double.NaN), "NaN", null, StyleId.Default, null),
+                new DisplayCell(1, 3, new NumberValue(double.PositiveInfinity), "Infinity", null, StyleId.Default, null)
+            ],
+            [new RowMetric(1, 20, 0)],
+            [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64), new ColMetric(3, 64, 128)]);
+
+        var rects = GridView.CalculateQuickAnalysisDataBarPreviewRects(
+            viewport,
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18);
+
+        rects.Should().Equal(new Rect(33, 22, 58, 12));
+    }
+
+    [Fact]
     public void CalculateQuickAnalysisDataBarPreviewRects_CalculatesMaxWithoutNumericCellList()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
@@ -206,6 +231,7 @@ public sealed class GridViewSelectionLayoutTests
         dataBars.Should().Contain("var hasNumericCell = false;");
         dataBars.Should().Contain("hasNumericCell = true;");
         dataBars.Should().Contain("if (positiveValue > max)");
+        source.Should().Contain("double.IsFinite(value)");
         dataBars.Should().Contain("foreach (var cell in viewport.Cells)");
         dataBars.Should().Contain("IsCellInRange(cell, range)");
         publicDataBars.Should().Contain("BuildRowMetricLookup(viewport.RowMetrics)");
