@@ -157,6 +157,13 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartExNs + "statistics", new XAttribute("quartileMethod", "exclusive")));
         }
 
+        if (chart.Type == ChartType.Waterfall)
+        {
+            return new XElement(chartExNs + "layoutPr",
+                new XElement(chartExNs + "visibility", new XAttribute("connectorLines", "1")),
+                BuildChartExSubtotals(chart, chartExNs));
+        }
+
         var subtotals = BuildChartExSubtotals(chart, chartExNs);
         return subtotals is null
             ? null
@@ -165,7 +172,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static IEnumerable<XElement> BuildChartExPlotAreaAxes(ChartModel chart, XNamespace chartExNs)
     {
-        if (chart.Type is not (ChartType.Pareto or ChartType.BoxAndWhisker))
+        if (chart.Type is not (ChartType.Pareto or ChartType.BoxAndWhisker or ChartType.Waterfall))
             yield break;
 
         yield return new XElement(chartExNs + "axis",
