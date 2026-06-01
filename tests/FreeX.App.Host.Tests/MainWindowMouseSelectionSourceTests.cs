@@ -21,7 +21,7 @@ public sealed class MainWindowMouseSelectionSourceTests
 
         var mouseMove = source[mouseMoveStart..helperStart];
         mouseMove.Should().Contain("var pos = e.GetPosition(SheetGrid);");
-        mouseMove.Should().Contain("var hitAddr = HitTestCell(pos);");
+        mouseMove.Should().Contain("var hitAddr = _dragHeaderSelectionTarget.HasValue ? null : HitTestCell(pos);");
         mouseMove.Should().Contain("e.Handled = true;");
         mouseMove.Should().Contain("RequestSelectionDragAutoScroll(pos);");
         mouseMove.LastIndexOf("e.Handled = true;", StringComparison.Ordinal)
@@ -386,6 +386,68 @@ public sealed class MainWindowMouseSelectionSourceTests
 
         columnShiftSelection.Should().Contain("ClearCommentPreview();");
         rowShiftSelection.Should().Contain("ClearCommentPreview();");
+    }
+
+    [Fact]
+    public void HeaderMouseSelectionBeginsDragAndExtendsAcrossHeaders()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+        var windowSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.xaml.cs"));
+
+        var mouseDown = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseDown", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void MainWindow_TextInput", StringComparison.Ordinal)];
+        var headerHelpers = selectionSource[
+            selectionSource.IndexOf("private void BeginHeaderSelectionDrag", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private CellAddress? HitTestCell", StringComparison.Ordinal)];
+        var mouseMove = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseMove", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void RequestSelectionDragAutoScroll", StringComparison.Ordinal)];
+
+        windowSource.Should().Contain("private GridHeaderContextMenuTarget? _dragHeaderSelectionTarget;");
+        windowSource.Should().Contain("private uint _dragHeaderSelectionAnchor;");
+        mouseDown.Should().Contain("BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Column, cm.Col);");
+        mouseDown.Should().Contain("BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Row, rm.Row);");
+        headerHelpers.Should().Contain("_dragHeaderSelectionTarget = target;");
+        headerHelpers.Should().Contain("_dragHeaderSelectionAnchor = index;");
+        headerHelpers.Should().Contain("_dragSelectActive = true;");
+        headerHelpers.Should().Contain("SheetGrid.CaptureMouse();");
+        headerHelpers.Should().Contain("GridHeaderContextMenuHitPlanner.HitTest(");
+        headerHelpers.Should().Contain("RefreshToolbarAfterDragSelectionChange();");
+        headerHelpers.Should().Contain("RefreshStatusBarAfterDragSelectionChange();");
+        mouseMove.Should().Contain("var headerHit = HitTestHeaderSelection(pos);");
+        mouseMove.Should().Contain("if (_dragHeaderSelectionTarget is { } headerTarget)");
+        mouseMove.Should().Contain("ExtendHeaderSelection(headerTarget, _dragHeaderSelectionAnchor, hit.Index);");
+        mouseMove.IndexOf("if (_dragHeaderSelectionTarget is { } headerTarget)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseMove.IndexOf("RequestSelectionDragAutoScroll(pos);", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void HeaderMouseSelectionClearsDragStateOnCancelAndMouseUp()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+
+        var mouseMove = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseMove", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private void RequestSelectionDragAutoScroll", StringComparison.Ordinal)];
+        var mouseUp = selectionSource[
+            selectionSource.IndexOf("private void SheetGrid_MouseUp", StringComparison.Ordinal)..];
+
+        var cancelBlock = mouseMove[
+            mouseMove.IndexOf("if (e.LeftButton != MouseButtonState.Pressed)", StringComparison.Ordinal)..
+            mouseMove.IndexOf("e.Handled = true;", mouseMove.IndexOf("if (e.LeftButton != MouseButtonState.Pressed)", StringComparison.Ordinal), StringComparison.Ordinal)];
+
+        cancelBlock.Should().Contain("_dragHeaderSelectionTarget = null;");
+        cancelBlock.Should().Contain("_dragHeaderSelectionAnchor = 0;");
+        mouseUp.Should().Contain("_dragHeaderSelectionTarget = null;");
+        mouseUp.Should().Contain("_dragHeaderSelectionAnchor = 0;");
+        mouseUp.IndexOf("_dragHeaderSelectionTarget = null;", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseUp.IndexOf("SheetGrid.ReleaseMouseCapture();", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.UI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -113,10 +114,12 @@ public partial class MainWindow
                             SheetGrid.Focus();
                             RefreshToolbarAfterSelectionChange();
                             RefreshStatusBar();
+                            BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Column, anchorCol);
                         }
                         else
                         {
                             SelectColumn(cm.Col);
+                            BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Column, cm.Col);
                         }
                         e.Handled = true;
                         return;
@@ -148,10 +151,12 @@ public partial class MainWindow
                         SheetGrid.Focus();
                         RefreshToolbarAfterSelectionChange();
                         RefreshStatusBar();
+                        BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Row, anchorRow);
                     }
                     else
                     {
                         SelectRow(rm.Row);
+                        BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Row, rm.Row);
                     }
                     e.Handled = true;
                     return;
@@ -899,6 +904,65 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
+    private void BeginHeaderSelectionDrag(GridHeaderContextMenuTarget target, uint index)
+    {
+        _dragHeaderSelectionTarget = target;
+        _dragHeaderSelectionAnchor = index;
+        _dragSelectActive = true;
+        SheetGrid.CaptureMouse();
+    }
+
+    private GridHeaderContextMenuHit? HitTestHeaderSelection(System.Windows.Point pos)
+    {
+        var viewport = SheetGrid.Viewport;
+        if (viewport is null)
+            return null;
+
+        return GridHeaderContextMenuHitPlanner.HitTest(
+            viewport,
+            pos,
+            SheetGrid.ActualRowHeaderWidth,
+            SheetGrid.EffectiveColHeaderHeight);
+    }
+
+    private void ExtendHeaderSelection(GridHeaderContextMenuTarget target, uint anchorIndex, uint targetIndex)
+    {
+        HideValidationDropdown();
+        ClearCommentPreview();
+        SheetGrid.SelectedRanges = null;
+
+        if (target == GridHeaderContextMenuTarget.Column)
+        {
+            var firstCol = Math.Min(anchorIndex, targetIndex);
+            var lastCol = Math.Max(anchorIndex, targetIndex);
+            _selectionAnchor = new CellAddress(_currentSheetId, 1, anchorIndex);
+            _selectionCursor = new CellAddress(_currentSheetId, 1_048_576, targetIndex);
+            SheetGrid.SelectedRange = new GridRange(
+                new CellAddress(_currentSheetId, 1, firstCol),
+                new CellAddress(_currentSheetId, 1_048_576, lastCol));
+            var c1 = FormatColumnReference(firstCol);
+            var c2 = FormatColumnReference(lastCol);
+            CellAddressBox.Text = c1 == c2 ? $"{c1}:{c1}" : $"{c1}:{c2}";
+        }
+        else
+        {
+            var firstRow = Math.Min(anchorIndex, targetIndex);
+            var lastRow = Math.Max(anchorIndex, targetIndex);
+            _selectionAnchor = new CellAddress(_currentSheetId, anchorIndex, 1);
+            _selectionCursor = new CellAddress(_currentSheetId, targetIndex, 16_384);
+            SheetGrid.SelectedRange = new GridRange(
+                new CellAddress(_currentSheetId, firstRow, 1),
+                new CellAddress(_currentSheetId, lastRow, 16_384));
+            CellAddressBox.Text = firstRow == lastRow ? $"{firstRow}:{firstRow}" : $"{firstRow}:{lastRow}";
+        }
+
+        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+        FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
+        SheetGrid.Focus();
+        RefreshToolbarAfterDragSelectionChange();
+        RefreshStatusBarAfterDragSelectionChange();
+    }
+
     private CellAddress? HitTestCell(System.Windows.Point pos)
     {
         var viewport = SheetGrid.Viewport;
@@ -909,7 +973,8 @@ public partial class MainWindow
     private void SheetGrid_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
         var pos = e.GetPosition(SheetGrid);
-        var hitAddr = HitTestCell(pos);
+        var headerHit = HitTestHeaderSelection(pos);
+        var hitAddr = _dragHeaderSelectionTarget.HasValue ? null : HitTestCell(pos);
         if (!_dragSelectActive)
         {
             if (hitAddr.HasValue)
@@ -924,6 +989,8 @@ public partial class MainWindow
             _formatPainterTargetSelectionActive = false;
             _dragSelectActive = false;
             _dragSelectAddsAdditionalRange = false;
+            _dragHeaderSelectionTarget = null;
+            _dragHeaderSelectionAnchor = 0;
             SheetGrid.ReleaseMouseCapture();
             CompleteDragSelectionToolbarRefresh();
             CompleteDragSelectionStatusRefresh();
@@ -936,6 +1003,13 @@ public partial class MainWindow
         }
 
         e.Handled = true;
+        if (_dragHeaderSelectionTarget is { } headerTarget)
+        {
+            if (headerHit is { } hit && hit.Target == headerTarget)
+                ExtendHeaderSelection(headerTarget, _dragHeaderSelectionAnchor, hit.Index);
+            return;
+        }
+
         RequestSelectionDragAutoScroll(pos);
         if (!hitAddr.HasValue)
             ClearCommentPreview();
@@ -994,6 +1068,8 @@ public partial class MainWindow
             _formatPainterTargetSelectionActive = false;
             _dragSelectActive = false;
             _dragSelectAddsAdditionalRange = false;
+            _dragHeaderSelectionTarget = null;
+            _dragHeaderSelectionAnchor = 0;
             SheetGrid.ReleaseMouseCapture();
             CompleteDragSelectionToolbarRefresh();
             CompleteDragSelectionStatusRefresh();
@@ -1012,6 +1088,8 @@ public partial class MainWindow
         if (!_dragSelectActive) return;
         _dragSelectActive = false;
         _dragSelectAddsAdditionalRange = false;
+        _dragHeaderSelectionTarget = null;
+        _dragHeaderSelectionAnchor = 0;
         SheetGrid.ReleaseMouseCapture();
         CompleteDragSelectionToolbarRefresh();
         CompleteDragSelectionStatusRefresh();
