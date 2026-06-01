@@ -482,6 +482,50 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_StylesheetKeys_CanJoinLookupRows()
+    {
+        using var source = StreamFromString("""
+            <catalog>
+              <categories>
+                <category id="A" name="Hardware" />
+                <category id="B" name="Services" />
+              </categories>
+              <items>
+                <item sku="100" category="B" />
+              </items>
+            </catalog>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:key name="categoryById" match="category" use="@id" />
+              <xsl:template match="/catalog">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Lookup">
+                    <ss:Table>
+                      <xsl:for-each select="items/item">
+                        <ss:Row>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@sku" /></ss:Data></ss:Cell>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="key('categoryById', @category)/@name" /></ss:Data></ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .Contain("<ss:Data ss:Type=\"String\">100</ss:Data>")
+            .And.Contain("<ss:Data ss:Type=\"String\">Services</ss:Data>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetHtmlOutput_PreservesHtmlSerialization()
     {
         using var source = StreamFromString("<rows><row name=\"April\" /></rows>");

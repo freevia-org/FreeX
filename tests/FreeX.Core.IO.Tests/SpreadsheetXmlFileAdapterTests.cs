@@ -1206,6 +1206,56 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromXsltKeyLookup()
+    {
+        using var source = StreamFromString("""
+            <catalog>
+              <categories>
+                <category id="A" name="Hardware" />
+                <category id="B" name="Services" />
+              </categories>
+              <items>
+                <item sku="100" category="B" amount="42.5" />
+                <item sku="101" category="A" amount="7.25" />
+              </items>
+            </catalog>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:key name="categoryById" match="category" use="@id" />
+              <xsl:template match="/catalog">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Lookup">
+                    <ss:Table>
+                      <xsl:for-each select="items/item">
+                        <ss:Row>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@sku" /></ss:Data></ss:Cell>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="key('categoryById', @category)/@name" /></ss:Data></ss:Cell>
+                          <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="@amount" /></ss:Data></ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Lookup");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("100"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new TextValue("Services"));
+        sheet.GetCell(1, 3)!.Value.Should().Be(new NumberValue(42.5));
+        sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("101"));
+        sheet.GetCell(2, 2)!.Value.Should().Be(new TextValue("Hardware"));
+        sheet.GetCell(2, 3)!.Value.Should().Be(new NumberValue(7.25));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlScalarValueTypesAndIndexes()
     {
         using var source = StreamFromString("""
