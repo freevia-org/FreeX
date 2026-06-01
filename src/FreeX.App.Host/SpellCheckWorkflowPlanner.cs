@@ -45,7 +45,8 @@ public static class SpellCheckWorkflowPlanner
                 continue;
             }
 
-            edits.Add(BuildReplacementEdit(issue, replacement));
+            var correctedText = SpellCheckService.ApplyCorrectionToAllOccurrences(issue, replacement);
+            edits.Add((issue.Address, Cell.FromValue(new TextValue(correctedText))));
         }
 
         return edits;

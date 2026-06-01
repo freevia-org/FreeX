@@ -91,6 +91,20 @@ public sealed class SpellCheckWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildReplaceAllEdits_PreservesPerOccurrenceCasingWithinCells()
+    {
+        var sheet = SheetId.New();
+        var address = new CellAddress(sheet, 1, 1);
+        var issues = SpellCheckService.FindIssuesInCell(address, "teh TEH Teh");
+
+        var edits = SpellCheckWorkflowPlanner.BuildReplaceAllEdits(issues, "teh", "the");
+
+        edits.Should().ContainSingle();
+        edits[0].Address.Should().Be(address);
+        edits[0].NewCell.Value.Should().Be(new TextValue("the THE The"));
+    }
+
+    [Fact]
     public void BuildReplaceAllEdits_ScansLargeIssueListsWithoutGroupingAllocation()
     {
         var sheet = SheetId.New();

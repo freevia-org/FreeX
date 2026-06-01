@@ -54,6 +54,58 @@ public sealed class HyperlinkCommandTests
     }
 
     [Fact]
+    public void CompositeWorkbookCommand_AppliesHyperlinkAcrossGroupedSheetsAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new SimpleCtx(wb);
+        var address1 = new CellAddress(sheet1.Id, 3, 2);
+        var address2 = new CellAddress(sheet2.Id, 3, 2);
+        sheet1.SetCell(address1, new TextValue("old1"));
+        sheet2.SetCell(address2, new TextValue("old2"));
+        sheet2.Hyperlinks[address2] = "https://old.example.com";
+        sheet2.HyperlinkMetadata[address2] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Old tip",
+            "old-bookmark");
+        var metadata = new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Open Budget",
+            "Budget!A1");
+
+        var command = new CompositeWorkbookCommand(
+            "Insert Link",
+            [
+                new SetHyperlinkCommand(sheet1.Id, address1, "Budget!A1", "Budget", metadata),
+                new SetHyperlinkCommand(sheet2.Id, address2, "Budget!A1", "Budget", metadata)
+            ]);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.AffectedCells.Should().BeEquivalentTo([address1, address2]);
+        sheet1.GetValue(address1).Should().Be(new TextValue("Budget"));
+        sheet2.GetValue(address2).Should().Be(new TextValue("Budget"));
+        sheet1.Hyperlinks[address1].Should().Be("Budget!A1");
+        sheet2.Hyperlinks[address2].Should().Be("Budget!A1");
+        sheet1.HyperlinkMetadata[address1].Should().Be(metadata);
+        sheet2.HyperlinkMetadata[address2].Should().Be(metadata);
+
+        command.Revert(ctx);
+
+        sheet1.GetValue(address1).Should().Be(new TextValue("old1"));
+        sheet1.Hyperlinks.Should().NotContainKey(address1);
+        sheet1.HyperlinkMetadata.Should().NotContainKey(address1);
+        sheet2.GetValue(address2).Should().Be(new TextValue("old2"));
+        sheet2.Hyperlinks[address2].Should().Be("https://old.example.com");
+        sheet2.HyperlinkMetadata[address2].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Old tip",
+            "old-bookmark"));
+    }
+
+    [Fact]
     public void ClearHyperlinksCommand_RemovesHyperlinksButKeepsDisplayText()
     {
         var wb = new Workbook("test");
