@@ -265,6 +265,25 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FunctionMenuInsertion_SeedsFormulaBarWithoutInlineEditorOverwrite()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+
+            harness.InsertFormulaFunction("SUM");
+
+            harness.FormulaBarText.Should().Be("=SUM(");
+            harness.InlineEditorVisible.Should().BeFalse();
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.CellText(1, 1).Should().Be("original");
+        });
+    }
+
+    [Fact]
     public void NameBoxEnter_NavigatesRefreshesFormulaBarAndReturnsFocusToGrid()
     {
         StaTestRunner.Run(() =>
@@ -386,6 +405,7 @@ public sealed class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _executeClearSelection;
         private readonly MethodInfo _formulaBarKeyDown;
         private readonly MethodInfo _cellAddressBoxKeyDown;
+        private readonly MethodInfo _insertFormulaFunction;
 
         private MainWindowHarness(MainWindow window)
         {
@@ -426,6 +446,9 @@ public sealed class MainWindowFormulaBarSyncTests
             _cellAddressBoxKeyDown = typeof(MainWindow)
                 .GetMethod("CellAddressBox_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "CellAddressBox_KeyDown");
+            _insertFormulaFunction = typeof(MainWindow)
+                .GetMethod("InsertFormulaFunction", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "InsertFormulaFunction");
         }
 
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
@@ -523,6 +546,12 @@ public sealed class MainWindowFormulaBarSyncTests
         {
             var sheet = Workbook.Sheets[0];
             _showInlineEditor.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            PumpDispatcher();
+        }
+
+        public void InsertFormulaFunction(string functionName)
+        {
+            _insertFormulaFunction.Invoke(_window, [functionName]);
             PumpDispatcher();
         }
 
