@@ -189,8 +189,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
             return;
 
         root.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
-        root.Elements(worksheetNs + "drawing").Remove();
-        root.Add(new XElement(worksheetNs + "drawing", new XAttribute(relNs + "id", drawingRelId)));
+        XlsxWorksheetDrawingPlacement.SetWorksheetDrawing(root, worksheetNs, relNs, drawingRelId);
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
     }
 

@@ -10,6 +10,8 @@ internal static partial class XlsxChartXmlWriter
         new(chartNs + "title",
             new XElement(chartNs + "tx",
                 new XElement(chartNs + "rich",
+                        // CT_TextBody requires bodyPr before the paragraph(s).
+                        new XElement(drawingNs + "bodyPr"),
                         new XElement(drawingNs + "p",
                             new XElement(drawingNs + "r",
                                 ToTextRunProperties(chart.ChartTitleTextThemeColor, chart.ChartTitleTextColor, chart.ChartTitleFontSize, drawingNs),
@@ -32,6 +34,7 @@ internal static partial class XlsxChartXmlWriter
             : new XElement(chartNs + "title",
                 new XElement(chartNs + "tx",
                     new XElement(chartNs + "rich",
+                        new XElement(drawingNs + "bodyPr"),
                         new XElement(drawingNs + "p",
                             new XElement(drawingNs + "r",
                                 ToTextRunProperties(textThemeColor, textColor, fontSize, drawingNs),

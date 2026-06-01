@@ -56,7 +56,10 @@ internal static class XlsxChartLevelReader
 
         chart.ShowLegend = true;
         chart.LegendLayout = XlsxChartMetadataReader.ReadManualLayout(legend.Element(chartNs + "layout"));
-        chart.LegendPosition = legend.Element(chartNs + "legendPos")?.Attribute("val")?.Value switch
+        // Classic charts use a <c:legendPos val="..."/> child; chartEx uses a "pos" attribute on
+        // <cx:legend> directly.
+        chart.LegendPosition = (legend.Element(chartNs + "legendPos")?.Attribute("val")?.Value
+            ?? legend.Attribute("pos")?.Value) switch
         {
             "l" => ChartLegendPosition.Left,
             "t" => ChartLegendPosition.Top,
@@ -64,7 +67,10 @@ internal static class XlsxChartLevelReader
             "r" => ChartLegendPosition.Right,
             _ => ChartLegendPosition.Right
         };
-        chart.LegendOverlay = XlsxChartScalarReader.IsTrue(legend.Element(chartNs + "overlay")?.Attribute("val")?.Value);
+        // Classic: <c:overlay val="1"/> child. chartEx: "overlay" attribute on <cx:legend>.
+        chart.LegendOverlay = XlsxChartScalarReader.IsTrue(
+            legend.Element(chartNs + "overlay")?.Attribute("val")?.Value
+            ?? legend.Attribute("overlay")?.Value);
         chart.LegendEntries = ReadLegendEntries(legend, chartNs);
         ApplyLegendFormatting(legend, chartNs, chart);
     }
