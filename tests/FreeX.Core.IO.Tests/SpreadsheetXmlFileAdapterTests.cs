@@ -96,6 +96,32 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_TrimsSpreadsheetMlBooleanText()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Booleans">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="Boolean"> 1 </ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Boolean"> TRUE </ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Boolean"> 0 </ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Boolean"> false </ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.GetCell(1, 1)!.Value.Should().Be(new BoolValue(true));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new BoolValue(true));
+        sheet.GetCell(1, 3)!.Value.Should().Be(new BoolValue(false));
+        sheet.GetCell(1, 4)!.Value.Should().Be(new BoolValue(false));
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsMultipleSheetsAndValueTypes()
     {
         var workbook = new Workbook("XmlRoundTrip");

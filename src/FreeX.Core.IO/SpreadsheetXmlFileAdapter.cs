@@ -479,15 +479,17 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
     private static bool ReadBoolean(string text, out bool value)
     {
-        if (string.Equals(text, "1", StringComparison.Ordinal) ||
-            string.Equals(text, "TRUE", StringComparison.OrdinalIgnoreCase))
+        var normalized = text.Trim();
+
+        if (string.Equals(normalized, "1", StringComparison.Ordinal) ||
+            string.Equals(normalized, "TRUE", StringComparison.OrdinalIgnoreCase))
         {
             value = true;
             return true;
         }
 
-        if (string.Equals(text, "0", StringComparison.Ordinal) ||
-            string.Equals(text, "FALSE", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(normalized, "0", StringComparison.Ordinal) ||
+            string.Equals(normalized, "FALSE", StringComparison.OrdinalIgnoreCase))
         {
             value = false;
             return true;
