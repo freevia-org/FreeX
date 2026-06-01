@@ -346,6 +346,90 @@ public sealed class XlsxChartExWriterTests
     }
 
     [Fact]
+    public void Save_WritesNativeLikeBoxAndWhiskerStatisticsTitlesAndAxes()
+    {
+        var saved = SaveWorkbookWithChart(ChartType.BoxAndWhisker, endCol: 3);
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var chartData = chartXml.Root!.Element(ChartExNs + "chartData")!;
+        var data = chartData.Elements(ChartExNs + "data").ToList();
+        data.Should().HaveCount(2);
+        data[0].Elements(ChartExNs + "strDim").Should().ContainSingle()
+            .Which.Element(ChartExNs + "f")!.Value.Should().Contain("$A$2:$A$4");
+        data[0].Elements(ChartExNs + "numDim").Should().ContainSingle()
+            .Which.Should().Match<XElement>(element =>
+                element.Element(ChartExNs + "f")!.Value.Contains("$B$2:$B$4", StringComparison.Ordinal) &&
+                element.Element(ChartExNs + "nf")!.Value.Contains("$B$1", StringComparison.Ordinal));
+        data[1].Elements(ChartExNs + "strDim").Should().ContainSingle()
+            .Which.Element(ChartExNs + "f")!.Value.Should().Contain("$A$2:$A$4");
+        data[1].Elements(ChartExNs + "numDim").Should().ContainSingle()
+            .Which.Should().Match<XElement>(element =>
+                element.Element(ChartExNs + "f")!.Value.Contains("$C$2:$C$4", StringComparison.Ordinal) &&
+                element.Element(ChartExNs + "nf")!.Value.Contains("$C$1", StringComparison.Ordinal));
+
+        var plotArea = chartXml.Root
+            .Element(ChartExNs + "chart")!
+            .Element(ChartExNs + "plotArea")!;
+        var series = plotArea
+            .Element(ChartExNs + "plotAreaRegion")!
+            .Elements(ChartExNs + "series")
+            .ToList();
+        series.Should().HaveCount(2);
+        series.Select(element => element.Attribute("layoutId")!.Value).Should().Equal("boxWhisker", "boxWhisker");
+        var uniqueIds = series.Select(element => element.Attribute("uniqueId")?.Value).ToList();
+        uniqueIds.Should().NotContainNulls().And.OnlyHaveUniqueItems();
+        foreach (var uniqueId in uniqueIds)
+        {
+            uniqueId.Should().HaveLength(38);
+            uniqueId.Should().StartWith("{").And.EndWith("}");
+        }
+
+        AssertBoxAndWhiskerSeries(series[0], dataId: "0", headerReference: "$B$1", headerText: "Amount");
+        AssertBoxAndWhiskerSeries(series[1], dataId: "1", headerReference: "$C$1", headerText: "Target");
+
+        var axes = plotArea.Elements(ChartExNs + "axis").ToList();
+        axes.Select(axis => axis.Attribute("id")!.Value).Should().Equal("0", "1");
+        axes[0].Elements(ChartExNs + "catScaling").Should().ContainSingle()
+            .Which.Attribute("gapWidth")!.Value.Should().Be("2.19000006");
+        axes[0].Elements(ChartExNs + "tickLabels").Should().ContainSingle();
+        axes[1].Elements(ChartExNs + "valScaling").Should().ContainSingle();
+        axes[1].Elements(ChartExNs + "majorGridlines").Should().ContainSingle();
+        axes[1].Elements(ChartExNs + "tickLabels").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Save_WritesBoxAndWhiskerAllNumericColumnsAsValueSeriesWhenNoCategoryColumn()
+    {
+        var saved = SaveBoxAndWhiskerAllNumericColumnsWorkbook();
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
+        var data = chartXml.Root!
+            .Element(ChartExNs + "chartData")!
+            .Elements(ChartExNs + "data")
+            .ToList();
+
+        data.Should().HaveCount(3);
+        data.Should().OnlyContain(element => !element.Elements(ChartExNs + "strDim").Any());
+        data[0].Element(ChartExNs + "numDim")!.Element(ChartExNs + "f")!.Value.Should().Contain("$A$2:$A$4");
+        data[1].Element(ChartExNs + "numDim")!.Element(ChartExNs + "f")!.Value.Should().Contain("$B$2:$B$4");
+        data[2].Element(ChartExNs + "numDim")!.Element(ChartExNs + "f")!.Value.Should().Contain("$C$2:$C$4");
+
+        var series = chartXml.Root
+            .Element(ChartExNs + "chart")!
+            .Element(ChartExNs + "plotArea")!
+            .Element(ChartExNs + "plotAreaRegion")!
+            .Elements(ChartExNs + "series")
+            .ToList();
+
+        series.Should().HaveCount(3);
+        AssertBoxAndWhiskerSeries(series[0], dataId: "0", headerReference: "$A$1", headerText: "Alpha");
+        AssertBoxAndWhiskerSeries(series[1], dataId: "1", headerReference: "$B$1", headerText: "Beta");
+        AssertBoxAndWhiskerSeries(series[2], dataId: "2", headerReference: "$C$1", headerText: "Gamma");
+    }
+
+    [Fact]
     public void Save_WritesWaterfallSubtotalsLayoutPr()
     {
         var saved = SaveWorkbookWithChart(ChartType.Waterfall, configureChart: chart =>
@@ -551,6 +635,55 @@ public sealed class XlsxChartExWriterTests
         new XlsxFileAdapter().Save(workbook, saved);
         saved.Position = 0;
         return saved;
+    }
+
+    private static MemoryStream SaveBoxAndWhiskerAllNumericColumnsWorkbook()
+    {
+        var workbook = new Workbook("BoxAndWhiskerAllNumeric");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Alpha"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Beta"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Gamma"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(14));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(22));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(24));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(32));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new NumberValue(34));
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.BoxAndWhisker,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 3)),
+            FirstRowIsHeader = true,
+            FirstColIsCategories = false,
+            Title = "BoxAndWhisker"
+        });
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+        return saved;
+    }
+
+    private static void AssertBoxAndWhiskerSeries(
+        XElement series,
+        string dataId,
+        string headerReference,
+        string headerText)
+    {
+        series.Element(ChartExNs + "dataId")!.Attribute("val")!.Value.Should().Be(dataId);
+        var txData = series.Element(ChartExNs + "tx")!.Element(ChartExNs + "txData")!;
+        txData.Element(ChartExNs + "f")!.Value.Should().Contain(headerReference);
+        txData.Element(ChartExNs + "v")!.Value.Should().Be(headerText);
+        series.Element(ChartExNs + "layoutPr")!
+            .Element(ChartExNs + "statistics")!
+            .Attribute("quartileMethod")!
+            .Value
+            .Should()
+            .Be("exclusive");
     }
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)

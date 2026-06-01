@@ -36,7 +36,7 @@ internal static partial class XlsxChartXmlWriter
                         : ToChartExTitleXml(chart, chartExNs, drawingNs),
                     new XElement(chartExNs + "plotArea",
                         new XElement(chartExNs + "plotAreaRegion",
-                            BuildChartExSeries(chart, chartExNs, chartData.Count)),
+                            BuildChartExSeries(chart, sheet, chartExNs, chartData.Count)),
                         BuildChartExPlotAreaAxes(chart, chartExNs)),
                     ToChartExLegendXml(chart, chartExNs))));
     }
@@ -109,6 +109,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static IEnumerable<XElement> BuildChartExSeries(
         ChartModel chart,
+        Sheet sheet,
         XNamespace chartExNs,
         int dataCount)
     {
@@ -118,6 +119,8 @@ internal static partial class XlsxChartXmlWriter
             // Per CT_Series the optional layoutPr (binning / subtotals) follows dataId.
             yield return new XElement(chartExNs + "series",
                 new XAttribute("layoutId", ToChartExSeriesLayoutId(chart.Type)),
+                ToChartExSeriesUniqueIdAttribute(chart, seriesIndex),
+                ToChartExSeriesTitleXml(chart, sheet, seriesIndex, chartExNs),
                 new XElement(chartExNs + "dataId", new XAttribute("val", dataId)),
                 BuildChartExSeriesLayoutPr(chart, chartExNs));
 
@@ -148,6 +151,12 @@ internal static partial class XlsxChartXmlWriter
         if (chart.Type == ChartType.Pareto)
             return new XElement(chartExNs + "layoutPr", new XElement(chartExNs + "aggregation"));
 
+        if (chart.Type == ChartType.BoxAndWhisker)
+        {
+            return new XElement(chartExNs + "layoutPr",
+                new XElement(chartExNs + "statistics", new XAttribute("quartileMethod", "exclusive")));
+        }
+
         var subtotals = BuildChartExSubtotals(chart, chartExNs);
         return subtotals is null
             ? null
@@ -156,7 +165,7 @@ internal static partial class XlsxChartXmlWriter
 
     private static IEnumerable<XElement> BuildChartExPlotAreaAxes(ChartModel chart, XNamespace chartExNs)
     {
-        if (chart.Type != ChartType.Pareto)
+        if (chart.Type is not (ChartType.Pareto or ChartType.BoxAndWhisker))
             yield break;
 
         yield return new XElement(chartExNs + "axis",
@@ -168,6 +177,9 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartExNs + "valScaling"),
             new XElement(chartExNs + "majorGridlines"),
             new XElement(chartExNs + "tickLabels"));
+        if (chart.Type != ChartType.Pareto)
+            yield break;
+
         yield return new XElement(chartExNs + "axis",
             new XAttribute("id", "2"),
             new XElement(chartExNs + "valScaling",
@@ -192,6 +204,55 @@ internal static partial class XlsxChartXmlWriter
     // cx:data/@id and cx:dataId/@val are xsd:unsignedInt — a bare numeric id, not "data{n}".
     private static string ToChartExDataId(int seriesIndex) =>
         seriesIndex.ToString(CultureInfo.InvariantCulture);
+
+    private static XAttribute? ToChartExSeriesUniqueIdAttribute(ChartModel chart, int seriesIndex) =>
+        chart.Type == ChartType.BoxAndWhisker
+            ? new XAttribute("uniqueId", ToChartExSeriesUniqueId(chart, seriesIndex))
+            : null;
+
+    private static string ToChartExSeriesUniqueId(ChartModel chart, int seriesIndex)
+    {
+        var chartId = chart.Id.ToString("N").ToUpperInvariant();
+        var seriesSuffix = (seriesIndex + 1).ToString("X8", CultureInfo.InvariantCulture);
+        var id = chartId[..24] + seriesSuffix;
+        return $"{{{id[..8]}-{id[8..12]}-{id[12..16]}-{id[16..20]}-{id[20..32]}}}";
+    }
+
+    private static XElement? ToChartExSeriesTitleXml(
+        ChartModel chart,
+        Sheet sheet,
+        int seriesIndex,
+        XNamespace chartExNs)
+    {
+        if (chart.Type != ChartType.BoxAndWhisker || !chart.FirstRowIsHeader)
+            return null;
+
+        var seriesColumn = GetChartExSeriesValueColumn(chart, seriesIndex);
+        return new XElement(chartExNs + "tx",
+            new XElement(chartExNs + "txData",
+                new XElement(chartExNs + "f",
+                    FormatSheetRange(sheet.Name, chart.DataRange.Start.Row, seriesColumn, chart.DataRange.Start.Row, seriesColumn)),
+                new XElement(chartExNs + "v",
+                    ToChartExSeriesTitleText(sheet.GetCell(chart.DataRange.Start.Row, seriesColumn)?.Value))));
+    }
+
+    private static uint GetChartExSeriesValueColumn(ChartModel chart, int seriesIndex)
+    {
+        var hasCategoryColumn = chart.FirstColIsCategories && chart.DataRange.End.Col > chart.DataRange.Start.Col;
+        var seriesStartCol = hasCategoryColumn ? chart.DataRange.Start.Col + 1 : chart.DataRange.Start.Col;
+        return seriesStartCol + (uint)seriesIndex;
+    }
+
+    private static string ToChartExSeriesTitleText(ScalarValue? value) =>
+        value switch
+        {
+            TextValue text => text.Value,
+            NumberValue number => number.Value.ToString(CultureInfo.InvariantCulture),
+            BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+            DateTimeValue dateTime => dateTime.Value.ToString(CultureInfo.InvariantCulture),
+            ErrorValue error => error.Code,
+            _ => string.Empty
+        };
 
     private static string ToChartExNumericDimensionType(ChartType chartType) =>
         chartType is ChartType.Treemap or ChartType.Sunburst ? "size" : "val";

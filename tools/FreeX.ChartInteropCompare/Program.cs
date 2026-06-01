@@ -1491,7 +1491,6 @@ internal sealed record VisualExpectation(int HashThreshold, int RoundTripHashThr
             ["ThreeDBar"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
             ["ThreeDArea"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
             ["ThreeDSurface"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
-            ["BoxAndWhisker"] = "Box-and-whisker lacks Excel-native per-series statistics layout metadata for multi-column sample data.",
             ["Waterfall"] = "Waterfall total/subtotal and connector defaults are not fully Excel-equivalent yet."
         };
 
