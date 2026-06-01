@@ -63,6 +63,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
         var loadedSheetsBySourceName = new Dictionary<string, Sheet>(StringComparer.OrdinalIgnoreCase);
         var pendingPivotTables = new List<(Sheet Sheet, SheetDto Dto)>();
+        var cellStyleTable = LoadCellStyleTable(workbook, dto.CellStyles);
         Dictionary<CellStyleDto, StyleId>? styleIdCache = null;
         var sheetIndex = 1;
         foreach (var sDto in dto.Sheets ?? [])
@@ -316,7 +317,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     if (cDto.Formula != null && value is not BlankValue)
                         cell.Value = value;
                     cell.IgnoreFormulaError = cDto.IgnoreFormulaError;
-                    if (GetCachedStyleId(workbook, ref styleIdCache, cDto.Style) is { } styleId)
+                    if (ResolveCellStyleId(workbook, cellStyleTable, ref styleIdCache, cDto.StyleId, cDto.Style) is { } styleId)
                         cell.StyleId = styleId;
                     sheet.SetCell(addr, cell);
                 }
@@ -325,7 +326,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
             foreach (var styleOnlyDto in sDto.StyleOnlyCells ?? [])
             {
-                if (string.IsNullOrWhiteSpace(styleOnlyDto?.Address) || styleOnlyDto.Style is null)
+                if (string.IsNullOrWhiteSpace(styleOnlyDto?.Address) ||
+                    (styleOnlyDto.StyleId is null && styleOnlyDto.Style is null))
                     continue;
 
                 try
@@ -333,7 +335,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     var address = CellAddress.Parse(styleOnlyDto.Address, sheet.Id);
                     if (address.Sheet != sheet.Id)
                         continue;
-                    if (GetCachedStyleId(workbook, ref styleIdCache, styleOnlyDto.Style) is { } styleId)
+                    if (ResolveCellStyleId(workbook, cellStyleTable, ref styleIdCache, styleOnlyDto.StyleId, styleOnlyDto.Style) is { } styleId)
                         sheet.SetStyleOnly(address.Row, address.Col, styleId);
                 }
                 catch (FormatException) { /* skip style-only entries with unparseable addresses */ }
