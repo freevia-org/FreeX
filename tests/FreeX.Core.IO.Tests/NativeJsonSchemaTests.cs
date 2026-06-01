@@ -133,6 +133,35 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_WritesNonFiniteNativeJsonNumbersAsTextCells()
+    {
+        var workbook = new Workbook("NonFinite");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(double.NaN));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(double.PositiveInfinity));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(double.NegativeInfinity));
+
+        using var stream = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var cells = document.RootElement.GetProperty("Sheets")[0].GetProperty("Cells");
+        cells[0].GetProperty("Value").GetString().Should().Be("NaN");
+        cells[0].GetProperty("ValueType").GetString().Should().Be("t");
+        cells[1].GetProperty("Value").GetString().Should().Be("Infinity");
+        cells[1].GetProperty("ValueType").GetString().Should().Be("t");
+        cells[2].GetProperty("Value").GetString().Should().Be("-Infinity");
+        cells[2].GetProperty("ValueType").GetString().Should().Be("t");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.GetCell(1, 1)!.Value.Should().Be(new TextValue("NaN"));
+        loaded.GetCell(1, 2)!.Value.Should().Be(new TextValue("Infinity"));
+        loaded.GetCell(1, 3)!.Value.Should().Be(new TextValue("-Infinity"));
+    }
+
+    [Fact]
     public void Load_AcceptsLegacyInlineCellStylesWithoutWorkbookStyleTable()
     {
         const string legacyJson = """
