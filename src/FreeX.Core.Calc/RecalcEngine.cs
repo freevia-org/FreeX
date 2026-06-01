@@ -210,10 +210,10 @@ public sealed class RecalcEngine
     public void RegisterFormulaDependencies(CellAddress formulaCell, FormulaNode ast, SheetId sheetId, FreeX.Core.Model.Workbook? workbook = null)
     {
         var refs = new FormulaDependencySet();
-        CollectReferences(ast, sheetId, formulaCell, workbook, refs);
+        var containsVolatileFunction = CollectReferences(ast, sheetId, formulaCell, workbook, refs);
         _graph.SetDependencies(formulaCell, refs.Cells, refs.Ranges);
 
-        if (ContainsVolatileFunction(ast))
+        if (containsVolatileFunction)
             _volatileCells.Add(formulaCell);
         else
             _volatileCells.Remove(formulaCell);
@@ -374,30 +374,7 @@ public sealed class RecalcEngine
         return true;
     }
 
-    private static bool ContainsVolatileFunction(FormulaNode node)
-    {
-        return node switch
-        {
-            FunctionCallNode f => BuiltInFunctions.IsVolatile(f.FunctionName)
-                                  || ContainsVolatileFunctionArgument(f.Arguments),
-            BinaryOpNode b => ContainsVolatileFunction(b.Left) || ContainsVolatileFunction(b.Right),
-            UnaryOpNode u => ContainsVolatileFunction(u.Operand),
-            _ => false
-        };
-    }
-
-    private static bool ContainsVolatileFunctionArgument(IReadOnlyList<FormulaNode> arguments)
-    {
-        for (var i = 0; i < arguments.Count; i++)
-        {
-            if (ContainsVolatileFunction(arguments[i]))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static void CollectReferences(
+    private static bool CollectReferences(
         FormulaNode node,
         SheetId defaultSheetId,
         CellAddress formulaCell,
@@ -411,11 +388,11 @@ public sealed class RecalcEngine
                 var targetSheet = workbook?.GetSheet(cellRef.SheetName);
                 if (targetSheet is not null)
                     refs.Add(new CellAddress(targetSheet.Id, cellRef.Row, cellRef.ColumnNumber));
-                break;
+                return false;
             }
             case CellRefNode cellRef:
                 refs.Add(new CellAddress(defaultSheetId, cellRef.Row, cellRef.ColumnNumber));
-                break;
+                return false;
 
             case RangeRefNode range when range.SheetName is not null:
             {
@@ -424,12 +401,12 @@ public sealed class RecalcEngine
                 {
                     refs.AddRange(CreateGridRange(targetSheet.Id, range));
                 }
-                break;
+                return false;
             }
             case RangeRefNode range:
             {
                 refs.AddRange(CreateGridRange(defaultSheetId, range));
-                break;
+                return false;
             }
 
             case FullColumnRangeRefNode range when range.SheetName is not null:
@@ -437,12 +414,12 @@ public sealed class RecalcEngine
                 var targetSheet = workbook?.GetSheet(range.SheetName);
                 if (targetSheet is not null)
                     refs.AddRange(CreateGridRange(targetSheet.Id, range));
-                break;
+                return false;
             }
             case FullColumnRangeRefNode range:
             {
                 refs.AddRange(CreateGridRange(defaultSheetId, range));
-                break;
+                return false;
             }
 
             case FullRowRangeRefNode range when range.SheetName is not null:
@@ -450,12 +427,12 @@ public sealed class RecalcEngine
                 var targetSheet = workbook?.GetSheet(range.SheetName);
                 if (targetSheet is not null)
                     refs.AddRange(CreateGridRange(targetSheet.Id, range));
-                break;
+                return false;
             }
             case FullRowRangeRefNode range:
             {
                 refs.AddRange(CreateGridRange(defaultSheetId, range));
-                break;
+                return false;
             }
 
             case NamedRangeNode named:
@@ -464,13 +441,13 @@ public sealed class RecalcEngine
                 {
                     refs.AddRange(namedRange);
                 }
-                break;
+                return false;
             }
 
             case StructuredReferenceNode structured:
             {
                 if (workbook is null)
-                    break;
+                    return false;
 
                 var structuredRange = StructuredReferenceResolver.ResolveDataBodyColumn(
                     workbook,
@@ -479,10 +456,10 @@ public sealed class RecalcEngine
                     structured.ColumnName,
                     formulaCell);
                 if (structuredRange is null)
-                    break;
+                    return false;
 
                 refs.AddRange(structuredRange.Value);
-                break;
+                return false;
             }
 
             case StructuredCurrentRowReferenceNode currentRow:
@@ -495,23 +472,34 @@ public sealed class RecalcEngine
                     currentRow.ColumnName);
                 if (address is not null)
                     refs.Add(address.Value);
-                break;
+                return false;
             }
 
             case BinaryOpNode binary:
-                CollectReferences(binary.Left, defaultSheetId, formulaCell, workbook, refs);
-                CollectReferences(binary.Right, defaultSheetId, formulaCell, workbook, refs);
-                break;
+            {
+                var leftHasVolatile = CollectReferences(binary.Left, defaultSheetId, formulaCell, workbook, refs);
+                var rightHasVolatile = CollectReferences(binary.Right, defaultSheetId, formulaCell, workbook, refs);
+                return leftHasVolatile || rightHasVolatile;
+            }
 
             case UnaryOpNode unary:
-                CollectReferences(unary.Operand, defaultSheetId, formulaCell, workbook, refs);
-                break;
+                return CollectReferences(unary.Operand, defaultSheetId, formulaCell, workbook, refs);
 
             case FunctionCallNode func:
-                foreach (var arg in func.Arguments)
-                    CollectReferences(arg, defaultSheetId, formulaCell, workbook, refs);
-                break;
+            {
+                var containsVolatileFunction = BuiltInFunctions.IsVolatile(func.FunctionName);
+                var arguments = func.Arguments;
+                for (var i = 0; i < arguments.Count; i++)
+                {
+                    if (CollectReferences(arguments[i], defaultSheetId, formulaCell, workbook, refs))
+                        containsVolatileFunction = true;
+                }
+
+                return containsVolatileFunction;
+            }
         }
+
+        return false;
     }
 
     private static GridRange CreateGridRange(SheetId sheetId, RangeRefNode range)
@@ -537,8 +525,10 @@ public sealed class RecalcEngine
 
     private sealed class FormulaDependencySet
     {
+        private List<GridRange>? _ranges;
+
         public HashSet<CellAddress> Cells { get; } = [];
-        public List<GridRange> Ranges { get; } = [];
+        public IReadOnlyList<GridRange> Ranges => _ranges is null ? Array.Empty<GridRange>() : _ranges;
 
         public void Add(CellAddress address) => Cells.Add(address);
 
@@ -546,7 +536,8 @@ public sealed class RecalcEngine
         {
             if (range.CellCount > CompactRangeCellThreshold)
             {
-                Ranges.Add(range);
+                _ranges ??= [];
+                _ranges.Add(range);
                 return;
             }
 
