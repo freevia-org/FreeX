@@ -10,17 +10,29 @@ namespace FreeX.App.Host.Tests;
 
 public sealed partial class EuLocalizationResourceTests
 {
-    private static readonly string[] ExpectedEuOfficeSatelliteCultures =
+    private static readonly string[] ExpectedOfficeSatelliteCultures =
     [
         "bg-BG",
         "cs-CZ",
         "da-DK",
         "de-DE",
+        "de-AT",
+        "de-CH",
         "el-GR",
+        "en-AU",
+        "en-CA",
         "en-GB",
+        "en-IE",
+        "en-NZ",
+        "en-ZA",
+        "es-AR",
+        "es-CL",
+        "es-CO",
         "es-ES",
+        "es-MX",
         "et-EE",
         "fi-FI",
+        "fr-CA",
         "fr-FR",
         "ga-IE",
         "hr-HR",
@@ -29,17 +41,34 @@ public sealed partial class EuLocalizationResourceTests
         "lt-LT",
         "lv-LV",
         "mt-MT",
+        "nb-NO",
         "nl-NL",
+        "nl-BE",
         "pl-PL",
+        "pt-BR",
         "pt-PT",
         "ro-RO",
         "sk-SK",
         "sl-SI",
+        "sr-Cyrl-RS",
+        "sr-Latn-RS",
         "sv-SE",
+        "tr-TR",
+        "uk-UA",
+    ];
+
+    private static readonly string[] EnglishVariantCultures =
+    [
+        "en-AU",
+        "en-CA",
+        "en-GB",
+        "en-IE",
+        "en-NZ",
+        "en-ZA",
     ];
 
     public static IEnumerable<object[]> ExpectedEuOfficeSatelliteCultureData() =>
-        ExpectedEuOfficeSatelliteCultures.Select(culture => new object[] { culture });
+        ExpectedOfficeSatelliteCultures.Select(culture => new object[] { culture });
 
     [Fact]
     public void Resources_IncludeEveryEuOfficeSatelliteCulture()
@@ -50,7 +79,7 @@ public sealed partial class EuLocalizationResourceTests
             .Select(fileName => fileName!["Strings.".Length..])
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        availableCultures.Should().Contain(ExpectedEuOfficeSatelliteCultures);
+        availableCultures.Should().Contain(ExpectedOfficeSatelliteCultures);
     }
 
     [Fact]
@@ -60,7 +89,7 @@ public sealed partial class EuLocalizationResourceTests
             .Select(option => option.CultureName)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        availableCultures.Should().Contain(ExpectedEuOfficeSatelliteCultures);
+        availableCultures.Should().Contain(ExpectedOfficeSatelliteCultures);
     }
 
     [Theory]
@@ -91,7 +120,7 @@ public sealed partial class EuLocalizationResourceTests
             .ToArray();
         accessKeyMismatches.Should().BeEmpty();
 
-        if (!string.Equals(cultureName, "en-GB", StringComparison.OrdinalIgnoreCase))
+        if (!EnglishVariantCultures.Contains(cultureName, StringComparer.OrdinalIgnoreCase))
         {
             var translatedValueCount = localized
                 .Count(entry => !string.IsNullOrWhiteSpace(neutral[entry.Key])
