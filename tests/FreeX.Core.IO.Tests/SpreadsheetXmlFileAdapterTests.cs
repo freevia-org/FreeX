@@ -1078,6 +1078,46 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_AppliesXsltParametersToGeneratedSpreadsheetMl()
+    {
+        using var source = StreamFromString("<rows><row amount=\"42.5\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:param name="sheetName" />
+              <xsl:param name="label" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="{$sheetName}">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="$label" /></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@amount" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(
+            source,
+            stylesheet,
+            new Dictionary<string, string?>
+            {
+                ["sheetName"] = "Parameterized",
+                ["label"] = "Runtime label"
+            });
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Parameterized");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Runtime label"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(42.5));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlScalarValueTypesAndIndexes()
     {
         using var source = StreamFromString("""

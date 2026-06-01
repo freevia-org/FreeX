@@ -103,6 +103,17 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     public static Workbook LoadTransformed(Stream sourceXml, Stream stylesheet)
         => LoadTransformed(sourceXml, stylesheet, XsltWorkbookTransform.DefaultMaxOutputBytes);
 
+    public static Workbook LoadTransformed(
+        Stream sourceXml,
+        Stream stylesheet,
+        IReadOnlyDictionary<string, string?> parameters)
+        => LoadTransformed(
+            sourceXml,
+            stylesheet,
+            XsltWorkbookTransform.DefaultMaxOutputBytes,
+            XsltWorkbookTransform.DefaultMaxInputCharacters,
+            parameters);
+
     public static Workbook LoadTransformed(Stream sourceXml, Stream stylesheet, long maxOutputBytes)
         => LoadTransformed(sourceXml, stylesheet, maxOutputBytes, XsltWorkbookTransform.DefaultMaxInputCharacters);
 
@@ -111,12 +122,21 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         Stream stylesheet,
         long maxOutputBytes,
         long maxInputCharacters)
+        => LoadTransformed(sourceXml, stylesheet, maxOutputBytes, maxInputCharacters, parameters: null);
+
+    public static Workbook LoadTransformed(
+        Stream sourceXml,
+        Stream stylesheet,
+        long maxOutputBytes,
+        long maxInputCharacters,
+        IReadOnlyDictionary<string, string?>? parameters)
     {
         using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(
             sourceXml,
             stylesheet,
             maxOutputBytes,
-            maxInputCharacters);
+            maxInputCharacters,
+            parameters);
         try
         {
             return new SpreadsheetXmlFileAdapter().Load(transformed);
