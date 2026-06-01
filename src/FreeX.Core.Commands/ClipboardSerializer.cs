@@ -69,7 +69,10 @@ public static class ClipboardSerializer
                     cellIndex++;
 
                 if (cellIndex < cells.Count && cells[cellIndex].Row == r && cells[cellIndex].Col == c)
+                {
                     AppendTsvCell(sb, cells[cellIndex].DisplayText);
+                    cellIndex++;
+                }
             }
         }
     }
@@ -222,40 +225,54 @@ public static class ClipboardSerializer
 
     private static string[][] DeserializePlainText(string text)
     {
-        text = text.TrimEnd('\r', '\n');
+        var span = text.AsSpan(0, GetTrimmedEndLength(text));
         var rows = new List<string[]>();
-        var row = new List<string>(EstimateFirstRowFieldCount(text));
+        var row = new List<string>(EstimateFirstRowFieldCount(span));
         var fieldStart = 0;
+        var searchStart = 0;
 
-        for (var i = 0; i < text.Length; i++)
+        while (searchStart < span.Length)
         {
-            var ch = text[i];
+            var delimiterOffset = span[searchStart..].IndexOfAny('\t', '\r', '\n');
+            if (delimiterOffset < 0)
+                break;
+
+            var i = searchStart + delimiterOffset;
+            var ch = span[i];
             if (ch == '\t')
             {
-                row.Add(text[fieldStart..i]);
+                row.Add(span[fieldStart..i].ToString());
                 fieldStart = i + 1;
+                searchStart = fieldStart;
                 continue;
             }
 
-            if (ch != '\r' && ch != '\n')
-                continue;
-
-            row.Add(text[fieldStart..i]);
+            row.Add(span[fieldStart..i].ToString());
             rows.Add(row.ToArray());
             row.Clear();
 
-            if (ch == '\r' && i + 1 < text.Length && text[i + 1] == '\n')
+            if (ch == '\r' && i + 1 < span.Length && span[i + 1] == '\n')
                 i++;
 
             fieldStart = i + 1;
+            searchStart = fieldStart;
         }
 
-        row.Add(text[fieldStart..]);
+        row.Add(span[fieldStart..].ToString());
         rows.Add(row.ToArray());
         return rows.ToArray();
     }
 
-    private static int EstimateFirstRowFieldCount(string text)
+    private static int GetTrimmedEndLength(string text)
+    {
+        var length = text.Length;
+        while (length > 0 && text[length - 1] is '\r' or '\n')
+            length--;
+
+        return length;
+    }
+
+    private static int EstimateFirstRowFieldCount(ReadOnlySpan<char> text)
     {
         var count = 1;
         foreach (var ch in text)
