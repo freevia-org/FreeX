@@ -53,6 +53,9 @@ public static class XlsxPackagePath
             targetPath.StartsWith("xl/tables/", StringComparison.OrdinalIgnoreCase))
             target = $"../tables/{targetPath["xl/tables/".Length..]}";
         else if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
+            targetPath.StartsWith("xl/threadedComments/", StringComparison.OrdinalIgnoreCase))
+            target = $"../threadedComments/{targetPath["xl/threadedComments/".Length..]}";
+        else if (sourceDirectory.Equals("xl/worksheets", StringComparison.OrdinalIgnoreCase) &&
             targetPath.StartsWith("xl/pivotTables/", StringComparison.OrdinalIgnoreCase))
             target = $"../pivotTables/{targetPath["xl/pivotTables/".Length..]}";
         else if (sourceDirectory.Equals("xl/pivotTables", StringComparison.OrdinalIgnoreCase) &&

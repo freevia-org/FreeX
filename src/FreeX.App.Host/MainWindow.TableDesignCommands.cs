@@ -103,7 +103,7 @@ public partial class MainWindow
         {
             new ResizeStructuredTableCommand(_currentSheetId, table.Id, newRange)
         };
-        if (TableStyleGalleryPlanner.TryGetOption(table.StyleName, out var option))
+        if (TableStyleGalleryPlanner.TryGetOption(table.StyleName, _workbook.Theme, out var option))
         {
             commands.Add(new ApplyStructuredTableStyleCommand(
                 _currentSheetId,
@@ -286,7 +286,7 @@ public partial class MainWindow
         if (TableDesignStyleGalleryMenu is null || TableDesignStyleGalleryMenu.Items.Count > 0)
             return;
 
-        var options = TableStyleGalleryPlanner.GetOptions();
+        var options = TableStyleGalleryPlanner.GetOptions(_workbook.Theme);
         string? currentFamily = null;
         for (var index = 0; index < options.Count; index++)
         {
@@ -344,7 +344,7 @@ public partial class MainWindow
             showColumnStripes.HasValue ||
             hasAutoFilter.HasValue;
 
-        if (TableStyleGalleryPlanner.TryGetOption(table.StyleName, out var option))
+        if (TableStyleGalleryPlanner.TryGetOption(table.StyleName, _workbook.Theme, out var option))
         {
             if (styleOptionChanged || totalsRowChanged)
             {
@@ -393,7 +393,7 @@ public partial class MainWindow
         if (!TryGetActiveStructuredTable(out _, out var table))
             return;
 
-        var option = TableStyleGalleryPlanner.GetOption(variant);
+        var option = TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme);
         if (!TryExecuteCommand(
                 new ApplyStructuredTableStyleCommand(
                     _currentSheetId,

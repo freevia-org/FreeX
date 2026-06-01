@@ -879,7 +879,7 @@ public partial class MainWindow
         if (FormatTableGalleryMenu is null || FormatTableGalleryMenu.Items.Count > 0)
             return;
 
-        var options = TableStyleGalleryPlanner.GetOptions();
+        var options = TableStyleGalleryPlanner.GetOptions(_workbook.Theme);
         string? currentFamily = null;
         for (var index = 0; index < options.Count; index++)
         {
@@ -973,7 +973,7 @@ public partial class MainWindow
     private void ApplyTableFormat(int variant)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        var tableStyle = TableStyleGalleryPlanner.GetOption(variant);
+        var tableStyle = TableStyleGalleryPlanner.GetOption(variant, _workbook.Theme);
         var tableStyleName = tableStyle.StyleName;
         CreateTableDialog? dialog = null;
         dialog = new CreateTableDialog(

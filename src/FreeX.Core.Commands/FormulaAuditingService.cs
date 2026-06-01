@@ -30,6 +30,9 @@ public static partial class FormulaAuditingService
     }
 
     public static IReadOnlyList<CellAddress> GetDirectDependents(Workbook workbook, CellAddress address)
+        => GetDirectDependents(workbook, new GridRange(address, address));
+
+    public static IReadOnlyList<CellAddress> GetDirectDependents(Workbook workbook, GridRange precedentRange)
     {
         var result = new HashSet<CellAddress>();
 
@@ -41,12 +44,21 @@ public static partial class FormulaAuditingService
                     continue;
 
                 var precedents = ExtractPrecedents(workbook, sheet.Id, cell.FormulaText);
-                if (precedents.Contains(address))
+                if (ContainsAny(precedents, precedentRange))
                     result.Add(formulaAddress);
             }
         }
 
         return SortByWorkbookOrder(workbook, result).ToList();
+    }
+
+    private static bool ContainsAny(IReadOnlyList<CellAddress> addresses, GridRange range)
+    {
+        foreach (var address in addresses)
+            if (range.Contains(address))
+                return true;
+
+        return false;
     }
 
     public static IReadOnlyList<FormulaTraceArrow> GetDependentTraceArrows(Workbook workbook, CellAddress address)

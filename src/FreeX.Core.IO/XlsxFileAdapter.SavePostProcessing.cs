@@ -66,6 +66,12 @@ public sealed partial class XlsxFileAdapter
             XlsxSparklineMapper.Save(packageStream, workbook);
         }
 
+        if (featurePlan.HasThreadedComments)
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetThreadedCommentMapper.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (featurePlan.HasBackgroundImages)
         {
             packageStream.Position = 0;
@@ -304,6 +310,7 @@ public sealed partial class XlsxFileAdapter
         public bool HasAllowEditRanges;
         public bool HasAdvancedConditionalFormats;
         public bool HasSparklines;
+        public bool HasThreadedComments;
         public bool HasBackgroundImages;
         public bool HasHeaderFooterPictures;
         public bool HasPersistableViewState;
@@ -339,6 +346,7 @@ public sealed partial class XlsxFileAdapter
             HasAllowEditRanges |= sheet.AllowEditRanges.Count > 0;
             HasAdvancedConditionalFormats |= XlsxAdvancedConditionalFormatWriter.HasAdvancedConditionalFormats(sheet);
             HasSparklines |= sheet.Sparklines.Count > 0;
+            HasThreadedComments |= XlsxWorksheetThreadedCommentMapper.HasThreadedComments(sheet);
             HasBackgroundImages |= sheet.BackgroundImage is not null;
             HasHeaderFooterPictures |= XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet);
             HasPersistableViewState |= XlsxWorksheetViewWriter.HasPersistableViewState(sheet);
