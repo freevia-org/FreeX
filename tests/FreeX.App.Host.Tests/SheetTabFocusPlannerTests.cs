@@ -60,6 +60,14 @@ public sealed class SheetTabFocusPlannerTests
     }
 
     [Fact]
+    public void AdjacentTab_ZeroDirectionRecoversMissingCurrentToFirstVisibleTab()
+    {
+        var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3");
+
+        SheetTabFocusPlanner.AdjacentTab(tabs, SheetId.New(), 0).Should().Be(tabs[0].Id);
+    }
+
+    [Fact]
     public void EdgeTab_ReturnsRequestedEdgeOrNull()
     {
         var tabs = CreateTabs("Sheet1", "Sheet2", "Sheet3");
