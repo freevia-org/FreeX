@@ -82,11 +82,11 @@ internal static class XlsxWorksheetViewWriter
             changed = true;
         }
 
-        var sheetView = sheetViews.Elements(worksheetNs + "sheetView").FirstOrDefault();
+        var sheetView = sheetViews.Elements(worksheetNs + "sheetView").FirstOrDefault(IsPrimarySheetView);
         if (sheetView is null)
         {
             sheetView = new XElement(worksheetNs + "sheetView", new XAttribute("workbookViewId", "0"));
-            sheetViews.Add(sheetView);
+            sheetViews.AddFirst(sheetView);
             changed = true;
         }
 
@@ -167,4 +167,7 @@ internal static class XlsxWorksheetViewWriter
         element.SetAttributeValue(name, value);
         return true;
     }
+
+    private static bool IsPrimarySheetView(XElement element) =>
+        string.Equals(element.Attribute("workbookViewId")?.Value ?? "0", "0", StringComparison.Ordinal);
 }

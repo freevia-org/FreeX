@@ -4279,6 +4279,48 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadAndSave_UsesPrimaryWorksheetViewWhenAdditionalViewAppearsFirst()
+    {
+        var workbook = new Workbook("XlsxPrimaryViewModeTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        sheet.ViewMode = WorksheetViewMode.PageLayout;
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddAdditionalWorksheetSheetViewBeforePrimary(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.ViewMode.Should().Be(WorksheetViewMode.PageLayout);
+        loadedSheet.AdditionalViews.Should().NotBeNull();
+        loadedSheet.AdditionalViews!.Views.Should().ContainSingle().Which.WorkbookViewId.Should().Be("1");
+        loadedSheet.ShowGridlines = false;
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var sheetViews = worksheetXml.Root!
+            .Element(worksheetNs + "sheetViews")!
+            .Elements(worksheetNs + "sheetView")
+            .ToList();
+        var primaryView = sheetViews.Single(view => string.Equals(view.Attribute("workbookViewId")?.Value ?? "0", "0", StringComparison.Ordinal));
+        var additionalView = sheetViews.Single(view => string.Equals(view.Attribute("workbookViewId")?.Value, "1", StringComparison.Ordinal));
+        primaryView.Attribute("view")!.Value.Should().Be("pageLayout");
+        primaryView.Attribute("showGridLines")!.Value.Should().Be("0");
+        additionalView.Attribute("view")!.Value.Should().Be("pageBreakPreview");
+        additionalView.Attribute("showGridLines").Should().BeNull();
+        additionalView.Attribute("customSheetViewFlag")!.Value.Should().Be("kept");
+    }
+
+    [Fact]
     public void XlsxAdapter_RoundTrip_PrintTitlesPageBreaksAndScaleToFit()
     {
         var workbook = new Workbook("PageSetupTest");
@@ -22783,6 +22825,31 @@ public partial class FileAdapterSmokeTests
             }
 
             sheetViews.Add(new XElement(
+                worksheetNs + "sheetView",
+                new XAttribute("workbookViewId", "1"),
+                new XAttribute("view", "pageBreakPreview"),
+                new XAttribute("topLeftCell", "C3"),
+                new XAttribute("zoomScale", "80"),
+                new XAttribute("customSheetViewFlag", "kept")));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddAdditionalWorksheetSheetViewBeforePrimary(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            var sheetViews = worksheetXml.Root!.Element(worksheetNs + "sheetViews");
+            sheetViews.Should().NotBeNull();
+            var primaryView = sheetViews!.Elements(worksheetNs + "sheetView")
+                .Single(view => string.Equals(view.Attribute("workbookViewId")?.Value ?? "0", "0", StringComparison.Ordinal));
+
+            primaryView.AddBeforeSelf(new XElement(
                 worksheetNs + "sheetView",
                 new XAttribute("workbookViewId", "1"),
                 new XAttribute("view", "pageBreakPreview"),
