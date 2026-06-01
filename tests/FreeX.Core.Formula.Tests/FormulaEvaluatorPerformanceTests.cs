@@ -433,7 +433,7 @@ public sealed class FormulaEvaluatorPerformanceTests
 
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(8_000_000);
+        allocatedBytes.Should().BeLessThan(5_500_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 

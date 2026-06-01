@@ -1088,6 +1088,18 @@ public class PhaseA2FunctionTests
     }
 
     [Fact]
+    public void Aggregate_ModeSngl_ReturnsFirstModeWhenCountsTie()
+    {
+        var (wb, sheet) = MakeWb(
+            (1, 1, new NumberValue(1)),
+            (2, 1, new NumberValue(2)),
+            (3, 1, new NumberValue(2)),
+            (4, 1, new NumberValue(1)));
+
+        _eval.Evaluate("=AGGREGATE(13,4,A1:A4)", sheet, wb).Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
     public void Aggregate_InvalidFuncNum_ReturnsValueError()
     {
         var (wb, sheet) = MakeWb((1, 1, new NumberValue(1)));

@@ -945,6 +945,10 @@ public sealed class FormulaEvaluator
         if (TryEvaluateReferenceDimensionFunction(functionName, node, context, out var dimensionResult))
             return dimensionResult;
 
+        if (functionName == "AGGREGATE" &&
+            TryEvaluateAggregateModeDirectRanges(node.Arguments, context, out var aggregateModeResult))
+            return aggregateModeResult;
+
         bool isStructured = IsStructuredRangeFunction(functionName);
         bool isAggregate = IsAggregateFunction(functionName);
         bool isDirectTextCoercingAggregate = IsDirectTextCoercingAggregate(functionName);
@@ -1153,6 +1157,120 @@ public sealed class FormulaEvaluator
             foreach (var value in values)
                 expandedArgs.Add(value);
         }
+    }
+
+    private static bool TryEvaluateAggregateModeDirectRanges(
+        IReadOnlyList<FormulaNode> arguments,
+        IEvalContext context,
+        out ScalarValue result)
+    {
+        result = BlankValue.Instance;
+        if (arguments.Count < 3)
+            return false;
+
+        if (arguments[0] is ErrorNode funcError)
+        {
+            result = funcError.Error;
+            return true;
+        }
+
+        if (arguments[1] is ErrorNode optionsError)
+        {
+            result = optionsError.Error;
+            return true;
+        }
+
+        if (arguments[0] is not NumberNode { Value: var funcNumD } ||
+            arguments[1] is not NumberNode { Value: var optionsD })
+        {
+            return false;
+        }
+
+        if (!double.IsFinite(funcNumD) || !double.IsFinite(optionsD))
+        {
+            result = ErrorValue.Value;
+            return true;
+        }
+
+        var funcNum = (int)funcNumD;
+        if (funcNum != 13)
+            return false;
+
+        var options = (int)optionsD;
+        if (options < 0 || options > 7)
+        {
+            result = ErrorValue.Value;
+            return true;
+        }
+
+        if (options != 4)
+            return false;
+
+        var mode = new FastAggregateModeAccumulator();
+
+        for (var index = 2; index < arguments.Count; index++)
+        {
+            var argument = arguments[index];
+            if (argument is ErrorNode argError)
+            {
+                result = argError.Error;
+                return true;
+            }
+
+            if (argument is NumberNode scalarNumber)
+            {
+                mode.Add(scalarNumber.Value);
+                continue;
+            }
+
+            var resolution = TryResolveFastAggregateRange(argument, context, out var range, out var rangeError);
+            if (resolution == FastAggregateRangeResolution.Unsupported)
+                return false;
+
+            if (rangeError is not null)
+            {
+                result = rangeError;
+                return true;
+            }
+
+            var rangeResult = AddAggregateModeRange(range, context, mode);
+            if (rangeResult is not null)
+            {
+                result = rangeResult;
+                return true;
+            }
+        }
+
+        result = mode.TryGetValue(out var value)
+            ? double.IsFinite(value) ? new NumberValue(value) : ErrorValue.Num
+            : ErrorValue.NA;
+        return true;
+    }
+
+    private static ErrorValue? AddAggregateModeRange(
+        FastAggregateRange range,
+        IEvalContext context,
+        FastAggregateModeAccumulator mode)
+    {
+        var values = range.SheetName is not null
+            ? context.GetRangeValues(range.SheetName, range.StartRow, range.StartCol, range.EndRow, range.EndCol)
+            : context.GetRangeValues(range.StartRow, range.StartCol, range.EndRow, range.EndCol);
+        if (values.Count == 1 && values[0] is RangeMaterializationErrorValue rangeError)
+            return rangeError.Error;
+
+        foreach (var cellValue in values)
+        {
+            if (TryDirectRangeNumber(cellValue, out var number, out var error))
+            {
+                mode.Add(number);
+            }
+            else if (error is not null)
+            {
+                return error;
+            }
+        }
+
+        return null;
     }
 
     private static bool TryEvaluateRangeOnlyFastAggregate(
@@ -1702,6 +1820,63 @@ public sealed class FormulaEvaluator
             default:
                 kind = default;
                 return false;
+        }
+    }
+
+    private sealed class FastAggregateModeAccumulator
+    {
+        private readonly Dictionary<double, FastAggregateModeCount> _counts = [];
+        private int _ordinal;
+        private int _bestCount;
+        private int _bestOrdinal;
+        private double _bestValue;
+
+        public void Add(double value)
+        {
+            ref var entry = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(
+                _counts,
+                value,
+                out bool exists);
+            if (exists)
+            {
+                entry.Count++;
+            }
+            else
+            {
+                entry = new FastAggregateModeCount(1, _ordinal);
+            }
+
+            if (entry.Count >= 2 &&
+                (entry.Count > _bestCount ||
+                 (entry.Count == _bestCount && entry.FirstOrdinal < _bestOrdinal)))
+            {
+                _bestCount = entry.Count;
+                _bestOrdinal = entry.FirstOrdinal;
+                _bestValue = value;
+            }
+
+            _ordinal++;
+        }
+
+        public bool TryGetValue(out double value)
+        {
+            value = _bestValue;
+            if (_bestCount < 2)
+                return false;
+
+            return true;
+        }
+    }
+
+    private struct FastAggregateModeCount
+    {
+        public int Count;
+        public int FirstOrdinal;
+
+        public FastAggregateModeCount(int count, int firstOrdinal)
+        {
+            Count = count;
+            FirstOrdinal = firstOrdinal;
         }
     }
 
