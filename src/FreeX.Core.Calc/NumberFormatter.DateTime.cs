@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Threading;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Calc;
@@ -14,6 +15,14 @@ public static partial class NumberFormatter
     private static readonly Regex FractionalSecondPrecisionRegex = new(@"(?<=[sS])\.(0+)");
     private static readonly Regex QuotedNumberFormatTextRegex = new("\"[^\"]*\"");
     private static readonly Regex ElapsedTimeFractionalSecondRegex = new(@"(?:s|\[[sS]\])\.(0+)");
+
+    private const int SimpleDateTimeFormatCacheSize = 1024;
+    private static readonly SimpleDateTimeFormatCacheEntry?[] SimpleDateTimeFormatCache =
+        new SimpleDateTimeFormatCacheEntry[SimpleDateTimeFormatCacheSize];
+
+    private readonly record struct SimpleDateTimeFormatPlan(string NetFormat, int FractionalSecondPrecision);
+
+    private sealed record SimpleDateTimeFormatCacheEntry(string ExcelFormat, SimpleDateTimeFormatPlan Plan);
 
     private enum SpecialDateTimeLocaleToken
     {
@@ -86,6 +95,65 @@ public static partial class NumberFormatter
         }
         catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
     }
+
+    private static bool TryFormatCachedSimpleDateTime(
+        double oaDate,
+        string format,
+        out string text)
+    {
+        if (!TryGetSimpleDateTimeFormatPlan(format, out var plan))
+        {
+            text = "";
+            return false;
+        }
+
+        try
+        {
+            var dt = DateTime.FromOADate(oaDate);
+            if (plan.FractionalSecondPrecision > 0)
+                dt = RoundToFractionalSecondPrecision(dt, plan.FractionalSecondPrecision);
+
+            text = dt.ToString(plan.NetFormat, CultureInfo.InvariantCulture.DateTimeFormat);
+            return true;
+        }
+        catch
+        {
+            text = oaDate.ToString(CultureInfo.InvariantCulture);
+            return true;
+        }
+    }
+
+    private static bool TryGetSimpleDateTimeFormatPlan(
+        string excelFormat,
+        out SimpleDateTimeFormatPlan plan)
+    {
+        if (!CanCacheSimpleDateTimeFormat(excelFormat))
+        {
+            plan = default;
+            return false;
+        }
+
+        var slot = StringComparer.Ordinal.GetHashCode(excelFormat) & (SimpleDateTimeFormatCacheSize - 1);
+        var cached = Volatile.Read(ref SimpleDateTimeFormatCache[slot]);
+        if (cached is not null &&
+            string.Equals(cached.ExcelFormat, excelFormat, StringComparison.Ordinal))
+        {
+            plan = cached.Plan;
+            return true;
+        }
+
+        var cleanFormat = RemoveSpacingAndFillDirectives(excelFormat);
+        TryGetFractionalSecondPrecision(cleanFormat, out var fractionalSecondPrecision);
+        plan = new SimpleDateTimeFormatPlan(
+            ExcelDateTimeFormatConverter.ToNetDateFormat(cleanFormat),
+            fractionalSecondPrecision);
+        Volatile.Write(ref SimpleDateTimeFormatCache[slot], new SimpleDateTimeFormatCacheEntry(excelFormat, plan));
+        return true;
+    }
+
+    private static bool CanCacheSimpleDateTimeFormat(string format)
+        => format.IndexOf('[') < 0 &&
+            !format.Contains("mmmmm", StringComparison.OrdinalIgnoreCase);
 
     private static bool ShouldAttemptSimpleDateTimeFormat(string formatString)
     {
