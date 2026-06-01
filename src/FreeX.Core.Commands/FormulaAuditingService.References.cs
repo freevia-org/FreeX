@@ -70,6 +70,101 @@ public static partial class FormulaAuditingService
         }
     }
 
+    private static bool HasAnyBlankPrecedent(Workbook workbook, SheetId hostSheetId, string formulaText)
+    {
+        try
+        {
+            var ast = new Parser(new Lexer(formulaText).Tokenize()).Parse();
+            return ReferencesBlankPrecedent(workbook, hostSheetId, ast);
+        }
+        catch (FormulaParseException)
+        {
+            return false;
+        }
+    }
+
+    private static bool ReferencesBlankPrecedent(Workbook workbook, SheetId hostSheetId, FormulaNode node)
+    {
+        switch (node)
+        {
+            case CellRefNode cellRef:
+                return ResolveSheet(workbook, hostSheetId, cellRef.SheetName) is { } cellSheet &&
+                       IsBlankPrecedent(workbook, new CellAddress(cellSheet.Id, cellRef.Row, cellRef.ColumnNumber));
+
+            case RangeRefNode rangeRef:
+                return ResolveSheet(workbook, hostSheetId, rangeRef.SheetName ?? rangeRef.Start.SheetName) is { } rangeSheet &&
+                       RangeContainsBlankPrecedent(workbook, rangeSheet.Id, rangeRef);
+
+            case NamedRangeNode namedRange:
+                return workbook.TryGetNamedRange(namedRange.Name, out var range) &&
+                       RangeContainsBlankPrecedent(workbook, range);
+
+            case StructuredReferenceNode structured:
+                return StructuredReferenceResolver.ResolveDataBodyColumn(
+                        workbook,
+                        workbook.GetSheet(hostSheetId),
+                        structured.TableName,
+                        structured.ColumnName) is { } structuredRange &&
+                       RangeContainsBlankPrecedent(workbook, structuredRange);
+
+            case BinaryOpNode binary:
+                return ReferencesBlankPrecedent(workbook, hostSheetId, binary.Left) ||
+                       ReferencesBlankPrecedent(workbook, hostSheetId, binary.Right);
+
+            case UnaryOpNode unary:
+                return ReferencesBlankPrecedent(workbook, hostSheetId, unary.Operand);
+
+            case FunctionCallNode function:
+                foreach (var arg in function.Arguments)
+                    if (ReferencesBlankPrecedent(workbook, hostSheetId, arg))
+                        return true;
+
+                return false;
+
+            default:
+                return false;
+        }
+    }
+
+    private static bool RangeContainsBlankPrecedent(Workbook workbook, SheetId sheetId, RangeRefNode range)
+    {
+        var startRow = Math.Min(range.Start.Row, range.End.Row);
+        var endRow = Math.Max(range.Start.Row, range.End.Row);
+        var startCol = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+        var endCol = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber);
+
+        return RangeContainsBlankPrecedent(workbook, sheetId, startRow, endRow, startCol, endCol);
+    }
+
+    private static bool RangeContainsBlankPrecedent(Workbook workbook, GridRange range) =>
+        RangeContainsBlankPrecedent(
+            workbook,
+            range.Start.Sheet,
+            Math.Min(range.Start.Row, range.End.Row),
+            Math.Max(range.Start.Row, range.End.Row),
+            Math.Min(range.Start.Col, range.End.Col),
+            Math.Max(range.Start.Col, range.End.Col));
+
+    private static bool RangeContainsBlankPrecedent(
+        Workbook workbook,
+        SheetId sheetId,
+        uint startRow,
+        uint endRow,
+        uint startCol,
+        uint endCol)
+    {
+        for (var row = startRow; row <= endRow; row++)
+        {
+            for (var col = startCol; col <= endCol; col++)
+            {
+                if (IsBlankPrecedent(workbook, new CellAddress(sheetId, row, col)))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
     private static Sheet? ResolveSheet(Workbook workbook, SheetId hostSheetId, string? sheetName)
     {
         if (!string.IsNullOrWhiteSpace(sheetName))
