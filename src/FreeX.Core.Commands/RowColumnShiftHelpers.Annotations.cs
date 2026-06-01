@@ -8,7 +8,6 @@ internal static partial class RowColumnShiftHelpers
     {
         var shifted = comments
             .Where(p => p.Key.Row >= start)
-            .OrderByDescending(p => p.Key.Row)
             .ToList();
 
         foreach (var (addr, _) in shifted)
@@ -23,7 +22,6 @@ internal static partial class RowColumnShiftHelpers
         var removed = comments.Keys.Where(addr => addr.Row >= start && addr.Row <= end).ToList();
         var shifted = comments
             .Where(p => p.Key.Row > end)
-            .OrderBy(p => p.Key.Row)
             .ToList();
 
         foreach (var addr in removed)
@@ -38,7 +36,6 @@ internal static partial class RowColumnShiftHelpers
     {
         var shifted = comments
             .Where(p => p.Key.Col >= start)
-            .OrderByDescending(p => p.Key.Col)
             .ToList();
 
         foreach (var (addr, _) in shifted)
@@ -53,7 +50,6 @@ internal static partial class RowColumnShiftHelpers
         var removed = comments.Keys.Where(addr => addr.Col >= start && addr.Col <= end).ToList();
         var shifted = comments
             .Where(p => p.Key.Col > end)
-            .OrderBy(p => p.Key.Col)
             .ToList();
 
         foreach (var addr in removed)
