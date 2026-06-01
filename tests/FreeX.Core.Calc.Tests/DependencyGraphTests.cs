@@ -91,8 +91,9 @@ public class DependencyGraphTests
         var registration = source[
             source.IndexOf("public void RegisterFormulaDependencies", StringComparison.Ordinal)..
             source.IndexOf("public void ClearFormulaDependencies", StringComparison.Ordinal)];
+        var collectReferencesStart = source.IndexOf("private static bool CollectReferences", StringComparison.Ordinal);
         var referenceCollection = source[
-            source.IndexOf("private static bool CollectReferences", StringComparison.Ordinal)..
+            source.LastIndexOf("private static bool", collectReferencesStart, StringComparison.Ordinal)..
             source.IndexOf("private static GridRange CreateGridRange", StringComparison.Ordinal)];
 
         registration.Should().Contain("var containsVolatileFunction = CollectReferences(");

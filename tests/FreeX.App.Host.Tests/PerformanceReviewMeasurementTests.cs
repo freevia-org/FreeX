@@ -237,6 +237,50 @@ public sealed class PerformanceReviewMeasurementTests
     }
 
     [Fact]
+    public void Benchmark_NonDragSelectionToolbarRefresh_ReportsTimingAndQatProbes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = SelectionDragHarness.Create();
+            harness.MeasureNonDragSelectionToolbarRefresh(iterations: 10);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var result = harness.MeasureNonDragSelectionToolbarRefresh(iterations: 160);
+            Console.WriteLine(
+                "PERF NON_DRAG_SELECTION_TOOLBAR " +
+                $"steps={result.StepCount} total_ms={result.TotalMilliseconds:F2} " +
+                $"mean_ms={result.MeanMilliseconds:F2} p95_ms={result.P95Milliseconds:F2} " +
+                $"max_ms={result.MaxMilliseconds:F2} allocated_bytes={result.AllocatedBytes:N0} " +
+                $"can_undo_probes={result.CanUndoProbeCount:N0} " +
+                $"can_redo_probes={result.CanRedoProbeCount:N0} " +
+                $"toolbar_writes={result.ToolbarWriteCount:N0}");
+
+            result.StepCount.Should().Be(160);
+            result.TotalMilliseconds.Should().BeGreaterThan(0);
+            result.CanUndoProbeCount.Should().Be(0);
+            result.CanRedoProbeCount.Should().Be(0);
+        });
+    }
+
+    [Fact]
+    public void NonDragSelectionWithUnchangedStyleSource_DoesNotProbeQat()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = SelectionDragHarness.Create();
+
+            var result = harness.MeasureNonDragSelectionToolbarRefresh(iterations: 20);
+
+            result.CanUndoProbeCount.Should().Be(0);
+            result.CanRedoProbeCount.Should().Be(0);
+            result.ToolbarWriteCount.Should().Be(0);
+        });
+    }
+
+    [Fact]
     public void Benchmark_ViewportNoCommentsFastPath_ReportsTiming()
     {
         var workbook = new Workbook("Book1");
@@ -664,6 +708,7 @@ public sealed class PerformanceReviewMeasurementTests
     {
         private readonly MainWindow _window;
         private readonly CountingCommandBus _commandBus;
+        private readonly Action<CellAddress> _setActiveCell;
         private readonly Action<CellAddress, CellAddress> _extendSelection;
         private readonly Action<CellAddress, bool> _addOrMoveAdditionalSelection;
         private readonly Action _completeDragSelectionStatusRefresh;
@@ -678,6 +723,11 @@ public sealed class PerformanceReviewMeasurementTests
             _window = window;
             _commandBus = commandBus;
             _anchor = new CellAddress(sheetId, 1, 1);
+            var setActiveCell = typeof(MainWindow)
+                .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
+            _setActiveCell = setActiveCell.CreateDelegate<Action<CellAddress>>(window);
+
             var extendSelection = typeof(MainWindow)
                 .GetMethod("ExtendSelection", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ExtendSelection");
@@ -902,6 +952,36 @@ public sealed class PerformanceReviewMeasurementTests
             }
         }
 
+        public ToolbarSelectionRefreshMeasurement MeasureNonDragSelectionToolbarRefresh(int iterations)
+        {
+            var timings = new List<double>(iterations);
+            var toolbarWrites = AttachToolbarWriteCounter();
+            _commandBus.ResetQuickAccessProbeCounts();
+
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            for (var i = 0; i < iterations; i++)
+            {
+                var row = (uint)(2 + i % 500);
+                var step = Stopwatch.StartNew();
+                _setActiveCell(new CellAddress(_anchor.Sheet, row, 2));
+                PumpDispatcher();
+                step.Stop();
+                timings.Add(step.Elapsed.TotalMilliseconds);
+            }
+
+            total.Stop();
+            var measurement = MeasurementResult.From(
+                timings,
+                total.Elapsed.TotalMilliseconds,
+                GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+            return new ToolbarSelectionRefreshMeasurement(
+                measurement,
+                _commandBus.CanUndoProbeCount,
+                _commandBus.CanRedoProbeCount,
+                toolbarWrites.Count);
+        }
+
         private bool IsStatusRefreshPending() =>
             _dragSelectStatusRefreshPending.GetValue(_window) is true;
 
@@ -1042,6 +1122,25 @@ public sealed class PerformanceReviewMeasurementTests
         int CanUndoProbeCount,
         int CanRedoProbeCount,
         int ToolbarWriteCount);
+
+    private sealed record ToolbarSelectionRefreshMeasurement(
+        MeasurementResult Measurement,
+        int CanUndoProbeCount,
+        int CanRedoProbeCount,
+        int ToolbarWriteCount)
+    {
+        public int StepCount => Measurement.StepCount;
+
+        public double TotalMilliseconds => Measurement.TotalMilliseconds;
+
+        public double MeanMilliseconds => Measurement.MeanMilliseconds;
+
+        public double P95Milliseconds => Measurement.P95Milliseconds;
+
+        public double MaxMilliseconds => Measurement.MaxMilliseconds;
+
+        public long AllocatedBytes => Measurement.AllocatedBytes;
+    }
 
     private sealed record MeasurementResult(
         int StepCount,

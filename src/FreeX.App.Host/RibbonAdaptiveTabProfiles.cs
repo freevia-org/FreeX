@@ -99,7 +99,7 @@ internal static class RibbonAdaptiveTabProfiles
             RuntimeVisibility:
             [
                 Runtime(1465, "Outline", RibbonAdaptiveGroupState.Collapsed),
-                Runtime(1120, "Sort & Filter", RibbonAdaptiveGroupState.IconOnly)
+                Runtime(1465, "Sort & Filter", RibbonAdaptiveGroupState.Collapsed)
             ],
             ProtectedGroups:
             [

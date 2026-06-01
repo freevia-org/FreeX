@@ -385,7 +385,7 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
-    public void DataRibbon_KeepsSortFilterExpandedAtMediumWidths()
+    public void DataRibbon_CollapsesSortFilterBeforePromotedDataToolsAtMediumWidths()
     {
         StaTestRunner.Run(() =>
         {
@@ -393,9 +393,15 @@ public sealed class MainWindowAdaptiveRibbonTests
 
             harness.SelectRibbonTab("Data", 1120);
 
-            harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
+            harness.CollapsedActiveRibbonGroupNames.Should().Contain(
                 "Sort & Filter",
-                "Data should keep the second Excel-style group available at medium widths and collapse later utility groups first");
+                "Data should keep promoted standalone Data Tools and Forecast commands readable before the dense Sort & Filter cluster at medium widths");
+            harness.CollapsedActiveRibbonGroupNames.Should().NotContain(
+                ["Data Tools", "Forecast"],
+                $"Data should keep promoted standalone command groups expanded at medium widths; {harness.DebugActiveRibbonChildren}");
+            harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                0.5,
+                $"Data should collapse Sort & Filter before the ribbon clips; {harness.DebugActiveRibbonChildren}");
         });
     }
 
@@ -819,7 +825,7 @@ public sealed class MainWindowAdaptiveRibbonTests
             var expectations = new[]
             {
                 new RibbonFallbackExpectation("Insert", 900, Expanded: ["Tables"], Collapsed: ["Charts"]),
-                new RibbonFallbackExpectation("Data", 1120, Expanded: ["Sort & Filter", "Data Tools", "Forecast"], Collapsed: []),
+                new RibbonFallbackExpectation("Data", 1120, Expanded: ["Data Tools", "Forecast"], Collapsed: ["Sort & Filter"]),
                 new RibbonFallbackExpectation("Page Layout", 1120, Expanded: ["Themes", "Page Setup", "Arrange"], Collapsed: []),
                 new RibbonFallbackExpectation("View", 900, Expanded: ["Workbook Views", "Show", "Zoom"], Collapsed: ["Window"]),
                 new RibbonFallbackExpectation("View", 750, Expanded: ["Workbook Views", "Show", "Zoom"], Collapsed: ["Window"])

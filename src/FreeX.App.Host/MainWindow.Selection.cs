@@ -24,7 +24,7 @@ public partial class MainWindow
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
         FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
         SheetGrid.Focus();
-        RefreshToolbar();
+        RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
     }
 
@@ -42,7 +42,7 @@ public partial class MainWindow
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
         FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
         SheetGrid.Focus();
-        RefreshToolbar();
+        RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
     }
 
@@ -60,7 +60,7 @@ public partial class MainWindow
         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
         FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
         SheetGrid.Focus();
-        RefreshToolbar();
+        RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
     }
 
@@ -111,7 +111,7 @@ public partial class MainWindow
                             var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
                             FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
                             SheetGrid.Focus();
-                            RefreshToolbar();
+                            RefreshToolbarAfterSelectionChange();
                             RefreshStatusBar();
                         }
                         else
@@ -146,7 +146,7 @@ public partial class MainWindow
                         var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
                         FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);
                         SheetGrid.Focus();
-                        RefreshToolbar();
+                        RefreshToolbarAfterSelectionChange();
                         RefreshStatusBar();
                     }
                     else
@@ -167,7 +167,7 @@ public partial class MainWindow
         {
             NavigateToCell(traceTarget);
             RefreshSheetTabs();
-            RefreshToolbar();
+            RefreshToolbarAfterSelectionChange();
             RefreshStatusBar();
             e.Handled = true;
             return;
@@ -615,7 +615,7 @@ public partial class MainWindow
         FormulaBar.Text = FormatFormulaBarText(_workbook.GetSheet(_currentSheetId)?.GetCell(nextCorner), nextCorner);
         EnsureCellVisible(nextCorner);
         FocusSheetGridIfNeeded();
-        RefreshToolbar();
+        RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
     }
 
@@ -648,7 +648,7 @@ public partial class MainWindow
             var mergedCell = sheet!.GetCell(merge.Value.Start);
             FormulaBar.Text = FormatFormulaBarText(mergedCell, merge.Value.Start);
             FocusSheetGridIfNeeded();
-            RefreshToolbar();
+            RefreshToolbarAfterSelectionChange();
             RefreshStatusBar();
             RefreshValidationDropdown();
             UpdateCommentPreview(merge.Value.Start);
@@ -670,7 +670,7 @@ public partial class MainWindow
         var cell = sheet?.GetCell(addr);
         FormulaBar.Text = FormatFormulaBarText(cell, addr);
         FocusSheetGridIfNeeded();
-        RefreshToolbar();
+        RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
         RefreshValidationDropdown();
         UpdateCommentPreview(addr);
@@ -710,7 +710,7 @@ public partial class MainWindow
             var activeCellModel = sheet.GetCell(cell);
             FormulaBar.Text = FormatFormulaBarText(activeCellModel, cell);
             SheetGrid.Focus();
-            RefreshToolbar();
+            RefreshToolbarAfterSelectionChange();
             RefreshStatusBar();
             return;
         }
@@ -733,7 +733,7 @@ public partial class MainWindow
             CellAddressBox.Text = FormatRangeReference(currentRegion.Start, currentRegion.End);
             FormulaBar.Text = FormatFormulaBarText(sheet.GetCell(cell), cell);
             SheetGrid.Focus();
-            RefreshToolbar();
+            RefreshToolbarAfterSelectionChange();
             RefreshStatusBar();
         }
     }
@@ -761,7 +761,7 @@ public partial class MainWindow
         var activeCellModel = sheet?.GetCell(activeCell);
         FormulaBar.Text = FormatFormulaBarText(activeCellModel, activeCell);
         FocusSheetGridIfNeeded();
-        RefreshToolbar();
+        RefreshToolbarAfterSelectionChange();
         RefreshStatusBar();
     }
 
@@ -864,7 +864,7 @@ public partial class MainWindow
             return;
         }
 
-        RefreshToolbar();
+        RefreshToolbarAfterSelectionChange();
     }
 
     private void CompleteDragSelectionToolbarRefresh()
@@ -876,7 +876,7 @@ public partial class MainWindow
         if (CanSkipSelectionDragToolbarRefresh())
             return;
 
-        RefreshToolbar();
+        RefreshToolbarAfterSelectionChange();
     }
 
     private void RefreshStatusBarAfterDragSelectionChange()
