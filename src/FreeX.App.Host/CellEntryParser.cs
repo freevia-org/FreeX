@@ -22,8 +22,7 @@ public static class CellEntryParser
 
     public static ScalarValue ParseScalarValue(string text)
     {
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) &&
-            double.IsFinite(number))
+        if (TryParseFiniteNumber(text, out var number))
         {
             return new NumberValue(number);
         }
@@ -36,4 +35,9 @@ public static class CellEntryParser
 
         return new TextValue(text);
     }
+
+    private static bool TryParseFiniteNumber(string text, out double number) =>
+        (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out number) ||
+         double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number)) &&
+        double.IsFinite(number);
 }
