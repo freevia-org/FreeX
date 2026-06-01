@@ -9,6 +9,16 @@ namespace FreeX.App.UI;
 public partial class GridView
 {
     private static readonly ConcurrentDictionary<uint, string> ColumnHeaderCache = new();
+    private DrawingGroup? _headerBaseLayerCache;
+    private HeaderBaseLayerCacheKey _headerBaseLayerCacheKey;
+
+    private readonly record struct HeaderBaseLayerCacheKey(
+        ViewportModel Viewport,
+        double RowHeaderWidth,
+        double ColumnHeaderHeight,
+        bool UseR1C1ReferenceStyle,
+        string CultureName,
+        double PixelsPerDip);
 
     private void RenderFreezeDivider(DrawingContext dc)
     {
@@ -42,50 +52,141 @@ public partial class GridView
     {
         if (!ShowHeaders) return;
 
+        var viewport = Viewport!;
         var selectedRanges = SelectedRanges;
         var selRange = SelectedRange;
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var rowHeaderWidth = ActualRowHeaderWidth;
         var columnHeaderHeight = EffectiveColHeaderHeight;
 
-        foreach (var col in Viewport!.ColMetrics)
+        RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
+        RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
+    }
+
+    private void RenderHeaderBaseLayer(
+        DrawingContext dc,
+        ViewportModel viewport,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double pixelsPerDip)
+    {
+        var key = new HeaderBaseLayerCacheKey(
+            viewport,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            UseR1C1ReferenceStyle,
+            CultureInfo.CurrentCulture.Name,
+            pixelsPerDip);
+        if (_headerBaseLayerCache is { } cached && _headerBaseLayerCacheKey == key)
         {
-            bool inSel = IsColumnHeaderSelected(col.Col, selectedRanges, selRange);
-
-            var bg = inSel ? HeaderHighlightBrush : HeaderBackgroundBrush;
-            var rect = new Rect(col.LeftOffset + rowHeaderWidth, 0, col.Width, columnHeaderHeight);
-            dc.DrawRectangle(bg, GridPen, rect);
-
-            var text = GetDefaultFormattedText(
-                FormatColumnHeader(col.Col, UseR1C1ReferenceStyle),
-                11,
-                pixelsPerDip);
-
-            dc.DrawText(text, new Point(
-                rect.Left + (rect.Width - text.Width) / 2,
-                rect.Top + (rect.Height - text.Height) / 2));
+            dc.DrawDrawing(cached);
+            return;
         }
 
-        foreach (var row in Viewport!.RowMetrics)
-        {
-            bool inSel = IsRowHeaderSelected(row.Row, selectedRanges, selRange);
+        var rebuilt = BuildHeaderBaseLayerCache(viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
+        _headerBaseLayerCache = rebuilt;
+        _headerBaseLayerCacheKey = key;
+        dc.DrawDrawing(rebuilt);
+    }
 
-            var bg = inSel ? HeaderHighlightBrush : HeaderBackgroundBrush;
-            var rect = new Rect(0, row.TopOffset + columnHeaderHeight, rowHeaderWidth, row.Height);
-            dc.DrawRectangle(bg, GridPen, rect);
+    private DrawingGroup BuildHeaderBaseLayerCache(
+        ViewportModel viewport,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double pixelsPerDip)
+    {
+        var group = new DrawingGroup();
+        using (var groupContext = group.Open())
+            RenderHeaderBase(groupContext, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
 
-            var text = GetDefaultFormattedText(
-                row.Row.ToString(CultureInfo.InvariantCulture),
-                11,
-                pixelsPerDip);
+        if (group.CanFreeze)
+            group.Freeze();
 
-            dc.DrawText(text, new Point(
-                rect.Left + (rect.Width - text.Width) / 2,
-                rect.Top + (rect.Height - text.Height) / 2));
-        }
+        return group;
+    }
+
+    private void RenderHeaderBase(
+        DrawingContext dc,
+        ViewportModel viewport,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double pixelsPerDip)
+    {
+        foreach (var col in viewport.ColMetrics)
+            DrawColumnHeader(dc, col, rowHeaderWidth, columnHeaderHeight, HeaderBackgroundBrush, pixelsPerDip);
+
+        foreach (var row in viewport.RowMetrics)
+            DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, HeaderBackgroundBrush, pixelsPerDip);
 
         dc.DrawRectangle(HeaderBackgroundBrush, GridPen,
             new Rect(0, 0, rowHeaderWidth, columnHeaderHeight));
+    }
+
+    private void RenderSelectedHeaders(
+        DrawingContext dc,
+        ViewportModel viewport,
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridRange? selRange,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double pixelsPerDip)
+    {
+        if (selectedRanges is not { Count: > 0 } && selRange is null)
+            return;
+
+        foreach (var col in viewport.ColMetrics)
+        {
+            if (IsColumnHeaderSelected(col.Col, selectedRanges, selRange))
+                DrawColumnHeader(dc, col, rowHeaderWidth, columnHeaderHeight, HeaderHighlightBrush, pixelsPerDip);
+        }
+
+        foreach (var row in viewport.RowMetrics)
+        {
+            if (IsRowHeaderSelected(row.Row, selectedRanges, selRange))
+                DrawRowHeader(dc, row, rowHeaderWidth, columnHeaderHeight, HeaderHighlightBrush, pixelsPerDip);
+        }
+    }
+
+    private void DrawColumnHeader(
+        DrawingContext dc,
+        ColMetric col,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        Brush background,
+        double pixelsPerDip)
+    {
+        var rect = new Rect(col.LeftOffset + rowHeaderWidth, 0, col.Width, columnHeaderHeight);
+        dc.DrawRectangle(background, GridPen, rect);
+
+        var text = GetDefaultFormattedText(
+            FormatColumnHeader(col.Col, UseR1C1ReferenceStyle),
+            11,
+            pixelsPerDip);
+
+        dc.DrawText(text, new Point(
+            rect.Left + (rect.Width - text.Width) / 2,
+            rect.Top + (rect.Height - text.Height) / 2));
+    }
+
+    private void DrawRowHeader(
+        DrawingContext dc,
+        RowMetric row,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        Brush background,
+        double pixelsPerDip)
+    {
+        var rect = new Rect(0, row.TopOffset + columnHeaderHeight, rowHeaderWidth, row.Height);
+        dc.DrawRectangle(background, GridPen, rect);
+
+        var text = GetDefaultFormattedText(
+            row.Row.ToString(CultureInfo.InvariantCulture),
+            11,
+            pixelsPerDip);
+
+        dc.DrawText(text, new Point(
+            rect.Left + (rect.Width - text.Width) / 2,
+            rect.Top + (rect.Height - text.Height) / 2));
     }
 
     private static bool IsColumnHeaderSelected(uint column, IReadOnlyList<GridRange>? selectedRanges, GridRange? selectedRange)

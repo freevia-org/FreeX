@@ -158,20 +158,46 @@ public sealed class GridViewRenderPerformanceTests
     public void RenderHeaders_AvoidsPerHeaderLinqSelectionScans()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
-        var renderHeaders = source[
-            source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)..
-            source.IndexOf("internal static string FormatColumnHeader", StringComparison.Ordinal)];
+        var renderSelectedHeaders = source[
+            source.IndexOf("private void RenderSelectedHeaders(", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawColumnHeader(", StringComparison.Ordinal)];
         var renderFreezeDivider = source[
             source.IndexOf("private void RenderFreezeDivider(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)];
 
-        renderHeaders.Should().Contain("IsColumnHeaderSelected(col.Col, selectedRanges, selRange)");
-        renderHeaders.Should().Contain("IsRowHeaderSelected(row.Row, selectedRanges, selRange)");
-        renderHeaders.Should().Contain("foreach (var range in selectedRanges)");
-        renderHeaders.Should().NotContain(".Any(");
+        renderSelectedHeaders.Should().Contain("IsColumnHeaderSelected(col.Col, selectedRanges, selRange)");
+        renderSelectedHeaders.Should().Contain("IsRowHeaderSelected(row.Row, selectedRanges, selRange)");
+        source.Should().Contain("foreach (var range in selectedRanges)");
+        renderSelectedHeaders.Should().NotContain(".Any(");
         renderFreezeDivider.Should().Contain("FindRowMetric(Viewport.RowMetrics, fp.Rows)");
         renderFreezeDivider.Should().Contain("FindColMetric(Viewport.ColMetrics, fp.Cols)");
         renderFreezeDivider.Should().NotContain("FirstOrDefault");
+    }
+
+    [Fact]
+    public void RenderHeaders_CachesUnselectedHeaderLayerAcrossSelectionRepaints()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var renderHeaders = source[
+            source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderHeaderBaseLayer(", StringComparison.Ordinal)];
+        var renderHeaderBaseLayer = source[
+            source.IndexOf("private void RenderHeaderBaseLayer(", StringComparison.Ordinal)..
+            source.IndexOf("private DrawingGroup BuildHeaderBaseLayerCache(", StringComparison.Ordinal)];
+        var buildHeaderBaseLayer = source[
+            source.IndexOf("private DrawingGroup BuildHeaderBaseLayerCache(", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderHeaderBase(", StringComparison.Ordinal)];
+
+        source.Should().Contain("private DrawingGroup? _headerBaseLayerCache;");
+        source.Should().Contain("private HeaderBaseLayerCacheKey _headerBaseLayerCacheKey;");
+        renderHeaders.Should().Contain("RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
+        renderHeaders.Should().Contain("RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
+        renderHeaderBaseLayer.Should().Contain("_headerBaseLayerCache is { } cached && _headerBaseLayerCacheKey == key");
+        renderHeaderBaseLayer.Should().Contain("dc.DrawDrawing(cached);");
+        renderHeaderBaseLayer.Should().NotContain("SelectedRange");
+        renderHeaderBaseLayer.Should().NotContain("SelectedRanges");
+        buildHeaderBaseLayer.Should().Contain("RenderHeaderBase(groupContext, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
+        buildHeaderBaseLayer.Should().Contain("group.Freeze();");
     }
 
     [Fact]
