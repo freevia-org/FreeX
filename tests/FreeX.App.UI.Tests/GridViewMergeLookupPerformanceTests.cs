@@ -1,5 +1,10 @@
 using System;
+using System.Collections;
+using System.Diagnostics;
 using System.IO;
+using System.Reflection;
+using System.Threading;
+using FreeX.Core.Model;
 using FluentAssertions;
 
 namespace FreeX.App.UI.Tests;
@@ -34,10 +39,62 @@ public sealed class GridViewMergeLookupPerformanceTests
         rebuildMethod.Should().Contain("foreach (var colMetric in Viewport.ColMetrics)");
         rebuildMethod.Should().Contain("foreach (var merge in rowMerges)");
         rebuildMethod.Should().NotContain("foreach (var merge in MergedRegions)");
-        rowIndexMethod.Should().Contain("foreach (var rowMetric in Viewport!.RowMetrics)");
         rowIndexMethod.Should().Contain("foreach (var merge in MergedRegions!)");
+        rowIndexMethod.Should().Contain("merge.End.Row < firstRow");
+        rowIndexMethod.Should().Contain("merge.Start.Row > lastRow");
+        rowIndexMethod.Should().Contain("merge.End.Col < firstColumn");
+        rowIndexMethod.Should().Contain("merge.Start.Col > lastColumn");
+        rowIndexMethod.Should().Contain("foreach (var rowMetric in rowMetrics)");
         rowIndexMethod.Should().NotContain("r <= merge.End.Row");
         rowIndexMethod.Should().NotContain("c <= merge.End.Col");
+    }
+
+    [Fact]
+    public void RebuildMergeLookup_SkipsOffscreenMergedRegionsBeforeVisibleRowExpansion()
+    {
+        RunOnStaThread(() =>
+        {
+            const int offscreenMergeCount = 80_000;
+            const int iterations = 8;
+
+            var grid = new GridView
+            {
+                Viewport = CreateViewport(rowCount: 40, columnCount: 20),
+                MergedRegions = CreateMergedRegions(offscreenMergeCount)
+            };
+            var rebuild = typeof(GridView).GetMethod("RebuildMergeLookup", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var clear = typeof(GridView).GetMethod("ClearMergeLookupCache", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var lookupField = typeof(GridView).GetField("_mergeLookup", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+            rebuild.Invoke(grid, null);
+            GetMergeLookupCount(grid, lookupField).Should().Be(64);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var stopwatch = Stopwatch.StartNew();
+            for (var i = 0; i < iterations; i++)
+            {
+                clear.Invoke(grid, null);
+                rebuild.Invoke(grid, null);
+            }
+
+            stopwatch.Stop();
+            var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+            Console.WriteLine(
+                "PERF GRID_MERGE_LOOKUP_OFFSCREEN " +
+                $"offscreen_merges={offscreenMergeCount:N0} visible_rows=40 visible_cols=20 " +
+                $"iterations={iterations} total_ms={stopwatch.Elapsed.TotalMilliseconds:F2} " +
+                $"mean_ms={stopwatch.Elapsed.TotalMilliseconds / iterations:F2} " +
+                $"allocated_bytes={allocatedBytes:N0}");
+
+            GetMergeLookupCount(grid, lookupField).Should().Be(64);
+            stopwatch.Elapsed.TotalMilliseconds.Should().BeLessThan(750);
+            allocatedBytes.Should().BeLessThan(6_000_000);
+        });
     }
 
     [Fact]
@@ -102,5 +159,69 @@ public sealed class GridViewMergeLookupPerformanceTests
         }
 
         throw new FileNotFoundException("Could not locate workspace file.", Path.Combine(relativeParts));
+    }
+
+    private static ViewportModel CreateViewport(int rowCount, int columnCount)
+    {
+        var rows = new RowMetric[rowCount];
+        for (var i = 0; i < rows.Length; i++)
+            rows[i] = new RowMetric((uint)(i + 1), 20, i * 20);
+
+        var columns = new ColMetric[columnCount];
+        for (var i = 0; i < columns.Length; i++)
+            columns[i] = new ColMetric((uint)(i + 1), 64, i * 64);
+
+        return new ViewportModel([], rows, columns);
+    }
+
+    private static IReadOnlyList<GridRange> CreateMergedRegions(int offscreenMergeCount)
+    {
+        var sheetId = new SheetId(Guid.NewGuid());
+        var regions = new List<GridRange>(offscreenMergeCount + 4)
+        {
+            CreateRange(sheetId, 5, 5, 6, 7),
+            CreateRange(sheetId, 25, 10, 27, 12),
+            CreateRange(sheetId, 38, 18, 44, 22),
+            CreateRange(sheetId, 1, 1, 40, 1)
+        };
+
+        for (var i = 0; i < offscreenMergeCount; i++)
+        {
+            var row = (uint)(1_000 + i * 2);
+            regions.Add(CreateRange(sheetId, row, 100, row, 102));
+        }
+
+        return regions;
+    }
+
+    private static GridRange CreateRange(SheetId sheetId, uint startRow, uint startColumn, uint endRow, uint endColumn) =>
+        new(
+            new CellAddress(sheetId, startRow, startColumn),
+            new CellAddress(sheetId, endRow, endColumn));
+
+    private static int GetMergeLookupCount(GridView grid, FieldInfo lookupField) =>
+        ((IDictionary)lookupField.GetValue(grid)!).Count;
+
+    private static void RunOnStaThread(Action action)
+    {
+        Exception? exception = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                exception = ex;
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        if (exception is not null)
+            throw exception;
     }
 }
