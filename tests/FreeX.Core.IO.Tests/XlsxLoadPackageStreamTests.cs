@@ -89,7 +89,7 @@ public sealed class XlsxLoadPackageStreamTests
         using var source = new MemoryStream(buffer, index: 1, count: 6, writable: true, publiclyVisible: true);
         source.Position = 2;
 
-        using var package = CreateLoadPackageStream(source);
+        using var package = CreateLoadPackageStream(source, expectedCanReuseBufferForSnapshot: false);
 
         package.Length.Should().Be(4);
         package.Position.Should().Be(4);
@@ -111,7 +111,7 @@ public sealed class XlsxLoadPackageStreamTests
         using var source = new MemoryStream(buffer, writable: true);
         source.Position = 1;
 
-        using var package = CreateLoadPackageStream(source);
+        using var package = CreateLoadPackageStream(source, expectedCanReuseBufferForSnapshot: true);
 
         source.Position.Should().Be(source.Length);
         buffer[1] = 42;
@@ -126,7 +126,7 @@ public sealed class XlsxLoadPackageStreamTests
         using var source = new NonMemoryReadStream(buffer);
         source.Position = 1;
 
-        using var package = CreateLoadPackageStream(source);
+        using var package = CreateLoadPackageStream(source, expectedCanReuseBufferForSnapshot: true);
 
         source.Position.Should().Be(source.Length);
         buffer[1] = 42;
@@ -134,15 +134,40 @@ public sealed class XlsxLoadPackageStreamTests
         package.ReadByte().Should().Be(2);
     }
 
-    private static MemoryStream CreateLoadPackageStream(Stream stream)
+    private static MemoryStream CreateLoadPackageStream(
+        Stream stream,
+        bool expectedCanReuseBufferForSnapshot)
     {
         var method = typeof(XlsxFileAdapter).GetMethod(
             "CreateLoadPackageStream",
             BindingFlags.NonPublic | BindingFlags.Static);
 
         method.Should().NotBeNull();
-        var package = method!.Invoke(null, [stream]).Should().BeOfType<MemoryStream>().Subject;
-        return package;
+        var loadPackage = method!.Invoke(null, [stream]);
+        loadPackage.Should().NotBeNull();
+
+        var loadPackageType = loadPackage!.GetType();
+        var packageStreamProperty = loadPackageType.GetProperty(
+            "PackageStream",
+            BindingFlags.Instance | BindingFlags.Public);
+        packageStreamProperty.Should().NotBeNull();
+        var packageStream = packageStreamProperty!
+            .GetValue(loadPackage)
+            .Should()
+            .BeOfType<MemoryStream>()
+            .Subject;
+        var canReuseBufferForSnapshotProperty = loadPackageType.GetProperty(
+            "CanReuseBufferForSnapshot",
+            BindingFlags.Instance | BindingFlags.Public);
+        canReuseBufferForSnapshotProperty.Should().NotBeNull();
+        var canReuseBufferForSnapshot = canReuseBufferForSnapshotProperty!
+            .GetValue(loadPackage)
+            .Should()
+            .BeOfType<bool>()
+            .Subject;
+
+        canReuseBufferForSnapshot.Should().Be(expectedCanReuseBufferForSnapshot);
+        return packageStream;
     }
 
     private static MemoryStream CreateStyleOnlyStrippedPackage(MemoryStream package)
