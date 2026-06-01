@@ -719,6 +719,36 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Save_OrdersValueCellsInsertedOutOfOrder()
+    {
+        var workbook = new Workbook("XmlUnorderedValues");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("B2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("C1"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+        stream.Position = 0;
+
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var rows = document.Descendants(ss + "Row").ToList();
+        rows.Select(row => row.Attribute(ss + "Index")!.Value).Should().Equal("1", "2");
+        rows[0].Elements(ss + "Cell").Select(cell => cell.Attribute(ss + "Index")!.Value).Should().Equal("1", "3");
+        rows[1].Elements(ss + "Cell").Select(cell => cell.Attribute(ss + "Index")!.Value).Should().Equal("1", "2");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.GetCell(1, 1)!.Value.Should().Be(new TextValue("A1"));
+        loaded.GetCell(1, 3)!.Value.Should().Be(new TextValue("C1"));
+        loaded.GetCell(2, 1)!.Value.Should().Be(new TextValue("A2"));
+        loaded.GetCell(2, 2)!.Value.Should().Be(new TextValue("B2"));
+    }
+
+    [Fact]
     public void Load_AdvancesImplicitCellIndexPastMergeAcrossSpan()
     {
         using var stream = StreamFromString("""

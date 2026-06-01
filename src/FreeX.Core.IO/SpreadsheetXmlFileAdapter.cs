@@ -846,23 +846,79 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         Sheet sheet,
         IReadOnlyDictionary<StyleId, string> styleIds)
     {
-        using var cellEnumerator = sheet.GetOccupiedCellMap()
-            .OrderBy(entry => entry.Key.Row)
-            .ThenBy(entry => entry.Key.Col)
-            .GetEnumerator();
-        using var layoutRowEnumerator = sheet.RowHeights.Keys
-            .Where(IsValidRowLayoutIndex)
-            .Concat(sheet.HiddenRows.Where(IsValidRowLayoutIndex))
-            .Distinct()
-            .OrderBy(row => row)
-            .GetEnumerator();
+        var occupiedCells = sheet.GetOccupiedCellMap();
+        var layoutRows = BuildSortedRowLayoutIndexes(sheet);
+        if (IsRowColumnOrdered(occupiedCells))
+        {
+            foreach (var rowElement in ToOrderedValueCellRowElements(sheet, occupiedCells, layoutRows, styleIds))
+                yield return rowElement;
 
+            yield break;
+        }
+
+        var cellsByRow = BuildValueCellsByRow(occupiedCells);
+        var cellRows = new List<uint>(cellsByRow.Keys);
+        cellRows.Sort();
+
+        var cellRowIndex = 0;
+        var layoutRowIndex = 0;
+        while (cellRowIndex < cellRows.Count || layoutRowIndex < layoutRows.Count)
+        {
+            var cellRow = cellRowIndex < cellRows.Count ? cellRows[cellRowIndex] : uint.MaxValue;
+            var layoutRow = layoutRowIndex < layoutRows.Count ? layoutRows[layoutRowIndex] : uint.MaxValue;
+            var rowIndex = cellRow <= layoutRow ? cellRow : layoutRow;
+            var rowElement = CreateRowElement(sheet, rowIndex);
+
+            if (cellRow == rowIndex)
+            {
+                foreach (var cell in cellsByRow[rowIndex])
+                {
+                    rowElement.Add(ToCellElement(
+                        new SpreadsheetXmlCell(rowIndex, cell.Col, cell.Cell, null, null, null, null),
+                        styleIds));
+                }
+
+                cellRowIndex++;
+            }
+
+            yield return rowElement;
+
+            if (layoutRow == rowIndex)
+                layoutRowIndex++;
+        }
+    }
+
+    private static bool IsRowColumnOrdered(IReadOnlyDictionary<(uint Row, uint Col), Cell> cells)
+    {
+        var hasPrevious = false;
+        var previousRow = 0u;
+        var previousCol = 0u;
+        foreach (var ((row, col), _) in cells)
+        {
+            if (hasPrevious && (row < previousRow || (row == previousRow && col < previousCol)))
+                return false;
+
+            hasPrevious = true;
+            previousRow = row;
+            previousCol = col;
+        }
+
+        return true;
+    }
+
+    private static IEnumerable<XElement> ToOrderedValueCellRowElements(
+        Sheet sheet,
+        IReadOnlyDictionary<(uint Row, uint Col), Cell> cells,
+        IReadOnlyList<uint> layoutRows,
+        IReadOnlyDictionary<StyleId, string> styleIds)
+    {
+        using var cellEnumerator = cells.GetEnumerator();
         var hasCell = cellEnumerator.MoveNext();
-        var hasLayoutRow = layoutRowEnumerator.MoveNext();
-        while (hasCell || hasLayoutRow)
+        var layoutRowIndex = 0;
+        while (hasCell || layoutRowIndex < layoutRows.Count)
         {
             var cellRow = hasCell ? cellEnumerator.Current.Key.Row : uint.MaxValue;
-            var layoutRow = hasLayoutRow ? layoutRowEnumerator.Current : uint.MaxValue;
+            var layoutRow = layoutRowIndex < layoutRows.Count ? layoutRows[layoutRowIndex] : uint.MaxValue;
             var rowIndex = cellRow <= layoutRow ? cellRow : layoutRow;
             var rowElement = CreateRowElement(sheet, rowIndex);
 
@@ -877,9 +933,63 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
             yield return rowElement;
 
-            if (hasLayoutRow && layoutRowEnumerator.Current == rowIndex)
-                hasLayoutRow = layoutRowEnumerator.MoveNext();
+            if (layoutRow == rowIndex)
+                layoutRowIndex++;
         }
+    }
+
+    private static Dictionary<uint, List<SpreadsheetXmlValueCell>> BuildValueCellsByRow(
+        IReadOnlyDictionary<(uint Row, uint Col), Cell> cells)
+    {
+        var rowCounts = new Dictionary<uint, int>(Math.Min(cells.Count, 1024));
+        foreach (var ((row, _), _) in cells)
+        {
+            if (!rowCounts.TryAdd(row, 1))
+                rowCounts[row]++;
+        }
+
+        var cellsByRow = new Dictionary<uint, List<SpreadsheetXmlValueCell>>(rowCounts.Count);
+        foreach (var (row, count) in rowCounts)
+            cellsByRow.Add(row, new List<SpreadsheetXmlValueCell>(count));
+
+        foreach (var ((row, col), cell) in cells)
+            cellsByRow[row].Add(new SpreadsheetXmlValueCell(col, cell));
+
+        foreach (var rowCells in cellsByRow.Values)
+            rowCells.Sort(static (left, right) => left.Col.CompareTo(right.Col));
+
+        return cellsByRow;
+    }
+
+    private static List<uint> BuildSortedRowLayoutIndexes(Sheet sheet)
+    {
+        var rows = new List<uint>(sheet.RowHeights.Count + sheet.HiddenRows.Count);
+        foreach (var row in sheet.RowHeights.Keys)
+        {
+            if (IsValidRowLayoutIndex(row))
+                rows.Add(row);
+        }
+
+        foreach (var row in sheet.HiddenRows)
+        {
+            if (IsValidRowLayoutIndex(row))
+                rows.Add(row);
+        }
+
+        rows.Sort();
+        var writeIndex = 0;
+        for (var readIndex = 0; readIndex < rows.Count; readIndex++)
+        {
+            if (readIndex > 0 && rows[readIndex] == rows[readIndex - 1])
+                continue;
+
+            rows[writeIndex++] = rows[readIndex];
+        }
+
+        if (writeIndex < rows.Count)
+            rows.RemoveRange(writeIndex, rows.Count - writeIndex);
+
+        return rows;
     }
 
     private static XElement ToRowElement(
@@ -1121,4 +1231,6 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         string? HyperlinkTarget,
         HyperlinkMetadata? HyperlinkMetadata,
         string? Comment);
+
+    private readonly record struct SpreadsheetXmlValueCell(uint Col, Cell Cell);
 }
