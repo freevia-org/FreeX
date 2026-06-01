@@ -345,6 +345,8 @@ public sealed class GridViewAutofillTests
         dragTarget.Should().Contain("TryFindRowEndpoints(viewport.RowMetrics");
         dragTarget.Should().Contain("TryFindColumnEndpoints(viewport.ColMetrics");
         dragTarget.Should().Contain("foreach (var metric in metrics)");
+        dragTarget.Should().Contain("if (metric.Row > bottomRow)");
+        dragTarget.Should().Contain("if (metric.Col > rightColumn)");
         dragTarget.Should().Contain("if (midY > boundBottom)");
         dragTarget.Should().Contain("if (midX > boundRight)");
         dragTarget.Should().Contain("break;");

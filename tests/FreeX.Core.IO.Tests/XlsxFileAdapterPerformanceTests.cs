@@ -146,6 +146,15 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void LoadSourcePackageCapture_CountsStyleOnlyEntriesTowardFingerprintLimit()
+    {
+        var snapshotSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
+
+        snapshotSource.Should().Contain("sheet.HasStyleOnlyCells");
+        snapshotSource.Should().Contain("sheet.GetStyleOnlyEntries()");
+    }
+
+    [Fact]
     public void Load_FromCallerOwnedMemoryStream_KeepsSourceSnapshotIndependent()
     {
         var package = CreateDenseXlsxPackage();
