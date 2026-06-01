@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.IO;
@@ -15,12 +16,36 @@ internal static partial class XlsxPivotTableWriter
             _ => "none"
         };
 
-    private static string ToPivotReportLayoutText(PivotReportLayout layout) =>
+    // Expresses the FreeX report layout as the OOXML CT_pivotTableDefinition layout attributes. There is
+    // no single 'reportLayout' attribute in the schema; Excel derives the layout from these flags.
+    private static XAttribute[] PivotReportLayoutAttributes(PivotReportLayout layout) =>
         layout switch
         {
-            PivotReportLayout.Compact => "compact",
-            PivotReportLayout.Outline => "outline",
-            _ => "tabular"
+            PivotReportLayout.Compact =>
+            [
+                new XAttribute("compact", "1"),
+                new XAttribute("compactData", "1"),
+                new XAttribute("outline", "1"),
+                new XAttribute("outlineData", "0"),
+                new XAttribute("gridDropZones", "0"),
+            ],
+            PivotReportLayout.Outline =>
+            [
+                new XAttribute("compact", "0"),
+                new XAttribute("compactData", "0"),
+                new XAttribute("outline", "1"),
+                new XAttribute("outlineData", "1"),
+                new XAttribute("gridDropZones", "0"),
+            ],
+            // Tabular
+            _ =>
+            [
+                new XAttribute("compact", "0"),
+                new XAttribute("compactData", "0"),
+                new XAttribute("outline", "0"),
+                new XAttribute("outlineData", "0"),
+                new XAttribute("gridDropZones", "1"),
+            ],
         };
 
     private static string ToPivotShowValuesAsText(PivotShowValuesAs showValuesAs) =>

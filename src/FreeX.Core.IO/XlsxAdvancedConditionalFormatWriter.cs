@@ -80,7 +80,10 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             List<ConditionalFormat>? newX14DataBars = null;
             foreach (var cf in advancedRules)
             {
-                root.Add(ToAdvancedConditionalFormattingXml(cf, workbookNs, dxfIds));
+                XlsxWorksheetConditionalFormattingPlacement.AddConditionalFormatting(
+                    root,
+                    workbookNs,
+                    ToAdvancedConditionalFormattingXml(cf, workbookNs, dxfIds));
                 if (cf.RuleType == CfRuleType.DataBar &&
                     XlsxAdvancedConditionalFormatMetadata.RequiresGeneratedOrExistingX14DataBar(cf))
                 {
@@ -429,19 +432,24 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 string.IsNullOrWhiteSpace(cf.DataBarAxisPosition) ? null : new XAttribute("axisPosition", cf.DataBarAxisPosition),
                 ToX14DataBarCfvoXml(x14Ns, xmNs, cf.DataBarMinThresholdType, cf.DataBarMinThresholdValue, isMinimum: true),
                 ToX14DataBarCfvoXml(x14Ns, xmNs, cf.DataBarMaxThresholdType, cf.DataBarMaxThresholdValue, isMinimum: false),
-                ToX14ColorXml(x14Ns, "axisColor", cf.DataBarAxisColor),
+                // x14 CT_DataBar requires this child order: cfvo, cfvo, fillColor?, borderColor?,
+                // negativeFillColor?, negativeBorderColor?, axisColor?. axisColor must come last.
                 ToX14ColorXml(x14Ns, "negativeFillColor", cf.DataBarNegativeFillColor),
-                ToX14ColorXml(x14Ns, "negativeBorderColor", cf.DataBarNegativeBorderColor));
+                ToX14ColorXml(x14Ns, "negativeBorderColor", cf.DataBarNegativeBorderColor),
+                ToX14ColorXml(x14Ns, "axisColor", cf.DataBarAxisColor));
             AddNativeX14DataBarChildren(dataBar, cf, x14Ns);
 
+            // In the x14 (2009/9/main) schema, CT_ConditionalFormatting carries the target range as a
+            // trailing <xm:sqref> child element (after the cfRule), not as a 'sqref' attribute. Emitting
+            // it as an attribute produces schema-invalid OOXML that Excel refuses to open.
             x14CfElements.Add(new XElement(
                 x14Ns + "conditionalFormatting",
-                new XAttribute("sqref", cf.AppliesTo.ToString()),
                 new XElement(
                     x14Ns + "cfRule",
                     new XAttribute("type", "dataBar"),
                     new XAttribute("id", GetX14DataBarId(cf)),
-                    dataBar)));
+                    dataBar),
+                new XElement(xmNs + "sqref", cf.AppliesTo.ToString())));
         }
 
         worksheetRoot.Add(new XElement(
