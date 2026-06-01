@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using System.Printing;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
@@ -754,11 +755,53 @@ public class ExportPlannerTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));
 
         source.Should().Contain("AutomationProperties.SetHelpText(_selectionButton, UiText.Get(\"ExportOptions_SelectACellRangeBeforeExportingTheSelection\"));");
-        source.Should().Contain("AutomationProperties.SetHelpText(_pdfABox, UiText.Get(\"ExportOptions_FreeXSCurrentPdfExporterCannotWritePdfAConformanceMetadata\"));");
-        source.Should().Contain("AutomationProperties.SetHelpText(_structureTagsBox, UiText.Get(\"ExportOptions_FreeXSCurrentPdfExporterCannotWriteTaggedPdfStructureTrees\"));");
+        source.Should().Contain("ApplyUnsupportedPdfPublishOptionHelpText(format);");
+        source.Should().Contain("UiText.Get(\"ExportOptions_FreeXSCurrentPdfExporterCannotWritePdfAConformanceMetadata\")");
+        source.Should().Contain("UiText.Get(\"ExportOptions_FreeXSCurrentPdfExporterCannotWriteTaggedPdfStructureTrees\")");
+        source.Should().Contain("UiText.Get(\"Export_PdfAPdfOnlyUnsupported\")");
+        source.Should().Contain("UiText.Get(\"Export_TaggedPdfPdfOnlyUnsupported\")");
         source.Should().Contain("private static void DisableOption(Control control, string helpText)");
         source.Should().Contain("AutomationProperties.SetHelpText(control, helpText);");
         source.Should().Contain("DisableOption(_minimumSizeButton, UiText.Get(\"Export_QualityMinimumSizePdfOnly\"));");
+    }
+
+    [Theory]
+    [InlineData("pdf", "ExportOptions_FreeXSCurrentPdfExporterCannotWritePdfAConformanceMetadata", "ExportOptions_FreeXSCurrentPdfExporterCannotWriteTaggedPdfStructureTrees")]
+    [InlineData("xps", "Export_PdfAPdfOnlyUnsupported", "Export_TaggedPdfPdfOnlyUnsupported")]
+    public void ExportOptionsDialog_UnsupportedPdfPublishChoicesUseFormatAwareHelpText(
+        string formatName,
+        string expectedPdfAHelpTextKey,
+        string expectedStructureTagsHelpTextKey)
+    {
+        var format = formatName == "xps"
+            ? ExportFormat.Xps
+            : ExportFormat.Pdf;
+
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ExportOptionsDialog(hasSelection: true, format: format);
+            try
+            {
+                var pdfABox = FindLogicalChildren<CheckBox>(dialog)
+                    .Single(box => Equals(box.Content, UiText.Get("ExportOptions_PdfACompliantNotSupported")));
+                var structureTagsBox = FindLogicalChildren<CheckBox>(dialog)
+                    .Single(box => Equals(box.Content, UiText.Get("ExportOptions_DocumentStructureTagsNotSupported")));
+                var expectedPdfAHelpText = UiText.Get(expectedPdfAHelpTextKey);
+                var expectedStructureTagsHelpText = UiText.Get(expectedStructureTagsHelpTextKey);
+
+                pdfABox.IsEnabled.Should().BeFalse();
+                pdfABox.ToolTip.Should().Be(expectedPdfAHelpText);
+                AutomationProperties.GetHelpText(pdfABox).Should().Be(expectedPdfAHelpText);
+
+                structureTagsBox.IsEnabled.Should().BeFalse();
+                structureTagsBox.ToolTip.Should().Be(expectedStructureTagsHelpText);
+                AutomationProperties.GetHelpText(structureTagsBox).Should().Be(expectedStructureTagsHelpText);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -3818,4 +3861,17 @@ public class ExportPlannerTests
 
     private static string? ReadPageLayout(PdfDocument pdf) =>
         pdf.Internals.Catalog.Elements.GetName("/PageLayout");
+
+    private static IEnumerable<T> FindLogicalChildren<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            if (child is T match)
+                yield return match;
+
+            foreach (var descendant in FindLogicalChildren<T>(child))
+                yield return descendant;
+        }
+    }
 }
