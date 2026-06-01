@@ -20,7 +20,8 @@ internal static class NativeJsonScalarValueMapper
     public static SerializedScalarValue SerializeWithType(ScalarValue value) => value switch
     {
         BlankValue => default,
-        NumberValue n => new SerializedScalarValue(n.Value.ToString(CultureInfo.InvariantCulture), "n"),
+        NumberValue n when double.IsFinite(n.Value) => new SerializedScalarValue(FormatNumber(n.Value), "n"),
+        NumberValue n => new SerializedScalarValue(FormatNumber(n.Value), "t"),
         BoolValue b => new SerializedScalarValue(b.Value ? "TRUE" : "FALSE", "b"),
         TextValue t => new SerializedScalarValue(t.Value, "t"),
         ErrorValue e => new SerializedScalarValue(e.Code, "e"),
@@ -30,7 +31,7 @@ internal static class NativeJsonScalarValueMapper
     public static string? Serialize(ScalarValue value) => value switch
     {
         BlankValue => null,
-        NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
+        NumberValue n => FormatNumber(n.Value),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         TextValue t => t.Value,
         ErrorValue e => e.Code,
@@ -39,7 +40,8 @@ internal static class NativeJsonScalarValueMapper
 
     public static string? GetValueType(ScalarValue value) => value switch
     {
-        NumberValue => "n",
+        NumberValue n when double.IsFinite(n.Value) => "n",
+        NumberValue => "t",
         BoolValue => "b",
         TextValue => "t",
         ErrorValue => "e",
@@ -86,4 +88,7 @@ internal static class NativeJsonScalarValueMapper
         return double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out number) &&
             double.IsFinite(number);
     }
+
+    private static string FormatNumber(double value) =>
+        value.ToString(CultureInfo.InvariantCulture);
 }

@@ -121,7 +121,7 @@ public partial class MainWindow
 
     private void SheetTab_LabelMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (e.ClickCount != 2) return;
+        if (e.ChangedButton != MouseButton.Left || e.ClickCount != 2) return;
         var tab = (sender as System.Windows.FrameworkElement)?.DataContext as SheetTabViewModel;
         if (tab is null) return;
         RenameSheetFromTab(tab);
