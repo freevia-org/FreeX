@@ -340,6 +340,34 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void SelectionOnlyInvalidations_ReusePreSelectionLayerCache()
+    {
+        var properties = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var dispatch = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
+        var cache = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderSurfaceCache.cs"));
+        var onRender = dispatch[
+            dispatch.IndexOf("protected override void OnRender", StringComparison.Ordinal)..
+            dispatch.IndexOf("private void RenderPreSelectionLayers", StringComparison.Ordinal)];
+
+        properties.Should().Contain("OnSelectionVisualPropertyChanged");
+        properties.Should().Contain("grid.MarkSelectionVisualOnlyChange();");
+        dispatch.Should().Contain("RenderPreSelectionLayersWithCache(dc, skipHeavyLayers, isLiveResizing);");
+        cache.Should().Contain("RenderPreSelectionLayers(dc, skipHeavyLayers, isLiveResizing);");
+        cache.Should().Contain("_selectionVisualOnlyChangePending &&");
+        cache.Should().Contain("dc.DrawDrawing(cached);");
+        cache.Should().Contain("BuildPreSelectionLayerCache(skipHeavyLayers, isLiveResizing)");
+        cache.Should().NotContain("SelectedRange");
+        cache.Should().NotContain("SelectedRanges");
+
+        onRender.IndexOf("RenderHeaders(dc);", StringComparison.Ordinal)
+            .Should().BeLessThan(onRender.IndexOf("RenderPreSelectionLayersWithCache", StringComparison.Ordinal));
+        onRender.IndexOf("RenderPreSelectionLayersWithCache", StringComparison.Ordinal)
+            .Should().BeLessThan(onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal));
+        onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal)
+            .Should().BeLessThan(onRender.IndexOf("RenderPostSelectionLayers", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void LiveResizeContinuation_PaintsExpandedGridWithoutViewportRefresh()
     {
         var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));

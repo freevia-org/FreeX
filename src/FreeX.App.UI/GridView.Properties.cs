@@ -45,7 +45,7 @@ public partial class GridView
 
     public static readonly DependencyProperty SelectedRangeProperty =
         DependencyProperty.Register(nameof(SelectedRange), typeof(GridRange?), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnSelectionVisualPropertyChanged));
     public GridRange? SelectedRange
     {
         get => (GridRange?)GetValue(SelectedRangeProperty);
@@ -81,7 +81,7 @@ public partial class GridView
 
     public static readonly DependencyProperty SelectedRangesProperty =
         DependencyProperty.Register(nameof(SelectedRanges), typeof(IReadOnlyList<GridRange>), typeof(GridView),
-            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnSelectionVisualPropertyChanged));
     public IReadOnlyList<GridRange>? SelectedRanges
     {
         get => (IReadOnlyList<GridRange>?)GetValue(SelectedRangesProperty);
@@ -393,6 +393,13 @@ public partial class GridView
 
         grid.ClearChartRenderCache();
         grid.ClearRenderLookupCache();
+        grid.ClearPreSelectionLayerCache();
+    }
+
+    private static void OnSelectionVisualPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is GridView grid)
+            grid.MarkSelectionVisualOnlyChange();
     }
 
     // Merge lookup (rebuilt once per render pass, O(1) per cell)

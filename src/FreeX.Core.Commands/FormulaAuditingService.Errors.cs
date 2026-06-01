@@ -1,6 +1,7 @@
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace FreeX.Core.Commands;
@@ -57,20 +58,18 @@ public static partial class FormulaAuditingService
 
     public static IReadOnlyList<FormulaErrorIssue> FindFormulaErrorIssues(Workbook workbook, SheetId? sheetId = null)
     {
-        var sheetOrder = workbook.Sheets
-            .Select((sheet, index) => (sheet.Id, index))
-            .ToDictionary(x => x.Id, x => x.index);
-
-        var result = FindFormulaErrors(workbook, sheetId)
-            .Select(error => new FormulaErrorIssue(
+        var result = new List<FormulaErrorIssue>();
+        foreach (var error in FindFormulaErrors(workbook, sheetId))
+        {
+            result.Add(new FormulaErrorIssue(
                 error.SheetId,
                 error.SheetName,
                 error.Address,
                 error.Address.ToA1(),
                 error.Error.Code,
                 error.FormulaText is null ? null : "=" + error.FormulaText,
-                DescribeError(error.Error)))
-            .ToList();
+                DescribeError(error.Error)));
+        }
 
         if (!workbook.DisabledFormulaErrorCodes.Contains(NumberStoredAsTextErrorCode))
             result.AddRange(FindNumbersStoredAsTextIssues(workbook, sheetId));
@@ -90,11 +89,32 @@ public static partial class FormulaAuditingService
         if (!workbook.DisabledFormulaErrorCodes.Contains(UnlockedFormulaCellsErrorCode))
             result.AddRange(FindUnlockedFormulaCellIssues(workbook, sheetId));
 
-        return result
-            .OrderBy(issue => sheetOrder.GetValueOrDefault(issue.SheetId, int.MaxValue))
-            .ThenBy(issue => issue.Address.Row)
-            .ThenBy(issue => issue.Address.Col)
-            .ToList();
+        if (result.Count <= 1)
+            return result;
+
+        var sheetOrder = workbook.Sheets
+            .Select((sheet, index) => (sheet.Id, index))
+            .ToDictionary(x => x.Id, x => x.index);
+
+        result.Sort((left, right) => CompareFormulaIssues(left, right, sheetOrder));
+        return result;
+    }
+
+    private static int CompareFormulaIssues(
+        FormulaErrorIssue left,
+        FormulaErrorIssue right,
+        IReadOnlyDictionary<SheetId, int> sheetOrder)
+    {
+        var sheetComparison = sheetOrder
+            .GetValueOrDefault(left.SheetId, int.MaxValue)
+            .CompareTo(sheetOrder.GetValueOrDefault(right.SheetId, int.MaxValue));
+        if (sheetComparison != 0)
+            return sheetComparison;
+
+        var rowComparison = left.Address.Row.CompareTo(right.Address.Row);
+        return rowComparison != 0
+            ? rowComparison
+            : left.Address.Col.CompareTo(right.Address.Col);
     }
 
     internal static bool HasIgnorableFormulaIssue(Workbook workbook, SheetId sheetId, CellAddress address, Cell cell) =>
@@ -342,6 +362,9 @@ public static partial class FormulaAuditingService
         if (!cell.HasFormula || string.IsNullOrWhiteSpace(cell.FormulaText))
             return false;
 
+        if (cell.FormulaText.IndexOf("SUM", StringComparison.OrdinalIgnoreCase) < 0)
+            return false;
+
         foreach (var ranges in ExtractSumRangeGroups(sheetId, cell.FormulaText))
         {
             var sameSheetRanges = ranges
@@ -534,25 +557,120 @@ public static partial class FormulaAuditingService
         return new CellAddress(sheetId, row, col);
     }
 
-    private static string NormalizeFormulaPattern(CellAddress address, string formulaText) =>
-        Regex.Replace(
-            formulaText,
-            @"(?<![A-Za-z0-9_])\$?([A-Za-z]{1,3})\$?([0-9]{1,7})(?![A-Za-z0-9_])",
-            match =>
+    private static string NormalizeFormulaPattern(CellAddress address, string formulaText)
+    {
+        StringBuilder? builder = null;
+        var appendStart = 0;
+
+        for (var index = 0; index < formulaText.Length; index++)
+        {
+            if (!IsFormulaReferenceBoundaryBefore(formulaText, index) ||
+                !TryReadFormulaReference(formulaText, index, out var end, out var row, out var col))
             {
-                var col = CellAddress.ColumnNameToNumber(match.Groups[1].Value);
-                var row = uint.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
-                return $"R[{(int)row - (int)address.Row}]C[{(int)col - (int)address.Col}]";
-            },
-            RegexOptions.CultureInvariant);
+                continue;
+            }
+
+            builder ??= new StringBuilder(formulaText.Length + 8);
+            builder.Append(formulaText, appendStart, index - appendStart);
+            builder.Append("R[");
+            builder.Append((int)row - (int)address.Row);
+            builder.Append("]C[");
+            builder.Append((int)col - (int)address.Col);
+            builder.Append(']');
+
+            appendStart = end;
+            index = end - 1;
+        }
+
+        if (builder is null)
+            return formulaText;
+
+        builder.Append(formulaText, appendStart, formulaText.Length - appendStart);
+        return builder.ToString();
+    }
+
+    private static bool TryReadFormulaReference(
+        string formulaText,
+        int start,
+        out int end,
+        out uint row,
+        out uint col)
+    {
+        end = start;
+        row = 0;
+        col = 0;
+
+        var index = start;
+        if (index < formulaText.Length && formulaText[index] == '$')
+            index++;
+
+        var letterCount = 0;
+        while (index < formulaText.Length &&
+               letterCount < 3 &&
+               TryNormalizeFormulaColumnLetter(formulaText[index], out var letter))
+        {
+            col = col * 26 + (uint)(letter - 'A' + 1);
+            letterCount++;
+            index++;
+        }
+
+        if (letterCount == 0)
+            return false;
+
+        if (index < formulaText.Length && IsAsciiLetter(formulaText[index]))
+            return false;
+
+        if (index < formulaText.Length && formulaText[index] == '$')
+            index++;
+
+        var digitCount = 0;
+        while (index < formulaText.Length && digitCount < 7 && formulaText[index] is >= '0' and <= '9')
+        {
+            row = (row * 10) + (uint)(formulaText[index] - '0');
+            digitCount++;
+            index++;
+        }
+
+        if (digitCount == 0 || row == 0)
+            return false;
+
+        if (index < formulaText.Length && formulaText[index] is >= '0' and <= '9')
+            return false;
+
+        if (!IsFormulaReferenceBoundaryAfter(formulaText, index))
+            return false;
+
+        end = index;
+        return true;
+    }
+
+    private static bool IsFormulaReferenceBoundaryBefore(string text, int index) =>
+        index == 0 || !IsAsciiLetterDigitOrUnderscore(text[index - 1]);
+
+    private static bool IsFormulaReferenceBoundaryAfter(string text, int index) =>
+        index >= text.Length || !IsAsciiLetterDigitOrUnderscore(text[index]);
+
+    private static bool TryNormalizeFormulaColumnLetter(char value, out char letter)
+    {
+        letter = value is >= 'a' and <= 'z'
+            ? (char)(value - ('a' - 'A'))
+            : value;
+
+        return letter is >= 'A' and <= 'Z';
+    }
+
+    private static bool IsAsciiLetter(char value) =>
+        value is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
+
+    private static bool IsAsciiLetterDigitOrUnderscore(char value) =>
+        value is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' or '_';
 
     private static bool FormulaRefersToBlankCells(Workbook workbook, SheetId sheetId, Cell cell)
     {
         if (!cell.HasFormula || string.IsNullOrWhiteSpace(cell.FormulaText))
             return false;
 
-        return ExtractPrecedents(workbook, sheetId, cell.FormulaText)
-            .Any(precedent => IsBlankPrecedent(workbook, precedent));
+        return HasAnyBlankPrecedent(workbook, sheetId, cell.FormulaText);
     }
 
     private static bool IsBlankPrecedent(Workbook workbook, CellAddress address)
