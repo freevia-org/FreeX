@@ -75,7 +75,9 @@ internal static class QuickAnalysisPreviewLayoutPlanner
                 if (row.Height <= 8 || col.Width <= 6)
                     continue;
 
-                consumer.Accept(CreateDataBarRect(row, col, value, max, rowHeaderWidth, columnHeaderHeight));
+                var rect = CreateDataBarRect(row, col, value, max, rowHeaderWidth, columnHeaderHeight);
+                if (rect.Width > 0 && rect.Height > 0)
+                    consumer.Accept(rect);
             }
         }
     }
