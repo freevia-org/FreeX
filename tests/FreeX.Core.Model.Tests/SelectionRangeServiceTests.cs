@@ -143,8 +143,8 @@ public class SelectionRangeServiceTests(ITestOutputHelper output)
         var activeCell = new CellAddress(sheet.Id, 120, 120);
         var (region, elapsed, allocated) = MeasureGetCurrentRegion(sheet, activeCell, iterations: 25);
 
-        output.WriteLine(
-            $"GetCurrentRegion sparse staircase {rows}x{cols}: {elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes, region {region}");
+        WritePerfLine(
+            $"PERF CURRENT_REGION_SPARSE_STAIRCASE rows={rows} cols={cols} steps=25 total_ms={elapsed.TotalMilliseconds:F2} allocated_bytes={allocated} region={region}");
         region.Should().Be(new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, rows, cols)));
@@ -167,8 +167,8 @@ public class SelectionRangeServiceTests(ITestOutputHelper output)
         var activeCell = new CellAddress(sheet.Id, 60, 40);
         var (region, elapsed, allocated) = MeasureGetCurrentRegion(sheet, activeCell, iterations: 25);
 
-        output.WriteLine(
-            $"GetCurrentRegion dense rectangle {rows}x{cols}: {elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes, region {region}");
+        WritePerfLine(
+            $"PERF CURRENT_REGION_DENSE_RECTANGLE rows={rows} cols={cols} steps=25 total_ms={elapsed.TotalMilliseconds:F2} allocated_bytes={allocated} region={region}");
         region.Should().Be(new GridRange(
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, rows, cols)));
@@ -248,6 +248,12 @@ public class SelectionRangeServiceTests(ITestOutputHelper output)
 
     private static void Set(Sheet sheet, uint row, uint col, string value) =>
         sheet.SetCell(new CellAddress(sheet.Id, row, col), new TextValue(value));
+
+    private void WritePerfLine(string line)
+    {
+        Console.WriteLine(line);
+        output.WriteLine(line);
+    }
 
     private static (GridRange? Region, TimeSpan Elapsed, long Allocated) MeasureGetCurrentRegion(
         Sheet sheet,
