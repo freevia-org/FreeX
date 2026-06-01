@@ -45,6 +45,25 @@ public sealed class SparklineLayoutPlannerTests
     }
 
     [Fact]
+    public void CalculateLineLayout_SkipsNonFiniteValuesAndBreaksSegments()
+    {
+        var layout = SparklineLayoutPlanner.CalculateLineLayout([0, double.NaN, 10, 20], new Rect(10, 20, 90, 40));
+
+        layout.SinglePoint.Should().BeNull();
+        layout.Segments.Should().Equal(
+            (new Point(70, 40), new Point(100, 20)));
+    }
+
+    [Fact]
+    public void CalculateLineLayout_ReturnsEmptyLayoutForOnlyNonFiniteValues()
+    {
+        var layout = SparklineLayoutPlanner.CalculateLineLayout([double.NaN, double.PositiveInfinity], new Rect(10, 20, 80, 40));
+
+        layout.SinglePoint.Should().BeNull();
+        layout.Segments.Should().BeEmpty();
+    }
+
+    [Fact]
     public void CalculateColumnLayout_ScalesPositiveAndNegativeBarsAroundAxis()
     {
         var layout = SparklineLayoutPlanner.CalculateColumnLayout([2, -4], new Rect(0, 0, 100, 40), winLoss: false);
@@ -75,13 +94,25 @@ public sealed class SparklineLayoutPlannerTests
     }
 
     [Fact]
+    public void CalculateColumnLayout_SkipsNonFiniteBars()
+    {
+        var layout = SparklineLayoutPlanner.CalculateColumnLayout([2, double.NaN, -4], new Rect(0, 0, 90, 40), winLoss: false);
+
+        layout.Bars.Should().Equal(
+            new SparklineColumnBar(new Rect(5.25, 10, 19.5, 10), IsNegative: false),
+            new SparklineColumnBar(new Rect(65.25, 20, 19.5, 20), IsNegative: true));
+    }
+
+    [Fact]
     public void SparklineLayoutPlanner_AvoidsLinqAndIntermediatePointArrays()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "SparklineLayoutPlanner.cs"));
 
-        source.Should().Contain("for (var i = 1; i < values.Count; i++)");
+        source.Should().Contain("for (var i = firstIndex + 1; i < values.Count; i++)");
         source.Should().Contain("foreach (var value in values)");
+        source.Should().Contain("double.IsFinite(value)");
+        source.Should().Contain("double.IsFinite(values[i])");
         source.Should().Contain("internal static void VisitLineLayout");
         source.Should().Contain("internal static void VisitColumnLayout");
         source.Should().NotContain("values.Min(");
