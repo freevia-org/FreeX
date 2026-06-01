@@ -1166,10 +1166,14 @@ public sealed partial class NativeJsonAdapter
         {
             writer.WriteStartObject();
             writer.WriteString(AddressName, value.Address);
-            writer.WriteString(ValueName, value.Value);
-            writer.WriteString(ValueTypeName, value.ValueType);
-            writer.WriteString(FormulaName, value.Formula);
-            writer.WriteBoolean(IgnoreFormulaErrorName, value.IgnoreFormulaError);
+            if (value.Value is not null)
+                writer.WriteString(ValueName, value.Value);
+            if (value.ValueType is not null)
+                writer.WriteString(ValueTypeName, value.ValueType);
+            if (value.Formula is not null)
+                writer.WriteString(FormulaName, value.Formula);
+            if (value.IgnoreFormulaError)
+                writer.WriteBoolean(IgnoreFormulaErrorName, value.IgnoreFormulaError);
             if (value.StyleId is { } styleId)
                 writer.WriteNumber(StyleIdName, styleId);
             if (value.Style is not null)
