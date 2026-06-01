@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -325,7 +326,7 @@ public static class AccessibilityCheckerService
     private static void AddLowContrastCellTextIssues(List<AccessibilityIssue> issues, Workbook workbook, Sheet sheet)
     {
         var occupiedCells = sheet.GetOccupiedCellMap();
-        var conditionalContrastRules = GetConditionalContrastRules(sheet, occupiedCells);
+        var conditionalContrastRules = GetConditionalContrastRules(workbook, sheet, occupiedCells);
         Dictionary<StyleId, CellStyle>? workbookStyleCache = null;
         Dictionary<CellStyle, CellContrastCheck>? contrastCache = null;
         foreach (var entry in occupiedCells)
@@ -356,6 +357,7 @@ public static class AccessibilityCheckerService
     }
 
     private static ConditionalContrastRuleSet? GetConditionalContrastRules(
+        Workbook workbook,
         Sheet sheet,
         IReadOnlyDictionary<(uint Row, uint Col), Cell> occupiedCells)
     {
@@ -379,7 +381,7 @@ public static class AccessibilityCheckerService
             hasSharedAppliesToRange,
             sharedAppliesToRange,
             hasSharedAppliesToRange ? GetAlwaysTrueTextValueStyle(rules) : null,
-            new ConditionalFormatEvaluationCache(sheet, occupiedCells));
+            new ConditionalFormatEvaluationCache(workbook, sheet, occupiedCells));
     }
 
     private static bool TryGetSharedAppliesToRange(IReadOnlyList<ConditionalFormat> rules, out GridRange range)
@@ -536,8 +538,134 @@ public static class AccessibilityCheckerService
             CfRuleType.EndsWith => ValueText(value).EndsWith(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
             CfRuleType.DateOccurring => IsDateOccurringRuleTrue(rule, value),
             CfRuleType.CellValue => IsCellValueRuleTrue(rule, value),
+            CfRuleType.Formula => evaluationCache.MatchesFormulaRule(rule, address),
             _ => false
         };
+
+    private static bool TryCreateFormulaComparison(string? formulaText, out ConditionalFormulaComparison comparison)
+    {
+        comparison = default;
+        if (string.IsNullOrWhiteSpace(formulaText))
+            return false;
+
+        try
+        {
+            var text = formulaText.Trim();
+            var formula = text[0] == '=' ? text : "=" + text;
+            var ast = new Parser(new Lexer(formula).Tokenize()).Parse();
+            return TryCreateFormulaComparison(ast, out comparison);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryCreateFormulaComparison(FormulaNode ast, out ConditionalFormulaComparison comparison)
+    {
+        comparison = default;
+        if (ast is not BinaryOpNode binary || !IsFormulaComparisonOperator(binary.Operator))
+            return false;
+
+        if (!TryCreateFormulaOperand(binary.Left, out var left) ||
+            !TryCreateFormulaOperand(binary.Right, out var right))
+        {
+            return false;
+        }
+
+        comparison = new ConditionalFormulaComparison(left, binary.Operator, right);
+        return true;
+    }
+
+    private static bool IsFormulaComparisonOperator(BinaryOperator op) =>
+        op is BinaryOperator.Equal
+            or BinaryOperator.NotEqual
+            or BinaryOperator.LessThan
+            or BinaryOperator.GreaterThan
+            or BinaryOperator.LessOrEqual
+            or BinaryOperator.GreaterOrEqual;
+
+    private static bool TryCreateFormulaOperand(FormulaNode node, out ConditionalFormulaOperand operand)
+    {
+        operand = default;
+        switch (node)
+        {
+            case CellRefNode cell:
+                operand = new ConditionalFormulaOperand(
+                    ConditionalFormulaOperandKind.Reference,
+                    null,
+                    cell.Row,
+                    cell.ColumnNumber,
+                    cell.IsRowAbsolute,
+                    cell.IsColAbsolute,
+                    cell.SheetName);
+                return true;
+            case NumberNode number:
+                operand = LiteralFormulaOperand(new NumberValue(number.Value));
+                return true;
+            case StringNode text:
+                operand = LiteralFormulaOperand(new TextValue(text.Value));
+                return true;
+            case BooleanNode boolean:
+                operand = LiteralFormulaOperand(new BoolValue(boolean.Value));
+                return true;
+            case ErrorNode error:
+                operand = LiteralFormulaOperand(error.Error);
+                return true;
+            case UnaryOpNode { Operator: UnaryOperator.Negate, Operand: NumberNode number }:
+                operand = LiteralFormulaOperand(new NumberValue(-number.Value));
+                return true;
+            case UnaryOpNode { Operator: UnaryOperator.Percent, Operand: NumberNode number }:
+                operand = LiteralFormulaOperand(new NumberValue(number.Value / 100d));
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static ConditionalFormulaOperand LiteralFormulaOperand(ScalarValue value) =>
+        new(ConditionalFormulaOperandKind.Literal, value, 0, 0, true, true, null);
+
+    private static int CompareFormulaValues(ScalarValue left, ScalarValue right)
+    {
+        if (TryGetNumber(left, out var leftNumber) && TryGetNumber(right, out var rightNumber))
+            return leftNumber.CompareTo(rightNumber);
+
+        if (left is TextValue leftText && right is TextValue rightText)
+            return string.Compare(leftText.Value, rightText.Value, StringComparison.OrdinalIgnoreCase);
+
+        if (left is BoolValue leftBool && right is BoolValue rightBool)
+            return leftBool.Value.CompareTo(rightBool.Value);
+
+        return FormulaValueTypeOrder(left).CompareTo(FormulaValueTypeOrder(right));
+    }
+
+    private static int FormulaValueTypeOrder(ScalarValue value) => value switch
+    {
+        BlankValue => 0,
+        NumberValue or DateTimeValue => 1,
+        TextValue => 2,
+        BoolValue => 3,
+        _ => 4
+    };
+
+    private static uint? ShiftFormulaRow(uint row, bool isAbsolute, int rowOffset)
+    {
+        if (isAbsolute)
+            return row;
+
+        var shifted = (long)row + rowOffset;
+        return shifted is < 1 or > CellAddress.MaxRow ? null : (uint)shifted;
+    }
+
+    private static uint? ShiftFormulaColumn(uint col, bool isAbsolute, int colOffset)
+    {
+        if (isAbsolute)
+            return col;
+
+        var shifted = (long)col + colOffset;
+        return shifted is < 1 or > CellAddress.MaxCol ? null : (uint)shifted;
+    }
 
     private static bool HasVisibleCellText(ScalarValue value) =>
         value switch
@@ -903,13 +1031,35 @@ public static class AccessibilityCheckerService
 
     private readonly record struct CellContrastCheck(double MinimumContrastRatio, bool HasSufficientContrast);
 
+    private readonly record struct ConditionalFormulaComparison(
+        ConditionalFormulaOperand Left,
+        BinaryOperator Operator,
+        ConditionalFormulaOperand Right);
+
+    private readonly record struct ConditionalFormulaOperand(
+        ConditionalFormulaOperandKind Kind,
+        ScalarValue? Literal,
+        uint Row,
+        uint Col,
+        bool IsRowAbsolute,
+        bool IsColAbsolute,
+        string? SheetName);
+
+    private enum ConditionalFormulaOperandKind
+    {
+        Literal,
+        Reference
+    }
+
     private sealed class ConditionalFormatEvaluationCache(
+        Workbook workbook,
         Sheet sheet,
         IReadOnlyDictionary<(uint Row, uint Col), Cell> occupiedCells)
     {
         private readonly Dictionary<ConditionalFormat, Dictionary<string, int>> _valueCounts = new();
         private readonly Dictionary<ConditionalFormat, RangeAverage> _averages = new();
         private readonly Dictionary<ConditionalFormat, HashSet<CellAddress>?> _topBottomMatches = new();
+        private readonly Dictionary<ConditionalFormat, ConditionalFormulaComparison?> _formulaComparisons = new();
 
         public bool HasDuplicateValue(ConditionalFormat rule, ScalarValue value) =>
             TryGetValueCount(rule, value, out var count) && count > 1;
@@ -933,6 +1083,84 @@ public static class AccessibilityCheckerService
 
         public bool MatchesTopBottomRule(ConditionalFormat rule, CellAddress address) =>
             GetTopBottomMatches(rule)?.Contains(address) == true;
+
+        public bool MatchesFormulaRule(ConditionalFormat rule, CellAddress address)
+        {
+            if (!TryGetFormulaComparison(rule, out var comparison))
+                return false;
+
+            var rowOffset = (int)address.Row - (int)rule.AppliesTo.Start.Row;
+            var colOffset = (int)address.Col - (int)rule.AppliesTo.Start.Col;
+            if (!TryResolveFormulaOperand(comparison.Left, rowOffset, colOffset, out var left) ||
+                !TryResolveFormulaOperand(comparison.Right, rowOffset, colOffset, out var right))
+            {
+                return false;
+            }
+
+            if (left is ErrorValue || right is ErrorValue)
+                return false;
+
+            var result = CompareFormulaValues(left, right);
+            return comparison.Operator switch
+            {
+                BinaryOperator.Equal => result == 0,
+                BinaryOperator.NotEqual => result != 0,
+                BinaryOperator.LessThan => result < 0,
+                BinaryOperator.GreaterThan => result > 0,
+                BinaryOperator.LessOrEqual => result <= 0,
+                BinaryOperator.GreaterOrEqual => result >= 0,
+                _ => false
+            };
+        }
+
+        private bool TryGetFormulaComparison(ConditionalFormat rule, out ConditionalFormulaComparison comparison)
+        {
+            if (_formulaComparisons.TryGetValue(rule, out var cached))
+            {
+                comparison = cached.GetValueOrDefault();
+                return cached.HasValue;
+            }
+
+            if (TryCreateFormulaComparison(rule.FormulaText, out comparison))
+            {
+                _formulaComparisons[rule] = comparison;
+                return true;
+            }
+
+            _formulaComparisons[rule] = null;
+            return false;
+        }
+
+        private bool TryResolveFormulaOperand(
+            ConditionalFormulaOperand operand,
+            int rowOffset,
+            int colOffset,
+            out ScalarValue value)
+        {
+            if (operand.Kind == ConditionalFormulaOperandKind.Literal)
+            {
+                value = operand.Literal ?? BlankValue.Instance;
+                return true;
+            }
+
+            var row = ShiftFormulaRow(operand.Row, operand.IsRowAbsolute, rowOffset);
+            var col = ShiftFormulaColumn(operand.Col, operand.IsColAbsolute, colOffset);
+            if (!row.HasValue || !col.HasValue)
+            {
+                value = ErrorValue.Ref;
+                return false;
+            }
+
+            var targetSheet = operand.SheetName is null ? sheet : workbook.GetSheet(operand.SheetName);
+            if (targetSheet is null)
+            {
+                value = ErrorValue.Ref;
+                return false;
+            }
+
+            value = targetSheet.GetValue(row.Value, col.Value);
+            return true;
+        }
 
         private bool TryGetValueCount(ConditionalFormat rule, ScalarValue value, out int count)
         {
