@@ -57,7 +57,8 @@ internal static class XlsxClosedXmlCellMapper
 
     public static XLCellValue MapValueInverse(ScalarValue value) => value switch
     {
-        NumberValue n => n.Value,
+        NumberValue n when double.IsFinite(n.Value) => n.Value,
+        NumberValue n => n.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
         TextValue t => t.Value,
         BoolValue b => b.Value,
         DateTimeValue dt => DateTime.FromOADate(dt.Value),

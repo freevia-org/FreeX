@@ -927,6 +927,9 @@ public partial class MainWindow
 
     private void ExtendHeaderSelection(GridHeaderContextMenuTarget target, uint anchorIndex, uint targetIndex)
     {
+        if (IsHeaderSelectionExtensionUnchanged(target, anchorIndex, targetIndex))
+            return;
+
         HideValidationDropdown();
         ClearCommentPreview();
         SheetGrid.SelectedRanges = null;
@@ -963,6 +966,35 @@ public partial class MainWindow
         RefreshStatusBarAfterDragSelectionChange();
     }
 
+    private bool IsHeaderSelectionExtensionUnchanged(
+        GridHeaderContextMenuTarget target,
+        uint anchorIndex,
+        uint targetIndex)
+    {
+        if (SheetGrid.SelectedRanges is not null ||
+            SheetGrid.SelectedRange is not { } range)
+        {
+            return false;
+        }
+
+        if (target == GridHeaderContextMenuTarget.Column)
+        {
+            var firstCol = Math.Min(anchorIndex, targetIndex);
+            var lastCol = Math.Max(anchorIndex, targetIndex);
+            return _selectionAnchor == new CellAddress(_currentSheetId, 1, anchorIndex) &&
+                _selectionCursor == new CellAddress(_currentSheetId, 1_048_576, targetIndex) &&
+                range.Start == new CellAddress(_currentSheetId, 1, firstCol) &&
+                range.End == new CellAddress(_currentSheetId, 1_048_576, lastCol);
+        }
+
+        var firstRow = Math.Min(anchorIndex, targetIndex);
+        var lastRow = Math.Max(anchorIndex, targetIndex);
+        return _selectionAnchor == new CellAddress(_currentSheetId, anchorIndex, 1) &&
+            _selectionCursor == new CellAddress(_currentSheetId, targetIndex, 16_384) &&
+            range.Start == new CellAddress(_currentSheetId, firstRow, 1) &&
+            range.End == new CellAddress(_currentSheetId, lastRow, 16_384);
+    }
+
     private CellAddress? HitTestCell(System.Windows.Point pos)
     {
         var viewport = SheetGrid.Viewport;
@@ -973,7 +1005,6 @@ public partial class MainWindow
     private void SheetGrid_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
         var pos = e.GetPosition(SheetGrid);
-        var headerHit = HitTestHeaderSelection(pos);
         var hitAddr = _dragHeaderSelectionTarget.HasValue ? null : HitTestCell(pos);
         if (!_dragSelectActive)
         {
@@ -1005,6 +1036,7 @@ public partial class MainWindow
         e.Handled = true;
         if (_dragHeaderSelectionTarget is { } headerTarget)
         {
+            var headerHit = HitTestHeaderSelection(pos);
             if (headerHit is { } hit && hit.Target == headerTarget)
                 ExtendHeaderSelection(headerTarget, _dragHeaderSelectionAnchor, hit.Index);
             return;

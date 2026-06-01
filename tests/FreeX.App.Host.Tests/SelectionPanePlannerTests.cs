@@ -633,7 +633,7 @@ public sealed class SelectionPanePlannerTests
             source.IndexOf("private IReadOnlyList<SelectionPaneVisibilityChange>", StringComparison.Ordinal) -
             source.IndexOf("private void AcceptMove", StringComparison.Ordinal));
         acceptMoveBody.Should().NotContain("DialogResult = true");
-        hostSource.Should().Contain("result.MoveChanges.Select");
+        hostSource.Should().Contain("SelectionPaneGroupedCommandPlanner.CreateCommand");
         hostSource.Should().NotContain("SelectionPaneDialogAction.MoveUp when dialog.Result.Target");
     }
 
@@ -657,6 +657,22 @@ public sealed class SelectionPanePlannerTests
         source.Should().Contain("IsDropAfter");
         source.Should().Contain("List_DragLeave");
         source.Should().Contain("ClearDropVisual");
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_MouseMoveClearsStaleDragStateWhenButtonReleased()
+    {
+        var source = ReadSelectionPaneDialogSources();
+        var mouseMove = source[
+            source.IndexOf("private void List_MouseMove", StringComparison.Ordinal)..
+            source.IndexOf("private void List_DragOver", StringComparison.Ordinal)];
+
+        mouseMove.Should().Contain("if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed)");
+        mouseMove.Should().Contain("_dragStartPoint = null;");
+        mouseMove.Should().Contain("_dragItem = null;");
+        mouseMove.IndexOf("_dragStartPoint = null;", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseMove.IndexOf("if (_dragStartPoint is not { } start", StringComparison.Ordinal));
     }
 
     private static string ReadSelectionPaneDialogSources() =>

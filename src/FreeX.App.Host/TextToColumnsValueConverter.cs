@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -25,7 +26,18 @@ internal static class TextToColumnsValueConverter
     private static bool TryParseNumber(string text, TextToColumnsAdvancedOptions? advancedOptions, out double number)
     {
         if (advancedOptions is null)
-            return double.TryParse(text, out number);
+        {
+            return TryParseFiniteNumber(
+                text,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.CurrentCulture,
+                out number) ||
+                TryParseFiniteNumber(
+                    text,
+                    NumberStyles.Float | NumberStyles.AllowThousands,
+                    CultureInfo.InvariantCulture,
+                    out number);
+        }
 
         var normalized = text.Trim();
         if (advancedOptions.TrailingMinusNumbers && normalized.EndsWith("-", StringComparison.Ordinal))
@@ -37,11 +49,27 @@ internal static class TextToColumnsValueConverter
         if (!string.IsNullOrEmpty(advancedOptions.DecimalSeparator) && advancedOptions.DecimalSeparator != ".")
             normalized = normalized.Replace(advancedOptions.DecimalSeparator, ".", StringComparison.Ordinal);
 
-        return double.TryParse(
+        return TryParseFiniteNumber(
             normalized,
-            System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture,
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
             out number);
+    }
+
+    private static bool TryParseFiniteNumber(
+        string text,
+        NumberStyles styles,
+        IFormatProvider formatProvider,
+        out double number)
+    {
+        if (double.TryParse(text, styles, formatProvider, out number) &&
+            double.IsFinite(number))
+        {
+            return true;
+        }
+
+        number = default;
+        return false;
     }
 
     private static bool TryParseDate(string text, DatePartOrder partOrder, out DateTime date)

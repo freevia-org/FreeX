@@ -499,18 +499,12 @@ public partial class MainWindow
 
     private void ApplySelectionPaneChanges(SelectionPaneDialogResult result)
     {
-        var commands = new List<IWorkbookCommand>();
-        commands.AddRange(result.RenameChanges.Select(change =>
-            new RenameSelectionPaneObjectCommand(_currentSheetId, change.Kind, change.Id, change.Name)));
-        commands.AddRange(result.VisibilityChanges.Select(change =>
-            new SetSelectionPaneObjectVisibilityCommand(_currentSheetId, change.Kind, change.Id, change.IsVisible)));
-        commands.AddRange(result.MoveChanges.Select(change =>
-            new MoveSelectionPaneObjectCommand(_currentSheetId, change.Kind, change.Id, change.Forward)));
-
-        if (commands.Count == 0)
+        if (!SelectionPaneGroupedCommandPlanner.HasChanges(result))
             return;
 
-        if (TryExecuteCommand(new CompositeWorkbookCommand("Selection Pane", commands), "Selection Pane"))
+        if (TryExecuteGroupedSheetCommand(
+                "Selection Pane",
+                sheetId => SelectionPaneGroupedCommandPlanner.CreateCommand(_workbook, _currentSheetId, sheetId, result)))
             UpdateViewport();
     }
 
