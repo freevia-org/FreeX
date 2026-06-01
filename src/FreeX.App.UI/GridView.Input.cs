@@ -444,43 +444,10 @@ public partial class GridView
             return;
         }
 
-        if (pos.Y <= EffectiveColHeaderHeight && pos.X >= ActualRowHeaderWidth)
+        if (GridHeaderContextMenuHitPlanner.HitTest(Viewport, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight) is { } headerHit)
         {
-            foreach (var cm in Viewport.ColMetrics)
-            {
-                double left = cm.LeftOffset + ActualRowHeaderWidth;
-                if (pos.X < left)
-                    break;
-
-                if (pos.X < left + cm.Width)
-                {
-                    HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Column, cm.Col, pos);
-                    e.Handled = true;
-                    return;
-                }
-            }
-
-            base.OnMouseRightButtonDown(e);
-            return;
-        }
-
-        if (pos.X <= ActualRowHeaderWidth && pos.Y >= EffectiveColHeaderHeight)
-        {
-            foreach (var rm in Viewport.RowMetrics)
-            {
-                double top = rm.TopOffset + EffectiveColHeaderHeight;
-                if (pos.Y < top)
-                    break;
-
-                if (pos.Y < top + rm.Height)
-                {
-                    HeaderContextMenuRequested?.Invoke(GridHeaderContextMenuTarget.Row, rm.Row, pos);
-                    e.Handled = true;
-                    return;
-                }
-            }
-
-            base.OnMouseRightButtonDown(e);
+            HeaderContextMenuRequested?.Invoke(headerHit.Target, headerHit.Index, pos);
+            e.Handled = true;
             return;
         }
 
