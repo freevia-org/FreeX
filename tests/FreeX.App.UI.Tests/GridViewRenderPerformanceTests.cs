@@ -337,7 +337,9 @@ public sealed class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private readonly Dictionary<CellTypefaceKey, Typeface> _typefaceCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<Brush, Pen> _underlinePenCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();");
+        gridViewSource.Should().Contain("private readonly Dictionary<DefaultWrappedTextLayoutKey, FormattedText> _defaultWrappedTextLayoutCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<TextWidthLayoutKey, double> _textWidthLayoutCache = new();");
+        gridViewSource.Should().Contain("private readonly Dictionary<Rect, RectangleGeometry> _cellClipGeometryCache = new();");
         gridViewSource.Should().Contain("private RenderCellLookupCache? _renderCellLookupCache;");
         gridViewSource.Should().Contain("private OccupiedCellLookupCache? _occupiedCellLookupCache;");
     }
@@ -350,11 +352,17 @@ public sealed class GridViewRenderPerformanceTests
         var headers = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
 
         cacheSource.Should().Contain("private FormattedText GetDefaultFormattedText");
+        cacheSource.Should().Contain("private FormattedText GetDefaultWrappedFormattedText");
         cacheSource.Should().Contain("private static bool CanUseDefaultFormattedText");
+        cacheSource.Should().Contain("private static bool CanUseDefaultWrappedFormattedText");
         cacheSource.Should().Contain("_defaultTextLayoutCache.TryGetValue");
+        cacheSource.Should().Contain("_defaultWrappedTextLayoutCache.TryGetValue");
         cacheSource.Should().Contain("_defaultTextLayoutCache.Count >= DefaultTextLayoutCacheLimit");
+        cacheSource.Should().Contain("_defaultWrappedTextLayoutCache.Count >= DefaultWrappedTextLayoutCacheLimit");
         rendering.Should().Contain("CanUseDefaultFormattedText(style, wrapText)");
+        rendering.Should().Contain("CanUseDefaultWrappedFormattedText(style)");
         rendering.Should().Contain("GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)");
+        rendering.Should().Contain("GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)");
         headers.Should().Contain("GetDefaultFormattedText(");
     }
 

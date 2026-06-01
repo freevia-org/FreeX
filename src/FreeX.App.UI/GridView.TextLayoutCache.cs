@@ -8,12 +8,21 @@ namespace FreeX.App.UI;
 public partial class GridView
 {
     private const int DefaultTextLayoutCacheLimit = 8192;
+    private const int DefaultWrappedTextLayoutCacheLimit = 8192;
     private const int TextWidthLayoutCacheLimit = 32768;
 
     private readonly record struct DefaultTextLayoutKey(
         string Text,
         string CultureName,
         double FontSize,
+        double PixelsPerDip);
+
+    private readonly record struct DefaultWrappedTextLayoutKey(
+        string Text,
+        string CultureName,
+        double FontSize,
+        double MaxTextWidth,
+        TextAlignment TextAlignment,
         double PixelsPerDip);
 
     private readonly record struct TextWidthLayoutKey(
@@ -44,10 +53,60 @@ public partial class GridView
         return formatted;
     }
 
+    private FormattedText GetDefaultWrappedFormattedText(
+        string text,
+        double fontSize,
+        double maxTextWidth,
+        TextAlignment textAlignment,
+        double pixelsPerDip)
+    {
+        var key = new DefaultWrappedTextLayoutKey(
+            text,
+            CultureInfo.CurrentCulture.Name,
+            fontSize,
+            maxTextWidth,
+            textAlignment,
+            pixelsPerDip);
+        if (_defaultWrappedTextLayoutCache.TryGetValue(key, out var cached))
+            return cached;
+
+        if (_defaultWrappedTextLayoutCache.Count >= DefaultWrappedTextLayoutCacheLimit)
+            _defaultWrappedTextLayoutCache.Clear();
+
+        var formatted = new FormattedText(
+            text,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            DefaultTypeface,
+            fontSize,
+            TextBrush,
+            pixelsPerDip)
+        {
+            MaxTextWidth = maxTextWidth,
+            TextAlignment = textAlignment
+        };
+        _defaultWrappedTextLayoutCache.Add(key, formatted);
+        return formatted;
+    }
+
     private static bool CanUseDefaultFormattedText(CellStyle? style, bool wrapText)
     {
         if (wrapText)
             return false;
+
+        return UsesDefaultTextLayoutStyle(style);
+    }
+
+    private static bool CanUseDefaultWrappedFormattedText(CellStyle? style)
+    {
+        if (style?.WrapText != true)
+            return false;
+
+        return UsesDefaultTextLayoutStyle(style);
+    }
+
+    private static bool UsesDefaultTextLayoutStyle(CellStyle? style)
+    {
         if (style is null)
             return true;
 

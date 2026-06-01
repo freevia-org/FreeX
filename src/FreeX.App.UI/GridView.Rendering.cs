@@ -293,7 +293,7 @@ public partial class GridView
                 _ => rect.Top + (rect.Height - text.Height) / 2
             };
 
-            dc.PushClip(new RectangleGeometry(layout.TextClipRect));
+            dc.PushClip(GetCellClipGeometry(layout.TextClipRect));
             dc.DrawText(text, new Point(Math.Round(textX), Math.Round(Math.Max(rect.Top, textY))));
             dc.Pop();
             dc.Pop();
@@ -502,28 +502,33 @@ public partial class GridView
                     ToDisplayFontSize(6));
             }
 
+            var wrapMaxTextWidth = Math.Max(1, rect.Width - 4);
+            var wrapTextAlignment = hAlign switch
+            {
+                CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
+                CellHAlign.Right => TextAlignment.Right,
+                _ => TextAlignment.Left
+            };
             var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);
+            var useDefaultWrappedTextLayout = !useDefaultTextLayout && wrapText && CanUseDefaultWrappedFormattedText(style);
             var text = useDefaultTextLayout
                 ? GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)
-                : new FormattedText(
-                    cell.DisplayText,
-                    CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
-                    typeface, fontSize, textBrush,
-                    pixelsPerDip);
+                : useDefaultWrappedTextLayout
+                    ? GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)
+                    : new FormattedText(
+                        cell.DisplayText,
+                        CultureInfo.CurrentCulture,
+                        FlowDirection.LeftToRight,
+                        typeface, fontSize, textBrush,
+                        pixelsPerDip);
 
-            if (!useDefaultTextLayout && BuildTextDecorations(style) is { } decorations)
+            if (!useDefaultTextLayout && !useDefaultWrappedTextLayout && BuildTextDecorations(style) is { } decorations)
                 text.SetTextDecorations(decorations);
 
-            if (wrapText)
+            if (wrapText && !useDefaultWrappedTextLayout)
             {
-                text.MaxTextWidth  = Math.Max(1, rect.Width - 4);
-                text.TextAlignment = hAlign switch
-                {
-                    CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => System.Windows.TextAlignment.Center,
-                    CellHAlign.Right => System.Windows.TextAlignment.Right,
-                    _ => System.Windows.TextAlignment.Left
-                };
+                text.MaxTextWidth = wrapMaxTextWidth;
+                text.TextAlignment = wrapTextAlignment;
             }
 
             double textX = hAlign switch
@@ -549,7 +554,7 @@ public partial class GridView
             var textPoint = new Point(Math.Round(textX), Math.Round(textY));
             var shouldClipText = ShouldClipText(wrapText, clipRect, text, textPoint);
             if (shouldClipText)
-                dc.PushClip(new RectangleGeometry(clipRect));
+                dc.PushClip(GetCellClipGeometry(clipRect));
 
             dc.DrawText(text, textPoint);
 
@@ -651,6 +656,22 @@ public partial class GridView
     {
         _renderCellLookupCache = null;
         _occupiedCellLookupCache = null;
+    }
+
+    private const int CellClipGeometryCacheLimit = 16384;
+
+    private RectangleGeometry GetCellClipGeometry(Rect rect)
+    {
+        if (_cellClipGeometryCache.TryGetValue(rect, out var cached))
+            return cached;
+
+        if (_cellClipGeometryCache.Count >= CellClipGeometryCacheLimit)
+            _cellClipGeometryCache.Clear();
+
+        var geometry = new RectangleGeometry(rect);
+        geometry.Freeze();
+        _cellClipGeometryCache.Add(rect, geometry);
+        return geometry;
     }
 
     private static Dictionary<uint, RowMetric> BuildRenderRowMetricLookup(IReadOnlyList<RowMetric> rows)
