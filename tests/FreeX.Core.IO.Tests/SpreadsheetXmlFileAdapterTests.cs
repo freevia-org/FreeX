@@ -1975,6 +1975,52 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromTextInstruction()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row first="Alpha" second="Beta" amount="42.5" />
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Text">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell>
+                          <ss:Data ss:Type="String">
+                            <xsl:value-of select="row/@first" />
+                            <xsl:text> - </xsl:text>
+                            <xsl:value-of select="row/@second" />
+                          </ss:Data>
+                        </ss:Cell>
+                        <ss:Cell>
+                          <ss:Data ss:Type="String">
+                            <xsl:text>Total: </xsl:text>
+                            <xsl:value-of select="row/@amount" />
+                          </ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Text");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Alpha - Beta"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new TextValue("Total: 42.5"));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromNumberInstruction()
     {
         using var source = StreamFromString("""
