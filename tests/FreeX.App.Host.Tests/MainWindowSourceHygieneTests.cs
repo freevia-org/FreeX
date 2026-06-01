@@ -1817,6 +1817,40 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void SheetTabsChromeAndViewport_UseNoOpGuardsForRepeatedManyTabNavigationUpdates()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var chromeSource = ExtractMethodSource(source, "private void UpdateSheetTabsChromeLayer()");
+        var viewportSource = ExtractMethodSource(source, "private void UpdateSheetTabViewportWidth()");
+
+        source.Should().Contain("SheetTabsChromeRenderKey");
+        source.Should().Contain("SheetTabViewportMeasureKey");
+        source.Should().Contain("_sheetTabViewportRefreshQueued");
+        source.Should().Contain("visibleTabs.Count");
+        source.Should().Contain("foreach (var tab in _sheetTabs)");
+
+        chromeSource.Should().Contain("CreateSheetTabsChromeRenderKey");
+        chromeSource.Should().Contain("if (_lastSheetTabsChromeRenderKey == renderKey)");
+        chromeSource.Should().Contain("return;");
+        chromeSource.IndexOf("if (_lastSheetTabsChromeRenderKey == renderKey)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(chromeSource.IndexOf("SheetTabsChromeLayer.Children.Clear();", StringComparison.Ordinal));
+
+        viewportSource.Should().Contain("CreateSheetTabViewportMeasureKey");
+        viewportSource.Should().Contain("if (_lastSheetTabViewportMeasureKey == viewportKey && _lastSheetTabViewportContentWidth > 0)");
+        viewportSource.Should().Contain("ApplySheetTabViewportWidths(_lastSheetTabViewportContentWidth");
+        viewportSource.IndexOf("if (_lastSheetTabViewportMeasureKey == viewportKey", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(viewportSource.IndexOf("SheetTabsControl.Measure", StringComparison.Ordinal));
+
+        var applyWidthsSource = ExtractMethodSource(source, "private void ApplySheetTabViewportWidths(");
+        applyWidthsSource.Should().Contain("if (_sheetTabViewportRefreshQueued)");
+        applyWidthsSource.Should().Contain("_sheetTabViewportRefreshQueued = true;");
+        applyWidthsSource.Should().Contain("_sheetTabViewportRefreshQueued = false;");
+        CountOccurrences(applyWidthsSource, "Dispatcher.BeginInvoke").Should().Be(1);
+    }
+
+    [Fact]
     public void MainWindow_DoesNotKeepLegacyZoomConversionHelpers()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
