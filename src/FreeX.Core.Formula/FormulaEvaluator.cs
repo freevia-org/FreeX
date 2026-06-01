@@ -26,6 +26,10 @@ public sealed class FormulaEvaluator
     [ThreadStatic]
     private static int _evalDepth;
 
+    private static readonly object ParsedFormulaCacheGate = new();
+    private static readonly Dictionary<string, FormulaNode> ParsedFormulaCache = new(StringComparer.Ordinal);
+    private static readonly Queue<string> ParsedFormulaCacheOrder = new();
+
     private static readonly HashSet<string> AggregateFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
         "SUM", "AVERAGE", "AVERAGEA", "MIN", "MINA", "MAX", "MAXA", "COUNT", "COUNTA", "AND", "OR", "CONCAT",
@@ -175,10 +179,7 @@ public sealed class FormulaEvaluator
         try
         {
             _evalDepth = 0;
-            var lexer = new Lexer(formulaText);
-            var tokens = lexer.Tokenize();
-            var parser = new Parser(tokens);
-            var ast = parser.Parse();
+            var ast = GetOrParseFormula(formulaText);
             var context = new SheetEvalContext(sheet, workbook, this, currentCell);
             return NormalizeTopLevelResult(EvaluateNode(ast, context));
         }
@@ -211,6 +212,42 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue NormalizeTopLevelResult(ScalarValue value) =>
         value is LambdaValue ? ErrorValue.Calc : value;
+
+    private static FormulaNode GetOrParseFormula(string formulaText)
+    {
+        lock (ParsedFormulaCacheGate)
+        {
+            if (ParsedFormulaCache.TryGetValue(formulaText, out var cached))
+                return cached;
+        }
+
+        var parsed = ParseFormulaUncached(formulaText);
+
+        lock (ParsedFormulaCacheGate)
+        {
+            if (ParsedFormulaCache.TryGetValue(formulaText, out var cached))
+                return cached;
+
+            if (ParsedFormulaCache.Count >= FormulaSafetyLimits.MaxParsedFormulaCacheEntries &&
+                ParsedFormulaCacheOrder.TryDequeue(out var oldest))
+            {
+                ParsedFormulaCache.Remove(oldest);
+            }
+
+            ParsedFormulaCache[formulaText] = parsed;
+            ParsedFormulaCacheOrder.Enqueue(formulaText);
+        }
+
+        return parsed;
+    }
+
+    private static FormulaNode ParseFormulaUncached(string formulaText)
+    {
+        var lexer = new Lexer(formulaText);
+        var tokens = lexer.Tokenize();
+        var parser = new Parser(tokens);
+        return parser.Parse();
+    }
 
     /// <summary>
     /// Evaluate an AST node recursively.
@@ -301,9 +338,9 @@ public sealed class FormulaEvaluator
 
         return node.Operator switch
         {
-            BinaryOperator.Add => ArithOp(left, right, (a, b) => a + b),
-            BinaryOperator.Subtract => ArithOp(left, right, (a, b) => a - b),
-            BinaryOperator.Multiply => ArithOp(left, right, (a, b) => a * b),
+            BinaryOperator.Add => ArithOp(left, right, ArithmeticKind.Add),
+            BinaryOperator.Subtract => ArithOp(left, right, ArithmeticKind.Subtract),
+            BinaryOperator.Multiply => ArithOp(left, right, ArithmeticKind.Multiply),
             BinaryOperator.Divide => DivideOp(left, right),
             BinaryOperator.Power => PowerOp(left, right),
             BinaryOperator.Concatenate => ConcatOp(left, right),
@@ -386,16 +423,42 @@ public sealed class FormulaEvaluator
         return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
     }
 
-    private static ScalarValue ArithOp(ScalarValue left, ScalarValue right, Func<double, double, double> op)
-        => ElementwiseOp(left, right, (l, r) => ArithScalarOp(l, r, op));
+    private static ScalarValue ArithOp(ScalarValue left, ScalarValue right, ArithmeticKind kind)
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return ArithScalarOp(left, right, kind);
 
-    private static ScalarValue ArithScalarOp(ScalarValue left, ScalarValue right, Func<double, double, double> op)
+        return kind switch
+        {
+            ArithmeticKind.Add => ElementwiseOp(left, right, AddScalarOp),
+            ArithmeticKind.Subtract => ElementwiseOp(left, right, SubtractScalarOp),
+            _ => ElementwiseOp(left, right, MultiplyScalarOp)
+        };
+    }
+
+    private static ScalarValue AddScalarOp(ScalarValue left, ScalarValue right) =>
+        ArithScalarOp(left, right, ArithmeticKind.Add);
+
+    private static ScalarValue SubtractScalarOp(ScalarValue left, ScalarValue right) =>
+        ArithScalarOp(left, right, ArithmeticKind.Subtract);
+
+    private static ScalarValue MultiplyScalarOp(ScalarValue left, ScalarValue right) =>
+        ArithScalarOp(left, right, ArithmeticKind.Multiply);
+
+    private static ScalarValue ArithScalarOp(ScalarValue left, ScalarValue right, ArithmeticKind kind)
     {
         var a = CoerceToNumber(left);
         var b = CoerceToNumber(right);
         if (a is ErrorValue errA) return errA;
         if (b is ErrorValue errB) return errB;
-        double result = op(((NumberValue)a).Value, ((NumberValue)b).Value);
+        var leftNumber = ((NumberValue)a).Value;
+        var rightNumber = ((NumberValue)b).Value;
+        double result = kind switch
+        {
+            ArithmeticKind.Add => leftNumber + rightNumber,
+            ArithmeticKind.Subtract => leftNumber - rightNumber,
+            _ => leftNumber * rightNumber
+        };
         return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
     }
 
@@ -462,6 +525,13 @@ public sealed class FormulaEvaluator
     }
 
     private static bool CanBroadcast(int left, int right) => left == right || left == 1 || right == 1;
+
+    private enum ArithmeticKind
+    {
+        Add,
+        Subtract,
+        Multiply
+    }
 
     private static ScalarValue CompareOp(ScalarValue left, ScalarValue right, int expected)
         => ElementwiseOp(left, right, (l, r) => CompareScalarOp(l, r, expected));

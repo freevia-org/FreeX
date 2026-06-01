@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -253,5 +254,51 @@ public sealed class SpellCheckServiceTests
         var corrected = SpellCheckService.ApplyCorrection(issue, "the");
 
         corrected.Should().Be(expected);
+    }
+
+    [Fact]
+    public void Benchmark_FindIssuesPlainTextSheet_ReportsTimingAndAllocatedBytes()
+    {
+        const int rows = 20_000;
+        const int iterations = 3;
+        var wb = new Workbook("spell");
+        var sheet = wb.AddSheet("Sheet1");
+        for (uint row = 1; row <= rows; row++)
+        {
+            sheet.SetCell(
+                new CellAddress(sheet.Id, row, 1),
+                new TextValue($"Quarterly revenue forecast row {row} is ready for review"));
+        }
+
+        SpellCheckService.FindIssues(wb, sheet.Id).Should().BeEmpty();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        IReadOnlyList<SpellingIssue> issues = [];
+        for (var i = 0; i < iterations; i++)
+        {
+            var step = Stopwatch.StartNew();
+            issues = SpellCheckService.FindIssues(wb, sheet.Id);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF SPELLCHECK_PLAIN_TEXT " +
+            $"rows={rows} steps={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={timings.Average():F2} p95_ms={p95:F2} max_ms={ordered[^1]:F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        issues.Should().BeEmpty();
     }
 }
