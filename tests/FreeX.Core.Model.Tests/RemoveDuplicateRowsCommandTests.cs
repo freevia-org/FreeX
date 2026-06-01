@@ -82,6 +82,41 @@ public sealed class RemoveDuplicateRowsCommandTests
     }
 
     [Fact]
+    public void CompositeWorkbookCommand_RemovesDuplicateRowsAcrossGroupedSheetsAndUndoRestores()
+    {
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var sheet2 = wb.AddSheet("Sheet2");
+        var ctx = new SimpleCtx(wb);
+        SeedDuplicateRows(sheet1, "A", "B", "A", "C");
+        SeedDuplicateRows(sheet2, "North", "South", "North", "West");
+        var range1 = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 4, 1));
+        var range2 = new GridRange(new CellAddress(sheet2.Id, 1, 1), new CellAddress(sheet2.Id, 4, 1));
+        var command = new CompositeWorkbookCommand(
+            "Remove Duplicates",
+            [
+                new RemoveDuplicateRowsCommand(sheet1.Id, range1),
+                new RemoveDuplicateRowsCommand(sheet2.Id, range2)
+            ]);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet1.GetValue(1, 1).Should().Be(new TextValue("A"));
+        sheet1.GetValue(2, 1).Should().Be(new TextValue("B"));
+        sheet1.GetValue(3, 1).Should().Be(new TextValue("C"));
+        sheet2.GetValue(1, 1).Should().Be(new TextValue("North"));
+        sheet2.GetValue(2, 1).Should().Be(new TextValue("South"));
+        sheet2.GetValue(3, 1).Should().Be(new TextValue("West"));
+
+        command.Revert(ctx);
+
+        sheet1.GetValue(3, 1).Should().Be(new TextValue("A"));
+        sheet1.GetValue(4, 1).Should().Be(new TextValue("C"));
+        sheet2.GetValue(3, 1).Should().Be(new TextValue("North"));
+        sheet2.GetValue(4, 1).Should().Be(new TextValue("West"));
+    }
+
+    [Fact]
     public void RemoveDuplicateRowsCommand_RejectsProtectedSheet()
     {
         var wb = new Workbook("test");
@@ -98,6 +133,12 @@ public sealed class RemoveDuplicateRowsCommandTests
         outcome.ErrorMessage.Should().Contain("protected");
         sheet.GetValue(1, 1).Should().Be(new TextValue("A"));
         sheet.GetValue(2, 1).Should().Be(new TextValue("A"));
+    }
+
+    private static void SeedDuplicateRows(Sheet sheet, params string[] values)
+    {
+        for (var index = 0; index < values.Length; index++)
+            sheet.SetCell(new CellAddress(sheet.Id, (uint)index + 1, 1), new TextValue(values[index]));
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext

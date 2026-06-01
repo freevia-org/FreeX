@@ -288,6 +288,39 @@ public sealed class SubtotalCommandTests
     }
 
     [Fact]
+    public void CompositeWorkbookCommand_AppliesSubtotalsAcrossGroupedSheetsAndUndoRestores()
+    {
+        var workbook = new Workbook("test");
+        var sheet1 = workbook.AddSheet("Sheet1");
+        var sheet2 = workbook.AddSheet("Sheet2");
+        var context = new SimpleCtx(workbook);
+        SeedSubtotalRows(sheet1);
+        SeedSubtotalRows(sheet2);
+        var range1 = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 5, 2));
+        var range2 = new GridRange(new CellAddress(sheet2.Id, 1, 1), new CellAddress(sheet2.Id, 5, 2));
+        var command = new CompositeWorkbookCommand(
+            "Subtotal",
+            [
+                new SubtotalCommand(sheet1.Id, range1, groupByColumnOffset: 0, subtotalColumnOffset: 1),
+                new SubtotalCommand(sheet2.Id, range2, groupByColumnOffset: 0, subtotalColumnOffset: 1)
+            ]);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet1.GetValue(4, 1).Should().Be(new TextValue("East Total"));
+        sheet1.GetCell(4, 2)!.FormulaText.Should().Be("SUBTOTAL(9,B2:B3)");
+        sheet2.GetValue(4, 1).Should().Be(new TextValue("East Total"));
+        sheet2.GetCell(4, 2)!.FormulaText.Should().Be("SUBTOTAL(9,B2:B3)");
+
+        command.Revert(context);
+
+        sheet1.GetValue(4, 1).Should().Be(new TextValue("West"));
+        sheet1.GetValue(5, 2).Should().Be(new NumberValue(25));
+        sheet2.GetValue(4, 1).Should().Be(new TextValue("West"));
+        sheet2.GetValue(5, 2).Should().Be(new NumberValue(25));
+    }
+
+    [Fact]
     public void RemoveSubtotalRowsCommand_RemovesSubtotalFormulaRowsAndUndoRestores()
     {
         var workbook = new Workbook("test");
@@ -338,6 +371,20 @@ public sealed class SubtotalCommandTests
         outcome.Success.Should().BeFalse();
         outcome.ErrorMessage.Should().Contain("protected");
         sheet.GetValue(2, 1).Should().Be(new TextValue("East Total"));
+    }
+
+    private static void SeedSubtotalRows(Sheet sheet)
+    {
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(15));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(25));
     }
 
     [Fact]
