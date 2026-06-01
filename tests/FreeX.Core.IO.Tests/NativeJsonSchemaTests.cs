@@ -429,6 +429,9 @@ public sealed class NativeJsonSchemaTests
         sheet.ThreadedComments[invalidColumn] = new ThreadedComment("dropped");
         sheet.Hyperlinks[valid] = "https://example.invalid/kept";
         sheet.Hyperlinks[invalidColumn] = "https://example.invalid/dropped";
+        var styleId = workbook.RegisterStyle(new CellStyle { Bold = true });
+        sheet.SetStyleOnly(valid.Row, valid.Col + 1, styleId);
+        sheet.SetStyleOnly(invalidRow.Row, invalidRow.Col + 1, styleId);
         workbook.WatchedCells.Add(valid);
         workbook.WatchedCells.Add(invalidRow);
         workbook.Scenarios.Add(new WorkbookScenario(
@@ -458,6 +461,8 @@ public sealed class NativeJsonSchemaTests
             .Should().ContainSingle().Which.GetProperty("Address").GetString().Should().Be("A1");
         sheetJson.GetProperty("Hyperlinks").EnumerateArray()
             .Should().ContainSingle().Which.GetProperty("Address").GetString().Should().Be("A1");
+        sheetJson.GetProperty("StyleOnlyCells").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("Address").GetString().Should().Be("B1");
     }
 
     [Fact]
