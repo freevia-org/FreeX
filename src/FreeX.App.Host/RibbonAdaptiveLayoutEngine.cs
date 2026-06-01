@@ -2,6 +2,8 @@ namespace FreeX.App.Host;
 
 internal static class RibbonAdaptiveLayoutEngine
 {
+    private const double ResizeThresholdProbeDelta = 0.5;
+
     public static RibbonAdaptiveLayoutResult Plan(
         double availableWidth,
         IReadOnlyList<RibbonAdaptiveGroup> groups,
@@ -45,10 +47,17 @@ internal static class RibbonAdaptiveLayoutEngine
     {
         var groupProfileKeys = GetGroupProfileKeys(groups);
         var thresholds = new SortedSet<double>(RibbonAdaptiveTabProfiles.GetBreakpointThresholds(groupProfileKeys, selectedTabHeader));
+        foreach (var threshold in RibbonCollapsedGroupPresentationPlanner.BreakpointThresholds)
+            thresholds.Add(threshold);
+
         foreach (var width in EnumerateThresholdCandidates(groups, fixedChromeWidth))
         {
             var layout = Plan(width, groups, groupProfileKeys, fixedChromeWidth, selectedTabHeader);
-            thresholds.Add(layout.PlannedWidth);
+            if (layout.RequiresMeasuredCorrection ||
+                ShouldKeepResizeThreshold(layout.PlannedWidth, groups, groupProfileKeys, fixedChromeWidth, selectedTabHeader))
+            {
+                thresholds.Add(layout.PlannedWidth);
+            }
         }
 
         var positiveThresholds = new List<double>(thresholds.Count);
@@ -59,6 +68,47 @@ internal static class RibbonAdaptiveLayoutEngine
         }
 
         return positiveThresholds;
+    }
+
+    private static bool ShouldKeepResizeThreshold(
+        double threshold,
+        IReadOnlyList<RibbonAdaptiveGroup> groups,
+        IReadOnlyList<string> groupProfileKeys,
+        double fixedChromeWidth,
+        string? selectedTabHeader)
+    {
+        if (threshold <= 0)
+            return false;
+
+        var belowThreshold = Math.Max(0, threshold - ResizeThresholdProbeDelta);
+        var aboveThreshold = threshold + ResizeThresholdProbeDelta;
+        if (!string.Equals(
+                RibbonCollapsedGroupPresentationPlanner.GetCacheKey(belowThreshold),
+                RibbonCollapsedGroupPresentationPlanner.GetCacheKey(aboveThreshold),
+                StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var belowLayout = Plan(belowThreshold, groups, groupProfileKeys, fixedChromeWidth, selectedTabHeader);
+        var aboveLayout = Plan(aboveThreshold, groups, groupProfileKeys, fixedChromeWidth, selectedTabHeader);
+        return !StatesEqual(belowLayout.States, aboveLayout.States);
+    }
+
+    private static bool StatesEqual(
+        IReadOnlyList<RibbonAdaptiveGroupState> first,
+        IReadOnlyList<RibbonAdaptiveGroupState> second)
+    {
+        if (first.Count != second.Count)
+            return false;
+
+        for (var i = 0; i < first.Count; i++)
+        {
+            if (first[i] != second[i])
+                return false;
+        }
+
+        return true;
     }
 
     public static IReadOnlyList<int> GetExpandableGroupIndexes(
