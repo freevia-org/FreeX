@@ -136,6 +136,21 @@ public sealed class PerformanceReviewMeasurementTests
     }
 
     [Fact]
+    public void RibbonMeasuredCorrections_ApplySingleGroupWithoutStateSnapshots()
+    {
+        var source = System.IO.File.ReadAllText(WorkspaceFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.RibbonAdaptive.cs"));
+
+        source.Should().Contain("ApplyRibbonAdaptiveStateAt(");
+        source.Should().Contain("out var changedIndex");
+        source.Should().NotContain("var previousStates = plannedStates.ToArray();");
+        source.Should().NotContain("previousStates = plannedStates.ToArray();");
+        source.Should().NotContain("var expandedStates = plannedStates.ToArray();");
+    }
+
+    [Fact]
     public void Benchmark_RibbonCollapsedButtonFootprint_ReportsTimingAndAllocatedBytes()
     {
         StaTestRunner.Run(() =>
