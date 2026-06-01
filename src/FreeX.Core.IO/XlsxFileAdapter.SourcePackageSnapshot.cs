@@ -7,7 +7,7 @@ public sealed partial class XlsxFileAdapter
 {
     private sealed record XlsxSourcePackage(byte[] Buffer, int Offset, int Count, string? ModelFingerprint)
     {
-        private const int FingerprintCellLimit = 10_000;
+        private const int FingerprintCellLimit = 25_000;
 
         public static XlsxSourcePackage Capture(Stream stream, Workbook workbook)
             => Capture(stream, workbook, allowBufferReuse: false);

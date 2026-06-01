@@ -61,6 +61,7 @@ internal static class XlsxPackageMetadataMerger
         if (targetRoot is null || sourceRoot is null)
             return;
 
+        var changed = false;
         var existingDefaults = targetRoot
             .Elements(contentTypeNs + "Default")
             .Select(element => element.Attribute("Extension")?.Value)
@@ -72,7 +73,10 @@ internal static class XlsxPackageMetadataMerger
         {
             var extension = sourceDefault.Attribute("Extension")?.Value;
             if (!string.IsNullOrWhiteSpace(extension) && existingDefaults.Add(NormalizeContentTypeExtension(extension)))
+            {
                 targetRoot.Add(new XElement(sourceDefault));
+                changed = true;
+            }
         }
 
         var existingOverrides = targetRoot
@@ -88,10 +92,14 @@ internal static class XlsxPackageMetadataMerger
             if (IsExcludedSourcePart(partName, excludedSourceParts))
                 continue;
             if (!string.IsNullOrWhiteSpace(partName) && existingOverrides.Add(NormalizeContentTypePartName(partName)))
+            {
                 targetRoot.Add(new XElement(sourceOverride));
+                changed = true;
+            }
         }
 
-        XlsxPackageXmlEditor.ReplaceXml(targetArchive, "[Content_Types].xml", targetXml);
+        if (changed)
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, "[Content_Types].xml", targetXml);
     }
 
     public static void MergeRelationshipParts(
@@ -135,6 +143,7 @@ internal static class XlsxPackageMetadataMerger
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+            var changed = false;
             foreach (var sourceRelationship in sourceRoot.Elements(relationshipNs + "Relationship"))
             {
                 if (!ShouldPreserveRelationship(
@@ -156,9 +165,11 @@ internal static class XlsxPackageMetadataMerger
                 var copiedId = copy.Attribute("Id")?.Value;
                 if (!string.IsNullOrWhiteSpace(copiedId))
                     existingIds.Add(copiedId);
+                changed = true;
             }
 
-            XlsxPackageXmlEditor.ReplaceXml(targetArchive, sourceEntry.FullName, targetXml);
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(targetArchive, sourceEntry.FullName, targetXml);
         }
     }
 
