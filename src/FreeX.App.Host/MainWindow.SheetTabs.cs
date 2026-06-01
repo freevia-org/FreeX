@@ -65,8 +65,13 @@ public partial class MainWindow
 
     private void SheetTab_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (_dragSheetTabId is not { } draggedId || e.LeftButton != MouseButtonState.Pressed)
+        if (_dragSheetTabId is not { } draggedId)
             return;
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            _dragSheetTabId = null;
+            return;
+        }
 
         var current = e.GetPosition(SheetTabsControl);
         if (Math.Abs(current.X - _dragSheetTabStart.X) < SystemParameters.MinimumHorizontalDragDistance)
