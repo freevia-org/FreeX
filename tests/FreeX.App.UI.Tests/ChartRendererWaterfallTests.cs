@@ -81,17 +81,19 @@ public sealed class ChartRendererWaterfallTests
     }
 
     [Fact]
-    public void HistogramRenderer_AggregatesMinAndMaxWhileCollectingValues()
+    public void HistogramRenderer_DelegatesBinningToHistogramBinPlanner()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "ChartRenderer.WaterfallHistogram.cs"));
         var histogram = source[
             source.IndexOf("internal static PlotModel BuildHistogramModel", StringComparison.Ordinal)..];
 
-        histogram.Should().Contain("if (v < min)");
-        histogram.Should().Contain("if (v > max)");
-        histogram.Should().NotContain("rawValues.Min()");
-        histogram.Should().NotContain("rawValues.Max()");
+        // Binning (count/width/automatic + overflow/underflow) lives in the pure, unit-tested
+        // HistogramBinPlanner; the renderer must consume it rather than re-deriving bin math inline.
+        histogram.Should().Contain("HistogramBinPlanner.Compute");
+        histogram.Should().Contain("chart.HistogramBinning");
+        histogram.Should().NotContain("Math.Sqrt");
+        histogram.Should().NotContain("Math.Floor");
     }
 
     [Fact]

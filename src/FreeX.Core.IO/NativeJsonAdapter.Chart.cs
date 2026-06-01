@@ -250,6 +250,7 @@ public sealed partial class NativeJsonAdapter
                 SeriesLineThemeColor = ToThemeColorReference(chartDto.SeriesLineThemeColor),
                 SeriesLineThickness = chartDto.SeriesLineThickness,
                 SeriesLineDashStyle = chartDto.SeriesLineDashStyle,
+                HistogramBinning = chartDto.HistogramBinning,
                 ShowUpDownBars = chartDto.ShowUpDownBars,
                 UpDownBarGapWidth = chartDto.UpDownBarGapWidth,
                 UpBarFillColor = chartDto.UpBarFillColor,
