@@ -103,6 +103,25 @@ public sealed class ToolbarVisualStateCacheTests
     }
 
     [Fact]
+    public void TryGet_ReusesRecentlySeenStateWithoutCreateCallback()
+    {
+        var cache = new ToolbarVisualStateCache();
+        var workbookId = WorkbookId.New();
+        var styleA = new StyleId(4);
+        var styleB = new StyleId(5);
+        var stateA = ToolbarVisualState.From(new CellStyle { Bold = true });
+        var stateB = ToolbarVisualState.From(new CellStyle { Italic = true });
+
+        cache.AddOrUpdate(workbookId, styleA, stateA);
+        cache.AddOrUpdate(workbookId, styleB, stateB);
+
+        cache.TryGet(workbookId, styleA, out var cachedA).Should().BeTrue();
+        cache.TryGet(workbookId, styleB, out var cachedB).Should().BeTrue();
+        cachedA.Should().Be(stateA);
+        cachedB.Should().Be(stateB);
+    }
+
+    [Fact]
     public void GetOrCreate_RebuildsStateWhenWorkbookChanges()
     {
         var cache = new ToolbarVisualStateCache();
@@ -133,7 +152,11 @@ public sealed class ToolbarVisualStateCacheTests
         var calls = 0;
 
         for (var i = 0; i < 100; i++)
-            cache.GetOrCreate(workbookId, i % 2 == 0 ? styleA : styleB, CreateState);
+        {
+            var styleId = i % 2 == 0 ? styleA : styleB;
+            if (!cache.TryGet(workbookId, styleId, out _))
+                cache.AddOrUpdate(workbookId, styleId, CreateState());
+        }
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -143,7 +166,11 @@ public sealed class ToolbarVisualStateCacheTests
         var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
         var stopwatch = Stopwatch.StartNew();
         for (var i = 0; i < iterations; i++)
-            cache.GetOrCreate(workbookId, i % 2 == 0 ? styleA : styleB, CreateState);
+        {
+            var styleId = i % 2 == 0 ? styleA : styleB;
+            if (!cache.TryGet(workbookId, styleId, out _))
+                cache.AddOrUpdate(workbookId, styleId, CreateState());
+        }
         stopwatch.Stop();
 
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
