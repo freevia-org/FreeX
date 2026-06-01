@@ -650,15 +650,17 @@ public class CellStyleTests
     }
 
     [Fact]
-    public void StyleRegistry_GetStyle_ReturnsSameInstance()
+    public void StyleRegistry_GetStyle_ReturnsDefensiveClone()
     {
-        // GetStyle returns the shared registry instance — no defensive clone on every read.
-        // Callers that need to modify a style must call .Clone() themselves.
         var wb = new Workbook();
         var id = wb.RegisterStyle(new CellStyle { Bold = true });
         var first = wb.GetStyle(id);
+        first.Bold = false;
+
         var second = wb.GetStyle(id);
-        first.Should().BeSameAs(second);
+
+        first.Should().NotBeSameAs(second);
+        second.Bold.Should().BeTrue();
     }
 
     [Fact]
