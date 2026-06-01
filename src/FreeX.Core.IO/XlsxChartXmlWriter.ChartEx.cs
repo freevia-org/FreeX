@@ -96,7 +96,7 @@ internal static partial class XlsxChartXmlWriter
                         new XAttribute("type", "cat"),
                         new XElement(chartExNs + "f", categoryRange)),
                 new XElement(chartExNs + "numDim",
-                    new XAttribute("type", "val"),
+                    new XAttribute("type", ToChartExNumericDimensionType(chart.Type)),
                     new XElement(chartExNs + "f", valueRange),
                     chart.FirstRowIsHeader
                         ? new XElement(chartExNs + "nf",
@@ -130,14 +130,19 @@ internal static partial class XlsxChartXmlWriter
     }
 
     /// <summary>
-    /// Optional per-series layout properties for chartEx families: waterfall total/anchor columns
-    /// (<c>cx:subtotals</c>). Histogram bin settings are intentionally not emitted because current
-    /// desktop Excel rejects otherwise valid chartEx packages containing <c>cx:binCount</c> or
-    /// <c>cx:binSize</c>. Returns null when
-    /// the chart carries no such settings so the element is omitted (Excel's defaults apply).
+    /// Optional per-series layout properties for chartEx families. Histogram emits Excel's default
+    /// empty binning element so desktop Excel treats the data as bins, but custom <c>cx:binCount</c>
+    /// and <c>cx:binSize</c> values remain intentionally suppressed because Excel rejects otherwise
+    /// valid chartEx packages that contain them.
     /// </summary>
     private static XElement? BuildChartExSeriesLayoutPr(ChartModel chart, XNamespace chartExNs)
     {
+        if (chart.Type == ChartType.Histogram)
+        {
+            return new XElement(chartExNs + "layoutPr",
+                new XElement(chartExNs + "binning", new XAttribute("intervalClosed", "r")));
+        }
+
         var subtotals = BuildChartExSubtotals(chart, chartExNs);
         return subtotals is null
             ? null
@@ -159,6 +164,9 @@ internal static partial class XlsxChartXmlWriter
     // cx:data/@id and cx:dataId/@val are xsd:unsignedInt — a bare numeric id, not "data{n}".
     private static string ToChartExDataId(int seriesIndex) =>
         seriesIndex.ToString(CultureInfo.InvariantCulture);
+
+    private static string ToChartExNumericDimensionType(ChartType chartType) =>
+        chartType is ChartType.Treemap or ChartType.Sunburst ? "size" : "val";
 
     private static string ToChartExSeriesLayoutId(ChartType chartType) =>
         chartType switch
