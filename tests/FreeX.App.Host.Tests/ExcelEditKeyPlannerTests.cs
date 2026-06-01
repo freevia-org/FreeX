@@ -218,6 +218,24 @@ public sealed class ExcelEditKeyPlannerTests
     }
 
     [Theory]
+    [InlineData(Key.Up)]
+    [InlineData(Key.Down)]
+    [InlineData(Key.PageUp)]
+    [InlineData(Key.PageDown)]
+    public void GetIntent_LetsFormulaBarHandleShiftNavigationTextSelection(Key key)
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            key,
+            ModifierKeys.Shift,
+            Current,
+            pageSize: 9,
+            allowFormulaBarNavigationKeys: true);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.None);
+        intent.Target.Should().BeNull();
+    }
+
+    [Theory]
     [InlineData(Key.Up, 9, 5)]
     [InlineData(Key.Down, 11, 5)]
     [InlineData(Key.Left, 10, 4)]
