@@ -17224,6 +17224,47 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Save_DoesNotCoalesceIgnoredErrorsWithDifferentNativeMetadata()
+    {
+        var workbook = new Workbook("IgnoredErrorsDistinctMetadataSaveTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("00123"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("00456"));
+        sheet.GetCell(1, 1)!.IgnoreFormulaError = true;
+        sheet.GetCell(1, 2)!.IgnoreFormulaError = true;
+        sheet.IgnoredErrorsMetadata = new WorksheetIgnoredErrorsMetadataModel
+        {
+            ErrorNativeAttributes =
+            {
+                ["A1"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["twoDigitTextYear"] = "1"
+                },
+                ["B1"] = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["calculatedColumn"] = "1"
+                }
+            }
+        };
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var entries = worksheetXml.Root!
+            .Element(worksheetNs + "ignoredErrors")!
+            .Elements(worksheetNs + "ignoredError")
+            .ToList();
+
+        entries.Select(entry => entry.Attribute("sqref")?.Value).Should().Equal("A1", "B1");
+        entries[0].Attribute("twoDigitTextYear")!.Value.Should().Be("1");
+        entries[1].Attribute("calculatedColumn")!.Value.Should().Be("1");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_DoesNotRestoreClearedIgnoredErrors()
     {
         var workbook = new Workbook("IgnoredErrorsRemovalTest");
@@ -17282,7 +17323,7 @@ public partial class FileAdapterSmokeTests
         ignoredErrors.Should().NotBeNull();
         var entries = ignoredErrors!.Elements(worksheetNs + "ignoredError").ToList();
 
-        entries.Select(entry => entry.Attribute("sqref")?.Value).Should().BeEquivalentTo(["A1", "B1"]);
+        entries.Select(entry => entry.Attribute("sqref")?.Value).Should().Equal("A1:B1");
         entries.Select(entry => entry.Attribute("numberStoredAsText")?.Value).Should().OnlyContain(value => value == "1");
         entries.Select(entry => entry.Attribute("twoDigitTextYear")?.Value).Should().OnlyContain(value => value == "1");
     }
