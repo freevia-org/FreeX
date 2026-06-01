@@ -18,7 +18,8 @@ internal sealed record CfEvaluationContext(
     Dictionary<ConditionalFormat, CfFormulaCache> Formulas,
     Dictionary<CfThresholdFormulaKey, FormulaNode> ThresholdFormulas,
     Dictionary<CfThresholdFormulaKey, double> StaticThresholdFormulaValues,
-    Dictionary<ConditionalFormat, CfIconSetThresholdCache> IconSetThresholds);
+    Dictionary<ConditionalFormat, CfIconSetThresholdCache> IconSetThresholds,
+    Dictionary<ConditionalFormat, CellStyle> DefaultMergedFormatStyles);
 
 internal sealed record CfIconSetThresholdCache(double[] Values, bool[] GreaterThanOrEqual);
 
@@ -26,6 +27,8 @@ internal sealed record CfFormulaCache(
     FormulaNode Ast,
     bool HasRelativeReferences,
     CfSimpleFormulaComparison? SimpleComparison);
+
+internal readonly record struct CfStyleResult(CellStyle Style, bool CanUseAsDefaultMergedStyle);
 
 internal readonly record struct CfSimpleFormulaComparison(
     CfFormulaScalarOperand Left,
@@ -68,6 +71,7 @@ internal static class ViewportConditionalFormatEvaluator
     private static readonly Dictionary<CfThresholdFormulaKey, FormulaNode> EmptyThresholdFormulas = [];
     private static readonly Dictionary<CfThresholdFormulaKey, double> EmptyStaticThresholdFormulaValues = [];
     private static readonly Dictionary<ConditionalFormat, CfIconSetThresholdCache> EmptyIconSetThresholds = new(ReferenceEqualityComparer.Instance);
+    private static readonly Dictionary<ConditionalFormat, CellStyle> EmptyDefaultMergedFormatStyles = new(ReferenceEqualityComparer.Instance);
     private static readonly FormulaEvaluator ThresholdFormulaEvaluator = new();
     private static readonly CfEvaluationContext EmptyContext = new(
         EmptyRules,
@@ -76,7 +80,8 @@ internal static class ViewportConditionalFormatEvaluator
         EmptyFormulas,
         EmptyThresholdFormulas,
         EmptyStaticThresholdFormulaValues,
-        EmptyIconSetThresholds);
+        EmptyIconSetThresholds,
+        EmptyDefaultMergedFormatStyles);
 
     public static CfEvaluationContext BuildContext(Sheet sheet, Workbook workbook)
     {
@@ -96,7 +101,8 @@ internal static class ViewportConditionalFormatEvaluator
             PrecomputeFormulaCaches(sheet),
             thresholdFormulas,
             staticThresholdFormulaValues,
-            PrecomputeIconSetThresholdCaches(sheet, aggregates));
+            PrecomputeIconSetThresholdCaches(sheet, aggregates),
+            PrecomputeDefaultMergedFormatStyles(rulesByPriority));
     }
 
     private static ConditionalFormat[] CopyRulesByPriority(IReadOnlyList<ConditionalFormat> rules)
@@ -146,7 +152,7 @@ internal static class ViewportConditionalFormatEvaluator
 
     private readonly record struct IndexedConditionalFormat(ConditionalFormat Rule, int Index);
 
-    public static CellStyle? Evaluate(
+    public static CfStyleResult? Evaluate(
         Sheet sheet,
         CellAddress addr,
         ScalarValue value,
@@ -157,25 +163,29 @@ internal static class ViewportConditionalFormatEvaluator
         if (cfContext.RulesByPriority.Count == 0)
             return null;
 
-        CellStyle? result = null;
+        CfStyleResult? result = null;
         for (var i = 0; i < cfContext.RulesByPriority.Count; i++)
         {
             var cf = cfContext.RulesByPriority[i];
             if (!cf.AppliesTo.Contains(addr))
                 continue;
 
-            CellStyle? matchedStyle = null;
+            CfStyleResult? matchedStyle = null;
             bool conditionMet;
             if (cf.RuleType == CfRuleType.ColorScale)
             {
-                matchedStyle = ComputeColorScaleStyle(cf, value, sheet, workbook, addr, cfContext);
-                conditionMet = matchedStyle is not null;
+                var colorScaleStyle = ComputeColorScaleStyle(cf, value, sheet, workbook, addr, cfContext);
+                conditionMet = colorScaleStyle is not null;
+                if (colorScaleStyle is not null)
+                    matchedStyle = new CfStyleResult(colorScaleStyle, CanUseAsDefaultMergedStyle: true);
             }
             else if (cf.RuleType == CfRuleType.DataBar)
             {
                 conditionMet = TryGetDouble(value, out _);
                 if (conditionMet)
-                    matchedStyle = new CellStyle { FillColor = cf.DataBarColor.ToCellColor() };
+                    matchedStyle = new CfStyleResult(
+                        new CellStyle { FillColor = cf.DataBarColor.ToCellColor() },
+                        CanUseAsDefaultMergedStyle: true);
             }
             else
             {
@@ -199,22 +209,48 @@ internal static class ViewportConditionalFormatEvaluator
                     _ => false
                 };
 
-                if (conditionMet)
-                    matchedStyle = cf.FormatIfTrue;
+                if (conditionMet && cf.FormatIfTrue is not null)
+                {
+                    matchedStyle = cfContext.DefaultMergedFormatStyles.TryGetValue(cf, out var defaultMergedStyle)
+                        ? new CfStyleResult(defaultMergedStyle, CanUseAsDefaultMergedStyle: true)
+                        : new CfStyleResult(cf.FormatIfTrue, CanUseAsDefaultMergedStyle: false);
+                }
             }
 
             if (!conditionMet)
                 continue;
 
-            if (matchedStyle is not null)
+            if (matchedStyle is { } styleResult)
+            {
                 result = result is null
-                    ? matchedStyle
-                    : StackDifferentialStyle(result, matchedStyle);
+                    ? styleResult
+                    : new CfStyleResult(
+                        StackDifferentialStyle(result.Value.Style, styleResult.Style),
+                        CanUseAsDefaultMergedStyle: true);
+            }
+
             if (cf.StopIfTrue)
                 break;
         }
 
         return result;
+    }
+
+    private static Dictionary<ConditionalFormat, CellStyle> PrecomputeDefaultMergedFormatStyles(
+        IReadOnlyList<ConditionalFormat> rulesByPriority)
+    {
+        Dictionary<ConditionalFormat, CellStyle>? result = null;
+        for (var i = 0; i < rulesByPriority.Count; i++)
+        {
+            var cf = rulesByPriority[i];
+            if (cf.FormatIfTrue is null)
+                continue;
+
+            result ??= new Dictionary<ConditionalFormat, CellStyle>(ReferenceEqualityComparer.Instance);
+            result[cf] = MergeStyles(CellStyle.Default, cf.FormatIfTrue);
+        }
+
+        return result ?? EmptyDefaultMergedFormatStyles;
     }
 
     public static CellStyle MergeStyles(CellStyle? baseStyle, CellStyle cfStyle)
