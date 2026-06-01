@@ -6,7 +6,6 @@ internal static partial class RowColumnShiftHelpers
     {
         var shifted = values
             .Where(p => p.Key >= start)
-            .OrderByDescending(p => p.Key)
             .ToList();
 
         foreach (var (key, _) in shifted)
@@ -18,23 +17,33 @@ internal static partial class RowColumnShiftHelpers
     internal static void ShiftIndexesDown(Dictionary<uint, double> values, uint start, uint count)
     {
         var end = start + count - 1;
-        var shifted = values
-            .Where(p => p.Key > end)
-            .OrderBy(p => p.Key)
-            .ToList();
-        var removed = values.Keys.Where(key => key >= start && key <= end).ToList();
+        List<KeyValuePair<uint, double>>? shifted = null;
+        List<uint>? removed = null;
+        foreach (var pair in values)
+        {
+            if (pair.Key > end)
+                (shifted ??= new List<KeyValuePair<uint, double>>(values.Count)).Add(pair);
+            else if (pair.Key >= start)
+                (removed ??= []).Add(pair.Key);
+        }
 
-        foreach (var key in removed)
-            values.Remove(key);
-        foreach (var (key, _) in shifted)
-            values.Remove(key);
-        foreach (var (key, value) in shifted)
-            values[key - count] = value;
+        if (removed is not null)
+        {
+            foreach (var key in removed)
+                values.Remove(key);
+        }
+        if (shifted is not null)
+        {
+            foreach (var (key, _) in shifted)
+                values.Remove(key);
+            foreach (var (key, value) in shifted)
+                values[key - count] = value;
+        }
     }
 
     internal static void ShiftSortedSetUp(SortedSet<uint> values, uint start, uint count)
     {
-        var shifted = values.Where(value => value >= start).OrderByDescending(value => value).ToList();
+        var shifted = values.Where(value => value >= start).ToList();
         foreach (var value in shifted)
             values.Remove(value);
         foreach (var value in shifted)
@@ -44,15 +53,28 @@ internal static partial class RowColumnShiftHelpers
     internal static void ShiftSortedSetDown(SortedSet<uint> values, uint start, uint count)
     {
         var end = start + count - 1;
-        var removed = values.Where(value => value >= start && value <= end).ToList();
-        var shifted = values.Where(value => value > end).OrderBy(value => value).ToList();
+        List<uint>? removed = null;
+        List<uint>? shifted = null;
+        foreach (var value in values)
+        {
+            if (value > end)
+                (shifted ??= new List<uint>(values.Count)).Add(value);
+            else if (value >= start)
+                (removed ??= []).Add(value);
+        }
 
-        foreach (var value in removed)
-            values.Remove(value);
-        foreach (var value in shifted)
-            values.Remove(value);
-        foreach (var value in shifted)
-            values.Add(value - count);
+        if (removed is not null)
+        {
+            foreach (var value in removed)
+                values.Remove(value);
+        }
+        if (shifted is not null)
+        {
+            foreach (var value in shifted)
+                values.Remove(value);
+            foreach (var value in shifted)
+                values.Add(value - count);
+        }
     }
 
     internal static void RestoreSortedSet(SortedSet<uint> target, IReadOnlyCollection<uint>? snapshot)

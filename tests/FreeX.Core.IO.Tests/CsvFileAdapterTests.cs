@@ -381,6 +381,19 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_HonorsTabSeparatorDirective()
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=\t\r\nName\tAmount\r\nAlice\t3.5\r\n"));
+        var workbook = new CsvFileAdapter().Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new TextValue("Name"));
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new TextValue("Amount"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new TextValue("Alice"));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(3.5));
+    }
+
+    [Fact]
     public void Load_AppliesExcelSeparatorDirectiveOnlyToFirstPhysicalRecord()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=;\r\nsep=x\r\n"));

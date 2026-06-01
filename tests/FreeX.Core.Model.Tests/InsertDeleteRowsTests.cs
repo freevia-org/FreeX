@@ -624,9 +624,111 @@ public class InsertDeleteRowsTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void Benchmark_InsertRowsWithDenseRowMetadata_ReportsTiming()
+    {
+        const int iterations = 3;
+        var (workbook, sheet, ctx) = SetupDenseRowMetadataWorkbook();
+
+        var warmup = new InsertRowsCommand(sheet.Id, beforeRow: DenseMetadataStartRow);
+        warmup.Apply(ctx).Success.Should().BeTrue();
+        warmup.Revert(ctx);
+        sheet.RowHeights.Should().HaveCount(DenseMetadataRows);
+        sheet.Comments.Should().HaveCount(DenseMetadataRows);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var command = new InsertRowsCommand(sheet.Id, beforeRow: DenseMetadataStartRow);
+            var step = Stopwatch.StartNew();
+            command.Apply(ctx).Success.Should().BeTrue();
+            command.Revert(ctx);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        workbook.SheetCount.Should().Be(1);
+        sheet.RowHeights.Should().HaveCount(DenseMetadataRows);
+        sheet.Comments.Should().ContainKey(new CellAddress(sheet.Id, DenseMetadataRows, 1));
+        sheet.ThreadedComments.Should().ContainKey(new CellAddress(sheet.Id, DenseMetadataRows, 2));
+        sheet.Hyperlinks.Should().ContainKey(new CellAddress(sheet.Id, DenseMetadataRows, 3));
+        sheet.HyperlinkMetadata.Should().ContainKey(new CellAddress(sheet.Id, DenseMetadataRows, 3));
+        Console.WriteLine(
+            "PERF INSERT_ROWS_METADATA_SHIFT " +
+            $"rows={DenseMetadataRows} before_row={DenseMetadataStartRow} steps={iterations} " +
+            $"metadata_entries={DenseMetadataRows * 6} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={timings.Average():F2} p95_ms={p95:F2} max_ms={ordered[^1]:F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Benchmark_DeleteRowsWithDenseRowMetadata_ReportsTiming()
+    {
+        const int iterations = 3;
+        var (workbook, sheet, ctx) = SetupDenseRowMetadataWorkbook();
+
+        var warmup = new DeleteRowsCommand(sheet.Id, startRow: DenseMetadataStartRow);
+        warmup.Apply(ctx).Success.Should().BeTrue();
+        warmup.Revert(ctx);
+        sheet.RowHeights.Should().HaveCount(DenseMetadataRows);
+        sheet.Comments.Should().HaveCount(DenseMetadataRows);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var command = new DeleteRowsCommand(sheet.Id, startRow: DenseMetadataStartRow);
+            var step = Stopwatch.StartNew();
+            command.Apply(ctx).Success.Should().BeTrue();
+            command.Revert(ctx);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        workbook.SheetCount.Should().Be(1);
+        sheet.RowHeights.Should().HaveCount(DenseMetadataRows);
+        sheet.Comments.Should().ContainKey(new CellAddress(sheet.Id, DenseMetadataRows, 1));
+        sheet.ThreadedComments.Should().ContainKey(new CellAddress(sheet.Id, DenseMetadataRows, 2));
+        sheet.Hyperlinks.Should().ContainKey(new CellAddress(sheet.Id, DenseMetadataRows, 3));
+        sheet.HyperlinkMetadata.Should().ContainKey(new CellAddress(sheet.Id, DenseMetadataRows, 3));
+        Console.WriteLine(
+            "PERF DELETE_ROWS_METADATA_SHIFT " +
+            $"rows={DenseMetadataRows} start_row={DenseMetadataStartRow} steps={iterations} " +
+            $"metadata_entries={DenseMetadataRows * 6} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={timings.Average():F2} p95_ms={p95:F2} max_ms={ordered[^1]:F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
     private const int DenseShiftRows = 500;
     private const int DenseShiftColumns = 80;
     private const uint DenseShiftBeforeRow = 2;
+    private const int DenseMetadataRows = 6_000;
+    private const uint DenseMetadataStartRow = 2;
 
     private static (Workbook Workbook, Sheet Sheet, ICommandContext Context) SetupDenseShiftWorkbook()
     {
@@ -637,6 +739,28 @@ public class InsertDeleteRowsTests
         {
             for (uint col = 1; col <= DenseShiftColumns; col++)
                 sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * 1000 + col));
+        }
+
+        return (workbook, sheet, new SimpleCtx(workbook));
+    }
+
+    private static (Workbook Workbook, Sheet Sheet, ICommandContext Context) SetupDenseRowMetadataWorkbook()
+    {
+        var workbook = new Workbook("dense row metadata shift perf");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        for (uint row = 1; row <= DenseMetadataRows; row++)
+        {
+            sheet.RowHeights[row] = 18 + row % 7;
+            sheet.HiddenRows.Add(row);
+            sheet.FilterHiddenRows.Add(row);
+            sheet.RowPageBreaks.Add(row);
+
+            sheet.Comments[new CellAddress(sheet.Id, row, 1)] = $"comment {row}";
+            sheet.ThreadedComments[new CellAddress(sheet.Id, row, 2)] = new ThreadedComment($"thread {row}", "FreeX");
+            var hyperlinkAddress = new CellAddress(sheet.Id, row, 3);
+            sheet.Hyperlinks[hyperlinkAddress] = $"https://example.com/{row}";
+            sheet.HyperlinkMetadata[hyperlinkAddress] = new HyperlinkMetadata(ScreenTip: $"Open row {row}");
         }
 
         return (workbook, sheet, new SimpleCtx(workbook));

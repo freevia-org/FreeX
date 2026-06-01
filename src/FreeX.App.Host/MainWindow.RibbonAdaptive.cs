@@ -72,29 +72,29 @@ public partial class MainWindow
             adaptiveGroups,
             fixedChromeWidth,
             selectedTabHeader);
-        var layoutStates = layout.States.ToArray();
-        var plannedStates = layoutStates.ToArray();
+        var layoutStates = layout.States;
+        var plannedStatesSource = layoutStates;
 
-        var correctionCacheKey = CreateRibbonCorrectionCacheKey(cacheKey, availableWidth, plannedStates);
+        var correctionCacheKey = CreateRibbonCorrectionCacheKey(cacheKey, availableWidth, plannedStatesSource);
         var hasCachedCorrection = _ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates);
         if (hasCachedCorrection)
             _ribbonCorrectedStateCacheHitCount++;
         var cachedCorrectionNeedsExpansion = false;
         if (hasCachedCorrection && correctedStates is not null)
         {
-            plannedStates = correctedStates.ToArray();
-            cachedCorrectionNeedsExpansion = RibbonStatesAreMoreCollapsedThan(plannedStates, layoutStates);
+            plannedStatesSource = correctedStates;
+            cachedCorrectionNeedsExpansion = RibbonStatesAreMoreCollapsedThan(plannedStatesSource, layoutStates);
         }
 
-        var appliedStateKey = CreateRibbonAppliedStateKey(availableWidth, plannedStates);
-        if (!force &&
-            !_ribbonAdaptiveStateDiffInvalidated &&
+        var appliedStateKey = CreateRibbonAppliedStateKey(availableWidth, plannedStatesSource);
+        if (!_ribbonAdaptiveStateDiffInvalidated &&
             _lastRibbonAdaptiveAppliedStateKey == appliedStateKey)
         {
             _ribbonAppliedStateSkipCount++;
             return RibbonCompactUpdateResult.SkippedAppliedState;
         }
 
+        var plannedStates = plannedStatesSource.ToArray();
         var changedGroupCount = ApplyRibbonAdaptiveStates(
             groupSnapshots,
             collapsedButtons,
@@ -115,10 +115,11 @@ public partial class MainWindow
 
         visualStateChanged |= SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
         appliedStateKey = CreateRibbonAppliedStateKey(availableWidth, plannedStates);
+        var appliedStates = plannedStates.ToArray();
         if (!hasCachedCorrection || requiresMeasuredCorrection)
-            _ribbonCorrectedStateCache[correctionCacheKey] = plannedStates.ToArray();
+            _ribbonCorrectedStateCache[correctionCacheKey] = appliedStates;
         _lastRibbonAdaptiveAppliedStateKey = appliedStateKey;
-        _lastRibbonAdaptiveAppliedStates = plannedStates.ToArray();
+        _lastRibbonAdaptiveAppliedStates = appliedStates;
         _ribbonAdaptiveStateDiffInvalidated = false;
 
         var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
@@ -497,8 +498,8 @@ public partial class MainWindow
         IReadOnlyList<RibbonAdaptiveGroupState> states)
     {
         return new RibbonAppliedStateKey(
-            RoundRibbonWidthToTenths(availableWidth),
             GetCollapsedRibbonFootprintMode(availableWidth),
+            UsesWideIconOnlyLabelMode(availableWidth),
             CreateRibbonStateSignature(states));
     }
 
@@ -562,6 +563,9 @@ public partial class MainWindow
             ? RibbonCollapsedGroupFootprintMode.Compact
             : RibbonCollapsedGroupFootprintMode.Normal;
     }
+
+    private static bool UsesWideIconOnlyLabelMode(double availableWidth) =>
+        availableWidth > 820;
 
     private static int RoundRibbonWidthToTenths(double width) =>
         (int)Math.Round(Math.Max(0, width) * 10, MidpointRounding.ToEven);
@@ -1111,8 +1115,8 @@ public partial class MainWindow
         string? Overflow);
 
     private readonly record struct RibbonAppliedStateKey(
-        int AvailableWidthTenths,
         RibbonCollapsedGroupFootprintMode FootprintMode,
+        bool WideIconOnlyLabelMode,
         RibbonStateSignature States);
 
     private readonly record struct RibbonCorrectionCacheKey(
