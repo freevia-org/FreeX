@@ -52,9 +52,7 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
         if (criteria.Rows.Count == 0)
             return new CommandOutcome(false, "Advanced Filter requires at least one criterion.");
 
-        var matches = AdvancedFilterPlanBuilder.MatchingRows(sheet, _listRange, criteria.Rows).ToList();
-        if (_uniqueRecordsOnly)
-            matches = AdvancedFilterPlanBuilder.UniqueRows(sheet, _listRange, matches).ToList();
+        var matches = AdvancedFilterPlanBuilder.MatchingRows(sheet, _listRange, criteria.Rows, _uniqueRecordsOnly);
 
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
         _copySnapshot = null;
@@ -103,18 +101,25 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
 
     private void CopyMatches(Sheet sheet, IReadOnlyList<uint> rows)
     {
-        _copySnapshot = [];
         var outputColumns = ResolveCopyOutputColumns(sheet);
-        foreach (var target in GetCopyTargetAddresses(sheet, rows, outputColumns))
-            _copySnapshot.Add((target, sheet.GetCell(target)?.Clone()));
+        var outputWidth = outputColumns is null ? _listRange.ColCount : (uint)outputColumns.Count;
+        var clearWidth = Math.Max(_listRange.ColCount, outputWidth);
+        var rowsToReplace = CountCopyRowsToReplace(sheet, rows.Count, clearWidth);
+        _copySnapshot = CreateCopySnapshot(rowsToReplace, clearWidth);
+        var outputRowCount = (uint)rows.Count + 1;
+        var destinationOverlapsSource = CopyDestinationOverlapsListRange(rowsToReplace, clearWidth);
 
-        foreach (var (target, _) in _copySnapshot)
+        for (uint r = 0; r < rowsToReplace; r++)
         {
-            sheet.ClearCell(target);
+            for (uint c = 0; c < clearWidth; c++)
+            {
+                var target = new CellAddress(sheet.Id, _copyTo!.Value.Row + r, _copyTo.Value.Col + c);
+                _copySnapshot.Add((target, sheet.GetCell(target)?.Clone()));
+                if (destinationOverlapsSource || r >= outputRowCount || c >= outputWidth)
+                    sheet.ClearCell(target);
+            }
         }
 
-        var outputWidth = outputColumns is null ? _listRange.ColCount : (uint)outputColumns.Count;
-        var outputRowCount = 1 + rows.Count;
         for (uint r = 0; r < outputRowCount; r++)
         {
             for (uint c = 0; c < outputWidth; c++)
@@ -123,44 +128,86 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
                 var sourceRow = r == 0 ? _listRange.Start.Row : rows[(int)r - 1];
                 var sourceCol = outputColumns is null ? _listRange.Start.Col + c : outputColumns[(int)c];
                 var source = new CellAddress(sheet.Id, sourceRow, sourceCol);
-                var sourceCell = sheet.GetCell(source)?.Clone()
+                var sourceCell = sheet.GetCell(source);
+                if (!destinationOverlapsSource &&
+                    sourceCell is not null &&
+                    sheet.GetCell(target) is { } existingTarget &&
+                    CellsHaveSameContent(existingTarget, sourceCell))
+                {
+                    continue;
+                }
+
+                var cellToCopy = sourceCell?.Clone()
                     ?? Cell.FromValue(sheet.GetValue(source.Row, source.Col));
-                sheet.SetCell(target, sourceCell);
+                if (!destinationOverlapsSource &&
+                    sourceCell is null &&
+                    sheet.GetCell(target) is { } existingBlankTarget &&
+                    CellsHaveSameContent(existingBlankTarget, cellToCopy))
+                {
+                    continue;
+                }
+
+                sheet.SetCell(target, cellToCopy);
             }
         }
     }
 
     private CommandOutcome? GetLockedCopyDestination(Workbook workbook, Sheet sheet, IReadOnlyList<uint> rows)
     {
-        foreach (var target in GetCopyTargetAddresses(sheet, rows))
+        var clearWidth = _listRange.ColCount;
+        var rowsToReplace = CountCopyRowsToReplace(sheet, rows.Count, clearWidth);
+        for (uint r = 0; r < rowsToReplace; r++)
         {
-            if (!CommandGuards.CanEditCell(workbook, sheet, target))
-                return new CommandOutcome(false, "The sheet is protected.");
+            for (uint c = 0; c < clearWidth; c++)
+            {
+                var target = new CellAddress(sheet.Id, _copyTo!.Value.Row + r, _copyTo.Value.Col + c);
+                if (!CommandGuards.CanEditCell(workbook, sheet, target))
+                    return new CommandOutcome(false, "The sheet is protected.");
+            }
         }
 
         return null;
     }
 
-    private IReadOnlyList<CellAddress> GetCopyTargetAddresses(
-        Sheet sheet,
-        IReadOnlyList<uint> rows,
-        IReadOnlyList<uint>? outputColumns = null)
+    private uint CountCopyRowsToReplace(Sheet sheet, int outputRows, uint clearWidth)
     {
         if (_copyTo is null)
-            return [];
+            return 0;
 
-        var outputWidth = outputColumns is null ? _listRange.ColCount : (uint)outputColumns.Count;
-        var clearWidth = Math.Max(_listRange.ColCount, outputWidth);
-        var outputRowCount = 1 + rows.Count;
-        var rowsToReplace = Math.Max(outputRowCount, CountExistingDestinationRows(sheet, clearWidth));
-        var targets = new List<CellAddress>();
-        for (uint row = 0; row < rowsToReplace; row++)
-        {
-            for (uint col = 0; col < clearWidth; col++)
-                targets.Add(new CellAddress(sheet.Id, _copyTo.Value.Row + row, _copyTo.Value.Col + col));
-        }
+        return Math.Max((uint)outputRows + 1, CountExistingDestinationRows(sheet, clearWidth));
+    }
 
-        return targets;
+    private bool CopyDestinationOverlapsListRange(uint rowsToReplace, uint clearWidth)
+    {
+        if (_copyTo is null || rowsToReplace == 0 || clearWidth == 0)
+            return false;
+
+        var targetStartRow = _copyTo.Value.Row;
+        var targetEndRow = (ulong)targetStartRow + rowsToReplace - 1;
+        var targetStartCol = _copyTo.Value.Col;
+        var targetEndCol = (ulong)targetStartCol + clearWidth - 1;
+
+        return targetStartRow <= _listRange.End.Row &&
+               targetEndRow >= _listRange.Start.Row &&
+               targetStartCol <= _listRange.End.Col &&
+               targetEndCol >= _listRange.Start.Col;
+    }
+
+    private static List<(CellAddress Address, Cell? OldCell)> CreateCopySnapshot(uint rowsToReplace, uint clearWidth)
+    {
+        var targetCount = (ulong)rowsToReplace * clearWidth;
+        return targetCount <= int.MaxValue
+            ? new List<(CellAddress Address, Cell? OldCell)>((int)targetCount)
+            : [];
+    }
+
+    private static bool CellsHaveSameContent(Cell left, Cell right)
+    {
+        return Equals(left.Value, right.Value) &&
+               string.Equals(left.FormulaText, right.FormulaText, StringComparison.Ordinal) &&
+               left.IgnoreFormulaError == right.IgnoreFormulaError &&
+               left.StyleId == right.StyleId &&
+               Equals(left.CachedAst, right.CachedAst);
     }
 
     private uint CountExistingDestinationRows(Sheet sheet, uint outputWidth)
