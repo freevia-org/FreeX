@@ -150,6 +150,33 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Save_WritesOutOfRangeSpreadsheetMlDateTimesAsTextCells()
+    {
+        var workbook = new Workbook("OutOfRangeDates");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new DateTimeValue(double.MaxValue));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new DateTimeValue(double.MinValue));
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+
+        stream.Position = 0;
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var data = document.Descendants(ss + "Data").ToArray();
+        data.Select(element => element.Attribute(ss + "Type")!.Value).Should().Equal("String", "String");
+        data.Select(element => element.Value).Should().Equal(
+            double.MaxValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+            double.MinValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.GetCell(1, 1)!.Value.Should().Be(new TextValue(double.MaxValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
+        loaded.GetCell(1, 2)!.Value.Should().Be(new TextValue(double.MinValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
+    }
+
+    [Fact]
     public void Load_TrimsSpreadsheetMlBooleanText()
     {
         using var stream = StreamFromString("""
@@ -1801,6 +1828,38 @@ public sealed class SpreadsheetXmlFileAdapterTests
         sheet.Name.Should().Be("Styled");
         sheet.GetCell(1, 1)!.Value.Should().Be(new NumberValue(42.5));
         workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromDecimalFormat()
+    {
+        using var source = StreamFromString("<rows><row amount=\"1234.5\" ratio=\"0.875\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:decimal-format name="report" decimal-separator="," grouping-separator="." percent="%" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Formatted">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="format-number(row/@amount, '#.##0,00', 'report')" /></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="format-number(row/@ratio, '0,0%', 'report')" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Formatted");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("1.234,50"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new TextValue("87,5%"));
     }
 
     [Fact]
