@@ -124,6 +124,9 @@ public static partial class NumberFormatter
     {
         numberFormat = CultureInfo.InvariantCulture.NumberFormat;
         dateTimeFormat = CultureInfo.InvariantCulture.DateTimeFormat;
+        if (!format.Contains("[$", StringComparison.Ordinal))
+            return format;
+
         var sb = new System.Text.StringBuilder(format.Length);
         bool inQuote = false;
 
