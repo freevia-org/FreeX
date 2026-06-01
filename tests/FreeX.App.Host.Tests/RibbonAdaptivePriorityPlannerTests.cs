@@ -171,7 +171,9 @@ public sealed class RibbonAdaptivePriorityPlannerTests
         var pageLayoutGroups = new[] { "Themes", "Page Setup", "Scale to Fit", "Sheet Options", "Arrange" };
         RibbonAdaptivePriorityPlanner.GetExpandableGroupIndexes(pageLayoutGroups, 1120)
             .Should()
-            .Equal(Array.IndexOf(pageLayoutGroups, "Page Setup"));
+            .Equal(
+                Array.IndexOf(pageLayoutGroups, "Themes"),
+                Array.IndexOf(pageLayoutGroups, "Page Setup"));
     }
 
     [Fact]
