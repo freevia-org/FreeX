@@ -48,6 +48,16 @@ public partial class GridView
         dc.DrawLine(pen, p1, p2);
     }
 
+    private static bool HasVisibleCellBorder(CellStyle style) =>
+        style.BorderTop.Style != BorderStyle.None ||
+        style.BorderBottom.Style != BorderStyle.None ||
+        style.BorderLeft.Style != BorderStyle.None ||
+        style.BorderRight.Style != BorderStyle.None;
+
+    private static bool HasVisibleCellSurface(CellStyle style) =>
+        style.FillColor.HasValue ||
+        style.FillPatternStyle != CellFillPatternStyle.None;
+
     private static SolidColorBrush BrushForCellColor(
         CellColor color,
         Dictionary<CellColor, SolidColorBrush>? brushCache = null)
