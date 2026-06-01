@@ -938,6 +938,42 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_NamespaceAlias_GeneratesSpreadsheetMlElements()
+    {
+        using var source = StreamFromString("<rows><row label=\"Aliased\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:proto="urn:placeholder-spreadsheetml"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:namespace-alias stylesheet-prefix="proto" result-prefix="ss" />
+              <xsl:template match="/rows">
+                <proto:Workbook>
+                  <proto:Worksheet proto:Name="Aliased">
+                    <proto:Table>
+                      <proto:Row>
+                        <proto:Cell><proto:Data proto:Type="String"><xsl:value-of select="row/@label" /></proto:Data></proto:Cell>
+                      </proto:Row>
+                    </proto:Table>
+                  </proto:Worksheet>
+                </proto:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var document = XDocument.Load(transformed);
+
+        document.Root!.Name.Should().Be(ss + "Workbook");
+        var worksheet = document.Root.Element(ss + "Worksheet");
+        worksheet.Should().NotBeNull();
+        worksheet!.Attribute(ss + "Name")!.Value.Should().Be("Aliased");
+        worksheet.Descendants(ss + "Data").Single().Value.Should().Be("Aliased");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetHtmlOutput_PreservesHtmlSerialization()
     {
         using var source = StreamFromString("<rows><row name=\"April\" /></rows>");
