@@ -65,9 +65,10 @@ public sealed class XlsxChartExWriterTests
                 .Which.Should().Match<XElement>(element =>
                     element.Attribute("type")!.Value == "cat" &&
                     element.Element(ChartExNs + "f")!.Value.Contains("$A$2:$A$4", StringComparison.Ordinal));
+            var expectedNumDimType = chartType is ChartType.Treemap or ChartType.Sunburst ? "size" : "val";
             data.Elements(ChartExNs + "numDim").Should().ContainSingle()
                 .Which.Should().Match<XElement>(element =>
-                    element.Attribute("type")!.Value == "val" &&
+                    element.Attribute("type")!.Value == expectedNumDimType &&
                     element.Element(ChartExNs + "f")!.Value.Contains("$B$2:$B$4", StringComparison.Ordinal) &&
                     element.Element(ChartExNs + "nf")!.Value.Contains("$B$1", StringComparison.Ordinal));
 
@@ -278,7 +279,7 @@ public sealed class XlsxChartExWriterTests
     }
 
     [Fact]
-    public void Save_OmitsHistogramBinningLayoutPrBecauseExcelRejectsCustomBinning()
+    public void Save_WritesHistogramDefaultBinningButOmitsCustomBinningValuesForExcelOpenability()
     {
         var saved = SaveWorkbookWithChart(ChartType.Histogram, configureChart: chart =>
             chart.HistogramBinning = new HistogramBinningModel(
@@ -286,8 +287,10 @@ public sealed class XlsxChartExWriterTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var chartXml = LoadPackageXml(archive.GetEntry("xl/charts/chart1.xml")!);
-        chartXml.Descendants(ChartExNs + "binning").Should().BeEmpty();
-        chartXml.Descendants(ChartExNs + "layoutPr").Should().BeEmpty();
+        var binning = chartXml.Descendants(ChartExNs + "binning").Should().ContainSingle().Subject;
+        binning.Attribute("intervalClosed")!.Value.Should().Be("r");
+        chartXml.Descendants(ChartExNs + "binCount").Should().BeEmpty();
+        chartXml.Descendants(ChartExNs + "binSize").Should().BeEmpty();
     }
 
     [Fact]
