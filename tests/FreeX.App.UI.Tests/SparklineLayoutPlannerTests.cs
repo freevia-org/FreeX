@@ -114,6 +114,18 @@ public sealed class SparklineLayoutPlannerTests
         layout.Bars[1].IsNegative.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CalculateColumnLayout_SkipsZeroValueBars(bool winLoss)
+    {
+        var layout = SparklineLayoutPlanner.CalculateColumnLayout([2, 0, -4], new Rect(0, 0, 90, 40), winLoss);
+
+        layout.Bars.Should().Equal(
+            new SparklineColumnBar(new Rect(5.25, winLoss ? 0 : 10, 19.5, winLoss ? 20 : 10), IsNegative: false),
+            new SparklineColumnBar(new Rect(65.25, 20, 19.5, 20), IsNegative: true));
+    }
+
     [Fact]
     public void CalculateColumnLayout_SkipsNonFiniteBars()
     {
