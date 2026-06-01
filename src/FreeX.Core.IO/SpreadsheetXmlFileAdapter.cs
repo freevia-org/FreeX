@@ -678,7 +678,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             : null;
     }
 
-    private static IEnumerable<SpreadsheetXmlCell> EnumerateXmlCells(Sheet sheet)
+    private static List<SpreadsheetXmlCell> BuildSortedXmlCells(Sheet sheet)
     {
         var mergeStarts = new Dictionary<(uint Row, uint Col), GridRange>();
         foreach (var region in sheet.MergedRegions)
@@ -780,8 +780,12 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 Comment: null));
         }
 
-        foreach (var cell in cells.OrderBy(cell => cell.Row).ThenBy(cell => cell.Col))
-            yield return cell;
+        cells.Sort(static (left, right) =>
+        {
+            var rowComparison = left.Row.CompareTo(right.Row);
+            return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
+        });
+        return cells;
     }
 
     private static bool IsCoveredByMergeNonAnchor(Sheet sheet, CellAddress address) =>
@@ -821,18 +825,29 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             yield break;
         }
 
-        var cellsByRow = EnumerateXmlCells(sheet)
-            .GroupBy(entry => entry.Row)
-            .ToDictionary(group => group.Key, group => group.OrderBy(cell => cell.Col).ToList());
+        var cells = BuildSortedXmlCells(sheet);
+        var layoutRows = BuildSortedRowLayoutIndexes(sheet);
 
-        var rowIndexes = cellsByRow.Keys
-            .Concat(sheet.RowHeights.Keys.Where(IsValidRowLayoutIndex))
-            .Concat(sheet.HiddenRows.Where(IsValidRowLayoutIndex))
-            .Distinct()
-            .OrderBy(row => row);
+        var cellIndex = 0;
+        var layoutRowIndex = 0;
+        while (cellIndex < cells.Count || layoutRowIndex < layoutRows.Count)
+        {
+            var cellRow = cellIndex < cells.Count ? cells[cellIndex].Row : uint.MaxValue;
+            var layoutRow = layoutRowIndex < layoutRows.Count ? layoutRows[layoutRowIndex] : uint.MaxValue;
+            var rowIndex = cellRow <= layoutRow ? cellRow : layoutRow;
+            var rowElement = CreateRowElement(sheet, rowIndex);
 
-        foreach (var rowIndex in rowIndexes)
-            yield return ToRowElement(sheet, rowIndex, cellsByRow.GetValueOrDefault(rowIndex) ?? [], styleIds);
+            while (cellIndex < cells.Count && cells[cellIndex].Row == rowIndex)
+            {
+                rowElement.Add(ToCellElement(cells[cellIndex], styleIds));
+                cellIndex++;
+            }
+
+            yield return rowElement;
+
+            if (layoutRow == rowIndex)
+                layoutRowIndex++;
+        }
     }
 
     private static bool CanStreamValueCellRows(Sheet sheet) =>
