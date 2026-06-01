@@ -24,6 +24,7 @@ public static class ExcelEditKeyPlanner
         Key systemKey = Key.None)
     {
         var effectiveKey = key == Key.None || key == Key.System ? systemKey : key;
+        var pageStep = (uint)Math.Max(1, pageSize);
 
         if (effectiveKey == Key.Enter && modifiers == ModifierKeys.Alt)
             return new ExcelEditKeyIntent(ExcelEditKeyAction.InsertLineBreak, null);
@@ -44,8 +45,8 @@ public static class ExcelEditKeyPlanner
                 Key.Down => new CellAddress(current.Sheet, Math.Min(current.Row + 1, CellAddress.MaxRow), current.Col),
                 Key.Left => new CellAddress(current.Sheet, current.Row, current.Col > 1 ? current.Col - 1 : 1u),
                 Key.Right => new CellAddress(current.Sheet, current.Row, Math.Min(current.Col + 1, CellAddress.MaxCol)),
-                Key.PageUp => new CellAddress(current.Sheet, (uint)Math.Max(1, (int)current.Row - pageSize), current.Col),
-                Key.PageDown => new CellAddress(current.Sheet, Math.Min(CellAddress.MaxRow, current.Row + (uint)pageSize), current.Col),
+                Key.PageUp => new CellAddress(current.Sheet, current.Row > pageStep ? current.Row - pageStep : 1u, current.Col),
+                Key.PageDown => new CellAddress(current.Sheet, Math.Min(CellAddress.MaxRow, current.Row + pageStep), current.Col),
                 _ => (CellAddress?)null
             };
 
@@ -83,9 +84,9 @@ public static class ExcelEditKeyPlanner
             Key.Down when allowFormulaBarNavigationKeys && !shiftHeld =>
                 new CellAddress(current.Sheet, Math.Min(current.Row + 1, CellAddress.MaxRow), current.Col),
             Key.PageUp when allowFormulaBarNavigationKeys && !shiftHeld =>
-                new CellAddress(current.Sheet, (uint)Math.Max(1, (int)current.Row - pageSize), current.Col),
+                new CellAddress(current.Sheet, current.Row > pageStep ? current.Row - pageStep : 1u, current.Col),
             Key.PageDown when allowFormulaBarNavigationKeys && !shiftHeld =>
-                new CellAddress(current.Sheet, Math.Min(CellAddress.MaxRow, current.Row + (uint)pageSize), current.Col),
+                new CellAddress(current.Sheet, Math.Min(CellAddress.MaxRow, current.Row + pageStep), current.Col),
             _ => (CellAddress?)null
         };
 
