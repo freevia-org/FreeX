@@ -82,13 +82,15 @@ public sealed class XlsxClassicChartDefaultTests
         barChart.Element(ChartNs + "shape")!.Attribute("val")!.Value.Should().Be("box");
         barChart.Element(ChartNs + "overlap").Should().BeNull();
         AssertChildOrder(barChart, "ser", "dLbls", "gapWidth", "shape", "axId");
-        barChart.Elements(ChartNs + "axId").Should().HaveCount(3);
+        barChart.Elements(ChartNs + "axId")
+            .Select(element => element.Attribute("val")!.Value)
+            .Should().Equal("48650112", "48672768", "0");
 
         chartXml.Descendants(ChartNs + "catAx").Single()
             .Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be(expectedCategoryAxisPosition);
         chartXml.Descendants(ChartNs + "valAx").Single()
             .Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be(expectedValueAxisPosition);
-        AssertDefaultSeriesAxis(chartXml);
+        AssertNoSeriesAxis(chartXml);
     }
 
     [Theory]
@@ -206,6 +208,11 @@ public sealed class XlsxClassicChartDefaultTests
         var seriesAxis = chartXml.Descendants(ChartNs + "serAx").Should().ContainSingle().Subject;
         seriesAxis.Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be("b");
         seriesAxis.Element(ChartNs + "crossAx")!.Attribute("val")!.Value.Should().Be("48672768");
+    }
+
+    private static void AssertNoSeriesAxis(XDocument chartXml)
+    {
+        chartXml.Descendants(ChartNs + "serAx").Should().BeEmpty();
     }
 
     private static void AssertChildOrder(XElement parent, params string[] expectedNames)
