@@ -122,6 +122,21 @@ public class SheetProtectionCommandTests
     }
 
     [Fact]
+    public void EditCellsCommand_UsesStyleOnlyLockStateForProtectedEmptyCells()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var unlockedStyleId = wb.RegisterStyle(new CellStyle { Locked = false });
+        sheet.SetStyleOnly(address.Row, address.Col, unlockedStyleId);
+        sheet.IsProtected = true;
+
+        var outcome = EditCellsCommand.ForValue(sheet.Id, address, new TextValue("new")).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetValue(address).Should().Be(new TextValue("new"));
+    }
+
+    [Fact]
     public void AllowEditRangeCommand_AddsAllowedRangeAndUndoRestores()
     {
         var (_, sheet, ctx) = Setup();
