@@ -143,6 +143,23 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void MouseMoveCancelsCapturedGridDragWhenLeftButtonIsReleased()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Input.cs"));
+        var mouseMoveBlock = source[
+            source.IndexOf("protected override void OnMouseMove", StringComparison.Ordinal)..
+            source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
+
+        mouseMoveBlock.Should().Contain("if (HasActiveCapturedGridDrag() && e.LeftButton != MouseButtonState.Pressed)");
+        mouseMoveBlock.Should().Contain("CancelActiveCapturedGridDrag();");
+        mouseMoveBlock.Should().Contain("e.Handled = true;");
+        mouseMoveBlock.IndexOf("CancelActiveCapturedGridDrag();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseMoveBlock.IndexOf("var pos = e.GetPosition(this);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SplitPaneScrollbarDragPreservesOrientationCursor()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
@@ -475,14 +492,19 @@ public sealed class GridViewPointerCursorTests
             "src", "FreeX.App.UI", "GridView.Input.cs"));
         var eventsSource = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "GridView.Events.cs"));
-        var lostCapture = source[
-            source.IndexOf("protected override void OnLostMouseCapture", StringComparison.Ordinal)..];
+        var cancellationHelper = source[
+            source.IndexOf("private void CancelActiveCapturedGridDrag", StringComparison.Ordinal)..
+            source.IndexOf("protected override void OnMouseLeftButtonDown", StringComparison.Ordinal)];
 
         eventsSource.Should().Contain("public event Action? ResizeCanceled;");
-        lostCapture.Should().Contain("if (_resizeTarget != ResizeTarget.None)");
-        lostCapture.Should().Contain("_resizeTarget = ResizeTarget.None;");
-        lostCapture.Should().Contain("ResizeCanceled?.Invoke();");
-        lostCapture.Should().Contain("InvalidateVisual();");
+        cancellationHelper.Should().Contain("if (_resizeTarget != ResizeTarget.None)");
+        cancellationHelper.Should().Contain("_resizeTarget = ResizeTarget.None;");
+        cancellationHelper.Should().Contain("ResizeCanceled?.Invoke();");
+        cancellationHelper.Should().Contain("InvalidateVisual();");
+        source[
+            source.IndexOf("protected override void OnLostMouseCapture", StringComparison.Ordinal)..]
+            .Should()
+            .Contain("CancelActiveCapturedGridDrag();");
     }
 
     [Fact]
@@ -494,8 +516,9 @@ public sealed class GridViewPointerCursorTests
         var resizeMouseUp = source[
             source.IndexOf("if (_resizeTarget != ResizeTarget.None)", mouseUpStart, StringComparison.Ordinal)..
             source.IndexOf("protected override void OnMouseLeave", StringComparison.Ordinal)];
-        var lostCapture = source[
-            source.IndexOf("protected override void OnLostMouseCapture", StringComparison.Ordinal)..];
+        var cancellationHelper = source[
+            source.IndexOf("private void CancelActiveCapturedGridDrag", StringComparison.Ordinal)..
+            source.IndexOf("protected override void OnMouseLeftButtonDown", StringComparison.Ordinal)];
 
         resizeMouseUp.Should().Contain("_resizeTarget = ResizeTarget.None;");
         resizeMouseUp.Should().Contain("_resizeIndex = 0;");
@@ -503,14 +526,14 @@ public sealed class GridViewPointerCursorTests
         resizeMouseUp.Should().Contain("_resizeSizeStart = 0;");
         resizeMouseUp.Should().Contain("_resizeLinePos = 0;");
 
-        lostCapture.Should().Contain("_resizeTarget = ResizeTarget.None;");
-        lostCapture.Should().Contain("_resizeIndex = 0;");
-        lostCapture.Should().Contain("_resizeDragStart = 0;");
-        lostCapture.Should().Contain("_resizeSizeStart = 0;");
-        lostCapture.Should().Contain("_resizeLinePos = 0;");
-        lostCapture.IndexOf("_resizeLinePos = 0;", StringComparison.Ordinal)
+        cancellationHelper.Should().Contain("_resizeTarget = ResizeTarget.None;");
+        cancellationHelper.Should().Contain("_resizeIndex = 0;");
+        cancellationHelper.Should().Contain("_resizeDragStart = 0;");
+        cancellationHelper.Should().Contain("_resizeSizeStart = 0;");
+        cancellationHelper.Should().Contain("_resizeLinePos = 0;");
+        cancellationHelper.IndexOf("_resizeLinePos = 0;", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(lostCapture.IndexOf("ResizeCanceled?.Invoke();", StringComparison.Ordinal));
+            .BeLessThan(cancellationHelper.IndexOf("ResizeCanceled?.Invoke();", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -518,25 +541,26 @@ public sealed class GridViewPointerCursorTests
     {
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "GridView.Input.cs"));
-        var lostCapture = source[
-            source.IndexOf("protected override void OnLostMouseCapture", StringComparison.Ordinal)..];
+        var cancellationHelper = source[
+            source.IndexOf("private void CancelActiveCapturedGridDrag", StringComparison.Ordinal)..
+            source.IndexOf("protected override void OnMouseLeftButtonDown", StringComparison.Ordinal)];
 
-        lostCapture.Should().Contain("if (_objectDragKind != ObjectDragKind.None)");
-        lostCapture.Should().Contain("_objectDragKind = ObjectDragKind.None;");
-        lostCapture.Should().Contain("_objectDragCurrentRect = Rect.Empty;");
-        lostCapture.Should().Contain("if (_marginDragEdge.HasValue)");
-        lostCapture.Should().Contain("_marginDragEdge = null;");
-        lostCapture.Should().Contain("if (_splitDividerDragHandle != SplitDividerHandle.None)");
-        lostCapture.Should().Contain("_splitDividerDragHandle = SplitDividerHandle.None;");
-        lostCapture.Should().Contain("if (_splitPaneScrollbarDragging)");
-        lostCapture.Should().Contain("_splitPaneScrollbarDragging = false;");
-        lostCapture.Should().Contain("_splitPaneScrollbarDragSource = null;");
-        lostCapture.Should().Contain("_splitPaneScrollbarDragPointerOffset = 0;");
-        lostCapture.Should().Contain("if (_autofillDragging)");
-        lostCapture.Should().Contain("_autofillDragging = false;");
-        lostCapture.Should().Contain("_autofillSourceRange = null;");
-        lostCapture.Should().Contain("_autofillTarget = null;");
-        lostCapture.Should().Contain("Cursor = null;");
+        cancellationHelper.Should().Contain("if (_objectDragKind != ObjectDragKind.None)");
+        cancellationHelper.Should().Contain("_objectDragKind = ObjectDragKind.None;");
+        cancellationHelper.Should().Contain("_objectDragCurrentRect = Rect.Empty;");
+        cancellationHelper.Should().Contain("if (_marginDragEdge.HasValue)");
+        cancellationHelper.Should().Contain("_marginDragEdge = null;");
+        cancellationHelper.Should().Contain("if (_splitDividerDragHandle != SplitDividerHandle.None)");
+        cancellationHelper.Should().Contain("_splitDividerDragHandle = SplitDividerHandle.None;");
+        cancellationHelper.Should().Contain("if (_splitPaneScrollbarDragging)");
+        cancellationHelper.Should().Contain("_splitPaneScrollbarDragging = false;");
+        cancellationHelper.Should().Contain("_splitPaneScrollbarDragSource = null;");
+        cancellationHelper.Should().Contain("_splitPaneScrollbarDragPointerOffset = 0;");
+        cancellationHelper.Should().Contain("if (_autofillDragging)");
+        cancellationHelper.Should().Contain("_autofillDragging = false;");
+        cancellationHelper.Should().Contain("_autofillSourceRange = null;");
+        cancellationHelper.Should().Contain("_autofillTarget = null;");
+        cancellationHelper.Should().Contain("Cursor = null;");
     }
 
     private static string FindWorkspaceFile(params string[] relativeParts)
