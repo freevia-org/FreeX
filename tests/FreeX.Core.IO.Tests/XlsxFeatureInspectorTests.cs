@@ -512,6 +512,24 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_WebQueryConnectionPackage_DetectsLiveWebQueries()
+    {
+        using var package = CreatePackageWithContent(("xl/connections.xml", """
+            <connections xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <connection id="1" name="FreeX Web Query" type="4" refreshedVersion="6">
+                <webPr sourceData="1" url="https://example.com/freex-web-query.html"/>
+              </connection>
+            </connections>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+        var reportedKinds = report.Features.Select(f => f.Kind);
+
+        reportedKinds.Should().Contain(XlsxUnsupportedFeatureKind.LiveWebQueries);
+        reportedKinds.Should().NotContain(XlsxUnsupportedFeatureKind.PowerQuery);
+    }
+
+    [Fact]
     public void Inspect_RelationshipOnlyWebPublishItemsReference_DetectsLiveWebQueries()
     {
         using var package = CreatePackageWithContent(("xl/worksheets/_rels/sheet1.xml.rels", """

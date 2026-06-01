@@ -208,7 +208,7 @@ public sealed partial class XlsxFileAdapter
         var sheetView = worksheetXml.Root?
             .Element(worksheetNs + "sheetViews")?
             .Elements(worksheetNs + "sheetView")
-            .FirstOrDefault();
+            .FirstOrDefault(IsPrimarySheetView);
         var sheetCalcPr = worksheetXml.Root?.Element(worksheetNs + "sheetCalcPr");
         var dimension = worksheetXml.Root?.Element(worksheetNs + "dimension");
         var sheetFormatPr = worksheetXml.Root?.Element(worksheetNs + "sheetFormatPr");
@@ -400,6 +400,9 @@ public sealed partial class XlsxFileAdapter
 
     private static WorksheetViewMode ParseWorksheetViewMode(string? value) =>
         XlsxWorksheetXmlValueParser.ParseWorksheetViewMode(value);
+
+    private static bool IsPrimarySheetView(XElement element) =>
+        string.Equals(element.Attribute("workbookViewId")?.Value ?? "0", "0", StringComparison.Ordinal);
 
     private static bool IsValidWorksheetRow(uint row) =>
         row is >= 1 and <= CellAddress.MaxRow;

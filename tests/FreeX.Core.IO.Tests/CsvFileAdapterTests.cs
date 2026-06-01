@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using FluentAssertions;
 using FreeX.Core.IO;
@@ -65,7 +66,7 @@ public sealed class CsvFileAdapterTests
         var end = source.IndexOf("private static bool TryReadError", start, StringComparison.Ordinal);
         var coerceValue = source[start..end];
 
-        coerceValue.IndexOf("double.TryParse(trimmed", StringComparison.Ordinal)
+        coerceValue.IndexOf("TryParseFiniteNumber(trimmed", StringComparison.Ordinal)
             .Should()
             .BeLessThan(coerceValue.IndexOf("TryParseIsoDateTime(trimmed", StringComparison.Ordinal));
     }
@@ -171,6 +172,29 @@ public sealed class CsvFileAdapterTests
 
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new BoolValue(true));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new BoolValue(false));
+    }
+
+    [Fact]
+    public void Load_UsesCurrentCultureForSeparatorDirectedCsvNumbersWithInvariantFallback()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+        try
+        {
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes("sep=;\r\nValue;Rate;Invariant;Bad\r\n1,25;12,5%;1.25;Infinity\r\n"));
+
+            var workbook = new CsvFileAdapter().Load(stream);
+            var sheet = workbook.Sheets.Single();
+
+            sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new NumberValue(1.25));
+            sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(0.125));
+            sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(new NumberValue(1.25));
+            sheet.GetValue(new CellAddress(sheet.Id, 2, 4)).Should().Be(new TextValue("Infinity"));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 
     [Fact]

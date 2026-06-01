@@ -1554,6 +1554,58 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromConditionalTemplates()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row name="Alpha" status="ok" note="Ready" />
+              <row name="Beta" status="warn" />
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Conditional">
+                    <ss:Table>
+                      <xsl:for-each select="row">
+                        <ss:Row>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@name" /></ss:Data></ss:Cell>
+                          <ss:Cell>
+                            <ss:Data ss:Type="String">
+                              <xsl:choose>
+                                <xsl:when test="@status = 'ok'">Pass</xsl:when>
+                                <xsl:otherwise>Review</xsl:otherwise>
+                              </xsl:choose>
+                            </ss:Data>
+                          </ss:Cell>
+                          <xsl:if test="@note">
+                            <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@note" /></ss:Data></ss:Cell>
+                          </xsl:if>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Conditional");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Alpha"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new TextValue("Pass"));
+        sheet.GetCell(1, 3)!.Value.Should().Be(new TextValue("Ready"));
+        sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("Beta"));
+        sheet.GetCell(2, 2)!.Value.Should().Be(new TextValue("Review"));
+        sheet.GetCell(2, 3).Should().BeNull();
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlScalarValueTypesAndIndexes()
     {
         using var source = StreamFromString("""

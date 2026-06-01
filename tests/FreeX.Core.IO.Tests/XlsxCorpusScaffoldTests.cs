@@ -299,6 +299,21 @@ public class XlsxCorpusScaffoldTests
     }
 
     [Fact]
+    public void CorpusReport_StatesDataValidationSemanticXmlCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/dv-count-package-003.xlsx" &&
+            row.FeatureTags.Contains("data-validation", StringComparison.Ordinal) &&
+            row.ExpectedStatus == "supported-metadata-pass");
+        const string reportLine = "| Data validation XML semantic comparison | Ten-rule generated package verifies list, numeric, date/time, text-length, and custom `dataValidation` type/operator/formula/`sqref` semantics survive ordinary model edits |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
+    }
+
+    [Fact]
     public void CorpusReport_StatesUnsupportedSheetTypeWorkbookReferenceCoverage()
     {
         var manifestRows = ReadManifestRows();
@@ -383,6 +398,21 @@ public class XlsxCorpusScaffoldTests
             row.FeatureTags.Contains("power-query", StringComparison.Ordinal) &&
             row.FeatureTags.Contains("connections", StringComparison.Ordinal));
         const string reportLine = "| Power Query package references | Worksheet query table relationships are exercised by generated known-gap retention coverage |";
+        report.Should().Contain(reportLine);
+        report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
+    }
+
+    [Fact]
+    public void CorpusReport_StatesLiveWebQueryPackageReferenceCoverage()
+    {
+        var manifestRows = ReadManifestRows();
+        var report = File.ReadAllText(FindWorkspaceFile("docs", "XLSX_CORPUS_REPORT.md"));
+
+        manifestRows.Should().Contain(row =>
+            row.Path == "generated/live-web-queries-001.xlsx" &&
+            row.FeatureTags.Contains("live-web-queries", StringComparison.Ordinal) &&
+            row.FeatureTags.Contains("web-publish", StringComparison.Ordinal));
+        const string reportLine = "| Live web query package references | Web publishing items and web-query connection metadata are exercised by generated known-gap retention coverage |";
         report.Should().Contain(reportLine);
         report.Split(reportLine).Should().HaveCount(2, "the coverage line should appear exactly once in the Current Result table");
     }
