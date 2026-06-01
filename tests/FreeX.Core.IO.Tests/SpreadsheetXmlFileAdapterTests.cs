@@ -96,6 +96,32 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_TrimsSpreadsheetMlBooleanText()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="Booleans">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="Boolean"> 1 </ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Boolean"> TRUE </ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Boolean"> 0 </ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Boolean"> false </ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.GetCell(1, 1)!.Value.Should().Be(new BoolValue(true));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new BoolValue(true));
+        sheet.GetCell(1, 3)!.Value.Should().Be(new BoolValue(false));
+        sheet.GetCell(1, 4)!.Value.Should().Be(new BoolValue(false));
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsMultipleSheetsAndValueTypes()
     {
         var workbook = new Workbook("XmlRoundTrip");
@@ -260,6 +286,50 @@ public sealed class SpreadsheetXmlFileAdapterTests
         sheet.PrintGridlines.Should().BeTrue();
         sheet.FrozenRows.Should().Be(2);
         sheet.FrozenCols.Should().Be(3);
+    }
+
+    [Fact]
+    public void Load_TrimsSpreadsheetMlUnsignedIntegerMetadata()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+                xmlns:x="urn:schemas-microsoft-com:office:excel">
+              <ss:Worksheet ss:Name="Layout">
+                <ss:Table>
+                  <ss:Column ss:Index=" 2 " ss:Span=" 1 " ss:Width="20"/>
+                  <ss:Row ss:Index=" 3 " ss:Span=" 1 " ss:Height="24">
+                    <ss:Cell ss:Index=" 4 " ss:MergeAcross=" 1 " ss:MergeDown=" 1 ">
+                      <ss:Data ss:Type="String">Merged</ss:Data>
+                    </ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+                <x:WorksheetOptions>
+                  <x:FreezePanes/>
+                  <x:FrozenNoSplit/>
+                  <x:SplitHorizontal>
+                    2
+                  </x:SplitHorizontal>
+                  <x:SplitVertical>
+                    3
+                  </x:SplitVertical>
+                </x:WorksheetOptions>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var sheet = new SpreadsheetXmlFileAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.FrozenRows.Should().Be(2);
+        sheet.FrozenCols.Should().Be(3);
+        sheet.ColumnWidths.Should().Contain(new KeyValuePair<uint, double>(2, 20));
+        sheet.ColumnWidths.Should().Contain(new KeyValuePair<uint, double>(3, 20));
+        sheet.RowHeights.Should().Contain(new KeyValuePair<uint, double>(3, 24));
+        sheet.RowHeights.Should().Contain(new KeyValuePair<uint, double>(4, 24));
+        sheet.GetCell(3, 4)!.Value.Should().Be(new TextValue("Merged"));
+        sheet.MergedRegions.Should().ContainSingle().Which.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 3, 4),
+            new CellAddress(sheet.Id, 4, 5)));
     }
 
     [Fact]
