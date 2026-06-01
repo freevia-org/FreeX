@@ -34,7 +34,7 @@ public static class SheetTabListPlanner
             firstVisibleIndex = 0;
         }
 
-        if (firstVisibleIndex >= 0 && workbook.GetSheet(currentSheetId)?.IsHidden == true)
+        if (firstVisibleIndex >= 0 && workbook.GetSheet(currentSheetId)?.IsHidden != false)
             currentSheetId = sheets[firstVisibleIndex].Id;
 
         groupedSheetIds.RemoveWhere(id => workbook.GetSheet(id)?.IsHidden != false);
