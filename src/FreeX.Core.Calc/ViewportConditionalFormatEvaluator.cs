@@ -20,7 +20,28 @@ internal sealed record CfEvaluationContext(
 
 internal sealed record CfFormulaCache(
     FormulaNode Ast,
-    Dictionary<(int RowDelta, int ColDelta), FormulaNode> ShiftedAsts);
+    bool HasRelativeReferences,
+    CfSimpleFormulaComparison? SimpleComparison);
+
+internal readonly record struct CfSimpleFormulaComparison(
+    CfFormulaScalarOperand Left,
+    BinaryOperator Operator,
+    CfFormulaScalarOperand Right);
+
+internal readonly record struct CfFormulaScalarOperand(
+    CfFormulaScalarOperandKind Kind,
+    ScalarValue? Literal,
+    uint Row,
+    uint Col,
+    bool IsRowAbsolute,
+    bool IsColAbsolute,
+    string? SheetName);
+
+internal enum CfFormulaScalarOperandKind
+{
+    Literal,
+    Reference
+}
 
 internal readonly record struct CfThresholdFormulaKey(
     ConditionalFormat Rule,
@@ -172,7 +193,9 @@ internal static class ViewportConditionalFormatEvaluator
                 continue;
 
             if (matchedStyle is not null)
-                result = StackDifferentialStyle(result, matchedStyle);
+                result = result is null
+                    ? matchedStyle
+                    : StackDifferentialStyle(result, matchedStyle);
             if (cf.StopIfTrue)
                 break;
         }
@@ -238,7 +261,10 @@ internal static class ViewportConditionalFormatEvaluator
             try
             {
                 var ast = ParseFormulaText(cf.FormulaText);
-                result[cf] = new CfFormulaCache(ast, []);
+                result[cf] = new CfFormulaCache(
+                    ast,
+                    HasRelativeReferences(ast),
+                    TryCreateSimpleComparison(ast, out var comparison) ? comparison : null);
             }
             catch
             {
@@ -247,6 +273,89 @@ internal static class ViewportConditionalFormatEvaluator
         }
 
         return result;
+    }
+
+    private static bool TryCreateSimpleComparison(FormulaNode ast, out CfSimpleFormulaComparison comparison)
+    {
+        comparison = default;
+        if (ast is not BinaryOpNode binary || !IsComparisonOperator(binary.Operator))
+            return false;
+
+        if (!TryCreateSimpleOperand(binary.Left, out var left) ||
+            !TryCreateSimpleOperand(binary.Right, out var right))
+            return false;
+
+        comparison = new CfSimpleFormulaComparison(left, binary.Operator, right);
+        return true;
+    }
+
+    private static bool IsComparisonOperator(BinaryOperator op) =>
+        op is BinaryOperator.Equal
+            or BinaryOperator.NotEqual
+            or BinaryOperator.LessThan
+            or BinaryOperator.GreaterThan
+            or BinaryOperator.LessOrEqual
+            or BinaryOperator.GreaterOrEqual;
+
+    private static bool TryCreateSimpleOperand(FormulaNode node, out CfFormulaScalarOperand operand)
+    {
+        operand = default;
+        switch (node)
+        {
+            case CellRefNode cell:
+                operand = new CfFormulaScalarOperand(
+                    CfFormulaScalarOperandKind.Reference,
+                    null,
+                    cell.Row,
+                    cell.ColumnNumber,
+                    cell.IsRowAbsolute,
+                    cell.IsColAbsolute,
+                    cell.SheetName);
+                return true;
+            case NumberNode number:
+                operand = LiteralOperand(new NumberValue(number.Value));
+                return true;
+            case StringNode text:
+                operand = LiteralOperand(new TextValue(text.Value));
+                return true;
+            case BooleanNode boolean:
+                operand = LiteralOperand(new BoolValue(boolean.Value));
+                return true;
+            case ErrorNode error:
+                operand = LiteralOperand(error.Error);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static CfFormulaScalarOperand LiteralOperand(ScalarValue value) =>
+        new(CfFormulaScalarOperandKind.Literal, value, 0, 0, true, true, null);
+
+    private static bool HasRelativeReferences(FormulaNode node)
+    {
+        return node switch
+        {
+            CellRefNode cr => !cr.IsColAbsolute || !cr.IsRowAbsolute,
+            RangeRefNode rr => HasRelativeReferences(rr.Start) || HasRelativeReferences(rr.End),
+            FullColumnRangeRefNode fcr => !fcr.IsStartAbsolute || !fcr.IsEndAbsolute,
+            FullRowRangeRefNode frr => !frr.IsStartAbsolute || !frr.IsEndAbsolute,
+            BinaryOpNode bin => HasRelativeReferences(bin.Left) || HasRelativeReferences(bin.Right),
+            UnaryOpNode un => HasRelativeReferences(un.Operand),
+            FunctionCallNode fn => HasRelativeReferences(fn.Arguments),
+            _ => false
+        };
+    }
+
+    private static bool HasRelativeReferences(IReadOnlyList<FormulaNode> nodes)
+    {
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (HasRelativeReferences(nodes[i]))
+                return true;
+        }
+
+        return false;
     }
 
     private static Dictionary<CfThresholdFormulaKey, FormulaNode> PrecomputeThresholdFormulaCaches(Sheet sheet)
