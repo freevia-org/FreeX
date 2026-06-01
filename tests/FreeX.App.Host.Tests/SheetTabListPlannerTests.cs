@@ -46,6 +46,21 @@ public sealed class SheetTabListPlannerTests
     }
 
     [Fact]
+    public void Build_RecoversMissingCurrentSheetToFirstVisibleSheet()
+    {
+        var workbook = new Workbook("Book");
+        var first = workbook.AddSheet("First");
+        workbook.AddSheet("Second");
+        var grouped = new HashSet<SheetId>();
+
+        var plan = SheetTabListPlanner.Build(workbook, SheetId.New(), grouped);
+
+        plan.CurrentSheetId.Should().Be(first.Id);
+        plan.Tabs.Should().ContainSingle(tab => tab.Id == first.Id && tab.IsActive && tab.IsGrouped);
+        grouped.Should().Equal(first.Id);
+    }
+
+    [Fact]
     public void Build_RemovesHiddenSheetsFromGroupedSet()
     {
         var workbook = new Workbook("Book");
