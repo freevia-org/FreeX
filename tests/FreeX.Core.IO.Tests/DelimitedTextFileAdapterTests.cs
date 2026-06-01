@@ -339,6 +339,35 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Load_UsesCurrentCultureForDateTimesWithInvariantFallback()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+        try
+        {
+            var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(
+                "17/05/2026\t17/05/2026 09:30\t17 mai 2026 21:45\tMay 17, 2026 9:30 AM\r\n"));
+
+            var workbook = adapter.Load(stream);
+            var sheet = workbook.Sheets.Single();
+
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+                .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17)));
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 2))
+                .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 3))
+                .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 21, 45, 0)));
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 4))
+                .Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 17, 9, 30, 0)));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
+    [Fact]
     public void Load_KeepsNonFiniteNumericTextAsText()
     {
         var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
