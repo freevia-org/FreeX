@@ -19,7 +19,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly InsertCellsShiftDirection _direction;
-    private List<(CellAddress Address, Cell Cell)>? _snapshot;
+    private CellShiftSnapshot? _snapshot;
 
     public string Label => "Insert Cells";
 
@@ -41,7 +41,6 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        _snapshot = CaptureCells(sheet);
         if (_direction == InsertCellsShiftDirection.Right)
         {
             uint width = _range.ColCount;
@@ -51,6 +50,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 .DefaultIfEmpty(0u).Max();
             if (maxOccupied > 0 && maxOccupied + width > CellAddress.MaxCol)
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last column ({CellAddress.MaxCol}).");
+            _snapshot = CaptureCells(sheet, CellShiftRegion.Rightward(_range));
             InsertShiftRight(sheet);
         }
         else
@@ -62,6 +62,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 .DefaultIfEmpty(0u).Max();
             if (maxOccupied > 0 && maxOccupied + height > CellAddress.MaxRow)
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last row ({CellAddress.MaxRow}).");
+            _snapshot = CaptureCells(sheet, CellShiftRegion.Downward(_range));
             InsertShiftDown(sheet);
         }
 
@@ -71,7 +72,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (_snapshot is null) return;
-        RestoreCells(ctx.GetSheet(_sheetId), _snapshot);
+        _snapshot.Restore(ctx.GetSheet(_sheetId));
     }
 
     private void InsertShiftRight(Sheet sheet)
@@ -110,16 +111,16 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         ClearRange(sheet, _range);
     }
 
-    internal static List<(CellAddress Address, Cell Cell)> CaptureCells(Sheet sheet) =>
-        sheet.EnumerateCells().Select(item => (item.Address, item.Cell.Clone())).ToList();
-
-    internal static void RestoreCells(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> snapshot)
+    internal static CellShiftSnapshot CaptureCells(Sheet sheet, CellShiftRegion region)
     {
-        foreach (var (address, _) in sheet.EnumerateCells().ToList())
-            sheet.ClearCell(address);
+        var cells = new List<(CellAddress Address, Cell Cell)>();
+        foreach (var (address, cell) in sheet.EnumerateCells())
+        {
+            if (region.Contains(address))
+                cells.Add((address, cell.Clone()));
+        }
 
-        foreach (var (address, cell) in snapshot)
-            sheet.SetCell(address, cell.Clone());
+        return new CellShiftSnapshot(region, cells);
     }
 
     internal static void ClearRange(Sheet sheet, GridRange range)
@@ -134,7 +135,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly DeleteCellsShiftDirection _direction;
-    private List<(CellAddress Address, Cell Cell)>? _snapshot;
+    private CellShiftSnapshot? _snapshot;
 
     public string Label => "Delete Cells";
 
@@ -156,11 +157,16 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
-        _snapshot = InsertCellsCommand.CaptureCells(sheet);
         if (_direction == DeleteCellsShiftDirection.Left)
+        {
+            _snapshot = InsertCellsCommand.CaptureCells(sheet, CellShiftRegion.Rightward(_range));
             DeleteShiftLeft(sheet);
+        }
         else
+        {
+            _snapshot = InsertCellsCommand.CaptureCells(sheet, CellShiftRegion.Downward(_range));
             DeleteShiftUp(sheet);
+        }
 
         return new CommandOutcome(true, AffectedCells: _range.AllCells().ToList());
     }
@@ -168,7 +174,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
     public void Revert(ICommandContext ctx)
     {
         if (_snapshot is null) return;
-        InsertCellsCommand.RestoreCells(ctx.GetSheet(_sheetId), _snapshot);
+        _snapshot.Restore(ctx.GetSheet(_sheetId));
     }
 
     private void DeleteShiftLeft(Sheet sheet)
@@ -203,5 +209,41 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             sheet.ClearCell(address);
         foreach (var (address, cell) in moved)
             sheet.SetCell(new CellAddress(address.Sheet, address.Row - height, address.Col), cell.Clone());
+    }
+}
+
+internal readonly record struct CellShiftRegion(uint StartRow, uint EndRow, uint StartCol, uint EndCol)
+{
+    public static CellShiftRegion Rightward(GridRange range) =>
+        new(range.Start.Row, range.End.Row, range.Start.Col, CellAddress.MaxCol);
+
+    public static CellShiftRegion Downward(GridRange range) =>
+        new(range.Start.Row, CellAddress.MaxRow, range.Start.Col, range.End.Col);
+
+    public bool Contains(CellAddress address) =>
+        address.Row >= StartRow &&
+        address.Row <= EndRow &&
+        address.Col >= StartCol &&
+        address.Col <= EndCol;
+}
+
+internal sealed class CellShiftSnapshot(
+    CellShiftRegion region,
+    IReadOnlyList<(CellAddress Address, Cell Cell)> cells)
+{
+    public void Restore(Sheet sheet)
+    {
+        var current = new List<CellAddress>();
+        foreach (var (address, _) in sheet.EnumerateCells())
+        {
+            if (region.Contains(address))
+                current.Add(address);
+        }
+
+        foreach (var address in current)
+            sheet.ClearCell(address);
+
+        foreach (var (address, cell) in cells)
+            sheet.SetCell(address, cell.Clone());
     }
 }
