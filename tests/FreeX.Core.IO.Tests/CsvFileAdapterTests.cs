@@ -57,6 +57,20 @@ public sealed class CsvFileAdapterTests
     }
 
     [Fact]
+    public void Load_CoercesPlainNumbersBeforeExpensiveDateTimeProbes()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.IO", "DelimitedTextWorkbookReader.cs"));
+        var start = source.IndexOf("private static ScalarValue CoerceValue", StringComparison.Ordinal);
+        var end = source.IndexOf("private static bool TryReadError", start, StringComparison.Ordinal);
+        var coerceValue = source[start..end];
+
+        coerceValue.IndexOf("double.TryParse(trimmed", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(coerceValue.IndexOf("TryParseIsoDateTime(trimmed", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Save_DenseSyntheticSheet_ReportsThroughputAndAllocatedBytes()
     {
         const int rowCount = 300;
