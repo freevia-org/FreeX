@@ -1,11 +1,19 @@
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FluentAssertions;
+using Xunit.Abstractions;
 
 namespace FreeX.Core.Formula.Tests;
 
 public sealed class BuiltInFunctionsPerformanceTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public BuiltInFunctionsPerformanceTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
+
     [Fact]
     public void Names_ReusesCachedReadOnlyCatalog()
     {
@@ -55,5 +63,31 @@ public sealed class BuiltInFunctionsPerformanceTests
         allocatedBytes.Should().BeLessThan(
             180_000,
             "REPT should size the StringBuilder once instead of growing through intermediate buffers");
+    }
+
+    [Fact]
+    public void Unique_LargeSingleColumnAvoidsSelectionAllocationChurn()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= 20_000; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+
+        var warmup = evaluator.Evaluate("=UNIQUE(A1:A20000)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+        warmup.RowCount.Should().Be(20_000);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        var result = evaluator.Evaluate("=UNIQUE(A1:A20000)", sheet)
+            .Should().BeOfType<RangeValue>().Subject;
+
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        result.RowCount.Should().Be(20_000);
+        _output.WriteLine($"UNIQUE large single-column allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(8_000_000);
     }
 }

@@ -903,7 +903,6 @@ public static partial class BuiltInFunctions
 
         if (!byCol)
         {
-            var keyOrder  = new List<string>();
             var keyIndex  = new Dictionary<string, int>();
             var keyCounts = new List<int>();
             var rowOfKey  = new List<int>();
@@ -924,29 +923,33 @@ public static partial class BuiltInFunctions
                 }
                 else
                 {
-                    keyIndex[key] = keyOrder.Count;
-                    keyOrder.Add(key);
+                    keyIndex[key] = rowOfKey.Count;
                     keyCounts.Add(1);
                     rowOfKey.Add(r);
                 }
             }
 
-            var selected = keyOrder
-                .Select((k, i) => (key: k, idx: i))
-                .Where(t => !exactlyOnce || keyCounts[t.idx] == 1)
-                .Select(t => rowOfKey[t.idx])
-                .ToList();
+            int selectedCount = exactlyOnce ? 0 : rowOfKey.Count;
+            if (exactlyOnce)
+            {
+                for (int i = 0; i < keyCounts.Count; i++)
+                    if (keyCounts[i] == 1) selectedCount++;
+            }
 
-            if (selected.Count == 0) return ErrorValue.Calc;
-            var result = new ScalarValue[selected.Count, arr.ColCount];
-            for (int ri = 0; ri < selected.Count; ri++)
+            if (selectedCount == 0) return ErrorValue.Calc;
+            var result = new ScalarValue[selectedCount, arr.ColCount];
+            for (int i = 0, ri = 0; i < rowOfKey.Count; i++)
+            {
+                if (exactlyOnce && keyCounts[i] != 1) continue;
+                int sourceRow = rowOfKey[i];
                 for (int c = 0; c < arr.ColCount; c++)
-                    result[ri, c] = arr.Cells[selected[ri], c];
+                    result[ri, c] = arr.Cells[sourceRow, c];
+                ri++;
+            }
             return new RangeValue(result);
         }
         else
         {
-            var keyOrder  = new List<string>();
             var keyIndex  = new Dictionary<string, int>();
             var keyCounts = new List<int>();
             var colOfKey  = new List<int>();
@@ -967,24 +970,30 @@ public static partial class BuiltInFunctions
                 }
                 else
                 {
-                    keyIndex[key] = keyOrder.Count;
-                    keyOrder.Add(key);
+                    keyIndex[key] = colOfKey.Count;
                     keyCounts.Add(1);
                     colOfKey.Add(c);
                 }
             }
 
-            var selected = keyOrder
-                .Select((k, i) => (key: k, idx: i))
-                .Where(t => !exactlyOnce || keyCounts[t.idx] == 1)
-                .Select(t => colOfKey[t.idx])
-                .ToList();
+            int selectedCount = exactlyOnce ? 0 : colOfKey.Count;
+            if (exactlyOnce)
+            {
+                for (int i = 0; i < keyCounts.Count; i++)
+                    if (keyCounts[i] == 1) selectedCount++;
+            }
 
-            if (selected.Count == 0) return ErrorValue.Calc;
-            var result = new ScalarValue[arr.RowCount, selected.Count];
+            if (selectedCount == 0) return ErrorValue.Calc;
+            var result = new ScalarValue[arr.RowCount, selectedCount];
             for (int r = 0; r < arr.RowCount; r++)
-                for (int ci = 0; ci < selected.Count; ci++)
-                    result[r, ci] = arr.Cells[r, selected[ci]];
+            {
+                for (int i = 0, ci = 0; i < colOfKey.Count; i++)
+                {
+                    if (exactlyOnce && keyCounts[i] != 1) continue;
+                    result[r, ci] = arr.Cells[r, colOfKey[i]];
+                    ci++;
+                }
+            }
             return new RangeValue(result);
         }
     }
