@@ -116,47 +116,28 @@ public static partial class ChartRenderer
     {
         // Collect all numeric values from the first data column
         var rawValues = new List<double>();
-        var min = double.MaxValue;
-        var max = double.MinValue;
         for (uint r = dataStartRow; r <= endRow; r++)
         {
             if (cellLookup.TryGetValue((r, dataStartCol), out var cell) &&
                 double.TryParse(cell.DisplayText, NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
-            {
                 rawValues.Add(v);
-                if (v < min)
-                    min = v;
-                if (v > max)
-                    max = v;
-            }
         }
 
         if (rawValues.Count == 0) return model;
 
-        int binCount = Math.Max(2, (int)Math.Ceiling(Math.Sqrt(rawValues.Count)));
-        double range = max - min;
-        if (range == 0) range = 1;
-        double binWidth = range / binCount;
-
-        var counts = new int[binCount];
-        foreach (var v in rawValues)
-        {
-            int idx = Math.Min(binCount - 1, (int)Math.Floor((v - min) / binWidth));
-            counts[idx]++;
-        }
+        // Binning (count/width/automatic + overflow/underflow) is decided by the pure, unit-tested
+        // HistogramBinPlanner; the renderer just draws the resulting bins. Null settings => Automatic.
+        var bins = HistogramBinPlanner.Compute(rawValues, chart.HistogramBinning ?? new HistogramBinningModel());
+        if (bins.Count == 0) return model;
 
         var bars = new RectangleBarSeries { FillColor = WaterfallTotalColor };
-        for (int i = 0; i < binCount; i++)
-            bars.Items.Add(new RectangleBarItem(i - 0.45, 0, i + 0.45, counts[i]));
+        for (int i = 0; i < bins.Count; i++)
+            bars.Items.Add(new RectangleBarItem(i - 0.45, 0, i + 0.45, bins[i].Count));
         model.Series.Add(bars);
 
         var catAxis = new CategoryAxis { Position = AxisPosition.Bottom, Title = chart.XAxisTitle };
-        for (int i = 0; i < binCount; i++)
-        {
-            double binMin = min + i * binWidth;
-            double binMax = binMin + binWidth;
-            catAxis.Labels.Add($"{binMin:G4}–{binMax:G4}");
-        }
+        foreach (var bin in bins)
+            catAxis.Labels.Add(bin.Label);
         model.Axes.Add(catAxis);
         model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle?.Length > 0 ? chart.YAxisTitle : "Frequency" });
 

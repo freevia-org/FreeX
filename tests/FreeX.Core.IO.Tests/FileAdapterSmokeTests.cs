@@ -802,6 +802,37 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_HistogramBinning()
+    {
+        var workbook = new Workbook("HistogramTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Histogram,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            HistogramBinning = new HistogramBinningModel(
+                HistogramBinningMode.BinCount,
+                BinCount: 5,
+                OverflowThreshold: 90,
+                UnderflowThreshold: 10),
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        chart.HistogramBinning.Should().Be(new HistogramBinningModel(
+            HistogramBinningMode.BinCount,
+            BinCount: 5,
+            OverflowThreshold: 90,
+            UnderflowThreshold: 10));
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_ChartLayout()
     {
         var workbook = new Workbook("ChartLayoutTest");
