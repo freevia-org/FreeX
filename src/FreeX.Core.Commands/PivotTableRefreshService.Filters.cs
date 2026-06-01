@@ -93,7 +93,7 @@ public static partial class PivotTableRefreshService
         foreach (var filter in pivotTable.ValueFilters)
         {
             if (filter.SourceFieldIndex is null ||
-                !fields.Any(field => field.SourceFieldIndex == filter.SourceFieldIndex.Value))
+                IndexOfSourceField(fields, filter.SourceFieldIndex.Value) < 0)
             {
                 continue;
             }
@@ -248,7 +248,7 @@ public static partial class PivotTableRefreshService
             return keys.Order(PivotKeyComparer.Instance).ToList();
 
         var sort = pivotTable.Sorts[^1];
-        var fieldIndex = fields.ToList().FindIndex(field => field.SourceFieldIndex == sort.FieldIndex);
+        var fieldIndex = IndexOfSourceField(fields, sort.FieldIndex);
         if (sort.Target == PivotSortTarget.Label && fieldIndex >= 0)
         {
             return sort.Direction == PivotSortDirection.Descending
@@ -275,6 +275,17 @@ public static partial class PivotTableRefreshService
 
     private static string GroupKeyText(ScalarValue value, PivotFieldModel field) =>
         GroupKeyText(value, field.Grouping, field.GroupStart, field.GroupEnd, field.GroupInterval);
+
+    private static int IndexOfSourceField(IReadOnlyList<PivotFieldModel> fields, int sourceFieldIndex)
+    {
+        for (var index = 0; index < fields.Count; index++)
+        {
+            if (fields[index].SourceFieldIndex == sourceFieldIndex)
+                return index;
+        }
+
+        return -1;
+    }
 
     private static string GroupKeyText(ScalarValue value, PivotFieldGrouping grouping) =>
         GroupKeyText(value, grouping, null, null, null);

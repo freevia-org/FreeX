@@ -24,11 +24,11 @@ public static partial class SpellCheckService
 {
     public static IReadOnlyList<SpellingIssue> FindIssues(Workbook workbook, SheetId? sheetId = null)
     {
-        var result = new List<SpellingIssue>();
+        List<SpellingIssue>? result = null;
 
         foreach (var sheet in EnumerateTargetSheets(workbook, sheetId))
         {
-            var sheetIssues = new List<SpellingIssue>();
+            List<SpellingIssue>? sheetIssues = null;
             foreach (var (address, cell) in sheet.EnumerateCells())
             {
                 if (cell.HasFormula || cell.Value is not TextValue textValue)
@@ -37,10 +37,15 @@ public static partial class SpellCheckService
                 if (!HasSpellCheckIssueCandidate(textValue.Value))
                     continue;
 
-                sheetIssues.AddRange(FindIssuesInCell(address, textValue.Value));
+                var cellIssues = FindIssuesInCell(address, textValue.Value);
+                if (cellIssues.Count == 0)
+                    continue;
+
+                sheetIssues ??= [];
+                sheetIssues.AddRange(cellIssues);
             }
 
-            if (sheetIssues.Count == 0)
+            if (sheetIssues is null)
                 continue;
 
             sheetIssues.Sort((left, right) =>
@@ -48,10 +53,11 @@ public static partial class SpellCheckService
                 var rowCmp = left.Address.Row.CompareTo(right.Address.Row);
                 return rowCmp != 0 ? rowCmp : left.Address.Col.CompareTo(right.Address.Col);
             });
+            result ??= [];
             result.AddRange(sheetIssues);
         }
 
-        return result;
+        return result ?? [];
     }
 
     /// <summary>

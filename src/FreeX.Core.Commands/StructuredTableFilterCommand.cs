@@ -30,6 +30,9 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
         if (filters is null)
             return new CommandOutcome(false, "Table filter refers to a missing column.");
 
+        if (FilterHiddenRowsAlreadyMatch(sheet, table.Range, filters))
+            return new CommandOutcome(true);
+
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
 
         RemoveExistingFilterRows(sheet.FilterHiddenRows, table.Range);
@@ -93,13 +96,26 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
 
     private static bool RowMatchesAllFilters(Sheet sheet, uint row, IReadOnlyList<TableFilterState> filters)
     {
-        foreach (var filter in filters)
+        for (var index = 0; index < filters.Count; index++)
         {
+            var filter = filters[index];
             var text = FilterValueFormatter.ToText(sheet.GetValue(row, filter.Column));
             if (text.Length == 0 && filter.IncludeBlank)
                 continue;
 
             if (!filter.AllowedValues.Contains(text))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool FilterHiddenRowsAlreadyMatch(Sheet sheet, GridRange range, IReadOnlyList<TableFilterState> filters)
+    {
+        for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
+        {
+            var shouldBeHidden = filters.Count > 0 && !RowMatchesAllFilters(sheet, row, filters);
+            if (sheet.FilterHiddenRows.Contains(row) != shouldBeHidden)
                 return false;
         }
 

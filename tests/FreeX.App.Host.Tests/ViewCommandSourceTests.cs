@@ -161,6 +161,7 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("ArrangeAllMenuPlanner.IsChecked(item.Tag, _workbook.WindowArrangement)");
         source.Should().Contain("ArrangeAllMenuPlanner.TryParseArrangement(");
         source.Should().Contain("new SetWorkbookWindowArrangementCommand(arrangement)");
+        source.Should().Contain("_windowRegistry?.ArrangeVisibleWindows(arrangement, workArea.Width, workArea.Height)");
         source.Should().Contain("RefreshViewWindowCommandState()");
         source.Should().Contain("ApplyLiveWindowCommandState()");
         source.Should().Contain("MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow");
@@ -190,6 +191,11 @@ public sealed class ViewCommandSourceTests
         source.Should().Contain("private void ViewResetWindowPositionBtn_Click(object sender, RoutedEventArgs e)");
         source.Should().Contain("WindowResetPositionPlanner.Compute(workArea.Width, workArea.Height, index)");
         source.Should().Contain("SystemParameters.WorkArea");
+
+        // Arrange All stores the workbook choice, then applies the live visible-window layout.
+        var viewCommandsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ViewCommands.cs"));
+        viewCommandsSource.Should().Contain("new SetWorkbookWindowArrangementCommand(arrangement)");
+        viewCommandsSource.Should().Contain("_windowRegistry?.ArrangeVisibleWindows(arrangement, workArea.Width, workArea.Height)");
 
         // View Side by Side toggles registry state and tiles via the registry/SideBySideLayoutPlanner.
         source.Should().Contain("private void ViewSideBySideBtn_Click(object sender, RoutedEventArgs e)");

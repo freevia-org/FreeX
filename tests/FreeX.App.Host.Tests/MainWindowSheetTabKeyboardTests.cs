@@ -143,9 +143,13 @@ public sealed class MainWindowSheetTabKeyboardTests
         labelMouseDown.Should().Contain("e.ChangedButton != MouseButton.Left");
         labelMouseDown.Should().Contain("e.ClickCount != 2");
         labelMouseDown.Should().Contain("RenameSheetFromTab(tab);");
+        labelMouseDown.Should().Contain("e.Handled = true;");
         labelMouseDown.IndexOf("e.ChangedButton != MouseButton.Left", StringComparison.Ordinal)
             .Should()
             .BeLessThan(labelMouseDown.IndexOf("RenameSheetFromTab(tab);", StringComparison.Ordinal));
+        labelMouseDown.IndexOf("RenameSheetFromTab(tab);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(labelMouseDown.IndexOf("e.Handled = true;", StringComparison.Ordinal));
     }
 
     [Fact]

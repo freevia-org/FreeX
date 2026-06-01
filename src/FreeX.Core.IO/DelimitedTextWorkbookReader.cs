@@ -237,7 +237,7 @@ internal static partial class DelimitedTextWorkbookReader
             '=' or '@' => true,
             >= '0' and <= '9' => TryParsePercentage(trimmed, out _),
             '+' or '-' =>
-                double.TryParse(trimmed, NumberStyles.Any, CultureInfo.InvariantCulture, out _) ||
+                TryParseFiniteNumber(trimmed, NumberStyles.Any, out _) ||
                 TryParsePercentage(trimmed, out _) ||
                 TryParseCurrency(trimmed, out _),
             '(' => TryParseCurrency(trimmed, out _),
@@ -260,7 +260,7 @@ internal static partial class DelimitedTextWorkbookReader
             !TryParsePercentage(trimmedCandidate, out _) &&
             !TryParseCurrency(candidate, out _) &&
             !IsFormulaInjectionMarkerText(candidate) &&
-            !double.TryParse(candidate, NumberStyles.Any, CultureInfo.InvariantCulture, out _))
+            !TryParseFiniteNumber(candidate, NumberStyles.Any, out _))
         {
             return false;
         }
@@ -366,8 +366,7 @@ internal static partial class DelimitedTextWorkbookReader
             return new NumberValue(percentage);
         if (TryParseCurrency(trimmed, out var currency))
             return new NumberValue(currency);
-        if (double.TryParse(trimmed, NumberStyles.Any, CultureInfo.InvariantCulture, out var number) &&
-            double.IsFinite(number))
+        if (TryParseFiniteNumber(trimmed, NumberStyles.Any, out var number))
         {
             return new NumberValue(number);
         }
@@ -454,14 +453,33 @@ internal static partial class DelimitedTextWorkbookReader
         if (field.Length < 2 || field[^1] != '%')
             return false;
 
-        if (!double.TryParse(field[..^1], NumberStyles.Any, CultureInfo.InvariantCulture, out var number) ||
-            !double.IsFinite(number))
+        if (!TryParseFiniteNumber(field[..^1], NumberStyles.Any, out var number))
         {
             return false;
         }
 
         value = number / 100d;
         return true;
+    }
+
+    private static bool TryParseFiniteNumber(string field, NumberStyles styles, out double value) =>
+        TryParseFiniteNumber(field, styles, CultureInfo.CurrentCulture, out value) ||
+        TryParseFiniteNumber(field, styles, CultureInfo.InvariantCulture, out value);
+
+    private static bool TryParseFiniteNumber(
+        string field,
+        NumberStyles styles,
+        IFormatProvider formatProvider,
+        out double value)
+    {
+        if (double.TryParse(field, styles, formatProvider, out value) &&
+            double.IsFinite(value))
+        {
+            return true;
+        }
+
+        value = default;
+        return false;
     }
 
     private static bool TryParseCurrency(string field, out double value)

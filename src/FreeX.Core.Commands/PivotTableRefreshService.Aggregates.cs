@@ -16,6 +16,10 @@ public static partial class PivotTableRefreshService
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers)
     {
+        var summaryFunction = dataField.SummaryFunction.AsSpan().Trim();
+        if (summaryFunction.Equals("sum", StringComparison.OrdinalIgnoreCase))
+            return SumAggregate(rows, dataField, pivotTable, headers);
+
         var nonBlankCount = 0;
         var numericCount = 0;
         var sum = 0d;
@@ -54,20 +58,52 @@ public static partial class PivotTableRefreshService
             sumSquaredDeviation += delta * (numeric - mean);
         }
 
-        return dataField.SummaryFunction.Trim().ToLowerInvariant() switch
+        if (summaryFunction.Equals("count", StringComparison.OrdinalIgnoreCase))
+            return nonBlankCount;
+        if (summaryFunction.Equals("countnums", StringComparison.OrdinalIgnoreCase))
+            return numericCount;
+        if (summaryFunction.Equals("average", StringComparison.OrdinalIgnoreCase) ||
+            summaryFunction.Equals("avg", StringComparison.OrdinalIgnoreCase))
+            return numericCount == 0 ? 0 : sum / numericCount;
+        if (summaryFunction.Equals("min", StringComparison.OrdinalIgnoreCase))
+            return numericCount == 0 ? 0 : min;
+        if (summaryFunction.Equals("max", StringComparison.OrdinalIgnoreCase))
+            return numericCount == 0 ? 0 : max;
+        if (summaryFunction.Equals("product", StringComparison.OrdinalIgnoreCase))
+            return numericCount == 0 ? 0 : product;
+        if (summaryFunction.Equals("stddev", StringComparison.OrdinalIgnoreCase) ||
+            summaryFunction.Equals("stddevs", StringComparison.OrdinalIgnoreCase) ||
+            summaryFunction.Equals("stddev.s", StringComparison.OrdinalIgnoreCase))
+            return numericCount < 2 ? 0 : Math.Sqrt(Variance(sumSquaredDeviation, numericCount, sample: true));
+        if (summaryFunction.Equals("stddevp", StringComparison.OrdinalIgnoreCase) ||
+            summaryFunction.Equals("stddev.p", StringComparison.OrdinalIgnoreCase))
+            return numericCount == 0 ? 0 : Math.Sqrt(Variance(sumSquaredDeviation, numericCount, sample: false));
+        if (summaryFunction.Equals("var", StringComparison.OrdinalIgnoreCase) ||
+            summaryFunction.Equals("vars", StringComparison.OrdinalIgnoreCase) ||
+            summaryFunction.Equals("var.s", StringComparison.OrdinalIgnoreCase))
+            return numericCount < 2 ? 0 : Variance(sumSquaredDeviation, numericCount, sample: true);
+        if (summaryFunction.Equals("varp", StringComparison.OrdinalIgnoreCase) ||
+            summaryFunction.Equals("var.p", StringComparison.OrdinalIgnoreCase))
+            return numericCount == 0 ? 0 : Variance(sumSquaredDeviation, numericCount, sample: false);
+
+        return sum;
+    }
+
+    private static double SumAggregate(
+        IEnumerable<IReadOnlyList<ScalarValue>> rows,
+        PivotDataFieldModel dataField,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers)
+    {
+        var sum = 0d;
+        foreach (var row in rows)
         {
-            "count" => nonBlankCount,
-            "countnums" => numericCount,
-            "average" or "avg" => numericCount == 0 ? 0 : sum / numericCount,
-            "min" => numericCount == 0 ? 0 : min,
-            "max" => numericCount == 0 ? 0 : max,
-            "product" => numericCount == 0 ? 0 : product,
-            "stddev" or "stddevs" or "stddev.s" => numericCount < 2 ? 0 : Math.Sqrt(Variance(sumSquaredDeviation, numericCount, sample: true)),
-            "stddevp" or "stddev.p" => numericCount == 0 ? 0 : Math.Sqrt(Variance(sumSquaredDeviation, numericCount, sample: false)),
-            "var" or "vars" or "var.s" => numericCount < 2 ? 0 : Variance(sumSquaredDeviation, numericCount, sample: true),
-            "varp" or "var.p" => numericCount == 0 ? 0 : Variance(sumSquaredDeviation, numericCount, sample: false),
-            _ => sum
-        };
+            var value = GetDataFieldValue(row, dataField, pivotTable, headers);
+            if (HasNumericValue(value))
+                sum += Number(value);
+        }
+
+        return sum;
     }
 
     private static double Variance(double sumSquaredDeviation, int count, bool sample)

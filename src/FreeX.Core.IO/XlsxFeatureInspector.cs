@@ -90,10 +90,17 @@ public static class XlsxFeatureInspector
         }
 
         if (normalized.StartsWith("xl/queries/", StringComparison.Ordinal) ||
-            normalized.StartsWith("xl/querytables/", StringComparison.Ordinal) ||
-            normalized is "xl/connections.xml")
+            normalized.StartsWith("xl/querytables/", StringComparison.Ordinal))
         {
             yield return Feature(XlsxUnsupportedFeatureKind.PowerQuery);
+            yield break;
+        }
+
+        if (normalized is "xl/connections.xml")
+        {
+            yield return Feature(ConnectionsHaveLiveWebQuery(entry)
+                ? XlsxUnsupportedFeatureKind.LiveWebQueries
+                : XlsxUnsupportedFeatureKind.PowerQuery);
             yield break;
         }
 
@@ -421,6 +428,10 @@ public static class XlsxFeatureInspector
             return false;
         }
     }
+
+    private static bool ConnectionsHaveLiveWebQuery(ZipArchiveEntry entry) =>
+        XmlHasDescendant(entry, element =>
+            string.Equals(element.Name.LocalName, "webPr", StringComparison.OrdinalIgnoreCase));
 
     private static bool WorksheetHasSparklines(ZipArchiveEntry entry)
     {
