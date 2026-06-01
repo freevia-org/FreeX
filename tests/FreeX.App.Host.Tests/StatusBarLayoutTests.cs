@@ -27,6 +27,7 @@ public sealed class StatusBarLayoutTests
             sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(6)));
             sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromValue(new TextValue("ignored")));
 
+            harness.InvalidateNavigationCaches();
             harness.SelectRange(1, 1, 2, 2);
             harness.RefreshStatusBar();
 
@@ -332,6 +333,7 @@ public sealed class StatusBarLayoutTests
         private readonly MethodInfo _cycleShellFocus;
         private readonly FieldInfo _currentSheetId;
         private readonly MethodInfo _getCurrentShellFocusTarget;
+        private readonly MethodInfo _invalidateNavigationCaches;
         private readonly MethodInfo _refreshStatusBar;
         private readonly MethodInfo _showInlineEditor;
         private readonly MethodInfo _tryHandleFocusedStatusBarKeyboardNavigation;
@@ -352,6 +354,9 @@ public sealed class StatusBarLayoutTests
             _getCurrentShellFocusTarget = typeof(MainWindow)
                 .GetMethod("GetCurrentShellFocusTarget", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "GetCurrentShellFocusTarget");
+            _invalidateNavigationCaches = typeof(MainWindow)
+                .GetMethod("InvalidateNavigationCaches", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "InvalidateNavigationCaches");
             _refreshStatusBar = typeof(MainWindow)
                 .GetMethod("RefreshStatusBar", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "RefreshStatusBar");
@@ -410,6 +415,12 @@ public sealed class StatusBarLayoutTests
         public void RefreshStatusBar()
         {
             _refreshStatusBar.Invoke(_window, []);
+            PumpDispatcher();
+        }
+
+        public void InvalidateNavigationCaches()
+        {
+            _invalidateNavigationCaches.Invoke(_window, []);
             PumpDispatcher();
         }
 
