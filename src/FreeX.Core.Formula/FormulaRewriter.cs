@@ -11,6 +11,7 @@ public sealed record InsertColsOp(string SheetName, uint BeforeCol, uint Count) 
 public sealed record DeleteColsOp(string SheetName, uint StartCol,  uint Count) : RewriteOperation;
 public sealed record PasteOffsetOp(int RowDelta, int ColDelta)                  : RewriteOperation;
 public sealed record RenameSheetOp(string OldSheetName, string NewSheetName)    : RewriteOperation;
+public sealed record DeleteSheetOp(string SheetName)                            : RewriteOperation;
 
 // ── Rewriter ─────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,8 @@ public static class FormulaRewriter
         {
             CellRefNode cr  => RewriteCellRef(cr, op, hostSheetName, ref changed),
             RangeRefNode rr => RewriteRange(rr, op, hostSheetName, ref changed),
+            FullColumnRangeRefNode fcr => RewriteFullColumnRange(fcr, op, hostSheetName, ref changed),
+            FullRowRangeRefNode frr => RewriteFullRowRange(frr, op, hostSheetName, ref changed),
             BinaryOpNode b  => b with
             {
                 Left  = RewriteNode(b.Left,  op, hostSheetName, ref changed),
@@ -87,6 +90,7 @@ public static class FormulaRewriter
             DeleteColsOp del => RewriteCellRefDeleteCols(cr, del, ref changed),
             PasteOffsetOp paste => RewriteCellRefPaste(cr, paste, ref changed),
             RenameSheetOp rename => RewriteCellRefRenameSheet(cr, rename, ref changed),
+            DeleteSheetOp => RewriteSheetQualifiedRefDeleteSheet(ref changed),
             _ => cr
         };
     }
@@ -118,6 +122,40 @@ public static class FormulaRewriter
         }
 
         return rr with { Start = (CellRefNode)start, End = (CellRefNode)end, SheetName = sheetName };
+    }
+
+    private static FormulaNode RewriteFullColumnRange(
+        FullColumnRangeRefNode range, RewriteOperation op, string hostSheetName, ref bool changed)
+    {
+        if (!Matches(range.SheetName, op, hostSheetName))
+            return range;
+
+        return op switch
+        {
+            InsertColsOp ins => RewriteFullColumnRangeInsertCols(range, ins, ref changed),
+            DeleteColsOp del => RewriteFullColumnRangeDeleteCols(range, del, ref changed),
+            PasteOffsetOp paste => RewriteFullColumnRangePaste(range, paste, ref changed),
+            RenameSheetOp rename => RewriteFullColumnRangeRenameSheet(range, rename, ref changed),
+            DeleteSheetOp => RewriteSheetQualifiedRefDeleteSheet(ref changed),
+            _ => range
+        };
+    }
+
+    private static FormulaNode RewriteFullRowRange(
+        FullRowRangeRefNode range, RewriteOperation op, string hostSheetName, ref bool changed)
+    {
+        if (!Matches(range.SheetName, op, hostSheetName))
+            return range;
+
+        return op switch
+        {
+            InsertRowsOp ins => RewriteFullRowRangeInsertRows(range, ins, ref changed),
+            DeleteRowsOp del => RewriteFullRowRangeDeleteRows(range, del, ref changed),
+            PasteOffsetOp paste => RewriteFullRowRangePaste(range, paste, ref changed),
+            RenameSheetOp rename => RewriteFullRowRangeRenameSheet(range, rename, ref changed),
+            DeleteSheetOp => RewriteSheetQualifiedRefDeleteSheet(ref changed),
+            _ => range
+        };
     }
 
     // ── Row insert ────────────────────────────────────────────────────────────
@@ -261,12 +299,234 @@ public static class FormulaRewriter
         return cr with { SheetName = op.NewSheetName };
     }
 
+    private static FormulaNode RewriteSheetQualifiedRefDeleteSheet(ref bool changed)
+    {
+        changed = true;
+        return new ErrorNode(ErrorValue.Ref);
+    }
+
+    private static FormulaNode RewriteFullColumnRangeInsertCols(
+        FullColumnRangeRefNode range, InsertColsOp op, ref bool changed)
+    {
+        var start = RewriteColumnInsert(range.StartColumnNumber, op, ref changed);
+        var end = RewriteColumnInsert(range.EndColumnNumber, op, ref changed);
+        if (start is null || end is null)
+            return new ErrorNode(ErrorValue.Ref);
+
+        return range with
+        {
+            StartColumnName = CellAddress.NumberToColumnName(start.Value),
+            EndColumnName = CellAddress.NumberToColumnName(end.Value)
+        };
+    }
+
+    private static FormulaNode RewriteFullColumnRangeDeleteCols(
+        FullColumnRangeRefNode range, DeleteColsOp op, ref bool changed)
+    {
+        var start = RewriteColumnDelete(range.StartColumnNumber, op, ref changed);
+        var end = RewriteColumnDelete(range.EndColumnNumber, op, ref changed);
+        if (start is null || end is null)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        return range with
+        {
+            StartColumnName = CellAddress.NumberToColumnName(start.Value),
+            EndColumnName = CellAddress.NumberToColumnName(end.Value)
+        };
+    }
+
+    private static FormulaNode RewriteFullColumnRangePaste(
+        FullColumnRangeRefNode range, PasteOffsetOp op, ref bool changed)
+    {
+        if (op.ColDelta == 0 || (range.IsStartAbsolute && range.IsEndAbsolute))
+            return range;
+
+        var start = RewriteColumnPaste(range.StartColumnNumber, range.IsStartAbsolute, op, ref changed);
+        var end = RewriteColumnPaste(range.EndColumnNumber, range.IsEndAbsolute, op, ref changed);
+        if (start is null || end is null)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        return range with
+        {
+            StartColumnName = CellAddress.NumberToColumnName(start.Value),
+            EndColumnName = CellAddress.NumberToColumnName(end.Value)
+        };
+    }
+
+    private static FormulaNode RewriteFullColumnRangeRenameSheet(
+        FullColumnRangeRefNode range, RenameSheetOp op, ref bool changed)
+    {
+        if (range.SheetName is null ||
+            !string.Equals(range.SheetName, op.OldSheetName, StringComparison.OrdinalIgnoreCase))
+            return range;
+
+        changed = true;
+        return range with { SheetName = op.NewSheetName };
+    }
+
+    private static FormulaNode RewriteFullRowRangeInsertRows(
+        FullRowRangeRefNode range, InsertRowsOp op, ref bool changed)
+    {
+        var start = RewriteRowInsert(range.StartRow, op, ref changed);
+        var end = RewriteRowInsert(range.EndRow, op, ref changed);
+        if (start is null || end is null)
+            return new ErrorNode(ErrorValue.Ref);
+
+        return range with { StartRow = start.Value, EndRow = end.Value };
+    }
+
+    private static FormulaNode RewriteFullRowRangeDeleteRows(
+        FullRowRangeRefNode range, DeleteRowsOp op, ref bool changed)
+    {
+        var start = RewriteRowDelete(range.StartRow, op, ref changed);
+        var end = RewriteRowDelete(range.EndRow, op, ref changed);
+        if (start is null || end is null)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        return range with { StartRow = start.Value, EndRow = end.Value };
+    }
+
+    private static FormulaNode RewriteFullRowRangePaste(
+        FullRowRangeRefNode range, PasteOffsetOp op, ref bool changed)
+    {
+        if (op.RowDelta == 0 || (range.IsStartAbsolute && range.IsEndAbsolute))
+            return range;
+
+        var start = RewriteRowPaste(range.StartRow, range.IsStartAbsolute, op, ref changed);
+        var end = RewriteRowPaste(range.EndRow, range.IsEndAbsolute, op, ref changed);
+        if (start is null || end is null)
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        return range with { StartRow = start.Value, EndRow = end.Value };
+    }
+
+    private static FormulaNode RewriteFullRowRangeRenameSheet(
+        FullRowRangeRefNode range, RenameSheetOp op, ref bool changed)
+    {
+        if (range.SheetName is null ||
+            !string.Equals(range.SheetName, op.OldSheetName, StringComparison.OrdinalIgnoreCase))
+            return range;
+
+        changed = true;
+        return range with { SheetName = op.NewSheetName };
+    }
+
+    private static uint? RewriteColumnInsert(uint column, InsertColsOp op, ref bool changed)
+    {
+        if (column < op.BeforeCol)
+            return column;
+
+        long newColumn = (long)column + op.Count;
+        if (newColumn > CellAddress.MaxCol)
+        {
+            changed = true;
+            return null;
+        }
+
+        changed = true;
+        return (uint)newColumn;
+    }
+
+    private static uint? RewriteColumnDelete(uint column, DeleteColsOp op, ref bool changed)
+    {
+        uint endCol = op.StartCol + op.Count - 1;
+        if (column >= op.StartCol && column <= endCol)
+            return null;
+
+        if (column > endCol)
+        {
+            changed = true;
+            return column - op.Count;
+        }
+
+        return column;
+    }
+
+    private static uint? RewriteColumnPaste(uint column, bool isAbsolute, PasteOffsetOp op, ref bool changed)
+    {
+        if (isAbsolute || op.ColDelta == 0)
+            return column;
+
+        long newColumn = (long)column + op.ColDelta;
+        if (newColumn < 1 || newColumn > CellAddress.MaxCol)
+            return null;
+
+        changed = true;
+        return (uint)newColumn;
+    }
+
+    private static uint? RewriteRowInsert(uint row, InsertRowsOp op, ref bool changed)
+    {
+        if (row < op.BeforeRow)
+            return row;
+
+        long newRow = (long)row + op.Count;
+        if (newRow > CellAddress.MaxRow)
+        {
+            changed = true;
+            return null;
+        }
+
+        changed = true;
+        return (uint)newRow;
+    }
+
+    private static uint? RewriteRowDelete(uint row, DeleteRowsOp op, ref bool changed)
+    {
+        uint endRow = op.StartRow + op.Count - 1;
+        if (row >= op.StartRow && row <= endRow)
+            return null;
+
+        if (row > endRow)
+        {
+            changed = true;
+            return row - op.Count;
+        }
+
+        return row;
+    }
+
+    private static uint? RewriteRowPaste(uint row, bool isAbsolute, PasteOffsetOp op, ref bool changed)
+    {
+        if (isAbsolute || op.RowDelta == 0)
+            return row;
+
+        long newRow = (long)row + op.RowDelta;
+        if (newRow < 1 || newRow > CellAddress.MaxRow)
+            return null;
+
+        changed = true;
+        return (uint)newRow;
+    }
+
     // ── Sheet matching ────────────────────────────────────────────────────────
 
     private static bool Matches(CellRefNode cr, RewriteOperation op, string hostSheetName)
     {
+        return Matches(cr.SheetName, op, hostSheetName);
+    }
+
+    private static bool Matches(string? refSheetName, RewriteOperation op, string hostSheetName)
+    {
         if (op is PasteOffsetOp) return true;   // paste always adjusts
-        if (op is RenameSheetOp) return cr.SheetName is not null;
+        if (op is RenameSheetOp rename)
+            return refSheetName is not null &&
+                   string.Equals(refSheetName, rename.OldSheetName, StringComparison.OrdinalIgnoreCase);
+        if (op is DeleteSheetOp deleteSheet)
+            return refSheetName is not null &&
+                   string.Equals(refSheetName, deleteSheet.SheetName, StringComparison.OrdinalIgnoreCase);
 
         var opSheet = op switch
         {
@@ -279,7 +539,7 @@ public static class FormulaRewriter
 
         if (opSheet is null) return false;
 
-        var refSheet = cr.SheetName ?? hostSheetName;
+        var refSheet = refSheetName ?? hostSheetName;
         return string.Equals(refSheet, opSheet, StringComparison.OrdinalIgnoreCase);
     }
 }
