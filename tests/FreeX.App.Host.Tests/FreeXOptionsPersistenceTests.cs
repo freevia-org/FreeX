@@ -65,6 +65,8 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
         {
             DefaultFormat = ".fxl",
             AppLanguage = "uk-UA",
+            CollapseRibbonAutomatically = true,
+            ShowScreenTips = false,
             QuickAccessToolbarBelowRibbon = true,
             QuickAccessToolbarCommands =
             [
@@ -88,6 +90,8 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
             .Should()
             .Be("uk-UA");
         var reloaded = FreeXOptions.LoadFromPath(path);
+        reloaded.CollapseRibbonAutomatically.Should().BeTrue();
+        reloaded.ShowScreenTips.Should().BeFalse();
         reloaded.QuickAccessToolbarBelowRibbon.Should().BeTrue();
         reloaded.QuickAccessToolbarCommands.Should().Equal(
             QuickAccessToolbarCommandIds.Open,
