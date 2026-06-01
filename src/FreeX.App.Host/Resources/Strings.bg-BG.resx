@@ -4589,6 +4589,12 @@
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Премахване от списъка</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Добавяне към лентата с инструменти за бърз достъп</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Премахване от лентата с инструменти за бърз достъп</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Премахнете прекъсването на страницата</value>
   </data>
