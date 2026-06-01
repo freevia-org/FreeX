@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using FluentAssertions;
 using FreeX.Core.IO;
@@ -309,6 +310,32 @@ public sealed class DelimitedTextFileAdapterTests
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new NumberValue(0.125));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(-0.03));
         sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new NumberValue(0.04));
+    }
+
+    [Fact]
+    public void Load_UsesCurrentCultureForNumbersAndPercentagesWithInvariantFallback()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+        try
+        {
+            var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes("1,25\t12,5%\t1.25\tNaN\tInfinity\tNaN%\r\n"));
+
+            var workbook = adapter.Load(stream);
+            var sheet = workbook.Sheets.Single();
+
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 1)).Should().Be(new NumberValue(1.25));
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 2)).Should().Be(new NumberValue(0.125));
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 3)).Should().Be(new NumberValue(1.25));
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 4)).Should().Be(new TextValue("NaN"));
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 5)).Should().Be(new TextValue("Infinity"));
+            sheet.GetValue(new CellAddress(sheet.Id, 1, 6)).Should().Be(new TextValue("NaN%"));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 
     [Fact]
