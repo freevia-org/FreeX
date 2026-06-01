@@ -162,7 +162,7 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             SelectionMode = SelectionMode.Single
         };
         _listView.SelectionChanged += ListView_SelectionChanged;
-        _listView.MouseDoubleClick += EditRule_Click;
+        _listView.MouseDoubleClick += ListView_MouseDoubleClick;
         _listView.KeyDown += ListView_KeyDown;
         AutomationProperties.SetName(_listView, UiText.Get("ManageConditionalFormats_ConditionalFormattingRules"));
 
@@ -253,6 +253,12 @@ public sealed partial class ManageConditionalFormatsDialog : Window
                 ManageConditionalFormatsPlanner.ReplaceRule(_rules, edited),
                 edited.Id);
         }
+    }
+
+    private void ListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        EditRule_Click(sender, e);
+        e.Handled = true;
     }
 
     private void DeleteRule_Click(object sender, RoutedEventArgs e)
