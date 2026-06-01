@@ -105,12 +105,8 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
 
         foreach (var sheet in workbook.Sheets)
         {
-            var ignoredCells = sheet.EnumerateCells()
-                .Where(pair => pair.Cell.IgnoreFormulaError)
-                .OrderBy(pair => pair.Address.Row)
-                .ThenBy(pair => pair.Address.Col)
-                .ToList();
-            if (ignoredCells.Count == 0)
+            var ignoredErrorRuns = BuildIgnoredErrorRuns(sheet);
+            if (ignoredErrorRuns.Count == 0)
                 continue;
 
             if (!sheetPaths.TryGetValue(sheet.Name, out var worksheetPath))
@@ -135,25 +131,21 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
                 TrySetNativeAttribute(ignoredErrors, attribute.Key, attribute.Value);
             }
 
-            foreach (var pair in ignoredCells)
+            foreach (var run in ignoredErrorRuns)
             {
-                var reference = pair.Address.ToA1();
                 var ignoredError = new XElement(
                     workbookNs + "ignoredError",
-                    new XAttribute("sqref", reference),
+                    new XAttribute("sqref", run.ToSqref()),
                     new XAttribute("numberStoredAsText", "1"),
                     new XAttribute("evalError", "1"),
                     new XAttribute("formula", "1"),
                     new XAttribute("emptyCellReference", "1"));
-                if (TryGetIgnoredErrorNativeAttributes(sheet.IgnoredErrorsMetadata, reference, out var attributes))
+                if (run.NativeAttributes is not null)
                 {
-                    foreach (var attribute in attributes)
+                    foreach (var attribute in run.NativeAttributes)
                     {
-                        if (string.IsNullOrWhiteSpace(attribute.Key) ||
-                            string.Equals(attribute.Key, "sqref", StringComparison.Ordinal))
-                        {
+                        if (ShouldSkipIgnoredErrorNativeAttribute(attribute.Key))
                             continue;
-                        }
 
                         TrySetNativeAttribute(ignoredError, attribute.Key, attribute.Value);
                     }
@@ -166,6 +158,77 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
 
             XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         }
+    }
+
+    private static List<IgnoredErrorRun> BuildIgnoredErrorRuns(Sheet sheet)
+    {
+        var ignoredCells = new List<CellAddress>();
+        foreach (var pair in sheet.GetOccupiedCellMap())
+        {
+            if (!pair.Value.IgnoreFormulaError)
+                continue;
+
+            var (row, col) = pair.Key;
+            ignoredCells.Add(new CellAddress(sheet.Id, row, col));
+        }
+
+        if (ignoredCells.Count == 0)
+            return [];
+
+        ignoredCells.Sort(static (left, right) =>
+        {
+            var rowCompare = left.Row.CompareTo(right.Row);
+            return rowCompare != 0 ? rowCompare : left.Col.CompareTo(right.Col);
+        });
+
+        var nativeAttributeLookup = IgnoredErrorNativeAttributeLookup.Create(sheet.IgnoredErrorsMetadata);
+        var runs = new List<IgnoredErrorRun>(Math.Min(ignoredCells.Count, 256));
+        var first = ignoredCells[0];
+        var currentRun = new IgnoredErrorRun(
+            first.Row,
+            first.Col,
+            first.Col,
+            nativeAttributeLookup.GetNativeAttributes(first));
+
+        for (var i = 1; i < ignoredCells.Count; i++)
+        {
+            var address = ignoredCells[i];
+            var nativeAttributes = nativeAttributeLookup.GetNativeAttributes(address);
+            if (address.Row == currentRun.Row &&
+                address.Col == currentRun.EndCol + 1 &&
+                HaveSameIgnoredErrorNativeAttributes(currentRun.NativeAttributes, nativeAttributes))
+            {
+                currentRun = currentRun with { EndCol = address.Col };
+                continue;
+            }
+
+            runs.Add(currentRun);
+            currentRun = new IgnoredErrorRun(address.Row, address.Col, address.Col, nativeAttributes);
+        }
+
+        runs.Add(currentRun);
+        return runs;
+    }
+
+    private static bool HaveSameIgnoredErrorNativeAttributes(
+        IReadOnlyDictionary<string, string>? left,
+        IReadOnlyDictionary<string, string>? right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
+        if (left is null || right is null || left.Count != right.Count)
+            return false;
+
+        foreach (var pair in left)
+        {
+            if (!right.TryGetValue(pair.Key, out var value) ||
+                !string.Equals(pair.Value, value, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public static bool MergeIgnoredErrors(
@@ -300,37 +363,87 @@ internal static partial class XlsxWorksheetDiagnosticsMapper
     private static bool IsSupportedIgnoredErrorElement(XElement ignoredError) =>
         SupportedIgnoredErrorFlags.Any(flag => IsTruthy(ignoredError.Attribute(flag)?.Value));
 
-    private static bool TryGetIgnoredErrorNativeAttributes(
-        WorksheetIgnoredErrorsMetadataModel? metadata,
-        string reference,
-        out Dictionary<string, string> attributes)
-    {
-        attributes = [];
-        if (metadata is null)
-            return false;
-
-        if (metadata.ErrorNativeAttributes.TryGetValue(reference, out attributes!))
-            return true;
-
-        var tempSheet = SheetId.New();
-        if (!CellAddress.TryParse(reference, tempSheet, out var address))
-            return false;
-
-        foreach (var pair in metadata.ErrorNativeAttributes)
-        {
-            foreach (var token in SplitSqrefTokens(pair.Key))
-            {
-                if (TryParseSqrefToken(token, tempSheet, out var range) && range.Contains(address))
-                {
-                    attributes = pair.Value;
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
+    private static bool ShouldSkipIgnoredErrorNativeAttribute(string key) =>
+        string.IsNullOrWhiteSpace(key) ||
+        string.Equals(key, "sqref", StringComparison.Ordinal);
 
     private static string[] SplitSqrefTokens(string sqref) =>
         sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private readonly record struct IgnoredErrorRun(
+        uint Row,
+        uint StartCol,
+        uint EndCol,
+        IReadOnlyDictionary<string, string>? NativeAttributes)
+    {
+        public string ToSqref()
+        {
+            var start = new CellAddress(default, Row, StartCol).ToA1();
+            if (StartCol == EndCol)
+                return start;
+
+            var end = new CellAddress(default, Row, EndCol).ToA1();
+            return $"{start}:{end}";
+        }
+    }
+
+    private sealed class IgnoredErrorNativeAttributeLookup
+    {
+        public static IgnoredErrorNativeAttributeLookup Empty { get; } = new(SheetId.New(), null, []);
+
+        private readonly SheetId _lookupSheet;
+        private readonly WorksheetIgnoredErrorsMetadataModel? _metadata;
+        private readonly List<(GridRange Range, Dictionary<string, string> Attributes)> _ranges;
+
+        private IgnoredErrorNativeAttributeLookup(
+            SheetId lookupSheet,
+            WorksheetIgnoredErrorsMetadataModel? metadata,
+            List<(GridRange Range, Dictionary<string, string> Attributes)> ranges)
+        {
+            _lookupSheet = lookupSheet;
+            _metadata = metadata;
+            _ranges = ranges;
+        }
+
+        public static IgnoredErrorNativeAttributeLookup Create(WorksheetIgnoredErrorsMetadataModel? metadata)
+        {
+            if (metadata is null || metadata.ErrorNativeAttributes.Count == 0)
+                return Empty;
+
+            var lookupSheet = SheetId.New();
+            var ranges = new List<(GridRange Range, Dictionary<string, string> Attributes)>();
+            foreach (var pair in metadata.ErrorNativeAttributes)
+            {
+                foreach (var token in SplitSqrefTokens(pair.Key))
+                {
+                    if (TryParseSqrefToken(token, lookupSheet, out var range))
+                        ranges.Add((range, pair.Value));
+                }
+            }
+
+            return new IgnoredErrorNativeAttributeLookup(lookupSheet, metadata, ranges);
+        }
+
+        public IReadOnlyDictionary<string, string>? GetNativeAttributes(CellAddress address)
+        {
+            if (_metadata is null)
+                return null;
+
+            var reference = address.ToA1();
+            if (_metadata.ErrorNativeAttributes.TryGetValue(reference, out var attributes))
+                return attributes;
+
+            if (_ranges.Count == 0)
+                return null;
+
+            var lookupAddress = new CellAddress(_lookupSheet, address.Row, address.Col);
+            foreach (var range in _ranges)
+            {
+                if (range.Range.Contains(lookupAddress))
+                    return range.Attributes;
+            }
+
+            return null;
+        }
+    }
 }

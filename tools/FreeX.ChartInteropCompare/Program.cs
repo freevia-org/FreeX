@@ -1503,8 +1503,7 @@ internal sealed record VisualExpectation(int HashThreshold, int RoundTripHashThr
             ["PercentStackedBar"] = "FreeX-authored percent stacked bar defaults differ from Excel-native percent stacked layout/styling.",
             ["ThreeDBar"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
             ["ThreeDArea"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
-            ["ThreeDSurface"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
-            ["Waterfall"] = "Waterfall total/subtotal and connector defaults are not fully Excel-equivalent yet."
+            ["ThreeDSurface"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling."
         };
 
     private static readonly IReadOnlySet<string> KnownRoundTripGaps =

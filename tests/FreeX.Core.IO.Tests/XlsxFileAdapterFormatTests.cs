@@ -120,7 +120,7 @@ public sealed class XlsxFileAdapterFormatTests
         sanitizerSource.Should().NotContain("sourcePackage.ToArray()");
         sanitizerSource.Should().Contain("GetSanitizationRequirements(sourcePackage, removeUnsupportedConditionalFormatting)");
         adapterSource.Should().Contain("var sheetXmlLayoutWarningCount = warnings.Count;");
-        adapterSource.Should().Contain("var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, warnings);");
+        adapterSource.Should().Contain("var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, warnings);");
         adapterSource.Should().Contain("warnings.Count != sheetXmlLayoutWarningCount");
         adapterSource.Should().Contain("OpenClosedXmlWorkbookWithSanitizationFallback(packageStream, shouldStripStyleOnlyCells)");
         sanitizerSource.Should().Contain("removeUnsupportedConditionalFormatting");

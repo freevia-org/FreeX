@@ -263,6 +263,51 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void Benchmark_SaveIgnoredErrorsWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var workbook = CreateIgnoredErrorsSaveWorkbook();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_IGNORED_ERRORS " +
+            $"rows={IgnoredErrorSaveRows} cols={IgnoredErrorSaveColumns} " +
+            $"ignored_cells={IgnoredErrorSaveRows * IgnoredErrorSaveColumns} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+        packageSizes.Should().OnlyContain(size => size > 0);
+    }
+
+    [Fact]
     public void Benchmark_SaveStyleOnlyWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -779,7 +824,7 @@ public sealed class XlsxFileAdapterPerformanceTests
         adapterSource.Should().Contain("XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(stylesXml)");
         adapterSource.Should().Contain("XlsxIndexedColorPaletteMapper.Load(stylesXml)");
         adapterSource.Should().Contain("XlsxPivotTableStyleMetadataReader.Load(stylesXml)");
-        adapterSource.Should().Contain("LoadSheetXmlLayout(packageStream, stylesXml, warnings)");
+        adapterSource.Should().Contain("LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, warnings)");
         adapterSource.Should().NotContain("XlsxStylesheetReader.Load(packageStream)");
         adapterSource.Should().NotContain("LoadNumberFormatCatalog(packageStream)");
         adapterSource.Should().NotContain("XlsxIndexedColorPaletteMapper.Load(packageStream)");
@@ -923,6 +968,8 @@ public sealed class XlsxFileAdapterPerformanceTests
     private const int IgnoredErrorStyleOnlyValueColumns = 30;
     private const int IgnoredErrorStyleOnlyStyleColumns = 10;
     private const int IgnoredErrorStyleOnlyIgnoredRanges = 800;
+    private const int IgnoredErrorSaveRows = 300;
+    private const int IgnoredErrorSaveColumns = 40;
 
     private static byte[] CreateDenseXlsxPackage()
     {
@@ -1030,6 +1077,24 @@ public sealed class XlsxFileAdapterPerformanceTests
                         new CellAddress(sheet.Id, row, col),
                         new NumberValue(row * col + sheetIndex));
                 }
+            }
+        }
+
+        return workbook;
+    }
+
+    private static Workbook CreateIgnoredErrorsSaveWorkbook()
+    {
+        var workbook = new Workbook("Ignored Errors Save IO");
+        var sheet = workbook.AddSheet("Data");
+        for (uint row = 1; row <= IgnoredErrorSaveRows; row++)
+        {
+            for (uint col = 1; col <= IgnoredErrorSaveColumns; col++)
+            {
+                sheet.SetCell(
+                    new CellAddress(sheet.Id, row, col),
+                    new TextValue($"{row:D4}{col:D2}"));
+                sheet.GetCell(row, col)!.IgnoreFormulaError = true;
             }
         }
 
