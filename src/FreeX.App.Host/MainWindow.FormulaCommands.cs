@@ -74,7 +74,7 @@ public partial class MainWindow
         var dlg = new InsertFunctionDialog();
         if (ShowOwnedDialog(dlg) != true || string.IsNullOrEmpty(dlg.SelectedFormula)) return;
         if (SheetGrid.SelectedRange is null) return;
-        BeginFormulaBarFunctionEdit("=" + dlg.SelectedFormula);
+        BeginFormulaBarFormulaEdit("=" + dlg.SelectedFormula);
     }
 
     private void DefineNameBtn_Click(object sender, RoutedEventArgs e)
@@ -135,10 +135,7 @@ public partial class MainWindow
     private void InsertDefinedNameIntoFormula(string name)
     {
         var result = FormulaInsertionService.InsertDefinedName(FormulaBar.Text, FormulaBar.CaretIndex, name);
-        FormulaBar.Text = result.Text;
-        FormulaBar.CaretIndex = result.CaretIndex;
-        FormulaBar.Focus();
-        EnterEditMode();
+        BeginFormulaBarFormulaEdit(result.Text, result.CaretIndex);
     }
 
     private void TracePrecedentsBtn_Click(object sender, RoutedEventArgs e)
@@ -408,16 +405,26 @@ public partial class MainWindow
     private void InsertFormulaFunction(string funcName)
     {
         if (SheetGrid.SelectedRange is null) return;
-        BeginFormulaBarFunctionEdit($"={funcName}(");
+        BeginFormulaBarFormulaEdit($"={funcName}(");
     }
 
-    private void BeginFormulaBarFunctionEdit(string text)
+    private void BeginFormulaBarFormulaEdit(string text, int? caretIndex = null)
     {
         CaptureFormulaEditCell();
         _formulaRangeEntryMode = FormulaEditInteractionPlanner.IsFormulaText(text);
         ClearFormulaReferenceEntrySpan();
         FormulaBar.Text = text;
-        FocusFormulaBarAtEnd();
+        if (caretIndex is { } requestedCaretIndex)
+        {
+            FormulaBar.Focus();
+            FormulaBar.CaretIndex = Math.Clamp(requestedCaretIndex, 0, FormulaBar.Text.Length);
+            SetStatusBarModeText(UiText.Get("StatusBar_EditMode"));
+        }
+        else
+        {
+            FocusFormulaBarAtEnd();
+        }
+
         RefreshFormulaReferenceHighlights();
     }
 

@@ -284,6 +284,26 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void UseInFormulaInsertion_SeedsFormulaBarWithoutInlineEditorOverwrite()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaBarText("=");
+
+            harness.InsertDefinedNameIntoFormula("SalesData");
+
+            harness.FormulaBarText.Should().Be("=SalesData");
+            harness.InlineEditorVisible.Should().BeFalse();
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.CellText(1, 1).Should().Be("original");
+        });
+    }
+
+    [Fact]
     public void NameBoxEnter_NavigatesRefreshesFormulaBarAndReturnsFocusToGrid()
     {
         StaTestRunner.Run(() =>
@@ -406,6 +426,7 @@ public sealed class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _formulaBarKeyDown;
         private readonly MethodInfo _cellAddressBoxKeyDown;
         private readonly MethodInfo _insertFormulaFunction;
+        private readonly MethodInfo _insertDefinedNameIntoFormula;
 
         private MainWindowHarness(MainWindow window)
         {
@@ -449,6 +470,9 @@ public sealed class MainWindowFormulaBarSyncTests
             _insertFormulaFunction = typeof(MainWindow)
                 .GetMethod("InsertFormulaFunction", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "InsertFormulaFunction");
+            _insertDefinedNameIntoFormula = typeof(MainWindow)
+                .GetMethod("InsertDefinedNameIntoFormula", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "InsertDefinedNameIntoFormula");
         }
 
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
@@ -552,6 +576,12 @@ public sealed class MainWindowFormulaBarSyncTests
         public void InsertFormulaFunction(string functionName)
         {
             _insertFormulaFunction.Invoke(_window, [functionName]);
+            PumpDispatcher();
+        }
+
+        public void InsertDefinedNameIntoFormula(string name)
+        {
+            _insertDefinedNameIntoFormula.Invoke(_window, [name]);
             PumpDispatcher();
         }
 

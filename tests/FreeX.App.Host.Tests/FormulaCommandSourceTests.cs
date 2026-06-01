@@ -72,16 +72,17 @@ public sealed class FormulaCommandSourceTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.FormulaCommands.cs"));
 
         source.Should().Contain("var dlg = new InsertFunctionDialog();");
-        source.Should().Contain("BeginFormulaBarFunctionEdit(\"=\" + dlg.SelectedFormula);");
+        source.Should().Contain("BeginFormulaBarFormulaEdit(\"=\" + dlg.SelectedFormula);");
         source.Should().Contain("new NamedRangeDialog(");
         source.Should().Contain("new CreateNamesFromSelectionDialog { Owner = this }");
         source.Should().Contain("new CreateNamedRangesFromSelectionCommand(");
         source.Should().Contain("FormulaInsertionService.InsertDefinedName(");
+        source.Should().Contain("BeginFormulaBarFormulaEdit(result.Text, result.CaretIndex);");
         source.Should().Contain("MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>())");
         source.Should().Contain("FormulaFinancialBtn_Click(object sender, RoutedEventArgs e) => OpenFormulaFunctionMenu(sender, [\"PMT\", \"NPV\", \"IRR\", \"RATE\", \"PV\", \"FV\"]);");
         source.Should().Contain("FormulaMoreBtn_Click(object sender, RoutedEventArgs e)    => InsertFunctionBtn_Click(sender, e);");
-        source.Should().Contain("BeginFormulaBarFunctionEdit($\"={funcName}(\");");
-        source.Should().Contain("private void BeginFormulaBarFunctionEdit(string text)");
+        source.Should().Contain("BeginFormulaBarFormulaEdit($\"={funcName}(\");");
+        source.Should().Contain("private void BeginFormulaBarFormulaEdit(string text, int? caretIndex = null)");
     }
 
     private static string ReadMainWindowXaml() =>
