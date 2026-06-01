@@ -11,7 +11,7 @@ public static partial class NumberFormatter
     private static readonly Regex NumericQuotedTextRegex = new("\"[^\"]*\"");
 
     // Returned alongside display text so the grid can apply conditional colors.
-    public sealed record FormatResult(string Text, string? ColorHex = null);
+    public readonly record struct FormatResult(string Text, string? ColorHex = null);
 
     public static string Format(ScalarValue value, string formatString)
         => FormatWithColor(value, formatString).Text;
