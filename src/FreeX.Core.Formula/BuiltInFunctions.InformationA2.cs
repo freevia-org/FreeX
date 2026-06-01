@@ -581,10 +581,6 @@ public static partial class BuiltInFunctions
         if (funcNum is >= 1 and <= 11)
             return AggregateNumericStreaming(args, ctx, funcNum, kIndex, ignoreErrors, ignoreHiddenRows, ignoreNestedAggregates);
 
-        var nums = new List<double>();
-        var collectError = CollectAggregateNumbers(args, ctx, kIndex, ignoreErrors, ignoreHiddenRows, ignoreNestedAggregates, nums);
-        if (collectError is not null) return collectError;
-
         double? k = null;
         if (needsK)
         {
@@ -593,6 +589,13 @@ public static partial class BuiltInFunctions
             if (!double.IsFinite(kc)) return ErrorValue.Num;
             k = kc;
         }
+
+        if (funcNum == 13)
+            return AggregateModeSnglStreaming(args, ctx, ignoreErrors, ignoreHiddenRows, ignoreNestedAggregates);
+
+        var nums = new List<double>();
+        var collectError = CollectAggregateNumbers(args, ctx, kIndex, ignoreErrors, ignoreHiddenRows, ignoreNestedAggregates, nums);
+        if (collectError is not null) return collectError;
 
         switch (funcNum)
         {
@@ -606,11 +609,6 @@ public static partial class BuiltInFunctions
                 double lower = SelectKthSmallest(nums, mid - 1);
                 double upper = SelectKthSmallest(nums, mid);
                 return NumberResult((lower + upper) / 2.0);
-            }
-            case 13: // MODE.SNGL
-            {
-                if (nums.Count == 0) return ErrorValue.NA;
-                return AggregateModeSngl(nums);
             }
             case 14: // LARGE
             {
@@ -702,6 +700,58 @@ public static partial class BuiltInFunctions
         }
 
         return null;
+    }
+
+    private static ScalarValue AggregateModeSnglStreaming(
+        IReadOnlyList<ScalarValue> args,
+        IEvalContext ctx,
+        bool ignoreErrors,
+        bool ignoreHiddenRows,
+        bool ignoreNestedAggregates)
+    {
+        var mode = new AggregateModeAccumulator();
+        for (int i = 2; i < args.Count; i++)
+        {
+            var arg = args[i];
+            if (arg is ErrorValue err)
+            {
+                if (ignoreErrors) continue;
+                return err;
+            }
+
+            if (arg is RangeValue rv)
+            {
+                for (int r = 0; r < rv.RowCount; r++)
+                {
+                    uint absRow = rv.StartRow + (uint)r;
+                    if (ignoreHiddenRows && IsAggregateRowHidden(ctx, rv, absRow)) continue;
+                    for (int c = 0; c < rv.ColCount; c++)
+                    {
+                        uint absCol = rv.StartCol + (uint)c;
+                        if (ignoreNestedAggregates && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                        var cell = rv.Cells[r, c];
+                        if (cell is ErrorValue ce)
+                        {
+                            if (ignoreErrors) continue;
+                            return ce;
+                        }
+                        if (TryCellNumber(cell, out double value)) mode.Add(value);
+                    }
+                }
+            }
+            else if (TryCellNumber(arg, out double value))
+            {
+                mode.Add(value);
+            }
+            else if (arg is DirectTextLiteralValue direct && TryDirectTextNumber(direct, out double directValue))
+            {
+                mode.Add(directValue);
+            }
+        }
+
+        return mode.TryGetValue(out var result)
+            ? NumberResult(result)
+            : ErrorValue.NA;
     }
 
     private static ScalarValue AggregateCountA(
@@ -851,27 +901,54 @@ public static partial class BuiltInFunctions
         return lower + (pos - lo) * (upper - lower);
     }
 
-    private static ScalarValue AggregateModeSngl(List<double> nums)
+    private sealed class AggregateModeAccumulator
     {
-        var counts = new Dictionary<double, int>();
-        var bestCount = 0;
+        private readonly Dictionary<double, AggregateModeCount> _counts = [];
+        private int _ordinal;
+        private int _bestCount;
+        private int _bestOrdinal;
+        private double _bestValue;
 
-        foreach (var value in nums)
+        public void Add(double value)
         {
-            ref int count = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(
-                counts,
+            ref var entry = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(
+                _counts,
                 value,
                 out bool exists);
-            count = exists ? count + 1 : 1;
+            if (exists)
+                entry.Count++;
+            else
+                entry = new AggregateModeCount(1, _ordinal);
 
-            if (count > bestCount)
-                bestCount = count;
+            if (entry.Count >= 2 &&
+                (entry.Count > _bestCount ||
+                 (entry.Count == _bestCount && entry.FirstOrdinal < _bestOrdinal)))
+            {
+                _bestCount = entry.Count;
+                _bestOrdinal = entry.FirstOrdinal;
+                _bestValue = value;
+            }
+
+            _ordinal++;
         }
 
-        if (bestCount < 2) return ErrorValue.NA;
-        foreach (var value in nums)
-            if (counts[value] == bestCount) return NumberResult(value);
-        return ErrorValue.NA;
+        public bool TryGetValue(out double value)
+        {
+            value = _bestValue;
+            return _bestCount >= 2;
+        }
+    }
+
+    private struct AggregateModeCount
+    {
+        public int Count;
+        public int FirstOrdinal;
+
+        public AggregateModeCount(int count, int firstOrdinal)
+        {
+            Count = count;
+            FirstOrdinal = firstOrdinal;
+        }
     }
 
     private struct AggregateNumericAccumulator
