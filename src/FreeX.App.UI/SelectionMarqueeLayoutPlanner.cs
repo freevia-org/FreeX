@@ -30,8 +30,10 @@ public static class SelectionMarqueeLayoutPlanner
         var bottom = 0d;
         foreach (var row in viewport.RowMetrics)
         {
-            if (row.Row < range.Start.Row || row.Row > range.End.Row)
+            if (row.Row < range.Start.Row)
                 continue;
+            if (row.Row > range.End.Row)
+                break;
 
             var rowTop = row.TopOffset;
             var rowBottom = row.TopOffset + row.Height;
@@ -57,8 +59,10 @@ public static class SelectionMarqueeLayoutPlanner
         var right = 0d;
         foreach (var column in viewport.ColMetrics)
         {
-            if (column.Col < range.Start.Col || column.Col > range.End.Col)
+            if (column.Col < range.Start.Col)
                 continue;
+            if (column.Col > range.End.Col)
+                break;
 
             var columnLeft = column.LeftOffset;
             var columnRight = column.LeftOffset + column.Width;

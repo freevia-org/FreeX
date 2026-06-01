@@ -19,10 +19,18 @@ public partial class GridView
 
         var fill = Brushes.White;
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var visibleRight = GetDrawingViewportRight();
+        var visibleBottom = GetDrawingViewportBottom();
+        var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
         foreach (var picture in Pictures)
         {
             if (!picture.IsVisible) continue;
+            if (!CanAnchoredObjectReachDrawingViewport(picture.Anchor, lastRenderableRow, lastRenderableColumn))
+                continue;
             if (!TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect))
+                continue;
+            if (NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom) &&
+                !IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom))
                 continue;
 
             if (Math.Abs(picture.RotationDegrees) > 0.0001)

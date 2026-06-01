@@ -37,8 +37,11 @@ public sealed class ShortcutParityMatrixTests
     {
         var matrix = File.ReadAllLines(WorkspaceFileLocator.Find("docs", "SHORTCUT_PARITY_MATRIX.md"));
         var nextWork = ReadNextWorkItems(matrix);
+        var nextWorkIntro = ReadNextWorkIntro(matrix);
 
         nextWork.Should().HaveCount(9);
+        nextWorkIntro.Should().Contain("Shortcut parity is complete");
+        nextWorkIntro.Should().Contain("not missing-shortcut blockers");
         nextWork.Should().SatisfyRespectively(
             item => item.Should().Contain("`Ctrl+P`"),
             item => item.Should().ContainAll("`Ctrl+V`", "`Ctrl+Alt+V`"),
@@ -49,6 +52,7 @@ public sealed class ShortcutParityMatrixTests
             item => item.Should().ContainAll("ribbon keytips", "Conditional Formatting"),
             item => item.Should().Contain("`Shift+F10` / Menu key"),
             item => item.Should().Contain("F4"));
+        nextWork.Should().NotContain(item => item.Contains("Missing", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -90,6 +94,16 @@ public sealed class ShortcutParityMatrixTests
             .TakeWhile(line => !line.StartsWith("## ", StringComparison.Ordinal))
             .Where(line => char.IsDigit(line.FirstOrDefault()))
             .ToArray();
+    }
+
+    private static string ReadNextWorkIntro(IReadOnlyList<string> lines)
+    {
+        var sectionStart = Array.FindIndex(lines.ToArray(), line => line == "## Next Shortcut Work");
+        sectionStart.Should().BeGreaterThanOrEqualTo(0);
+
+        return lines
+            .Skip(sectionStart + 1)
+            .First(line => !string.IsNullOrWhiteSpace(line));
     }
 
     private static CoverageSummary ReadCoverageSummary(IReadOnlyList<string> lines)

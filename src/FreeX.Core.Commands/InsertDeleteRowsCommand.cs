@@ -56,7 +56,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             .Select(p => (p.Address, p.Cell.Clone()))
             .ToList();
 
-        foreach (var (addr, _) in _movedSnapshot.OrderByDescending(p => p.Addr.Row))
+        foreach (var (addr, _) in _movedSnapshot)
             sheet.ClearCell(addr);
 
         foreach (var (addr, cell) in _movedSnapshot)
