@@ -320,17 +320,15 @@ public sealed partial class NativeJsonAdapter
                 !NativeJsonValueSanitizer.IsValidColumnIndex(col))
                 continue;
 
-            var address = new CellAddress(sheet.Id, row, col);
             var cell = entry.Value;
             var serializedValue = NativeJsonScalarValueMapper.SerializeWithType(cell.Value);
-            dto.Address = address.ToA1();
             dto.Value = serializedValue.Value;
             dto.ValueType = serializedValue.ValueType;
             dto.Formula = cell.HasFormula ? NormalizeNativeFormulaText(cell.FormulaText!) : null;
             dto.IgnoreFormulaError = cell.IgnoreFormulaError;
             dto.StyleId = GetNativeStyleId(cell.StyleId);
             dto.Style = null;
-            CellDtoJsonConverter.WriteCell(writer, dto, options);
+            CellDtoJsonConverter.WriteCell(writer, dto, options, row, col);
         }
     }
 
@@ -347,10 +345,9 @@ public sealed partial class NativeJsonAdapter
                 !NativeJsonValueSanitizer.IsValidColumnIndex(col))
                 continue;
 
-            dto.Address = new CellAddress(sheet.Id, row, col).ToA1();
             dto.StyleId = GetNativeStyleId(entry.StyleId, includeDefault: true);
             dto.Style = null;
-            StyleOnlyCellDtoJsonConverter.WriteCell(writer, dto, options);
+            StyleOnlyCellDtoJsonConverter.WriteCell(writer, dto, options, row, col);
         }
     }
 
