@@ -131,6 +131,33 @@ public sealed class RibbonKeyTipRoutingTests
     }
 
     [Fact]
+    public void ResolveMenuItem_WithScopePrefixRoutesPrefixedChildByLocalSuffix()
+    {
+        RunSta(() =>
+        {
+            var child = CreateMenuItem("HG");
+
+            var resolved = RibbonKeyTipRouting.ResolveMenuItem([child], "G", scopePrefix: "H");
+
+            resolved.Should().BeSameAs(child);
+        });
+    }
+
+    [Fact]
+    public void ResolveMenuItem_WithScopePrefixStillWaitsForNestedLongerSuffix()
+    {
+        RunSta(() =>
+        {
+            var child = CreateMenuItem("HG");
+            child.Items.Add(CreateMenuItem("HGT"));
+
+            var resolved = RibbonKeyTipRouting.ResolveMenuItem([child], "G", scopePrefix: "H");
+
+            resolved.Should().BeNull("scoped parent prefixes should preserve nested submenu ambiguity");
+        });
+    }
+
+    [Fact]
     public void ResolveMenuItem_RejectsDuplicateExactMatches()
     {
         RunSta(() =>
@@ -153,6 +180,17 @@ public sealed class RibbonKeyTipRoutingTests
             parent.Items.Add(CreateMenuItem("TA"));
 
             RibbonKeyTipRouting.HasMenuItemKeyTipPrefix([parent], "TA").Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void HasMenuItemKeyTipPrefix_WithScopePrefixMatchesLocalSuffix()
+    {
+        RunSta(() =>
+        {
+            var child = CreateMenuItem("HG");
+
+            RibbonKeyTipRouting.HasMenuItemKeyTipPrefix([child], "G", scopePrefix: "H").Should().BeTrue();
         });
     }
 
