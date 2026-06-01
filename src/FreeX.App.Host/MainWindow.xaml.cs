@@ -76,6 +76,8 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _endMode;
     private bool _dragSelectActive;
     private bool _dragSelectAddsAdditionalRange;
+    private GridHeaderContextMenuTarget? _dragHeaderSelectionTarget;
+    private uint _dragHeaderSelectionAnchor;
     private bool _dragSelectStatusRefreshPending;
     private bool _dragSelectToolbarRefreshPending;
     private FreeX.App.UI.SplitPaneRegion _activeSplitPaneRegion = FreeX.App.UI.SplitPaneRegion.BottomRight;

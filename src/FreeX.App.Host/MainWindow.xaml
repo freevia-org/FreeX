@@ -3767,6 +3767,7 @@
                                           MouseLeftButtonDown="SheetTab_MouseLeftButtonDown"
                                           MouseMove="SheetTab_MouseMove"
                                           MouseLeftButtonUp="SheetTab_MouseLeftButtonUp"
+                                          LostMouseCapture="SheetTab_LostMouseCapture"
                                           MouseRightButtonDown="SheetTab_MouseRightButtonDown">
                                         <Grid.Style>
                                             <Style TargetType="Grid">
