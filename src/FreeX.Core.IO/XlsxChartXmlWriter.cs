@@ -264,6 +264,8 @@ internal static partial class XlsxChartXmlWriter
         XNamespace drawingNs,
         Func<int, bool> includeSeries) =>
         new(chartNs + "lineChart",
+            // CT_LineChart requires <c:grouping> before the series.
+            new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
             BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
             ToChartGuideLineXml(chart, chartNs, drawingNs));
 
@@ -274,6 +276,7 @@ internal static partial class XlsxChartXmlWriter
         XNamespace drawingNs,
         Func<int, bool> includeSeries) =>
         new(chartNs + "line3DChart",
+            new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
             BuildChartSeries(chart, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true),
             ToChartGuideLineXml(chart, chartNs, drawingNs));
 
