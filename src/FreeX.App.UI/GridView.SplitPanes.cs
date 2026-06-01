@@ -154,6 +154,32 @@ public partial class GridView
         uint step = 3) =>
         SplitPaneViewportChrome.CalculateWheelTarget(scrollbar, currentIndex, notches, step);
 
+    public static SplitPaneWheelTarget ResolveSplitPaneWheelTarget(
+        ViewportModel viewport,
+        SheetId sheetId,
+        Point pos,
+        double actualWidth,
+        double actualHeight,
+        bool requestedHorizontal)
+    {
+        if (viewport.SplitPanes is not null)
+        {
+            var chrome = CalculateSplitPaneScrollbarChrome(viewport, actualWidth, actualHeight);
+            if (HitTestSplitPaneScrollbar(chrome, pos) is { } scrollbarHit)
+            {
+                return new SplitPaneWheelTarget(
+                    scrollbarHit.Region,
+                    scrollbarHit.Orientation == SplitPaneScrollbarOrientation.Horizontal);
+            }
+        }
+
+        var region = viewport.SplitPanes is not null &&
+            HitTestViewportCell(viewport, sheetId, pos) is not null
+                ? HitTestSplitPaneRegion(viewport, pos)
+                : SplitPaneRegion.BottomRight;
+        return new SplitPaneWheelTarget(region, requestedHorizontal);
+    }
+
     public static SplitPaneScrollbarScrollTarget? CalculateSplitPaneScrollbarInteractionTarget(
         ViewportModel viewport,
         SplitPaneScrollbarChrome chrome,
@@ -427,6 +453,7 @@ public sealed record SplitPaneScrollbarScrollTarget(
     SplitPaneRegion Region,
     SplitPaneScrollbarOrientation Orientation,
     uint Index);
+public sealed record SplitPaneWheelTarget(SplitPaneRegion Region, bool Horizontal);
 public sealed record SplitPaneClipRects(
     Rect TopLeft,
     Rect TopRight,
