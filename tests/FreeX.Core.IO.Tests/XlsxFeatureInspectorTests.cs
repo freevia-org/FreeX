@@ -204,6 +204,22 @@ public class XlsxFeatureInspectorTests
     }
 
     [Fact]
+    public void Inspect_RelationshipOnlyEmbeddedPackageReference_DetectsEmbeddedObjects()
+    {
+        using var package = CreatePackageWithContent(("xl/worksheets/_rels/sheet1.xml.rels", """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+              <Relationship Id="rIdEmbeddedPackage"
+                            Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/package"
+                            Target="../embeddings/package1.bin"/>
+            </Relationships>
+            """));
+
+        var report = XlsxFeatureInspector.Inspect(package);
+
+        report.Features.Should().Contain(f => f.Kind == XlsxUnsupportedFeatureKind.EmbeddedObjects);
+    }
+
+    [Fact]
     public void Inspect_SlicerAndTimelinePackage_DoesNotReportUnsupportedFeatures()
     {
         using var package = CreatePackage(

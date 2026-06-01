@@ -332,10 +332,12 @@ public sealed class ProtectionDialogTests
             dialog.Dispatcher.BeginInvoke(() =>
             {
                 existingRangesBox.SelectedIndex = 0;
-                existingRangesBox.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+                var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
                 {
                     RoutedEvent = Control.MouseDoubleClickEvent
-                });
+                };
+                existingRangesBox.RaiseEvent(doubleClick);
+                doubleClick.Handled.Should().BeTrue();
 
                 dialog.Dispatcher.BeginInvoke(() =>
                 {

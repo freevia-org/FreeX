@@ -928,6 +928,34 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromDateOccurringConditionalFormat()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var recent = new CellAddress(sheet.Id, 1, 1);
+        var older = new CellAddress(sheet.Id, 2, 1);
+        var today = DateTime.Today;
+        sheet.SetCell(recent, DateTimeValue.FromDateTime(today.AddDays(-3)));
+        sheet.SetCell(older, DateTimeValue.FromDateTime(today.AddDays(-8)));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(recent, older),
+            RuleType = CfRuleType.DateOccurring,
+            DateOccurringPeriod = "last7Days",
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = new CellColor(120, 120, 120),
+                FillColor = new CellColor(130, 130, 130)
+            }
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("A1");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_WhenPatternForegroundIsLowContrast()
     {
         var workbook = new Workbook("Accessibility");

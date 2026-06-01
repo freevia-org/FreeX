@@ -334,7 +334,7 @@ public sealed partial class Sheet
     public List<ConditionalFormat> ConditionalFormats { get; } = [];
 
     /// <summary>Data validation rules applied to this sheet.</summary>
-    public List<DataValidation> DataValidations { get; } = [];
+    public DataValidationCollection DataValidations { get; } = [];
 
     /// <summary>Set of row numbers manually hidden or imported as hidden (1-based).</summary>
     public HashSet<uint> HiddenRows { get; } = [];

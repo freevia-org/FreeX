@@ -119,6 +119,23 @@ public sealed class GridViewTextDecorationTests
         layout.TextRect.Width.Should().Be(0);
     }
 
+    [Fact]
+    public void CalculateConditionalIconCellLayout_KeepsZeroSizeIconOriginInsideUltraNarrowCells()
+    {
+        var cellRect = new Rect(10, 20, 3, 12);
+
+        var layout = GridView.CalculateConditionalIconCellLayout(
+            cellRect,
+            new ConditionalFormatIcon("3TrafficLights1", 1, 3, ShowValue: false));
+
+        layout.IconRect.Width.Should().Be(0);
+        layout.IconRect.Height.Should().Be(0);
+        layout.IconRect.Left.Should().Be(cellRect.Right);
+        layout.IconRect.Right.Should().Be(cellRect.Right);
+        layout.TextRect.Should().Be(Rect.Empty);
+        layout.ShouldDrawText.Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(0, 5, "#C00000")]
     [InlineData(1, 5, "#ED7D31")]

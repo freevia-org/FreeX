@@ -906,14 +906,31 @@ public sealed class GridViewRenderPerformanceTests
     public void FormulaTraceLayoutPlanner_AvoidsPerArrowLinqMetricScans()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "FormulaTraceLayoutPlanner.cs"));
+        var overlaysSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
         var calculateLayouts = source[
             source.IndexOf("public static IReadOnlyList<FormulaTraceArrowLayout> CalculateLayouts", StringComparison.Ordinal)..
+            source.IndexOf("public static void VisitLayouts<TConsumer>", StringComparison.Ordinal)];
+        var visitLayouts = source[
+            source.IndexOf("public static void VisitLayouts<TConsumer>", StringComparison.Ordinal)..
             source.IndexOf("public static CellAddress? HitTestMarker", StringComparison.Ordinal)];
         var tryGetCellRect = source[
             source.IndexOf("private static bool TryGetCellRect", StringComparison.Ordinal)..
             source.IndexOf("private static bool TryGetMarkerHit", StringComparison.Ordinal)];
+        var renderFormulaTrace = overlaysSource[
+            overlaysSource.IndexOf("private void RenderFormulaTraceArrows", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("public static IReadOnlyList<FormulaTraceArrowLayout> CalculateFormulaTraceArrowLayouts", StringComparison.Ordinal)];
 
-        calculateLayouts.Should().Contain("new List<FormulaTraceArrowLayout>(arrows.Count)");
+        source.Should().Contain("public interface IFormulaTraceArrowLayoutConsumer");
+        calculateLayouts.Should().Contain("var consumer = new FormulaTraceArrowLayoutCollector(arrows.Count);");
+        calculateLayouts.Should().Contain("VisitLayouts(viewport, arrows, sheetId, ref consumer);");
+        visitLayouts.Should().Contain("where TConsumer : struct, IFormulaTraceArrowLayoutConsumer");
+        visitLayouts.Should().Contain("consumer.AcceptLayout(");
+        visitLayouts.Should().NotContain("new List<FormulaTraceArrowLayout>");
+        visitLayouts.Should().NotContain("new FormulaTraceArrowLayout");
+        renderFormulaTrace.Should().Contain("FormulaTraceLayoutPlanner.VisitLayouts(viewport, arrows, FormulaTraceSheetId, ref consumer);");
+        renderFormulaTrace.Should().NotContain("CalculateFormulaTraceArrowLayouts");
+        renderFormulaTrace.Should().NotContain("foreach");
+        overlaysSource.Should().Contain("private readonly struct FormulaTraceArrowDrawingConsumer");
         tryGetCellRect.Should().Contain("FindRowMetric(viewport.RowMetrics, address.Row)");
         tryGetCellRect.Should().Contain("FindColMetric(viewport.ColMetrics, address.Col)");
         tryGetCellRect.Should().NotContain("FirstOrDefault");

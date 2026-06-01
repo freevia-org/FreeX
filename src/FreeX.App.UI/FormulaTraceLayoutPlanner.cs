@@ -3,6 +3,15 @@ using System.Windows;
 
 namespace FreeX.App.UI;
 
+public interface IFormulaTraceArrowLayoutConsumer
+{
+    void AcceptLayout(
+        Point start,
+        Point end,
+        FormulaTraceArrowLayoutKind kind,
+        CellAddress? navigationTarget);
+}
+
 public static class FormulaTraceLayoutPlanner
 {
     public static IReadOnlyList<FormulaTraceArrowLayout> CalculateLayouts(
@@ -10,7 +19,18 @@ public static class FormulaTraceLayoutPlanner
         IReadOnlyList<FormulaTraceArrow> arrows,
         SheetId sheetId)
     {
-        var layouts = new List<FormulaTraceArrowLayout>(arrows.Count);
+        var consumer = new FormulaTraceArrowLayoutCollector(arrows.Count);
+        VisitLayouts(viewport, arrows, sheetId, ref consumer);
+        return consumer.ToLayouts();
+    }
+
+    public static void VisitLayouts<TConsumer>(
+        ViewportModel viewport,
+        IReadOnlyList<FormulaTraceArrow> arrows,
+        SheetId sheetId,
+        ref TConsumer consumer)
+        where TConsumer : struct, IFormulaTraceArrowLayoutConsumer
+    {
         var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);
         var useMetricLookups = arrows.Count > 1;
         Dictionary<uint, RowMetric>? rowLookup = null;
@@ -24,9 +44,11 @@ public static class FormulaTraceLayoutPlanner
 
             if (fromVisible && toVisible)
             {
-                layouts.Add(new FormulaTraceArrowLayout(
+                consumer.AcceptLayout(
                     CenterOf(fromRect),
-                    CenterOf(toRect)));
+                    CenterOf(toRect),
+                    FormulaTraceArrowLayoutKind.VisibleArrow,
+                    null);
                 continue;
             }
 
@@ -35,12 +57,16 @@ public static class FormulaTraceLayoutPlanner
                 : FormulaTraceArrowLayoutKind.CrossSheetMarker;
 
             if (fromVisible)
-                layouts.Add(new FormulaTraceArrowLayout(CenterOf(fromRect), CenterOf(fromRect), markerKind, arrow.To));
+            {
+                var markerPoint = CenterOf(fromRect);
+                consumer.AcceptLayout(markerPoint, markerPoint, markerKind, arrow.To);
+            }
             else if (toVisible)
-                layouts.Add(new FormulaTraceArrowLayout(CenterOf(toRect), CenterOf(toRect), markerKind, arrow.From));
+            {
+                var markerPoint = CenterOf(toRect);
+                consumer.AcceptLayout(markerPoint, markerPoint, markerKind, arrow.From);
+            }
         }
-
-        return layouts;
     }
 
     public static CellAddress? HitTestMarker(
@@ -75,6 +101,25 @@ public static class FormulaTraceLayoutPlanner
         }
 
         return null;
+    }
+
+    private struct FormulaTraceArrowLayoutCollector(int capacity) : IFormulaTraceArrowLayoutConsumer
+    {
+        private readonly int _capacity = capacity;
+        private List<FormulaTraceArrowLayout>? _layouts;
+
+        public void AcceptLayout(
+            Point start,
+            Point end,
+            FormulaTraceArrowLayoutKind kind,
+            CellAddress? navigationTarget)
+        {
+            _layouts ??= new List<FormulaTraceArrowLayout>(_capacity);
+            _layouts.Add(new FormulaTraceArrowLayout(start, end, kind, navigationTarget));
+        }
+
+        public readonly IReadOnlyList<FormulaTraceArrowLayout> ToLayouts() =>
+            _layouts is { Count: > 0 } layouts ? layouts : [];
     }
 
     private static Point CenterOf(Rect rect) =>
