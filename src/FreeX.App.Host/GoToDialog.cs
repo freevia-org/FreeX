@@ -70,7 +70,7 @@ public sealed partial class GoToDialog : Window
             if (_historyList.SelectedItem is string reference)
                 _addressBox.Text = reference;
         };
-        _historyList.MouseDoubleClick += (_, _) => Accept();
+        _historyList.MouseDoubleClick += HistoryList_MouseDoubleClick;
         _historyList.SelectedIndex = 0;
         Grid.SetRow(_historyList, 1);
         Grid.SetColumnSpan(_historyList, 2);
@@ -135,6 +135,12 @@ public sealed partial class GoToDialog : Window
         SelectedSpecialKind = dialog.SelectedKind;
         SelectedSpecialOptions = dialog.SelectedOptions;
         DialogResult = true;
+    }
+
+    private void HistoryList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        Accept();
+        e.Handled = true;
     }
 
     private void Accept()
