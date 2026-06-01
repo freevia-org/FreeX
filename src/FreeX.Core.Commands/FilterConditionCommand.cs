@@ -200,13 +200,9 @@ public sealed class FilterConditionCommand : IWorkbookCommand
 
         var filterCol = _range.Start.Col + _filterColOffset;
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
-            sheet.FilterHiddenRows.Remove(row);
-
-        for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {
             var value = sheet.GetValue(row, filterCol);
-            if (!_criterion.Matches(value))
-                sheet.FilterHiddenRows.Add(row);
+            FilterHiddenRowUpdater.SetVisible(sheet.FilterHiddenRows, row, _criterion.Matches(value));
         }
 
         return new CommandOutcome(true);
