@@ -75,13 +75,18 @@ internal static class XlsxWorkbookThemeWriter
 
         return new XElement(drawingNs + "fontScheme",
             new XAttribute("name", $"{theme.Name} Fonts"),
-            new XElement(drawingNs + "majorFont",
-                new XElement(drawingNs + "latin",
-                    new XAttribute("typeface", theme.MajorFontName))),
-            new XElement(drawingNs + "minorFont",
-                new XElement(drawingNs + "latin",
-                    new XAttribute("typeface", theme.MinorFontName))));
+            CreateFontCollectionElement("majorFont", theme.MajorFontName, drawingNs),
+            CreateFontCollectionElement("minorFont", theme.MinorFontName, drawingNs));
     }
+
+    // CT_FontCollection requires latin, ea and cs children (in that order). The east-asian/complex-
+    // script faces default to empty (inherit), matching Office's built-in theme; omitting them makes
+    // the theme part schema-invalid and Excel refuses to open the whole workbook.
+    private static XElement CreateFontCollectionElement(string collectionName, string latinTypeface, XNamespace drawingNs) =>
+        new(drawingNs + collectionName,
+            new XElement(drawingNs + "latin", new XAttribute("typeface", latinTypeface)),
+            new XElement(drawingNs + "ea", new XAttribute("typeface", string.Empty)),
+            new XElement(drawingNs + "cs", new XAttribute("typeface", string.Empty)));
 
     private static XElement CreateFormatSchemeElement(WorkbookTheme theme, XNamespace drawingNs)
     {
@@ -99,8 +104,31 @@ internal static class XlsxWorkbookThemeWriter
             }
         }
 
+        // CT_StyleMatrix (fmtScheme) requires fillStyleLst, lnStyleLst, effectStyleLst and
+        // bgFillStyleLst, each with at least three entries. An empty fmtScheme is schema-invalid and
+        // makes Excel reject the workbook, so emit a minimal complete style matrix using phClr
+        // placeholder colours (the standard theme convention).
+        XElement SolidPhClrFill() =>
+            new(drawingNs + "solidFill", new XElement(drawingNs + "schemeClr", new XAttribute("val", "phClr")));
+
+        XElement Line(int widthEmu) =>
+            new(drawingNs + "ln",
+                new XAttribute("w", widthEmu),
+                new XAttribute("cap", "flat"),
+                new XAttribute("cmpd", "sng"),
+                new XAttribute("algn", "ctr"),
+                SolidPhClrFill(),
+                new XElement(drawingNs + "prstDash", new XAttribute("val", "solid")));
+
+        XElement EffectStyle() =>
+            new(drawingNs + "effectStyle", new XElement(drawingNs + "effectLst"));
+
         return new XElement(drawingNs + "fmtScheme",
-            new XAttribute("name", theme.EffectsName));
+            new XAttribute("name", theme.EffectsName),
+            new XElement(drawingNs + "fillStyleLst", SolidPhClrFill(), SolidPhClrFill(), SolidPhClrFill()),
+            new XElement(drawingNs + "lnStyleLst", Line(6350), Line(12700), Line(19050)),
+            new XElement(drawingNs + "effectStyleLst", EffectStyle(), EffectStyle(), EffectStyle()),
+            new XElement(drawingNs + "bgFillStyleLst", SolidPhClrFill(), SolidPhClrFill(), SolidPhClrFill()));
     }
 
     private static string FormatColor(CellColor color) =>
