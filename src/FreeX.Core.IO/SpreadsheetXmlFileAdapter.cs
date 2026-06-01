@@ -73,6 +73,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
     public void Save(Workbook workbook, Stream stream)
     {
+        SaveStreamPreparer.TruncateFromCurrentPosition(stream);
+
         var styleIds = CreateNumberFormatStyleIds(workbook);
         var document = new XDocument(
             new XDeclaration("1.0", "utf-8", null),

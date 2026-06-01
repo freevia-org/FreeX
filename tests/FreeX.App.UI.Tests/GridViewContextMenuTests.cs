@@ -52,6 +52,38 @@ public sealed class GridViewContextMenuTests
 
         GridHeaderContextMenuHitPlanner.HitTest(
                 viewport,
+                new Point(12, 8),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeNull();
+
+        GridHeaderContextMenuHitPlanner.HitTest(
+                viewport,
+                new Point(30, 18),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeNull();
+
+        GridHeaderContextMenuHitPlanner.HitTest(
+                viewport,
+                new Point(-1, 24),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeNull();
+
+        GridHeaderContextMenuHitPlanner.HitTest(
+                viewport,
+                new Point(40, -1),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18)
+            .Should()
+            .BeNull();
+
+        GridHeaderContextMenuHitPlanner.HitTest(
+                viewport,
                 new Point(80, 40),
                 rowHeaderWidth: 30,
                 columnHeaderHeight: 18)

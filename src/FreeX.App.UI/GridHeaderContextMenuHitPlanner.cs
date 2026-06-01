@@ -16,7 +16,9 @@ public static class GridHeaderContextMenuHitPlanner
         if (viewport is null)
             return null;
 
-        if (pointer.Y <= columnHeaderHeight && pointer.X >= rowHeaderWidth)
+        if (pointer.Y >= 0 &&
+            pointer.Y < columnHeaderHeight &&
+            pointer.X >= rowHeaderWidth)
         {
             foreach (var cm in viewport.ColMetrics)
             {
@@ -31,7 +33,9 @@ public static class GridHeaderContextMenuHitPlanner
             return null;
         }
 
-        if (pointer.X <= rowHeaderWidth && pointer.Y >= columnHeaderHeight)
+        if (pointer.X >= 0 &&
+            pointer.X < rowHeaderWidth &&
+            pointer.Y >= columnHeaderHeight)
         {
             foreach (var rm in viewport.RowMetrics)
             {
