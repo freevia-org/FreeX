@@ -626,6 +626,19 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void Save_UsesSaveScopedStyleCacheForStyleLookup()
+    {
+        var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
+
+        saveSource.Should().Contain("var styleCache = new Dictionary<StyleId, CellStyle>(workbook.StyleCount);");
+        saveSource.Should().Contain("GetCachedStyle(workbook, styleCache, cell.StyleId)");
+        saveSource.Should().Contain("GetCachedStyle(workbook, styleCache, run.StyleId)");
+        saveSource.Should().Contain("style = workbook.GetStyle(styleId);");
+        saveSource.Should().NotContain("workbook.GetStyle(cell.StyleId)");
+        saveSource.Should().NotContain("workbook.GetStyle(run.StyleId)");
+    }
+
+    [Fact]
     public void SavePostProcessing_BatchesWorkbookMetadataXmlWrites()
     {
         var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
