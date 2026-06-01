@@ -88,15 +88,13 @@ public sealed class XlsxChartExWriterTests
             {
                 var columnLayoutPr = series.Elements(ChartExNs + "layoutPr").Should().ContainSingle().Subject;
                 columnLayoutPr.Elements(ChartExNs + "aggregation").Should().ContainSingle();
-                series.Elements(ChartExNs + "axisId").Should().ContainSingle()
-                    .Which.Value.Should().Be("1");
+                series.Elements(ChartExNs + "axisId").Should().BeEmpty();
 
                 var paretoLine = regionSeries[1];
                 paretoLine.Attribute("layoutId")!.Value.Should().Be("paretoLine");
                 paretoLine.Attribute("ownerIdx")!.Value.Should().Be("0");
                 paretoLine.Elements(ChartExNs + "dataId").Should().BeEmpty();
-                paretoLine.Elements(ChartExNs + "axisId").Should().ContainSingle()
-                    .Which.Value.Should().Be("2");
+                paretoLine.Elements(ChartExNs + "axisId").Should().BeEmpty();
             }
 
             var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
@@ -302,7 +300,7 @@ public sealed class XlsxChartExWriterTests
     }
 
     [Fact]
-    public void Save_WritesNativeLikeParetoAggregationLineAndPercentageAxes()
+    public void Save_WritesParetoAggregationOwnerLineAndPercentageAxes()
     {
         var saved = SaveWorkbookWithChart(ChartType.Pareto);
 
@@ -322,15 +320,13 @@ public sealed class XlsxChartExWriterTests
             .Which.Attribute("val")!.Value.Should().Be("0");
         columnSeries.Elements(ChartExNs + "layoutPr").Should().ContainSingle()
             .Which.Elements(ChartExNs + "aggregation").Should().ContainSingle();
-        columnSeries.Elements(ChartExNs + "axisId").Should().ContainSingle()
-            .Which.Value.Should().Be("1");
+        columnSeries.Elements(ChartExNs + "axisId").Should().BeEmpty();
 
         var paretoLine = regionSeries[1];
         paretoLine.Attribute("layoutId")!.Value.Should().Be("paretoLine");
         paretoLine.Attribute("ownerIdx")!.Value.Should().Be("0");
         paretoLine.Elements(ChartExNs + "dataId").Should().BeEmpty();
-        paretoLine.Elements(ChartExNs + "axisId").Should().ContainSingle()
-            .Which.Value.Should().Be("2");
+        paretoLine.Elements(ChartExNs + "axisId").Should().BeEmpty();
 
         var axes = plotArea.Elements(ChartExNs + "axis").ToList();
         axes.Select(axis => axis.Attribute("id")!.Value).Should().Equal("0", "1", "2");
