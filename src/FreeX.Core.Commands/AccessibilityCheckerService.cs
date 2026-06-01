@@ -335,7 +335,7 @@ public static class AccessibilityCheckerService
             var address = new CellAddress(sheet.Id, row, col);
             var style = GetEffectiveContrastStyle(workbook, conditionalContrastRules, address, cell);
             var minimumContrastRatio = MinimumTextContrastRatio(style);
-            if (EffectiveCellTextBackgrounds(style).All(background => ContrastRatio(style.FontColor, background) >= minimumContrastRatio))
+            if (HasSufficientCellTextContrast(style, minimumContrastRatio))
                 continue;
 
             issues.Add(new AccessibilityIssue(
@@ -540,6 +540,17 @@ public static class AccessibilityCheckerService
 
     private static void AddHiddenContentIssues(List<AccessibilityIssue> issues, Sheet sheet)
     {
+        if (!sheet.IsHidden &&
+            !sheet.IsVeryHidden &&
+            sheet.HiddenRows.Count == 0 &&
+            sheet.FilterHiddenRows.Count == 0 &&
+            sheet.GroupHiddenRows.Count == 0 &&
+            sheet.HiddenCols.Count == 0 &&
+            sheet.GroupHiddenCols.Count == 0)
+        {
+            return;
+        }
+
         var hasContent = false;
         HashSet<uint>? hiddenRows = null;
         HashSet<uint>? hiddenCols = null;
@@ -658,22 +669,20 @@ public static class AccessibilityCheckerService
             ? 3.0
             : 4.5;
 
-    private static IEnumerable<CellColor> EffectiveCellTextBackgrounds(CellStyle style)
+    private static bool HasSufficientCellTextContrast(CellStyle style, double minimumContrastRatio)
     {
         var baseFill = style.FillColor ?? CellColor.White;
-        yield return baseFill;
+        if (ContrastRatio(style.FontColor, baseFill) < minimumContrastRatio)
+            return false;
 
         if (style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
-            yield break;
+            return true;
 
         var patternColor = style.FillPatternColor ?? CellColor.Black;
         if (TryGetGrayPatternOpacity(style.FillPatternStyle, out var opacity))
-        {
-            yield return Blend(patternColor, baseFill, opacity);
-            yield break;
-        }
+            return ContrastRatio(style.FontColor, Blend(patternColor, baseFill, opacity)) >= minimumContrastRatio;
 
-        yield return patternColor;
+        return ContrastRatio(style.FontColor, patternColor) >= minimumContrastRatio;
     }
 
     private static bool TryGetGrayPatternOpacity(CellFillPatternStyle patternStyle, out double opacity)
