@@ -83,8 +83,17 @@ public static partial class FlashFillService
         if (exampleSources.Count == 0 || exampleSources.Count != exampleOutputs.Count)
             return null;
 
-        if (exampleSources.Any(s => s.Count < 2) || remainingSources.Any(s => s.Count < 2))
-            return null;
+        for (var i = 0; i < exampleSources.Count; i++)
+        {
+            if (exampleSources[i].Count < 2)
+                return null;
+        }
+
+        for (var i = 0; i < remainingSources.Count; i++)
+        {
+            if (remainingSources[i].Count < 2)
+                return null;
+        }
 
         var patterns = new List<Func<IReadOnlyList<string>, string>>
         {
@@ -132,7 +141,11 @@ public static partial class FlashFillService
             if (!allExamplesMatch)
                 continue;
 
-            return remainingSources.Select(pattern).ToList();
+            var results = new List<string>(remainingSources.Count);
+            for (var i = 0; i < remainingSources.Count; i++)
+                results.Add(pattern(remainingSources[i]));
+
+            return results;
         }
 
         return null;

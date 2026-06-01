@@ -113,24 +113,13 @@ public static partial class FlashFillService
             bool allMatch = true;
             foreach (var (source, expected) in examples)
             {
-                var parts = source.Split(delimiter, StringSplitOptions.TrimEntries);
-                if (parts.Length < 2)
+                if (source.IndexOf(delimiter) < 0)
                 {
                     allMatch = false;
                     break;
                 }
 
-                int foundIndex = -1;
-                for (int i = 0; i < parts.Length; i++)
-                {
-                    if (parts[i] == expected)
-                    {
-                        foundIndex = i;
-                        break;
-                    }
-                }
-
-                if (foundIndex < 0)
+                if (!TryFindDelimitedPartIndex(source, delimiter, expected, out var foundIndex))
                 {
                     allMatch = false;
                     break;
@@ -150,13 +139,9 @@ public static partial class FlashFillService
                 var idx = partIndex.Value;
                 var d = delimiter;
                 return s =>
-                {
-                    var parts = s.Split(d, StringSplitOptions.TrimEntries);
-                    if (idx < parts.Length)
-                        return parts[idx];
-
-                    return idx == 0 ? s : null;
-                };
+                    TryGetDelimitedPart(s, d, idx, out var part)
+                        ? part
+                        : null;
             }
         }
 
@@ -229,15 +214,136 @@ public static partial class FlashFillService
 
     private static bool TryGetFinalDottedToken(string source, out string token)
     {
-        var parts = source.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length < 2)
+        token = string.Empty;
+
+        var end = source.Length - 1;
+        TrimTrailingWhitespace(source, ref end);
+
+        while (end >= 0)
         {
-            token = string.Empty;
-            return false;
+            var dotIndex = source.LastIndexOf('.', end);
+            if (dotIndex < 0)
+                return false;
+
+            var tokenStart = dotIndex + 1;
+            var tokenEnd = end;
+            TrimSegment(source, ref tokenStart, ref tokenEnd);
+            if (tokenStart <= tokenEnd && HasNonEmptyPartBeforeDelimiter(source, dotIndex, '.'))
+            {
+                token = SliceSegment(source, tokenStart, tokenEnd + 1);
+                return true;
+            }
+
+            end = dotIndex - 1;
+            TrimTrailingWhitespace(source, ref end);
         }
 
-        token = parts[^1];
-        return token.Length > 0;
+        return false;
+    }
+
+    private static bool TryFindDelimitedPartIndex(
+        string source,
+        char delimiter,
+        string expected,
+        out int foundIndex)
+    {
+        foundIndex = -1;
+        var partIndex = 0;
+        var start = 0;
+        while (true)
+        {
+            var delimiterIndex = source.IndexOf(delimiter, start);
+            var endExclusive = delimiterIndex < 0 ? source.Length : delimiterIndex;
+            if (TrimmedSegmentEquals(source, start, endExclusive, expected))
+            {
+                foundIndex = partIndex;
+                return true;
+            }
+
+            if (delimiterIndex < 0)
+                return false;
+
+            start = delimiterIndex + 1;
+            partIndex++;
+        }
+    }
+
+    private static bool TryGetDelimitedPart(string source, char delimiter, int partIndex, out string part)
+    {
+        part = string.Empty;
+        if (partIndex < 0)
+            return false;
+
+        var currentPartIndex = 0;
+        var start = 0;
+        while (true)
+        {
+            var delimiterIndex = source.IndexOf(delimiter, start);
+            var endExclusive = delimiterIndex < 0 ? source.Length : delimiterIndex;
+            if (currentPartIndex == partIndex)
+            {
+                part = SliceTrimmedSegment(source, start, endExclusive);
+                return true;
+            }
+
+            if (delimiterIndex < 0)
+                return false;
+
+            start = delimiterIndex + 1;
+            currentPartIndex++;
+        }
+    }
+
+    private static bool TrimmedSegmentEquals(string source, int start, int endExclusive, string expected)
+    {
+        var trimStart = start;
+        var trimEnd = endExclusive - 1;
+        TrimSegment(source, ref trimStart, ref trimEnd);
+
+        var length = trimStart <= trimEnd ? trimEnd - trimStart + 1 : 0;
+        return length == expected.Length &&
+               source.AsSpan(trimStart, length).SequenceEqual(expected.AsSpan());
+    }
+
+    private static string SliceTrimmedSegment(string source, int start, int endExclusive)
+    {
+        var trimStart = start;
+        var trimEnd = endExclusive - 1;
+        TrimSegment(source, ref trimStart, ref trimEnd);
+        return trimStart <= trimEnd
+            ? SliceSegment(source, trimStart, trimEnd + 1)
+            : string.Empty;
+    }
+
+    private static string SliceSegment(string source, int start, int endExclusive) =>
+        start == 0 && endExclusive == source.Length
+            ? source
+            : source[start..endExclusive];
+
+    private static void TrimSegment(string source, ref int start, ref int end)
+    {
+        while (start <= end && char.IsWhiteSpace(source[start]))
+            start++;
+
+        while (end >= start && char.IsWhiteSpace(source[end]))
+            end--;
+    }
+
+    private static void TrimTrailingWhitespace(string source, ref int end)
+    {
+        while (end >= 0 && char.IsWhiteSpace(source[end]))
+            end--;
+    }
+
+    private static bool HasNonEmptyPartBeforeDelimiter(string source, int delimiterIndex, char delimiter)
+    {
+        for (var i = 0; i < delimiterIndex; i++)
+        {
+            if (source[i] != delimiter && !char.IsWhiteSpace(source[i]))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool TryGetFinalDelimitedToken(string source, char delimiter, out string token)
