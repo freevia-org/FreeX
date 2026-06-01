@@ -129,10 +129,9 @@ public partial class MainWindow
             request => ApplyTextToColumnsRangeSelection(dialog, request)) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
+        var targetSheetIds = CurrentGroupedEditSheetIds();
         var currentRange = SheetGrid.SelectedRange ?? range;
-        var edits = BuildTextToColumnsEdits(currentRange, dialog.Result);
-        if (sheet is not null &&
-            TextToColumnsPlanner.FindOverwriteTargets(sheet, edits, currentRange).Count > 0 &&
+        if (TextToColumnsCommandPlanner.FindOverwriteTargets(_workbook, targetSheetIds, currentRange, dialog.Result).Count > 0 &&
             !_messageService.AskYesNo(
                 UiText.Get("MainWindowMessage_TextToColumnsReplaceDataPrompt"),
                 UiText.Get("MainWindowMessage_TextToColumnsTitle")))
@@ -140,7 +139,9 @@ public partial class MainWindow
             return;
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, () => CreateTextToColumnsCommand(edits));
+        var outcome = _commandBus.ExecuteRepeatable(
+            _workbook.Id,
+            () => CreateTextToColumnsCommand(CurrentGroupedEditSheetIds(), currentRange, dialog.Result));
         if (!outcome.Success)
         {
             ShowCommandError(outcome, "Text to Columns");
@@ -175,45 +176,11 @@ public partial class MainWindow
         }
     }
 
-    private IWorkbookCommand CreateTextToColumnsCommand(GridRange range, TextToColumnsDialogResult result)
-    {
-        return CreateTextToColumnsCommand(BuildTextToColumnsEdits(range, result));
-    }
-
-    private IWorkbookCommand CreateTextToColumnsCommand(IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)
-    {
-        var targetSheetIds = CurrentGroupedEditSheetIds();
-        return targetSheetIds.Count > 1
-            ? new GroupedEditCellsCommand(targetSheetIds, _currentSheetId, edits)
-            : new EditCellsCommand(_currentSheetId, edits);
-    }
-
-    private IReadOnlyList<(CellAddress Address, Cell NewCell)> BuildTextToColumnsEdits(
+    private IWorkbookCommand CreateTextToColumnsCommand(
+        IReadOnlyList<SheetId> targetSheetIds,
         GridRange range,
-        TextToColumnsDialogResult result)
-    {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        if (sheet is null)
-            return [];
-
-        return result.SplitMode == TextToColumnsSplitMode.FixedWidth
-            ? TextToColumnsPlanner.BuildFixedWidthEdits(
-                sheet,
-                range,
-                result.Destination ?? range.Start,
-                result.FixedWidthBreakPositions ?? [],
-                result.ColumnFormats,
-                result.AdvancedOptions)
-            : TextToColumnsPlanner.BuildEdits(
-                sheet,
-                range,
-                result.Destination ?? range.Start,
-                result.Delimiters,
-                result.TextQualifierChar,
-                result.TreatConsecutiveDelimitersAsOne,
-                result.ColumnFormats,
-                result.AdvancedOptions);
-    }
+        TextToColumnsDialogResult result) =>
+        TextToColumnsCommandPlanner.CreateCommand(_workbook, targetSheetIds, _currentSheetId, range, result);
 
     private void RemoveDuplicatesBtn_Click(object sender, RoutedEventArgs e)
     {
