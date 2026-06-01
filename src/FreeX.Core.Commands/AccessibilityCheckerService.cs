@@ -324,12 +324,16 @@ public static class AccessibilityCheckerService
 
     private static void AddLowContrastCellTextIssues(List<AccessibilityIssue> issues, Workbook workbook, Sheet sheet)
     {
-        foreach (var (address, cell) in sheet.GetUsedCells())
+        var conditionalContrastRules = GetConditionalContrastRules(sheet);
+        foreach (var entry in sheet.GetOccupiedCellMap())
         {
+            var (row, col) = entry.Key;
+            var cell = entry.Value;
             if (cell.Value is not TextValue text || string.IsNullOrWhiteSpace(text.Value))
                 continue;
 
-            var style = GetEffectiveContrastStyle(workbook, sheet, address, cell);
+            var address = new CellAddress(sheet.Id, row, col);
+            var style = GetEffectiveContrastStyle(workbook, conditionalContrastRules, address, cell);
             var minimumContrastRatio = MinimumTextContrastRatio(style);
             if (EffectiveCellTextBackgrounds(style).All(background => ContrastRatio(style.FontColor, background) >= minimumContrastRatio))
                 continue;
@@ -343,13 +347,40 @@ public static class AccessibilityCheckerService
         }
     }
 
-    private static CellStyle GetEffectiveContrastStyle(Workbook workbook, Sheet sheet, CellAddress address, Cell cell)
+    private static List<ConditionalFormat>? GetConditionalContrastRules(Sheet sheet)
+    {
+        List<ConditionalFormat>? rules = null;
+        foreach (var rule in sheet.ConditionalFormats)
+        {
+            if (rule.FormatIfTrue is null)
+                continue;
+
+            rules ??= [];
+            rules.Add(rule);
+        }
+
+        if (rules is null)
+            return null;
+
+        rules.Sort(static (left, right) => left.Priority.CompareTo(right.Priority));
+        return rules;
+    }
+
+    private static CellStyle GetEffectiveContrastStyle(
+        Workbook workbook,
+        IReadOnlyList<ConditionalFormat>? conditionalContrastRules,
+        CellAddress address,
+        Cell cell)
     {
         var style = workbook.GetStyle(cell.StyleId);
-        foreach (var rule in sheet.ConditionalFormats
-                     .Where(rule => rule.FormatIfTrue is not null && rule.AppliesTo.Contains(address))
-                     .OrderBy(rule => rule.Priority))
+        if (conditionalContrastRules is null)
+            return style;
+
+        foreach (var rule in conditionalContrastRules)
         {
+            if (!rule.AppliesTo.Contains(address))
+                continue;
+
             if (!IsConditionalFormatTrue(rule, cell.Value))
                 continue;
 
@@ -509,8 +540,26 @@ public static class AccessibilityCheckerService
 
     private static void AddHiddenContentIssues(List<AccessibilityIssue> issues, Sheet sheet)
     {
-        var usedCells = sheet.GetUsedCells().Keys.ToList();
-        if (usedCells.Count == 0)
+        var hasContent = false;
+        HashSet<uint>? hiddenRows = null;
+        HashSet<uint>? hiddenCols = null;
+        foreach (var ((row, col), _) in sheet.GetOccupiedCellMap())
+        {
+            hasContent = true;
+            if (sheet.IsRowEffectivelyHidden(row))
+            {
+                hiddenRows ??= [];
+                hiddenRows.Add(row);
+            }
+
+            if (sheet.IsColEffectivelyHidden(col))
+            {
+                hiddenCols ??= [];
+                hiddenCols.Add(col);
+            }
+        }
+
+        if (!hasContent)
             return;
 
         if (sheet.IsHidden || sheet.IsVeryHidden)
@@ -523,33 +572,35 @@ public static class AccessibilityCheckerService
                 "Hidden sheets with content may not be available to assistive technologies."));
         }
 
-        foreach (var row in usedCells
-                     .Select(address => address.Row)
-                     .Where(sheet.IsRowEffectivelyHidden)
-                     .Distinct()
-                     .Order())
+        if (hiddenRows is not null)
         {
-            issues.Add(new AccessibilityIssue(
-                AccessibilityIssueKind.HiddenRowWithContent,
-                sheet.Id,
-                sheet.Name,
-                $"{row}:{row}",
-                "Hidden rows with content may not be available to assistive technologies."));
+            var rows = hiddenRows.ToList();
+            rows.Sort();
+            foreach (var row in rows)
+            {
+                issues.Add(new AccessibilityIssue(
+                    AccessibilityIssueKind.HiddenRowWithContent,
+                    sheet.Id,
+                    sheet.Name,
+                    $"{row}:{row}",
+                    "Hidden rows with content may not be available to assistive technologies."));
+            }
         }
 
-        foreach (var col in usedCells
-                     .Select(address => address.Col)
-                     .Where(sheet.IsColEffectivelyHidden)
-                     .Distinct()
-                     .Order())
+        if (hiddenCols is not null)
         {
-            var name = CellAddress.NumberToColumnName(col);
-            issues.Add(new AccessibilityIssue(
-                AccessibilityIssueKind.HiddenColumnWithContent,
-                sheet.Id,
-                sheet.Name,
-                $"{name}:{name}",
-                "Hidden columns with content may not be available to assistive technologies."));
+            var cols = hiddenCols.ToList();
+            cols.Sort();
+            foreach (var col in cols)
+            {
+                var name = CellAddress.NumberToColumnName(col);
+                issues.Add(new AccessibilityIssue(
+                    AccessibilityIssueKind.HiddenColumnWithContent,
+                    sheet.Id,
+                    sheet.Name,
+                    $"{name}:{name}",
+                    "Hidden columns with content may not be available to assistive technologies."));
+            }
         }
     }
 

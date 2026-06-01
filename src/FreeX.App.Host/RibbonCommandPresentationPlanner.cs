@@ -152,6 +152,8 @@ public static partial class RibbonCommandPresentationPlanner
         name.Contains("forecast sheet") ||
         name == "group" ||
         name == "ungroup" ||
+        name.Contains("collapse group") ||
+        name.Contains("expand group") ||
         name.Contains("subtotal") ||
         name.Contains("spelling") ||
         name.Contains("workbook statistics") ||
@@ -170,7 +172,13 @@ public static partial class RibbonCommandPresentationPlanner
         name == "100%" ||
         name.Contains("zoom to 100") ||
         name.Contains("zoom to selection") ||
-        name == "macros";
+        name == "macros" ||
+        name.Contains("help online") ||
+        name == "feedback" ||
+        name.Contains("copy diagnostics") ||
+        name.Contains("check for updates") ||
+        name.Contains("about freex") ||
+        name.Contains("legal notices");
 
     private static bool IsMediumRibbonCommand(string name) =>
         name.Contains("line sparkline") ||
