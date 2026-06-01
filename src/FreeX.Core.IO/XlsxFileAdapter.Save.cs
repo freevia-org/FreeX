@@ -30,13 +30,15 @@ public sealed partial class XlsxFileAdapter
             if (sheet.TabColor is { } tabColor)
                 xlSheet.TabColor = XLColor.FromArgb(tabColor.R, tabColor.G, tabColor.B);
 
-            foreach (var (address, cell) in sheet.EnumerateCells())
+            foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
             {
                 // Skip blank cells that carry no style
                 if (cell.Value is BlankValue && !cell.HasFormula && cell.StyleId == StyleId.Default)
                     continue;
+                if (!IsValidWorksheetRow(row) || !IsValidWorksheetColumn(col))
+                    continue;
 
-                var xlCell = xlSheet.Cell((int)address.Row, (int)address.Col);
+                var xlCell = xlSheet.Cell((int)row, (int)col);
 
                 if (cell.HasFormula)
                 {

@@ -6,6 +6,13 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetChartWriter
 {
+    private const string ChartExRelationshipType = "http://schemas.microsoft.com/office/2014/relationships/chartEx";
+    private const string ChartExColorStyleContentType = "application/vnd.ms-office.chartcolorstyle+xml";
+    private const string ChartExStyleContentType = "application/vnd.ms-office.chartstyle+xml";
+    private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
+    private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
+    private const string ChartExChoiceNamespace = "http://schemas.microsoft.com/office/drawing/2015/9/8/chartex";
+
     public static bool HasSupportedCharts(Workbook workbook, Func<ChartModel, bool> isSupportedChart)
     {
         foreach (var sheet in workbook.Sheets)
@@ -112,6 +119,7 @@ internal static class XlsxWorksheetChartWriter
         var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
         var anchors = new List<XElement>();
         var chartContentTypes = new Dictionary<int, string>();
+        var chartExStyleParts = new Dictionary<int, ChartExStylePackageParts>();
         foreach (var chart in charts)
         {
             var currentChartIndex = chartIndex++;
@@ -121,7 +129,13 @@ internal static class XlsxWorksheetChartWriter
             var chartEntry = archive.CreateEntry(chartPath);
             using (var chartStream = chartEntry.Open())
                 createChartXml(chart, sheet).Save(chartStream);
-            WriteChartExternalDataRelationships(archive, chartPath, chart, packageRelNs);
+
+            var styleParts = ChartTypeSupport.IsChartExFamily(chart.Type)
+                ? WriteChartExStyleParts(archive, currentChartIndex)
+                : (ChartExStylePackageParts?)null;
+            if (styleParts is { } chartExParts)
+                chartExStyleParts[currentChartIndex] = chartExParts;
+            WriteChartRelationships(archive, chartPath, chart, styleParts, packageRelNs);
 
             var chartRelId = $"rIdFreeXChart{currentChartIndex}";
             var chartRelationshipType = getChartRelationshipType(chart);
@@ -147,6 +161,11 @@ internal static class XlsxWorksheetChartWriter
         XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{drawingPath}", "application/vnd.openxmlformats-officedocument.drawing+xml");
         foreach (var (index, contentType) in chartContentTypes)
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/xl/charts/chart{index}.xml", contentType);
+        foreach (var (_, styleParts) in chartExStyleParts)
+        {
+            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{styleParts.ColorStylePath}", ChartExColorStyleContentType);
+            XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{styleParts.StylePath}", ChartExStyleContentType);
+        }
 
         var relsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var worksheetRelsXml = archive.GetEntry(relsPath) is { } relsEntry
@@ -171,13 +190,15 @@ internal static class XlsxWorksheetChartWriter
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
     }
 
-    private static void WriteChartExternalDataRelationships(
+    private static void WriteChartRelationships(
         ZipArchive archive,
         string chartPath,
         ChartModel chart,
+        ChartExStylePackageParts? chartExStyleParts,
         XNamespace packageRelNs)
     {
-        var relationships = new List<XElement>();
+        var relsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
+        var relationships = relsXml.Root!;
         if (chart.ExternalData is { } externalData &&
             !string.IsNullOrWhiteSpace(externalData.RelationshipId) &&
             !string.IsNullOrWhiteSpace(externalData.RelationshipType) &&
@@ -208,13 +229,179 @@ internal static class XlsxWorksheetChartWriter
                     : new XAttribute("TargetMode", userShapes.TargetMode)));
         }
 
-        if (relationships.Count == 0)
+        if (chartExStyleParts is { } styleParts)
+        {
+            relationships.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", XlsxPackageXmlEditor.NextRelationshipId(relsXml, packageRelNs)),
+                new XAttribute("Type", ChartExStyleRelationshipType),
+                new XAttribute("Target", GetSameDirectoryRelationshipTarget(styleParts.StylePath))));
+            relationships.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", XlsxPackageXmlEditor.NextRelationshipId(relsXml, packageRelNs)),
+                new XAttribute("Type", ChartExColorStyleRelationshipType),
+                new XAttribute("Target", GetSameDirectoryRelationshipTarget(styleParts.ColorStylePath))));
+        }
+
+        if (!relationships.HasElements)
         {
             return;
         }
 
         var relsPath = XlsxPackagePath.GetRelationshipPartPath(chartPath);
-        XlsxPackageXmlEditor.ReplaceXml(archive, relsPath, new XDocument(new XElement(packageRelNs + "Relationships", relationships)));
+        XlsxPackageXmlEditor.ReplaceXml(archive, relsPath, relsXml);
+    }
+
+    private static ChartExStylePackageParts WriteChartExStyleParts(ZipArchive archive, int chartIndex)
+    {
+        var colorStylePath = $"xl/charts/colors{chartIndex}.xml";
+        var stylePath = $"xl/charts/style{chartIndex}.xml";
+        XlsxPackageXmlEditor.ReplaceXml(archive, colorStylePath, CreateChartExColorStyleXml());
+        XlsxPackageXmlEditor.ReplaceXml(archive, stylePath, CreateChartExStyleXml());
+        return new ChartExStylePackageParts(colorStylePath, stylePath);
+    }
+
+    private static XDocument CreateChartExColorStyleXml()
+    {
+        XNamespace chartStyleNs = "http://schemas.microsoft.com/office/drawing/2012/chartStyle";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var accents = new[] { "accent1", "accent2", "accent3", "accent4", "accent5", "accent6" }
+            .Select(color => new XElement(drawingNs + "schemeClr", new XAttribute("val", color)));
+
+        return new XDocument(
+            new XElement(chartStyleNs + "colorStyle",
+                new XAttribute(XNamespace.Xmlns + "cs", chartStyleNs),
+                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                new XAttribute("meth", "cycle"),
+                new XAttribute("id", "10"),
+                accents,
+                new XElement(chartStyleNs + "variation"),
+                ToChartExColorVariation(chartStyleNs, drawingNs, lumMod: 60000),
+                ToChartExColorVariation(chartStyleNs, drawingNs, lumMod: 80000, lumOff: 20000),
+                ToChartExColorVariation(chartStyleNs, drawingNs, lumMod: 80000),
+                ToChartExColorVariation(chartStyleNs, drawingNs, lumMod: 60000, lumOff: 40000),
+                ToChartExColorVariation(chartStyleNs, drawingNs, lumMod: 50000),
+                ToChartExColorVariation(chartStyleNs, drawingNs, lumMod: 70000, lumOff: 30000),
+                ToChartExColorVariation(chartStyleNs, drawingNs, lumMod: 70000),
+                ToChartExColorVariation(chartStyleNs, drawingNs, lumMod: 50000, lumOff: 50000)));
+    }
+
+    private static XElement ToChartExColorVariation(
+        XNamespace chartStyleNs,
+        XNamespace drawingNs,
+        int lumMod,
+        int? lumOff = null) =>
+        new(chartStyleNs + "variation",
+            new XElement(drawingNs + "lumMod", new XAttribute("val", lumMod)),
+            lumOff is null
+                ? null
+                : new XElement(drawingNs + "lumOff", new XAttribute("val", lumOff.Value)));
+
+    private static XDocument CreateChartExStyleXml()
+    {
+        XNamespace chartStyleNs = "http://schemas.microsoft.com/office/drawing/2012/chartStyle";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        return new XDocument(
+            new XElement(chartStyleNs + "chartStyle",
+                new XAttribute(XNamespace.Xmlns + "cs", chartStyleNs),
+                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
+                new XAttribute("id", "410"),
+                ToChartStyleElement(chartStyleNs, drawingNs, "axisTitle", textSize: 900),
+                ToChartStyleElement(chartStyleNs, drawingNs, "categoryAxis", textSize: 900, includeLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "chartArea", textSize: 1000, includeShapeProperties: true, mods: "allowNoFillOverride allowNoLineOverride"),
+                ToChartStyleElement(chartStyleNs, drawingNs, "dataLabel", textSize: 900),
+                ToChartStyleElement(chartStyleNs, drawingNs, "dataLabelCallout", textSize: 900, includeShapeProperties: true, includeBodyProperties: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "dataPoint", includeShapeProperties: true, usePlaceholderFill: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "dataPoint3D", includeShapeProperties: true, usePlaceholderFill: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "dataPointLine", includeLine: true, usePlaceholderLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "dataPointMarker", includeShapeProperties: true, usePlaceholderFill: true),
+                new XElement(chartStyleNs + "dataPointMarkerLayout", new XAttribute("symbol", "circle"), new XAttribute("size", "5")),
+                ToChartStyleElement(chartStyleNs, drawingNs, "dataPointWireframe", includeLine: true, usePlaceholderLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "dataTable", textSize: 900, includeLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "downBar", includeShapeProperties: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "dropLine", includeLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "errorBar", includeLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "floor"),
+                ToChartStyleElement(chartStyleNs, drawingNs, "gridlineMajor", includeLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "gridlineMinor", includeLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "hiLoLine", includeLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "leaderLine", includeLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "legend", textSize: 900),
+                ToChartStyleElement(chartStyleNs, drawingNs, "plotArea", mods: "allowNoFillOverride allowNoLineOverride"),
+                ToChartStyleElement(chartStyleNs, drawingNs, "plotArea3D", mods: "allowNoFillOverride allowNoLineOverride"),
+                ToChartStyleElement(chartStyleNs, drawingNs, "seriesAxis", textSize: 900, includeLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "seriesLine", includeLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "title", textSize: 1400),
+                ToChartStyleElement(chartStyleNs, drawingNs, "trendline", includeLine: true, usePlaceholderLine: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "trendlineLabel", textSize: 900),
+                ToChartStyleElement(chartStyleNs, drawingNs, "upBar", includeShapeProperties: true),
+                ToChartStyleElement(chartStyleNs, drawingNs, "valueAxis", textSize: 900),
+                ToChartStyleElement(chartStyleNs, drawingNs, "wall")));
+    }
+
+    private static XElement ToChartStyleElement(
+        XNamespace chartStyleNs,
+        XNamespace drawingNs,
+        string name,
+        int? textSize = null,
+        bool includeShapeProperties = false,
+        bool includeLine = false,
+        bool includeBodyProperties = false,
+        bool usePlaceholderFill = false,
+        bool usePlaceholderLine = false,
+        string? mods = null) =>
+        new(chartStyleNs + name,
+            string.IsNullOrWhiteSpace(mods) ? null : new XAttribute("mods", mods),
+            new XElement(chartStyleNs + "lnRef", new XAttribute("idx", "0"), usePlaceholderLine ? ToChartStyleColor(chartStyleNs, "auto") : null),
+            new XElement(chartStyleNs + "fillRef", new XAttribute("idx", "0"), usePlaceholderFill ? ToChartStyleColor(chartStyleNs, "auto") : null),
+            new XElement(chartStyleNs + "effectRef", new XAttribute("idx", "0")),
+            new XElement(chartStyleNs + "fontRef",
+                new XAttribute("idx", "minor"),
+                new XElement(drawingNs + "schemeClr", new XAttribute("val", "tx1"))),
+            includeShapeProperties || includeLine
+                ? ToChartStyleShapeProperties(chartStyleNs, drawingNs, includeFill: includeShapeProperties, usePlaceholderFill, usePlaceholderLine)
+                : null,
+            textSize is null
+                ? null
+                : new XElement(chartStyleNs + "defRPr", new XAttribute("sz", textSize.Value)),
+            includeBodyProperties
+                ? new XElement(chartStyleNs + "bodyPr",
+                    new XAttribute("rot", "0"),
+                    new XAttribute("vertOverflow", "clip"),
+                    new XAttribute("horzOverflow", "clip"),
+                    new XAttribute("vert", "horz"),
+                    new XAttribute("wrap", "square"),
+                    new XAttribute("anchor", "ctr"),
+                    new XAttribute("anchorCtr", "1"),
+                    new XElement(drawingNs + "spAutoFit"))
+                : null);
+
+    private static XElement ToChartStyleColor(XNamespace chartStyleNs, string value) =>
+        new(chartStyleNs + "styleClr", new XAttribute("val", value));
+
+    private static XElement ToChartStyleShapeProperties(
+        XNamespace chartStyleNs,
+        XNamespace drawingNs,
+        bool includeFill,
+        bool usePlaceholderFill,
+        bool usePlaceholderLine) =>
+        new(chartStyleNs + "spPr",
+            includeFill
+                ? new XElement(drawingNs + "solidFill",
+                    new XElement(usePlaceholderFill ? drawingNs + "schemeClr" : drawingNs + "srgbClr",
+                        new XAttribute("val", usePlaceholderFill ? "phClr" : "FFFFFF")))
+                : null,
+            new XElement(drawingNs + "ln",
+                new XAttribute("w", "9525"),
+                new XElement(drawingNs + "solidFill",
+                    new XElement(drawingNs + "schemeClr", new XAttribute("val", usePlaceholderLine ? "phClr" : "tx1"))),
+                new XElement(drawingNs + "round")));
+
+    private static string GetSameDirectoryRelationshipTarget(string targetPath)
+    {
+        var slash = targetPath.LastIndexOf('/');
+        return slash < 0 ? targetPath : targetPath[(slash + 1)..];
     }
 
     private static XElement ToChartAnchor(
@@ -307,8 +494,9 @@ internal static class XlsxWorksheetChartWriter
         XNamespace drawingNs,
         XNamespace chartNs,
         XNamespace chartExNs,
-        XNamespace relNs) =>
-        new(spreadsheetDrawingNs + "graphicFrame",
+        XNamespace relNs)
+    {
+        var graphicFrame = new XElement(spreadsheetDrawingNs + "graphicFrame",
             new XElement(spreadsheetDrawingNs + "nvGraphicFramePr",
                 new XElement(spreadsheetDrawingNs + "cNvPr",
                     new XAttribute("id", chartIndex + 1),
@@ -320,15 +508,75 @@ internal static class XlsxWorksheetChartWriter
                     new XAttribute("uri", ToChartDrawingUri(chartRelationshipType)),
                     new XElement(ToChartDrawingElementName(chartRelationshipType, chartNs, chartExNs), new XAttribute(relNs + "id", chartRelId)))));
 
+        if (!IsChartExRelationshipType(chartRelationshipType))
+            return graphicFrame;
+
+        XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+        return new XElement(markupCompatNs + "AlternateContent",
+            new XAttribute(XNamespace.Xmlns + "mc", markupCompatNs),
+            new XElement(markupCompatNs + "Choice",
+                new XAttribute(XNamespace.Xmlns + "cx1", ChartExChoiceNamespace),
+                new XAttribute("Requires", "cx1"),
+                graphicFrame),
+            new XElement(markupCompatNs + "Fallback",
+                ToChartExFallbackShape(chart, chartIndex, spreadsheetDrawingNs, drawingNs)));
+    }
+
     private static string ToChartDrawingUri(string chartRelationshipType) =>
-        string.Equals(chartRelationshipType, "http://schemas.microsoft.com/office/2014/relationships/chartEx", StringComparison.OrdinalIgnoreCase)
+        IsChartExRelationshipType(chartRelationshipType)
             ? "http://schemas.microsoft.com/office/drawing/2014/chartex"
             : "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
     private static XName ToChartDrawingElementName(string chartRelationshipType, XNamespace chartNs, XNamespace chartExNs) =>
-        string.Equals(chartRelationshipType, "http://schemas.microsoft.com/office/2014/relationships/chartEx", StringComparison.OrdinalIgnoreCase)
+        IsChartExRelationshipType(chartRelationshipType)
             ? chartExNs + "chart"
             : chartNs + "chart";
+
+    private static bool IsChartExRelationshipType(string chartRelationshipType) =>
+        string.Equals(chartRelationshipType, ChartExRelationshipType, StringComparison.OrdinalIgnoreCase);
+
+    private static XElement ToChartExFallbackShape(
+        ChartModel chart,
+        int chartIndex,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs) =>
+        new(spreadsheetDrawingNs + "sp",
+            new XAttribute("macro", ""),
+            new XAttribute("textlink", ""),
+            new XElement(spreadsheetDrawingNs + "nvSpPr",
+                new XElement(spreadsheetDrawingNs + "cNvPr",
+                    new XAttribute("id", chartIndex + 1000),
+                    new XAttribute("name", $"{DrawingName(chart.Name, $"Chart {chartIndex}")} Fallback")),
+                new XElement(spreadsheetDrawingNs + "cNvSpPr",
+                    new XElement(drawingNs + "spLocks", new XAttribute("noTextEdit", "1")))),
+            new XElement(spreadsheetDrawingNs + "spPr",
+                new XElement(drawingNs + "xfrm",
+                    new XElement(drawingNs + "off",
+                        new XAttribute("x", PixelsToEmus(chart.Left)),
+                        new XAttribute("y", PixelsToEmus(chart.Top))),
+                    new XElement(drawingNs + "ext",
+                        new XAttribute("cx", PixelsToEmus(chart.Width)),
+                        new XAttribute("cy", PixelsToEmus(chart.Height)))),
+                new XElement(drawingNs + "prstGeom",
+                    new XAttribute("prst", "rect"),
+                    new XElement(drawingNs + "avLst")),
+                new XElement(drawingNs + "solidFill",
+                    new XElement(drawingNs + "prstClr", new XAttribute("val", "white"))),
+                new XElement(drawingNs + "ln",
+                    new XAttribute("w", "1"),
+                    new XElement(drawingNs + "solidFill",
+                        new XElement(drawingNs + "prstClr", new XAttribute("val", "green"))))),
+            new XElement(spreadsheetDrawingNs + "txBody",
+                new XElement(drawingNs + "bodyPr",
+                    new XAttribute("vertOverflow", "clip"),
+                    new XAttribute("horzOverflow", "clip")),
+                new XElement(drawingNs + "lstStyle"),
+                new XElement(drawingNs + "p",
+                    new XElement(drawingNs + "r",
+                        new XElement(drawingNs + "rPr",
+                            new XAttribute("lang", "en-US"),
+                            new XAttribute("sz", "1100")),
+                        new XElement(drawingNs + "t", "This chart isn't available in your version of Excel.")))));
 
     private static XElement ToAnchorMarkerXml(string name, AnchorMarker marker, XNamespace spreadsheetDrawingNs) =>
         new(spreadsheetDrawingNs + name,
@@ -381,4 +629,6 @@ internal static class XlsxWorksheetChartWriter
 
     private static string DrawingName(string? name, string fallback) =>
         string.IsNullOrWhiteSpace(name) ? fallback : name;
+
+    private readonly record struct ChartExStylePackageParts(string ColorStylePath, string StylePath);
 }
