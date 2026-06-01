@@ -293,6 +293,66 @@ public class PerformanceBenchmarkTests
     }
 
     [Fact]
+    public void Benchmark_ManyCompactRangeDependents_ReportsIndexedLookupTiming()
+    {
+        var graph = new DependencyGraph();
+        var sheetId = SheetId.New();
+        const uint rangeCount = 20_000;
+        const int iterations = 250;
+
+        var setDependencies = typeof(DependencyGraph).GetMethod(
+            "SetDependencies",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+            binder: null,
+            [
+                typeof(CellAddress),
+                typeof(HashSet<CellAddress>),
+                typeof(IReadOnlyList<GridRange>)
+            ],
+            modifiers: null);
+        setDependencies.Should().NotBeNull();
+
+        for (uint row = 1; row <= rangeCount; row++)
+        {
+            var formula = new CellAddress(sheetId, row, 1_200);
+            var range = new GridRange(
+                new CellAddress(sheetId, row, 1),
+                new CellAddress(sheetId, row, 1_100));
+
+            setDependencies!.Invoke(graph, [formula, new HashSet<CellAddress>(), new[] { range }]);
+        }
+
+        var changed = new CellAddress(sheetId, rangeCount / 2, 500);
+        var expected = new CellAddress(sheetId, rangeCount / 2, 1_200);
+        graph.GetRecalcOrder([changed]);
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var plan = graph.GetRecalcOrder([changed]);
+            if (plan.OrderedCells.Count != 1 ||
+                plan.CyclicCells.Count != 0 ||
+                !plan.OrderedCells[0].Equals(expected))
+            {
+                throw new Xunit.Sdk.XunitException("Compact range lookup should recalculate the one formula whose range contains the changed cell.");
+            }
+        }
+
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Many compact range dependents recalc order: {iterations} iterations, {rangeCount:N0} ranges, " +
+            $"{sw.Elapsed.TotalMilliseconds:F2}ms, {allocated:N0} bytes allocated, " +
+            $"{allocated / iterations:N0} bytes/iteration");
+
+        (sw.Elapsed.TotalMilliseconds / iterations).Should().BeLessThan(
+            5.0,
+            "compact range invalidation lookup should stay sublinear enough for interactive single-cell edits");
+    }
+
+    [Fact]
     public void Benchmark_DependencyRebuildWithFormulaFreeSheet_ReportsTiming()
     {
         var workbook = new Workbook("Benchmark");
