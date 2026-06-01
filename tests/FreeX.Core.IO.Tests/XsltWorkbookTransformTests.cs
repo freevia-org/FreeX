@@ -603,6 +603,53 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_NamespaceUriDynamicElements_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("<rows><row sheet=\"UriDynamic\" label=\"Bravo\" amount=\"18.75\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:variable name="spreadsheetml" select="'urn:schemas-microsoft-com:office:spreadsheet'" />
+              <xsl:template match="/rows">
+                <xsl:element name="Workbook" namespace="{$spreadsheetml}">
+                  <xsl:element name="Worksheet" namespace="{$spreadsheetml}">
+                    <xsl:attribute name="Name" namespace="{$spreadsheetml}"><xsl:value-of select="row/@sheet" /></xsl:attribute>
+                    <xsl:element name="Table" namespace="{$spreadsheetml}">
+                      <xsl:element name="Row" namespace="{$spreadsheetml}">
+                        <xsl:element name="Cell" namespace="{$spreadsheetml}">
+                          <xsl:element name="Data" namespace="{$spreadsheetml}">
+                            <xsl:attribute name="Type" namespace="{$spreadsheetml}">String</xsl:attribute>
+                            <xsl:value-of select="row/@label" />
+                          </xsl:element>
+                        </xsl:element>
+                        <xsl:element name="Cell" namespace="{$spreadsheetml}">
+                          <xsl:element name="Data" namespace="{$spreadsheetml}">
+                            <xsl:attribute name="Type" namespace="{$spreadsheetml}">Number</xsl:attribute>
+                            <xsl:value-of select="row/@amount" />
+                          </xsl:element>
+                        </xsl:element>
+                      </xsl:element>
+                    </xsl:element>
+                  </xsl:element>
+                </xsl:element>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var document = XDocument.Load(transformed);
+        var worksheet = document.Root!.Element(ss + "Worksheet");
+        var dataCells = worksheet!.Descendants(ss + "Data").ToArray();
+
+        document.Root.Name.Should().Be(ss + "Workbook");
+        worksheet.Attribute(ss + "Name")!.Value.Should().Be("UriDynamic");
+        dataCells.Select(cell => cell.Attribute(ss + "Type")!.Value).Should().Equal("String", "Number");
+        dataCells.Select(cell => cell.Value).Should().Equal("Bravo", "18.75");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_CopyOf_CopiesSpreadsheetMlFragmentsFromSource()
     {
         using var source = StreamFromString("""

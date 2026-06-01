@@ -750,6 +750,63 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromDuplicateValuesConditionalFormat()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var first = new CellAddress(sheet.Id, 1, 1);
+        var second = new CellAddress(sheet.Id, 2, 1);
+        var third = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(first, new TextValue("West"));
+        sheet.SetCell(second, new TextValue("West"));
+        sheet.SetCell(third, new TextValue("North"));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(first, third),
+            RuleType = CfRuleType.DuplicateValues,
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = new CellColor(120, 120, 120),
+                FillColor = new CellColor(130, 130, 130)
+            }
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook)
+            .Where(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText)
+            .ToList();
+
+        issues.Select(issue => issue.Location).Should().Equal("A1", "A2");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromUniqueValuesConditionalFormat()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var first = new CellAddress(sheet.Id, 1, 1);
+        var second = new CellAddress(sheet.Id, 2, 1);
+        var third = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(first, new TextValue("West"));
+        sheet.SetCell(second, new TextValue("West"));
+        sheet.SetCell(third, new TextValue("North"));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(first, third),
+            RuleType = CfRuleType.UniqueValues,
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = new CellColor(120, 120, 120),
+                FillColor = new CellColor(130, 130, 130)
+            }
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("A3");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_WhenPatternForegroundIsLowContrast()
     {
         var workbook = new Workbook("Accessibility");
@@ -941,7 +998,8 @@ public sealed class AccessibilityCheckerServiceTests
 
         source.Should().NotContain("GetUsedCells()");
         source.Should().Contain("GetOccupiedCellMap()");
-        source.Should().Contain("GetConditionalContrastRules(sheet)");
+        source.Should().Contain("GetConditionalContrastRules(sheet, occupiedCells)");
+        source.Should().Contain("ConditionalFormatEvaluationCache");
         source.Should().Contain("SharedAppliesToRange");
     }
 
