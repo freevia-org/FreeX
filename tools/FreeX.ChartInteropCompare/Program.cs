@@ -7,6 +7,8 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
+using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeX.App.UI;
@@ -21,6 +23,8 @@ internal static class Program
 
 internal static class ChartInteropCompare
 {
+    private const int AverageHashSize = 16;
+    private const double MinimumNonWhiteRatio = 0.01;
     private const int XlOpenXmlWorkbook = 51;
     private const string ExcelProcessName = "EXCEL";
 
@@ -33,16 +37,32 @@ internal static class ChartInteropCompare
             return 0;
         }
 
+        if (options.ListCharts)
+        {
+            WriteChartList(CreateCases());
+            return 0;
+        }
+
+        var automationCulture = CultureInfo.GetCultureInfo("en-US");
+        Thread.CurrentThread.CurrentCulture = automationCulture;
+        Thread.CurrentThread.CurrentUICulture = automationCulture;
+        CultureInfo.CurrentCulture = automationCulture;
+        CultureInfo.CurrentUICulture = automationCulture;
+
         var runDirectory = options.OutputDirectory ?? CreateDefaultRunDirectory();
         Directory.CreateDirectory(runDirectory);
 
         var directories = ComparisonDirectories.Create(runDirectory);
-        var cases = CreateCases();
+        var cases = FilterCases(CreateCases(), options);
+        if (cases.Count == 0)
+            throw new InvalidOperationException("No chart cases matched the requested filter.");
+
         var results = cases.Select(chartCase => new ChartCompareResult(chartCase.Name, chartCase.Type.ToString(), chartCase.Family)).ToList();
 
         Console.WriteLine("FreeX / Excel chart interop comparison");
         Console.WriteLine($"Run directory: {runDirectory}");
         Console.WriteLine($"Chart cases: {cases.Count}");
+        Console.WriteLine($"Visual thresholds: classic={options.ClassicVisualHashThreshold}, chartEx={options.ChartExVisualHashThreshold}, known-gap={options.KnownGapVisualHashThreshold}, roundtrip={options.RoundTripVisualHashThreshold}");
 
         for (var index = 0; index < cases.Count; index++)
         {
@@ -52,34 +72,63 @@ internal static class ChartInteropCompare
             GenerateFreeXFixture(chartCase, directories, result);
         }
 
+        for (var index = 0; index < cases.Count; index++)
+        {
+            var chartCase = cases[index];
+            var result = results[index];
+            Console.WriteLine($"[{index + 1}/{cases.Count}] Excel interop: {chartCase.Name}");
+            RunExcelInteropCase(chartCase, directories, result);
+        }
+
+        EvaluateVisualParity(directories, results, options);
+        WriteResults(runDirectory, results);
+        Console.WriteLine($"Results: {Path.Combine(runDirectory, "chart_compare_results.csv")}");
+        Console.WriteLine($"Visual metrics: {Path.Combine(runDirectory, "visual_metrics.csv")}");
+        Console.WriteLine($"Summary: {Path.Combine(runDirectory, "README.md")}");
+
+        var openabilityFailed = results.Count(result => !result.OpenabilityPassed);
+        var rendererFailed = results.Count(result => result.OpenabilityPassed && !result.FreeXRendererPng);
+        var visualFailed = results.Count(result => result.OpenabilityPassed && !result.VisualGatePassed);
+        var knownVisualGapCharts = results.Count(result => result.KnownVisualGap);
+        var knownVisualGapAllowances = results.Count(result => result.VisualStatus == VisualStatuses.KnownGap);
+
+        Console.WriteLine(openabilityFailed == 0
+            ? $"Openability/export: PASS {results.Count}/{results.Count}"
+            : $"Openability/export: FAIL {results.Count - openabilityFailed}/{results.Count}; {openabilityFailed} failed.");
+        Console.WriteLine(visualFailed == 0
+            ? $"Visual gate: PASS {results.Count - openabilityFailed}/{results.Count - openabilityFailed} evaluated; {knownVisualGapCharts} known-gap chart(s), {knownVisualGapAllowances} allowance(s) used."
+            : $"Visual gate: FAIL {visualFailed} mismatch(es); {knownVisualGapCharts} known-gap chart(s), {knownVisualGapAllowances} allowance(s) used.");
+
+        if (openabilityFailed > 0)
+            return 1;
+        if (visualFailed > 0)
+            return 2;
+        if (rendererFailed > 0)
+            return 3;
+        return 0;
+    }
+
+    private static void RunExcelInteropCase(
+        ChartCase chartCase,
+        ComparisonDirectories directories,
+        ChartCompareResult result)
+    {
         var baselineExcelPids = GetExcelProcessIds();
+        var ownedExcelPids = new HashSet<int>();
         object? excel = null;
         try
         {
-            var excelType = Type.GetTypeFromProgID("Excel.Application")
-                ?? throw new InvalidOperationException("Excel.Application COM registration was not found.");
-            excel = Activator.CreateInstance(excelType)
-                ?? throw new InvalidOperationException("Excel.Application COM activation returned null.");
+            excel = CreateExcelApplication();
+            ownedExcelPids = GetExcelProcessIds().Except(baselineExcelPids).ToHashSet();
             dynamic app = excel;
-            app.Visible = false;
-            app.DisplayAlerts = false;
-            TrySetExcelProperty(app, "EnableEvents", false);
-            TrySetExcelProperty(app, "AutomationSecurity", 3);
 
-            for (var index = 0; index < cases.Count; index++)
-            {
-                var chartCase = cases[index];
-                var result = results[index];
-                Console.WriteLine($"[{index + 1}/{cases.Count}] Excel interop: {chartCase.Name}");
-                ExportFreeXWorkbookThroughExcel(app, chartCase, directories, result);
-                GenerateExcelNativeFixture(app, chartCase, directories, result);
-                RoundTripExcelWorkbookThroughFreeX(app, chartCase, directories, result);
-            }
+            ExportFreeXWorkbookThroughExcel(app, chartCase, directories, result);
+            GenerateExcelNativeFixture(app, chartCase, directories, result);
+            RoundTripExcelWorkbookThroughFreeX(app, chartCase, directories, result);
         }
         catch (Exception ex)
         {
-            foreach (var result in results.Where(result => string.IsNullOrWhiteSpace(result.Error)))
-                result.Error = $"Excel automation stopped before this case completed: {ex.GetType().Name}: {ex.Message}";
+            result.Error = AppendError(result.Error, $"Excel automation failed: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
@@ -91,24 +140,47 @@ internal static class ChartInteropCompare
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"Excel.Quit failed during cleanup: {ex.Message}");
+                    Console.Error.WriteLine($"Excel.Quit failed during cleanup for {chartCase.Name}: {ex.Message}");
                 }
 
                 ReleaseComObject(excel);
             }
 
-            KillOrphanExcelProcesses(baselineExcelPids);
+            WaitForExcelProcessesToExit(ownedExcelPids, 2000);
+            KillExcelProcesses(ownedExcelPids);
+        }
+    }
+
+    private static object CreateExcelApplication()
+    {
+        var excelType = Type.GetTypeFromProgID("Excel.Application")
+            ?? throw new InvalidOperationException("Excel.Application COM registration was not found.");
+        Exception? lastException = null;
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            try
+            {
+                var excel = Activator.CreateInstance(excelType)
+                    ?? throw new InvalidOperationException("Excel.Application COM activation returned null.");
+                dynamic app = excel;
+                app.Visible = false;
+                app.DisplayAlerts = false;
+                TrySetExcelProperty(app, "EnableEvents", false);
+                TrySetExcelProperty(app, "AutomationSecurity", 3);
+                return excel;
+            }
+            catch (Exception ex) when (attempt < 3)
+            {
+                lastException = ex;
+                Thread.Sleep(2000);
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+            }
         }
 
-        WriteResults(runDirectory, results);
-        Console.WriteLine($"Results: {Path.Combine(runDirectory, "chart_compare_results.csv")}");
-        Console.WriteLine($"Summary: {Path.Combine(runDirectory, "README.md")}");
-
-        var failed = results.Count(result => !result.Passed);
-        Console.WriteLine(failed == 0
-            ? $"PASS: {results.Count}/{results.Count} chart cases interoperate."
-            : $"FAIL: {results.Count - failed}/{results.Count} chart cases interoperate; {failed} failed.");
-        return failed == 0 ? 0 : 1;
+        throw new InvalidOperationException($"Excel.Application COM activation failed after retries: {lastException?.Message}", lastException);
     }
 
     private static void GenerateFreeXFixture(ChartCase chartCase, ComparisonDirectories directories, ChartCompareResult result)
@@ -720,10 +792,345 @@ internal static class ChartInteropCompare
         encoder.Save(stream);
     }
 
+    private static void EvaluateVisualParity(
+        ComparisonDirectories directories,
+        IReadOnlyList<ChartCompareResult> results,
+        CompareOptions options)
+    {
+        foreach (var result in results)
+        {
+            var expectation = VisualExpectation.For(result, options);
+            result.VisualHashThreshold = expectation.HashThreshold;
+            result.KnownVisualGap = expectation.KnownGapReason is not null;
+            result.KnownVisualGapReason = expectation.KnownGapReason;
+            result.KnownVisualGapThreshold = expectation.KnownGapReason is null
+                ? null
+                : options.KnownGapVisualHashThreshold;
+            result.RoundTripVisualHashThreshold = expectation.RoundTripHashThreshold;
+
+            if (!result.OpenabilityPassed)
+            {
+                result.VisualStatus = VisualStatuses.SkippedOpenability;
+                continue;
+            }
+
+            var native = ReadPngMetrics(result.ExcelNativePngPath);
+            var freexXlsx = ReadPngMetrics(result.FreeXExcelPngPath);
+            var roundTrip = ReadPngMetrics(result.ExcelRoundTripPngPath);
+            var freexRenderer = ReadPngMetrics(result.FreeXRendererPngPath);
+
+            result.ExcelNativeNonWhiteRatio = native?.NonWhiteRatio;
+            result.FreeXXlsxExcelNonWhiteRatio = freexXlsx?.NonWhiteRatio;
+            result.ExcelRoundTripNonWhiteRatio = roundTrip?.NonWhiteRatio;
+            result.FreeXRendererNonWhiteRatio = freexRenderer?.NonWhiteRatio;
+            result.ExcelNativeImageSize = native?.SizeText;
+            result.FreeXXlsxExcelImageSize = freexXlsx?.SizeText;
+            result.ExcelRoundTripImageSize = roundTrip?.SizeText;
+            result.FreeXRendererImageSize = freexRenderer?.SizeText;
+
+            if (native is not null && freexXlsx is not null)
+                result.HashDistanceNativeVsFreeXXlsx = HashDistance(native.AverageHash, freexXlsx.AverageHash);
+            if (native is not null && roundTrip is not null)
+                result.HashDistanceNativeVsRoundTrip = HashDistance(native.AverageHash, roundTrip.AverageHash);
+            if (native is not null && freexRenderer is not null)
+                result.HashDistanceNativeVsFreeXRenderer = HashDistance(native.AverageHash, freexRenderer.AverageHash);
+
+            var failures = new List<string>();
+            AddImageFailure(failures, "Excel-native PNG", native);
+            AddImageFailure(failures, "Excel-rendered FreeX XLSX PNG", freexXlsx);
+            AddImageFailure(failures, "Excel round-trip PNG", roundTrip);
+
+            var usedKnownGapAllowance = false;
+            if (result.HashDistanceNativeVsRoundTrip is int roundTripDistance &&
+                roundTripDistance > options.RoundTripVisualHashThreshold)
+            {
+                if (expectation.KnownGapReason is not null && roundTripDistance <= expectation.RoundTripHashThreshold)
+                {
+                    usedKnownGapAllowance = true;
+                    result.AddNote($"Known visual gap tolerated: {expectation.KnownGapReason} (round-trip distance {roundTripDistance}, threshold {options.RoundTripVisualHashThreshold}, known-gap threshold {expectation.RoundTripHashThreshold}).");
+                }
+                else
+                {
+                    failures.Add($"round-trip hash distance {roundTripDistance} exceeded {expectation.RoundTripHashThreshold}");
+                }
+            }
+
+            if (result.HashDistanceNativeVsFreeXXlsx is not int distance)
+            {
+                failures.Add("native-vs-FreeX XLSX hash distance could not be computed");
+            }
+            else if (distance > expectation.HashThreshold)
+            {
+                if (expectation.KnownGapReason is not null && distance <= options.KnownGapVisualHashThreshold)
+                {
+                    usedKnownGapAllowance = true;
+                    result.AddNote($"Known visual gap tolerated: {expectation.KnownGapReason} (distance {distance}, threshold {expectation.HashThreshold}, known-gap threshold {options.KnownGapVisualHashThreshold}).");
+                }
+                else
+                {
+                    failures.Add($"native-vs-FreeX XLSX hash distance {distance} exceeded allowed threshold {expectation.AllowedThresholdText(options)}");
+                }
+            }
+
+            if (failures.Count > 0)
+            {
+                result.VisualStatus = VisualStatuses.Fail;
+                result.VisualFailure = string.Join("; ", failures);
+            }
+            else
+            {
+                result.VisualStatus = usedKnownGapAllowance
+                    ? VisualStatuses.KnownGap
+                    : VisualStatuses.Pass;
+            }
+        }
+
+        WriteVisualMetrics(Path.Combine(directories.Root, "visual_metrics.csv"), results);
+        WriteVisualContactSheets(directories.Root, results);
+    }
+
+    private static void AddImageFailure(List<string> failures, string label, PngMetrics? metrics)
+    {
+        if (metrics is null)
+        {
+            failures.Add($"{label} missing");
+            return;
+        }
+
+        if (metrics.NonWhiteRatio < MinimumNonWhiteRatio)
+            failures.Add($"{label} appears blank (non-white ratio {metrics.NonWhiteRatio.ToString("0.####", CultureInfo.InvariantCulture)})");
+    }
+
+    private static PngMetrics? ReadPngMetrics(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            return null;
+
+        using var stream = File.OpenRead(path);
+        var decoder = BitmapDecoder.Create(
+            stream,
+            BitmapCreateOptions.PreservePixelFormat,
+            BitmapCacheOption.OnLoad);
+        var source = decoder.Frames[0];
+        BitmapSource bitmap = source.Format == PixelFormats.Bgra32
+            ? source
+            : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+
+        var width = bitmap.PixelWidth;
+        var height = bitmap.PixelHeight;
+        var stride = width * 4;
+        var pixels = new byte[stride * height];
+        bitmap.CopyPixels(pixels, stride, 0);
+
+        var nonWhite = 0;
+        var total = width * height;
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var (red, green, blue) = ReadCompositedPixel(pixels, stride, x, y);
+                if (red < 248 || green < 248 || blue < 248)
+                    nonWhite++;
+            }
+        }
+
+        var samples = new double[AverageHashSize * AverageHashSize];
+        var sampleIndex = 0;
+        for (var row = 0; row < AverageHashSize; row++)
+        {
+            var y = Math.Min(height - 1, (int)((row + 0.5) * height / AverageHashSize));
+            for (var column = 0; column < AverageHashSize; column++)
+            {
+                var x = Math.Min(width - 1, (int)((column + 0.5) * width / AverageHashSize));
+                var (red, green, blue) = ReadCompositedPixel(pixels, stride, x, y);
+                samples[sampleIndex++] = (red * 0.299) + (green * 0.587) + (blue * 0.114);
+            }
+        }
+
+        var average = samples.Average();
+        var hash = samples.Select(value => value < average).ToArray();
+        return new PngMetrics(width, height, nonWhite / (double)total, hash);
+    }
+
+    private static (byte Red, byte Green, byte Blue) ReadCompositedPixel(byte[] pixels, int stride, int x, int y)
+    {
+        var offset = (y * stride) + (x * 4);
+        var blue = pixels[offset];
+        var green = pixels[offset + 1];
+        var red = pixels[offset + 2];
+        var alpha = pixels[offset + 3] / 255.0;
+        return (
+            (byte)Math.Round((red * alpha) + (255 * (1 - alpha))),
+            (byte)Math.Round((green * alpha) + (255 * (1 - alpha))),
+            (byte)Math.Round((blue * alpha) + (255 * (1 - alpha))));
+    }
+
+    private static int HashDistance(IReadOnlyList<bool> left, IReadOnlyList<bool> right)
+    {
+        var count = Math.Min(left.Count, right.Count);
+        var distance = Math.Abs(left.Count - right.Count);
+        for (var index = 0; index < count; index++)
+        {
+            if (left[index] != right[index])
+                distance++;
+        }
+
+        return distance;
+    }
+
+    private static void WriteVisualMetrics(string path, IReadOnlyList<ChartCompareResult> results)
+    {
+        var csv = new StringBuilder();
+        csv.AppendLine("Chart,Family,VisualStatus,KnownVisualGap,VisualThreshold,KnownGapThreshold,RoundTripThreshold,FreeXRendererNonWhite,ExcelNativeNonWhite,ExcelFreeXXlsxNonWhite,ExcelRoundTripNonWhite,HashDistance_Native_vs_FreeXXlsx,HashDistance_Native_vs_RoundTrip,HashDistance_Native_vs_FreeXRenderer,NativeSize,FreeXXlsxExcelSize,RoundTripSize,FreeXRendererSize,VisualFailure,KnownGapReason");
+        foreach (var result in results)
+        {
+            csv.AppendCsvRow(
+                result.Chart,
+                result.Family,
+                result.VisualStatus,
+                result.KnownVisualGap,
+                result.VisualHashThreshold,
+                result.KnownVisualGapThreshold,
+                result.RoundTripVisualHashThreshold,
+                result.FreeXRendererNonWhiteRatio,
+                result.ExcelNativeNonWhiteRatio,
+                result.FreeXXlsxExcelNonWhiteRatio,
+                result.ExcelRoundTripNonWhiteRatio,
+                result.HashDistanceNativeVsFreeXXlsx,
+                result.HashDistanceNativeVsRoundTrip,
+                result.HashDistanceNativeVsFreeXRenderer,
+                result.ExcelNativeImageSize,
+                result.FreeXXlsxExcelImageSize,
+                result.ExcelRoundTripImageSize,
+                result.FreeXRendererImageSize,
+                result.VisualFailure,
+                result.KnownVisualGapReason);
+        }
+
+        File.WriteAllText(path, csv.ToString(), Encoding.UTF8);
+    }
+
+    private static void WriteVisualContactSheets(string runDirectory, IReadOnlyList<ChartCompareResult> results)
+    {
+        WriteVisualContactSheet(Path.Combine(runDirectory, "visual_contact_sheet_all.png"), results, "all");
+        foreach (var group in results.GroupBy(result => result.Family, StringComparer.OrdinalIgnoreCase))
+        {
+            WriteVisualContactSheet(
+                Path.Combine(runDirectory, $"visual_contact_sheet_{SanitizeFileName(group.Key)}.png"),
+                group.ToList(),
+                group.Key);
+        }
+    }
+
+    private static void WriteVisualContactSheet(string path, IReadOnlyList<ChartCompareResult> results, string label)
+    {
+        if (results.Count == 0)
+            return;
+
+        const int rowLabelWidth = 160;
+        const int columnWidth = 220;
+        const int headerHeight = 46;
+        const int rowHeight = 176;
+        const int thumbnailHeight = 126;
+        string[] headers = ["FreeX renderer", "Excel FreeX XLSX", "Excel native", "Excel round-trip"];
+
+        var width = rowLabelWidth + (columnWidth * headers.Length);
+        var height = headerHeight + (rowHeight * results.Count);
+        var visual = new DrawingVisual();
+        using (var context = visual.RenderOpen())
+        {
+            context.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
+            context.DrawText(CreateText($"Visual contact sheet: {label}", 15, Brushes.Black, FontWeights.SemiBold), new Point(12, 6));
+            for (var column = 0; column < headers.Length; column++)
+            {
+                var x = rowLabelWidth + (column * columnWidth);
+                context.DrawText(CreateText(headers[column], 12, Brushes.Black, FontWeights.SemiBold), new Point(x + 8, 26));
+            }
+
+            for (var index = 0; index < results.Count; index++)
+            {
+                var result = results[index];
+                var y = headerHeight + (index * rowHeight);
+                var rowBrush = index % 2 == 0 ? Brushes.White : new SolidColorBrush(Color.FromRgb(248, 248, 248));
+                context.DrawRectangle(rowBrush, null, new Rect(0, y, width, rowHeight));
+                context.DrawLine(new Pen(Brushes.Gainsboro, 1), new Point(0, y), new Point(width, y));
+
+                context.DrawText(CreateText(result.Chart, 13, Brushes.Black, FontWeights.SemiBold), new Point(10, y + 10));
+                context.DrawText(CreateText(result.VisualStatus, 11, StatusBrush(result.VisualStatus), FontWeights.Normal), new Point(10, y + 32));
+                if (result.HashDistanceNativeVsFreeXXlsx is int distance)
+                    context.DrawText(CreateText($"d={distance}", 11, Brushes.DimGray, FontWeights.Normal), new Point(10, y + 50));
+
+                DrawImageCell(context, result.FreeXRendererPngPath, rowLabelWidth, y + 8, columnWidth, thumbnailHeight);
+                DrawImageCell(context, result.FreeXExcelPngPath, rowLabelWidth + columnWidth, y + 8, columnWidth, thumbnailHeight);
+                DrawImageCell(context, result.ExcelNativePngPath, rowLabelWidth + (2 * columnWidth), y + 8, columnWidth, thumbnailHeight);
+                DrawImageCell(context, result.ExcelRoundTripPngPath, rowLabelWidth + (3 * columnWidth), y + 8, columnWidth, thumbnailHeight);
+            }
+        }
+
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
+
+    private static void DrawImageCell(DrawingContext context, string? path, double x, double y, double width, double height)
+    {
+        var bounds = new Rect(x + 8, y + 22, width - 16, height);
+        context.DrawRectangle(Brushes.White, new Pen(Brushes.Gainsboro, 1), bounds);
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            context.DrawText(CreateText("missing", 12, Brushes.DimGray, FontWeights.Normal), new Point(bounds.X + 8, bounds.Y + 8));
+            return;
+        }
+
+        using var stream = File.OpenRead(path);
+        var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+        var image = decoder.Frames[0];
+        var scale = Math.Min(bounds.Width / image.PixelWidth, bounds.Height / image.PixelHeight);
+        var drawWidth = image.PixelWidth * scale;
+        var drawHeight = image.PixelHeight * scale;
+        var imageBounds = new Rect(
+            bounds.X + ((bounds.Width - drawWidth) / 2),
+            bounds.Y + ((bounds.Height - drawHeight) / 2),
+            drawWidth,
+            drawHeight);
+        context.DrawImage(image, imageBounds);
+    }
+
+    private static FormattedText CreateText(string text, double fontSize, Brush brush, FontWeight weight) =>
+        new(
+            text,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, weight, FontStretches.Normal),
+            fontSize,
+            brush,
+            1.0);
+
+    private static Brush StatusBrush(string status) => status switch
+    {
+        VisualStatuses.Pass => Brushes.ForestGreen,
+        VisualStatuses.KnownGap => Brushes.DarkOrange,
+        VisualStatuses.Fail => Brushes.Firebrick,
+        _ => Brushes.DimGray
+    };
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars().ToHashSet();
+        var builder = new StringBuilder(value.Length);
+        foreach (var character in value)
+            builder.Append(invalid.Contains(character) ? '_' : char.ToLowerInvariant(character));
+        return builder.ToString();
+    }
+
     private static void WriteResults(string runDirectory, IReadOnlyList<ChartCompareResult> results)
     {
         var csv = new StringBuilder();
-        csv.AppendLine("Chart,Type,Family,FreeXRendererPng,FreeXXlsxOpenedInExcel,FreeXExcelChartCount,FreeXExcelPng,ExcelNativeCreated,ExcelNativePng,ExcelLoadedByFreeX,ExcelRoundTripOpenedInExcel,ExcelRoundTripChartCount,ExcelRoundTripPng,Passed,Notes,Error");
+        csv.AppendLine("Chart,Type,Family,FreeXRendererPng,FreeXXlsxOpenedInExcel,FreeXExcelChartCount,FreeXExcelPng,ExcelNativeCreated,ExcelNativePng,ExcelLoadedByFreeX,ExcelRoundTripOpenedInExcel,ExcelRoundTripChartCount,ExcelRoundTripPng,OpenabilityPassed,VisualStatus,VisualGatePassed,Passed,FailureCategory,Notes,OpenabilityError,VisualFailure");
         foreach (var result in results)
         {
             csv.AppendCsvRow(
@@ -740,9 +1147,14 @@ internal static class ChartInteropCompare
                 result.ExcelRoundTripOpenedInExcel,
                 result.ExcelRoundTripChartCount,
                 result.ExcelRoundTripPng,
+                result.OpenabilityPassed,
+                result.VisualStatus,
+                result.VisualGatePassed,
                 result.Passed,
+                result.FailureCategory,
                 result.Notes,
-                result.Error);
+                result.Error,
+                result.VisualFailure);
         }
 
         File.WriteAllText(Path.Combine(runDirectory, "chart_compare_results.csv"), csv.ToString(), Encoding.UTF8);
@@ -758,22 +1170,82 @@ internal static class ChartInteropCompare
         var builder = new StringBuilder();
         builder.AppendLine("# FreeX / Excel Chart Interop Comparison");
         builder.AppendLine();
-        builder.AppendLine("| Chart | FreeX renderer | FreeX XLSX opens in Excel | Excel native | Excel -> FreeX -> Excel | Notes |");
-        builder.AppendLine("|---|---:|---:|---:|---:|---|");
-        foreach (var result in results)
+        builder.AppendLine("## Gate Summary");
+        builder.AppendLine();
+        builder.AppendLine("| Gate | Result |");
+        builder.AppendLine("|---|---:|");
+        builder.AppendLine($"| Openability/export | {results.Count(result => result.OpenabilityPassed)}/{results.Count} |");
+        builder.AppendLine($"| FreeX renderer PNG | {results.Count(result => result.FreeXRendererPng)}/{results.Count} |");
+        builder.AppendLine($"| Visual gate | {results.Count(result => result.VisualGatePassed)}/{results.Count(result => result.OpenabilityPassed)} evaluated |");
+        builder.AppendLine($"| Known visual gap charts | {results.Count(result => result.KnownVisualGap)} |");
+        builder.AppendLine($"| Known-gap threshold allowances used | {results.Count(result => result.VisualStatus == VisualStatuses.KnownGap)} |");
+        builder.AppendLine($"| Full pass | {results.Count(result => result.Passed)}/{results.Count} |");
+        builder.AppendLine();
+        builder.AppendLine("Visual status values: `pass` is within the family hash threshold; `known-gap` exceeds the normal threshold but is inside the known-gap allowance; `fail` is a blocking visual mismatch or blank/missing image; `skipped-openability` means Excel open/export did not pass first.");
+        builder.AppendLine();
+        builder.AppendLine("## Per-Family Visual Summary");
+        builder.AppendLine();
+        builder.AppendLine("| Family | Charts | Openability pass | Visual pass | Known gaps | Visual fail | Max native-vs-FreeX hash | Threshold(s) |");
+        builder.AppendLine("|---|---:|---:|---:|---:|---:|---:|---|");
+        foreach (var group in results.GroupBy(result => result.Family, StringComparer.OrdinalIgnoreCase).OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
         {
-            builder.AppendLine($"| {result.Chart} | {Mark(result.FreeXRendererPng)} | {Mark(result.FreeXXlsxOpenedInExcel && result.FreeXExcelPng)} | {Mark(result.ExcelNativeCreated && result.ExcelNativePng)} | {Mark(result.ExcelRoundTripOpenedInExcel && result.ExcelRoundTripPng)} | {EscapeMarkdown(result.SummaryNote)} |");
+            var evaluated = group.Where(result => result.OpenabilityPassed).ToList();
+            var maxDistance = evaluated
+                .Select(result => result.HashDistanceNativeVsFreeXXlsx)
+                .Where(distance => distance.HasValue)
+                .Select(distance => distance!.Value)
+                .DefaultIfEmpty()
+                .Max();
+            var thresholds = string.Join(
+                ", ",
+                group.Select(result => result.VisualHashThreshold.ToString(CultureInfo.InvariantCulture))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal));
+            builder.AppendLine($"| {group.Key} | {group.Count()} | {group.Count(result => result.OpenabilityPassed)} | {group.Count(result => result.VisualStatus == VisualStatuses.Pass)} | {group.Count(result => result.VisualStatus == VisualStatuses.KnownGap)} | {group.Count(result => result.VisualStatus == VisualStatuses.Fail)} | {maxDistance} | {thresholds} |");
         }
 
         builder.AppendLine();
-        builder.AppendLine($"Passed: {results.Count(result => result.Passed)}/{results.Count}");
+        builder.AppendLine("## Chart Matrix");
+        builder.AppendLine();
+        builder.AppendLine("| Chart | Family | Openability/export | Visual status | Native vs FreeX hash | Threshold | Known gap | Excel round-trip hash | Notes |");
+        builder.AppendLine("|---|---|---:|---|---:|---:|---|---:|---|");
+        foreach (var result in results)
+        {
+            builder.AppendLine($"| {result.Chart} | {result.Family} | {Mark(result.OpenabilityPassed)} | {result.VisualStatus} | {Metric(result.HashDistanceNativeVsFreeXXlsx)} | {result.VisualHashThreshold} | {EscapeMarkdown(result.KnownVisualGapReason)} | {Metric(result.HashDistanceNativeVsRoundTrip)} | {EscapeMarkdown(result.SummaryNote)} |");
+        }
+
         builder.AppendLine();
         builder.AppendLine("Generated folders:");
         builder.AppendLine("- `freex-xlsx/`: workbooks written by FreeX.");
         builder.AppendLine("- `excel-xlsx/`: matching workbooks authored by Excel COM.");
         builder.AppendLine("- `excel-roundtrip-xlsx/`: Excel-authored workbooks loaded and saved by FreeX.");
         builder.AppendLine("- `png-*`: chart image exports from FreeX renderer or Excel.");
+        builder.AppendLine("- `visual_metrics.csv`: nonblank and perceptual hash-distance metrics.");
+        builder.AppendLine("- `visual_contact_sheet_*.png`: side-by-side image evidence.");
         return builder.ToString();
+    }
+
+    private static List<ChartCase> FilterCases(IEnumerable<ChartCase> cases, CompareOptions options)
+    {
+        var filtered = cases;
+        if (options.ChartFilters.Count > 0)
+        {
+            filtered = filtered.Where(chartCase =>
+                options.ChartFilters.Contains(chartCase.Name) ||
+                options.ChartFilters.Contains(chartCase.Type.ToString()));
+        }
+
+        if (options.FamilyFilters.Count > 0)
+            filtered = filtered.Where(chartCase => options.FamilyFilters.Contains(chartCase.Family));
+
+        return filtered.ToList();
+    }
+
+    private static void WriteChartList(IEnumerable<ChartCase> cases)
+    {
+        Console.WriteLine("Available chart cases:");
+        foreach (var chartCase in cases)
+            Console.WriteLine($"  {chartCase.Name} ({chartCase.Family})");
     }
 
     private static List<ChartCase> CreateCases() =>
@@ -858,22 +1330,42 @@ internal static class ChartInteropCompare
     private static HashSet<int> GetExcelProcessIds() =>
         Process.GetProcessesByName(ExcelProcessName).Select(process => process.Id).ToHashSet();
 
-    private static void KillOrphanExcelProcesses(HashSet<int> baselineExcelPids)
+    private static void WaitForExcelProcessesToExit(HashSet<int> excelPids, int timeoutMilliseconds)
     {
+        if (excelPids.Count == 0)
+            return;
+
+        var deadline = Environment.TickCount64 + timeoutMilliseconds;
+        while (Environment.TickCount64 < deadline)
+        {
+            var running = Process.GetProcessesByName(ExcelProcessName)
+                .Any(process => excelPids.Contains(process.Id));
+            if (!running)
+                return;
+
+            Thread.Sleep(250);
+        }
+    }
+
+    private static void KillExcelProcesses(HashSet<int> excelPids)
+    {
+        if (excelPids.Count == 0)
+            return;
+
         foreach (var process in Process.GetProcessesByName(ExcelProcessName))
         {
-            if (baselineExcelPids.Contains(process.Id))
+            if (!excelPids.Contains(process.Id))
                 continue;
 
             try
             {
                 process.Kill(entireProcessTree: true);
                 process.WaitForExit(5000);
-                Console.WriteLine($"Killed orphan EXCEL PID {process.Id}.");
+                Console.WriteLine($"Killed owned EXCEL PID {process.Id}.");
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Failed to kill orphan EXCEL PID {process.Id}: {ex.Message}");
+                Console.Error.WriteLine($"Failed to kill owned EXCEL PID {process.Id}: {ex.Message}");
             }
         }
     }
@@ -896,6 +1388,9 @@ internal static class ChartInteropCompare
 
     private static string Mark(bool value) => value ? "yes" : "no";
 
+    private static string Metric(int? value) =>
+        value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : "";
+
     private static string EscapeMarkdown(string? value) =>
         string.IsNullOrWhiteSpace(value) ? "" : value.Replace("|", "\\|", StringComparison.Ordinal);
 
@@ -907,8 +1402,21 @@ internal static class ChartInteropCompare
               dotnet run --project tools/FreeX.ChartInteropCompare -- [options]
 
             Options:
-              --out <directory>  Output directory. Defaults to %USERPROFILE%\freex-xlsx-verify\chart-interop\<timestamp>.
-              --help             Show this help text.
+              --out <directory>                  Output directory. Defaults to %USERPROFILE%\freex-xlsx-verify\chart-interop\<timestamp>.
+              --chart <name>[,<name>]            Run only the named chart case(s). Can be repeated.
+              --family <classic|chartEx>         Run only the requested chart family. Can be repeated.
+              --classic-visual-threshold <0-256> Native-vs-FreeX hash threshold for classic charts. Default: 96.
+              --chartex-visual-threshold <0-256> Native-vs-FreeX hash threshold for chartEx charts. Default: 72.
+              --known-gap-threshold <0-256>      Allowed hash threshold for declared known visual gaps. Default: 128.
+              --roundtrip-threshold <0-256>      Native-vs-roundtrip hash threshold. Default: 4.
+              --list-charts                      Print chart cases and exit.
+              --help                             Show this help text.
+
+            Exit codes:
+              0  Openability/export and visual gate passed (known gaps may be allowed).
+              1  Openability/export failure.
+              2  Visual mismatch failure after openability passed.
+              3  FreeX renderer PNG failure after openability and visual gate passed.
             """);
     }
 }
@@ -940,6 +1448,70 @@ internal enum ChartFixtureKind
 
 internal sealed record ExcelChartExport(int ChartCount, bool ChartExported);
 
+internal static class VisualStatuses
+{
+    public const string NotEvaluated = "not-evaluated";
+    public const string SkippedOpenability = "skipped-openability";
+    public const string Pass = "pass";
+    public const string KnownGap = "known-gap";
+    public const string Fail = "fail";
+}
+
+internal sealed record PngMetrics(int Width, int Height, double NonWhiteRatio, IReadOnlyList<bool> AverageHash)
+{
+    public string SizeText => $"{Width}x{Height}";
+}
+
+internal sealed record VisualExpectation(int HashThreshold, int RoundTripHashThreshold, string? KnownGapReason)
+{
+    private static readonly IReadOnlyDictionary<string, string> KnownGaps =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["StackedColumn"] = "FreeX-authored stacked column defaults differ from Excel-native stacked column layout/styling.",
+            ["PercentStackedColumn"] = "FreeX-authored percent stacked column defaults differ from Excel-native percent stacked layout/styling.",
+            ["ThreeDColumn"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
+            ["ThreeDLine"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
+            ["ThreeDPie"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
+            ["StackedBar"] = "FreeX-authored stacked bar defaults differ from Excel-native stacked bar layout/styling.",
+            ["PercentStackedBar"] = "FreeX-authored percent stacked bar defaults differ from Excel-native percent stacked layout/styling.",
+            ["ThreeDBar"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
+            ["Scatter"] = "FreeX-authored scatter exports as a connected/multiseries-looking chart instead of Excel's marker-only default.",
+            ["ThreeDArea"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
+            ["ThreeDSurface"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
+            ["Pareto"] = "Pareto lacks Excel-native aggregation, owner-linked Pareto line, and secondary percentage-axis metadata.",
+            ["BoxAndWhisker"] = "Box-and-whisker lacks Excel-native per-series statistics layout metadata for multi-column sample data.",
+            ["Waterfall"] = "Waterfall total/subtotal and connector defaults are not fully Excel-equivalent yet."
+        };
+
+    private static readonly IReadOnlySet<string> KnownRoundTripGaps =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "ThreeDColumn",
+            "ThreeDLine",
+            "ThreeDPie",
+            "ThreeDBar",
+            "ThreeDArea",
+            "ThreeDSurface"
+        };
+
+    public static VisualExpectation For(ChartCompareResult result, CompareOptions options)
+    {
+        var threshold = string.Equals(result.Family, "chartEx", StringComparison.OrdinalIgnoreCase)
+            ? options.ChartExVisualHashThreshold
+            : options.ClassicVisualHashThreshold;
+        var roundTripThreshold = KnownRoundTripGaps.Contains(result.Chart)
+            ? Math.Max(options.RoundTripVisualHashThreshold, 12)
+            : options.RoundTripVisualHashThreshold;
+        KnownGaps.TryGetValue(result.Chart, out var reason);
+        return new VisualExpectation(threshold, roundTripThreshold, reason);
+    }
+
+    public string AllowedThresholdText(CompareOptions options) =>
+        KnownGapReason is null
+            ? HashThreshold.ToString(CultureInfo.InvariantCulture)
+            : $"{HashThreshold} (known-gap allowance {options.KnownGapVisualHashThreshold})";
+}
+
 internal sealed class ChartCompareResult(string chart, string type, string family)
 {
     private readonly List<string> _notes = [];
@@ -967,11 +1539,31 @@ internal sealed class ChartCompareResult(string chart, string type, string famil
     public bool ExcelRoundTripPng { get; set; }
     public string? ExcelRoundTripPngPath { get; set; }
     public string? Error { get; set; }
+    public string VisualStatus { get; set; } = VisualStatuses.NotEvaluated;
+    public bool KnownVisualGap { get; set; }
+    public string? KnownVisualGapReason { get; set; }
+    public int VisualHashThreshold { get; set; }
+    public int? KnownVisualGapThreshold { get; set; }
+    public int RoundTripVisualHashThreshold { get; set; }
+    public double? FreeXRendererNonWhiteRatio { get; set; }
+    public double? ExcelNativeNonWhiteRatio { get; set; }
+    public double? FreeXXlsxExcelNonWhiteRatio { get; set; }
+    public double? ExcelRoundTripNonWhiteRatio { get; set; }
+    public int? HashDistanceNativeVsFreeXXlsx { get; set; }
+    public int? HashDistanceNativeVsRoundTrip { get; set; }
+    public int? HashDistanceNativeVsFreeXRenderer { get; set; }
+    public string? FreeXRendererImageSize { get; set; }
+    public string? ExcelNativeImageSize { get; set; }
+    public string? FreeXXlsxExcelImageSize { get; set; }
+    public string? ExcelRoundTripImageSize { get; set; }
+    public string? VisualFailure { get; set; }
     public string Notes => string.Join("; ", _notes);
-    public string SummaryNote => string.IsNullOrWhiteSpace(Error) ? Notes : $"{Notes} {Error}".Trim();
-    public bool Passed =>
+    public string SummaryNote => string.Join(
+            " ",
+            new[] { Notes, Error, VisualFailure }.Where(value => !string.IsNullOrWhiteSpace(value)))
+        .Trim();
+    public bool OpenabilityPassed =>
         string.IsNullOrWhiteSpace(Error) &&
-        FreeXRendererPng &&
         FreeXXlsxOpenedInExcel &&
         FreeXExcelPng &&
         ExcelNativeCreated &&
@@ -979,6 +1571,17 @@ internal sealed class ChartCompareResult(string chart, string type, string famil
         ExcelLoadedByFreeX &&
         ExcelRoundTripOpenedInExcel &&
         ExcelRoundTripPng;
+    public bool VisualGatePassed =>
+        VisualStatus is VisualStatuses.Pass or VisualStatuses.KnownGap;
+    public string FailureCategory =>
+        !OpenabilityPassed ? "openability" :
+        !FreeXRendererPng ? "freex-renderer" :
+        !VisualGatePassed ? "visual-mismatch" :
+        "";
+    public bool Passed =>
+        OpenabilityPassed &&
+        FreeXRendererPng &&
+        VisualGatePassed;
 
     public void AddNote(string note)
     {
@@ -988,6 +1591,7 @@ internal sealed class ChartCompareResult(string chart, string type, string famil
 }
 
 internal sealed record ComparisonDirectories(
+    string Root,
     string FreeXXlsx,
     string ExcelXlsx,
     string ExcelRoundTripXlsx,
@@ -999,6 +1603,7 @@ internal sealed record ComparisonDirectories(
     public static ComparisonDirectories Create(string root)
     {
         var directories = new ComparisonDirectories(
+            root,
             Path.Combine(root, "freex-xlsx"),
             Path.Combine(root, "excel-xlsx"),
             Path.Combine(root, "excel-roundtrip-xlsx"),
@@ -1015,6 +1620,7 @@ internal sealed record ComparisonDirectories(
 
     private IEnumerable<string> All()
     {
+        yield return Root;
         yield return FreeXXlsx;
         yield return ExcelXlsx;
         yield return ExcelRoundTripXlsx;
@@ -1025,11 +1631,29 @@ internal sealed record ComparisonDirectories(
     }
 }
 
-internal sealed record CompareOptions(string? OutputDirectory, bool ShowHelp)
+internal sealed record CompareOptions(
+    string? OutputDirectory,
+    IReadOnlySet<string> ChartFilters,
+    IReadOnlySet<string> FamilyFilters,
+    int ClassicVisualHashThreshold,
+    int ChartExVisualHashThreshold,
+    int KnownGapVisualHashThreshold,
+    int RoundTripVisualHashThreshold,
+    bool ListCharts,
+    bool ShowHelp)
 {
+    private const int MaxHashThreshold = 256;
+
     public static CompareOptions Parse(string[] args)
     {
         string? outputDirectory = null;
+        var chartFilters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var familyFilters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var classicVisualHashThreshold = 96;
+        var chartExVisualHashThreshold = 72;
+        var knownGapVisualHashThreshold = 128;
+        var roundTripVisualHashThreshold = 4;
+        var listCharts = false;
         var showHelp = false;
         for (var index = 0; index < args.Length; index++)
         {
@@ -1039,17 +1663,84 @@ internal sealed record CompareOptions(string? OutputDirectory, bool ShowHelp)
                 case "--help" or "-h" or "/?":
                     showHelp = true;
                     break;
+                case "--list-charts":
+                    listCharts = true;
+                    break;
                 case "--out":
                     if (index + 1 >= args.Length)
                         throw new ArgumentException("--out requires a directory.");
                     outputDirectory = Path.GetFullPath(args[++index]);
+                    break;
+                case "--chart" or "--charts":
+                    if (index + 1 >= args.Length)
+                        throw new ArgumentException($"{arg} requires a chart name or comma-separated list.");
+                    AddFilterValues(chartFilters, args[++index]);
+                    break;
+                case "--family":
+                    if (index + 1 >= args.Length)
+                        throw new ArgumentException("--family requires classic or chartEx.");
+                    AddFilterValues(familyFilters, args[++index]);
+                    break;
+                case "--classic-visual-threshold":
+                    classicVisualHashThreshold = ReadHashThreshold(args, ref index, arg);
+                    break;
+                case "--chartex-visual-threshold":
+                    chartExVisualHashThreshold = ReadHashThreshold(args, ref index, arg);
+                    break;
+                case "--known-gap-threshold":
+                    knownGapVisualHashThreshold = ReadHashThreshold(args, ref index, arg);
+                    break;
+                case "--roundtrip-threshold":
+                    roundTripVisualHashThreshold = ReadHashThreshold(args, ref index, arg);
                     break;
                 default:
                     throw new ArgumentException($"Unknown argument: {arg}");
             }
         }
 
-        return new CompareOptions(outputDirectory, showHelp);
+        ValidateFamilies(familyFilters);
+        return new CompareOptions(
+            outputDirectory,
+            chartFilters,
+            familyFilters,
+            classicVisualHashThreshold,
+            chartExVisualHashThreshold,
+            knownGapVisualHashThreshold,
+            roundTripVisualHashThreshold,
+            listCharts,
+            showHelp);
+    }
+
+    private static void AddFilterValues(HashSet<string> filters, string value)
+    {
+        foreach (var part in value.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            filters.Add(part);
+    }
+
+    private static int ReadHashThreshold(string[] args, ref int index, string optionName)
+    {
+        if (index + 1 >= args.Length)
+            throw new ArgumentException($"{optionName} requires an integer from 0 to 256.");
+        if (!int.TryParse(args[++index], NumberStyles.Integer, CultureInfo.InvariantCulture, out var threshold) ||
+            threshold < 0 ||
+            threshold > MaxHashThreshold)
+        {
+            throw new ArgumentException($"{optionName} requires an integer from 0 to {MaxHashThreshold}.");
+        }
+
+        return threshold;
+    }
+
+    private static void ValidateFamilies(IEnumerable<string> familyFilters)
+    {
+        foreach (var family in familyFilters)
+        {
+            if (!string.Equals(family, "classic", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(family, "chartEx", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException($"Unknown chart family '{family}'. Expected classic or chartEx.");
+            }
+        }
     }
 }
 
