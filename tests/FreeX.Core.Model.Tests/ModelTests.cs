@@ -104,6 +104,12 @@ public class CellAddressTests
     }
 
     [Fact]
+    public void NumberToColumnName_FormatsColumnsBeyondExcelBounds()
+    {
+        CellAddress.NumberToColumnName(18_279).Should().Be("AAAA");
+    }
+
+    [Fact]
     public void ToA1_FormatsCorrectly()
     {
         var sheet = SheetId.New();
@@ -120,6 +126,15 @@ public class CellAddressTests
         var addr = new CellAddress(sheet, row, col);
 
         addr.ToA1().Should().Be(expected);
+    }
+
+    [Fact]
+    public void ToA1_FormatsRowsBeyondExcelBoundsWithoutTruncating()
+    {
+        var sheet = SheetId.New();
+        var addr = new CellAddress(sheet, 1_000_000_000, 1);
+
+        addr.ToA1().Should().Be("A1000000000");
     }
 
     [Fact]

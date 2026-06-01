@@ -42,7 +42,7 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
 
         var index = 0;
         if (!TryReadColumnNumber(value, ref index, out var col) ||
-            !TryReadRowNumber(value[index..], out var row))
+            !TryReadRowNumber(value, ref index, out var row))
         {
             result = default;
             return false;
@@ -89,14 +89,14 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
         return index > start;
     }
 
-    private static bool TryReadRowNumber(ReadOnlySpan<char> value, out uint row)
+    private static bool TryReadRowNumber(ReadOnlySpan<char> value, ref int index, out uint row)
     {
         row = 0;
-        if (value.IsEmpty)
-            return false;
+        var start = index;
 
-        foreach (var c in value)
+        while (index < value.Length)
         {
+            var c = value[index];
             if (c is < '0' or > '9')
                 return false;
 
@@ -105,11 +105,10 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
                 return false;
 
             row = row * 10 + digit;
-            if (row > MaxRow)
-                return false;
+            index++;
         }
 
-        return row > 0;
+        return index > start && row > 0;
     }
 
     private static char NormalizeColumnLetter(char c) =>
@@ -197,26 +196,28 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
 
     private static uint GetColumnNameLength(uint col)
     {
-        uint length = 0;
-        while (col > 0)
-        {
-            length++;
-            col = (col - 1) / 26;
-        }
+        if (col == 0)
+            return 0;
 
-        return length;
+        return col <= 26 ? 1u :
+            col <= 702 ? 2u :
+            col <= 18_278 ? 3u :
+            col <= 475_254 ? 4u :
+            col <= 12_356_630 ? 5u :
+            col <= 321_272_406 ? 6u : 7u;
     }
 
     private static uint GetRowDigitCount(uint row)
     {
-        uint length = 1;
-        while (row >= 10)
-        {
-            length++;
-            row /= 10;
-        }
-
-        return length;
+        return row < 10 ? 1u :
+            row < 100 ? 2u :
+            row < 1_000 ? 3u :
+            row < 10_000 ? 4u :
+            row < 100_000 ? 5u :
+            row < 1_000_000 ? 6u :
+            row < 10_000_000 ? 7u :
+            row < 100_000_000 ? 8u :
+            row < 1_000_000_000 ? 9u : 10u;
     }
 
     public override string ToString() => ToA1();
