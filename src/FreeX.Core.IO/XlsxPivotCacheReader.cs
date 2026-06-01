@@ -34,6 +34,9 @@ internal static class XlsxPivotCacheReader
 
             var cacheSource = root.Element(workbookNs + "cacheSource");
             var worksheetSource = cacheSource?.Element(workbookNs + "worksheetSource");
+            // FreeX persists preserveSourceSortFilter / the ISO refreshed date in an extLst extension
+            // (they have no base-schema attribute home). Prefer the extension, then any legacy attribute.
+            var freeXProps = ReadFreeXCacheProps(root, workbookNs);
             var cache = new PivotCacheModel
             {
                 CacheId = cacheId,
@@ -47,14 +50,16 @@ internal static class XlsxPivotCacheReader
                 RefreshOnLoad = XlsxXmlAttributeReader.ReadBoolAttribute(root, "refreshOnLoad", defaultValue: true),
                 SaveData = XlsxXmlAttributeReader.ReadBoolAttribute(root, "saveData", defaultValue: true),
                 EnableRefresh = XlsxXmlAttributeReader.ReadBoolAttribute(root, "enableRefresh", defaultValue: true),
-                PreserveSourceSortFilter = XlsxXmlAttributeReader.ReadBoolAttribute(root, "preserveSourceSortFilter", defaultValue: true),
+                PreserveSourceSortFilter = freeXProps?.Attribute("preserveSourceSortFilter") is { } preserveAttr
+                    ? !string.Equals(preserveAttr.Value, "0", StringComparison.Ordinal)
+                    : XlsxXmlAttributeReader.ReadBoolAttribute(root, "preserveSourceSortFilter", defaultValue: true),
                 MissingItemsLimit = XlsxXmlAttributeReader.ReadIntAttribute(root, "missingItemsLimit"),
                 RecordCount = XlsxXmlAttributeReader.ReadIntAttribute(root, "recordCount"),
                 CreatedVersion = XlsxXmlAttributeReader.ReadIntAttribute(root, "createdVersion"),
                 MinRefreshableVersion = XlsxXmlAttributeReader.ReadIntAttribute(root, "minRefreshableVersion"),
                 RefreshedVersion = XlsxXmlAttributeReader.ReadIntAttribute(root, "refreshedVersion"),
                 RefreshedBy = root.Attribute("refreshedBy")?.Value,
-                RefreshedDateIso = root.Attribute("refreshedDateIso")?.Value
+                RefreshedDateIso = freeXProps?.Attribute("refreshedDateIso")?.Value ?? root.Attribute("refreshedDateIso")?.Value
             };
 
             foreach (var field in root
@@ -123,6 +128,18 @@ internal static class XlsxPivotCacheReader
         if (!string.IsNullOrWhiteSpace(worksheetSource.Attribute("ref")?.Value))
             return PivotCacheSourceType.WorksheetRange;
         return PivotCacheSourceType.Unknown;
+    }
+
+    private const string FreeXPivotExtensionNamespace = "urn:freex:pivot:2026";
+
+    // Returns the FreeX cacheProps element from the pivotCacheDefinition extLst, or null when absent.
+    private static XElement? ReadFreeXCacheProps(XElement root, XNamespace workbookNs)
+    {
+        XNamespace freeXNs = FreeXPivotExtensionNamespace;
+        return root.Element(workbookNs + "extLst")?
+            .Elements(workbookNs + "ext")
+            .Select(ext => ext.Element(freeXNs + "cacheProps"))
+            .FirstOrDefault(props => props is not null);
     }
 
 }
