@@ -135,19 +135,22 @@ public class CellAddressTests
 
         const int repetitions = 100_000;
         var before = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
         string result = "";
         for (var i = 0; i < repetitions; i++)
             result = addr.ToA1();
+        stopwatch.Stop();
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         result.Should().Be("XFD1048576");
         Console.WriteLine(
-            $"ToA1 repeated {repetitions:N0}x: {allocated:N0} bytes allocated.");
+            $"ToA1 repeated {repetitions:N0}x: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
         allocated.Should().BeLessThan(6_500_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
     }
 
     [Fact]
-    public void NumberToColumnName_RepeatedCalls_AllocateOnlyResultStrings()
+    public void NumberToColumnName_RepeatedCalls_ReusesCachedColumnName()
     {
         CellAddress.NumberToColumnName(CellAddress.MaxCol).Should().Be("XFD");
 
@@ -157,15 +160,48 @@ public class CellAddressTests
 
         const int repetitions = 100_000;
         var before = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
         string result = "";
         for (var i = 0; i < repetitions; i++)
             result = CellAddress.NumberToColumnName(CellAddress.MaxCol);
+        stopwatch.Stop();
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
         result.Should().Be("XFD");
         Console.WriteLine(
-            $"NumberToColumnName repeated {repetitions:N0}x: {allocated:N0} bytes allocated.");
-        allocated.Should().BeLessThan(5_500_000);
+            $"NumberToColumnName cached repeated {repetitions:N0}x: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(1_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
+    }
+
+    [Fact]
+    public void TryParse_RepeatedCalls_DoNotAllocateAndReportsTime()
+    {
+        var sheet = SheetId.New();
+        CellAddress.TryParse("XFD1048576", sheet, out var warmup).Should().BeTrue();
+        warmup.Should().Be(new CellAddress(sheet, CellAddress.MaxRow, CellAddress.MaxCol));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        const int repetitions = 100_000;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        CellAddress result = default;
+        for (var i = 0; i < repetitions; i++)
+        {
+            if (!CellAddress.TryParse("XFD1048576", sheet, out result))
+                throw new InvalidOperationException("Expected XFD1048576 to parse.");
+        }
+        stopwatch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        result.Should().Be(new CellAddress(sheet, CellAddress.MaxRow, CellAddress.MaxCol));
+        Console.WriteLine(
+            $"TryParse repeated {repetitions:N0}x: {stopwatch.Elapsed.TotalMilliseconds:F2} ms, {allocated:N0} bytes allocated.");
+        allocated.Should().BeLessThan(1_000);
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromMilliseconds(500));
     }
 }
 

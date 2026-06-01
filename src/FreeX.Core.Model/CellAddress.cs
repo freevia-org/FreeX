@@ -1,3 +1,5 @@
+using System.Threading;
+
 namespace FreeX.Core.Model;
 
 /// <summary>
@@ -11,6 +13,8 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
 
     /// <summary>Maximum supported rows (1,048,576 in Excel).</summary>
     public const uint MaxRow = 1_048_576;
+
+    private static readonly string?[] ColumnNameCache = new string?[(int)MaxCol + 1];
 
     /// <summary>
     /// Parse an A1-notation string like "B7" into a CellAddress.
@@ -116,15 +120,31 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
     /// </summary>
     public static string NumberToColumnName(uint col)
     {
-        var columnLength = GetColumnNameLength(col);
-        Span<char> buffer = stackalloc char[(int)columnLength];
-        WriteColumnName(col, buffer);
-        return new string(buffer);
+        return TryGetCachedColumnName(col) ?? CreateColumnName(col);
     }
 
     /// <summary>Format as A1 notation (e.g. "B7").</summary>
     public string ToA1()
     {
+        var columnName = TryGetCachedColumnName(Col);
+        if (columnName is not null)
+        {
+            var cachedRowLength = GetRowDigitCount(Row);
+            return string.Create(columnName.Length + (int)cachedRowLength, (columnName, Row), static (buffer, state) =>
+            {
+                var (columnName, row) = state;
+                columnName.AsSpan().CopyTo(buffer);
+
+                var rowIndex = buffer.Length;
+                do
+                {
+                    buffer[--rowIndex] = (char)('0' + row % 10);
+                    row /= 10;
+                }
+                while (row > 0);
+            });
+        }
+
         var columnLength = GetColumnNameLength(Col);
         var rowLength = GetRowDigitCount(Row);
         return string.Create((int)(columnLength + rowLength), (Col, Row, columnLength), static (buffer, state) =>
@@ -140,6 +160,29 @@ public readonly record struct CellAddress(SheetId Sheet, uint Row, uint Col) : I
             }
             while (row > 0);
         });
+    }
+
+    private static string? TryGetCachedColumnName(uint col)
+    {
+        if (col is 0 || col > MaxCol)
+            return null;
+
+        var index = (int)col;
+        var cached = Volatile.Read(ref ColumnNameCache[index]);
+        if (cached is not null)
+            return cached;
+
+        var created = CreateColumnName(col);
+        var previous = Interlocked.CompareExchange(ref ColumnNameCache[index], created, null);
+        return previous ?? created;
+    }
+
+    private static string CreateColumnName(uint col)
+    {
+        var columnLength = GetColumnNameLength(col);
+        Span<char> buffer = stackalloc char[(int)columnLength];
+        WriteColumnName(col, buffer);
+        return new string(buffer);
     }
 
     private static void WriteColumnName(uint col, Span<char> destination)
