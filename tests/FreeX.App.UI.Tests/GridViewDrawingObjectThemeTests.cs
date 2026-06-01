@@ -209,10 +209,10 @@ public sealed class GridViewDrawingObjectThemeTests
             source.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)..
             source.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)];
         var drawTextBoxEffect = source[
-            source.IndexOf("private static void DrawTextBoxThemeEffect", StringComparison.Ordinal)..
-            source.IndexOf("private static void DrawShapeThemeEffect", StringComparison.Ordinal)];
+            source.IndexOf("private void DrawTextBoxThemeEffect", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)];
         var drawShapeEffect = source[
-            source.IndexOf("private static void DrawShapeThemeEffect", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)..
             source.IndexOf("public static DrawingObjectColors ResolveDrawingShapeColors", StringComparison.Ordinal)];
 
         renderTextBoxes.Should().Contain("var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);");
@@ -233,8 +233,8 @@ public sealed class GridViewDrawingObjectThemeTests
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
         var authoredEffect = source[
-            source.IndexOf("private static void DrawShapeAuthoredEffect", StringComparison.Ordinal)..
-            source.IndexOf("private static void DrawTextBoxThemeEffect", StringComparison.Ordinal)];
+            source.IndexOf("private void DrawShapeAuthoredEffect", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawTextBoxThemeEffect", StringComparison.Ordinal)];
 
         authoredEffect.Should().Contain("shape.GetEffectiveEffectPreset()");
         authoredEffect.Should().Contain("DrawingShapeEffectPreset.Shadow");
