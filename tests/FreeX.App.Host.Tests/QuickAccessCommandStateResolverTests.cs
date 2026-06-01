@@ -58,6 +58,22 @@ public sealed class QuickAccessCommandStateResolverTests
         QuickAccessCommandStateResolver.CanExecute(QuickAccessToolbarCommandIds.Redo, state).Should().BeFalse();
     }
 
+    [Fact]
+    public void WithSelectionContext_PreservesUndoRedoState()
+    {
+        var state = new QuickAccessCommandState(
+            CanUndo: true,
+            CanRedo: false,
+            HasActiveWorksheet: false,
+            HasSelection: false);
+
+        var refreshed = state.WithSelectionContext(hasActiveWorksheet: true, hasSelection: true);
+
+        QuickAccessCommandStateResolver.CanExecute(QuickAccessToolbarCommandIds.Undo, refreshed).Should().BeTrue();
+        QuickAccessCommandStateResolver.CanExecute(QuickAccessToolbarCommandIds.Redo, refreshed).Should().BeFalse();
+        QuickAccessCommandStateResolver.CanExecute(QuickAccessToolbarCommandIds.Bold, refreshed).Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(QuickAccessToolbarCommandIds.New)]
     [InlineData(QuickAccessToolbarCommandIds.Open)]

@@ -58,6 +58,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private readonly ToolbarVisualStateCache _toolbarVisualStateCache = new();
     private ToolbarVisualState? _lastToolbarVisualState;
     private QuickAccessCommandState? _lastQuickAccessCommandState;
+    private WorkbookId? _lastQuickAccessCommandStateWorkbookId;
     private readonly StatusBarStatsCache _statusBarStatsCache = new();
     private StatusBarDisplayState? _lastStatusBarDisplayState;
     private readonly SparklineValueCache _sparklineValueCache = new();

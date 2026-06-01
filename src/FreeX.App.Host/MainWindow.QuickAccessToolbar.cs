@@ -108,13 +108,46 @@ public partial class MainWindow
 
     private void RefreshQuickAccessToolbarCommandStates(bool force = false)
     {
-        var state = new QuickAccessCommandState(
+        ApplyQuickAccessToolbarCommandState(CreateQuickAccessCommandState(), force);
+    }
+
+    private void RefreshQuickAccessToolbarCommandStatesAfterSelectionChange()
+    {
+        if (_lastQuickAccessCommandState is not { } state ||
+            _lastQuickAccessCommandStateWorkbookId != _workbook.Id)
+        {
+            RefreshQuickAccessToolbarCommandStates();
+            return;
+        }
+
+        ApplyQuickAccessToolbarCommandState(
+            state.WithSelectionContext(
+                HasActiveWorksheetForQuickAccessCommandState(),
+                HasSelectionForQuickAccessCommandState()),
+            force: false);
+    }
+
+    private QuickAccessCommandState CreateQuickAccessCommandState() =>
+        new(
             _commandBus.CanUndo(_workbook.Id),
             _commandBus.CanRedo(_workbook.Id),
-            _workbook.GetSheet(_currentSheetId) is not null,
-            SheetGrid.SelectedRange is not null);
-        if (!force && _lastQuickAccessCommandState == state)
+            HasActiveWorksheetForQuickAccessCommandState(),
+            HasSelectionForQuickAccessCommandState());
+
+    private bool HasActiveWorksheetForQuickAccessCommandState() =>
+        _workbook.GetSheet(_currentSheetId) is not null;
+
+    private bool HasSelectionForQuickAccessCommandState() =>
+        SheetGrid.SelectedRange is not null;
+
+    private void ApplyQuickAccessToolbarCommandState(QuickAccessCommandState state, bool force)
+    {
+        if (!force &&
+            _lastQuickAccessCommandState == state &&
+            _lastQuickAccessCommandStateWorkbookId == _workbook.Id)
+        {
             return;
+        }
 
         foreach (var button in _quickAccessToolbarButtons)
         {
@@ -127,15 +160,17 @@ public partial class MainWindow
         }
 
         _lastQuickAccessCommandState = state;
+        _lastQuickAccessCommandStateWorkbookId = _workbook.Id;
     }
 
     private bool IsQuickAccessToolbarCommandStateStableForSelectionDrag()
     {
-        if (_lastQuickAccessCommandState is not { } state)
+        if (_lastQuickAccessCommandState is not { } state ||
+            _lastQuickAccessCommandStateWorkbookId != _workbook.Id)
             return false;
 
-        return state.HasActiveWorksheet == (_workbook.GetSheet(_currentSheetId) is not null) &&
-            state.HasSelection == (SheetGrid.SelectedRange is not null);
+        return state.HasActiveWorksheet == HasActiveWorksheetForQuickAccessCommandState() &&
+            state.HasSelection == HasSelectionForQuickAccessCommandState();
     }
 
     private Button? GetQuickAccessToolbarButton(string commandId)

@@ -334,7 +334,7 @@ public sealed class MainWindowMouseSelectionSourceTests
         columnShiftSelection.Should().Contain("HideValidationDropdown();");
         columnShiftSelection.Should().Contain("FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);");
         columnShiftSelection.Should().Contain("SheetGrid.Focus();");
-        columnShiftSelection.Should().Contain("RefreshToolbar();");
+        columnShiftSelection.Should().Contain("RefreshToolbarAfterSelectionChange();");
         columnShiftSelection.Should().Contain("RefreshStatusBar();");
 
         rowShiftSelection.Should().Contain("SheetGrid.SelectedRanges = null;");
@@ -343,7 +343,7 @@ public sealed class MainWindowMouseSelectionSourceTests
         rowShiftSelection.Should().Contain("HideValidationDropdown();");
         rowShiftSelection.Should().Contain("FormulaBar.Text = FormatFormulaBarText(cell, _selectionAnchor.Value);");
         rowShiftSelection.Should().Contain("SheetGrid.Focus();");
-        rowShiftSelection.Should().Contain("RefreshToolbar();");
+        rowShiftSelection.Should().Contain("RefreshToolbarAfterSelectionChange();");
         rowShiftSelection.Should().Contain("RefreshStatusBar();");
     }
 
@@ -570,7 +570,7 @@ public sealed class MainWindowMouseSelectionSourceTests
         refreshHelper.Should().Contain("if (_dragSelectActive)");
         refreshHelper.Should().Contain("_dragSelectToolbarRefreshPending = true;");
         refreshHelper.Should().Contain("CompleteDragSelectionToolbarRefresh");
-        refreshHelper.Should().Contain("RefreshToolbar();");
+        refreshHelper.Should().Contain("RefreshToolbarAfterSelectionChange();");
         mouseUp.Should().Contain("CompleteDragSelectionToolbarRefresh();");
     }
 

@@ -4,7 +4,11 @@ internal readonly record struct QuickAccessCommandState(
     bool CanUndo,
     bool CanRedo,
     bool HasActiveWorksheet,
-    bool HasSelection);
+    bool HasSelection)
+{
+    public QuickAccessCommandState WithSelectionContext(bool hasActiveWorksheet, bool hasSelection) =>
+        new(CanUndo, CanRedo, hasActiveWorksheet, hasSelection);
+}
 
 internal static class QuickAccessCommandStateResolver
 {
