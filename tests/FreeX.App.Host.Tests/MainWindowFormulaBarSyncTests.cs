@@ -467,6 +467,29 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void UseInFormulaInsertion_EscapeRestoresOriginalCellText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+
+            harness.InsertDefinedNameIntoFormula("SalesData");
+            harness.PressFormulaBarKey(Key.Escape).Should().BeTrue();
+
+            harness.CellText(1, 1).Should().Be("original");
+            harness.CellFormula(1, 1).Should().BeNull();
+            harness.FormulaBarText.Should().Be("original");
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 1),
+                new CellAddress(harness.CurrentSheetId, 1, 1)));
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void UseInFormulaInsertion_InsertsDefinedNameAtFormulaBarCaret()
     {
         StaTestRunner.Run(() =>
