@@ -353,6 +353,31 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FunctionMenuInsertion_EnterCommitsCompletedFormulaToActiveCell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+
+            harness.InsertFormulaFunction("SUM");
+            harness.SetFormulaBarText("=SUM(1,2)");
+            harness.PressFormulaBarKey(Key.Enter).Should().BeTrue();
+
+            harness.CellFormula(1, 1).Should().Be("SUM(1,2)");
+            harness.CellText(1, 1).Should().BeNull();
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 2, 1),
+                new CellAddress(harness.CurrentSheetId, 2, 1)));
+            harness.CellAddressBoxText.Should().Be("A2");
+            harness.FormulaBarText.Should().BeEmpty();
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void UseInFormulaInsertion_SeedsFormulaBarWithoutInlineEditorOverwrite()
     {
         StaTestRunner.Run(() =>
