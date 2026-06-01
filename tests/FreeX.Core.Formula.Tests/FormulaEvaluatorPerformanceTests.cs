@@ -63,7 +63,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(expected);
         _output.WriteLine(
             $"PERF repeated formula text eval iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(9_000_000);
+        allocatedBytes.Should().BeLessThan(4_000_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
@@ -96,7 +96,39 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(expected);
         _output.WriteLine(
             $"PERF repeated comparison formula text eval iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(12_000_000);
+        allocatedBytes.Should().BeLessThan(1_024);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Fact]
+    public void RepeatedBooleanCoercionFormulaTextEvaluation_AvoidsCoercedNumberChurn()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new BoolValue(true));
+
+        const string formula = "=A1+A1+A1+A1";
+        const int iterations = 100_000;
+        var expected = new NumberValue(4d);
+
+        evaluator.Evaluate(formula, sheet).Should().Be(expected);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        ScalarValue result = BlankValue.Instance;
+        for (var iteration = 0; iteration < iterations; iteration++)
+            result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(expected);
+        _output.WriteLine(
+            $"PERF repeated boolean coercion formula text eval iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(10_000_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 

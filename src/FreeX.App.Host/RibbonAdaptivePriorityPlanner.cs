@@ -44,9 +44,7 @@ internal static class RibbonAdaptivePriorityPlanner
         string? selectedTabHeader = null) =>
         GetRuntimeVisibilityOverrides(availableWidth, groupNames, selectedTabHeader)
             .Where(decision => decision.State != RibbonAdaptiveGroupState.Collapsed)
-            .Where(decision => decision.Index < 0 ||
-                               decision.Index >= groupNames.Count ||
-                               !RibbonAdaptiveStateApplicator.ShouldUseSmallWithLabelsForIconOnlyGroup(groupNames[decision.Index]))
+            .Where(decision => decision.Index >= 0 && decision.Index < groupNames.Count)
             .Select(decision => decision.Index)
             .ToHashSet();
 
