@@ -61,16 +61,18 @@ internal static class XlsxDataValidationNativeMetadataMapper
 
         foreach (var validation in sheet.DataValidations)
         {
-            var metadata = nativeMetadata.FirstOrDefault(item =>
-                RangesEqual(item.AppliesTo, validation.AppliesTo));
+            var metadata = FindNativeMetadata(nativeMetadata, validation.AppliesTo);
             if (metadata is null)
                 continue;
 
             validation.AdditionalRanges.Clear();
-            validation.AdditionalRanges.AddRange(metadata.AppliesToRanges.Skip(1).Select(range =>
-                new GridRange(
+            for (var rangeIndex = 1; rangeIndex < metadata.AppliesToRanges.Count; rangeIndex++)
+            {
+                var range = metadata.AppliesToRanges[rangeIndex];
+                validation.AdditionalRanges.Add(new GridRange(
                     new CellAddress(sheet.Id, range.Start.Row, range.Start.Col),
-                    new CellAddress(sheet.Id, range.End.Row, range.End.Col))));
+                    new CellAddress(sheet.Id, range.End.Row, range.End.Col)));
+            }
 
             if (metadata.NativeAttributes.Count > 0)
                 validation.NativeAttributes = metadata.NativeAttributes;
@@ -152,7 +154,9 @@ internal static class XlsxDataValidationNativeMetadataMapper
             if (containerSource is not null)
                 changed |= ApplyContainerNativeMetadata(dataValidations, containerSource, WorksheetNs);
 
-            var validationsByRange = new Dictionary<string, XElement>(StringComparer.Ordinal);
+            var validationsByRange = new Dictionary<string, XElement>(
+                sheet.DataValidations.Count,
+                StringComparer.Ordinal);
             foreach (var element in dataValidations.Elements(WorksheetNs + "dataValidation"))
             {
                 var sqref = element.Attribute("sqref")?.Value;
@@ -165,7 +169,9 @@ internal static class XlsxDataValidationNativeMetadataMapper
                 if (!HasNativeMetadata(validation))
                     continue;
 
-                if (validationsByRange.TryGetValue(ToSqref(validation), out var validationElement) ||
+                var sqref = ToSqref(validation);
+                if (validationsByRange.TryGetValue(sqref, out var validationElement) ||
+                    validation.AdditionalRanges.Count > 0 &&
                     validationsByRange.TryGetValue(validation.AppliesTo.ToString(), out validationElement))
                 {
                     changed |= ApplyValidationNativeMetadata(validationElement, validation, WorksheetNs);
@@ -250,18 +256,42 @@ internal static class XlsxDataValidationNativeMetadataMapper
         Sheet sheet,
         IReadOnlyList<DataValidationNativeMetadata> nativeMetadata)
     {
-        foreach (var metadata in nativeMetadata.Where(item => item.AppliesToRanges.Count > 1))
+        foreach (var metadata in nativeMetadata)
         {
-            foreach (var duplicateRange in metadata.AppliesToRanges.Skip(1))
+            if (metadata.AppliesToRanges.Count <= 1)
+                continue;
+
+            for (var rangeIndex = 1; rangeIndex < metadata.AppliesToRanges.Count; rangeIndex++)
             {
-                var duplicate = sheet.DataValidations.FirstOrDefault(validation =>
-                    RangesEqual(validation.AppliesTo, duplicateRange) &&
-                    validation.AdditionalRanges.Count == 0 &&
-                    MatchesNativeValidation(validation, metadata));
-                if (duplicate is not null)
-                    sheet.DataValidations.Remove(duplicate);
+                var duplicateRange = metadata.AppliesToRanges[rangeIndex];
+                for (var validationIndex = 0; validationIndex < sheet.DataValidations.Count; validationIndex++)
+                {
+                    var validation = sheet.DataValidations[validationIndex];
+                    if (!RangesEqual(validation.AppliesTo, duplicateRange) ||
+                        validation.AdditionalRanges.Count != 0 ||
+                        !MatchesNativeValidation(validation, metadata))
+                    {
+                        continue;
+                    }
+
+                    sheet.DataValidations.RemoveAt(validationIndex);
+                    break;
+                }
             }
         }
+    }
+
+    private static DataValidationNativeMetadata? FindNativeMetadata(
+        IReadOnlyList<DataValidationNativeMetadata> nativeMetadata,
+        GridRange appliesTo)
+    {
+        foreach (var metadata in nativeMetadata)
+        {
+            if (RangesEqual(metadata.AppliesTo, appliesTo))
+                return metadata;
+        }
+
+        return null;
     }
 
     private static bool MatchesNativeValidation(DataValidation validation, DataValidationNativeMetadata metadata) =>
@@ -315,25 +345,32 @@ internal static class XlsxDataValidationNativeMetadataMapper
         XNamespace worksheetNs)
     {
         var changed = false;
-        foreach (var (name, value) in source.NativeContainerAttributes ?? new Dictionary<string, string>())
+        if (source.NativeContainerAttributes is { Count: > 0 } attributes)
         {
-            changed |= TrySetNativeAttributeIfMissing(dataValidations, name, value);
+            foreach (var (name, value) in attributes)
+                changed |= TrySetNativeAttributeIfMissing(dataValidations, name, value);
         }
 
-        foreach (var nativeChildXml in (source.NativeContainerChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        if (source.NativeContainerChildXmls is { Count: > 0 } childXmls)
         {
-            try
+            foreach (var nativeChildXml in childXmls)
             {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == worksheetNs && nativeChild.Name.LocalName != "dataValidation")
+                if (string.IsNullOrWhiteSpace(nativeChildXml))
+                    continue;
+
+                try
                 {
-                    dataValidations.Add(nativeChild);
-                    changed = true;
+                    var nativeChild = XElement.Parse(nativeChildXml);
+                    if (nativeChild.Name.Namespace == worksheetNs && nativeChild.Name.LocalName != "dataValidation")
+                    {
+                        dataValidations.Add(nativeChild);
+                        changed = true;
+                    }
                 }
-            }
-            catch
-            {
-                // Ignore malformed native data-validation container payloads from older saves.
+                catch
+                {
+                    // Ignore malformed native data-validation container payloads from older saves.
+                }
             }
         }
 
@@ -346,25 +383,32 @@ internal static class XlsxDataValidationNativeMetadataMapper
         XNamespace worksheetNs)
     {
         var changed = false;
-        foreach (var (name, value) in source.NativeAttributes ?? new Dictionary<string, string>())
+        if (source.NativeAttributes is { Count: > 0 } attributes)
         {
-            changed |= TrySetNativeAttributeIfMissing(validationElement, name, value);
+            foreach (var (name, value) in attributes)
+                changed |= TrySetNativeAttributeIfMissing(validationElement, name, value);
         }
 
-        foreach (var nativeChildXml in (source.NativeChildXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)))
+        if (source.NativeChildXmls is { Count: > 0 } childXmls)
         {
-            try
+            foreach (var nativeChildXml in childXmls)
             {
-                var nativeChild = XElement.Parse(nativeChildXml);
-                if (nativeChild.Name.Namespace == worksheetNs)
+                if (string.IsNullOrWhiteSpace(nativeChildXml))
+                    continue;
+
+                try
                 {
-                    validationElement.Add(nativeChild);
-                    changed = true;
+                    var nativeChild = XElement.Parse(nativeChildXml);
+                    if (nativeChild.Name.Namespace == worksheetNs)
+                    {
+                        validationElement.Add(nativeChild);
+                        changed = true;
+                    }
                 }
-            }
-            catch
-            {
-                // Ignore malformed native data-validation payloads from older saves.
+                catch
+                {
+                    // Ignore malformed native data-validation payloads from older saves.
+                }
             }
         }
 

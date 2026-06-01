@@ -245,7 +245,7 @@ public sealed class FormulaEvaluatorPerformanceTests
     [Theory]
     [InlineData("=LARGE(A1:A100000,10)", 99_991d, 2_000_000)]
     [InlineData("=SMALL(A1:A100000,10)", 10d, 2_000_000)]
-    [InlineData("=PERCENTILE(A1:A100000,0.5)", 50_000.5d, 5_000_000)]
+    [InlineData("=PERCENTILE(A1:A100000,0.5)", 50_000.5d, 2_000_000)]
     public void StatisticalSelectionLargeRanges_AvoidExcessAllocationChurn(string formula, double expected, long maxAllocatedBytes)
     {
         AssertLargeRangeSelectionPerformance(formula, expected, maxAllocatedBytes);

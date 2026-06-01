@@ -18,9 +18,27 @@ internal static class XlsxWorksheetSourceIndependentMetadataBatchWriter
         if (worksheetPathMap is null)
             return;
 
+        var hasAutoFilter = false;
+        var hasDataValidationNativeMetadata = false;
+        var hasWorksheetNativeMetadata = false;
+        foreach (var sheet in workbook.Sheets)
+        {
+            hasAutoFilter |= sheet.AutoFilter is not null;
+            hasDataValidationNativeMetadata |= XlsxDataValidationNativeMetadataMapper.HasNativeMetadata(sheet);
+            hasWorksheetNativeMetadata |= XlsxWorksheetNativeMetadataBatchWriter.HasMetadata(sheet);
+            if (hasAutoFilter && hasDataValidationNativeMetadata && hasWorksheetNativeMetadata)
+                break;
+        }
+
+        if (!hasAutoFilter && !hasDataValidationNativeMetadata && !hasWorksheetNativeMetadata)
+            return;
+
         using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
-        XlsxWorksheetAutoFilterMapper.Save(session, workbook);
-        XlsxDataValidationNativeMetadataMapper.Save(session, workbook);
-        XlsxWorksheetNativeMetadataBatchWriter.Save(session, workbook);
+        if (hasAutoFilter)
+            XlsxWorksheetAutoFilterMapper.Save(session, workbook);
+        if (hasDataValidationNativeMetadata)
+            XlsxDataValidationNativeMetadataMapper.Save(session, workbook);
+        if (hasWorksheetNativeMetadata)
+            XlsxWorksheetNativeMetadataBatchWriter.Save(session, workbook);
     }
 }

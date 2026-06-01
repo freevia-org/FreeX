@@ -833,6 +833,29 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_WaterfallTotalPointIndices()
+    {
+        var workbook = new Workbook("WaterfallTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Waterfall,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 1)),
+            WaterfallTotalPointIndices = [0, 3],
+        });
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var chart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+        chart.WaterfallTotalPointIndices.Should().Equal(0, 3);
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_ChartLayout()
     {
         var workbook = new Workbook("ChartLayoutTest");

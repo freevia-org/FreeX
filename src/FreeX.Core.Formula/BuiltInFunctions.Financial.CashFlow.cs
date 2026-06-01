@@ -66,15 +66,14 @@ public static partial class BuiltInFunctions
         var ds = datesRaw!;
         if (cf.Count < 2) return ErrorValue.NA;
         if (cf.Count != ds.Count) return ErrorValue.Num;
-        var dates = ds.Select(SerialToDate).ToList();
-        DateTime d0 = dates[0];
+        NormalizeDateSerialsToYearFractions(ds);
         double r = guess;
         for (int iter = 0; iter < 200; iter++)
         {
             double f = 0, df = 0;
             for (int i = 0; i < cf.Count; i++)
             {
-                double t = (dates[i] - d0).TotalDays / 365.0;
+                double t = ds[i];
                 double denom = Math.Pow(1 + r, t);
                 f  += cf[i] / denom;
                 df -= t * cf[i] / (denom * (1 + r));
@@ -113,15 +112,20 @@ public static partial class BuiltInFunctions
         var cf = vals!;
         var ds = datesRaw!;
         if (cf.Count != ds.Count || cf.Count == 0) return ErrorValue.Num;
-        var dates = ds.Select(SerialToDate).ToList();
-        DateTime d0 = dates[0];
+        NormalizeDateSerialsToYearFractions(ds);
         double result = 0;
         for (int i = 0; i < cf.Count; i++)
         {
-            double t = (dates[i] - d0).TotalDays / 365.0;
-            result += cf[i] / Math.Pow(1 + rate, t);
+            result += cf[i] / Math.Pow(1 + rate, ds[i]);
         }
         return NumberResult(result);
+    }
+
+    private static void NormalizeDateSerialsToYearFractions(List<double> serials)
+    {
+        var firstDate = SerialToDate(serials[0]);
+        for (var i = 0; i < serials.Count; i++)
+            serials[i] = (SerialToDate(serials[i]) - firstDate).TotalDays / 365.0;
     }
 
     private static ScalarValue Npv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

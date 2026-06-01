@@ -328,6 +328,8 @@ public class ConditionalFormatTests
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.Core.Calc", "ViewportService.ConditionalFormatIcons.cs"));
 
+        source.Should().Contain("cfContext.IconSetThresholds.TryGetValue");
+        source.Should().Contain("ResolveIconSetIndexFromThresholds");
         source.Should().Contain("stackalloc double[thresholdCount]");
         source.Should().Contain("stackalloc bool[thresholdCount]");
         source.Should().NotContain("new List<(double Value, bool GreaterThanOrEqual)>");

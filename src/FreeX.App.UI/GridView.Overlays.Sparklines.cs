@@ -40,7 +40,7 @@ public partial class GridView
                 Math.Max(1, col.Width - 6),
                 Math.Max(1, row.Height - 6));
 
-            dc.PushClip(new RectangleGeometry(rect));
+            dc.PushClip(GetCellClipGeometry(rect));
             if (sparkline.Kind == SparklineKind.Line)
                 DrawLineSparkline(dc, values, rect, SparklineLinePen);
             else

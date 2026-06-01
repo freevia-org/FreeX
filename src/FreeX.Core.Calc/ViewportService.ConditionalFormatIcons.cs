@@ -19,7 +19,7 @@ public sealed partial class ViewportService
                 return null;
 
             var style = string.IsNullOrWhiteSpace(rule.IconSetStyle) ? "3TrafficLights1" : rule.IconSetStyle!;
-            var iconCount = GetIconSetCount(style);
+            var iconCount = ViewportConditionalFormatEvaluator.GetIconSetCount(style);
             var bucketIndex = ResolveIconSetIndex(rule, cellValue, cache, sheet, workbook, addr, iconCount, cfContext);
 
             if (rule.IconOverrides.Count == iconCount)
@@ -48,6 +48,15 @@ public sealed partial class ViewportService
         CfEvaluationContext cfContext)
     {
         var thresholdCount = iconCount - 1;
+        if (cfContext.IconSetThresholds.TryGetValue(rule, out var cachedThresholds))
+        {
+            return ResolveIconSetIndexFromThresholds(
+                value,
+                cachedThresholds.Values,
+                cachedThresholds.GreaterThanOrEqual,
+                iconCount);
+        }
+
         Span<double> thresholdValues = stackalloc double[thresholdCount];
         Span<bool> thresholdComparisons = stackalloc bool[thresholdCount];
         if (TryResolveIconSetThresholds(
@@ -61,17 +70,26 @@ public sealed partial class ViewportService
                 thresholdValues,
                 thresholdComparisons))
         {
-            var index = 0;
-            for (var i = 0; i < thresholdCount; i++)
-            {
-                if (thresholdComparisons[i] ? value >= thresholdValues[i] : value > thresholdValues[i])
-                    index++;
-            }
-
-            return Math.Clamp(index, 0, iconCount - 1);
+            return ResolveIconSetIndexFromThresholds(value, thresholdValues, thresholdComparisons, iconCount);
         }
 
         return ResolveInterpolatedIconSetIndex(value, cache.Min, cache.Max, iconCount);
+    }
+
+    private static int ResolveIconSetIndexFromThresholds(
+        double value,
+        ReadOnlySpan<double> thresholdValues,
+        ReadOnlySpan<bool> thresholdComparisons,
+        int iconCount)
+    {
+        var index = 0;
+        for (var i = 0; i < thresholdValues.Length; i++)
+        {
+            if (thresholdComparisons[i] ? value >= thresholdValues[i] : value > thresholdValues[i])
+                index++;
+        }
+
+        return Math.Clamp(index, 0, iconCount - 1);
     }
 
     private static int ResolveInterpolatedIconSetIndex(double value, double min, double max, int iconCount)
@@ -124,8 +142,4 @@ public sealed partial class ViewportService
         return true;
     }
 
-    private static int GetIconSetCount(string style) =>
-        style.Length > 0 && char.IsDigit(style[0])
-            ? Math.Clamp(style[0] - '0', 3, 5)
-            : 3;
 }
