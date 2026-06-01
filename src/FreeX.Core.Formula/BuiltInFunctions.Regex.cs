@@ -20,7 +20,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue RegexTestScalar(ScalarValue value, Regex regex)
     {
         if (value is ErrorValue e) return e;
-        return new BoolValue(regex.IsMatch(ToText(value)));
+        try
+        {
+            return new BoolValue(regex.IsMatch(ToText(value)));
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return ErrorValue.Value;
+        }
     }
 
     private static ScalarValue RegexExtract(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -43,7 +50,17 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue e) return e;
 
         var text = ToText(value);
-        var matches = regex.Matches(text);
+        MatchCollection matches;
+        try
+        {
+            matches = regex.Matches(text);
+            _ = matches.Count;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return ErrorValue.Value;
+        }
+
         if (matches.Count == 0)
             return ErrorValue.NA;
 
@@ -95,19 +112,26 @@ public static partial class BuiltInFunctions
         if (value is ErrorValue e) return e;
 
         var text = ToText(value);
-        if (occurrence == 0)
-            return TextResult(regex.Replace(text, replacement));
+        try
+        {
+            if (occurrence == 0)
+                return TextResult(regex.Replace(text, replacement));
 
-        var matches = regex.Matches(text);
-        var matchIndex = occurrence > 0 ? occurrence - 1 : matches.Count + occurrence;
-        if (matchIndex < 0 || matchIndex >= matches.Count)
-            return TextResult(text);
+            var matches = regex.Matches(text);
+            var matchIndex = occurrence > 0 ? occurrence - 1 : matches.Count + occurrence;
+            if (matchIndex < 0 || matchIndex >= matches.Count)
+                return TextResult(text);
 
-        var match = matches[matchIndex];
-        return TextResult(
-            text[..match.Index] +
-            match.Result(replacement) +
-            text[(match.Index + match.Length)..]);
+            var match = matches[matchIndex];
+            return TextResult(
+                text[..match.Index] +
+                match.Result(replacement) +
+                text[(match.Index + match.Length)..]);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return ErrorValue.Value;
+        }
     }
 
     private static bool TryCreateRegex(
@@ -132,7 +156,7 @@ public static partial class BuiltInFunctions
 
         try
         {
-            regex = new Regex(ToText(pattern), options, TimeSpan.FromSeconds(1));
+            regex = new Regex(ToText(pattern), options, FormulaSafetyLimits.RegexTimeout);
             return true;
         }
         catch (ArgumentException)

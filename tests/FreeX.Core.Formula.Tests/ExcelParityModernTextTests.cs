@@ -460,6 +460,21 @@ public sealed class ExcelParityModernTextTests
         _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
     }
 
+    [Fact]
+    public void RegexFunctions_ReturnValueWhenMatchTimesOut()
+    {
+        var hostileText = new string('a', 10_000) + "!";
+        var formulas = new[]
+        {
+            $"=REGEXTEST(\"{hostileText}\",\"^(a+)+$\")",
+            $"=REGEXEXTRACT(\"{hostileText}\",\"^(a+)+$\")",
+            $"=REGEXREPLACE(\"{hostileText}\",\"^(a+)+$\",\"x\")"
+        };
+
+        foreach (var formula in formulas)
+            _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
+    }
+
     private static Sheet Sheet(params (int Row, int Col, ScalarValue Value)[] cells)
     {
         var sheet = new Sheet(SheetId.New(), "S");
