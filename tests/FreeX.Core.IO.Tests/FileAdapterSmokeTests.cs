@@ -20292,8 +20292,10 @@ public partial class FileAdapterSmokeTests
             archive.GetEntry("xl/pivotTables/pivotTable1.xml").Should().NotBeNull();
             var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
             workbookXml.ToString().Should().Contain("pivotCaches");
-            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-            worksheetXml.ToString().Should().Contain("pivotTableDefinition");
+            // The pivot table is linked to its worksheet through a schema-valid worksheet-rels pivotTable
+            // relationship (not a worksheet-embedded pivotTableDefinition element, which is not valid OOXML).
+            var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+            worksheetRelsXml.ToString().Should().Contain("relationships/pivotTable");
             var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
             XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
             pivotXml.ToString().Should().Contain("rowFields");
@@ -20325,9 +20327,10 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("enableDrill")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("asteriskTotals")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("multipleFieldFilters")!.Value.Should().Be("0");
-            pivotXml.Root!.Attribute("enableFieldDialog")!.Value.Should().Be("0");
+            // OOXML uses disableFieldList (inverse of EnableFieldDialog=false => "1") and editData.
+            pivotXml.Root!.Attribute("disableFieldList")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("enableFieldProperties")!.Value.Should().Be("0");
-            pivotXml.Root!.Attribute("enableDataValueEditing")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("editData")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("indent")!.Value.Should().Be("4");
             pivotXml.Root!.Attribute("altText")!.Value.Should().Be("Sales pivot");
             pivotXml.Root!.Attribute("altTextSummary")!.Value.Should().Be("Pivot summary for sales");
@@ -20642,13 +20645,16 @@ public partial class FileAdapterSmokeTests
             cacheXml.Should().Contain("refreshOnLoad=\"0\"");
             cacheXml.Should().Contain("saveData=\"0\"");
             cacheXml.Should().Contain("enableRefresh=\"0\"");
-            cacheXml.Should().Contain("preserveSourceSortFilter=\"0\"");
             cacheXml.Should().Contain("missingItemsLimit=\"0\"");
             cacheXml.Should().Contain("recordCount=\"2\"");
             cacheXml.Should().Contain("createdVersion=\"8\"");
             cacheXml.Should().Contain("minRefreshableVersion=\"4\"");
             cacheXml.Should().Contain("refreshedVersion=\"7\"");
             cacheXml.Should().Contain("refreshedBy=\"FreeX Tests\"");
+            // preserveSourceSortFilter and the ISO refreshed date are not OOXML cacheDefinition attributes;
+            // FreeX persists them in a schema-valid extLst extension (keeps the cache part Excel-openable).
+            cacheXml.Should().Contain("{FREEX-PIVOT-CACHE-EXT}");
+            cacheXml.Should().Contain("preserveSourceSortFilter=\"0\"");
             cacheXml.Should().Contain("refreshedDateIso=\"2026-05-24T12:34:56Z\"");
         }
 
@@ -21061,12 +21067,17 @@ public partial class FileAdapterSmokeTests
             pivotXml.ToString().Should().Contain("value2=\"West\"");
             pivotXml.ToString().Should().Contain("pivotSorts");
             pivotXml.ToString().Should().Contain("direction=\"descending\"");
-            pivotXml.ToString().Should().Contain("showGrandTotals=\"1\"");
-            pivotXml.ToString().Should().Contain("showRowGrandTotals=\"0\"");
-            pivotXml.ToString().Should().Contain("showColumnGrandTotals=\"1\"");
+            // OOXML grand-total attributes are rowGrandTotals / colGrandTotals (no showGrandTotals).
+            pivotXml.ToString().Should().Contain("rowGrandTotals=\"0\"");
+            pivotXml.ToString().Should().Contain("colGrandTotals=\"1\"");
+            // repeatItemLabels has no base-schema home, so it is persisted in the FreeX tableProps extension.
+            pivotXml.ToString().Should().Contain("{FREEX-PIVOT-TABLE-EXT}");
             pivotXml.ToString().Should().Contain("repeatItemLabels=\"0\"");
-            pivotXml.ToString().Should().Contain("blankLineAfterItems=\"1\"");
-            pivotXml.ToString().Should().Contain("reportLayout=\"compact\"");
+            // blankLineAfterItems maps to per-field insertBlankRow; Compact layout maps to the OOXML
+            // compact/outline/compactData flags (there is no reportLayout attribute).
+            pivotXml.ToString().Should().Contain("insertBlankRow=\"1\"");
+            pivotXml.ToString().Should().Contain("compact=\"1\"");
+            pivotXml.ToString().Should().Contain("outline=\"1\"");
             pivotXml.ToString().Should().Contain("name=\"PivotStyleMedium9\"");
             pivotXml.ToString().Should().Contain("showRowHeaders=\"0\"");
             pivotXml.ToString().Should().Contain("showColHeaders=\"1\"");

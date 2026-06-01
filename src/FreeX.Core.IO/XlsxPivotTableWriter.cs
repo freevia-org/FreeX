@@ -55,15 +55,15 @@ internal static partial class XlsxPivotTableWriter
         if (workbookRoot is not null && pivotCacheElements.Count > 0)
         {
             workbookRoot.Elements(workbookNs + "pivotCaches").Remove();
-            var sheetsElement = workbookRoot.Element(workbookNs + "sheets");
+            // CT_PivotCaches has no 'count' attribute in the OOXML schema (unlike most other collection
+            // wrappers); emitting one makes the workbook schema-invalid and Excel rejects it.
             var pivotCachesElement = new XElement(
                 workbookNs + "pivotCaches",
-                new XAttribute("count", pivotCacheElements.Count.ToString(CultureInfo.InvariantCulture)),
                 pivotCacheElements);
-            if (sheetsElement is not null)
-                sheetsElement.AddBeforeSelf(pivotCachesElement);
-            else
-                workbookRoot.Add(pivotCachesElement);
+            // Per CT_Workbook, pivotCaches comes after sheets/definedNames/calcPr/customWorkbookViews and
+            // before smartTagPr/webPublishing/extLst. Inserting it before <sheets> (as a naive
+            // AddBeforeSelf would) is schema-invalid and makes Excel reject the workbook.
+            InsertWorkbookPivotCaches(workbookRoot, workbookNs, pivotCachesElement);
         }
 
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
@@ -97,6 +97,26 @@ internal static partial class XlsxPivotTableWriter
         }
     }
 
+    // CT_Workbook elements that must come after <pivotCaches>. The element is inserted immediately
+    // before the first of these present; otherwise it is appended after the existing leading elements.
+    private static readonly HashSet<string> WorkbookElementsAfterPivotCaches = new(StringComparer.Ordinal)
+    {
+        "smartTagPr", "smartTagTypes", "webPublishing", "fileRecoveryPr", "webPublishObjects", "extLst",
+    };
+
+    private static void InsertWorkbookPivotCaches(XElement workbookRoot, XNamespace workbookNs, XElement pivotCaches)
+    {
+        var anchor = workbookRoot.Elements()
+            .FirstOrDefault(element => WorkbookElementsAfterPivotCaches.Contains(element.Name.LocalName));
+        if (anchor is not null)
+        {
+            anchor.AddBeforeSelf(pivotCaches);
+            return;
+        }
+
+        workbookRoot.Add(pivotCaches);
+    }
+
     private static void WriteWorksheetPivotTables(
         ZipArchive archive,
         string worksheetPath,
@@ -118,7 +138,7 @@ internal static partial class XlsxPivotTableWriter
             ? XlsxPackageXmlEditor.LoadXml(worksheetRelsEntry)
             : new XDocument(new XElement(packageRelNs + "Relationships"));
 
-        var references = new List<XElement>();
+        var wroteAnyPivot = false;
         foreach (var pivot in sheet.PivotTables)
         {
             if (!cachePartById.TryGetValue(pivot.CacheId, out var cachePath))
@@ -135,20 +155,24 @@ internal static partial class XlsxPivotTableWriter
                         new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(pivotPath, cachePath))))));
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{pivotPath}", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml");
 
-            var pivotRelId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
+            // A pivot table is linked to its host worksheet purely through a worksheet-rels pivotTable
+            // relationship. CT_Worksheet has no element that references a pivotTableDefinition, so adding
+            // one to the worksheet XML (as earlier revisions did) produced schema-invalid output that
+            // Excel rejects.
+            XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
                 worksheetRelsXml,
                 packageRelNs,
                 worksheetPath,
                 pivotPath,
                 "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable");
-            references.Add(new XElement(workbookNs + "pivotTableDefinition", new XAttribute(relNs + "id", pivotRelId)));
+            wroteAnyPivot = true;
         }
 
-        if (references.Count == 0)
+        if (!wroteAnyPivot)
             return;
 
+        // Drop any stale worksheet-embedded pivot reference from older saves, then persist the updated rels.
         worksheetXml.Root?.Elements(workbookNs + "pivotTableDefinition").Remove();
-        worksheetXml.Root?.Add(references);
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetRelsPath, worksheetRelsXml);
     }
@@ -172,11 +196,14 @@ internal static partial class XlsxPivotTableWriter
             ToOptionalIntAttribute("createdVersion", pivot.CreatedVersion),
             new XAttribute("updatedVersion", (pivot.UpdatedVersion ?? 8).ToString(CultureInfo.InvariantCulture)),
             new XAttribute("minRefreshableVersion", (pivot.MinRefreshableVersion ?? 3).ToString(CultureInfo.InvariantCulture)),
-            new XAttribute("showGrandTotals", pivot.ShowGrandTotals ? "1" : "0"),
-            new XAttribute("showRowGrandTotals", pivot.ShowRowGrandTotals ? "1" : "0"),
-            new XAttribute("showColumnGrandTotals", pivot.ShowColumnGrandTotals ? "1" : "0"),
-            new XAttribute("repeatItemLabels", pivot.RepeatItemLabels ? "1" : "0"),
-            new XAttribute("blankLineAfterItems", pivot.BlankLineAfterItems ? "1" : "0"),
+            // CT_pivotTableDefinition declares grand-total visibility as 'rowGrandTotals' / 'colGrandTotals'.
+            // There is no 'showGrandTotals' / 'showRowGrandTotals' / 'showColumnGrandTotals' attribute; the
+            // earlier names were schema-invalid and Excel rejected them.
+            new XAttribute("rowGrandTotals", pivot.ShowRowGrandTotals ? "1" : "0"),
+            new XAttribute("colGrandTotals", pivot.ShowColumnGrandTotals ? "1" : "0"),
+            // repeatItemLabels / blankLineAfterItems are NOT pivotTableDefinition attributes in OOXML; they
+            // live on each CT_PivotField (as repeatItemLabels / insertBlankRow). They are emitted per-field
+            // in ToPivotFieldsXml below; emitting them on the definition is schema-invalid.
             new XAttribute("showHeaders", pivot.ShowFieldHeaders ? "1" : "0"),
             new XAttribute("showDataTips", pivot.ShowContextualTooltips ? "1" : "0"),
             new XAttribute("showMemberPropertyTips", pivot.ShowPropertiesInTooltips ? "1" : "0"),
@@ -190,20 +217,27 @@ internal static partial class XlsxPivotTableWriter
             new XAttribute("enableDrill", pivot.EnableDrill ? "1" : "0"),
             new XAttribute("asteriskTotals", pivot.AsteriskTotals ? "1" : "0"),
             new XAttribute("multipleFieldFilters", pivot.MultipleFieldFilters ? "1" : "0"),
-            new XAttribute("enableFieldDialog", pivot.EnableFieldDialog ? "1" : "0"),
+            // OOXML spells these as disableFieldList (inverse of EnableFieldDialog) and editData (the
+            // EnableDataValueEditing flag). The earlier enableFieldDialog / enableDataValueEditing names
+            // are not declared on CT_pivotTableDefinition and made Excel reject the workbook.
+            new XAttribute("disableFieldList", pivot.EnableFieldDialog ? "0" : "1"),
             new XAttribute("enableFieldProperties", pivot.EnableFieldProperties ? "1" : "0"),
-            new XAttribute("enableDataValueEditing", pivot.EnableDataValueEditing ? "1" : "0"),
+            new XAttribute("editData", pivot.EnableDataValueEditing ? "1" : "0"),
             new XAttribute("itemPrintTitles", pivot.PrintTitles ? "1" : "0"),
             new XAttribute("fieldPrintTitles", pivot.PrintTitles ? "1" : "0"),
             new XAttribute("printDrill", pivot.PrintExpandCollapseButtons ? "1" : "0"),
             new XAttribute("indent", Math.Clamp(pivot.CompactRowLabelIndent, 0, 15).ToString(CultureInfo.InvariantCulture)),
             OptionalAttribute("altText", pivot.AltTextTitle),
             OptionalAttribute("altTextSummary", pivot.AltTextDescription),
-            OptionalAttribute("dataCaption", pivot.DataCaption),
+            // dataCaption is a REQUIRED attribute on CT_pivotTableDefinition; Excel defaults it to
+            // "Values" when unspecified. Omitting it produces schema-invalid OOXML.
+            new XAttribute("dataCaption", string.IsNullOrWhiteSpace(pivot.DataCaption) ? "Values" : pivot.DataCaption),
             OptionalAttribute("grandTotalCaption", pivot.GrandTotalCaption),
             OptionalAttribute("missingCaption", pivot.MissingCaption),
             OptionalAttribute("errorCaption", pivot.ErrorCaption),
-            new XAttribute("reportLayout", ToPivotReportLayoutText(pivot.ReportLayout)),
+            // OOXML has no single 'reportLayout' attribute; the layout is expressed through
+            // compact / compactData / outline / outlineData / gridDropZones on CT_pivotTableDefinition.
+            PivotReportLayoutAttributes(pivot.ReportLayout),
             new XElement(
                 workbookNs + "location",
                 new XAttribute("ref", pivot.TargetRange.ToString()),
@@ -226,7 +260,29 @@ internal static partial class XlsxPivotTableWriter
                 new XAttribute("showColHeaders", pivot.ShowColumnHeaders ? "1" : "0"),
                 new XAttribute("showRowStripes", pivot.ShowRowStripes ? "1" : "0"),
                 new XAttribute("showColStripes", pivot.ShowColumnStripes ? "1" : "0"),
-                new XAttribute("showLastColumn", "1"))));
+                new XAttribute("showLastColumn", "1")),
+            FreeXPivotTableExtension(pivot, workbookNs)));
+
+    // Persists pivot-table flags with no base-schema attribute (repeatItemLabels only exists in the x14
+    // extension) inside a schema-valid extLst/ext block. Returns null when nothing needs preserving.
+    private static XElement? FreeXPivotTableExtension(PivotTableModel pivot, XNamespace workbookNs)
+    {
+        XNamespace freeXNs = FreeXPivotExtensionNamespace;
+        var payload = new XElement(freeXNs + "tableProps");
+        if (!pivot.RepeatItemLabels)
+            payload.SetAttributeValue("repeatItemLabels", "0");
+
+        if (!payload.HasAttributes)
+            return null;
+
+        return new XElement(
+            workbookNs + "extLst",
+            new XElement(
+                workbookNs + "ext",
+                new XAttribute("uri", FreeXPivotTableExtensionUri),
+                new XAttribute(XNamespace.Xmlns + "fx", FreeXPivotExtensionNamespace),
+                payload));
+    }
 
     private static XElement ToPivotFieldsXml(PivotTableModel pivot, XNamespace workbookNs)
     {
@@ -244,11 +300,20 @@ internal static partial class XlsxPivotTableWriter
             Enumerable.Range(0, Math.Max(0, maxFieldIndex + 1)).Select(index =>
             {
                 var metadataField = FindPivotField(pivot, index);
+                var isAxisField =
+                    pivot.RowFields.Any(field => field.SourceFieldIndex == index) ||
+                    pivot.ColumnFields.Any(field => field.SourceFieldIndex == index);
                 return new XElement(
                     workbookNs + "pivotField",
                     pivot.RowFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisRow") : null,
                     pivot.ColumnFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisCol") : null,
                     pivot.PageFields.Any(field => field.SourceFieldIndex == index) ? new XAttribute("axis", "axisPage") : null,
+                    // insertBlankRow is the per-field flag for a blank line after items in OOXML
+                    // (CT_PivotField); it is not a pivotTableDefinition attribute. repeatItemLabels has no
+                    // home in the base spreadsheetml schema (it only exists in the x14 extension), so it is
+                    // intentionally not emitted to keep output schema-valid; the modeled value is preserved
+                    // and round-trips through the native JSON adapter.
+                    isAxisField && pivot.BlankLineAfterItems ? new XAttribute("insertBlankRow", "1") : null,
                     pivot.ShowSubtotals ? new XAttribute("defaultSubtotal", "1") : null,
                     pivot.ShowSubtotals && pivot.SubtotalPlacement == PivotSubtotalPlacement.Top ? new XAttribute("subtotalTop", "1") : null,
                     new XAttribute("showAll", metadataField?.ShowAll == true ? "1" : "0"),
