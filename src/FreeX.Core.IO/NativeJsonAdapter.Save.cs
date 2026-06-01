@@ -79,7 +79,7 @@ public sealed partial class NativeJsonAdapter
             }).ToList(),
             WatchedCells = workbook.WatchedCells.Select(address =>
             {
-                var sheet = workbook.Sheets.FirstOrDefault(s => s.Id.Equals(address.Sheet));
+                var sheet = workbook.GetSheet(address.Sheet);
                 return sheet is null || !IsValidAddressOnSheet(address, sheet.Id)
                     ? null
                     : new WatchedCellDto { SheetName = sheet.Name, Address = address.ToA1() };
@@ -93,7 +93,7 @@ public sealed partial class NativeJsonAdapter
                 User = string.IsNullOrWhiteSpace(scenario.User) ? null : scenario.User,
                 ChangingCells = scenario.ChangingCells.Select(change =>
                 {
-                    var sheet = workbook.Sheets.FirstOrDefault(s => s.Id.Equals(change.Address.Sheet));
+                    var sheet = workbook.GetSheet(change.Address.Sheet);
                     if (sheet is null || !IsValidAddressOnSheet(change.Address, sheet.Id))
                         return null;
 
