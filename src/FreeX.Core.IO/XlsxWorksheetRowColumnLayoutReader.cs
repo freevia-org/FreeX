@@ -21,6 +21,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         var columnWidths = new Dictionary<uint, double>();
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
         var cachedFormulaErrors = new Dictionary<(uint Row, uint Col), ErrorValue>();
+        var hasStyleOnlyCells = false;
 
         var root = worksheetXml.Root;
         if (root is not null)
@@ -36,13 +37,15 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                     ReadRowLayout(row, rowNumber, hiddenRows, rowOutlineLevels, groupHiddenRows, rowHeights);
 
                 foreach (var cell in row.Elements(cellName))
-                    XlsxWorksheetCellLayoutReader.ReadCell(
+                {
+                    hasStyleOnlyCells |= XlsxWorksheetCellLayoutReader.ReadCell(
                         cell,
                         formulaName,
                         valueName,
                         inlineStringName,
                         explicitStyleOnlyCells,
                         cachedFormulaErrors);
+                }
             }
 
             foreach (var cols in root.Elements(worksheetNs + "cols"))
@@ -62,7 +65,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 groupHiddenCols,
                 rowHeights,
                 columnWidths),
-            new XlsxWorksheetCellLayout(cachedFormulaErrors, explicitStyleOnlyCells));
+            new XlsxWorksheetCellLayout(cachedFormulaErrors, explicitStyleOnlyCells, hasStyleOnlyCells));
     }
 
     private static void ReadRowLayout(

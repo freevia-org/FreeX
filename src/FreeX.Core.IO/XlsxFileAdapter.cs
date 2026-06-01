@@ -93,11 +93,15 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var xlsxCustomViews = workbookMetadata.CustomViews;
 
         packageStream.Position = 0;
-        var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(packageStream);
+        var sheetXmlLayoutWarningCount = warnings.Count;
+        var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, warnings);
+        var shouldStripStyleOnlyCells = ShouldStripClosedXmlStyleOnlyCells(
+            sheetXmlLayout,
+            warnings.Count != sheetXmlLayoutWarningCount);
+        packageStream.Position = 0;
+        var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(packageStream, shouldStripStyleOnlyCells);
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
-        packageStream.Position = 0;
-        var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, warnings);
         var workbook = new Workbook("Untitled");
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = workbookMetadata.Uses1904DateSystem;
@@ -409,6 +413,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         return workbook;
     }
 
+    private static bool ShouldStripClosedXmlStyleOnlyCells(
+        IReadOnlyDictionary<string, SheetXmlLayout> sheetXmlLayout,
+        bool sheetXmlLayoutHadWarnings) =>
+        sheetXmlLayoutHadWarnings ||
+        sheetXmlLayout.Count == 0 ||
+        sheetXmlLayout.Values.Any(static layout => layout.HasStyleOnlyCells);
+
     private static void LoadMergedRegions(IXLWorksheet xlSheet, Sheet sheet)
     {
         foreach (var xlMerge in xlSheet.MergedRanges)
@@ -584,10 +595,12 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         bool CanReuseBufferForSnapshot);
 
     private static (MemoryStream PackageStream, XLWorkbook Workbook) OpenClosedXmlWorkbookWithSanitizationFallback(
-        MemoryStream packageStream)
+        MemoryStream packageStream,
+        bool stripStyleOnlyCells)
     {
         var closedXmlPackageStream = CreateClosedXmlParsePackage(
             packageStream,
+            stripStyleOnlyCells,
             removeUnsupportedConditionalFormatting: false);
         try
         {
@@ -599,11 +612,12 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 closedXmlPackageStream.Dispose();
 
             if (IsClosedXmlConditionalFormattingLoadFailure(ex))
-                return OpenClosedXmlWorkbookWithConditionalFormattingStripped(packageStream);
+                return OpenClosedXmlWorkbookWithConditionalFormattingStripped(packageStream, stripStyleOnlyCells);
 
             packageStream.Position = 0;
             var fallbackPackageStream = CreateClosedXmlParsePackage(
                 packageStream,
+                stripStyleOnlyCells,
                 removeUnsupportedConditionalFormatting: true,
                 removeAllConditionalFormatting: false);
             try
@@ -615,17 +629,19 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 if (!ReferenceEquals(fallbackPackageStream, packageStream))
                     fallbackPackageStream.Dispose();
 
-                return OpenClosedXmlWorkbookWithConditionalFormattingStripped(packageStream);
+                return OpenClosedXmlWorkbookWithConditionalFormattingStripped(packageStream, stripStyleOnlyCells);
             }
         }
     }
 
     private static (MemoryStream PackageStream, XLWorkbook Workbook) OpenClosedXmlWorkbookWithConditionalFormattingStripped(
-        MemoryStream packageStream)
+        MemoryStream packageStream,
+        bool stripStyleOnlyCells)
     {
         packageStream.Position = 0;
         var conditionalFormattingStrippedPackageStream = CreateClosedXmlParsePackage(
             packageStream,
+            stripStyleOnlyCells,
             removeUnsupportedConditionalFormatting: true,
             removeAllConditionalFormatting: true);
         try
@@ -653,10 +669,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
     private static MemoryStream CreateClosedXmlParsePackage(
         MemoryStream packageStream,
+        bool stripStyleOnlyCells,
         bool removeUnsupportedConditionalFormatting,
         bool removeAllConditionalFormatting = false)
     {
-        var styleOptimizedPackage = XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream);
+        var styleOptimizedPackage = stripStyleOnlyCells
+            ? XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream)
+            : packageStream;
         try
         {
             var sanitizedPackage = XlsxClosedXmlLoadPackageSanitizer.Create(
