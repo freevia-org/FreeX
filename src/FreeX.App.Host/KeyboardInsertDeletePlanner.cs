@@ -62,10 +62,13 @@ public static class KeyboardInsertDeletePlanner
             case "up" or "u" or "shift up" or "shift cells up" when !insert:
                 choice = KeyboardInsertDeleteDialogChoice.ShiftUp;
                 return true;
+            case "r" or "row" or "rows" or "entire row" or "entire rows" when !insert:
+                choice = KeyboardInsertDeleteDialogChoice.EntireRow;
+                return true;
             case "row" or "rows" or "entire row" or "entire rows":
                 choice = KeyboardInsertDeleteDialogChoice.EntireRow;
                 return true;
-            case "column" or "columns" or "col" or "cols" or "entire column" or "entire columns":
+            case "c" or "column" or "columns" or "col" or "cols" or "entire column" or "entire columns":
                 choice = KeyboardInsertDeleteDialogChoice.EntireColumn;
                 return true;
             default:
