@@ -208,10 +208,13 @@ public sealed partial class XlsxFileAdapter
         }
 
         packageStream.Position = 0;
-        PreserveSourcePackageParts(workbook, packageStream);
+        var sourceParts = PreserveSourcePackageParts(workbook, packageStream);
 
-        packageStream.Position = 0;
-        XlsxHeaderFooterPictureReaderWriter.RemoveClearedPictures(packageStream, workbook);
+        if (sourceParts.HasDrawings)
+        {
+            packageStream.Position = 0;
+            XlsxHeaderFooterPictureReaderWriter.RemoveClearedPictures(packageStream, workbook);
+        }
 
         if (workbook.IndexedColors.Colors.Count > 0)
         {
@@ -219,8 +222,11 @@ public sealed partial class XlsxFileAdapter
             XlsxIndexedColorPaletteMapper.Save(packageStream, workbook);
         }
 
-        packageStream.Position = 0;
-        XlsxWorkbookMetadataWriter.SaveSourcePackageReplayMetadata(packageStream, workbook);
+        if (featurePlan.HasWorkbookReplayMetadata)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SaveSourcePackageReplayMetadata(packageStream, workbook);
+        }
 
         SaveSourcePackageIndependentPostProcessingMetadata();
 
@@ -310,12 +316,14 @@ public sealed partial class XlsxFileAdapter
         public bool HasStructuredTables;
         public bool HasPivotTables;
         public bool HasPivotCustomNumberFormats;
+        public bool HasWorkbookReplayMetadata;
         public bool HasReplayMetadata;
         public bool HasSourceIndependentMetadata;
 
         public static XlsxPostProcessingFeaturePlan Create(Workbook workbook)
         {
             var plan = new XlsxPostProcessingFeaturePlan();
+            plan.HasWorkbookReplayMetadata = XlsxWorkbookMetadataWriter.HasSourcePackageReplayMetadata(workbook);
             foreach (var sheet in workbook.Sheets)
                 plan.Include(sheet);
 
