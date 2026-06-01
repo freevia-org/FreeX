@@ -603,6 +603,30 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void NameBoxEnter_WithPaddedDefinedName_SelectsNamedRangeAndRefreshesFormulaBarFromStartCell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var expectedRange = new GridRange(
+                new CellAddress(harness.CurrentSheetId, 2, 2),
+                new CellAddress(harness.CurrentSheetId, 3, 3));
+
+            harness.SetCellText(2, 2, "padded name start");
+            harness.DefineNamedRange("SalesData", expectedRange);
+            harness.SelectActiveCell(1, 1);
+            harness.SetCellAddressBoxText("  SalesData  ");
+
+            harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
+
+            harness.SelectedRange.Should().Be(expectedRange);
+            harness.CellAddressBoxText.Should().Be("B2:C3");
+            harness.FormulaBarText.Should().Be("padded name start");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void NameBoxEnter_WithInvalidReference_DoesNotChangeSelectionOrFormulaBar()
     {
         StaTestRunner.Run(() =>

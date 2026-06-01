@@ -6,7 +6,8 @@ public enum RibbonKeyTipBadgeKind
 {
     Command,
     Tab,
-    CollapsedGroup
+    CollapsedGroup,
+    ComboBox
 }
 
 public static class RibbonKeyTipOverlayPlacement
@@ -14,6 +15,7 @@ public static class RibbonKeyTipOverlayPlacement
     // Excel shows tab keytips a few pixels beneath the tab label rather than
     // straddling the bottom edge as command keytips do.
     private const double TabBelowGap = 2;
+    private const double ComboBoxBelowGap = 2;
     private const double TitleBarCommandBelowGap = 2;
     private const double TitleBarCommandMaxTop = 34;
     private const double TitleBarCommandMaxHeight = 30;
@@ -32,6 +34,9 @@ public static class RibbonKeyTipOverlayPlacement
             // instead of down in the caption/chevron area.
             RibbonKeyTipBadgeKind.CollapsedGroup =>
                 elementBounds.Top + (elementBounds.Height / 2) - (badgeSize.Height / 2),
+            // Combo boxes are editable field controls; hang badges below the
+            // selector frame so they do not cover the selected value or arrow.
+            RibbonKeyTipBadgeKind.ComboBox => elementBounds.Bottom + ComboBoxBelowGap,
             // Compact title-bar commands are QAT buttons; Excel places those badges below the icons.
             RibbonKeyTipBadgeKind.Command when IsCompactTitleBarCommand(elementBounds) =>
                 elementBounds.Bottom + TitleBarCommandBelowGap,
