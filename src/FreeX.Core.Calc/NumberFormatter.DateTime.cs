@@ -87,6 +87,84 @@ public static partial class NumberFormatter
         catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
     }
 
+    private static bool ShouldAttemptSimpleDateTimeFormat(string formatString)
+    {
+        if (formatString.IndexOf(';') >= 0 ||
+            (formatString.Length > 0 && formatString[0] == '['))
+        {
+            return ShouldFormatDateTimeValue(SplitSections(formatString));
+        }
+
+        return HasUnquotedDateTimeTokenWithoutNumericPlaceholder(formatString);
+    }
+
+    private static bool ShouldFormatDateTimeValue(string[] sections)
+    {
+        for (var i = 0; i < sections.Length; i++)
+        {
+            var (_, format) = NumberFormatColorMapper.ExtractColor(sections[i]);
+            if (TryResolveSpecialDateTimeLocaleToken(format, out _))
+                return true;
+
+            format = PreserveLocaleCurrencyTokens(format, out _, out _);
+            if (DateTimeElapsedTokenRegex.IsMatch(format))
+                return true;
+
+            format = DateTimeBracketDirectiveRegex.Replace(format, "");
+            format = RemoveSpacingAndFillDirectives(format);
+            if (IsDateTimeFormat(format))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasUnquotedDateTimeTokenWithoutNumericPlaceholder(string format)
+    {
+        var hasDateTimeToken = false;
+        var inQuote = false;
+
+        for (var i = 0; i < format.Length; i++)
+        {
+            var ch = format[i];
+            if (ch == '\\')
+            {
+                i++;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (inQuote)
+                continue;
+
+            switch (ch)
+            {
+                case '0':
+                case '#':
+                    return false;
+                case 'y':
+                case 'Y':
+                case 'd':
+                case 'D':
+                case 'h':
+                case 'H':
+                case 's':
+                case 'S':
+                case 'm':
+                case 'M':
+                    hasDateTimeToken = true;
+                    break;
+            }
+        }
+
+        return hasDateTimeToken;
+    }
+
     private static string FormatDateTimeValue(
         DateTime dateTime,
         string excelFormat,

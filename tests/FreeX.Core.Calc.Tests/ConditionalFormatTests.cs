@@ -230,6 +230,75 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void ConditionalFormats_StackMatchingDifferentialStyles()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var range = new GridRange(address, address);
+
+        sheet.SetCell(address, Cell.FromValue(new NumberValue(5)));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            Priority = 1,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0",
+            FormatIfTrue = new CellStyle { Bold = true }
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            Priority = 2,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0",
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 199, 206) }
+        });
+
+        var vp = GetViewport(wb, sheet);
+        var style = GetCell(vp, 1, 1).Style!;
+
+        style.Bold.Should().BeTrue();
+        style.FillColor.Should().Be(new CellColor(255, 199, 206));
+    }
+
+    [Fact]
+    public void ConditionalFormats_StopIfTruePreventsLowerPriorityStyles()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var range = new GridRange(address, address);
+
+        sheet.SetCell(address, Cell.FromValue(new NumberValue(5)));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            Priority = 1,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0",
+            StopIfTrue = true,
+            FormatIfTrue = new CellStyle { Bold = true }
+        });
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = range,
+            Priority = 2,
+            RuleType = CfRuleType.CellValue,
+            Operator = CfOperator.GreaterThan,
+            Value1 = "0",
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(255, 199, 206) }
+        });
+
+        var vp = GetViewport(wb, sheet);
+        var style = GetCell(vp, 1, 1).Style!;
+
+        style.Bold.Should().BeTrue();
+        style.FillColor.Should().NotBe(new CellColor(255, 199, 206));
+    }
+
+    [Fact]
     public void CellValue_Between_AppliesOnlyWhenInRange()
     {
         // Arrange
@@ -427,6 +496,64 @@ public class ConditionalFormatTests
         GetCell(vp, 1, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3Arrows", 0, 3, true));
         GetCell(vp, 2, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3Arrows", 1, 3, true));
         GetCell(vp, 3, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("3Arrows", 2, 3, true));
+    }
+
+    [Fact]
+    public void IconSet_ResolvesPercentileFormulaThresholdsAndStrictComparison()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        for (uint row = 1; row <= 5; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), Cell.FromValue(new NumberValue(row * 10)));
+
+        var cf = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "4Arrows"
+        };
+        cf.IconSetThresholds.AddRange([
+            new CfThresholdModel(CfThresholdType.Number, "20", GreaterThanOrEqual: false),
+            new CfThresholdModel(CfThresholdType.Percentile, "50"),
+            new CfThresholdModel(CfThresholdType.Formula, "$A$5")
+        ]);
+        sheet.ConditionalFormats.Add(cf);
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 2, 1).ConditionalIcon.Should().Be(
+            new ConditionalFormatIcon("4Arrows", 0, 4, true),
+            "gte=false should keep a value equal to the first threshold in the lower bucket");
+        GetCell(vp, 3, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("4Arrows", 2, 4, true));
+        GetCell(vp, 5, 1).ConditionalIcon.Should().Be(new ConditionalFormatIcon("4Arrows", 3, 4, true));
+    }
+
+    [Fact]
+    public void ColorScale_ResolvesFormulaMidpointThreshold()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(0)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(50)));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), Cell.FromValue(new NumberValue(100)));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+            MinThresholdType = CfThresholdType.Min,
+            MidThresholdType = CfThresholdType.Formula,
+            MidThresholdValue = "$A$2",
+            MaxThresholdType = CfThresholdType.Max,
+            MinColor = new RgbColor(0, 0, 255),
+            MidColor = new RgbColor(255, 255, 255),
+            MaxColor = new RgbColor(255, 0, 0)
+        });
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 2, 1).Style!.FillColor.Should().Be(new CellColor(255, 255, 255));
     }
 
     [Fact]
@@ -784,6 +911,48 @@ public class ConditionalFormatTests
     }
 
     // ─── ReplaceAllConditionalFormatsCommand tests ────────────────────────────
+
+    [Fact]
+    public void Formula_Rule_CurrentRowStructuredReference_UsesCurrentCellAddress()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Flag"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(5));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new TextValue("Low"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(15));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new TextValue("High"));
+
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Sales",
+            DisplayName = "Sales",
+            Range = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 2)),
+            HasAutoFilter = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Amount"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Flag"));
+        sheet.StructuredTables.Add(table);
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 3, 2)),
+            Priority = 1,
+            RuleType = CfRuleType.Formula,
+            FormulaText = "[@Amount]>10",
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(198, 239, 206) }
+        });
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 2, 2).Style!.FillColor.Should().NotBe(new CellColor(198, 239, 206));
+        GetCell(vp, 3, 2).Style!.FillColor.Should().Be(new CellColor(198, 239, 206));
+    }
 
     [Fact]
     public void ReplaceAllCF_Commit_ReplacesAllRules()

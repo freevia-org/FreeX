@@ -7,6 +7,7 @@ internal sealed record CfAggregateCache(
     double Average,
     double Min,
     double Max,
+    IReadOnlyList<double>? SortedValues = null,
     IReadOnlySet<CellAddress>? TopBottomMatches = null,
     IReadOnlyDictionary<string, int>? ValueCounts = null);
 
@@ -104,41 +105,61 @@ internal static class ViewportConditionalFormatEvaluator
         if (cfContext.RulesByPriority.Count == 0)
             return null;
 
+        CellStyle? result = null;
         foreach (var cf in cfContext.RulesByPriority)
         {
             if (!cf.AppliesTo.Contains(addr))
                 continue;
 
+            CellStyle? matchedStyle = null;
+            bool conditionMet;
             if (cf.RuleType == CfRuleType.ColorScale)
-                return ComputeColorScaleStyle(cf, value, cfContext.Aggregates);
-            if (cf.RuleType == CfRuleType.DataBar)
-                return new CellStyle { FillColor = cf.DataBarColor.ToCellColor() };
-
-            bool conditionMet = cf.RuleType switch
             {
-                CfRuleType.CellValue => MatchesCellValue(cf, value),
-                CfRuleType.AboveAverage => MatchesAboveAverage(cf, value, cfContext.Aggregates),
-                CfRuleType.Formula => matchesFormula(cf, sheet, addr, workbook, cfContext),
-                CfRuleType.Top10 => MatchesTopBottom(cf, addr, cfContext.Aggregates),
-                CfRuleType.DuplicateValues => MatchesDuplicateState(cf, value, cfContext.Aggregates, duplicate: true),
-                CfRuleType.UniqueValues => MatchesDuplicateState(cf, value, cfContext.Aggregates, duplicate: false),
-                CfRuleType.ContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.Contains),
-                CfRuleType.NotContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.NotContains),
-                CfRuleType.BeginsWith => MatchesTextRule(cf, value, TextRuleMatchKind.BeginsWith),
-                CfRuleType.EndsWith => MatchesTextRule(cf, value, TextRuleMatchKind.EndsWith),
-                CfRuleType.DateOccurring => MatchesDateOccurring(cf, value, DateTime.Today),
-                CfRuleType.Blanks => IsBlankValue(value),
-                CfRuleType.NoBlanks => !IsBlankValue(value),
-                CfRuleType.Errors => value is ErrorValue,
-                CfRuleType.NoErrors => value is not ErrorValue,
-                _ => false
-            };
+                matchedStyle = ComputeColorScaleStyle(cf, value, sheet, workbook, addr, cfContext.Aggregates);
+                conditionMet = matchedStyle is not null;
+            }
+            else if (cf.RuleType == CfRuleType.DataBar)
+            {
+                conditionMet = TryGetDouble(value, out _);
+                if (conditionMet)
+                    matchedStyle = new CellStyle { FillColor = cf.DataBarColor.ToCellColor() };
+            }
+            else
+            {
+                conditionMet = cf.RuleType switch
+                {
+                    CfRuleType.CellValue => MatchesCellValue(cf, value),
+                    CfRuleType.AboveAverage => MatchesAboveAverage(cf, value, cfContext.Aggregates),
+                    CfRuleType.Formula => matchesFormula(cf, sheet, addr, workbook, cfContext),
+                    CfRuleType.Top10 => MatchesTopBottom(cf, addr, cfContext.Aggregates),
+                    CfRuleType.DuplicateValues => MatchesDuplicateState(cf, value, cfContext.Aggregates, duplicate: true),
+                    CfRuleType.UniqueValues => MatchesDuplicateState(cf, value, cfContext.Aggregates, duplicate: false),
+                    CfRuleType.ContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.Contains),
+                    CfRuleType.NotContainsText => MatchesTextRule(cf, value, TextRuleMatchKind.NotContains),
+                    CfRuleType.BeginsWith => MatchesTextRule(cf, value, TextRuleMatchKind.BeginsWith),
+                    CfRuleType.EndsWith => MatchesTextRule(cf, value, TextRuleMatchKind.EndsWith),
+                    CfRuleType.DateOccurring => MatchesDateOccurring(cf, value, DateTime.Today),
+                    CfRuleType.Blanks => IsBlankValue(value),
+                    CfRuleType.NoBlanks => !IsBlankValue(value),
+                    CfRuleType.Errors => value is ErrorValue,
+                    CfRuleType.NoErrors => value is not ErrorValue,
+                    _ => false
+                };
 
-            if (conditionMet)
-                return cf.FormatIfTrue;
+                if (conditionMet)
+                    matchedStyle = cf.FormatIfTrue;
+            }
+
+            if (!conditionMet)
+                continue;
+
+            if (matchedStyle is not null)
+                result = StackDifferentialStyle(result, matchedStyle);
+            if (cf.StopIfTrue)
+                break;
         }
 
-        return null;
+        return result;
     }
 
     public static CellStyle MergeStyles(CellStyle? baseStyle, CellStyle cfStyle)
@@ -159,6 +180,30 @@ internal static class ViewportConditionalFormatEvaluator
         if (cfStyle.Underline)
             result.Underline = true;
         if (cfStyle.FontColor != CellColor.Black)
+            result.FontColor = cfStyle.FontColor;
+
+        return result;
+    }
+
+    private static CellStyle StackDifferentialStyle(CellStyle? accumulatedStyle, CellStyle cfStyle)
+    {
+        var result = (accumulatedStyle ?? CellStyle.Default).Clone();
+
+        if (!result.FillColor.HasValue && cfStyle.FillColor.HasValue)
+            result.FillColor = cfStyle.FillColor;
+        if (result.FillPatternStyle == CellFillPatternStyle.None &&
+            cfStyle.FillPatternStyle != CellFillPatternStyle.None)
+            result.FillPatternStyle = cfStyle.FillPatternStyle;
+        if (!result.FillPatternColor.HasValue && cfStyle.FillPatternColor.HasValue)
+            result.FillPatternColor = cfStyle.FillPatternColor;
+
+        if (cfStyle.Bold)
+            result.Bold = true;
+        if (cfStyle.Italic)
+            result.Italic = true;
+        if (cfStyle.Underline)
+            result.Underline = true;
+        if (result.FontColor == CellColor.Black && cfStyle.FontColor != CellColor.Black)
             result.FontColor = cfStyle.FontColor;
 
         return result;
@@ -223,6 +268,10 @@ internal static class ViewportConditionalFormatEvaluator
                 cf.RuleType is CfRuleType.DuplicateValues or CfRuleType.UniqueValues
                     ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
                     : null;
+            List<double>? numericValues =
+                cf.RuleType is CfRuleType.ColorScale or CfRuleType.IconSet
+                    ? []
+                    : null;
             foreach (var (a, v) in EnumerateAggregateValues(sheet, cf.AppliesTo))
             {
                 if (valueCounts is not null)
@@ -237,16 +286,19 @@ internal static class ViewportConditionalFormatEvaluator
                     if (x < min) min = x;
                     if (x > max) max = x;
                     rankedValues?.Add((a, x, count));
+                    numericValues?.Add(x);
                     count++;
                 }
             }
 
             var topBottomMatches = ResolveTopBottomMatches(cf, rankedValues);
+            numericValues?.Sort();
             if (count > 0 || valueCounts?.Count > 0 || topBottomMatches is not null)
                 result[cf] = new CfAggregateCache(
                     count > 0 ? sum / count : 0,
                     count > 0 ? min : 0,
                     count > 0 ? max : 0,
+                    numericValues,
                     topBottomMatches,
                     valueCounts?.Count > 0 ? valueCounts : null);
         }
@@ -420,23 +472,114 @@ internal static class ViewportConditionalFormatEvaluator
     private static CellStyle? ComputeColorScaleStyle(
         ConditionalFormat cf,
         ScalarValue value,
+        Sheet sheet,
+        Workbook workbook,
+        CellAddress addr,
         Dictionary<ConditionalFormat, CfAggregateCache> cfCache)
     {
         if (!TryGetDouble(value, out double cellVal)) return null;
         if (!double.IsFinite(cellVal)) return null;
         if (!cfCache.TryGetValue(cf, out var cache)) return null;
 
-        double min = cache.Min, max = cache.Max;
-        if (max == min) return new CellStyle { FillColor = cf.MinColor.ToCellColor() };
+        if (!TryResolveThreshold(cf.MinThresholdType, cf.MinThresholdValue, cache, sheet, workbook, addr, out var min) ||
+            !TryResolveThreshold(cf.MaxThresholdType, cf.MaxThresholdValue, cache, sheet, workbook, addr, out var max))
+        {
+            return null;
+        }
 
-        double t = (cellVal - min) / (max - min);
-        var interpolated = cf.UseThreeColorScale
-            ? t <= 0.5
-                ? Lerp(cf.MinColor, cf.MidColor, t * 2)
-                : Lerp(cf.MidColor, cf.MaxColor, (t - 0.5) * 2)
-            : Lerp(cf.MinColor, cf.MaxColor, t);
+        if (max <= min) return new CellStyle { FillColor = cf.MinColor.ToCellColor() };
+
+        var interpolated = cf.UseThreeColorScale &&
+                           TryResolveThreshold(cf.MidThresholdType, cf.MidThresholdValue, cache, sheet, workbook, addr, out var mid) &&
+                           mid > min &&
+                           mid < max
+            ? cellVal <= mid
+                ? Lerp(cf.MinColor, cf.MidColor, Math.Clamp((cellVal - min) / (mid - min), 0d, 1d))
+                : Lerp(cf.MidColor, cf.MaxColor, Math.Clamp((cellVal - mid) / (max - mid), 0d, 1d))
+            : Lerp(cf.MinColor, cf.MaxColor, Math.Clamp((cellVal - min) / (max - min), 0d, 1d));
 
         return new CellStyle { FillColor = interpolated };
+    }
+
+    internal static bool TryResolveThreshold(
+        CfThresholdType type,
+        string? text,
+        CfAggregateCache cache,
+        Sheet sheet,
+        Workbook workbook,
+        CellAddress currentCell,
+        out double value)
+    {
+        value = 0;
+        return type switch
+        {
+            CfThresholdType.Min => Set(cache.Min, out value),
+            CfThresholdType.Max => Set(cache.Max, out value),
+            CfThresholdType.Number => TryParseDouble(text, out value),
+            CfThresholdType.Percent => TryParseDouble(text, out var percent) &&
+                                       Set(cache.Min + (cache.Max - cache.Min) * (percent / 100d), out value),
+            CfThresholdType.Percentile => TryParseDouble(text, out var percentile) &&
+                                          TryResolvePercentile(cache.SortedValues, percentile, out value),
+            CfThresholdType.Formula => TryEvaluateThresholdFormula(text, sheet, workbook, currentCell, out value),
+            _ => false
+        };
+
+        static bool Set(double input, out double output)
+        {
+            output = input;
+            return double.IsFinite(input);
+        }
+    }
+
+    private static bool TryResolvePercentile(IReadOnlyList<double>? sortedValues, double percentile, out double value)
+    {
+        value = 0;
+        if (sortedValues is null || sortedValues.Count == 0)
+            return false;
+
+        percentile = Math.Clamp(percentile, 0d, 100d);
+        if (sortedValues.Count == 1)
+        {
+            value = sortedValues[0];
+            return true;
+        }
+
+        var position = (sortedValues.Count - 1) * percentile / 100d;
+        var lower = (int)Math.Floor(position);
+        var upper = (int)Math.Ceiling(position);
+        if (lower == upper)
+        {
+            value = sortedValues[lower];
+            return true;
+        }
+
+        var weight = position - lower;
+        value = sortedValues[lower] + (sortedValues[upper] - sortedValues[lower]) * weight;
+        return true;
+    }
+
+    private static bool TryEvaluateThresholdFormula(
+        string? text,
+        Sheet sheet,
+        Workbook workbook,
+        CellAddress currentCell,
+        out double value)
+    {
+        value = 0;
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        try
+        {
+            var formula = text[0] == '=' ? text : "=" + text;
+            var result = new FormulaEvaluator().Evaluate(formula, sheet, workbook, currentCell);
+            return TryGetDouble(result, out value);
+        }
+        catch
+        {
+            value = 0;
+            return false;
+        }
     }
 
     private static CellColor Lerp(RgbColor a, RgbColor b, double t)

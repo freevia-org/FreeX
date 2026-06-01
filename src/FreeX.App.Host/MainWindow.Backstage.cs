@@ -336,6 +336,8 @@ public partial class MainWindow
         var adapter = FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, ext, out var format);
         if (adapter == null) return;
         if (_isOpeningFile) return;
+        if (!await ConfirmSaveBeforeDestructiveActionAsync(UiText.Get("MainWindowMessage_SaveChangesBeforeOpeningWorkbook")))
+            return;
 
         try
         {

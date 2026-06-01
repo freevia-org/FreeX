@@ -178,7 +178,7 @@ public static partial class ChartRenderer
     {
         value = 0;
         return cellLookup.TryGetValue((row, col), out var cell) &&
-               double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
+               TryGetChartNumericValue(cell, out value);
     }
 
     private static (double[] PositiveTotals, double[] NegativeTotals) CalculateStackedPercentTotals(

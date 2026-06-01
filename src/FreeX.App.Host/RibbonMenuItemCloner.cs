@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
@@ -25,9 +26,7 @@ internal static class RibbonMenuItemCloner
             InputGestureText = sourceItem.InputGestureText
         };
 
-        var keyTip = RibbonTooltip.GetKeyTip(sourceItem);
-        if (!string.IsNullOrWhiteSpace(keyTip))
-            RibbonTooltip.SetKeyTip(item, keyTip);
+        CopyRibbonMenuMetadata(sourceItem, item);
 
         foreach (var child in sourceItem.Items)
         {
@@ -154,11 +153,55 @@ internal static class RibbonMenuItemCloner
         clonedItem.IsCheckable = sourceItem.IsCheckable;
         clonedItem.IsChecked = sourceItem.IsChecked;
 
+        CopyRibbonMenuMetadata(sourceItem, clonedItem);
+        SynchronizeClonedMenuItems(sourceItem.Items, clonedItem.Items);
+    }
+
+    private static void CopyRibbonMenuMetadata(MenuItem sourceItem, MenuItem clonedItem)
+    {
+        RibbonTooltip.SetTitle(clonedItem, RibbonTooltip.GetTitle(sourceItem) ?? "");
+        RibbonTooltip.SetDescription(clonedItem, RibbonTooltip.GetDescription(sourceItem) ?? "");
+        RibbonMetadata.SetCommandName(clonedItem, RibbonMetadata.GetCommandName(sourceItem));
+        CopyAutomationMetadata(sourceItem, clonedItem);
+        SynchronizeRibbonMenuKeyTip(sourceItem, clonedItem);
+    }
+
+    private static void SynchronizeRibbonMenuKeyTip(MenuItem sourceItem, MenuItem clonedItem)
+    {
         var keyTip = RibbonTooltip.GetKeyTip(sourceItem);
         RibbonTooltip.SetKeyTip(clonedItem, keyTip ?? "");
         if (string.IsNullOrWhiteSpace(keyTip))
             clonedItem.InputGestureText = sourceItem.InputGestureText;
+    }
 
-        SynchronizeClonedMenuItems(sourceItem.Items, clonedItem.Items);
+    private static void CopyAutomationMetadata(MenuItem sourceItem, MenuItem clonedItem)
+    {
+        SetOrClearAutomationName(clonedItem, AutomationProperties.GetName(sourceItem));
+        SetOrClearAutomationHelpText(clonedItem, AutomationProperties.GetHelpText(sourceItem));
+        SetOrClearAutomationId(clonedItem, AutomationProperties.GetAutomationId(sourceItem));
+    }
+
+    private static void SetOrClearAutomationName(MenuItem item, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            item.ClearValue(AutomationProperties.NameProperty);
+        else
+            AutomationProperties.SetName(item, value);
+    }
+
+    private static void SetOrClearAutomationHelpText(MenuItem item, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            item.ClearValue(AutomationProperties.HelpTextProperty);
+        else
+            AutomationProperties.SetHelpText(item, value);
+    }
+
+    private static void SetOrClearAutomationId(MenuItem item, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            item.ClearValue(AutomationProperties.AutomationIdProperty);
+        else
+            AutomationProperties.SetAutomationId(item, value);
     }
 }
