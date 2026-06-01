@@ -91,6 +91,7 @@ public sealed partial class XlsxFileAdapter
         Stream xlsxStream,
         XDocument? stylesXml,
         WorkbookTheme workbookTheme,
+        WorkbookIndexedColorPalette indexedColors,
         List<string>? warnings = null)
     {
         var result = new Dictionary<string, SheetXmlLayout>(StringComparer.OrdinalIgnoreCase);
@@ -130,7 +131,7 @@ public sealed partial class XlsxFileAdapter
                 if (worksheetEntry is null)
                     continue;
 
-                result[name] = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry, differentialStyles, workbookTheme);
+                result[name] = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry, differentialStyles, workbookTheme, indexedColors);
             }
         }
         catch (Exception ex)
@@ -191,7 +192,8 @@ public sealed partial class XlsxFileAdapter
         string worksheetPath,
         ZipArchiveEntry worksheetEntry,
         IReadOnlyList<CellStyle> differentialStyles,
-        WorkbookTheme workbookTheme)
+        WorkbookTheme workbookTheme,
+        WorkbookIndexedColorPalette indexedColors)
     {
         var worksheetXml = LoadXml(worksheetEntry);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -235,7 +237,7 @@ public sealed partial class XlsxFileAdapter
         var headerFooterPictures = XlsxHeaderFooterPictureReaderWriter.Read(archive, worksheetPath, worksheetXml);
         var drawingParts = XlsxWorksheetDrawingPartReader.ReadParts(archive, worksheetPath, worksheetXml);
         var sparklines = XlsxSparklineMapper.Read(worksheetXml);
-        var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles, workbookTheme);
+        var advancedConditionalFormats = ReadAdvancedConditionalFormats(worksheetXml, worksheetNs, differentialStyles, workbookTheme, indexedColors);
         var dataValidationNativeMetadata = XlsxDataValidationNativeMetadataMapper.Read(worksheetXml, worksheetNs);
         var ignoredErrors = XlsxWorksheetDiagnosticsMapper.ReadIgnoredErrors(worksheetXml, worksheetNs);
         var ignoredErrorsMetadata = XlsxWorksheetDiagnosticsMapper.ReadIgnoredErrorsMetadata(worksheetXml, worksheetNs);

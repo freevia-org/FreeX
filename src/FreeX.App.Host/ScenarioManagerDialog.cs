@@ -76,7 +76,7 @@ public sealed partial class ScenarioManagerDialog : Window
         _scenarioList.ItemsSource = BuildScenarioItems(workbook);
         _scenarioList.DisplayMemberPath = nameof(ScenarioManagerItem.Name);
         _scenarioList.SelectionChanged += (_, _) => UpdateSelectionState();
-        _scenarioList.MouseDoubleClick += (_, _) => AcceptSelectedScenario();
+        _scenarioList.MouseDoubleClick += ScenarioList_MouseDoubleClick;
         _scenarioList.SelectedIndex = _scenarioList.Items.Count > 0 ? 0 : -1;
         _scenarioList.Height = 118;
         left.Children.Add(_scenarioList);
@@ -252,6 +252,12 @@ public sealed partial class ScenarioManagerDialog : Window
         }
 
         Accept(ScenarioManagerAction.Show);
+    }
+
+    private void ScenarioList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        AcceptSelectedScenario();
+        e.Handled = true;
     }
 
     private void Accept(ScenarioManagerAction action)
