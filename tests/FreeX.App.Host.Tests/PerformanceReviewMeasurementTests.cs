@@ -197,6 +197,30 @@ public sealed class PerformanceReviewMeasurementTests
     }
 
     [Fact]
+    public void Benchmark_RepeatedHeaderSelectionTarget_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = SelectionDragHarness.Create();
+            harness.MeasureRepeatedHeaderSelectionTarget(iterations: 10);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var result = harness.MeasureRepeatedHeaderSelectionTarget(iterations: 2_000);
+            Console.WriteLine(
+                "PERF HEADER_SELECTION_REPEATED_TARGET " +
+                $"steps={result.StepCount} total_ms={result.TotalMilliseconds:F2} " +
+                $"mean_ms={result.MeanMilliseconds:F4} p95_ms={result.P95Milliseconds:F4} " +
+                $"max_ms={result.MaxMilliseconds:F4} allocated_bytes={result.AllocatedBytes:N0}");
+
+            result.StepCount.Should().Be(2_000);
+            result.TotalMilliseconds.Should().BeGreaterThan(0);
+        });
+    }
+
+    [Fact]
     public void Benchmark_ViewportSidePaneRefresh_ReportsTiming()
     {
         StaTestRunner.Run(() =>
@@ -790,6 +814,7 @@ public sealed class PerformanceReviewMeasurementTests
         private readonly Action<CellAddress> _setActiveCell;
         private readonly Action<CellAddress, CellAddress> _extendSelection;
         private readonly Action<CellAddress, bool> _addOrMoveAdditionalSelection;
+        private readonly Action<FreeX.App.UI.GridHeaderContextMenuTarget, uint, uint> _extendHeaderSelection;
         private readonly Action _completeDragSelectionStatusRefresh;
         private readonly Action? _completeDragSelectionToolbarRefresh;
         private readonly FieldInfo _dragSelectActive;
@@ -816,6 +841,12 @@ public sealed class PerformanceReviewMeasurementTests
                 .GetMethod("AddOrMoveAdditionalSelection", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "AddOrMoveAdditionalSelection");
             _addOrMoveAdditionalSelection = addOrMoveAdditionalSelection.CreateDelegate<Action<CellAddress, bool>>(window);
+
+            var extendHeaderSelection = typeof(MainWindow)
+                .GetMethod("ExtendHeaderSelection", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "ExtendHeaderSelection");
+            _extendHeaderSelection = extendHeaderSelection
+                .CreateDelegate<Action<FreeX.App.UI.GridHeaderContextMenuTarget, uint, uint>>(window);
 
             var completeDragSelectionStatusRefresh = typeof(MainWindow)
                 .GetMethod("CompleteDragSelectionStatusRefresh", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -917,6 +948,35 @@ public sealed class PerformanceReviewMeasurementTests
             finally
             {
                 _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionStatusRefresh();
+            }
+
+            total.Stop();
+            return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+        }
+
+        public MeasurementResult MeasureRepeatedHeaderSelectionTarget(int iterations)
+        {
+            _extendHeaderSelection(FreeX.App.UI.GridHeaderContextMenuTarget.Column, 3, 8);
+            PumpDispatcher();
+
+            var timings = new List<double>(iterations);
+            _dragSelectActive.SetValue(_window, true);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            try
+            {
+                for (var i = 0; i < iterations; i++)
+                {
+                    var stepStarted = Stopwatch.GetTimestamp();
+                    _extendHeaderSelection(FreeX.App.UI.GridHeaderContextMenuTarget.Column, 3, 8);
+                    timings.Add(Stopwatch.GetElapsedTime(stepStarted).TotalMilliseconds);
+                }
+            }
+            finally
+            {
+                _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionToolbarRefresh?.Invoke();
                 _completeDragSelectionStatusRefresh();
             }
 
