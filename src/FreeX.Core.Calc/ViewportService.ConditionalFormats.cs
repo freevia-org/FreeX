@@ -4,8 +4,8 @@ namespace FreeX.Core.Calc;
 
 public sealed partial class ViewportService
 {
-    private static CfEvaluationContext BuildConditionalFormatContext(Sheet sheet) =>
-        ViewportConditionalFormatEvaluator.BuildContext(sheet);
+    private static CfEvaluationContext BuildConditionalFormatContext(Sheet sheet, Workbook workbook) =>
+        ViewportConditionalFormatEvaluator.BuildContext(sheet, workbook);
 
     private static CellStyle? EvaluateConditionalFormats(
         Sheet sheet,

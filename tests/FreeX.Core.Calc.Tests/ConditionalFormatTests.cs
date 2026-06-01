@@ -353,6 +353,15 @@ public class ConditionalFormatTests
         evaluatorSource.Should().Contain(
             "PrecomputeThresholdFormulaCaches(sheet)",
             "formula thresholds should be parsed once while building the conditional-format viewport context");
+        evaluatorSource.Should().Contain(
+            "PrecomputeStaticThresholdFormulaValues",
+            "absolute formula thresholds should be evaluated once per viewport instead of once per displayed cell");
+        evaluatorSource.Should().Contain(
+            "StaticThresholdFormulaValues",
+            "resolved threshold formula values should be reused by color scales and icon sets");
+        evaluatorSource.Should().Contain(
+            "IsCurrentCellSensitive",
+            "relative or volatile threshold formulas must stay on the per-cell path");
         evaluatorSource.Should().NotContain(
             "new FormulaEvaluator().Evaluate(formula",
             "formula thresholds should reuse cached ASTs instead of parsing text for every displayed cell");
