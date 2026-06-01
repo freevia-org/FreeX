@@ -2409,40 +2409,26 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="DataToolsGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <StackPanel Orientation="Vertical">
-                                    <Button Width="124" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TextToColumnsBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_TextToColumns}"
-                                            local:RibbonTooltip.KeyTip="E"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SplitTextInOneColumnIntoMultipleColumnsUsingADelimiterSuchAsACommaOrSpac_EF92EDC9}" local:RibbonMetadata.CommandName="Text to Columns">
-                                        <TextBlock Text="{local:Loc Key=MainWindow_Text_TextToColumns}" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
-                                    </Button>
-                                    <Button Width="124" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FlashFillMenuItem_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FlashFill}"
-                                            local:RibbonTooltip.KeyTip="FF"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AutomaticallyFillValuesFromExamplesInAdjacentColumns}" local:RibbonMetadata.CommandName="Flash Fill">
-                                        <TextBlock Text="{local:Loc Key=MainWindow_Text_FlashFill}" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
-                                    </Button>
-                                    <Button Width="124" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveDuplicatesBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RemoveDuplicates}"
-                                            local:RibbonTooltip.KeyTip="M"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeleteDuplicateRowsFromTheSelectedRange}" local:RibbonMetadata.CommandName="Remove Duplicates">
-                                        <TextBlock Text="{local:Loc Key=MainWindow_Text_RemoveDuplicates}" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
-                                    </Button>
-                                </StackPanel>
-                                <StackPanel Orientation="Vertical">
-                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ValidationButton_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DataValidation}"
-                                            local:RibbonTooltip.KeyTip="V"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ControlWhatDataCanBeEnteredInTheSelectedCells}" local:RibbonMetadata.CommandName="Data Validation">
-                                        <TextBlock Text="{local:Loc Key=MainWindow_Text_DataValidation}" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
-                                    </Button>
-                                    <Button Width="110" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ConsolidateBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Consolidate}"
-                                            local:RibbonTooltip.KeyTip="N"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CombineValuesFromMultipleRangesIntoASingleSummaryRange}" local:RibbonMetadata.CommandName="Consolidate">
-                                        <TextBlock Text="{local:Loc Key=MainWindow_Text_Consolidate}" local:RibbonMetadata.Role="CommandLabel" FontSize="12" VerticalAlignment="Center" TextAlignment="Center"/>
-                                    </Button>
-                                </StackPanel>
+                                <Button Content="{local:Loc Key=MainWindow_Text_TextToColumns}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="TextToColumnsBtn_Click"
+                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_TextToColumns}"
+                                        local:RibbonTooltip.KeyTip="E"
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_SplitTextInOneColumnIntoMultipleColumnsUsingADelimiterSuchAsACommaOrSpac_EF92EDC9}" local:RibbonMetadata.CommandName="Text to Columns"/>
+                                <Button Content="{local:Loc Key=MainWindow_Text_FlashFill}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="FlashFillMenuItem_Click"
+                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_FlashFill}"
+                                        local:RibbonTooltip.KeyTip="FF"
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AutomaticallyFillValuesFromExamplesInAdjacentColumns}" local:RibbonMetadata.CommandName="Flash Fill"/>
+                                <Button Content="{local:Loc Key=MainWindow_Text_RemoveDuplicates}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="RemoveDuplicatesBtn_Click"
+                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_RemoveDuplicates}"
+                                        local:RibbonTooltip.KeyTip="M"
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_DeleteDuplicateRowsFromTheSelectedRange}" local:RibbonMetadata.CommandName="Remove Duplicates"/>
+                                <Button Content="{local:Loc Key=MainWindow_Text_DataValidation}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ValidationButton_Click"
+                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_DataValidation}"
+                                        local:RibbonTooltip.KeyTip="V"
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ControlWhatDataCanBeEnteredInTheSelectedCells}" local:RibbonMetadata.CommandName="Data Validation"/>
+                                <Button Content="{local:Loc Key=MainWindow_Text_Consolidate}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ConsolidateBtn_Click"
+                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Consolidate}"
+                                        local:RibbonTooltip.KeyTip="N"
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CombineValuesFromMultipleRangesIntoASingleSummaryRange}" local:RibbonMetadata.CommandName="Consolidate"/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_DataTools}" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>
@@ -3175,55 +3161,49 @@
                         <Grid Style="{StaticResource RibbonGroupPanel}" local:RibbonMetadata.CatalogId="HelpHelpGroup">
                             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="16"/></Grid.RowDefinitions>
                             <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,2,2,0">
-                                <StackPanel Orientation="Vertical">
-                                    <local:AutomationInvokeButton x:Name="HelpOnlineButton"
-                                                                  Content="{local:Loc Key=MainWindow_Content_HelpOnline}" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HelpOnlineBtn_Click"
-                                                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_HelpOnline}"
-                                                                  AutomationProperties.AutomationId="HelpOnlineButton"
-                                                                  AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenTheFreeXHelpDocumentationInAWebBrowser}"
-                                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_HelpOnline}"
-                                                                  local:RibbonTooltip.KeyTip="HO"
-                                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenTheFreeXHelpDocumentationInAWebBrowser}" local:RibbonMetadata.CommandName="Help Online"/>
-                                    <local:AutomationInvokeButton x:Name="HelpFeedbackButton"
-                                                                  Content="{local:Loc Key=MainWindow_Content_Feedback}" Width="96" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
-                                                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Feedback}"
-                                                                  AutomationProperties.AutomationId="HelpFeedbackButton"
-                                                                  AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenAPrefilledGitHubIssueWithSafeAppDiagnostics}"
-                                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Feedback}"
-                                                                  local:RibbonTooltip.KeyTip="FE"
-                                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenAPrefilledGitHubIssueWithSafeAppDiagnostics}" local:RibbonMetadata.CommandName="Feedback"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Vertical">
-                                    <Button Content="{local:Loc Key=MainWindow_Content_CopyDiagnostics}" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CopyDiagnosticsBtn_Click"
-                                            local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_CopyDiagnostics}"
-                                            local:RibbonTooltip.KeyTip="DG"
-                                            local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CopySafeAppVersionRuntimeOSAndSessionDiagnosticsForTesterReports}" local:RibbonMetadata.CommandName="Copy Diagnostics"/>
-                                    <local:AutomationInvokeButton x:Name="HelpCheckForUpdatesButton"
-                                                                  Content="{local:Loc Key=MainWindow_Content_CheckForUpdates}" Width="126" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CheckForUpdatesBtn_Click"
-                                                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_CheckForUpdates}"
-                                                                  AutomationProperties.AutomationId="HelpCheckForUpdatesButton"
-                                                                  AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenTheLatestFreeXTesterReleaseInAWebBrowser}"
-                                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_CheckForUpdates}"
-                                                                  local:RibbonTooltip.KeyTip="UP"
-                                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenTheLatestFreeXTesterReleaseInAWebBrowser}" local:RibbonMetadata.CommandName="Check for Updates"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Vertical">
-                                    <local:AutomationInvokeButton x:Name="HelpAboutFreeXButton"
-                                                                  Content="{local:Loc Key=MainWindow_Content_AboutFreeX}" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AboutBtn_Click"
-                                                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AboutFreeX}"
-                                                                  AutomationProperties.AutomationId="HelpAboutFreeXButton"
-                                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AboutFreeX}"
-                                                                  local:RibbonTooltip.KeyTip="AB"
-                                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ViewVersionAndLicenseInformationAboutFreeX}" local:RibbonMetadata.CommandName="About FreeX"/>
-                                    <local:AutomationInvokeButton x:Name="HelpLegalNoticesButton"
-                                                                  Content="{local:Loc Key=MainWindow_Content_LegalNotices}" Width="108" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="LegalNoticesBtn_Click"
-                                                                  AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_LegalNotices}"
-                                                                  AutomationProperties.AutomationId="HelpLegalNoticesButton"
-                                                                  AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenLegalPrivacyAndThirdPartyNoticesPackagedWithFreeX}"
-                                                                  local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_LegalNotices}"
-                                                                  local:RibbonTooltip.KeyTip="LN"
-                                                                  local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ViewLegalPrivacyAndThirdPartyNoticesPackagedWithFreeX}" local:RibbonMetadata.CommandName="Legal Notices"/>
-                                </StackPanel>
+                                <local:AutomationInvokeButton x:Name="HelpOnlineButton"
+                                                              Content="{local:Loc Key=MainWindow_Content_HelpOnline}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="HelpOnlineBtn_Click"
+                                                              AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_HelpOnline}"
+                                                              AutomationProperties.AutomationId="HelpOnlineButton"
+                                                              AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenTheFreeXHelpDocumentationInAWebBrowser}"
+                                                              local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_HelpOnline}"
+                                                              local:RibbonTooltip.KeyTip="HO"
+                                                              local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenTheFreeXHelpDocumentationInAWebBrowser}" local:RibbonMetadata.CommandName="Help Online"/>
+                                <local:AutomationInvokeButton x:Name="HelpFeedbackButton"
+                                                              Content="{local:Loc Key=MainWindow_Content_Feedback}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="SendFeedbackBtn_Click"
+                                                              AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_Feedback}"
+                                                              AutomationProperties.AutomationId="HelpFeedbackButton"
+                                                              AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenAPrefilledGitHubIssueWithSafeAppDiagnostics}"
+                                                              local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_Feedback}"
+                                                              local:RibbonTooltip.KeyTip="FE"
+                                                              local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenAPrefilledGitHubIssueWithSafeAppDiagnostics}" local:RibbonMetadata.CommandName="Feedback"/>
+                                <Button Content="{local:Loc Key=MainWindow_Content_CopyDiagnostics}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CopyDiagnosticsBtn_Click"
+                                        local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_CopyDiagnostics}"
+                                        local:RibbonTooltip.KeyTip="DG"
+                                        local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_CopySafeAppVersionRuntimeOSAndSessionDiagnosticsForTesterReports}" local:RibbonMetadata.CommandName="Copy Diagnostics"/>
+                                <local:AutomationInvokeButton x:Name="HelpCheckForUpdatesButton"
+                                                              Content="{local:Loc Key=MainWindow_Content_CheckForUpdates}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="CheckForUpdatesBtn_Click"
+                                                              AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_CheckForUpdates}"
+                                                              AutomationProperties.AutomationId="HelpCheckForUpdatesButton"
+                                                              AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenTheLatestFreeXTesterReleaseInAWebBrowser}"
+                                                              local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_CheckForUpdates}"
+                                                              local:RibbonTooltip.KeyTip="UP"
+                                                              local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenTheLatestFreeXTesterReleaseInAWebBrowser}" local:RibbonMetadata.CommandName="Check for Updates"/>
+                                <local:AutomationInvokeButton x:Name="HelpAboutFreeXButton"
+                                                              Content="{local:Loc Key=MainWindow_Content_AboutFreeX}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="AboutBtn_Click"
+                                                              AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_AboutFreeX}"
+                                                              AutomationProperties.AutomationId="HelpAboutFreeXButton"
+                                                              local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_AboutFreeX}"
+                                                              local:RibbonTooltip.KeyTip="AB"
+                                                              local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ViewVersionAndLicenseInformationAboutFreeX}" local:RibbonMetadata.CommandName="About FreeX"/>
+                                <local:AutomationInvokeButton x:Name="HelpLegalNoticesButton"
+                                                              Content="{local:Loc Key=MainWindow_Content_LegalNotices}" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="LegalNoticesBtn_Click"
+                                                              AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_LegalNotices}"
+                                                              AutomationProperties.AutomationId="HelpLegalNoticesButton"
+                                                              AutomationProperties.HelpText="{local:Loc Key=MainWindow_AutomationHelpText_OpenLegalPrivacyAndThirdPartyNoticesPackagedWithFreeX}"
+                                                              local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_LegalNotices}"
+                                                              local:RibbonTooltip.KeyTip="LN"
+                                                              local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_ViewLegalPrivacyAndThirdPartyNoticesPackagedWithFreeX}" local:RibbonMetadata.CommandName="Legal Notices"/>
                             </StackPanel>
                             <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#E0E0E0"><TextBlock Text="{local:Loc Key=MainWindow_Text_Help}" Style="{StaticResource GroupLbl}"/></Border>
                         </Grid>

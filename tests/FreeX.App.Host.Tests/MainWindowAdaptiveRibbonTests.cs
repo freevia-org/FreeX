@@ -447,6 +447,48 @@ public sealed class MainWindowAdaptiveRibbonTests
     }
 
     [Fact]
+    public void DataAndHelpRibbon_PromoteStandaloneCommandsToTallIconLabelsWhenSpaceAllows()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectRibbonTab("Data", 1465);
+            if (harness.CanUseRequestedRibbonWidth(1465))
+            {
+                harness.TallLargeRibbonCommandLabels.Should().Contain(
+                    ["Get Data", "Refresh All", "Text to Columns", "Flash Fill", "Remove Duplicates", "Data Validation", "Consolidate", "What-If Analysis", "Forecast Sheet"],
+                    $"Data should use large icon-label tiles for standalone commands when there is room; {harness.DebugActiveRibbonChildren}");
+                harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                    0.5,
+                    $"Data should promote standalone commands without hidden overflow; {harness.DebugActiveRibbonChildren}");
+            }
+
+            harness.SelectRibbonTab("Data", 1100);
+            if (harness.CanUseRequestedRibbonWidth(1100))
+            {
+                harness.TallLargeRibbonCommandLabels.Should().Contain(
+                    ["Text to Columns", "Flash Fill", "Remove Duplicates", "Data Validation", "Consolidate"],
+                    $"Data Tools should keep tall icon-label tiles at medium desktop widths instead of compact horizontal rows; {harness.DebugActiveRibbonChildren}");
+                harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                    0.5,
+                    $"Data should keep Data Tools expanded without hidden overflow at 1100px; {harness.DebugActiveRibbonChildren}");
+            }
+
+            harness.SelectRibbonTab("Help", 900);
+            if (harness.CanUseRequestedRibbonWidth(900))
+            {
+                harness.TallLargeRibbonCommandLabels.Should().Contain(
+                    ["Help Online", "Feedback", "Copy Diagnostics", "Check for Updates", "About FreeX", "Legal Notices"],
+                    $"Help should use large icon-label tiles instead of stacked small rows when the row has room; {harness.DebugActiveRibbonChildren}");
+                harness.ActiveRibbonPanelOverflow.Should().BeLessThanOrEqualTo(
+                    0.5,
+                    $"Help should promote standalone commands without hidden overflow; {harness.DebugActiveRibbonChildren}");
+            }
+        });
+    }
+
+    [Fact]
     public void ViewRibbon_KeepsShowWithZoomAndWindowAtMediumWidths()
     {
         StaTestRunner.Run(() =>

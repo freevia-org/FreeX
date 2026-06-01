@@ -84,9 +84,61 @@ public sealed class NativeJsonAdapterPerformanceTests
         allocatedBytes.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void Benchmark_LoadRepeatedCustomStyles_ReportsTimingAndAllocatedBytes()
+    {
+        const int iterations = 3;
+        var adapter = new NativeJsonAdapter();
+        var workbook = CreateRepeatedCustomStyleWorkbook();
+        byte[] payload;
+        using (var source = new MemoryStream())
+        {
+            adapter.Save(workbook, source);
+            payload = source.ToArray();
+        }
+
+        using (var warmup = new MemoryStream(payload, writable: false))
+            adapter.Load(warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream(payload, writable: false);
+            var step = Stopwatch.StartNew();
+            var loaded = adapter.Load(stream);
+            step.Stop();
+            loaded.SheetCount.Should().Be(RepeatedStyleSheetCount);
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF NATIVE_JSON_LOAD_REPEATED_STYLES " +
+            $"sheets={RepeatedStyleSheetCount} rows={RepeatedStyleRowsPerSheet} cols={RepeatedStyleColumnsPerSheet} " +
+            $"steps={iterations} bytes={payload.Length:N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+        allocatedBytes.Should().BeGreaterThan(0);
+    }
+
     private const int DenseSheetCount = 4;
     private const int DenseRowsPerSheet = 160;
     private const int DenseColumnsPerSheet = 80;
+    private const int RepeatedStyleSheetCount = 3;
+    private const int RepeatedStyleRowsPerSheet = 140;
+    private const int RepeatedStyleColumnsPerSheet = 70;
 
     private static Workbook CreateDenseWorkbook()
     {
@@ -116,6 +168,45 @@ public sealed class NativeJsonAdapterPerformanceTests
 
             for (uint row = 1; row <= 120; row++)
                 sheet.SetStyleOnly(row, (uint)(DenseColumnsPerSheet + 4), StyleId.Default);
+        }
+
+        return workbook;
+    }
+
+    private static Workbook CreateRepeatedCustomStyleWorkbook()
+    {
+        var workbook = new Workbook("Native JSON Repeated Styles");
+        var boldCurrencyStyleId = workbook.RegisterStyle(new CellStyle
+        {
+            Bold = true,
+            NumberFormat = "$#,##0.00",
+            FillColor = CellColor.FromArgb(234, 242, 255)
+        });
+        var wrappedPercentStyleId = workbook.RegisterStyle(new CellStyle
+        {
+            Italic = true,
+            WrapText = true,
+            NumberFormat = "0.00%",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            BorderBottom = new CellBorder(BorderStyle.Thin, CellColor.FromArgb(93, 93, 93))
+        });
+
+        for (var sheetIndex = 1; sheetIndex <= RepeatedStyleSheetCount; sheetIndex++)
+        {
+            var sheet = workbook.AddSheet($"Styled {sheetIndex}");
+            for (uint row = 1; row <= RepeatedStyleRowsPerSheet; row++)
+            {
+                for (uint col = 1; col <= RepeatedStyleColumnsPerSheet; col++)
+                {
+                    var address = new CellAddress(sheet.Id, row, col);
+                    sheet.SetCell(address, new NumberValue((row * col + sheetIndex) / 100.0));
+                    sheet.GetCell(row, col)!.StyleId = (row + col + sheetIndex) % 2 == 0
+                        ? boldCurrencyStyleId
+                        : wrappedPercentStyleId;
+                }
+
+                sheet.SetStyleOnly(row, (uint)(RepeatedStyleColumnsPerSheet + 2), boldCurrencyStyleId);
+            }
         }
 
         return workbook;

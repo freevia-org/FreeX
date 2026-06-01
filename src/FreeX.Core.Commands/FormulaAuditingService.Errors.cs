@@ -16,7 +16,8 @@ public static partial class FormulaAuditingService
             if (sheetId.HasValue && sheet.Id != sheetId.Value)
                 continue;
 
-            foreach (var (address, cell) in sheet.EnumerateCells().OrderBy(c => c.Address.Row).ThenBy(c => c.Address.Col))
+            List<FormulaErrorInfo>? sheetErrors = null;
+            foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
             {
                 if (cell.IgnoreFormulaError)
                     continue;
@@ -27,16 +28,31 @@ public static partial class FormulaAuditingService
                 if (workbook.DisabledFormulaErrorCodes.Contains(error.Code))
                     continue;
 
-                result.Add(new FormulaErrorInfo(
+                var address = new CellAddress(sheet.Id, row, col);
+                (sheetErrors ??= []).Add(new FormulaErrorInfo(
                     sheet.Id,
                     sheet.Name,
                     address,
                     error,
                     cell.HasFormula ? cell.FormulaText : null));
             }
+
+            if (sheetErrors is null)
+                continue;
+
+            sheetErrors.Sort(CompareFormulaErrors);
+            result.AddRange(sheetErrors);
         }
 
         return result;
+    }
+
+    private static int CompareFormulaErrors(FormulaErrorInfo left, FormulaErrorInfo right)
+    {
+        var rowComparison = left.Address.Row.CompareTo(right.Address.Row);
+        return rowComparison != 0
+            ? rowComparison
+            : left.Address.Col.CompareTo(right.Address.Col);
     }
 
     public static IReadOnlyList<FormulaErrorIssue> FindFormulaErrorIssues(Workbook workbook, SheetId? sheetId = null)
@@ -125,7 +141,7 @@ public static partial class FormulaAuditingService
             if (sheetId.HasValue && sheet.Id != sheetId.Value)
                 continue;
 
-            foreach (var (address, cell) in sheet.EnumerateCells())
+            foreach (var (address, cell) in EnumerateFormulaIssueCandidates(sheet))
             {
                 if (cell.IgnoreFormulaError || !FormulaRefersToBlankCells(workbook, sheet.Id, cell))
                     continue;
@@ -174,10 +190,17 @@ public static partial class FormulaAuditingService
             if (sheetId.HasValue && sheet.Id != sheetId.Value)
                 continue;
 
-            var formulas = sheet.EnumerateCells()
-                .Where(item => item.Cell.HasFormula && !item.Cell.IgnoreFormulaError && !string.IsNullOrWhiteSpace(item.Cell.FormulaText))
-                .Select(item => new FormulaPattern(item.Address, item.Cell.FormulaText!, NormalizeFormulaPattern(item.Address, item.Cell.FormulaText!)))
-                .ToList();
+            if (sheet.FormulaCellCount == 0)
+                continue;
+
+            var formulas = new List<FormulaPattern>(sheet.FormulaCellCount);
+            foreach (var (address, cell) in EnumerateFormulaIssueCandidates(sheet))
+            {
+                if (cell.IgnoreFormulaError || string.IsNullOrWhiteSpace(cell.FormulaText))
+                    continue;
+
+                formulas.Add(new FormulaPattern(address, cell.FormulaText!, NormalizeFormulaPattern(address, cell.FormulaText!)));
+            }
 
             foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas.GroupBy(item => item.Address.Row), flagged))
                 yield return issue;
@@ -261,7 +284,7 @@ public static partial class FormulaAuditingService
             if (sheetId.HasValue && sheet.Id != sheetId.Value)
                 continue;
 
-            foreach (var (address, cell) in sheet.EnumerateCells())
+            foreach (var (address, cell) in EnumerateFormulaIssueCandidates(sheet))
             {
                 if (cell.IgnoreFormulaError || !FormulaOmitsAdjacentCells(workbook, sheet.Id, cell))
                     continue;
@@ -285,7 +308,7 @@ public static partial class FormulaAuditingService
             if (sheetId.HasValue && sheet.Id != sheetId.Value)
                 continue;
 
-            foreach (var (address, cell) in sheet.EnumerateCells())
+            foreach (var (address, cell) in EnumerateFormulaIssueCandidates(sheet))
             {
                 if (cell.IgnoreFormulaError || !IsUnlockedFormulaCell(workbook, cell))
                     continue;
@@ -299,6 +322,15 @@ public static partial class FormulaAuditingService
                     cell.FormulaText is null ? null : "=" + cell.FormulaText,
                     "The formula cell is unlocked and may be changed when the worksheet is protected.");
             }
+        }
+    }
+
+    private static IEnumerable<(CellAddress Address, Cell Cell)> EnumerateFormulaIssueCandidates(Sheet sheet)
+    {
+        foreach (var address in sheet.EnumerateFormulaCells())
+        {
+            if (sheet.GetCell(address) is { } cell)
+                yield return (address, cell);
         }
     }
 

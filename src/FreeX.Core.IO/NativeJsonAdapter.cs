@@ -63,6 +63,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
         var loadedSheetsBySourceName = new Dictionary<string, Sheet>(StringComparer.OrdinalIgnoreCase);
         var pendingPivotTables = new List<(Sheet Sheet, SheetDto Dto)>();
+        Dictionary<CellStyleDto, StyleId>? styleIdCache = null;
         var sheetIndex = 1;
         foreach (var sDto in dto.Sheets ?? [])
         {
@@ -315,8 +316,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     if (cDto.Formula != null && value is not BlankValue)
                         cell.Value = value;
                     cell.IgnoreFormulaError = cDto.IgnoreFormulaError;
-                    if (ToCellStyle(cDto.Style) is { } style)
-                        cell.StyleId = workbook.RegisterStyle(style);
+                    if (GetCachedStyleId(workbook, ref styleIdCache, cDto.Style) is { } styleId)
+                        cell.StyleId = styleId;
                     sheet.SetCell(addr, cell);
                 }
                 catch (FormatException) { /* skip cells with unparseable addresses */ }
@@ -332,8 +333,8 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     var address = CellAddress.Parse(styleOnlyDto.Address, sheet.Id);
                     if (address.Sheet != sheet.Id)
                         continue;
-                    if (ToCellStyle(styleOnlyDto.Style) is { } style)
-                        sheet.SetStyleOnly(address.Row, address.Col, workbook.RegisterStyle(style));
+                    if (GetCachedStyleId(workbook, ref styleIdCache, styleOnlyDto.Style) is { } styleId)
+                        sheet.SetStyleOnly(address.Row, address.Col, styleId);
                 }
                 catch (FormatException) { /* skip style-only entries with unparseable addresses */ }
             }

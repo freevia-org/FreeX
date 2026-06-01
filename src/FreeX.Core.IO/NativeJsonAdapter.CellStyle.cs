@@ -4,6 +4,24 @@ namespace FreeX.Core.IO;
 
 public sealed partial class NativeJsonAdapter
 {
+    private static StyleId? GetCachedStyleId(
+        Workbook workbook,
+        ref Dictionary<CellStyleDto, StyleId>? styleIdCache,
+        CellStyleDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        styleIdCache ??= new Dictionary<CellStyleDto, StyleId>(CellStyleDtoComparer.Instance);
+        if (!styleIdCache.TryGetValue(dto, out var styleId))
+        {
+            styleId = workbook.RegisterStyle(ToCellStyle(dto)!);
+            styleIdCache[dto] = styleId;
+        }
+
+        return styleId;
+    }
+
     private static CellStyle? ToCellStyle(CellStyleDto? dto)
     {
         if (dto is null)
@@ -125,4 +143,153 @@ public sealed partial class NativeJsonAdapter
         Style = NativeJsonValueSanitizer.ValidEnumOrDefault(border.Style, BorderStyle.None),
         Color = border.Color
     };
+
+    private sealed class CellStyleDtoComparer : IEqualityComparer<CellStyleDto>
+    {
+        public static readonly CellStyleDtoComparer Instance = new();
+
+        public bool Equals(CellStyleDto? x, CellStyleDto? y)
+        {
+            if (ReferenceEquals(x, y))
+                return true;
+            if (x is null || y is null)
+                return false;
+
+            return string.Equals(x.FontName, y.FontName, StringComparison.Ordinal)
+                && x.FontSize == y.FontSize
+                && x.Bold == y.Bold
+                && x.Italic == y.Italic
+                && x.Underline == y.Underline
+                && x.Strikethrough == y.Strikethrough
+                && x.Superscript == y.Superscript
+                && x.Subscript == y.Subscript
+                && x.FontColor == y.FontColor
+                && x.FillColor == y.FillColor
+                && x.FillPatternStyle == y.FillPatternStyle
+                && x.FillPatternColor == y.FillPatternColor
+                && BorderEquals(x.BorderTop, y.BorderTop)
+                && BorderEquals(x.BorderRight, y.BorderRight)
+                && BorderEquals(x.BorderBottom, y.BorderBottom)
+                && BorderEquals(x.BorderLeft, y.BorderLeft)
+                && string.Equals(x.NumberFormat, y.NumberFormat, StringComparison.Ordinal)
+                && x.HorizontalAlignment == y.HorizontalAlignment
+                && x.VerticalAlignment == y.VerticalAlignment
+                && x.WrapText == y.WrapText
+                && x.ShrinkToFit == y.ShrinkToFit
+                && x.DoubleUnderline == y.DoubleUnderline
+                && x.IndentLevel == y.IndentLevel
+                && x.TextRotation == y.TextRotation
+                && x.Locked == y.Locked
+                && x.Hidden == y.Hidden
+                && DictionaryEquals(x.NativeDifferentialAttributes, y.NativeDifferentialAttributes)
+                && ListEquals(x.NativeDifferentialChildXmls, y.NativeDifferentialChildXmls)
+                && DictionaryEquals(x.NativeDifferentialElementXmls, y.NativeDifferentialElementXmls);
+        }
+
+        public int GetHashCode(CellStyleDto obj)
+        {
+            var hash = new HashCode();
+            hash.Add(obj.FontName, StringComparer.Ordinal);
+            hash.Add(obj.FontSize);
+            hash.Add(obj.Bold);
+            hash.Add(obj.Italic);
+            hash.Add(obj.Underline);
+            hash.Add(obj.Strikethrough);
+            hash.Add(obj.Superscript);
+            hash.Add(obj.Subscript);
+            hash.Add(obj.FontColor);
+            hash.Add(obj.FillColor);
+            hash.Add(obj.FillPatternStyle);
+            hash.Add(obj.FillPatternColor);
+            AddBorderHash(ref hash, obj.BorderTop);
+            AddBorderHash(ref hash, obj.BorderRight);
+            AddBorderHash(ref hash, obj.BorderBottom);
+            AddBorderHash(ref hash, obj.BorderLeft);
+            hash.Add(obj.NumberFormat, StringComparer.Ordinal);
+            hash.Add(obj.HorizontalAlignment);
+            hash.Add(obj.VerticalAlignment);
+            hash.Add(obj.WrapText);
+            hash.Add(obj.ShrinkToFit);
+            hash.Add(obj.DoubleUnderline);
+            hash.Add(obj.IndentLevel);
+            hash.Add(obj.TextRotation);
+            hash.Add(obj.Locked);
+            hash.Add(obj.Hidden);
+            hash.Add(GetDictionaryHashCode(obj.NativeDifferentialAttributes));
+            hash.Add(GetListHashCode(obj.NativeDifferentialChildXmls));
+            hash.Add(GetDictionaryHashCode(obj.NativeDifferentialElementXmls));
+            return hash.ToHashCode();
+        }
+
+        private static bool BorderEquals(CellBorderDto? x, CellBorderDto? y) =>
+            ReferenceEquals(x, y) || (x is not null && y is not null && x.Style == y.Style && x.Color == y.Color);
+
+        private static void AddBorderHash(ref HashCode hash, CellBorderDto? border)
+        {
+            if (border is null)
+            {
+                hash.Add(0);
+                return;
+            }
+
+            hash.Add(border.Style);
+            hash.Add(border.Color);
+        }
+
+        private static bool DictionaryEquals(IReadOnlyDictionary<string, string>? x, IReadOnlyDictionary<string, string>? y)
+        {
+            if (ReferenceEquals(x, y))
+                return true;
+            if (x is null || y is null || x.Count != y.Count)
+                return false;
+
+            foreach (var (key, value) in x)
+            {
+                if (!y.TryGetValue(key, out var otherValue) || value != otherValue)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool ListEquals(IReadOnlyList<string>? x, IReadOnlyList<string>? y)
+        {
+            if (ReferenceEquals(x, y))
+                return true;
+            if (x is null || y is null || x.Count != y.Count)
+                return false;
+
+            for (var i = 0; i < x.Count; i++)
+            {
+                if (x[i] != y[i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static int GetDictionaryHashCode(IReadOnlyDictionary<string, string>? dictionary)
+        {
+            if (dictionary is null)
+                return 0;
+
+            var code = 0;
+            foreach (var (key, value) in dictionary)
+                code ^= HashCode.Combine(
+                    key is null ? 0 : StringComparer.Ordinal.GetHashCode(key),
+                    value is null ? 0 : StringComparer.Ordinal.GetHashCode(value));
+            return code;
+        }
+
+        private static int GetListHashCode(IReadOnlyList<string>? list)
+        {
+            if (list is null)
+                return 0;
+
+            var hash = new HashCode();
+            foreach (var item in list)
+                hash.Add(item, StringComparer.Ordinal);
+            return hash.ToHashCode();
+        }
+    }
 }

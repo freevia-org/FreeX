@@ -574,33 +574,16 @@ public static partial class BuiltInFunctions
         bool needsK = funcNum is >= 14 and <= 19;
         if (needsK && args.Count < 4) return ErrorValue.Value;
 
-        var nums = new List<double>();
-        // Collect from positional value args (skip funcNum, options, and a potential k arg)
         int kIndex = needsK ? args.Count - 1 : -1;
-        for (int i = 2; i < args.Count; i++)
-        {
-            if (i == kIndex) continue;
-            var arg = args[i];
-            if (arg is ErrorValue err)
-            {
-                if (ignoreErrors) continue;
-                return err;
-            }
-            if (arg is RangeValue rv)
-            {
-                foreach (var cell in AggregateVisibleCells(rv, ctx, ignoreHiddenRows, ignoreNestedAggregates))
-                {
-                    if (cell is ErrorValue ce)
-                    {
-                        if (ignoreErrors) continue;
-                        return ce;
-                    }
-                    if (TryCellNumber(cell, out double v)) nums.Add(v);
-                }
-            }
-            else if (TryCellNumber(arg, out double v)) nums.Add(v);
-            else if (arg is DirectTextLiteralValue d && TryDirectTextNumber(d, out double dv)) nums.Add(dv);
-        }
+
+        if (funcNum == 3)
+            return AggregateCountA(args, ctx, kIndex, ignoreErrors, ignoreHiddenRows, ignoreNestedAggregates);
+        if (funcNum is >= 1 and <= 11)
+            return AggregateNumericStreaming(args, ctx, funcNum, kIndex, ignoreErrors, ignoreHiddenRows, ignoreNestedAggregates);
+
+        var nums = new List<double>();
+        var collectError = CollectAggregateNumbers(args, ctx, kIndex, ignoreErrors, ignoreHiddenRows, ignoreNestedAggregates, nums);
+        if (collectError is not null) return collectError;
 
         double? k = null;
         if (needsK)
@@ -613,64 +596,6 @@ public static partial class BuiltInFunctions
 
         switch (funcNum)
         {
-            case 1:  return nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(nums.Average());
-            case 2:  return new NumberValue(nums.Count);
-            case 3:
-            {
-                int countA = 0;
-                for (int i = 2; i < args.Count; i++)
-                {
-                    if (i == kIndex) continue;
-                    var arg = args[i];
-                    if (arg is ErrorValue err)
-                    {
-                        if (ignoreErrors) continue;
-                        return err;
-                    }
-                    if (arg is RangeValue rv)
-                    {
-                        foreach (var cell in AggregateVisibleCells(rv, ctx, ignoreHiddenRows, ignoreNestedAggregates))
-                        {
-                            if (cell is ErrorValue ce)
-                            {
-                                if (ignoreErrors) continue;
-                                return ce;
-                            }
-                            if (cell is not BlankValue) countA++;
-                        }
-                    }
-                    else if (arg is not BlankValue) countA++;
-                }
-                return new NumberValue(countA);
-            }
-            case 4:  return nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(nums.Max());
-            case 5:  return nums.Count == 0 ? ErrorValue.DivByZero : NumberResult(nums.Min());
-            case 6:  return NumberResult(nums.Count == 0 ? 0 : nums.Aggregate(1.0, (a, x) => a * x));
-            case 7:
-            {
-                if (nums.Count < 2) return ErrorValue.DivByZero;
-                double mean = nums.Average();
-                return NumberResult(Math.Sqrt(nums.Sum(x => (x - mean) * (x - mean)) / (nums.Count - 1)));
-            }
-            case 8:
-            {
-                if (nums.Count == 0) return ErrorValue.DivByZero;
-                double mean = nums.Average();
-                return NumberResult(Math.Sqrt(nums.Sum(x => (x - mean) * (x - mean)) / nums.Count));
-            }
-            case 9:  return NumberResult(nums.Sum());
-            case 10:
-            {
-                if (nums.Count < 2) return ErrorValue.DivByZero;
-                double mean = nums.Average();
-                return NumberResult(nums.Sum(x => (x - mean) * (x - mean)) / (nums.Count - 1));
-            }
-            case 11:
-            {
-                if (nums.Count == 0) return ErrorValue.DivByZero;
-                double mean = nums.Average();
-                return NumberResult(nums.Sum(x => (x - mean) * (x - mean)) / nums.Count);
-            }
             case 12:
             {
                 if (nums.Count == 0) return ErrorValue.Num;
@@ -732,23 +657,165 @@ public static partial class BuiltInFunctions
         }
     }
 
-    private static IEnumerable<ScalarValue> AggregateVisibleCells(
-        RangeValue range,
+    private static ErrorValue? CollectAggregateNumbers(
+        IReadOnlyList<ScalarValue> args,
         IEvalContext ctx,
+        int kIndex,
+        bool ignoreErrors,
+        bool ignoreHiddenRows,
+        bool ignoreNestedAggregates,
+        List<double> nums)
+    {
+        // Collect from positional value args (skip funcNum, options, and a potential k arg).
+        for (int i = 2; i < args.Count; i++)
+        {
+            if (i == kIndex) continue;
+            var arg = args[i];
+            if (arg is ErrorValue err)
+            {
+                if (ignoreErrors) continue;
+                return err;
+            }
+            if (arg is RangeValue rv)
+            {
+                for (int r = 0; r < rv.RowCount; r++)
+                {
+                    uint absRow = rv.StartRow + (uint)r;
+                    if (ignoreHiddenRows && IsAggregateRowHidden(ctx, rv, absRow)) continue;
+                    for (int c = 0; c < rv.ColCount; c++)
+                    {
+                        uint absCol = rv.StartCol + (uint)c;
+                        if (ignoreNestedAggregates && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                        var cell = rv.Cells[r, c];
+                        if (cell is ErrorValue ce)
+                        {
+                            if (ignoreErrors) continue;
+                            return ce;
+                        }
+                        if (TryCellNumber(cell, out double value)) nums.Add(value);
+                    }
+                }
+            }
+            else if (TryCellNumber(arg, out double value)) nums.Add(value);
+            else if (arg is DirectTextLiteralValue direct && TryDirectTextNumber(direct, out double directValue))
+                nums.Add(directValue);
+        }
+
+        return null;
+    }
+
+    private static ScalarValue AggregateCountA(
+        IReadOnlyList<ScalarValue> args,
+        IEvalContext ctx,
+        int kIndex,
+        bool ignoreErrors,
         bool ignoreHiddenRows,
         bool ignoreNestedAggregates)
     {
-        for (int r = 0; r < range.RowCount; r++)
+        long count = 0;
+        for (int i = 2; i < args.Count; i++)
         {
-            uint absRow = range.StartRow + (uint)r;
-            if (ignoreHiddenRows && IsAggregateRowHidden(ctx, range, absRow)) continue;
-            for (int c = 0; c < range.ColCount; c++)
+            if (i == kIndex) continue;
+            var arg = args[i];
+            if (arg is ErrorValue err)
             {
-                uint absCol = range.StartCol + (uint)c;
-                if (ignoreNestedAggregates && IsNestedSubtotalOrAggregateCell(ctx, range, absRow, absCol)) continue;
-                yield return range.Cells[r, c];
+                if (ignoreErrors) continue;
+                return err;
+            }
+
+            if (arg is RangeValue rv)
+            {
+                for (int r = 0; r < rv.RowCount; r++)
+                {
+                    uint absRow = rv.StartRow + (uint)r;
+                    if (ignoreHiddenRows && IsAggregateRowHidden(ctx, rv, absRow)) continue;
+                    for (int c = 0; c < rv.ColCount; c++)
+                    {
+                        uint absCol = rv.StartCol + (uint)c;
+                        if (ignoreNestedAggregates && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                        var cell = rv.Cells[r, c];
+                        if (cell is ErrorValue ce)
+                        {
+                            if (ignoreErrors) continue;
+                            return ce;
+                        }
+                        if (cell is not BlankValue) count++;
+                    }
+                }
+            }
+            else if (arg is not BlankValue)
+            {
+                count++;
             }
         }
+
+        return new NumberValue(count);
+    }
+
+    private static ScalarValue AggregateNumericStreaming(
+        IReadOnlyList<ScalarValue> args,
+        IEvalContext ctx,
+        int funcNum,
+        int kIndex,
+        bool ignoreErrors,
+        bool ignoreHiddenRows,
+        bool ignoreNestedAggregates)
+    {
+        var numeric = new AggregateNumericAccumulator();
+        for (int i = 2; i < args.Count; i++)
+        {
+            if (i == kIndex) continue;
+            var arg = args[i];
+            if (arg is ErrorValue err)
+            {
+                if (ignoreErrors) continue;
+                return err;
+            }
+
+            if (arg is RangeValue rv)
+            {
+                for (int r = 0; r < rv.RowCount; r++)
+                {
+                    uint absRow = rv.StartRow + (uint)r;
+                    if (ignoreHiddenRows && IsAggregateRowHidden(ctx, rv, absRow)) continue;
+                    for (int c = 0; c < rv.ColCount; c++)
+                    {
+                        uint absCol = rv.StartCol + (uint)c;
+                        if (ignoreNestedAggregates && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                        var cell = rv.Cells[r, c];
+                        if (cell is ErrorValue ce)
+                        {
+                            if (ignoreErrors) continue;
+                            return ce;
+                        }
+                        if (TryCellNumber(cell, out double value)) numeric.Add(value, funcNum);
+                    }
+                }
+            }
+            else if (TryCellNumber(arg, out double value))
+            {
+                numeric.Add(value, funcNum);
+            }
+            else if (arg is DirectTextLiteralValue direct && TryDirectTextNumber(direct, out double directValue))
+            {
+                numeric.Add(directValue, funcNum);
+            }
+        }
+
+        return funcNum switch
+        {
+            1  => numeric.Count == 0 ? ErrorValue.DivByZero : NumberResult(numeric.Average),
+            2  => new NumberValue(numeric.Count),
+            4  => numeric.Count == 0 ? ErrorValue.DivByZero : NumberResult(numeric.Max),
+            5  => numeric.Count == 0 ? ErrorValue.DivByZero : NumberResult(numeric.Min),
+            6  => NumberResult(numeric.Count == 0 ? 0 : numeric.Product),
+            7  => numeric.Count < 2 ? ErrorValue.DivByZero : NumberResult(Math.Sqrt(numeric.SampleVariance)),
+            8  => numeric.Count == 0 ? ErrorValue.DivByZero : NumberResult(Math.Sqrt(numeric.PopulationVariance)),
+            9  => NumberResult(numeric.Sum),
+            10 => numeric.Count < 2 ? ErrorValue.DivByZero : NumberResult(numeric.SampleVariance),
+            11 => numeric.Count == 0 ? ErrorValue.DivByZero : NumberResult(numeric.PopulationVariance),
+            _  => ErrorValue.Value
+        };
     }
 
     private static bool IsAggregateRowHidden(IEvalContext ctx, RangeValue range, uint row)
@@ -805,5 +872,49 @@ public static partial class BuiltInFunctions
         foreach (var value in nums)
             if (counts[value] == bestCount) return NumberResult(value);
         return ErrorValue.NA;
+    }
+
+    private struct AggregateNumericAccumulator
+    {
+        private double _varianceMean;
+
+        public long Count { get; private set; }
+        public double Sum { get; private set; }
+        public double Product { get; private set; }
+        public double Min { get; private set; }
+        public double Max { get; private set; }
+        public double VarianceM2 { get; private set; }
+        public double Average => Sum / Count;
+        public double SampleVariance => VarianceM2 / (Count - 1);
+        public double PopulationVariance => VarianceM2 / Count;
+
+        public void Add(double value, int funcNum)
+        {
+            Count++;
+            switch (funcNum)
+            {
+                case 1:
+                case 9:
+                    Sum += value;
+                    break;
+                case 4:
+                    Max = Count == 1 ? value : Math.Max(Max, value);
+                    break;
+                case 5:
+                    Min = Count == 1 ? value : Math.Min(Min, value);
+                    break;
+                case 6:
+                    Product = Count == 1 ? value : Product * value;
+                    break;
+                case 7:
+                case 8:
+                case 10:
+                case 11:
+                    var delta = value - _varianceMean;
+                    _varianceMean += delta / Count;
+                    VarianceM2 += delta * (value - _varianceMean);
+                    break;
+            }
+        }
     }
 }

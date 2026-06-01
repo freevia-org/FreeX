@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -652,6 +653,50 @@ public sealed class FormulaAuditingServiceTests
                 (FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells"),
                 (FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits"),
                 (FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe"));
+    }
+
+    [Fact]
+    public void Benchmark_SparseFormulaErrorIssues_ReportsTimingAndAllocatedBytes()
+    {
+        const int valueRows = 100_000;
+        const int formulaRows = 2_000;
+        const int steps = 3;
+
+        var wb = new Workbook("perf");
+        var sheet = wb.AddSheet("Sheet1");
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.NumberStoredAsTextErrorCode);
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.TwoDigitYearTextDateErrorCode);
+
+        for (uint row = 1; row <= valueRows; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+
+        for (uint row = 1; row <= formulaRows; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), Cell.FromFormula($"A{row}+1"));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id).Should().BeEmpty();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        var maxStepMs = 0d;
+
+        for (var stepIndex = 0; stepIndex < steps; stepIndex++)
+        {
+            var step = Stopwatch.StartNew();
+            FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id).Should().BeEmpty();
+            step.Stop();
+            maxStepMs = Math.Max(maxStepMs, step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var meanMs = total.Elapsed.TotalMilliseconds / steps;
+
+        Console.WriteLine(
+            $"PERF FORMULA_AUDIT_SPARSE_FORMULAS occupied={sheet.CellCount} formulas={sheet.FormulaCellCount} steps={steps} total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={meanMs:F2} max_ms={maxStepMs:F2} allocated_bytes={allocatedBytes}");
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
