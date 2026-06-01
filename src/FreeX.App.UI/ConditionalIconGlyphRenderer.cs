@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Windows;
 using System.Windows.Media;
 
@@ -16,13 +17,15 @@ internal static class ConditionalIconGlyphRenderer
     private static readonly Pen OutlinePen = FrozenPen(FrozenBrush(96, 96, 96), 0.75);
     private static readonly Pen WhiteThinPen = FrozenPen(Brushes.White, 1.2);
     private static readonly Pen WhiteMediumPen = FrozenPen(Brushes.White, 1.4);
+    private static readonly ConcurrentDictionary<ConditionalIconAppearanceKey, ConditionalIconAppearance> AppearanceCache = new();
 
     public static void Draw(DrawingContext dc, ConditionalFormatIcon icon, Rect rect)
     {
-        var brush = BrushForResolvedColor(ConditionalIconLayoutPlanner.ResolveColor(icon));
+        var appearance = ResolveAppearance(icon);
+        var brush = appearance.Brush;
         var outline = OutlinePen;
 
-        switch (ConditionalIconLayoutPlanner.ResolveGlyphKind(icon))
+        switch (appearance.GlyphKind)
         {
             case ConditionalIconGlyphKind.TrafficLight:
                 dc.DrawEllipse(brush, outline, Center(rect), rect.Width / 2, rect.Height / 2);
@@ -49,6 +52,25 @@ internal static class ConditionalIconGlyphRenderer
                 dc.DrawGeometry(brush, outline, CreateArrowGeometry(rect, icon.IconIndex));
                 break;
         }
+    }
+
+    private static ConditionalIconAppearance ResolveAppearance(ConditionalFormatIcon icon)
+    {
+        var key = new ConditionalIconAppearanceKey(
+            icon.Style ?? "",
+            icon.IconIndex,
+            icon.IconCount);
+        return AppearanceCache.GetOrAdd(key, static cacheKey =>
+        {
+            var icon = new ConditionalFormatIcon(
+                cacheKey.Style,
+                cacheKey.IconIndex,
+                cacheKey.IconCount,
+                ShowValue: true);
+            return new ConditionalIconAppearance(
+                ConditionalIconLayoutPlanner.ResolveGlyphKind(icon),
+                BrushForResolvedColor(ConditionalIconLayoutPlanner.ResolveColor(icon)));
+        });
     }
 
     private static SolidColorBrush BrushForResolvedColor(string color) => color switch
@@ -265,4 +287,13 @@ internal static class ConditionalIconGlyphRenderer
         geometry.Freeze();
         return geometry;
     }
+
+    private readonly record struct ConditionalIconAppearanceKey(
+        string Style,
+        int IconIndex,
+        int IconCount);
+
+    private readonly record struct ConditionalIconAppearance(
+        ConditionalIconGlyphKind GlyphKind,
+        SolidColorBrush Brush);
 }
