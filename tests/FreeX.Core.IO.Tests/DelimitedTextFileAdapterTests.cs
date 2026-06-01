@@ -848,6 +848,28 @@ public sealed class DelimitedTextFileAdapterTests
     }
 
     [Fact]
+    public void Save_WritesOutOfRangeDateTimeValuesAsText()
+    {
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new DateTimeValue(double.MaxValue));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new DateTimeValue(double.MinValue));
+
+        var adapter = new DelimitedTextFileAdapter(".tsv", "Tab-separated values", '\t');
+        using var stream = new MemoryStream();
+        adapter.Save(workbook, stream);
+
+        var max = double.MaxValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+        var min = double.MinValue.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+        Encoding.UTF8.GetString(stream.ToArray()).Should().Be($"\"'{max}\"\t\"'{min}\"\r\n");
+        stream.Position = 0;
+
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.GetCell(1, 1)!.Value.Should().Be(new TextValue(max));
+        loaded.GetCell(1, 2)!.Value.Should().Be(new TextValue(min));
+    }
+
+    [Fact]
     public void Save_RoundTripsFormulaLikeTextFieldsAsLiteralText()
     {
         var workbook = new Workbook("Book1");

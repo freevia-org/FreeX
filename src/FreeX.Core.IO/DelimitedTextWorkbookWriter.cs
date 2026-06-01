@@ -118,7 +118,7 @@ internal static class DelimitedTextWorkbookWriter
         foreach (var (col, cell) in cells)
         {
             WriteDelimiters(writer, delimiter, previousCol == 0 ? col - 1 : col - previousCol);
-            WriteField(writer, delimiter, FormatCell(cell), cell.Value is TextValue);
+            WriteField(writer, delimiter, FormatCell(cell), ShouldWriteAsText(cell.Value));
             previousCol = col;
         }
 
@@ -339,7 +339,7 @@ internal static class DelimitedTextWorkbookWriter
     private static string FormatValue(ScalarValue value) => value switch
     {
         NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
-        DateTimeValue dt when double.IsFinite(dt.Value) => FormatDateTimeValue(dt),
+        DateTimeValue dt when TryFormatDateTimeValue(dt, out var formatted) => formatted,
         DateTimeValue dt => dt.Value.ToString("R", CultureInfo.InvariantCulture),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         TextValue t => t.Value,
@@ -347,15 +347,52 @@ internal static class DelimitedTextWorkbookWriter
         _ => "",
     };
 
-    private static string FormatDateTimeValue(DateTimeValue value)
+    private static bool ShouldWriteAsText(ScalarValue value) =>
+        value is TextValue ||
+        value is DateTimeValue dt && double.IsFinite(dt.Value) && !CanFormatDateTimeValue(dt);
+
+    private static bool CanFormatDateTimeValue(DateTimeValue value)
     {
-        var dateTime = value.ToDateTime();
+        if (!double.IsFinite(value.Value))
+            return false;
+
+        try
+        {
+            _ = value.ToDateTime();
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryFormatDateTimeValue(DateTimeValue value, out string text)
+    {
+        text = "";
+        if (!double.IsFinite(value.Value))
+            return false;
+
+        DateTime dateTime;
+        try
+        {
+            dateTime = value.ToDateTime();
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+
         var hasFractionalSeconds = dateTime.Ticks % TimeSpan.TicksPerSecond != 0;
         if (dateTime.Date == new DateTime(1899, 12, 30) && dateTime.TimeOfDay != TimeSpan.Zero)
-            return dateTime.ToString(hasFractionalSeconds ? "HH:mm:ss.FFFFFFF" : "HH:mm:ss", CultureInfo.InvariantCulture);
+        {
+            text = dateTime.ToString(hasFractionalSeconds ? "HH:mm:ss.FFFFFFF" : "HH:mm:ss", CultureInfo.InvariantCulture);
+            return true;
+        }
 
-        return dateTime.TimeOfDay == TimeSpan.Zero
+        text = dateTime.TimeOfDay == TimeSpan.Zero
             ? dateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
             : dateTime.ToString(hasFractionalSeconds ? "yyyy-MM-dd HH:mm:ss.FFFFFFF" : "yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        return true;
     }
 }
