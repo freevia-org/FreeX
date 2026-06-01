@@ -11,8 +11,9 @@ public sealed partial class ViewportService
         Workbook workbook,
         CfEvaluationContext cfContext)
     {
-        foreach (var rule in cfContext.IconRulesByPriority)
+        for (var i = 0; i < cfContext.IconRulesByPriority.Count; i++)
         {
+            var rule = cfContext.IconRulesByPriority[i];
             if (!rule.AppliesTo.Contains(addr))
                 continue;
             if (!TryGetDouble(value, out var cellValue) || !cfContext.Aggregates.TryGetValue(rule, out var cache))

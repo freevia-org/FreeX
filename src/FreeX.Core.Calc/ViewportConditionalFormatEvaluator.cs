@@ -158,8 +158,9 @@ internal static class ViewportConditionalFormatEvaluator
             return null;
 
         CellStyle? result = null;
-        foreach (var cf in cfContext.RulesByPriority)
+        for (var i = 0; i < cfContext.RulesByPriority.Count; i++)
         {
+            var cf = cfContext.RulesByPriority[i];
             if (!cf.AppliesTo.Contains(addr))
                 continue;
 

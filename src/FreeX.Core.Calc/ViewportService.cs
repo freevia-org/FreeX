@@ -27,7 +27,7 @@ public sealed partial class ViewportService : IViewportService
 
         // Pre-compute CF rule order and aggregates once per frame rather than per cell.
         var cfContext = BuildConditionalFormatContext(sheet, workbook);
-        var hasConditionalFormats = cfContext.RulesByPriority.Count != 0;
+        var hasConditionalStyles = HasConditionalStyleRules(cfContext);
         var hasConditionalIcons = cfContext.IconRulesByPriority.Count != 0;
         var cells = new List<DisplayCell>(EstimateDisplayCellCapacity(
             rowMetrics.Count,
@@ -51,7 +51,7 @@ public sealed partial class ViewportService : IViewportService
                     ConditionalFormatIcon? cfIcon = null;
                     var hasComment = false;
 
-                    if (hasConditionalFormats || hasAnyCellComments)
+                    if (hasConditionalStyles || hasConditionalIcons || hasAnyCellComments)
                         ApplyConditionalVisualsAndComments(
                             sheet,
                             sheetId,
@@ -60,7 +60,7 @@ public sealed partial class ViewportService : IViewportService
                             cell.Value,
                             workbook,
                             cfContext,
-                            hasConditionalFormats,
+                            hasConditionalStyles,
                             hasConditionalIcons,
                             hasAnyCellComments,
                             ref style,
@@ -95,7 +95,7 @@ public sealed partial class ViewportService : IViewportService
                         ConditionalFormatIcon? cfIcon = null;
                         var hasComment = false;
 
-                        if (hasConditionalFormats || hasAnyCellComments)
+                        if (hasConditionalStyles || hasConditionalIcons || hasAnyCellComments)
                             ApplyConditionalVisualsAndComments(
                                 sheet,
                                 sheetId,
@@ -104,7 +104,7 @@ public sealed partial class ViewportService : IViewportService
                                 BlankValue.Instance,
                                 workbook,
                                 cfContext,
-                                hasConditionalFormats,
+                                hasConditionalStyles,
                                 hasConditionalIcons,
                                 hasAnyCellComments,
                                 ref style,
@@ -237,7 +237,7 @@ public sealed partial class ViewportService : IViewportService
         ScalarValue value,
         Workbook workbook,
         CfEvaluationContext cfContext,
-        bool hasConditionalFormats,
+        bool hasConditionalStyles,
         bool hasConditionalIcons,
         bool hasAnyCellComments,
         ref CellStyle style,
@@ -248,17 +248,29 @@ public sealed partial class ViewportService : IViewportService
         hasComment = false;
 
         var addr = new CellAddress(sheetId, row, col);
-        if (hasConditionalFormats)
+        if (hasConditionalStyles)
         {
             var cfStyle = EvaluateConditionalFormats(sheet, addr, value, workbook, cfContext);
             if (cfStyle != null)
                 style = MergeStyles(style, cfStyle);
-            if (hasConditionalIcons)
-                cfIcon = EvaluateConditionalIcon(sheet, addr, value, workbook, cfContext);
         }
+
+        if (hasConditionalIcons)
+            cfIcon = EvaluateConditionalIcon(sheet, addr, value, workbook, cfContext);
 
         if (hasAnyCellComments)
             hasComment = HasCellComment(sheet, addr, hasAnyCellComments);
+    }
+
+    private static bool HasConditionalStyleRules(CfEvaluationContext cfContext)
+    {
+        for (var i = 0; i < cfContext.RulesByPriority.Count; i++)
+        {
+            if (cfContext.RulesByPriority[i].RuleType != CfRuleType.IconSet)
+                return true;
+        }
+
+        return false;
     }
 
     private static IReadOnlyList<ChartDataCell> BuildChartDataCells(
@@ -340,7 +352,7 @@ public sealed partial class ViewportService : IViewportService
         var dedupeCells = SplitPaneRegionsCanOverlap(topRows, leftColumns, bottomLeftRows, topRightColumns);
         HashSet<(uint Row, uint Col)>? seen = null;
         var hasAnyStyleOnlyCells = sheet.HasStyleOnlyCells;
-        var hasConditionalFormats = cfContext.RulesByPriority.Count != 0;
+        var hasConditionalStyles = HasConditionalStyleRules(cfContext);
         var hasConditionalIcons = cfContext.IconRulesByPriority.Count != 0;
         var cells = new List<DisplayCell>(EstimateSplitPaneCellCapacity(
             topRows,
@@ -354,15 +366,15 @@ public sealed partial class ViewportService : IViewportService
         foreach (var row in topRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalFormats, hasConditionalIcons, ref styleCache);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, ref styleCache);
             foreach (var column in topRightColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalFormats, hasConditionalIcons, ref styleCache);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, ref styleCache);
         }
 
         foreach (var row in bottomLeftRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalFormats, hasConditionalIcons, ref styleCache);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, ref styleCache);
         }
 
         return cells;
@@ -407,7 +419,7 @@ public sealed partial class ViewportService : IViewportService
         CfEvaluationContext cfContext,
         bool hasAnyCellComments,
         bool hasAnyStyleOnlyCells,
-        bool hasConditionalFormats,
+        bool hasConditionalStyles,
         bool hasConditionalIcons,
         ref ViewportStyleCache styleCache)
     {
@@ -445,7 +457,7 @@ public sealed partial class ViewportService : IViewportService
             var style = styleCache.Get(workbook, styleOnlyId.Value);
             ConditionalFormatIcon? cfIcon = null;
             var hasComment = false;
-            if (hasConditionalFormats || hasAnyCellComments)
+            if (hasConditionalStyles || hasConditionalIcons || hasAnyCellComments)
                 ApplyConditionalVisualsAndComments(
                     sheet,
                     sheetId,
@@ -454,7 +466,7 @@ public sealed partial class ViewportService : IViewportService
                     BlankValue.Instance,
                     workbook,
                     cfContext,
-                    hasConditionalFormats,
+                    hasConditionalStyles,
                     hasConditionalIcons,
                     hasAnyCellComments,
                     ref style,
@@ -479,7 +491,7 @@ public sealed partial class ViewportService : IViewportService
         var style = styleCache.Get(workbook, cell.StyleId);
         ConditionalFormatIcon? cfIcon = null;
         var hasComment = false;
-        if (hasConditionalFormats || hasAnyCellComments)
+        if (hasConditionalStyles || hasConditionalIcons || hasAnyCellComments)
             ApplyConditionalVisualsAndComments(
                 sheet,
                 sheetId,
@@ -488,7 +500,7 @@ public sealed partial class ViewportService : IViewportService
                 cell.Value,
                 workbook,
                 cfContext,
-                hasConditionalFormats,
+                hasConditionalStyles,
                 hasConditionalIcons,
                 hasAnyCellComments,
                 ref style,
