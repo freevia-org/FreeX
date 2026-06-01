@@ -591,6 +591,32 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_EmailDisplayName_StripsTrailingNumericSuffixesFromUserNameTokens()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada.lovelace2@contoso.com", "Ada Lovelace"),
+                ("grace.hopper17@contoso.com", "Grace Hopper")
+            ],
+            ["alan.turing3@contoso.com", "katherine.johnson42@contoso.com"]);
+
+        result.Should().BeEquivalentTo(["Alan Turing", "Katherine Johnson"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmailDisplayName_ReturnsNullWhenNumericSuffixWouldEmptyAToken()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("ada.lovelace2@contoso.com", "Ada Lovelace"),
+                ("grace.hopper17@contoso.com", "Grace Hopper")
+            ],
+            ["alan.123@contoso.com"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_SplitPascalCaseWords_InsertsWordSpaces()
     {
         var result = FlashFillService.Fill(

@@ -425,10 +425,35 @@ public static partial class FlashFillService
         }
 
         var parts = userName.Split(['.', '_', '-'], StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length < 2 || parts.Any(part => part.Any(char.IsDigit)))
+        if (parts.Length < 2)
             return false;
 
-        displayName = string.Join(' ', parts.Select(ToProperCase));
+        var nameParts = new string[parts.Length];
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (!TryNormalizeEmailDisplayNamePart(parts[i], out nameParts[i]))
+                return false;
+        }
+
+        displayName = string.Join(' ', nameParts.Select(ToProperCase));
+        return true;
+    }
+
+    private static bool TryNormalizeEmailDisplayNamePart(string part, out string normalized)
+    {
+        normalized = string.Empty;
+        var endExclusive = part.Length;
+        while (endExclusive > 0 && char.IsDigit(part[endExclusive - 1]))
+            endExclusive--;
+
+        if (endExclusive == 0)
+            return false;
+
+        var candidate = part[..endExclusive];
+        if (!candidate.Any(char.IsLetter) || candidate.Any(char.IsDigit))
+            return false;
+
+        normalized = candidate;
         return true;
     }
 
