@@ -71,6 +71,10 @@ public sealed class NamedRangeDialogXamlTests
             .Attribute("MouseDoubleClick")?.Value.Should().Be("NamesList_MouseDoubleClick");
         source.Should().Contain("private void NamesList_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
         source.Should().Contain("EditButton_Click(sender, e);");
+        source.Should().Contain("e.Handled = true;");
+        source.IndexOf("EditButton_Click(sender, e);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(source.IndexOf("e.Handled = true;", StringComparison.Ordinal));
     }
 
     [Fact]
