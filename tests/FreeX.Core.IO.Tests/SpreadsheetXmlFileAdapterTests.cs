@@ -2764,6 +2764,50 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromNamedRangeAttributeValueTemplate()
+    {
+        using var source = StreamFromString("""
+            <report sheet="Q1 Bob's Team" range="='Q1 Bob''s Team'!$A$1:$B$2">
+              <row name="Alpha" amount="12.5"/>
+              <row name="Beta" amount="7.25"/>
+            </report>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/report">
+                <ss:Workbook>
+                  <ss:Names>
+                    <ss:NamedRange ss:Name="GeneratedRows" ss:RefersTo="{@range}"/>
+                  </ss:Names>
+                  <ss:Worksheet ss:Name="{@sheet}">
+                    <ss:Table>
+                      <xsl:for-each select="row">
+                        <ss:Row>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@name"/></ss:Data></ss:Cell>
+                          <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="@amount"/></ss:Data></ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Q1 Bob's Team");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Alpha"));
+        sheet.GetCell(2, 2)!.Value.Should().Be(new NumberValue(7.25));
+        workbook.NamedRanges["GeneratedRows"].Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2)));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlColumnSpanLayout()
     {
         using var source = StreamFromString("""
