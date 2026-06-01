@@ -314,6 +314,34 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedLiveWebQueriesRetentionPackage_IncludesWebQueryConnectionMetadata()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-live-web-queries-001");
+        var report = XlsxFeatureInspector.Inspect(package);
+        report.Features.Select(feature => feature.Kind).Distinct().Should().BeEquivalentTo(
+            new[] { XlsxUnsupportedFeatureKind.LiveWebQueries });
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var connectionsEntry = archive.GetEntry("xl/connections.xml");
+        var webPublishItemsEntry = archive.GetEntry("xl/webPublishItems.xml");
+        connectionsEntry.Should().NotBeNull();
+        webPublishItemsEntry.Should().NotBeNull();
+
+        XDocument connectionsXml;
+        using (var stream = connectionsEntry!.Open())
+            connectionsXml = XDocument.Load(stream);
+
+        XNamespace sheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var webPr = connectionsXml
+            .Descendants(sheetNs + "webPr")
+            .Should()
+            .ContainSingle()
+            .Subject;
+        webPr.Attribute("url")?.Value.Should().Be("https://example.com/freex-web-query.html");
+    }
+
+    [Fact]
     public void GeneratedUnsupportedSheetTypesRetentionPackage_ListsWorkbookSheetReferences()
     {
         using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-unsupported-sheet-types-001");
