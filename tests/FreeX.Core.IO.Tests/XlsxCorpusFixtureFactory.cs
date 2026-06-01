@@ -4388,7 +4388,10 @@ internal static class XlsxCorpusFixtureFactory
             ShowClassicLayout = true,
             MergeAndCenterLabels = true,
             AltTextTitle = "Corpus pivot",
-            AltTextDescription = "Generated PivotTable parity fixture"
+            AltTextDescription = "Generated PivotTable parity fixture",
+            // dataCaption is a required OOXML attribute; FreeX writes the Excel default "Values" when unset,
+            // so the fixture states it explicitly to keep the save/load round-trip identity-stable.
+            DataCaption = "Values"
         };
         pivot.RowFields.Add(new PivotFieldModel(0));
         pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum", 4));
@@ -4790,7 +4793,9 @@ internal static class XlsxCorpusFixtureFactory
         var pivot = new PivotTableModel
         {
             Name = "PivotCalcField", CacheId = 3, SourceRange = Range(sheet, "A1", "C4"),
-            TargetRange = Range(sheet, "A6", "C10"), PackagePart = "xl/pivotTables/pivotTable3.xml"
+            TargetRange = Range(sheet, "A6", "C10"), PackagePart = "xl/pivotTables/pivotTable3.xml",
+            // dataCaption is a required OOXML attribute; FreeX writes the Excel default "Values" when unset.
+            DataCaption = "Values"
         };
         pivot.CalculatedFields.Add(new PivotCalculatedFieldModel("Margin", "Sales-Cost"));
         pivot.RowFields.Add(new PivotFieldModel(0));

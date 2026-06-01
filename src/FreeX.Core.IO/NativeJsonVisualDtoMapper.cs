@@ -75,7 +75,12 @@ internal static class NativeJsonVisualDtoMapper
 
             NormalizePictureCrop(picture);
             foreach (var cellDto in pictureDto.Cells ?? [])
+            {
+                if (cellDto is null)
+                    continue;
+
                 picture.Cells.Add(new PictureCellSnapshot(cellDto.RowOffset, cellDto.ColumnOffset, cellDto.Text ?? ""));
+            }
 
             return picture;
         }

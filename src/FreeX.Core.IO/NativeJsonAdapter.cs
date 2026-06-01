@@ -78,7 +78,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             sheet.IsProtected = sDto.IsProtected;
             sheet.ProtectionPassword = sDto.IsProtected ? sDto.ProtectionPassword : null;
             sheet.ProtectionMetadata = ToWorksheetProtectionMetadata(sDto.ProtectionMetadata);
-            if (sDto.ProtectionPermissions is { Count: > 0 })
+            if (sDto.ProtectionPermissions is not null)
             {
                 sheet.ProtectionPermissions.Clear();
                 foreach (var permission in sDto.ProtectionPermissions.Where(Enum.IsDefined).Distinct())
