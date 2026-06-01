@@ -79,6 +79,30 @@ public sealed class ExcelWorksheetNavigationPlannerTests(ITestOutputHelper outpu
     }
 
     [Theory]
+    [InlineData(Key.PageDown, Key.None, ModifierKeys.Alt, CellAddress.MaxCol - 1, CellAddress.MaxCol)]
+    [InlineData(Key.System, Key.PageDown, ModifierKeys.Alt | ModifierKeys.Shift, CellAddress.MaxCol - 1, CellAddress.MaxCol)]
+    [InlineData(Key.PageUp, Key.None, ModifierKeys.Alt, 2u, 1u)]
+    [InlineData(Key.System, Key.PageUp, ModifierKeys.Alt | ModifierKeys.Shift, 2u, 1u)]
+    public void GetHorizontalPageTarget_ClampsAtWorksheetEdges(
+        Key key,
+        Key systemKey,
+        ModifierKeys modifiers,
+        uint currentCol,
+        uint expectedCol)
+    {
+        var current = new CellAddress(SheetId, 5, currentCol);
+
+        var target = ExcelWorksheetNavigationPlanner.GetHorizontalPageTarget(
+            key,
+            systemKey,
+            modifiers,
+            current,
+            pageSize: 6);
+
+        target.Should().Be(new CellAddress(SheetId, 5, expectedCol));
+    }
+
+    [Theory]
     [InlineData(Key.End, ModifierKeys.None, false, true)]
     [InlineData(Key.End, ModifierKeys.None, true, false)]
     public void TryToggleEndMode_MapsPlainEndKey(

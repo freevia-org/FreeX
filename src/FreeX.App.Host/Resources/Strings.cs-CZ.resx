@@ -4587,6 +4587,12 @@
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Odebrat ze seznamu</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Přidat na panel nástrojů Rychlý přístup</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Odebrat z panelu nástrojů Rychlý přístup</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Odebrat konec stránky</value>
   </data>

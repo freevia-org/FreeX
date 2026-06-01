@@ -4587,6 +4587,12 @@
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Ukloni s liste</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Dodaj na traku sa alatkama za brzi pristup</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Ukloni sa trake sa alatkama za brzi pristup</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Ukloni prelom stranice</value>
   </data>

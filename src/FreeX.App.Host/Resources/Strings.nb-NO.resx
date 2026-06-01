@@ -4597,6 +4597,12 @@ Sende krasjrapporter for dette testbygget?</value>
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Fjern fra listen</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Legg til på verktøylinjen for hurtigtilgang</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Fjern fra verktøylinjen for hurtigtilgang</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Fjern sideskift</value>
   </data>

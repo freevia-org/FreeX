@@ -4597,6 +4597,12 @@ ZX
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Αφαίρεση από τη λίστα</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Προσθήκη στη γραμμή εργαλείων γρήγορης πρόσβασης</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Κατάργηση από τη γραμμή εργαλείων γρήγορης πρόσβασης</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Κατάργηση αλλαγής σελίδας</value>
   </data>
