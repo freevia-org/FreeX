@@ -29,6 +29,18 @@ public static class XlsxWorkbookThemeReader
         try
         {
             using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            return Load(archive);
+        }
+        catch
+        {
+            return WorkbookTheme.Office;
+        }
+    }
+
+    internal static WorkbookTheme Load(ZipArchive archive)
+    {
+        try
+        {
             var themeEntry = archive.GetEntry("xl/theme/theme1.xml");
             if (themeEntry is null)
                 return WorkbookTheme.Office;

@@ -1,4 +1,3 @@
-using System.Globalization;
 using OxyPlot;
 using OxyPlot.Axes;
 using OxyPlot.Series;
@@ -25,7 +24,7 @@ public static partial class ChartRenderer
         for (uint r = dataStartRow; r <= endRow; r++)
         {
             if (cellLookup.TryGetValue((r, dataStartCol), out var cell) &&
-                double.TryParse(cell.DisplayText, NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
+                TryGetChartNumericValue(cell, out var v))
                 values.Add(v);
             else
                 values.Add(0);
@@ -119,7 +118,7 @@ public static partial class ChartRenderer
         for (uint r = dataStartRow; r <= endRow; r++)
         {
             if (cellLookup.TryGetValue((r, dataStartCol), out var cell) &&
-                double.TryParse(cell.DisplayText, NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
+                TryGetChartNumericValue(cell, out var v))
                 rawValues.Add(v);
         }
 

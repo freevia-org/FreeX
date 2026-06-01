@@ -22,7 +22,7 @@ public static partial class ChartRenderer
         for (uint r = dataStartRow; r <= endRow; r++)
         {
             if (cellLookup.TryGetValue((r, dataStartCol), out var cell) &&
-                double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
+                TryGetChartNumericValue(cell, out var v))
             {
                 var label = (int)(r - dataStartRow) < categories.Count
                     ? categories[(int)(r - dataStartRow)]
@@ -108,7 +108,7 @@ public static partial class ChartRenderer
             var colValues = new List<double>();
             for (uint r = dataStartRow; r <= endRow; r++)
                 if (cellLookup.TryGetValue((r, col), out var cell) &&
-                    double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
+                    TryGetChartNumericValue(cell, out var v))
                     colValues.Add(v);
 
             if (colValues.Count > 0)
@@ -187,7 +187,7 @@ public static partial class ChartRenderer
         for (uint r = dataStartRow; r <= endRow; r++)
         {
             if (cellLookup.TryGetValue((r, dataStartCol), out var cell) &&
-                double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v) && v > 0)
+                TryGetChartNumericValue(cell, out var v) && v > 0)
             {
                 var label = (int)(r - dataStartRow) < categories.Count
                     ? categories[(int)(r - dataStartRow)]
@@ -255,7 +255,7 @@ public static partial class ChartRenderer
         for (uint r = dataStartRow; r <= endRow; r++)
         {
             if (!cellLookup.TryGetValue((r, dataStartCol), out var cell)) continue;
-            if (!double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v) || v <= 0) continue;
+            if (!TryGetChartNumericValue(cell, out var v) || v <= 0) continue;
             var label = (int)(r - dataStartRow) < categories.Count
                 ? categories[(int)(r - dataStartRow)]
                 : $"Item {r - dataStartRow + 1}";
@@ -283,7 +283,7 @@ public static partial class ChartRenderer
         for (uint r = dataStartRow; r <= endRow; r++)
         {
             if (cellLookup.TryGetValue((r, dataStartCol), out var cell) &&
-                double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
+                TryGetChartNumericValue(cell, out var v))
             {
                 var label = (int)(r - dataStartRow) < categories.Count
                     ? categories[(int)(r - dataStartRow)]

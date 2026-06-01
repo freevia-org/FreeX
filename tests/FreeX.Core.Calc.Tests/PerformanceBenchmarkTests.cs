@@ -375,8 +375,8 @@ public class PerformanceBenchmarkTests
             $"{allocated:N0} bytes allocated, {allocated / iterations:N0} bytes/iteration");
 
         (allocated / iterations).Should().BeLessThan(
-            850,
-            "single-section number formats should skip List/StringBuilder section-splitting scaffolding");
+            760,
+            "single-section number formats should reuse cached split-section arrays");
     }
 
     [Fact]
@@ -391,6 +391,59 @@ public class PerformanceBenchmarkTests
         negative.Should().Be("-1");
         zero.Should().Be("0");
         text.Should().Be("a;bx");
+    }
+
+    [Fact]
+    public void Benchmark_RepeatedCustomNumberFormat_ReusesSplitSectionCache()
+    {
+        const int iterations = 10_000;
+        const string format = "#,##0.00;[Red]-#,##0.00;0.00;\"txt:\"@";
+        var workbook = new Workbook();
+        ScalarValue[] values =
+        [
+            new NumberValue(12345.678),
+            new NumberValue(-12345.678),
+            new NumberValue(0),
+            new TextValue("x")
+        ];
+
+        foreach (var value in values)
+            NumberFormatter.FormatWithColor(value, format, 12, workbook.IndexedColors, workbook.Theme);
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var result = NumberFormatter.FormatWithColor(
+                values[i & 3],
+                format,
+                12,
+                workbook.IndexedColors,
+                workbook.Theme);
+
+            if (i < 4)
+            {
+                var expected = (i & 3) switch
+                {
+                    0 => "12,345.68",
+                    1 => "-12,345.68",
+                    2 => "0.00",
+                    _ => "txt:x"
+                };
+                if (result.Text != expected)
+                    throw new Xunit.Sdk.XunitException("Repeated custom number format produced an unexpected value.");
+            }
+        }
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Repeated custom number format: {iterations:N0} iterations, {sw.Elapsed.TotalMilliseconds:F2}ms, " +
+            $"{allocated:N0} bytes allocated, {allocated / iterations:N0} bytes/iteration");
+
+        (allocated / iterations).Should().BeLessThan(
+            1_350,
+            "repeated custom display formats should reuse cached split-section arrays");
     }
 
     [Fact]

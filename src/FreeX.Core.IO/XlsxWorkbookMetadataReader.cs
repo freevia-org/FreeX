@@ -13,6 +13,18 @@ internal static class XlsxWorkbookMetadataReader
         try
         {
             using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            return LoadWorkbookMetadata(archive);
+        }
+        catch
+        {
+            return XlsxWorkbookMetadataSnapshot.Default;
+        }
+    }
+
+    internal static XlsxWorkbookMetadataSnapshot LoadWorkbookMetadata(ZipArchive archive)
+    {
+        try
+        {
             var workbookEntry = archive.GetEntry("xl/workbook.xml");
             if (workbookEntry is null)
                 return XlsxWorkbookMetadataSnapshot.Default;

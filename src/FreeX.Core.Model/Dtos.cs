@@ -74,7 +74,8 @@ public sealed record ChartDataCell(
     SheetId SheetId,
     uint Row,
     uint Col,
-    string DisplayText);
+    string DisplayText,
+    ScalarValue? RawValue = null);
 
 public sealed record RowMetric(uint Row, double Height, double TopOffset);
 public sealed record ColMetric(uint Col, double Width, double LeftOffset);

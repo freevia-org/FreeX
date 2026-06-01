@@ -149,4 +149,12 @@ public class LexerTests
         var tokens = new Lexer("=ABCD1").Tokenize();
         tokens.Should().NotContain(t => t.Type == TokenType.CellRef);
     }
+
+    [Fact]
+    public void Lexer_LoneDecimalPoint_ThrowsFormulaParseException()
+    {
+        Action act = () => new Lexer("=.").Tokenize();
+
+        act.Should().Throw<FormulaParseException>();
+    }
 }

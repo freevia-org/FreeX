@@ -20,6 +20,18 @@ public partial class GridView
     private static readonly Brush NativeControlMutedTextBrush = MakeBrush(89, 89, 89);
     private static readonly Pen NativeControlBorderPen = CreateFrozenPen(NativeControlBorderBrush, 1);
 
+    private const int DrawingObjectBrushCacheLimit = 256;
+    private const int DrawingObjectPenCacheLimit = 256;
+    private const int DrawingObjectGradientBrushCacheLimit = 256;
+    private const int DrawingObjectClipGeometryCacheLimit = 4096;
+    private const int DrawingObjectTextLayoutCacheLimit = 4096;
+
+    private readonly Dictionary<DrawingObjectBrushKey, Brush> _drawingObjectBrushCache = new();
+    private readonly Dictionary<DrawingObjectPenKey, Pen> _drawingObjectPenCache = new();
+    private readonly Dictionary<DrawingObjectGradientBrushKey, Brush> _drawingObjectGradientBrushCache = new();
+    private readonly Dictionary<Rect, RectangleGeometry> _drawingObjectClipGeometryCache = new();
+    private readonly Dictionary<DrawingObjectTextLayoutKey, FormattedText> _drawingObjectTextLayoutCache = new();
+
     private void RenderCharts(DrawingContext dc)
     {
         if (Charts == null || Viewport == null) return;
@@ -40,6 +52,7 @@ public partial class GridView
         if (TextBoxes == null || Viewport == null) return;
 
         var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         foreach (var textBox in TextBoxes)
         {
             if (!textBox.IsVisible) continue;
@@ -49,25 +62,15 @@ public partial class GridView
             var rotationPushed = PushRotation(dc, textBox.RotationDegrees, rect);
             var colors = ResolveTextBoxColors(textBox, WorkbookTheme);
             DrawTextBoxThemeEffect(dc, rect, themeEffect);
-            var fillBrush = MakeBrushAlpha(242, colors.Fill.R, colors.Fill.G, colors.Fill.B);
-            var borderPen = new Pen(MakeBrush(colors.Outline.R, colors.Outline.G, colors.Outline.B), 1);
-            borderPen.Freeze();
+            var fillBrush = GetDrawingObjectBrush(242, colors.Fill);
+            var borderPen = GetDrawingObjectPen(255, colors.Outline, 1);
             dc.DrawRectangle(fillBrush, borderPen, rect);
 
-            var text = new FormattedText(
-                textBox.Text,
-                CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                DefaultTypeface,
-                12,
-                TextBrush,
-                VisualTreeHelper.GetDpi(this).PixelsPerDip)
-            {
-                MaxTextWidth = Math.Max(1, rect.Width - 8),
-                MaxTextHeight = Math.Max(1, rect.Height - 8)
-            };
+            var textWidth = Math.Max(1, rect.Width - 8);
+            var textHeight = Math.Max(1, rect.Height - 8);
+            var text = GetDrawingObjectText(textBox.Text, TextBrush, 12, textWidth, textHeight, pixelsPerDip);
 
-            dc.PushClip(new RectangleGeometry(new Rect(rect.Left + 4, rect.Top + 4, rect.Width - 8, rect.Height - 8)));
+            dc.PushClip(GetDrawingObjectClipGeometry(new Rect(rect.Left + 4, rect.Top + 4, textWidth, textHeight)));
             dc.DrawText(text, new Point(rect.Left + 4, rect.Top + 4));
             dc.Pop();
             if (rotationPushed) dc.Pop();
@@ -89,8 +92,7 @@ public partial class GridView
             var colors = ResolveDrawingShapeColors(shape, WorkbookTheme);
             DrawShapeThemeEffect(dc, shape.Kind, rect, themeEffect);
             DrawShapeAuthoredEffect(dc, shape.Kind, rect, shape);
-            var pen = new Pen(MakeBrush(colors.Outline.R, colors.Outline.G, colors.Outline.B), 1.5);
-            pen.Freeze();
+            var pen = GetDrawingObjectPen(255, colors.Outline, 1.5);
             var fill = CreateDrawingShapeFill(shape, colors.Fill);
             switch (shape.Kind)
             {
@@ -199,21 +201,16 @@ public partial class GridView
 
     private void DrawClippedText(DrawingContext dc, string textValue, Rect rect, Brush brush, double fontSize, double verticalPadding)
     {
-        var text = new FormattedText(
+        var text = GetDrawingObjectText(
             string.IsNullOrWhiteSpace(textValue) ? " " : textValue,
-            CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            DefaultTypeface,
-            fontSize,
             brush,
-            VisualTreeHelper.GetDpi(this).PixelsPerDip)
-        {
-            MaxTextWidth = Math.Max(1, rect.Width),
-            MaxTextHeight = Math.Max(1, rect.Height),
-            Trimming = TextTrimming.CharacterEllipsis
-        };
+            fontSize,
+            Math.Max(1, rect.Width),
+            Math.Max(1, rect.Height),
+            VisualTreeHelper.GetDpi(this).PixelsPerDip,
+            TextTrimming.CharacterEllipsis);
 
-        dc.PushClip(new RectangleGeometry(rect));
+        dc.PushClip(GetDrawingObjectClipGeometry(rect));
         dc.DrawText(text, new Point(rect.Left, rect.Top + verticalPadding));
         dc.Pop();
     }
@@ -224,23 +221,15 @@ public partial class GridView
     private static string FormatTimelineRange(TimelineModel timeline)
         => GridDrawingObjectPlanner.FormatTimelineRange(timeline);
 
-    private static Brush CreateDrawingShapeFill(DrawingShapeModel shape, CellColor startColor)
+    private Brush CreateDrawingShapeFill(DrawingShapeModel shape, CellColor startColor)
     {
         if (shape.GradientFillEndColor is { } endColor && shape.Kind != DrawingShapeKind.Line)
-        {
-            var brush = new LinearGradientBrush(
-                Color.FromArgb(72, startColor.R, startColor.G, startColor.B),
-                Color.FromArgb(72, endColor.R, endColor.G, endColor.B),
-                new Point(0, 0),
-                new Point(1, 1));
-            brush.Freeze();
-            return brush;
-        }
+            return GetDrawingObjectGradientBrush(startColor, endColor);
 
-        return MakeBrushAlpha(32, startColor.R, startColor.G, startColor.B);
+        return GetDrawingObjectBrush(32, startColor);
     }
 
-    private static void DrawShapeAuthoredEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, DrawingShapeModel shape)
+    private void DrawShapeAuthoredEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, DrawingShapeModel shape)
     {
         switch (shape.GetEffectiveEffectPreset())
         {
@@ -248,15 +237,15 @@ public partial class GridView
                 DrawShapeShadowEffect(dc, kind, rect, offsetX: 3, offsetY: 3, alpha: 58);
                 break;
             case DrawingShapeEffectPreset.Glow:
-                DrawShapeOutlineEffect(dc, kind, rect, MakeBrushAlpha(96, 91, 155, 213), thickness: 6, inflate: 3);
+                DrawShapeOutlineEffect(dc, kind, rect, alpha: 96, r: 91, g: 155, b: 213, thickness: 6, inflate: 3);
                 break;
             case DrawingShapeEffectPreset.SoftEdges:
-                DrawShapeOutlineEffect(dc, kind, rect, MakeBrushAlpha(54, 128, 128, 128), thickness: 8, inflate: 2);
+                DrawShapeOutlineEffect(dc, kind, rect, alpha: 54, r: 128, g: 128, b: 128, thickness: 8, inflate: 2);
                 break;
         }
     }
 
-    private static void DrawShapeShadowEffect(
+    private void DrawShapeShadowEffect(
         DrawingContext dc,
         DrawingShapeKind kind,
         Rect rect,
@@ -266,9 +255,8 @@ public partial class GridView
     {
         var shadowRect = rect;
         shadowRect.Offset(offsetX, offsetY);
-        var shadowBrush = MakeBrushAlpha(alpha, 0, 0, 0);
-        var shadowPen = new Pen(shadowBrush, 2);
-        shadowPen.Freeze();
+        var shadowBrush = GetDrawingObjectBrush(alpha, 0, 0, 0);
+        var shadowPen = GetDrawingObjectPen(alpha, 0, 0, 0, 2);
 
         switch (kind)
         {
@@ -284,18 +272,20 @@ public partial class GridView
         }
     }
 
-    private static void DrawShapeOutlineEffect(
+    private void DrawShapeOutlineEffect(
         DrawingContext dc,
         DrawingShapeKind kind,
         Rect rect,
-        Brush brush,
+        byte alpha,
+        byte r,
+        byte g,
+        byte b,
         double thickness,
         double inflate)
     {
         var effectRect = rect;
         effectRect.Inflate(inflate, inflate);
-        var pen = new Pen(brush, thickness);
-        pen.Freeze();
+        var pen = GetDrawingObjectPen(alpha, r, g, b, thickness);
 
         switch (kind)
         {
@@ -311,7 +301,7 @@ public partial class GridView
         }
     }
 
-    private static void DrawTextBoxThemeEffect(DrawingContext dc, Rect rect, WorkbookThemeEffectStyle effect)
+    private void DrawTextBoxThemeEffect(DrawingContext dc, Rect rect, WorkbookThemeEffectStyle effect)
     {
         if (!effect.HasShadow)
             return;
@@ -319,10 +309,10 @@ public partial class GridView
         var shadowRect = rect;
         shadowRect.Offset(effect.ShadowOffsetX, effect.ShadowOffsetY);
         var alpha = (byte)Math.Clamp(Math.Round(255 * effect.ShadowOpacity), 0, 255);
-        dc.DrawRectangle(MakeBrushAlpha(alpha, 0, 0, 0), null, shadowRect);
+        dc.DrawRectangle(GetDrawingObjectBrush(alpha, 0, 0, 0), null, shadowRect);
     }
 
-    private static void DrawShapeThemeEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, WorkbookThemeEffectStyle effect)
+    private void DrawShapeThemeEffect(DrawingContext dc, DrawingShapeKind kind, Rect rect, WorkbookThemeEffectStyle effect)
     {
         if (!effect.HasShadow)
             return;
@@ -330,9 +320,8 @@ public partial class GridView
         var shadowRect = rect;
         shadowRect.Offset(effect.ShadowOffsetX, effect.ShadowOffsetY);
         var alpha = (byte)Math.Clamp(Math.Round(255 * effect.ShadowOpacity), 0, 255);
-        var shadowBrush = MakeBrushAlpha(alpha, 0, 0, 0);
-        var shadowPen = new Pen(shadowBrush, 2);
-        shadowPen.Freeze();
+        var shadowBrush = GetDrawingObjectBrush(alpha, 0, 0, 0);
+        var shadowPen = GetDrawingObjectPen(alpha, 0, 0, 0, 2);
 
         switch (kind)
         {
@@ -469,24 +458,19 @@ public partial class GridView
         dc.DrawRectangle(ObjectPlaceholderFill, ObjectPlaceholderPen, rect);
         DrawPlaceholderDiagonals(dc, rect);
 
-        var text = new FormattedText(
+        var text = GetDrawingObjectText(
             label,
-            CultureInfo.CurrentCulture,
-            FlowDirection.LeftToRight,
-            DefaultTypeface,
-            11,
             ObjectPlaceholderTextBrush,
-            VisualTreeHelper.GetDpi(this).PixelsPerDip)
-        {
-            MaxTextWidth = Math.Max(1, rect.Width - 8),
-            MaxTextHeight = Math.Max(1, rect.Height - 8),
-            Trimming = TextTrimming.CharacterEllipsis
-        };
+            11,
+            Math.Max(1, rect.Width - 8),
+            Math.Max(1, rect.Height - 8),
+            VisualTreeHelper.GetDpi(this).PixelsPerDip,
+            TextTrimming.CharacterEllipsis);
 
         var textPoint = new Point(
             rect.Left + Math.Max(4, (rect.Width - text.Width) / 2),
             rect.Top + Math.Max(4, (rect.Height - text.Height) / 2));
-        dc.PushClip(new RectangleGeometry(new Rect(rect.Left + 4, rect.Top + 4, Math.Max(1, rect.Width - 8), Math.Max(1, rect.Height - 8))));
+        dc.PushClip(GetDrawingObjectClipGeometry(new Rect(rect.Left + 4, rect.Top + 4, Math.Max(1, rect.Width - 8), Math.Max(1, rect.Height - 8))));
         dc.DrawText(text, textPoint);
         dc.Pop();
     }
@@ -503,6 +487,130 @@ public partial class GridView
         pen.Freeze();
         return pen;
     }
+
+    private Brush GetDrawingObjectBrush(byte alpha, CellColor color) =>
+        GetDrawingObjectBrush(alpha, color.R, color.G, color.B);
+
+    private Brush GetDrawingObjectBrush(byte alpha, byte r, byte g, byte b)
+    {
+        var key = new DrawingObjectBrushKey(alpha, r, g, b);
+        if (_drawingObjectBrushCache.TryGetValue(key, out var cached))
+            return cached;
+
+        if (_drawingObjectBrushCache.Count >= DrawingObjectBrushCacheLimit)
+            _drawingObjectBrushCache.Clear();
+
+        var brush = MakeBrushAlpha(alpha, r, g, b);
+        _drawingObjectBrushCache.Add(key, brush);
+        return brush;
+    }
+
+    private Pen GetDrawingObjectPen(byte alpha, CellColor color, double thickness) =>
+        GetDrawingObjectPen(alpha, color.R, color.G, color.B, thickness);
+
+    private Pen GetDrawingObjectPen(byte alpha, byte r, byte g, byte b, double thickness)
+    {
+        var key = new DrawingObjectPenKey(alpha, r, g, b, thickness);
+        if (_drawingObjectPenCache.TryGetValue(key, out var cached))
+            return cached;
+
+        if (_drawingObjectPenCache.Count >= DrawingObjectPenCacheLimit)
+            _drawingObjectPenCache.Clear();
+
+        var pen = CreateFrozenPen(GetDrawingObjectBrush(alpha, r, g, b), thickness);
+        _drawingObjectPenCache.Add(key, pen);
+        return pen;
+    }
+
+    private Brush GetDrawingObjectGradientBrush(CellColor startColor, CellColor endColor)
+    {
+        var key = new DrawingObjectGradientBrushKey(startColor, endColor);
+        if (_drawingObjectGradientBrushCache.TryGetValue(key, out var cached))
+            return cached;
+
+        if (_drawingObjectGradientBrushCache.Count >= DrawingObjectGradientBrushCacheLimit)
+            _drawingObjectGradientBrushCache.Clear();
+
+        var brush = new LinearGradientBrush(
+            Color.FromArgb(72, startColor.R, startColor.G, startColor.B),
+            Color.FromArgb(72, endColor.R, endColor.G, endColor.B),
+            new Point(0, 0),
+            new Point(1, 1));
+        brush.Freeze();
+        _drawingObjectGradientBrushCache.Add(key, brush);
+        return brush;
+    }
+
+    private RectangleGeometry GetDrawingObjectClipGeometry(Rect rect)
+    {
+        if (_drawingObjectClipGeometryCache.TryGetValue(rect, out var cached))
+            return cached;
+
+        if (_drawingObjectClipGeometryCache.Count >= DrawingObjectClipGeometryCacheLimit)
+            _drawingObjectClipGeometryCache.Clear();
+
+        var geometry = new RectangleGeometry(rect);
+        geometry.Freeze();
+        _drawingObjectClipGeometryCache.Add(rect, geometry);
+        return geometry;
+    }
+
+    private FormattedText GetDrawingObjectText(
+        string textValue,
+        Brush brush,
+        double fontSize,
+        double maxTextWidth,
+        double maxTextHeight,
+        double pixelsPerDip,
+        TextTrimming trimming = TextTrimming.None)
+    {
+        var key = new DrawingObjectTextLayoutKey(
+            textValue,
+            CultureInfo.CurrentCulture.Name,
+            brush,
+            fontSize,
+            maxTextWidth,
+            maxTextHeight,
+            pixelsPerDip,
+            trimming);
+        if (_drawingObjectTextLayoutCache.TryGetValue(key, out var cached))
+            return cached;
+
+        if (_drawingObjectTextLayoutCache.Count >= DrawingObjectTextLayoutCacheLimit)
+            _drawingObjectTextLayoutCache.Clear();
+
+        var formatted = new FormattedText(
+            textValue,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            DefaultTypeface,
+            fontSize,
+            brush,
+            pixelsPerDip)
+        {
+            MaxTextWidth = maxTextWidth,
+            MaxTextHeight = maxTextHeight,
+            Trimming = trimming
+        };
+        _drawingObjectTextLayoutCache.Add(key, formatted);
+        return formatted;
+    }
+
+    private readonly record struct DrawingObjectBrushKey(byte Alpha, byte R, byte G, byte B);
+
+    private readonly record struct DrawingObjectPenKey(byte Alpha, byte R, byte G, byte B, double Thickness);
+
+    private readonly record struct DrawingObjectGradientBrushKey(CellColor StartColor, CellColor EndColor);
+
+    private readonly record struct DrawingObjectTextLayoutKey(
+        string Text,
+        string CultureName,
+        Brush Brush,
+        double FontSize,
+        double MaxTextWidth,
+        double MaxTextHeight,
+        double PixelsPerDip,
+        TextTrimming Trimming);
 
 }
 

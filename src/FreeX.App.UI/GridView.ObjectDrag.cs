@@ -97,9 +97,8 @@ public partial class GridView
         return null;
     }
 
-    // v1 simplification: the selection frame and handles stay axis-aligned around the
-    // object's (unrotated) bounding box; we do not rotate the handle frame to match
-    // RotationDegrees. Rotated handle hit-testing is out of scope for v1.
+    // The selection frame and handles stay axis-aligned around the object's
+    // unrotated bounding box; body hit-testing still honors RotationDegrees.
     internal void DrawObjectSelectionHandles(DrawingContext dc, Rect r)
     {
         dc.DrawRectangle(null, SelectionBorderPen, r);
@@ -195,7 +194,7 @@ public partial class GridView
             for (var i = TextBoxes.Count - 1; i >= 0; i--)
             {
                 var t = TextBoxes[i];
-                if (t.IsVisible && TryCreateAnchoredObjectRect(t.Anchor, t.Width, t.Height, 8, 8, out var r) && ContainsInclusive(r, pos))
+                if (t.IsVisible && TryCreateAnchoredObjectRect(t.Anchor, t.Width, t.Height, 8, 8, out var r) && ContainsRotatedInclusive(r, pos, t.RotationDegrees))
                     return (t.Id, ObjectKind.TextBox, r, t.Anchor);
             }
 
@@ -203,7 +202,7 @@ public partial class GridView
             for (var i = Pictures.Count - 1; i >= 0; i--)
             {
                 var p = Pictures[i];
-                if (p.IsVisible && TryCreateAnchoredObjectRect(p.Anchor, p.Width, p.Height, 24, 18, out var r) && ContainsInclusive(r, pos))
+                if (p.IsVisible && TryCreateAnchoredObjectRect(p.Anchor, p.Width, p.Height, 24, 18, out var r) && ContainsRotatedInclusive(r, pos, p.RotationDegrees))
                     return (p.Id, ObjectKind.Picture, r, p.Anchor);
             }
 
@@ -211,11 +210,30 @@ public partial class GridView
             for (var i = DrawingShapes.Count - 1; i >= 0; i--)
             {
                 var s = DrawingShapes[i];
-                if (s.IsVisible && TryCreateAnchoredObjectRect(s.Anchor, s.Width, s.Height, 8, 8, out var r) && ContainsInclusive(r, pos))
+                if (s.IsVisible && TryCreateAnchoredObjectRect(s.Anchor, s.Width, s.Height, 8, 8, out var r) && ContainsRotatedInclusive(r, pos, s.RotationDegrees))
                     return (s.Id, ObjectKind.Shape, r, s.Anchor);
             }
 
         return default;
+    }
+
+    private static bool ContainsRotatedInclusive(Rect rect, Point pos, double rotationDegrees)
+    {
+        if (Math.Abs(rotationDegrees) <= 0.0001)
+            return ContainsInclusive(rect, pos);
+
+        var radians = -rotationDegrees * Math.PI / 180.0;
+        var centerX = rect.Left + rect.Width / 2.0;
+        var centerY = rect.Top + rect.Height / 2.0;
+        var dx = pos.X - centerX;
+        var dy = pos.Y - centerY;
+        var cos = Math.Cos(radians);
+        var sin = Math.Sin(radians);
+        var local = new Point(
+            centerX + dx * cos - dy * sin,
+            centerY + dx * sin + dy * cos);
+
+        return ContainsInclusive(rect, local);
     }
 
     private static bool ContainsInclusive(Rect rect, Point pos) =>

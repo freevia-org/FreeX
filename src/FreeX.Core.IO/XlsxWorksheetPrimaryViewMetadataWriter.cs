@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -13,25 +12,22 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
         if (worksheetPathMap is null)
             return;
 
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
+        Save(session, workbook);
+    }
+
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
         foreach (var sheet in workbook.Sheets)
         {
             var metadata = sheet.PrimaryViewMetadata;
             if (metadata is null)
                 continue;
 
-            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
+            if (!session.TryGetWorksheet(sheet, out var worksheetEdit))
                 continue;
 
-            var entry = archive.GetEntry(worksheetPath);
-            if (entry is null)
-                continue;
-
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(entry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
+            var root = worksheetEdit.Root;
             var sheetViews = root.Element(WorksheetNs + "sheetViews");
             if (sheetViews is null)
             {
@@ -87,7 +83,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 }
             }
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            session.MarkDirty(worksheetEdit);
         }
     }
 

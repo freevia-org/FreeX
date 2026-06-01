@@ -41,7 +41,8 @@ function Test-IsIgnoredProjectPath {
     return $segments -contains "bin" -or
         $segments -contains "obj" -or
         $segments -contains ".git" -or
-        $segments -contains ".worktrees"
+        $segments -contains ".worktrees" -or
+        $segments -contains ".claude"
 }
 
 $resolvedProjectRoot = Resolve-RepoPath $ProjectRoot

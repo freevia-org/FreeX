@@ -12,6 +12,18 @@ internal static class XlsxStructuredTableMetadataReader
         try
         {
             using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            return Load(archive);
+        }
+        catch
+        {
+            return StructuredTablePackageMetadata.Empty;
+        }
+    }
+
+    internal static StructuredTablePackageMetadata Load(ZipArchive archive)
+    {
+        try
+        {
             var workbookEntry = archive.GetEntry("xl/workbook.xml");
             var workbookRelsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
             if (workbookEntry is null || workbookRelsEntry is null)

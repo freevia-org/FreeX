@@ -76,6 +76,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private bool _dragSelectActive;
     private bool _dragSelectAddsAdditionalRange;
     private bool _dragSelectStatusRefreshPending;
+    private bool _dragSelectToolbarRefreshPending;
     private FreeX.App.UI.SplitPaneRegion _activeSplitPaneRegion = FreeX.App.UI.SplitPaneRegion.BottomRight;
     private readonly Dictionary<SheetId, SplitPaneViewportOffsets> _splitPaneViewportOffsets = [];
     private readonly List<FormulaTraceArrow> _formulaTraceArrows = [];
@@ -139,6 +140,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private RibbonFallbackWork _lastRibbonFallbackRequestedWork;
     private RibbonFallbackWork _lastRibbonFallbackMergedWork;
     private RibbonFallbackWork _lastRibbonFallbackExecutedWork;
+    private RibbonAppliedStateKey? _queuedRibbonCompactFallbackStateKey;
     private bool _suppressRibbonSelectionChangedNormalization;
     private bool _ribbonResizeCompactionPendingOnExit;
     private bool _resizeViewportRefreshPending;

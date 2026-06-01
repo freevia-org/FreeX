@@ -152,11 +152,25 @@ public static partial class BuiltInFunctions
     /// <summary>Simple Excel-style wildcard match (* = any chars, ? = any single char).</summary>
     private static bool WildcardMatch(string text, string pattern, bool ignoreCase)
     {
+        var key = (pattern, ignoreCase);
+        if (!WildcardCache.ContainsKey(key) &&
+            WildcardCache.Count >= FormulaSafetyLimits.MaxRegexCacheEntries)
+        {
+            WildcardCache.Clear();
+        }
+
         var regex = WildcardCache.GetOrAdd((pattern, ignoreCase), key =>
         {
             var opts = key.IgnoreCase ? RegexOptions.IgnoreCase | RegexOptions.Compiled : RegexOptions.Compiled;
-            return new Regex(WildcardToRegexPattern(key.Pattern), opts);
+            return new Regex(WildcardToRegexPattern(key.Pattern), opts, FormulaSafetyLimits.RegexTimeout);
         });
-        return regex.IsMatch(text);
+        try
+        {
+            return regex.IsMatch(text);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
     }
 }

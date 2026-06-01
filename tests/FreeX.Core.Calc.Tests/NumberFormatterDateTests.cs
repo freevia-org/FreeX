@@ -14,4 +14,12 @@ public sealed class NumberFormatterDateTests
         action.Should().NotThrow();
         action().Should().Be("9999999");
     }
+
+    [Fact]
+    public void Format_DateTimeValueWithNumericFormat_RendersSerialNumber()
+    {
+        var result = NumberFormatter.Format(new DateTimeValue(45292.125), "0.00");
+
+        result.Should().Be("45292.13");
+    }
 }

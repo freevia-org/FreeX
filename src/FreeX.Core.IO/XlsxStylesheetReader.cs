@@ -10,6 +10,18 @@ internal static class XlsxStylesheetReader
         try
         {
             using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+            return Load(archive);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    internal static XDocument? Load(ZipArchive archive)
+    {
+        try
+        {
             var stylesEntry = archive.GetEntry("xl/styles.xml");
             return stylesEntry is null ? null : XlsxPackageXmlEditor.LoadXml(stylesEntry);
         }

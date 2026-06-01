@@ -254,7 +254,7 @@ public partial class DataValidationDialog : Window
     private void FocusInvalidCriteriaInput(string typeTag, string opTag)
     {
         ValidationTabs.SelectedItem = SettingsTab;
-        var target = RequiresSecondFormula(typeTag, opTag) && string.IsNullOrWhiteSpace(Formula2Box.Text)
+        var target = ShouldFocusSecondCriteriaInput(typeTag, opTag, Formula1Box.Text, Formula2Box.Text)
             ? Formula2Box
             : Formula1Box;
         target.Focus();

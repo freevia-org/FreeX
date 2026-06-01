@@ -236,6 +236,23 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void ClipboardRangeAnimationTimer_StopsWhenGridUnloads()
+    {
+        var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
+        var stateSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.State.cs"));
+        var constructorStart = gridViewSource.IndexOf("public GridView()", StringComparison.Ordinal);
+        var constructor = gridViewSource[
+            constructorStart..
+            gridViewSource.IndexOf("/// <summary>", constructorStart, StringComparison.Ordinal)];
+        var stopMarchTimer = stateSource[
+            stateSource.IndexOf("private void StopMarchTimer()", StringComparison.Ordinal)..];
+
+        constructor.Should().Contain("Unloaded += (_, _) => StopMarchTimer();");
+        stopMarchTimer.Should().Contain("_marchTimer?.Stop();");
+        stopMarchTimer.Should().Contain("_marchTimer = null;");
+    }
+
+    [Fact]
     public void GetMarchingAntsPhase_NormalizesAnimationOffset()
     {
         var getPhase = typeof(GridView).GetMethod(
@@ -595,6 +612,7 @@ public sealed class GridViewRenderPerformanceTests
 
         buildLookup.Should().Contain("foreach (var cell in viewport.ChartDataCells)");
         buildLookup.Should().Contain("if (cell.SheetId != sheetId)");
+        buildLookup.Should().Contain("cell.RawValue");
         buildLookup.Should().NotContain(".Where(");
         buildLookup.Should().NotContain(".Select(");
     }
@@ -611,7 +629,12 @@ public sealed class GridViewRenderPerformanceTests
         drawingSource.Should().Contain("GetCachedChartImage(chart, Viewport, WorkbookTheme)");
         drawingSource.Should().NotContain("ChartRenderer.Render(chart, Viewport, WorkbookTheme)");
         cacheSource.Should().Contain("_chartRenderCache.TryGetValue");
-        cacheSource.Should().Contain("ChartRenderer.Render(chart, viewport, theme)");
+        cacheSource.Should().Contain("VisualTreeHelper.GetDpi(this)");
+        cacheSource.Should().Contain("ZoomFactor > 0 ? ZoomFactor : 1.0");
+        cacheSource.Should().Contain("private readonly double _renderScale;");
+        cacheSource.Should().Contain("chart.Width * renderScale");
+        cacheSource.Should().Contain("chart.Height * renderScale");
+        cacheSource.Should().Contain("ChartRenderer.Render(chart, viewport, theme, renderScale)");
         propertiesSource.Should().Contain("OnChartRenderCacheInputChanged");
         propertiesSource.Should().Contain("grid.ClearChartRenderCache();");
     }

@@ -18,6 +18,9 @@ internal static class NativePasswordHelper
     /// </summary>
     public static string HashPassword(string plain)
     {
+        if (IsStoredSha256Hash(plain))
+            return Sha256Prefix + plain[Sha256Prefix.Length..].ToUpperInvariant();
+
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(plain));
         return Sha256Prefix + Convert.ToHexString(hash);
     }
@@ -63,5 +66,27 @@ internal static class NativePasswordHelper
 
         // Legacy plaintext — compare as-is
         return string.Equals(stored, provided, StringComparison.Ordinal);
+    }
+
+    private static bool IsStoredSha256Hash(string value)
+    {
+        if (!value.StartsWith(Sha256Prefix, StringComparison.Ordinal) ||
+            value.Length != Sha256Prefix.Length + SHA256.HashSizeInBytes * 2)
+        {
+            return false;
+        }
+
+        for (var index = Sha256Prefix.Length; index < value.Length; index++)
+        {
+            var ch = value[index];
+            if (ch is not (>= '0' and <= '9') &&
+                ch is not (>= 'A' and <= 'F') &&
+                ch is not (>= 'a' and <= 'f'))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

@@ -221,6 +221,7 @@ internal static partial class DelimitedTextWorkbookReader
             !TryParseTime(candidate, out _) &&
             !TryParsePercentage(trimmedCandidate, out _) &&
             !TryParseCurrency(candidate, out _) &&
+            !IsFormulaInjectionMarkerText(candidate) &&
             !double.TryParse(candidate, NumberStyles.Any, CultureInfo.InvariantCulture, out _))
         {
             return false;
@@ -229,6 +230,9 @@ internal static partial class DelimitedTextWorkbookReader
         text = candidate;
         return true;
     }
+
+    private static bool IsFormulaInjectionMarkerText(string value) =>
+        value.Length > 0 && value[0] is '=' or '+' or '-' or '@';
 
     private static bool IsBooleanLikeText(string value)
     {

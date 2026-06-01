@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -7,36 +6,41 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetProtectionMetadataWriter
 {
+    public static bool HasProtectionState(Sheet sheet) =>
+        sheet.ProtectionMetadata is not null ||
+        sheet.IsProtected && !string.IsNullOrWhiteSpace(sheet.ProtectionPassword);
+
     public static void Save(Stream xlsxStream, Workbook workbook, XlsxWorkbookWorksheetPathMap? worksheetPathMap)
     {
         if (worksheetPathMap is null)
             return;
 
-        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
+        using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
+        Save(session, workbook);
+    }
+
+    internal static void Save(XlsxWorksheetXmlEditSession session, Workbook workbook)
+    {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         foreach (var sheet in workbook.Sheets)
         {
             var metadata = sheet.ProtectionMetadata;
+            var hasProtectionPassword = !string.IsNullOrWhiteSpace(sheet.ProtectionPassword);
             if (metadata is null)
+            {
+                if (!hasProtectionPassword)
+                    continue;
+            }
+
+            if (!session.TryGetWorksheet(sheet, out var worksheetEdit))
                 continue;
 
-            if (!worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
-                continue;
-
-            var worksheetEntry = archive.GetEntry(worksheetPath);
-            if (worksheetEntry is null)
-                continue;
-
-            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
-            var root = worksheetXml.Root;
-            if (root is null)
-                continue;
-
+            var root = worksheetEdit.Root;
             if (!sheet.IsProtected)
             {
                 root.Element(worksheetNs + "sheetProtection")?.Remove();
-                XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+                session.MarkDirty(worksheetEdit);
                 continue;
             }
 
@@ -47,39 +51,51 @@ internal static class XlsxWorksheetProtectionMetadataWriter
                 InsertSheetProtection(root, worksheetNs, protection);
             }
 
-            var (protAttrs, protChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetProtection"));
-            foreach (var attribute in protAttrs)
+            var hasAdvancedHash = false;
+            if (metadata is not null)
             {
-                if (string.IsNullOrWhiteSpace(attribute.Key) ||
-                    string.Equals(attribute.Key, "sheet", StringComparison.Ordinal) ||
-                    string.Equals(attribute.Key, "password", StringComparison.Ordinal))
+                var (protAttrs, protChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetProtection"));
+                hasAdvancedHash = protAttrs.ContainsKey("hashValue");
+                foreach (var attribute in protAttrs)
                 {
-                    continue;
+                    if (string.IsNullOrWhiteSpace(attribute.Key) ||
+                        string.Equals(attribute.Key, "sheet", StringComparison.Ordinal) ||
+                        string.Equals(attribute.Key, "password", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
                 }
 
-                TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
+                protection.Elements().Remove();
+                foreach (var childXml in protChildren)
+                {
+                    if (string.IsNullOrWhiteSpace(childXml))
+                        continue;
+
+                    try
+                    {
+                        protection.Add(XElement.Parse(childXml));
+                    }
+                    catch
+                    {
+                        // Skip malformed native payloads in authored native JSON files.
+                    }
+                }
             }
 
-            protection.Elements().Remove();
-            foreach (var childXml in protChildren)
-            {
-                if (string.IsNullOrWhiteSpace(childXml))
-                    continue;
-
-                try
-                {
-                    protection.Add(XElement.Parse(childXml));
-                }
-                catch
-                {
-                    // Skip malformed native payloads in authored native JSON files.
-                }
-            }
+            if (hasAdvancedHash)
+                protection.Attribute("password")?.Remove();
+            else if (hasProtectionPassword)
+                protection.SetAttributeValue(
+                    "password",
+                    XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash(sheet.ProtectionPassword!));
 
             if (sheet.IsProtected)
                 protection.SetAttributeValue("sheet", "1");
 
-            XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+            session.MarkDirty(worksheetEdit);
         }
     }
 

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Threading;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Calc;
@@ -10,6 +11,11 @@ public static partial class NumberFormatter
         @"^\s*(>=|<=|<>|>|<|=)\s*([+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?)\s*$");
 
     private sealed record ParsedSection(string Format, string? ColorHex, FormatCondition? Condition);
+
+    private const int SplitSectionsCacheSize = 1024;
+    private static readonly SplitSectionsCacheEntry?[] SplitSectionsCache = new SplitSectionsCacheEntry[SplitSectionsCacheSize];
+
+    private sealed record SplitSectionsCacheEntry(string Format, string[] Sections);
 
     private sealed record FormatCondition(string Operator, double Value)
     {
@@ -27,6 +33,18 @@ public static partial class NumberFormatter
 
     // Split format into sections separated by ';' that are not inside "" or []
     private static string[] SplitSections(string format)
+    {
+        var slot = StringComparer.Ordinal.GetHashCode(format) & (SplitSectionsCacheSize - 1);
+        var cached = Volatile.Read(ref SplitSectionsCache[slot]);
+        if (cached is not null && string.Equals(cached.Format, format, StringComparison.Ordinal))
+            return cached.Sections;
+
+        var sections = SplitSectionsUncached(format);
+        Volatile.Write(ref SplitSectionsCache[slot], new SplitSectionsCacheEntry(format, sections));
+        return sections;
+    }
+
+    private static string[] SplitSectionsUncached(string format)
     {
         if (format.IndexOf(';') < 0)
             return [format];

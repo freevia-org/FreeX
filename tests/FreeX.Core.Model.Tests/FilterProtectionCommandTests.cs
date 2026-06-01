@@ -34,6 +34,56 @@ public sealed class FilterProtectionCommandTests
     }
 
     [Fact]
+    public void FilterCommands_RejectFilterColumnOffsetOutsideRange()
+    {
+        var (_, sheet, ctx, range) = SetupFilterRange();
+        IWorkbookCommand[] commands =
+        [
+            new FilterCommand(sheet.Id, range, 2, ["West"]),
+            new AverageFilterCommand(sheet.Id, range, 2, above: true),
+            new TopBottomFilterCommand(sheet.Id, range, 2, count: 1, top: true),
+            new FilterConditionCommand(sheet.Id, range, 2, new NonBlankFilterCriterion())
+        ];
+
+        foreach (var command in commands)
+        {
+            var outcome = command.Apply(ctx);
+
+            outcome.Success.Should().BeFalse();
+            outcome.ErrorMessage.Should().Contain("offset");
+        }
+
+        sheet.FilterHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FilterCommands_RejectRangesOnDifferentSheet()
+    {
+        var (_, sheet, ctx, _) = SetupFilterRange();
+        var otherSheetId = SheetId.New();
+        var otherRange = new GridRange(
+            new CellAddress(otherSheetId, 1, 1),
+            new CellAddress(otherSheetId, 3, 2));
+        IWorkbookCommand[] commands =
+        [
+            new FilterCommand(sheet.Id, otherRange, 0, ["West"]),
+            new AverageFilterCommand(sheet.Id, otherRange, 0, above: true),
+            new TopBottomFilterCommand(sheet.Id, otherRange, 0, count: 1, top: true),
+            new FilterConditionCommand(sheet.Id, otherRange, 0, new NonBlankFilterCriterion())
+        ];
+
+        foreach (var command in commands)
+        {
+            var outcome = command.Apply(ctx);
+
+            outcome.Success.Should().BeFalse();
+            outcome.ErrorMessage.Should().Contain("target sheet");
+        }
+
+        sheet.FilterHiddenRows.Should().BeEmpty();
+    }
+
+    [Fact]
     public void FilterConditionCommand_AllowsProtectedSheetWithUseAutoFilterPermission()
     {
         var (_, sheet, ctx, range) = SetupFilterRange();

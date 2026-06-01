@@ -49,6 +49,7 @@ public partial class GridView : FrameworkElement
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
         TextOptions.SetTextRenderingMode(this, TextRenderingMode.ClearType);
         TextOptions.SetTextHintingMode(this, TextHintingMode.Fixed);
+        Unloaded += (_, _) => StopMarchTimer();
     }
 
     /// <summary>

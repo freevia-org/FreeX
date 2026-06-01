@@ -767,6 +767,9 @@ public partial class MainWindow
 
     private void ExtendSelection(CellAddress anchor, CellAddress to)
     {
+        if (IsSelectionExtensionUnchanged(anchor, to))
+            return;
+
         HideValidationDropdown();
         ClearCommentPreview();
 
@@ -783,6 +786,9 @@ public partial class MainWindow
 
     private void AddOrMoveAdditionalSelection(CellAddress target, bool extendSelection)
     {
+        if (IsAdditionalSelectionExtensionUnchanged(target, extendSelection))
+            return;
+
         HideValidationDropdown();
         ClearCommentPreview();
 
@@ -794,6 +800,12 @@ public partial class MainWindow
             _selectionAnchor = target;
 
         var anchor = _selectionAnchor ?? target;
+        if (anchor.Sheet != target.Sheet)
+        {
+            anchor = target;
+            _selectionAnchor = target;
+        }
+
         _selectionCursor = target;
         var activeRange = new GridRange(anchor, target);
 
@@ -809,8 +821,63 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         FormulaBar.Text = FormatFormulaBarText(sheet?.GetCell(target), target);
         FocusSheetGridIfNeeded();
-        RefreshToolbar();
+        RefreshToolbarAfterDragSelectionChange();
         RefreshStatusBarAfterDragSelectionChange();
+    }
+
+    private bool IsSelectionExtensionUnchanged(CellAddress anchor, CellAddress target) =>
+        _selectionCursor == target &&
+        SheetGrid.SelectedRanges is null &&
+        SheetGrid.SelectedRange is { } range &&
+        IsSameNormalizedRange(range, _currentSheetId, anchor, target);
+
+    private bool IsAdditionalSelectionExtensionUnchanged(CellAddress target, bool extendSelection)
+    {
+        if (!extendSelection || _selectionCursor != target)
+            return false;
+
+        var anchor = _selectionAnchor ?? target;
+        if (SheetGrid.SelectedRange is not { } activeRange ||
+            !IsSameNormalizedRange(activeRange, _currentSheetId, anchor, target))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsSameNormalizedRange(
+        GridRange range,
+        SheetId sheetId,
+        CellAddress anchor,
+        CellAddress target) =>
+        anchor.Sheet == sheetId &&
+        target.Sheet == sheetId &&
+        range.Start.Sheet == sheetId &&
+        range.End.Sheet == sheetId &&
+        range.Start.Row == Math.Min(anchor.Row, target.Row) &&
+        range.Start.Col == Math.Min(anchor.Col, target.Col) &&
+        range.End.Row == Math.Max(anchor.Row, target.Row) &&
+        range.End.Col == Math.Max(anchor.Col, target.Col);
+
+    private void RefreshToolbarAfterDragSelectionChange()
+    {
+        if (_dragSelectActive)
+        {
+            _dragSelectToolbarRefreshPending = true;
+            return;
+        }
+
+        RefreshToolbar();
+    }
+
+    private void CompleteDragSelectionToolbarRefresh()
+    {
+        if (!_dragSelectToolbarRefreshPending)
+            return;
+
+        _dragSelectToolbarRefreshPending = false;
+        RefreshToolbar();
     }
 
     private void RefreshStatusBarAfterDragSelectionChange()
@@ -859,6 +926,7 @@ public partial class MainWindow
             _dragSelectActive = false;
             _dragSelectAddsAdditionalRange = false;
             SheetGrid.ReleaseMouseCapture();
+            CompleteDragSelectionToolbarRefresh();
             CompleteDragSelectionStatusRefresh();
             if (hitAddr.HasValue)
                 UpdateCommentPreview(hitAddr.Value);
@@ -928,6 +996,7 @@ public partial class MainWindow
             _dragSelectActive = false;
             _dragSelectAddsAdditionalRange = false;
             SheetGrid.ReleaseMouseCapture();
+            CompleteDragSelectionToolbarRefresh();
             CompleteDragSelectionStatusRefresh();
 
             if (SheetGrid.SelectedRange is { } selectedRange)
@@ -945,6 +1014,7 @@ public partial class MainWindow
         _dragSelectActive = false;
         _dragSelectAddsAdditionalRange = false;
         SheetGrid.ReleaseMouseCapture();
+        CompleteDragSelectionToolbarRefresh();
         CompleteDragSelectionStatusRefresh();
         if (hitAddr.HasValue)
             UpdateCommentPreview(hitAddr.Value);

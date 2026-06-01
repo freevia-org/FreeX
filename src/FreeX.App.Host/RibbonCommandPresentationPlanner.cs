@@ -113,6 +113,8 @@ public static partial class RibbonCommandPresentationPlanner
         name.Contains("bring forward") ||
         name.Contains("send backward") ||
         name.Contains("selection pane") ||
+        name == "rotate object" ||
+        name == "object size" ||
         name.Contains("themes") ||
         name.Contains("margins") ||
         name.Contains("orientation") ||

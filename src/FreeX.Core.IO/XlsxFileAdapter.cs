@@ -47,27 +47,47 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     private Workbook LoadCore(Stream stream, List<string> warnings)
     {
         using var packageStream = CreateLoadPackageStream(stream);
+        var packageParts = XlsxLoadPackageParts.Empty;
+        var workbookTheme = WorkbookTheme.Office;
+        var workbookMetadata = XlsxWorkbookMetadataSnapshot.Default;
+        XDocument? stylesXml = null;
+        var numberFormatCatalog = new Dictionary<int, string>();
+        var pivotMetadata = XlsxPivotTableReader.PivotPackageMetadata.Empty;
+        var slicerTimelineMetadata = SlicerTimelinePackageMetadata.Empty;
+        IReadOnlyList<ExternalLinkModel> externalLinkMetadata = [];
+        var structuredTableMetadata = StructuredTablePackageMetadata.Empty;
+        try
+        {
+            using var packageArchive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
+            // Reject zip-bomb / oversized packages before any decompression-heavy reads.
+            WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(packageArchive);
+            packageParts = XlsxLoadPackageParts.Inspect(packageArchive);
 
-        // Reject zip-bomb / oversized packages before any decompression-heavy reads.
-        WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(packageStream);
-        packageStream.Position = 0;
+            workbookTheme = packageParts.HasTheme
+                ? XlsxWorkbookThemeReader.Load(packageArchive)
+                : WorkbookTheme.Office;
+            workbookMetadata = packageParts.HasWorkbook
+                ? XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageArchive)
+                : XlsxWorkbookMetadataSnapshot.Default;
+            stylesXml = packageParts.HasStyles
+                ? XlsxStylesheetReader.Load(packageArchive)
+                : null;
+            numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(stylesXml);
+            if (packageParts.HasPivotPackageParts)
+                pivotMetadata = XlsxPivotTableReader.Load(packageArchive, numberFormatCatalog);
+            if (packageParts.HasSlicerTimelinePackageParts)
+                slicerTimelineMetadata = XlsxSlicerTimelineMetadataReader.Load(packageArchive);
+            if (packageParts.HasExternalLinks)
+                externalLinkMetadata = XlsxExternalLinkMetadataReader.Load(packageArchive);
+            if (packageParts.HasStructuredTables)
+                structuredTableMetadata = XlsxStructuredTableMetadataReader.Load(packageArchive);
+        }
+        catch (InvalidDataException)
+        {
+            // Not a valid zip archive; let the ClosedXML loader produce the format error.
+        }
 
-        var workbookTheme = XlsxWorkbookThemeReader.Load(packageStream);
-        packageStream.Position = 0;
-        var workbookMetadata = XlsxWorkbookMetadataReader.LoadWorkbookMetadata(packageStream);
-        packageStream.Position = 0;
-        var stylesXml = XlsxStylesheetReader.Load(packageStream);
-        var numberFormatCatalog = XlsxWorkbookMetadataReader.LoadNumberFormatCatalog(stylesXml);
         var indexedColors = XlsxIndexedColorPaletteMapper.Load(stylesXml);
-        packageStream.Position = 0;
-        var pivotMetadata = XlsxPivotTableReader.Load(packageStream, numberFormatCatalog);
-        packageStream.Position = 0;
-        var slicerTimelineMetadata = XlsxSlicerTimelineMetadataReader.Load(packageStream);
-        packageStream.Position = 0;
-        var externalLinkMetadata = XlsxExternalLinkMetadataReader.Load(packageStream);
-        packageStream.Position = 0;
-        var structuredTableMetadata = XlsxStructuredTableMetadataReader.Load(packageStream);
-        packageStream.Position = 0;
         var pivotTableStyleMetadata = XlsxPivotTableStyleMetadataReader.Load(stylesXml);
         var xlsxCustomViews = workbookMetadata.CustomViews;
 
@@ -76,7 +96,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
         packageStream.Position = 0;
-        var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml);
+        var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, warnings);
         var workbook = new Workbook("Untitled");
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = workbookMetadata.Uses1904DateSystem;
@@ -175,11 +195,6 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 sheet.SetCell(addr, cell);
             }
 
-            var explicitStyleOnlyRepresentativesByXlsxStyleIndex = (xmlLayout?.ExplicitStyleOnlyCells ?? [])
-                .GroupBy(cell => cell.StyleIndex)
-                .ToDictionary(
-                    group => group.Key,
-                    group => (group.First().Row, group.First().Col));
             foreach (var (row, col, styleIndex) in xmlLayout?.ExplicitStyleOnlyCells ?? [])
             {
                 if (sheet.GetCell(row, col) is not null)
@@ -187,10 +202,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
                 if (!explicitStyleOnlyStyleIdsByXlsxStyleIndex.TryGetValue(styleIndex, out var styleId))
                 {
-                    var representative = explicitStyleOnlyRepresentativesByXlsxStyleIndex.TryGetValue(styleIndex, out var address)
-                        ? address
-                        : (row, col);
-                    var xlCell = xlSheet.Cell((int)representative.Item1, (int)representative.Item2);
+                    var xlCell = xlSheet.Cell((int)row, (int)col);
                     var style = XlsxClosedXmlCellMapper.MapStyle(xlCell.Style, workbook.Theme);
                     styleId = style.Equals(CellStyle.Default)
                         ? null
@@ -221,9 +233,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                         hyperlink.Tooltip ?? "",
                         NormalizeInternalHyperlinkAddress(hyperlink.InternalAddress) ?? "");
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Skip hyperlinks ClosedXML cannot expose.
+                    warnings.Add($"[hyperlinks] Sheet '{xlSheet.Name}': {ex.Message}");
                 }
             }
 
@@ -441,6 +453,95 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         return Expression.Lambda<Func<IXLCell, object?>>(
             Expression.Convert(styleValue, typeof(object)),
             cell).Compile();
+    }
+
+    private readonly struct XlsxLoadPackageParts
+    {
+        private XlsxLoadPackageParts(
+            bool hasWorkbook,
+            bool hasStyles,
+            bool hasTheme,
+            bool hasPivotPackageParts,
+            bool hasSlicerTimelinePackageParts,
+            bool hasExternalLinks,
+            bool hasStructuredTables)
+        {
+            HasWorkbook = hasWorkbook;
+            HasStyles = hasStyles;
+            HasTheme = hasTheme;
+            HasPivotPackageParts = hasPivotPackageParts;
+            HasSlicerTimelinePackageParts = hasSlicerTimelinePackageParts;
+            HasExternalLinks = hasExternalLinks;
+            HasStructuredTables = hasStructuredTables;
+        }
+
+        public static XlsxLoadPackageParts Empty => default;
+        public bool HasWorkbook { get; }
+        public bool HasStyles { get; }
+        public bool HasTheme { get; }
+        public bool HasPivotPackageParts { get; }
+        public bool HasSlicerTimelinePackageParts { get; }
+        public bool HasExternalLinks { get; }
+        public bool HasStructuredTables { get; }
+
+        public static XlsxLoadPackageParts Inspect(ZipArchive archive)
+        {
+            var hasWorkbook = false;
+            var hasStyles = false;
+            var hasTheme = false;
+            var hasPivotPackageParts = false;
+            var hasSlicerTimelinePackageParts = false;
+            var hasExternalLinks = false;
+            var hasStructuredTables = false;
+
+            foreach (var entry in archive.Entries)
+            {
+                var path = entry.FullName;
+                hasWorkbook |= EntryPathEquals(path, "xl/workbook.xml");
+                hasStyles |= EntryPathEquals(path, "xl/styles.xml");
+                hasTheme |= EntryPathEquals(path, "xl/theme/theme1.xml");
+                hasPivotPackageParts |=
+                    EntryPathStartsWith(path, "xl/pivotCache/") ||
+                    EntryPathStartsWith(path, "xl/pivotTables/");
+                hasSlicerTimelinePackageParts |=
+                    EntryPathStartsWith(path, "xl/slicerCaches/") ||
+                    EntryPathStartsWith(path, "xl/slicers/") ||
+                    EntryPathStartsWith(path, "xl/timelineCaches/") ||
+                    EntryPathStartsWith(path, "xl/timelines/");
+                hasExternalLinks |= EntryPathStartsWith(path, "xl/externalLinks/");
+                hasStructuredTables |= EntryPathStartsWith(path, "xl/tables/");
+
+                if (hasWorkbook &&
+                    hasStyles &&
+                    hasTheme &&
+                    hasPivotPackageParts &&
+                    hasSlicerTimelinePackageParts &&
+                    hasExternalLinks &&
+                    hasStructuredTables)
+                {
+                    break;
+                }
+            }
+
+            return new XlsxLoadPackageParts(
+                hasWorkbook,
+                hasStyles,
+                hasTheme,
+                hasPivotPackageParts,
+                hasSlicerTimelinePackageParts,
+                hasExternalLinks,
+                hasStructuredTables);
+        }
+
+        private static bool EntryPathEquals(string path, string expectedPath) =>
+            string.Equals(path, expectedPath, StringComparison.OrdinalIgnoreCase) ||
+            (path.Contains('\\') &&
+             string.Equals(path.Replace('\\', '/'), expectedPath, StringComparison.OrdinalIgnoreCase));
+
+        private static bool EntryPathStartsWith(string path, string expectedPrefix) =>
+            path.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase) ||
+            (path.Contains('\\') &&
+             path.Replace('\\', '/').StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase));
     }
 
     private static MemoryStream CreateLoadPackageStream(Stream stream)

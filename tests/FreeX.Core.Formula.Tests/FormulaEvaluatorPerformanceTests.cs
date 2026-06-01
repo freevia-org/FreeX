@@ -275,6 +275,58 @@ public sealed class FormulaEvaluatorPerformanceTests
     }
 
     [Theory]
+    [InlineData("=MATCH(100000,A1:A100000,0)", 100_000d)]
+    [InlineData("=MATCH(100000,A1:A100000,1)", 100_000d)]
+    public void MatchLargeDirectRange_AvoidsVectorFlattenAllocation(string formula, double expected)
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeNumericSheet();
+
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_100_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Theory]
+    [InlineData("=LOOKUP(100000,A1:A100000,B1:B100000)", 200_000d)]
+    [InlineData("=LOOKUP(100000,A1:B100000)", 200_000d)]
+    public void LookupLargeDirectRange_AvoidsVectorFlattenAllocation(string formula, double expected)
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeLookupSheet();
+
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_900_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
+    [Theory]
     [InlineData("=XMATCH(100000,A1:A100000,0,1)", 100_000d)]
     [InlineData("=XMATCH(1,A1:A100000,0,-1)", 1d)]
     public void XmatchLargeDirectRangeLinearSearch_AvoidsIndexListAllocation(string formula, double expected)
@@ -296,7 +348,7 @@ public sealed class FormulaEvaluatorPerformanceTests
 
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(1_850_000);
+        allocatedBytes.Should().BeLessThan(1_100_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
@@ -322,7 +374,7 @@ public sealed class FormulaEvaluatorPerformanceTests
 
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(1_850_000);
+        allocatedBytes.Should().BeLessThan(1_100_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
@@ -348,7 +400,7 @@ public sealed class FormulaEvaluatorPerformanceTests
 
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(2_650_000);
+        allocatedBytes.Should().BeLessThan(1_900_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
@@ -374,7 +426,7 @@ public sealed class FormulaEvaluatorPerformanceTests
 
         result.Should().Be(new NumberValue(expected));
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(2_650_000);
+        allocatedBytes.Should().BeLessThan(1_900_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 

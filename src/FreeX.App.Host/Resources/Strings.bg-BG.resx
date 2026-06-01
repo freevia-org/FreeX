@@ -589,7 +589,7 @@
     <value>_Основни линии на мрежата</value>
   </data>
   <data name="ChartAxisFormat_MinorGridlines" xml:space="preserve">
-    <value>_Малки линии на мрежата</value>
+    <value>_Второстепенни линии на мрежата</value>
   </data>
   <data name="ChartAxisFormat_ShowLabels" xml:space="preserve">
     <value>_Показване на етикети</value>
@@ -628,19 +628,19 @@
     <value>Опции на осите</value>
   </data>
   <data name="ChartAxisFormat_MajorGridlineColorLabel" xml:space="preserve">
-    <value>_Цвят на основната мрежа</value>
+    <value>_Цвят на основната линия на мрежата</value>
   </data>
   <data name="ChartAxisFormat_MinorGridlineColorLabel" xml:space="preserve">
-    <value>_Малък цвят на мрежата</value>
+    <value>_Цвят на второстепенната линия на мрежата</value>
   </data>
   <data name="ChartAxisFormat_GridlineWidthLabel" xml:space="preserve">
-    <value>_Ширина на мрежата</value>
+    <value>_Ширина на линия на мрежата</value>
   </data>
   <data name="ChartAxisFormat_GridlineWidthHelpText" xml:space="preserve">
-    <value>Въведете ширина на мрежата в точки.</value>
+    <value>Въведете ширина на линия на мрежата в точки.</value>
   </data>
   <data name="ChartAxisFormat_GridlinesGroup" xml:space="preserve">
-    <value>Мрежови линии</value>
+    <value>Линии на мрежата</value>
   </data>
   <data name="ChartAxisFormat_MajorTickMarksLabel" xml:space="preserve">
     <value>_Основни отметки</value>
@@ -688,7 +688,7 @@
     <value>Въведете положителна второстепенна единица или я оставете празна.</value>
   </data>
   <data name="ChartAxisFormat_InvalidGridlineWidthMessage" xml:space="preserve">
-    <value>Въведете положителна ширина на мрежата.</value>
+    <value>Въведете положителна ширина на линия на мрежата.</value>
   </data>
   <data name="ChartAxisFormat_InvalidLabelFontSizeMessage" xml:space="preserve">
     <value>Въведете размер на шрифта на етикета от 6 до 72 точки.</value>
@@ -1138,7 +1138,7 @@
     <value>Скрити</value>
   </data>
   <data name="SelectionPane_FilterCharts" xml:space="preserve">
-    <value>Графики</value>
+    <value>Диаграми</value>
   </data>
   <data name="SelectionPane_FilterPictures" xml:space="preserve">
     <value>Снимки</value>
@@ -1237,7 +1237,7 @@
     <value>_Избран диапазон:</value>
   </data>
   <data name="AddWatch_Title" xml:space="preserve">
-    <value>Добавете часовник</value>
+    <value>Добавяне на наблюдение</value>
   </data>
   <data name="AllowEditRange_ClearAllAutomationName" xml:space="preserve">
     <value>Изчистване на всички</value>
@@ -1270,7 +1270,7 @@
     <value>_Диапазони, отключени с парола:</value>
   </data>
   <data name="AllowEditRange_IntroText" xml:space="preserve">
-    <value>Посочете диапазон от работни листове, който може да се редактира, докато листът е защитен.</value>
+    <value>Посочете диапазон в работен лист, който може да се редактира, докато листът е защитен.</value>
   </data>
   <data name="AllowEditRange_InvalidRangeMessage" xml:space="preserve">
     <value>Въведете валиден диапазон.</value>
@@ -1507,7 +1507,7 @@
     <value>Описание</value>
   </data>
   <data name="ErrorChecking_EditInFormulaBarButton" xml:space="preserve">
-    <value>_Редактирайте в лентата с формули</value>
+    <value>_Редактиране в лентата за формули</value>
   </data>
   <data name="ErrorChecking_FormulaColumnHeader" xml:space="preserve">
     <value>Формула</value>
@@ -1556,7 +1556,7 @@
 
 {1}
 
-Използвайте Показване на стъпките за изчисление, за да проследите формулата, Игнориране на грешка, за да потиснете този проблем, или Редактиране в лентата с формули, за да коригирате формулата.</value>
+Използвайте Показване на стъпките за изчисление, за да проследите формулата, Игнориране на грешка, за да потиснете този проблем, или Редактиране в лентата за формули, за да коригирате формулата.</value>
   </data>
   <data name="ErrorChecking_SheetColumnHeader" xml:space="preserve">
     <value>Лист</value>
@@ -1574,43 +1574,43 @@
     <value>_затвори</value>
   </data>
   <data name="EvaluateFormula_EvaluateButton" xml:space="preserve">
-    <value>_Оценете</value>
+    <value>_Изчисли</value>
   </data>
   <data name="EvaluateFormula_EvaluationLabel" xml:space="preserve">
-    <value>оценка:</value>
+    <value>изчисление:</value>
   </data>
   <data name="EvaluateFormula_FormulaPrefix" xml:space="preserve">
     <value>Формула:</value>
   </data>
   <data name="EvaluateFormula_HelpBody" xml:space="preserve">
-    <value>Evaluate Formula показва избраната формула стъпка по стъпка на изчисление. Използвайте Evaluate за напредване, Step In, когато може да се провери вложена формула, Step Out, за да се върнете към предишната стъпка, и Restart, за да започнете отначало.</value>
+    <value>Изчисляване на формула показва избраната формула стъпка по стъпка. Използвайте Изчисли, за да продължите, Стъпка навътре, когато може да се провери вложена формула, Стъпка навън, за да се върнете към предишната стъпка, и Рестартиране, за да започнете отначало.</value>
   </data>
   <data name="EvaluateFormula_HelpButton" xml:space="preserve">
     <value>_Помощ за тази функция</value>
   </data>
   <data name="EvaluateFormula_HelpTitle" xml:space="preserve">
-    <value>Оценете Помощ за формула</value>
+    <value>Помощ за изчисляване на формула</value>
   </data>
   <data name="EvaluateFormula_NoIntermediateStepsText" xml:space="preserve">
-    <value>Без междинни стъпки за оценка.</value>
+    <value>Няма междинни стъпки за изчисляване.</value>
   </data>
   <data name="EvaluateFormula_RestartButton" xml:space="preserve">
-    <value>_Рестартирайте</value>
+    <value>_Рестартиране</value>
   </data>
   <data name="EvaluateFormula_ResultText" xml:space="preserve">
     <value>Резултат: {0}</value>
   </data>
   <data name="EvaluateFormula_StepInButton" xml:space="preserve">
-    <value>_Намесете се</value>
+    <value>_Стъпка навътре</value>
   </data>
   <data name="EvaluateFormula_StepOutButton" xml:space="preserve">
-    <value>_Излезте</value>
+    <value>_Стъпка навън</value>
   </data>
   <data name="EvaluateFormula_StepPositionText" xml:space="preserve">
     <value>Стъпка {0} от {1}</value>
   </data>
   <data name="EvaluateFormula_Title" xml:space="preserve">
-    <value>Оценете формулата</value>
+    <value>Изчисляване на формула</value>
   </data>
   <data name="EvaluateFormula_ValueText" xml:space="preserve">
     <value>Стойност: {0}</value>
@@ -2719,10 +2719,10 @@
     <value>Персонализиране на лентата</value>
   </data>
   <data name="DeferredCommand_TrustCenter_Body" xml:space="preserve">
-    <value>Настройките на правилата на Trust Center са информационни в FreeX, тъй като FreeX не изпълнява VBA макроси, добавки на Office, ActiveX контроли, Power Query или външно опресняване на модел на данни.</value>
+    <value>Настройките на правилата на Центъра за сигурност са информационни във FreeX, тъй като FreeX не изпълнява VBA макроси, добавки на Office, ActiveX контроли, Power Query или външно опресняване на модел на данни.</value>
   </data>
   <data name="DeferredCommand_TrustCenter_Title" xml:space="preserve">
-    <value>Център за доверие</value>
+    <value>Център за сигурност</value>
   </data>
   <data name="DeferredCommand_UnsupportedXlsxFeature_DigitalSignatureWarningSuffix" xml:space="preserve">
     <value>Цифровите подписи може вече да не се валидират след редакции на работна книга.</value>
@@ -2856,13 +2856,13 @@
     <value>Редактирайте стойността на активната клетка или формулата</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ExpandOrCollapseTheFormulaBar" xml:space="preserve">
-    <value>Разгъване или свиване на лентата с формули</value>
+    <value>Разгъване или свиване на лентата за формули</value>
   </data>
   <data name="MainWindow_AutomationHelpText_ExpandTheFormulaBarToAMultiLineEditor" xml:space="preserve">
-    <value>Разширете лентата с формули до многоредов редактор</value>
+    <value>Разширяване на лентата за формули до многоредов редактор</value>
   </data>
   <data name="MainWindow_AutomationHelpText_CollapseTheFormulaBarToASingleLineEditor" xml:space="preserve">
-    <value>Свийте лентата с формули до едноредов редактор</value>
+    <value>Свиване на лентата за формули до едноредов редактор</value>
   </data>
   <data name="MainWindow_AutomationHelpText_FilterRecentAndPinnedFiles" xml:space="preserve">
     <value>Филтрирайте последните и фиксираните файлове</value>
@@ -2994,7 +2994,7 @@
     <value>Проверете за актуализации</value>
   </data>
   <data name="MainWindow_AutomationName_ClearSlicerFilter" xml:space="preserve">
-    <value>Изчистване на филтъра за нарязване</value>
+    <value>Изчистване на филтъра на сегментатора</value>
   </data>
   <data name="MainWindow_AutomationName_ClearTimelineFilter" xml:space="preserve">
     <value>Изчистване на филтъра за времевата линия</value>
@@ -3027,10 +3027,10 @@
     <value>Отлагане на актуализацията на оформлението на обобщена таблица</value>
   </data>
   <data name="MainWindow_AutomationName_ExpandFormulaBar" xml:space="preserve">
-    <value>Разширете лентата с формули</value>
+    <value>Разширяване на лентата за формули</value>
   </data>
   <data name="MainWindow_AutomationName_CollapseFormulaBar" xml:space="preserve">
-    <value>Свиване на лентата с формули</value>
+    <value>Свиване на лентата за формули</value>
   </data>
   <data name="MainWindow_AutomationName_Feedback" xml:space="preserve">
     <value>Обратна връзка</value>
@@ -3048,7 +3048,7 @@
     <value>Размер на шрифта</value>
   </data>
   <data name="MainWindow_AutomationName_FormulaBar" xml:space="preserve">
-    <value>Лента с формули</value>
+    <value>Лента за формули</value>
   </data>
   <data name="MainWindow_AutomationName_FreeXColorfulTheme" xml:space="preserve">
     <value>FreeX Цветна тема</value>
@@ -3084,7 +3084,7 @@
     <value>Не са налични повече шаблони</value>
   </data>
   <data name="MainWindow_AutomationName_NameBox" xml:space="preserve">
-    <value>Кутия за име</value>
+    <value>Поле Име</value>
   </data>
   <data name="MainWindow_AutomationName_NumberFormat" xml:space="preserve">
     <value>Числов формат</value>
@@ -3198,7 +3198,7 @@
     <value>Сегментатори на работна книга</value>
   </data>
   <data name="MainWindow_AutomationName_WorkbookTimelines" xml:space="preserve">
-    <value>График на работната книга</value>
+    <value>Времеви линии на работната книга</value>
   </data>
   <data name="MainWindow_AutomationName_Worksheet" xml:space="preserve">
     <value>Работен лист</value>
@@ -3258,7 +3258,7 @@
     <value>Добавете писалка</value>
   </data>
   <data name="MainWindow_Content_AddWatch" xml:space="preserve">
-    <value>Добавете часовник</value>
+    <value>Добавяне на наблюдение</value>
   </data>
   <data name="MainWindow_Content_AllowUsersToEditRanges" xml:space="preserve">
     <value>Диапазони</value>
@@ -3426,7 +3426,7 @@
     <value>Изтриване</value>
   </data>
   <data name="MainWindow_Content_DelWatch" xml:space="preserve">
-    <value>Дел Гледайте</value>
+    <value>Изтриване на наблюдение</value>
   </data>
   <data name="MainWindow_Content_Doughnut" xml:space="preserve">
     <value>Пръстеновидна</value>
@@ -3453,7 +3453,7 @@
     <value>Проверка на грешки</value>
   </data>
   <data name="MainWindow_Content_EvaluateFormula" xml:space="preserve">
-    <value>Оценете формулата</value>
+    <value>Изчисляване на формула</value>
   </data>
   <data name="MainWindow_Content_Expand" xml:space="preserve">
     <value>Разширяване</value>
@@ -3495,10 +3495,10 @@
     <value>Копиране на формати</value>
   </data>
   <data name="MainWindow_Content_FormulaBar" xml:space="preserve">
-    <value>Лента с формули</value>
+    <value>Лента за формули</value>
   </data>
   <data name="MainWindow_Content_FreezePanes" xml:space="preserve">
-    <value>Замразяване на панели</value>
+    <value>Фиксиране на прозорци</value>
   </data>
   <data name="MainWindow_Content_Funnel" xml:space="preserve">
     <value>фуния</value>
@@ -3522,7 +3522,7 @@
     <value>Общи суми</value>
   </data>
   <data name="MainWindow_Content_Gridlines" xml:space="preserve">
-    <value>Мрежови линии</value>
+    <value>Линии на мрежата</value>
   </data>
   <data name="MainWindow_Content_Group" xml:space="preserve">
     <value>Група</value>
@@ -3654,7 +3654,7 @@
     <value>Моите добавки</value>
   </data>
   <data name="MainWindow_Content_NameManager" xml:space="preserve">
-    <value>Мениджър имена</value>
+    <value>Диспечер на имената</value>
   </data>
   <data name="MainWindow_Content_New" xml:space="preserve">
     <value>Нов</value>
@@ -3915,7 +3915,7 @@
     <value>Теми</value>
   </data>
   <data name="MainWindow_Content_Timeline" xml:space="preserve">
-    <value>Хронология</value>
+    <value>Времева линия</value>
   </data>
   <data name="MainWindow_Content_TitleColor" xml:space="preserve">
     <value>Цвят на заглавието</value>
@@ -3972,13 +3972,13 @@
     <value>Ценности</value>
   </data>
   <data name="MainWindow_Content_View" xml:space="preserve">
-    <value>Преглед</value>
+    <value>Изглед</value>
   </data>
   <data name="MainWindow_Content_ViewSideBySide" xml:space="preserve">
     <value>Преглед рамо до рамо</value>
   </data>
   <data name="MainWindow_Content_WatchWindow" xml:space="preserve">
-    <value>Прозорец за гледане</value>
+    <value>Прозорец за наблюдение</value>
   </data>
   <data name="MainWindow_Content_Waterfall" xml:space="preserve">
     <value>Водопад</value>
@@ -4158,10 +4158,10 @@
     <value>Arial</value>
   </data>
   <data name="MainWindow_Header_AutoFitColumnWidth" xml:space="preserve">
-    <value>AutoFit Ширина на колона</value>
+    <value>Автопобиране на ширината на колона</value>
   </data>
   <data name="MainWindow_Header_AutoFitRowHeight" xml:space="preserve">
-    <value>AutoFit Височина на ред</value>
+    <value>Автопобиране на височината на ред</value>
   </data>
   <data name="MainWindow_Header_Automatic" xml:space="preserve">
     <value>Автоматичен</value>
@@ -4365,13 +4365,13 @@
     <value>FreeX Цветен</value>
   </data>
   <data name="MainWindow_Header_FreezeFirstColumn" xml:space="preserve">
-    <value>Замразяване на първата колона</value>
+    <value>Фиксиране на първата колона</value>
   </data>
   <data name="MainWindow_Header_FreezePanes" xml:space="preserve">
-    <value>Замразяване на панели</value>
+    <value>Фиксиране на прозорци</value>
   </data>
   <data name="MainWindow_Header_FreezeTopRow" xml:space="preserve">
-    <value>Замразяване на горния ред</value>
+    <value>Фиксиране на горния ред</value>
   </data>
   <data name="MainWindow_Header_GoalSeek" xml:space="preserve">
     <value>Търсене на цел...</value>
@@ -4626,7 +4626,7 @@
     <value>Височина на реда...</value>
   </data>
   <data name="MainWindow_Header_ScenarioManager" xml:space="preserve">
-    <value>Мениджър на сценарии...</value>
+    <value>Диспечер на сценарии...</value>
   </data>
   <data name="MainWindow_Header_SelectAllSheets" xml:space="preserve">
     <value>Изберете Всички листове</value>
@@ -4710,7 +4710,7 @@
     <value>Транспониране</value>
   </data>
   <data name="MainWindow_Header_UnfreezePanes" xml:space="preserve">
-    <value>Размразяване на панели</value>
+    <value>Освобождаване на прозорци</value>
   </data>
   <data name="MainWindow_Header_UngroupSheets" xml:space="preserve">
     <value>Разгрупиране на листове</value>
@@ -4803,7 +4803,7 @@
     <value>клетки</value>
   </data>
   <data name="MainWindow_Text_Charts" xml:space="preserve">
-    <value>Графики</value>
+    <value>Диаграми</value>
   </data>
   <data name="MainWindow_Text_CheckAccessibility" xml:space="preserve">
     <value>Проверка достъпност</value>
@@ -4851,7 +4851,7 @@
     <value>Типове данни</value>
   </data>
   <data name="MainWindow_Text_DataValidation" xml:space="preserve">
-    <value>Валидиране на данни</value>
+    <value>Проверка на данни</value>
   </data>
   <data name="MainWindow_Text_DateModified" xml:space="preserve">
     <value>Дата на промяна</value>
@@ -4917,7 +4917,7 @@
     <value>Вземете и преобразувайте данни</value>
   </data>
   <data name="MainWindow_Text_Gridlines" xml:space="preserve">
-    <value>Мрежови линии</value>
+    <value>Линии на мрежата</value>
   </data>
   <data name="MainWindow_Text_Group" xml:space="preserve">
     <value>Група</value>
@@ -5352,7 +5352,7 @@
     <value>Създайте обобщена таблица от избрания диапазон.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CreateASlicerConnectedToTheSelectedPivotTableField" xml:space="preserve">
-    <value>Създайте разделител, свързан с избраното поле на обобщена таблица.</value>
+    <value>Създайте сегментатор, свързан с избраното поле на обобщена таблица.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CreateATableToManageAndAnalyzeRelatedData" xml:space="preserve">
     <value>Създайте таблица за управление и анализ на свързани данни.</value>
@@ -5487,10 +5487,10 @@
     <value>Цикъл кои серии от данни се изобразяват като линия на комбинирана диаграма.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleXAxisGridlineColorAndWeight" xml:space="preserve">
-    <value>Цвят и тегло на решетката на оста X на цикъла.</value>
+    <value>Превключва цвета и дебелината на линиите на мрежата на ос X.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleXAxisGridlinesBetweenOffMajorAndMajorPlusMinor" xml:space="preserve">
-    <value>Цикъл на решетката на оста X между изключено, голямо и голямо плюс второстепенно.</value>
+    <value>Превключва линиите на мрежата на ос X между изключени, основни и основни плюс второстепенни.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleXAxisLabelRotation" xml:space="preserve">
     <value>Цикъл на въртене на етикета на оста X.</value>
@@ -5505,10 +5505,10 @@
     <value>Стилове за отметка на циклична ос X.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleYAxisGridlineColorAndWeight" xml:space="preserve">
-    <value>Цвят и тегло на решетката на оста Y на цикъл.</value>
+    <value>Превключва цвета и дебелината на линиите на мрежата на ос Y.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleYAxisGridlinesBetweenOffMajorAndMajorPlusMinor" xml:space="preserve">
-    <value>Цикъл на решетката на оста Y между изключено, основно и основно плюс второстепенно.</value>
+    <value>Превключва линиите на мрежата на ос Y между изключени, основни и основни плюс второстепенни.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CycleYAxisLabelRotation" xml:space="preserve">
     <value>Цикъл на въртене на етикета по оста Y.</value>
@@ -5592,13 +5592,13 @@
     <value>Изтриване на щрихи с мастило. Създаването на мастило е отложено в FreeX.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ExpandOrCollapseTheFormulaBar" xml:space="preserve">
-    <value>Разгъване или свиване на лентата с формули.</value>
+    <value>Разгъване или свиване на лентата за формули.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ExpandTheFormulaBarToAMultiLineEditor" xml:space="preserve">
-    <value>Разширете лентата с формули до многоредов редактор.</value>
+    <value>Разширете лентата за формули до многоредов редактор.</value>
   </data>
   <data name="MainWindow_TooltipDescription_CollapseTheFormulaBarToASingleLineEditor" xml:space="preserve">
-    <value>Свийте лентата с формули до едноредов редактор.</value>
+    <value>Свийте лентата за формули до едноредов редактор.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ExternalWorkbookQueriesAndConnectionManagementAreDeferredInFreeX" xml:space="preserve">
     <value>Заявките за външна работна книга и управлението на връзката са отложени в FreeX.</value>
@@ -5769,7 +5769,7 @@
     <value>Съединете избраните клетки в една по-голяма клетка и центрирайте съдържанието.</value>
   </data>
   <data name="MainWindow_TooltipDescription_KeepRowsOrColumnsVisibleWhileScrollingCreatingFrozenPanesClearsSplitPane_D77EB1E0" xml:space="preserve">
-    <value>Дръжте редовете или колоните видими, докато превъртате; създаването на замразени панели изчиства разделените панели.</value>
+    <value>Запазва редовете или колоните видими при превъртане; създаването на фиксирани прозорци изчиства разделените прозорци.</value>
   </data>
   <data name="MainWindow_TooltipDescription_LinkedGeographyDataTypesAreDeferredInFreeX" xml:space="preserve">
     <value>Свързаните типове географски данни са отложени в FreeX.</value>
@@ -5850,7 +5850,7 @@
     <value>Отворете учебно съдържание FreeX. Съдържанието на обучението все още не е внедрено.</value>
   </data>
   <data name="MainWindow_TooltipDescription_OpenGoalSeekScenarioManagerOrDataTableTools" xml:space="preserve">
-    <value>Отворете инструментите Goal Seek, Scenario Manager или Data Table.</value>
+    <value>Отворете инструментите Търсене на цел, Диспечер на сценарии или Таблица с данни.</value>
   </data>
   <data name="MainWindow_TooltipDescription_OpenGroupingOptionsForTheSelectedPivotTableField" xml:space="preserve">
     <value>Отворете опциите за групиране за избраното поле на обобщена таблица.</value>
@@ -5898,7 +5898,7 @@
     <value>Отпечатайте заглавия на редове и колони на всяка страница.</value>
   </data>
   <data name="MainWindow_TooltipDescription_PrintWorksheetGridlinesOnEachPage" xml:space="preserve">
-    <value>Отпечатайте мрежови линии на работен лист на всяка страница.</value>
+    <value>Отпечатва линиите на мрежата на работния лист на всяка страница.</value>
   </data>
   <data name="MainWindow_TooltipDescription_QueuePivotTableFieldLayoutChangesUntilYouChooseUpdate" xml:space="preserve">
     <value>Оформлението на полето на обобщената таблица на опашката се променя, докато не изберете Актуализиране.</value>
@@ -6042,7 +6042,7 @@
     <value>Показване или скриване на имена на категории в етикетите с данни на диаграмата.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ShowOrHideCellGridlinesOnTheWorksheet" xml:space="preserve">
-    <value>Показване или скриване на решетъчни линии на клетки в работния лист.</value>
+    <value>Показване или скриване на линиите на мрежата за клетки в работния лист.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ShowOrHidePercentageValuesInPieAndDoughnutChartDataLabels" xml:space="preserve">
     <value>Показване или скриване на процентни стойности в етикетите с данни на кръгова и кръгова диаграма.</value>
@@ -6060,7 +6060,7 @@
     <value>Показване или скриване на имена на серии в етикетите с данни на диаграмата.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ShowOrHideTheFormulaBar" xml:space="preserve">
-    <value>Показване или скриване на лентата с формули.</value>
+    <value>Показване или скриване на лентата за формули.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ShowOrHideThePivotTableFieldsTaskPane" xml:space="preserve">
     <value>Показване или скриване на прозореца на задачите с полета на обобщена таблица.</value>
@@ -6075,7 +6075,7 @@
     <value>Показване или скриване на етикети със стойности на текущата диаграма.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ShowOrHideWorksheetGridlines" xml:space="preserve">
-    <value>Показване или скриване на мрежовите линии на работния лист.</value>
+    <value>Показване или скриване на линиите на мрежата на работния лист.</value>
   </data>
   <data name="MainWindow_TooltipDescription_ShowOrHideXAxisLabelsOnTheCurrentChart" xml:space="preserve">
     <value>Показване или скриване на етикетите на оста X на текущата диаграма.</value>
@@ -6114,7 +6114,7 @@
     <value>Разделете текста в една колона на няколко колони, като използвате разделител, като запетая или интервал.</value>
   </data>
   <data name="MainWindow_TooltipDescription_SplitTheWorksheetAtTheSelectedCellOrRemoveTheCurrentSplitCreatingASplitC_2DAD6EB5" xml:space="preserve">
-    <value>Разделете работния лист в избраната клетка или премахнете текущото разделяне; създаването на разделяне изчиства замразените прозорци.</value>
+    <value>Разделя работния лист при избраната клетка или премахва текущото разделяне; създаването на разделяне освобождава фиксираните прозорци.</value>
   </data>
   <data name="MainWindow_TooltipDescription_StoreTheWorkbookWindowArrangementToUseWhenMultiWindowHostingIsAvailable" xml:space="preserve">
     <value>Съхранявайте подредбата на прозореца на работната книга, която да използвате, когато е наличен хостинг с множество прозорци.</value>
@@ -6219,7 +6219,7 @@
     <value>Добавете писалка</value>
   </data>
   <data name="MainWindow_TooltipTitle_AddWatch" xml:space="preserve">
-    <value>Добавете часовник</value>
+    <value>Добавяне на наблюдение</value>
   </data>
   <data name="MainWindow_TooltipTitle_AdvancedFilter" xml:space="preserve">
     <value>Разширен филтър</value>
@@ -6429,7 +6429,7 @@
     <value>Текст на етикета с данни</value>
   </data>
   <data name="MainWindow_TooltipTitle_DataValidation" xml:space="preserve">
-    <value>Валидиране на данни</value>
+    <value>Проверка на данни</value>
   </data>
   <data name="MainWindow_TooltipTitle_DateTime" xml:space="preserve">
     <value>Дата и час</value>
@@ -6459,7 +6459,7 @@
     <value>Изтриване на коментар</value>
   </data>
   <data name="MainWindow_TooltipTitle_DeleteWatch" xml:space="preserve">
-    <value>Изтриване на часовник</value>
+    <value>Изтриване на наблюдение</value>
   </data>
   <data name="MainWindow_TooltipTitle_DoughnutChart" xml:space="preserve">
     <value>Пръстеновидна диаграма</value>
@@ -6486,13 +6486,13 @@
     <value>Проверка на грешки</value>
   </data>
   <data name="MainWindow_TooltipTitle_EvaluateFormula" xml:space="preserve">
-    <value>Оценете формулата</value>
+    <value>Изчисляване на формула</value>
   </data>
   <data name="MainWindow_TooltipTitle_ExpandFormulaBar" xml:space="preserve">
-    <value>Разширете лентата с формули</value>
+    <value>Разширяване на лентата за формули</value>
   </data>
   <data name="MainWindow_TooltipTitle_CollapseFormulaBar" xml:space="preserve">
-    <value>Свиване на лентата с формули</value>
+    <value>Свиване на лентата за формули</value>
   </data>
   <data name="MainWindow_TooltipTitle_ExpandGroup" xml:space="preserve">
     <value>Разширете групата</value>
@@ -6573,10 +6573,10 @@
     <value>Форматиране на борсова диаграма</value>
   </data>
   <data name="MainWindow_TooltipTitle_FormulaBar" xml:space="preserve">
-    <value>Лента с формули</value>
+    <value>Лента за формули</value>
   </data>
   <data name="MainWindow_TooltipTitle_FreezePanes" xml:space="preserve">
-    <value>Замразяване на панели</value>
+    <value>Фиксиране на прозорци</value>
   </data>
   <data name="MainWindow_TooltipTitle_FunnelChart" xml:space="preserve">
     <value>Диаграма на фунията</value>
@@ -6594,7 +6594,7 @@
     <value>Общи суми</value>
   </data>
   <data name="MainWindow_TooltipTitle_Gridlines" xml:space="preserve">
-    <value>Мрежови линии</value>
+    <value>Линии на мрежата</value>
   </data>
   <data name="MainWindow_TooltipTitle_Group" xml:space="preserve">
     <value>Група</value>
@@ -6741,7 +6741,7 @@
     <value>Моите добавки</value>
   </data>
   <data name="MainWindow_TooltipTitle_NameManager" xml:space="preserve">
-    <value>Мениджър на имена</value>
+    <value>Диспечер на имената</value>
   </data>
   <data name="MainWindow_TooltipTitle_New" xml:space="preserve">
     <value>Нов</value>
@@ -6867,7 +6867,7 @@
     <value>Област за печат</value>
   </data>
   <data name="MainWindow_TooltipTitle_PrintGridlines" xml:space="preserve">
-    <value>Отпечатайте линии на мрежата</value>
+    <value>Печат на линии на мрежата</value>
   </data>
   <data name="MainWindow_TooltipTitle_PrintHeadings" xml:space="preserve">
     <value>Печат на заглавия</value>
@@ -7143,7 +7143,7 @@
     <value>Използвайте във Формула</value>
   </data>
   <data name="MainWindow_TooltipTitle_ViewGridlines" xml:space="preserve">
-    <value>Преглед на линиите на мрежата</value>
+    <value>Линии на мрежата</value>
   </data>
   <data name="MainWindow_TooltipTitle_ViewHeadings" xml:space="preserve">
     <value>Преглед на заглавия</value>
@@ -7152,7 +7152,7 @@
     <value>Преглед рамо до рамо</value>
   </data>
   <data name="MainWindow_TooltipTitle_WatchWindow" xml:space="preserve">
-    <value>Прозорец за гледане</value>
+    <value>Прозорец за наблюдение</value>
   </data>
   <data name="MainWindow_TooltipTitle_WaterfallChart" xml:space="preserve">
     <value>Водопадна диаграма</value>
@@ -7176,7 +7176,7 @@
     <value>Граници на оста X</value>
   </data>
   <data name="MainWindow_TooltipTitle_XAxisGridlines" xml:space="preserve">
-    <value>Мрежови линии на ос X</value>
+    <value>Линии на мрежата на ос X</value>
   </data>
   <data name="MainWindow_TooltipTitle_XAxisLabelAngle" xml:space="preserve">
     <value>Ъгъл на етикета на ос X</value>
@@ -7197,7 +7197,7 @@
     <value>Отметки по оста X</value>
   </data>
   <data name="MainWindow_TooltipTitle_XGridlineStyle" xml:space="preserve">
-    <value>Стил на мрежата X</value>
+    <value>Стил на линиите на мрежата по ос X</value>
   </data>
   <data name="MainWindow_TooltipTitle_XLogScale" xml:space="preserve">
     <value>Логаритмичен мащаб X</value>
@@ -7206,7 +7206,7 @@
     <value>Граници на оста Y</value>
   </data>
   <data name="MainWindow_TooltipTitle_YAxisGridlines" xml:space="preserve">
-    <value>Мрежови линии на ос Y</value>
+    <value>Линии на мрежата на ос Y</value>
   </data>
   <data name="MainWindow_TooltipTitle_YAxisLabelAngle" xml:space="preserve">
     <value>Ъгъл на етикета на ос Y</value>
@@ -7227,7 +7227,7 @@
     <value>Отметки по оста Y</value>
   </data>
   <data name="MainWindow_TooltipTitle_YGridlineStyle" xml:space="preserve">
-    <value>Стил на мрежата Y</value>
+    <value>Стил на линиите на мрежата по ос Y</value>
   </data>
   <data name="MainWindow_TooltipTitle_YLogScale" xml:space="preserve">
     <value>Логаритмичен мащаб Y</value>
@@ -7248,16 +7248,16 @@
     <value>Мащабиране до селекция</value>
   </data>
   <data name="DataValidation_DataValidation" xml:space="preserve">
-    <value>Валидиране на данни</value>
+    <value>Проверка на данни</value>
   </data>
   <data name="DataValidation_Settings" xml:space="preserve">
     <value>_Настройки</value>
   </data>
   <data name="DataValidation_ValidationCriteria" xml:space="preserve">
-    <value>Критерии за валидиране</value>
+    <value>Критерии за проверка</value>
   </data>
   <data name="DataValidation_Allow" xml:space="preserve">
-    <value>_Позволява:</value>
+    <value>_Разреши:</value>
   </data>
   <data name="DataValidation_AnyValue" xml:space="preserve">
     <value>Всяка стойност</value>
@@ -7266,25 +7266,25 @@
     <value>Цяло число</value>
   </data>
   <data name="DataValidation_Decimal" xml:space="preserve">
-    <value>десетична</value>
+    <value>Десетично</value>
   </data>
   <data name="DataValidation_List" xml:space="preserve">
-    <value>списък</value>
+    <value>Списък</value>
   </data>
   <data name="DataValidation_Date" xml:space="preserve">
     <value>Дата</value>
   </data>
   <data name="DataValidation_Time" xml:space="preserve">
-    <value>време</value>
+    <value>Час</value>
   </data>
   <data name="DataValidation_TextLength" xml:space="preserve">
     <value>Дължина на текста</value>
   </data>
   <data name="DataValidation_Custom" xml:space="preserve">
-    <value>По поръчка</value>
+    <value>По избор</value>
   </data>
   <data name="DataValidation_Data" xml:space="preserve">
-    <value>_данни:</value>
+    <value>_Данни:</value>
   </data>
   <data name="DataValidation_Between" xml:space="preserve">
     <value>Между</value>
@@ -7314,43 +7314,43 @@
     <value>_минимум:</value>
   </data>
   <data name="DataValidation_SelectSourceRange" xml:space="preserve">
-    <value>Изберете диапазон на източника</value>
+    <value>Изберете диапазон източник</value>
   </data>
   <data name="DataValidation_CollapseDialogAndSelectAWorksheetRangeForTheValidationSo" xml:space="preserve">
-    <value>Свиване на диалоговия прозорец и избор на диапазон от работни листове за източника за проверка.</value>
+    <value>Свийте диалоговия прозорец и изберете диапазон в работен лист за източника на проверката.</value>
   </data>
   <data name="DataValidation_CollapseDialogAndSelectSourceRange" xml:space="preserve">
-    <value>Свиване на диалоговия прозорец и избор на изходен диапазон</value>
+    <value>Свийте диалоговия прозорец и изберете диапазон източник</value>
   </data>
   <data name="DataValidation_UseSelection" xml:space="preserve">
-    <value>_Използвайте Избор</value>
+    <value>_Използвай избора</value>
   </data>
   <data name="DataValidation_Maximum" xml:space="preserve">
     <value>_Максимум:</value>
   </data>
   <data name="DataValidation_SelectMaximumRange" xml:space="preserve">
-    <value>Изберете максимален обхват</value>
+    <value>Изберете максимален диапазон</value>
   </data>
   <data name="DataValidation_CollapseDialogAndSelectAWorksheetRangeForTheValidationMa" xml:space="preserve">
-    <value>Свиване на диалоговия прозорец и избор на диапазон от работни листове за максимума за валидиране.</value>
+    <value>Свийте диалоговия прозорец и изберете диапазон в работен лист за максимума на проверката.</value>
   </data>
   <data name="DataValidation_CollapseDialogAndSelectMaximumRange" xml:space="preserve">
-    <value>Свиване на диалоговия прозорец и избор на максимален обхват</value>
+    <value>Свийте диалоговия прозорец и изберете максимален диапазон</value>
   </data>
   <data name="DataValidation_UseSelection2" xml:space="preserve">
-    <value>_Използвайте Избор</value>
+    <value>_Използвай избора</value>
   </data>
   <data name="DataValidation_InCellDropdown" xml:space="preserve">
-    <value>_Падащо меню в клетка</value>
+    <value>_Падащ списък в клетката</value>
   </data>
   <data name="DataValidation_IgnoreBlank" xml:space="preserve">
-    <value>_Игнорирайте празното</value>
+    <value>_Игнорирай празните</value>
   </data>
   <data name="DataValidation_ApplyTheseChangesToAllOtherCellsWithTheSameSettings" xml:space="preserve">
     <value>_Приложете тези промени към всички други клетки със същите настройки</value>
   </data>
   <data name="DataValidation_InputMessage" xml:space="preserve">
-    <value>_Входно съобщение</value>
+    <value>_Съобщение при въвеждане</value>
   </data>
   <data name="DataValidation_ShowInputMessageWhenCellIsSelected" xml:space="preserve">
     <value>_Показване на съобщение за въвеждане, когато клетката е избрана</value>
@@ -7377,7 +7377,7 @@
     <value>_Стил на предупреждение:</value>
   </data>
   <data name="DataValidation_Stop" xml:space="preserve">
-    <value>Спрете</value>
+    <value>Стоп</value>
   </data>
   <data name="DataValidation_Warning" xml:space="preserve">
     <value>Предупреждение</value>
@@ -7392,7 +7392,7 @@
     <value>_Съобщение за грешка:</value>
   </data>
   <data name="DataValidation_ClearAll" xml:space="preserve">
-    <value>_Изчистване на всички</value>
+    <value>_Изчисти всички</value>
   </data>
   <data name="FindReplace_FindAndReplace" xml:space="preserve">
     <value>Намиране и замяна</value>
@@ -8223,7 +8223,7 @@
     <value>Свийте диалоговия прозорец Настройка на страницата и изберете колони, които да се повтарят отляво на всяка отпечатана страница.</value>
   </data>
   <data name="PageSetup_PrintGridlines" xml:space="preserve">
-    <value>_Отпечатайте мрежови линии</value>
+    <value>_Печат на линии на мрежата</value>
   </data>
   <data name="PageSetup_PrintRowAndColumnHeadings" xml:space="preserve">
     <value>_Отпечатайте заглавия на редове и колони</value>
@@ -8340,13 +8340,13 @@
     <value>Персонализиране на лентата</value>
   </data>
   <data name="Options_QuickAccessToolbar" xml:space="preserve">
-    <value>Лента с бърз достъп</value>
+    <value>Лента с инструменти за бърз достъп</value>
   </data>
   <data name="Options_AddIns" xml:space="preserve">
     <value>Добавки</value>
   </data>
   <data name="Options_TrustCenter" xml:space="preserve">
-    <value>Център за надеждност</value>
+    <value>Център за сигурност</value>
   </data>
   <data name="Options_View" xml:space="preserve">
     <value>Изглед</value>
@@ -8430,10 +8430,10 @@
     <value>Опции за изглед на работна книга</value>
   </data>
   <data name="Options_ShowFormulaBar" xml:space="preserve">
-    <value>_Показване на лентата с формули</value>
+    <value>_Показване на лентата за формули</value>
   </data>
   <data name="Options_ExpandFormulaBar" xml:space="preserve">
-    <value>_Разгъване на лентата с формули</value>
+    <value>_Разгъване на лентата за формули</value>
   </data>
   <data name="Options_ChooseEditingLanguages" xml:space="preserve">
     <value>Изберете езици за редактиране</value>
@@ -8559,7 +8559,7 @@
     <value>_давай...</value>
   </data>
   <data name="Options_TrustCenter2" xml:space="preserve">
-    <value>Център за доверие</value>
+    <value>Център за сигурност</value>
   </data>
   <data name="Options_SecurityAndPrivacySettingsForFreeX" xml:space="preserve">
     <value>Настройки за сигурност и поверителност за FreeX.</value>
@@ -8577,7 +8577,7 @@
     <value>Локална диагностика на тестер</value>
   </data>
   <data name="Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr" xml:space="preserve">
-    <value>_FreeX записва локални събития за използване и файлове за срив в %LOCALAPPDATA%\FreeX\Diagnostics. Тези файлове остават на този компютър, освен ако не ги прикачите към проблем. Съобщенията за изключения при сривове и проследяванията на стека понякога могат да съдържат чувствителни стойности, така че прегледайте файловете, преди да ги споделите. Стартирайте FreeX с FREEXDIAGNOSTICS=0, за да деактивирате локалната диагностика за това изпълнение.</value>
+    <value>FreeX записва локални събития за използване и файлове за срив в %LOCALAPPDATA%\FreeX\Diagnostics. Тези файлове остават на този компютър, освен ако не ги прикачите към проблем. Съобщенията за изключения при сривове и проследяванията на стека понякога могат да съдържат чувствителни стойности, така че прегледайте файловете, преди да ги споделите. Стартирайте FreeX с FREEX_DIAGNOSTICS=0, за да деактивирате локалната диагностика за това изпълнение.</value>
   </data>
   <data name="Options_TrustCenterSettings" xml:space="preserve">
     <value>_Настройки на центъра за сигурност...</value>
@@ -8781,7 +8781,7 @@
     <value>Нов</value>
   </data>
   <data name="NamedRange_NameManager" xml:space="preserve">
-    <value>Мениджър на имена</value>
+    <value>Диспечер на имената</value>
   </data>
   <data name="NamedRange_New" xml:space="preserve">
     <value>_Нов...</value>
@@ -8856,7 +8856,7 @@
     <value>Задайте клетка</value>
   </data>
   <data name="GoalSeek_SetCellHelpText" xml:space="preserve">
-    <value>Въведете клетката с формула, която Goal Seek трябва да реши.</value>
+    <value>Въведете клетката с формула, която Търсене на цел трябва да реши.</value>
   </data>
   <data name="GoalSeek_CollapseDialogAndSelectSetCellReference" xml:space="preserve">
     <value>Свиване на диалоговия прозорец и избор на задаване на препратка към клетка</value>
@@ -8883,7 +8883,7 @@
     <value>Чрез смяна на клетка</value>
   </data>
   <data name="GoalSeek_ByChangingCellHelpText" xml:space="preserve">
-    <value>Въведете клетката, чиято стойност Goal Seek може да се промени.</value>
+    <value>Въведете клетката, чиято стойност Търсене на цел може да промени.</value>
   </data>
   <data name="GoalSeek_CollapseDialogAndSelectChangingCellReference" xml:space="preserve">
     <value>Свиване на диалоговия прозорец и избор на промяна на препратката към клетка</value>
@@ -9144,7 +9144,7 @@
     <value>Съхранява персонализирания код на числов формат за полето за стойност.</value>
   </data>
   <data name="DataValidation_Source" xml:space="preserve">
-    <value>_източник:</value>
+    <value>_Източник:</value>
   </data>
   <data name="DataValidation_Formula" xml:space="preserve">
     <value>_Формула:</value>
@@ -10287,7 +10287,7 @@
     <value>_Възстановете оригиналните стойности</value>
   </data>
   <data name="GoalSeekStatus_ReportsWhetherGoalSeekReachedTheTargetValue" xml:space="preserve">
-    <value>Отчита дали Goal Seek е достигнал целевата стойност.</value>
+    <value>Отчита дали Търсене на цел е достигнало целевата стойност.</value>
   </data>
   <data name="GoalSeekStatus_KeepResult2" xml:space="preserve">
     <value>Запазване на резултата</value>
@@ -10299,7 +10299,7 @@
     <value>Възстановете оригиналните стойности</value>
   </data>
   <data name="GoalSeekStatus_RestoreTheOriginalWorkbookValuesBeforeGoalSeekRan" xml:space="preserve">
-    <value>Възстановете оригиналните стойности на работната книга, преди да се изпълни Goal Seek.</value>
+    <value>Възстановете оригиналните стойности на работната книга отпреди изпълнението на Търсене на цел.</value>
   </data>
   <data name="GoalSeekStatus_Ok" xml:space="preserve">
     <value>добре</value>
@@ -10425,7 +10425,7 @@
     <value>_Лява колона</value>
   </data>
   <data name="Consolidate_CreateLinksToSourceData" xml:space="preserve">
-    <value>_Създайте връзки към изходни данни</value>
+    <value>_Създаване на връзки към данните източник</value>
   </data>
   <data name="Consolidate_Consolidate" xml:space="preserve">
     <value>Консолидирайте</value>
@@ -10449,19 +10449,19 @@
     <value>Използвайте етикети в:</value>
   </data>
   <data name="Consolidate_WriteFormulasThatReferenceTheSourceCellsWhileKeepingTheConsolidatedResul" xml:space="preserve">
-    <value>Напишете формули, които препращат към изходните клетки, като същевременно запазват стойността на консолидирания резултат.</value>
+    <value>Напишете формули, които препращат към клетките източник, като запазват стойността на консолидирания резултат.</value>
   </data>
   <data name="Consolidate_Reference2" xml:space="preserve">
     <value>справка</value>
   </data>
   <data name="Consolidate_EnterASourceRangeToAddToTheAllReferencesList" xml:space="preserve">
-    <value>Въведете диапазон от източници, който да добавите към списъка Всички препратки.</value>
+    <value>Въведете диапазон източник, който да добавите към списъка Всички препратки.</value>
   </data>
   <data name="Consolidate_AllReferences2" xml:space="preserve">
     <value>Всички препратки</value>
   </data>
   <data name="Consolidate_ListsTheSourceRangesThatWillBeConsolidated" xml:space="preserve">
-    <value>Изброява изходните диапазони, които ще бъдат консолидирани.</value>
+    <value>Изброява диапазоните източник, които ще бъдат консолидирани.</value>
   </data>
   <data name="Consolidate_DestinationCell2" xml:space="preserve">
     <value>Целева клетка</value>
@@ -10476,7 +10476,7 @@
     <value>Изберете целева клетка</value>
   </data>
   <data name="Consolidate_EnterAValidSourceRange" xml:space="preserve">
-    <value>Въведете валиден изходен диапазон.</value>
+    <value>Въведете валиден диапазон източник.</value>
   </data>
   <data name="Consolidate_AddTheReferenceBeforeClickingOk" xml:space="preserve">
     <value>Добавете препратката, преди да щракнете върху OK.</value>
@@ -10497,25 +10497,25 @@
     <value>функция</value>
   </data>
   <data name="Consolidate_ChooseTheFunctionUsedToCombineSourceRanges" xml:space="preserve">
-    <value>Изберете функцията, използвана за комбиниране на изходни диапазони.</value>
+    <value>Изберете функцията, използвана за комбиниране на диапазони източник.</value>
   </data>
   <data name="Consolidate_TopRowLabelsAutomationName" xml:space="preserve">
     <value>Етикети на горния ред</value>
   </data>
   <data name="Consolidate_UseLabelsFromTheTopRowOfEachSourceRange" xml:space="preserve">
-    <value>Използвайте етикети от горния ред на всеки изходен диапазон.</value>
+    <value>Използвайте етикети от горния ред на всеки диапазон източник.</value>
   </data>
   <data name="Consolidate_LeftColumnLabelsAutomationName" xml:space="preserve">
     <value>Етикети в лявата колона</value>
   </data>
   <data name="Consolidate_UseLabelsFromTheLeftColumnOfEachSourceRange" xml:space="preserve">
-    <value>Използвайте етикети от лявата колона на всеки изходен диапазон.</value>
+    <value>Използвайте етикети от лявата колона на всеки диапазон източник.</value>
   </data>
   <data name="Consolidate_CreateLinksToSourceDataAutomationName" xml:space="preserve">
-    <value>Създайте връзки към изходни данни</value>
+    <value>Създаване на връзки към данните източник</value>
   </data>
   <data name="Consolidate_CreateFormulasThatLinkTheResultToTheSourceCells" xml:space="preserve">
-    <value>Създавайте формули, които свързват резултата с изходните клетки.</value>
+    <value>Създавайте формули, които свързват резултата с клетките източник.</value>
   </data>
   <data name="Consolidate_EnterValidConsolidationRanges" xml:space="preserve">
     <value>Въведете валидни диапазони на консолидация.</value>
@@ -10701,10 +10701,10 @@
     <value>Промяна на източника на данни за обобщена таблица</value>
   </data>
   <data name="PivotTableDataSource_PivotTableSourceRange" xml:space="preserve">
-    <value>Изходен диапазон на обобщена таблица</value>
+    <value>Диапазон източник на обобщена таблица</value>
   </data>
   <data name="PivotTableDataSource_SelectPivotTableSourceRange" xml:space="preserve">
-    <value>Изберете изходен диапазон на обобщена таблица</value>
+    <value>Изберете диапазон източник на обобщена таблица</value>
   </data>
   <data name="PivotTableName_Title" xml:space="preserve">
     <value>Име на обобщена таблица</value>
@@ -10971,7 +10971,7 @@
     <value>_Лентовидни колони</value>
   </data>
   <data name="PivotTableOptions_AutofitColumnWidthsOnUpdate" xml:space="preserve">
-    <value>_Автоматично побиране на ширините на колоните при актуализация</value>
+    <value>_Автопобиране на ширините на колоните при актуализация</value>
   </data>
   <data name="PivotTableOptions_PreserveCellFormattingOnUpdate" xml:space="preserve">
     <value>_Запазване на форматирането на клетката при актуализация</value>
@@ -10980,7 +10980,7 @@
     <value>_Опресняване на данните при отваряне на файла</value>
   </data>
   <data name="PivotTableOptions_SaveSourceDataWithFile" xml:space="preserve">
-    <value>_Запазете изходните данни с файл</value>
+    <value>_Запазване на данните източник с файла</value>
   </data>
   <data name="PivotTableOptions_EnableRefresh" xml:space="preserve">
     <value>_Активирайте опресняването</value>
@@ -11022,10 +11022,10 @@
     <value>_Алтернативен текст</value>
   </data>
   <data name="WatchWindow_WatchWindow" xml:space="preserve">
-    <value>Прозорец за гледане</value>
+    <value>Прозорец за наблюдение</value>
   </data>
   <data name="WatchWindow_AddWatch" xml:space="preserve">
-    <value>_Добавете часовник</value>
+    <value>_Добавяне на наблюдение</value>
   </data>
   <data name="WatchWindow_AddTheCurrentWorksheetSelectionToTheWatchWindow" xml:space="preserve">
     <value>Добавете текущия избор на работен лист към прозореца за наблюдение.</value>
@@ -11034,16 +11034,16 @@
     <value>_Опресняване</value>
   </data>
   <data name="WatchWindow_DeleteWatch" xml:space="preserve">
-    <value>_Изтриване на часовник</value>
+    <value>_Изтриване на наблюдение</value>
   </data>
   <data name="WatchWindow_Close" xml:space="preserve">
-    <value>_затвори</value>
+    <value>_Затвори</value>
   </data>
   <data name="WatchWindow_Watches" xml:space="preserve">
-    <value>_часовници:</value>
+    <value>_Наблюдения:</value>
   </data>
   <data name="WatchWindow_Book" xml:space="preserve">
-    <value>книга</value>
+    <value>Книга</value>
   </data>
   <data name="WatchWindow_Sheet" xml:space="preserve">
     <value>Лист</value>
@@ -11052,7 +11052,7 @@
     <value>Име</value>
   </data>
   <data name="WatchWindow_Cell" xml:space="preserve">
-    <value>клетка</value>
+    <value>Клетка</value>
   </data>
   <data name="WatchWindow_Value" xml:space="preserve">
     <value>Стойност</value>
@@ -11061,16 +11061,16 @@
     <value>Формула</value>
   </data>
   <data name="WatchWindow_AddWatch2" xml:space="preserve">
-    <value>Добавете часовник</value>
+    <value>Добавяне на наблюдение</value>
   </data>
   <data name="WatchWindow_RefreshWatches" xml:space="preserve">
-    <value>Опресняване на часовници</value>
+    <value>Опресняване на наблюдения</value>
   </data>
   <data name="WatchWindow_RefreshValuesAndFormulasForWatchedCells" xml:space="preserve">
     <value>Опресняване на стойности и формули за наблюдавани клетки.</value>
   </data>
   <data name="WatchWindow_DeleteWatch2" xml:space="preserve">
-    <value>Изтриване на часовник</value>
+    <value>Изтриване на наблюдение</value>
   </data>
   <data name="WatchWindow_DeleteTheSelectedWatchedCells" xml:space="preserve">
     <value>Изтрийте избраните наблюдавани клетки.</value>
@@ -11082,7 +11082,7 @@
     <value>Затворете прозореца за наблюдение.</value>
   </data>
   <data name="WatchWindow_Watches2" xml:space="preserve">
-    <value>часовници</value>
+    <value>Наблюдения</value>
   </data>
   <data name="WatchWindow_ListsWatchedCellsWithTheirWorkbookSheetAddressValueAndFormula" xml:space="preserve">
     <value>Изброява наблюдаваните клетки с тяхната работна книга, лист, адрес, стойност и формула.</value>
@@ -11436,7 +11436,7 @@
     <value>_Скрий се</value>
   </data>
   <data name="ScenarioManager_ScenarioManager" xml:space="preserve">
-    <value>Мениджър на сценарии</value>
+    <value>Диспечер на сценарии</value>
   </data>
   <data name="ScenarioManager_Scenarios" xml:space="preserve">
     <value>_Сценарии:</value>
@@ -11565,7 +11565,7 @@
     <value>затвори</value>
   </data>
   <data name="ScenarioManager_CloseTheScenarioManagerDialog" xml:space="preserve">
-    <value>Затворете диалоговия прозорец на диспечера на сценариите.</value>
+    <value>Затворете диалоговия прозорец Диспечер на сценарии.</value>
   </data>
   <data name="PasteSpecial_PasteSpecial" xml:space="preserve">
     <value>Специална паста</value>
@@ -11616,13 +11616,13 @@
     <value>Поставете само коментари и бележки.</value>
   </data>
   <data name="PasteSpecial_Validation" xml:space="preserve">
-    <value>_Валидиране</value>
+    <value>_Проверка</value>
   </data>
   <data name="PasteSpecial_ValidationAutomationName" xml:space="preserve">
-    <value>Валидиране на поставяне</value>
+    <value>Поставяне на проверка</value>
   </data>
   <data name="PasteSpecial_PasteOnlyDataValidationRules" xml:space="preserve">
-    <value>Поставете само правила за валидиране на данни.</value>
+    <value>Поставете само правила за проверка на данни.</value>
   </data>
   <data name="PasteSpecial_AllUsingSourceTheme" xml:space="preserve">
     <value>_Всички използват изходна тема</value>
@@ -11928,13 +11928,13 @@
     <value>Автофилтър - {0}</value>
   </data>
   <data name="GoalSeekStatus_FailureSummary" xml:space="preserve">
-    <value>Goal Seek не можа да намери решение.
+    <value>Търсене на цел не можа да намери решение.
 Целева стойност: {0}
 Текуща стойност: {1}
 Промяна на стойността на клетката: {2}</value>
   </data>
   <data name="GoalSeekStatus_SuccessSummary" xml:space="preserve">
-    <value>Goal Seek намери решение.
+    <value>Търсене на цел намери решение.
 Целева стойност: {0}
 Текуща стойност: {1}
 Промяна на стойността на клетката: {2}</value>
@@ -11958,7 +11958,7 @@
     <value>_Текущ регион</value>
   </data>
   <data name="GoToSpecial_DataValidation" xml:space="preserve">
-    <value>_Валидиране на данни</value>
+    <value>_Проверка на данни</value>
   </data>
   <data name="GoToSpecial_Dependents" xml:space="preserve">
     <value>_Зависими</value>
@@ -12189,7 +12189,7 @@
     <value>Изберете Отнася се за диапазон</value>
   </data>
   <data name="ManageConditionalFormats_SelectAppliesToRangeHelpText" xml:space="preserve">
-    <value>Свиване на диалоговия прозорец и избор на диапазон от работни листове за това правило за условен формат.</value>
+    <value>Свийте диалоговия прозорец и изберете диапазон в работен лист за това правило за условно форматиране.</value>
   </data>
   <data name="ManageConditionalFormats_StopIfTrueColumn" xml:space="preserve">
     <value>Спрете, ако е вярно</value>
@@ -12384,16 +12384,16 @@
     <value>_Поле за дата за свързване</value>
   </data>
   <data name="PivotSlicerTimeline_DefaultSlicerName" xml:space="preserve">
-    <value>{0} Резачка</value>
+    <value>{0} сегментатор</value>
   </data>
   <data name="PivotSlicerTimeline_DefaultTimelineName" xml:space="preserve">
-    <value>{0} Хронология</value>
+    <value>{0} времева линия</value>
   </data>
   <data name="PivotSlicerTimeline_EnterSlicerCaption" xml:space="preserve">
-    <value>Въведете надпис на секцията.</value>
+    <value>Въведете надпис на сегментатор.</value>
   </data>
   <data name="PivotSlicerTimeline_EnterSlicerOptions" xml:space="preserve">
-    <value>Въведете опции за нарязване.</value>
+    <value>Въведете опции за сегментатор.</value>
   </data>
   <data name="PivotSlicerTimeline_EnterTimelineCaption" xml:space="preserve">
     <value>Въведете надпис на времевата линия.</value>
@@ -12426,7 +12426,7 @@
     <value>Въведете целева клетка в активния работен лист.</value>
   </data>
   <data name="PivotTable_EnterValidSourceRange" xml:space="preserve">
-    <value>Въведете валиден изходен диапазон на обобщена таблица.</value>
+    <value>Въведете валиден диапазон източник на обобщена таблица.</value>
   </data>
   <data name="PivotTable_LocationLabel" xml:space="preserve">
     <value>_местоположение:</value>
@@ -12435,13 +12435,13 @@
     <value>Изберете местоположение на обобщена таблица</value>
   </data>
   <data name="PivotTable_SelectPivotTableSourceRange" xml:space="preserve">
-    <value>Изберете изходен диапазон на обобщена таблица</value>
+    <value>Изберете диапазон източник на обобщена таблица</value>
   </data>
   <data name="PivotTable_TableRangeLabel" xml:space="preserve">
     <value>_Таблица/диапазон:</value>
   </data>
   <data name="PivotTableDataSource_EnterValidSourceRange" xml:space="preserve">
-    <value>Въведете валиден изходен диапазон на обобщена таблица.</value>
+    <value>Въведете валиден диапазон източник на обобщена таблица.</value>
   </data>
   <data name="PivotTableDataSource_TableRangeLabel" xml:space="preserve">
     <value>_Таблица/диапазон:</value>
@@ -12762,19 +12762,19 @@
     <value>Списъчният диапазон трябва да включва заглавки и поне един ред с данни.</value>
   </data>
   <data name="Consolidate_AtLeastOneSourceRangeRequired" xml:space="preserve">
-    <value>Изисква се поне един диапазон от източници.</value>
+    <value>Изисква се поне един диапазон източник.</value>
   </data>
   <data name="Consolidate_EnterAtLeastOneValidSourceRange" xml:space="preserve">
-    <value>Въведете поне един валиден изходен диапазон.</value>
+    <value>Въведете поне един валиден диапазон източник.</value>
   </data>
   <data name="Consolidate_EnterValidDestinationCell" xml:space="preserve">
     <value>Въведете валидна целева клетка.</value>
   </data>
   <data name="Consolidate_EnterValidSourceRange" xml:space="preserve">
-    <value>Въведете валиден изходен диапазон.</value>
+    <value>Въведете валиден диапазон източник.</value>
   </data>
   <data name="Consolidate_EnterValidSourceRangeWithPart" xml:space="preserve">
-    <value>Въведете валиден диапазон от източници: {0}.</value>
+    <value>Въведете валиден диапазон източник: {0}.</value>
   </data>
   <data name="Consolidate_FunctionCountNumbers" xml:space="preserve">
     <value>Брой числа</value>
@@ -12786,7 +12786,7 @@
     <value>StdDevp</value>
   </data>
   <data name="Consolidate_SourceRangesMustBeSameSize" xml:space="preserve">
-    <value>Изходните диапазони трябва да са с еднакъв размер.</value>
+    <value>Диапазоните източник трябва да са с еднакъв размер.</value>
   </data>
   <data name="RemoveDuplicates_ColumnLabel" xml:space="preserve">
     <value>Колона {0}</value>
@@ -12939,7 +12939,7 @@
     <value>Вмъкнете или изберете диаграма, преди да промените отметките на оста.</value>
   </data>
   <data name="MainWindowMessage_ChartGridlineFormattingRequiresChart" xml:space="preserve">
-    <value>Вмъкнете или изберете диаграма, преди да промените форматирането на мрежата.</value>
+    <value>Вмъкнете или изберете диаграма, преди да промените форматирането на линиите на мрежата.</value>
   </data>
   <data name="MainWindowMessage_ChartPieOptionsUnsupported" xml:space="preserve">
     <value>Опциите за кръгов формат се прилагат само за кръгови и кръгови диаграми.</value>
@@ -13165,7 +13165,7 @@
     <value>Въведете целева клетка в активния работен лист.</value>
   </data>
   <data name="MainWindowMessage_PivotTableInvalidSourceRange" xml:space="preserve">
-    <value>Въведете валиден изходен диапазон на обобщена таблица.</value>
+    <value>Въведете валиден диапазон източник на обобщена таблица.</value>
   </data>
   <data name="MainWindowMessage_PivotTableMoveCurrentSheetOnly" xml:space="preserve">
     <value>Преместване на обобщена таблица понастоящем поддържа дестинации в активния работен лист.</value>
@@ -13192,7 +13192,7 @@
     <value>Изберете клетка в съществуваща обобщена таблица или отворете работна книга с обобщена таблица на активния лист.</value>
   </data>
   <data name="MainWindowMessage_PivotTableSelectSourceRange" xml:space="preserve">
-    <value>Изберете изходен диапазон със заглавен ред, преди да създадете обобщена таблица.</value>
+    <value>Изберете диапазон източник със заглавен ред, преди да създадете обобщена таблица.</value>
   </data>
   <data name="MainWindowMessage_PivotTableSelectValueForDetails" xml:space="preserve">
     <value>Изберете клетка със стойност в съществуваща обобщена таблица, преди да покажете редове с подробности.</value>
@@ -13340,7 +13340,7 @@
     <value>Могат да се изрязват само вмъкнати изображения.</value>
   </data>
   <data name="MainWindowMessage_DataValidationTitle" xml:space="preserve">
-    <value>Валидиране на данни</value>
+    <value>Проверка на данни</value>
   </data>
   <data name="MainWindowMessage_DeferredCommandFallbackName" xml:space="preserve">
     <value>Тази команда</value>
@@ -13933,7 +13933,7 @@
     <value>Мащабиране: {0}</value>
   </data>
   <data name="PrintSettings_GridlinesFormat" xml:space="preserve">
-    <value>Мрежови линии: {0}</value>
+    <value>Линии на мрежата: {0}</value>
   </data>
   <data name="PrintSettings_HeadingsFormat" xml:space="preserve">
     <value>Заглавия: {0}</value>
@@ -14321,6 +14321,30 @@
   </data>
   <data name="MainWindow_TooltipTitle_UnhideWindow" xml:space="preserve">
     <value>Показване</value>
+  </data>
+  <data name="DataValidation_InvalidCustomCriteria" xml:space="preserve">
+    <value>Формулата трябва да е валидна формула.</value>
+  </data>
+  <data name="DataValidation_InvalidDateCriteria" xml:space="preserve">
+    <value>Критериите за дата трябва да са дати, серийни числа за дата или валидни формули.</value>
+  </data>
+  <data name="DataValidation_InvalidDecimalCriteria" xml:space="preserve">
+    <value>Критериите за десетично число трябва да са числа или валидни формули.</value>
+  </data>
+  <data name="DataValidation_InvalidListCriteria" xml:space="preserve">
+    <value>Източникът трябва да е списък, разделен със запетаи, или валидна формула.</value>
+  </data>
+  <data name="DataValidation_InvalidTextLengthCriteria" xml:space="preserve">
+    <value>Критериите за дължина на текста трябва да са цели числа или валидни формули.</value>
+  </data>
+  <data name="DataValidation_InvalidTimeCriteria" xml:space="preserve">
+    <value>Критериите за час трябва да са часове, серийни числа за час или валидни формули.</value>
+  </data>
+  <data name="DataValidation_InvalidWholeNumberCriteria" xml:space="preserve">
+    <value>Критериите за цяло число трябва да са цели числа или валидни формули.</value>
+  </data>
+  <data name="MainWindowMessage_SaveChangesBeforeOpeningWorkbook" xml:space="preserve">
+    <value>Да се запазят ли промените преди отваряне на друга работна книга?</value>
   </data>
 </root>
 

@@ -168,12 +168,17 @@ public sealed class ScreenshotHarnessScriptTests
     }
 
     [Fact]
-    public void FreeXScreenshotScript_FailsFastWhenReleaseHostIsMissing()
+    public void FreeXScreenshotScript_AcceptsExplicitExePathAndDiscoversBuiltHost()
     {
         var script = ReadScript("screenshot_ribbon.ps1");
 
-        script.Should().Contain("Test-Path -LiteralPath $exe");
-        script.Should().Contain("FreeX executable was not found at $exe. Build the Release host before running tools\\screenshot_ribbon.ps1.");
+        script.Should().Contain("[string]$ExePath = $env:FREEX_RIBBON_EXE_PATH");
+        script.Should().Contain("function Resolve-FreeXExecutablePath");
+        script.Should().Contain("Test-Path -LiteralPath $resolvedRequestedExePath -PathType Leaf");
+        script.Should().Contain($"Pass -ExePath with an existing {FreeXUiRun.AppExecutableName}");
+        script.Should().Contain($"Get-ChildItem -LiteralPath $binRoot -Recurse -Filter \"{FreeXUiRun.AppExecutableName}\" -File");
+        script.Should().Contain("Sort-Object LastWriteTimeUtc -Descending");
+        script.Should().Contain("$exe = Resolve-FreeXExecutablePath $ExePath");
         script.Should().Contain("$proc = Start-Process -FilePath $exe -PassThru");
     }
 

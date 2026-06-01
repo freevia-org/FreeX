@@ -280,6 +280,12 @@ public partial class MainWindow
                     "theme effects",
             "PageLayoutScaleToFitGroup" =>
                 normalizedCommandName is "scale to fit",
+            "PageLayoutArrangeGroup" or "DrawArrangeGroup" =>
+                normalizedCommandName is "bring forward" or
+                    "send backward" or
+                    "selection pane" or
+                    "rotate object" or
+                    "object size",
             "FormulasFunctionLibraryGroup" =>
                 normalizedCommandName is "insert function" or "autosum",
             "FormulasDefinedNamesGroup" =>
@@ -999,6 +1005,9 @@ public partial class MainWindow
         _lastRibbonFallbackRequestedWork = work;
         _ribbonFallbackWork = MergeRibbonFallbackWork(_ribbonFallbackWork, work);
         _lastRibbonFallbackMergedWork = _ribbonFallbackWork;
+        _queuedRibbonCompactFallbackStateKey = _ribbonFallbackWork == RibbonFallbackWork.CompactOnly
+            ? _lastRibbonAdaptiveAppliedStateKey
+            : null;
         if (_ribbonFallbackPending)
             return;
 
@@ -1008,7 +1017,9 @@ public partial class MainWindow
             (Action)(() =>
             {
                 var pendingWork = _ribbonFallbackWork;
+                var compactFallbackStateKey = _queuedRibbonCompactFallbackStateKey;
                 _ribbonFallbackWork = RibbonFallbackWork.None;
+                _queuedRibbonCompactFallbackStateKey = null;
                 _ribbonFallbackPending = false;
                 _ribbonFallbackExecutedCount++;
                 _lastRibbonFallbackExecutedWork = pendingWork;
@@ -1022,6 +1033,12 @@ public partial class MainWindow
                 else if (pendingWork == RibbonFallbackWork.CompactOnly)
                 {
                     _ribbonFallbackForcedCompactCount++;
+                    if (CanSkipQueuedRibbonCompactFallback(compactFallbackStateKey))
+                    {
+                        _ribbonFallbackSkippedCompactLayoutCount++;
+                        return;
+                    }
+
                     var result = UpdateRibbonCompactMode(force: false);
                     if (RibbonCompactUpdateRequiresLayout(result))
                         UpdateActiveRibbonLayoutBeforeFirstFrame();
@@ -1059,6 +1076,7 @@ public partial class MainWindow
         _lastRibbonFallbackRequestedWork = RibbonFallbackWork.None;
         _lastRibbonFallbackMergedWork = RibbonFallbackWork.None;
         _lastRibbonFallbackExecutedWork = RibbonFallbackWork.None;
+        _queuedRibbonCompactFallbackStateKey = null;
     }
 
     private static RibbonFallbackWork MergeRibbonFallbackWork(RibbonFallbackWork current, RibbonFallbackWork requested) =>
@@ -1070,6 +1088,11 @@ public partial class MainWindow
 
     private static bool RibbonCompactUpdateRequiresLayout(RibbonCompactUpdateResult result) =>
         result is RibbonCompactUpdateResult.AppliedVisualChange or RibbonCompactUpdateResult.MeasuredCorrectionApplied;
+
+    private bool CanSkipQueuedRibbonCompactFallback(RibbonAppliedStateKey? queuedStateKey) =>
+        queuedStateKey is not null &&
+        !_ribbonAdaptiveStateDiffInvalidated &&
+        _lastRibbonAdaptiveAppliedStateKey == queuedStateKey;
 
     private void CompleteRibbonResizeCompaction()
     {
@@ -1485,42 +1508,41 @@ public partial class MainWindow
     private bool TryNormalizeStaticRibbonCommandButton(ButtonBase button)
     {
         if (RibbonTabs is null ||
-            button is not Button commandButton ||
-            IsRibbonCollapsedGroupButton(commandButton) ||
-            IsRibbonCommandContent(commandButton.Content) ||
-            (!ContainsUnreplacedRibbonIcon(commandButton.Content) &&
-             !ContainsRibbonCommandLabel(commandButton.Content)))
+            IsRibbonCollapsedGroupButton(button) ||
+            IsRibbonCommandContent(button.Content) ||
+            (!ContainsUnreplacedRibbonIcon(button.Content) &&
+             !ContainsRibbonCommandLabel(button.Content)))
         {
             return false;
         }
 
-        var hadUnreplacedIcon = ContainsUnreplacedRibbonIcon(commandButton.Content);
-        var hadRibbonCommandLabel = ContainsRibbonCommandLabel(commandButton.Content);
-        var commandName = GetRibbonButtonCommandName(commandButton);
+        var hadUnreplacedIcon = ContainsUnreplacedRibbonIcon(button.Content);
+        var hadRibbonCommandLabel = ContainsRibbonCommandLabel(button.Content);
+        var commandName = GetRibbonButtonCommandName(button);
         if (string.IsNullOrWhiteSpace(commandName))
             return false;
 
-        var label = GetRibbonButtonDisplayLabel(commandButton);
-        var layoutKind = IsFixedHeightIconOnlyRibbonButton(commandButton, hadUnreplacedIcon, hadRibbonCommandLabel) ||
+        var label = GetRibbonButtonDisplayLabel(button);
+        var layoutKind = IsFixedHeightIconOnlyRibbonButton(button, hadUnreplacedIcon, hadRibbonCommandLabel) ||
                          (!hadUnreplacedIcon &&
                           hadRibbonCommandLabel &&
-                          commandButton.Height is > 0 and <= 34)
+                          button.Height is > 0 and <= 34)
             ? RibbonCommandLayoutKind.Small
             : RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
-        ApplyRibbonCommandSize(commandButton, layoutKind);
+        ApplyRibbonCommandSize(button, layoutKind);
         if (layoutKind is RibbonCommandLayoutKind.Small)
         {
-            commandButton.Width = Math.Max(commandButton.Width is > 0 ? commandButton.Width : 0, GetSmallRibbonCommandWidth(label));
+            button.Width = Math.Max(button.Width is > 0 ? button.Width : 0, GetSmallRibbonCommandWidth(label));
             if (!hadUnreplacedIcon && hadRibbonCommandLabel)
-                commandButton.Width = Math.Max(commandButton.Width, GetIconLabelRowRibbonCommandWidth(label));
+                button.Width = Math.Max(button.Width, GetIconLabelRowRibbonCommandWidth(label));
         }
         SetRibbonCompactWidths(
-            commandButton,
-            commandButton.Width is > 0 ? commandButton.Width : Math.Max(commandButton.ActualWidth, 64),
+            button,
+            button.Width is > 0 ? button.Width : Math.Max(button.ActualWidth, 64),
             layoutKind is RibbonCommandLayoutKind.Large or RibbonCommandLayoutKind.Medium ? 38 : 24);
 
-        commandButton.Content = CreateRibbonCommandContent(commandName, label, layoutKind);
-        if (!hadUnreplacedIcon && hadRibbonCommandLabel && commandButton.Content is DependencyObject contentRoot)
+        button.Content = CreateRibbonCommandContent(commandName, label, layoutKind);
+        if (!hadUnreplacedIcon && hadRibbonCommandLabel && button.Content is DependencyObject contentRoot)
         {
             foreach (var textBlock in EnumerateVisualDescendants(contentRoot)
                          .Concat(EnumerateLogicalDescendants(contentRoot))
@@ -1534,8 +1556,8 @@ public partial class MainWindow
         }
 
         if (layoutKind is RibbonCommandLayoutKind.Small)
-            commandButton.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
-        commandButton.HorizontalContentAlignment = layoutKind is RibbonCommandLayoutKind.Small
+            button.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+        button.HorizontalContentAlignment = layoutKind is RibbonCommandLayoutKind.Small
             ? System.Windows.HorizontalAlignment.Left
             : System.Windows.HorizontalAlignment.Center;
         return true;
@@ -2032,6 +2054,7 @@ public partial class MainWindow
     private void NormalizeRibbonCommandGroups(RibbonStaticSurfaceSnapshot surface)
     {
         NormalizeRibbonCommandColumns(surface);
+        NormalizeRibbonGridCommandColumns(surface);
     }
 
     private void NormalizeRibbonCommandColumns(RibbonStaticSurfaceSnapshot surface)
@@ -2140,6 +2163,36 @@ public partial class MainWindow
         }
     }
 
+    private static void NormalizeRibbonGridCommandColumns(RibbonStaticSurfaceSnapshot surface)
+    {
+        foreach (var grid in surface.Grids)
+        {
+            if (RibbonMetadata.IsRibbonGroup(grid) ||
+                RibbonMetadata.TryGetCommandContentLayout(grid, out _) ||
+                FindVisualAncestor<ButtonBase>(grid) is not null)
+            {
+                continue;
+            }
+
+            var buttonsByColumn = grid.Children
+                .OfType<ButtonBase>()
+                .Where(IsVisibleStackedSmallRibbonCommandButton)
+                .GroupBy(Grid.GetColumn)
+                .Where(group => group.Count() >= 2)
+                .ToList();
+            foreach (var columnButtons in buttonsByColumn)
+            {
+                var buttons = columnButtons.ToList();
+                foreach (var button in buttons)
+                    NormalizeDenseRibbonColumnButton(button);
+
+                var columnWidth = buttons.Max(button => button.Width is > 0 ? button.Width : button.DesiredSize.Width);
+                foreach (var button in buttons)
+                    ApplyDenseRibbonColumnWidth(button, columnWidth);
+            }
+        }
+    }
+
     private static void ApplyDenseRibbonColumnWidth(ButtonBase button, double columnWidth)
     {
         button.Width = columnWidth;
@@ -2159,6 +2212,21 @@ public partial class MainWindow
     private static bool IsVisibleLabeledRibbonCommandButton(ButtonBase button) =>
         button.Visibility == Visibility.Visible &&
         FindRibbonContentLabel(button.Content) is not null;
+
+    private static bool IsVisibleStackedSmallRibbonCommandButton(ButtonBase button)
+    {
+        if (!IsVisibleLabeledRibbonCommandButton(button))
+            return false;
+
+        if (button.Content is DependencyObject content &&
+            RibbonMetadata.TryGetCommandContentLayout(content, out var layout))
+        {
+            return layout == RibbonCommandContentLayout.Small;
+        }
+
+        return button is FrameworkElement { Height: > 0 and <= 34 } &&
+               ContainsRibbonCommandIcon(button.Content);
+    }
 
     private static void NormalizeDenseRibbonColumnButton(ButtonBase button)
     {

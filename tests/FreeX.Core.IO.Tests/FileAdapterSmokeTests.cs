@@ -4570,6 +4570,59 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesSheetProtectionPasswordHash()
+    {
+        var workbook = new Workbook("ProtectionHashRetentionTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+        sheet.IsProtected = true;
+        sheet.ProtectionPassword = "secret";
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        var sourcePasswordHash = ReadSheetProtectionAttribute(source, "password");
+        sourcePasswordHash.Should().NotBeNullOrWhiteSpace();
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        ReadSheetProtectionAttribute(saved, "password").Should().Be(sourcePasswordHash);
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesAdvancedSheetProtectionHashWithoutLegacyPassword()
+    {
+        var workbook = new Workbook("AdvancedProtectionHashRetentionTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddAdvancedSheetProtectionMetadata(source);
+        var sourceHashValue = ReadSheetProtectionAttribute(source, "hashValue");
+        sourceHashValue.Should().Be("abc123");
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        ReadSheetProtectionAttribute(saved, "hashValue").Should().Be(sourceHashValue);
+        ReadSheetProtectionAttribute(saved, "password").Should().BeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesAdvancedSheetProtectionMetadata()
     {
         var workbook = new Workbook("AdvancedSheetProtectionRetentionTest");
@@ -7339,6 +7392,40 @@ public partial class FileAdapterSmokeTests
         var allowEditRange = loadedSheet.AllowEditRanges.Should().ContainSingle().Subject;
         allowEditRange.Start.ToA1().Should().Be("B2");
         allowEditRange.End.ToA1().Should().Be("C3");
+    }
+
+    [Fact]
+    public void NativeJsonAdapter_SaveLoadSave_KeepsProtectionPasswordHashesStable()
+    {
+        var workbook = new Workbook("ProtectionNativeHashStabilityTest");
+        workbook.IsStructureProtected = true;
+        workbook.StructureProtectionPassword = "workbook-secret";
+        var sheet = workbook.AddSheet("S1");
+        sheet.IsProtected = true;
+        sheet.ProtectionPassword = "sheet-secret";
+
+        var adapter = new NativeJsonAdapter();
+        using var first = new MemoryStream();
+        adapter.Save(workbook, first);
+        var firstBytes = first.ToArray();
+        first.Position = 0;
+
+        var loaded = adapter.Load(first);
+        using var second = new MemoryStream();
+        adapter.Save(loaded, second);
+        var secondBytes = second.ToArray();
+
+        using var firstJson = JsonDocument.Parse(firstBytes);
+        using var secondJson = JsonDocument.Parse(secondBytes);
+        var firstWorkbookHash = firstJson.RootElement.GetProperty("StructureProtectionPassword").GetString();
+        var secondWorkbookHash = secondJson.RootElement.GetProperty("StructureProtectionPassword").GetString();
+        var firstSheetHash = firstJson.RootElement.GetProperty("Sheets")[0].GetProperty("ProtectionPassword").GetString();
+        var secondSheetHash = secondJson.RootElement.GetProperty("Sheets")[0].GetProperty("ProtectionPassword").GetString();
+
+        secondWorkbookHash.Should().Be(firstWorkbookHash);
+        secondSheetHash.Should().Be(firstSheetHash);
+        NativePasswordHelper.VerifyPassword(secondWorkbookHash!, "workbook-secret").Should().BeTrue();
+        NativePasswordHelper.VerifyPassword(secondSheetHash!, "sheet-secret").Should().BeTrue();
     }
 
     [Fact]
@@ -15626,6 +15713,129 @@ public partial class FileAdapterSmokeTests
         columnBreak.Attribute("man")!.Value.Should().Be("1");
         columnBreak.Attribute("pt")!.Value.Should().Be("1");
         columnBreak.Attribute("customAttr")!.Value.Should().Be("col-native");
+    }
+
+    [Fact]
+    public void XlsxAdapter_Save_BatchesWorksheetNativeMetadataOnSameSheet()
+    {
+        var workbook = new Workbook("WorksheetNativeMetadataBatchSave");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("native metadata"));
+        sheet.IsProtected = true;
+        sheet.ProtectionMetadata = MakeBag("sheetProtection",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["algorithmName"] = "SHA-512",
+                ["hashValue"] = "abc123",
+                ["saltValue"] = "salt123",
+                ["spinCount"] = "100000"
+            },
+            ["<fx:sheetProtectionNativeChild xmlns:fx=\"urn:freex:test\" id=\"batch\" />"]);
+        sheet.PrintOptionsMetadata = MakeBag("printOptions",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gridLinesSet"] = "1",
+                ["customPrintOptionsAttr"] = "kept"
+            },
+            ["<fx:printOptionsNativeChild xmlns:fx=\"urn:freex:test\" id=\"batch\" />"]);
+        sheet.DimensionMetadata = MakeBag("dimension",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["nativeDimensionAttr"] = "kept"
+            });
+        sheet.SheetPropertiesMetadata = MakeBag("sheetPr",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["filterMode"] = "1"
+            },
+            ["<fx:sheetPrNativeChild xmlns:fx=\"urn:freex:test\" id=\"batch\" />"]);
+        sheet.PrimaryViewMetadata = MakeBag("sheetView",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["rightToLeft"] = "1",
+                ["showZeros"] = "0"
+            },
+            ["<pivotSelection xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" pane=\"topRight\" />"]);
+        sheet.PageMargins = new WorksheetPageMargins(0.7, 0.8, 0.9, 1.1);
+        sheet.PageMarginsMetadata = MakeBag("pageMargins",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["customMarginsAttr"] = "kept"
+            },
+            ["<fx:pageMarginsNativeChild xmlns:fx=\"urn:freex:test\" id=\"batch\" />"]);
+        sheet.RowPageBreaks.Add(20);
+        sheet.ColumnPageBreaks.Add(5);
+        sheet.RowPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["manualBreakCount"] = "1"
+            },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [20] = new(StringComparer.Ordinal)
+                {
+                    ["customAttr"] = "row-native"
+                }
+            }
+        };
+        sheet.ColumnPageBreaksMetadata = new WorksheetPageBreaksMetadataModel
+        {
+            NativeAttributes = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["manualBreakCount"] = "1"
+            },
+            BreakNativeAttributes = new Dictionary<uint, Dictionary<string, string>>
+            {
+                [5] = new(StringComparer.Ordinal)
+                {
+                    ["customAttr"] = "col-native"
+                }
+            }
+        };
+        sheet.PageHeader = new WorksheetHeaderFooter("Left", "Center", "Right");
+        sheet.HeaderFooterMetadata = MakeBag("headerFooter",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["nativeHeaderFooterAttr"] = "kept"
+            },
+            ["<fx:headerFooterNativeChild xmlns:fx=\"urn:freex:test\" id=\"batch\" />"]);
+
+        var saved = new MemoryStream();
+        new XlsxFileAdapter().Save(workbook, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var root = worksheetXml.Root!;
+
+        root.Element(worksheetNs + "sheetProtection")!.Attribute("algorithmName")!.Value.Should().Be("SHA-512");
+        root.Element(worksheetNs + "printOptions")!.Attribute("customPrintOptionsAttr")!.Value.Should().Be("kept");
+        root.Element(worksheetNs + "dimension")!.Attribute("nativeDimensionAttr")!.Value.Should().Be("kept");
+        root.Element(worksheetNs + "sheetPr")!.Attribute("filterMode")!.Value.Should().Be("1");
+        root.Element(worksheetNs + "sheetViews")!
+            .Element(worksheetNs + "sheetView")!
+            .Attribute("rightToLeft")!
+            .Value
+            .Should()
+            .Be("1");
+        root.Element(worksheetNs + "pageMargins")!.Attribute("customMarginsAttr")!.Value.Should().Be("kept");
+        root.Element(worksheetNs + "rowBreaks")!
+            .Elements(worksheetNs + "brk")
+            .Single(element => element.Attribute("id")?.Value == "20")
+            .Attribute("customAttr")!
+            .Value
+            .Should()
+            .Be("row-native");
+        root.Element(worksheetNs + "colBreaks")!
+            .Elements(worksheetNs + "brk")
+            .Single(element => element.Attribute("id")?.Value == "5")
+            .Attribute("customAttr")!
+            .Value
+            .Should()
+            .Be("col-native");
+        root.Element(worksheetNs + "headerFooter")!.Attribute("nativeHeaderFooterAttr")!.Value.Should().Be("kept");
     }
 
     [Fact]
@@ -24657,6 +24867,29 @@ public partial class FileAdapterSmokeTests
     {
         using var stream = entry.Open();
         return XDocument.Load(stream);
+    }
+
+    private static string? ReadSheetProtectionAttribute(Stream packageStream, string attributeName)
+    {
+        var originalPosition = packageStream.CanSeek ? packageStream.Position : 0;
+        if (packageStream.CanSeek)
+            packageStream.Position = 0;
+
+        try
+        {
+            using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            return worksheetXml.Root?
+                .Element(worksheetNs + "sheetProtection")?
+                .Attribute(attributeName)?
+                .Value;
+        }
+        finally
+        {
+            if (packageStream.CanSeek)
+                packageStream.Position = originalPosition;
+        }
     }
 
     private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)

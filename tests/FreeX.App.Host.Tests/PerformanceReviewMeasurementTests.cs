@@ -63,6 +63,8 @@ public sealed class PerformanceReviewMeasurementTests
 
             var resize = harness.MeasureWindowResizeSequence(widths, iterations: 3);
             var forcedCompact = harness.MeasureForcedCompactSequence(widths, iterations: 3);
+            var fallbackDiagnostics = harness.FallbackDiagnostics;
+            var adaptiveDiagnostics = harness.AdaptiveDiagnostics;
 
             Console.WriteLine(
                 "PERF RIBBON_RESIZE " +
@@ -74,6 +76,19 @@ public sealed class PerformanceReviewMeasurementTests
                 $"steps={forcedCompact.StepCount} total_ms={forcedCompact.TotalMilliseconds:F2} " +
                 $"mean_ms={forcedCompact.MeanMilliseconds:F2} p95_ms={forcedCompact.P95Milliseconds:F2} " +
                 $"max_ms={forcedCompact.MaxMilliseconds:F2} allocated_bytes={forcedCompact.AllocatedBytes:N0}");
+            Console.WriteLine(
+                "PERF RIBBON_DIAGNOSTICS " +
+                $"fallback_requests={fallbackDiagnostics.RequestCount:N0} " +
+                $"fallback_posts={fallbackDiagnostics.PostedCount:N0} " +
+                $"fallback_executed={fallbackDiagnostics.ExecutedCount:N0} " +
+                $"first_frame_layouts={fallbackDiagnostics.FirstFrameLayoutUpdateCount:N0} " +
+                $"group_measurements={adaptiveDiagnostics.GroupMeasurementCount:N0} " +
+                $"snapshot_captures={adaptiveDiagnostics.CompactSnapshotCaptureCount:N0} " +
+                $"threshold_rebuilds={adaptiveDiagnostics.ResizeThresholdRebuildCount:N0} " +
+                $"layout_plan_computes={adaptiveDiagnostics.LayoutPlanComputeCount:N0} " +
+                $"layout_plan_hits={adaptiveDiagnostics.LayoutPlanCacheHitCount:N0} " +
+                $"measured_overflow_checks={adaptiveDiagnostics.MeasuredOverflowMeasurementCount:N0} " +
+                $"applied_state_skips={adaptiveDiagnostics.AppliedStateSkipCount:N0}");
 
             resize.StepCount.Should().Be(widths.Length * 3);
             forcedCompact.StepCount.Should().Be(widths.Length * 3);
@@ -103,6 +118,104 @@ public sealed class PerformanceReviewMeasurementTests
 
             result.StepCount.Should().Be(80);
             result.TotalMilliseconds.Should().BeGreaterThan(0);
+        });
+    }
+
+    [Fact]
+    public void Benchmark_AdditionalSelectionDragToolbarRefresh_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = SelectionDragHarness.Create();
+            harness.MeasureAdditionalSelectionDrag(iterations: 10);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var result = harness.MeasureAdditionalSelectionDrag(iterations: 80);
+            Console.WriteLine(
+                "PERF ADDITIONAL_SELECTION_DRAG_TOOLBAR " +
+                $"steps={result.StepCount} total_ms={result.TotalMilliseconds:F2} " +
+                $"mean_ms={result.MeanMilliseconds:F2} p95_ms={result.P95Milliseconds:F2} " +
+                $"max_ms={result.MaxMilliseconds:F2} allocated_bytes={result.AllocatedBytes:N0}");
+
+            result.StepCount.Should().Be(80);
+            result.TotalMilliseconds.Should().BeGreaterThan(0);
+        });
+    }
+
+    [Fact]
+    public void Benchmark_ViewportSidePaneRefresh_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = ViewportSidePaneRefreshHarness.Create();
+            harness.MeasureUpdateViewport(iterations: 10);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var result = harness.MeasureUpdateViewport(iterations: 80);
+            Console.WriteLine(
+                "PERF VIEWPORT_SIDE_PANE_REFRESH " +
+                $"steps={result.StepCount} total_ms={result.TotalMilliseconds:F2} " +
+                $"mean_ms={result.MeanMilliseconds:F2} p95_ms={result.P95Milliseconds:F2} " +
+                $"max_ms={result.MaxMilliseconds:F2} allocated_bytes={result.AllocatedBytes:N0} " +
+                $"viewport_gets={result.ViewportCalls:N0}");
+
+            result.StepCount.Should().Be(80);
+            result.ViewportCalls.Should().Be(80);
+            result.TotalMilliseconds.Should().BeGreaterThan(0);
+        });
+    }
+
+    [Fact]
+    public void Benchmark_RepeatedSelectionDragTargetNoOps_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var dragHarness = SelectionDragHarness.Create();
+            dragHarness.MeasureRepeatedDragSelectionTarget(iterations: 10);
+
+            using var additionalHarness = SelectionDragHarness.Create();
+            additionalHarness.MeasureRepeatedAdditionalSelectionTarget(iterations: 10);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var dragResult = dragHarness.MeasureRepeatedDragSelectionTarget(iterations: 2_000);
+            var additionalResult = additionalHarness.MeasureRepeatedAdditionalSelectionTarget(iterations: 2_000);
+            Console.WriteLine(
+                "PERF SELECTION_DRAG_REPEATED_TARGET " +
+                $"steps={dragResult.StepCount} total_ms={dragResult.TotalMilliseconds:F2} " +
+                $"mean_ms={dragResult.MeanMilliseconds:F2} p95_ms={dragResult.P95Milliseconds:F2} " +
+                $"max_ms={dragResult.MaxMilliseconds:F2} allocated_bytes={dragResult.AllocatedBytes:N0}");
+            Console.WriteLine(
+                "PERF ADDITIONAL_SELECTION_DRAG_REPEATED_TARGET " +
+                $"steps={additionalResult.StepCount} total_ms={additionalResult.TotalMilliseconds:F2} " +
+                $"mean_ms={additionalResult.MeanMilliseconds:F2} p95_ms={additionalResult.P95Milliseconds:F2} " +
+                $"max_ms={additionalResult.MaxMilliseconds:F2} allocated_bytes={additionalResult.AllocatedBytes:N0}");
+
+            dragResult.StepCount.Should().Be(2_000);
+            additionalResult.StepCount.Should().Be(2_000);
+            dragResult.TotalMilliseconds.Should().BeGreaterThan(0);
+            additionalResult.TotalMilliseconds.Should().BeGreaterThan(0);
+        });
+    }
+
+    [Fact]
+    public void RepeatedSelectionDragTargetNoOps_DoNotQueueDeferredRefresh()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var dragHarness = SelectionDragHarness.Create();
+            dragHarness.RepeatedDragSelectionTargetLeavesStatusPendingClear().Should().BeTrue();
+
+            using var additionalHarness = SelectionDragHarness.Create();
+            additionalHarness.RepeatedAdditionalSelectionTargetLeavesPendingRefreshClear().Should().BeTrue();
         });
     }
 
@@ -283,6 +396,10 @@ public sealed class PerformanceReviewMeasurementTests
             return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
         }
 
+        public RibbonFallbackDiagnosticsSnapshot FallbackDiagnostics => _window.GetRibbonFallbackDiagnosticsForTests();
+
+        public RibbonAdaptiveDiagnosticsSnapshot AdaptiveDiagnostics => _window.GetRibbonAdaptiveDiagnosticsForTests();
+
         public static RibbonResizeHarness Create()
         {
             var workbook = new Workbook("Book1");
@@ -393,23 +510,183 @@ public sealed class PerformanceReviewMeasurementTests
         }
     }
 
+    private sealed class ViewportSidePaneRefreshHarness : IDisposable
+    {
+        private readonly MainWindow _window;
+        private readonly CountingViewportService _viewportService;
+        private readonly MethodInfo _updateViewport;
+
+        private ViewportSidePaneRefreshHarness(MainWindow window, CountingViewportService viewportService)
+        {
+            _window = window;
+            _viewportService = viewportService;
+            _updateViewport = typeof(MainWindow)
+                .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
+        }
+
+        public MeasurementResult MeasureUpdateViewport(int iterations)
+        {
+            var timings = new List<double>(iterations);
+            _viewportService.Reset();
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            for (var i = 0; i < iterations; i++)
+            {
+                var step = Stopwatch.StartNew();
+                _updateViewport.Invoke(_window, []);
+                PumpDispatcher();
+                step.Stop();
+                timings.Add(step.Elapsed.TotalMilliseconds);
+            }
+
+            total.Stop();
+            return MeasurementResult.From(
+                timings,
+                total.Elapsed.TotalMilliseconds,
+                GC.GetAllocatedBytesForCurrentThread() - allocatedBefore,
+                _viewportService.GetViewportCallCount);
+        }
+
+        public static ViewportSidePaneRefreshHarness Create()
+        {
+            var workbook = new Workbook("Book1");
+            var sheet = workbook.AddSheet("Sheet1");
+            var headers = new[] { "Region", "Product", "Sales" };
+            for (uint col = 1; col <= headers.Length; col++)
+                sheet.SetCell(new CellAddress(sheet.Id, 1, col), new TextValue(headers[col - 1]));
+
+            for (uint row = 2; row <= 180; row++)
+            {
+                sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"Region {row % 12}"));
+                sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue($"Product {row % 16}"));
+                sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(row * 13));
+            }
+
+            var pivotTable = new PivotTableModel
+            {
+                Name = "SalesPivot",
+                CacheId = 1,
+                SourceRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 180, 3)),
+                TargetRange = new GridRange(new CellAddress(sheet.Id, 2, 6), new CellAddress(sheet.Id, 16, 9))
+            };
+            pivotTable.RowFields.Add(new PivotFieldModel(0));
+            pivotTable.DataFields.Add(new PivotDataFieldModel(2, "Sum of Sales", "sum"));
+            sheet.PivotTables.Add(pivotTable);
+
+            sheet.StructuredTables.Add(new StructuredTableModel
+            {
+                Id = 1,
+                Name = "SalesTable",
+                DisplayName = "SalesTable",
+                Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 180, 3)),
+                HeaderRowCount = 1,
+                HasAutoFilter = true,
+                ShowRowStripes = true,
+                StyleName = "TableStyleMedium2"
+            });
+
+            for (var i = 0; i < 6; i++)
+            {
+                workbook.Slicers.Add(new SlicerModel
+                {
+                    Name = $"RegionSlicer{i}",
+                    CacheName = $"RegionSlicerCache{i}",
+                    SourcePivotTableName = pivotTable.Name,
+                    SourceFieldName = "Region"
+                });
+            }
+
+            workbook.Timelines.Add(new TimelineModel
+            {
+                Name = "SalesTimeline",
+                CacheName = "SalesTimelineCache",
+                SourcePivotTableName = pivotTable.Name,
+                SourceFieldName = "Sales"
+            });
+
+            var workbookRef = new WorkbookRef { Current = workbook };
+            var graph = new DependencyGraph();
+            var evaluator = new FormulaEvaluator();
+            var viewportService = new CountingViewportService(new ViewportService());
+            var window = new MainWindow(
+                NullLogger<MainWindow>.Instance,
+                viewportService,
+                new CommandBus(_ => new TestCommandContext(workbookRef.Current)),
+                new RecalcEngine(graph, evaluator),
+                Array.Empty<IFileAdapter>(),
+                workbookRef,
+                workbook,
+                NullUserMessageService.Instance)
+            {
+                Width = 1280,
+                Height = 720
+            };
+
+            window.Show();
+            window.UpdateLayout();
+            if (window.FindName("SheetGrid") is FreeX.App.UI.GridView grid)
+            {
+                grid.SelectedRange = new GridRange(
+                    new CellAddress(sheet.Id, 3, 6),
+                    new CellAddress(sheet.Id, 3, 6));
+            }
+
+            PumpDispatcher();
+            viewportService.Reset();
+            return new ViewportSidePaneRefreshHarness(window, viewportService);
+        }
+
+        public void Dispose()
+        {
+            MainWindowTestCleanup.CloseWithoutSavePrompt(_window);
+        }
+    }
+
     private sealed class SelectionDragHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _extendSelection;
+        private readonly Action<CellAddress, CellAddress> _extendSelection;
+        private readonly Action<CellAddress, bool> _addOrMoveAdditionalSelection;
+        private readonly Action _completeDragSelectionStatusRefresh;
+        private readonly Action? _completeDragSelectionToolbarRefresh;
         private readonly FieldInfo _dragSelectActive;
+        private readonly FieldInfo _dragSelectStatusRefreshPending;
+        private readonly FieldInfo _dragSelectToolbarRefreshPending;
         private readonly CellAddress _anchor;
 
         private SelectionDragHarness(MainWindow window, SheetId sheetId)
         {
             _window = window;
             _anchor = new CellAddress(sheetId, 1, 1);
-            _extendSelection = typeof(MainWindow)
+            var extendSelection = typeof(MainWindow)
                 .GetMethod("ExtendSelection", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ExtendSelection");
+            _extendSelection = extendSelection.CreateDelegate<Action<CellAddress, CellAddress>>(window);
+
+            var addOrMoveAdditionalSelection = typeof(MainWindow)
+                .GetMethod("AddOrMoveAdditionalSelection", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "AddOrMoveAdditionalSelection");
+            _addOrMoveAdditionalSelection = addOrMoveAdditionalSelection.CreateDelegate<Action<CellAddress, bool>>(window);
+
+            var completeDragSelectionStatusRefresh = typeof(MainWindow)
+                .GetMethod("CompleteDragSelectionStatusRefresh", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "CompleteDragSelectionStatusRefresh");
+            _completeDragSelectionStatusRefresh = completeDragSelectionStatusRefresh.CreateDelegate<Action>(window);
+
+            var completeDragSelectionToolbarRefresh = typeof(MainWindow)
+                .GetMethod("CompleteDragSelectionToolbarRefresh", BindingFlags.Instance | BindingFlags.NonPublic);
+            _completeDragSelectionToolbarRefresh =
+                completeDragSelectionToolbarRefresh?.CreateDelegate<Action>(window);
             _dragSelectActive = typeof(MainWindow)
                 .GetField("_dragSelectActive", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_dragSelectActive");
+            _dragSelectStatusRefreshPending = typeof(MainWindow)
+                .GetField("_dragSelectStatusRefreshPending", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_dragSelectStatusRefreshPending");
+            _dragSelectToolbarRefreshPending = typeof(MainWindow)
+                .GetField("_dragSelectToolbarRefreshPending", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_dragSelectToolbarRefreshPending");
         }
 
         public MeasurementResult MeasureDragSelection(int iterations)
@@ -424,7 +701,7 @@ public sealed class PerformanceReviewMeasurementTests
                 {
                     var row = (uint)(20 + i * 6);
                     var step = Stopwatch.StartNew();
-                    _extendSelection.Invoke(_window, [_anchor, new CellAddress(_anchor.Sheet, row, 40)]);
+                    _extendSelection(_anchor, new CellAddress(_anchor.Sheet, row, 40));
                     PumpDispatcher();
                     step.Stop();
                     timings.Add(step.Elapsed.TotalMilliseconds);
@@ -439,15 +716,152 @@ public sealed class PerformanceReviewMeasurementTests
             return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
         }
 
+        public MeasurementResult MeasureAdditionalSelectionDrag(int iterations)
+        {
+            var timings = new List<double>(iterations);
+            _addOrMoveAdditionalSelection(_anchor, false);
+            PumpDispatcher();
+            _dragSelectActive.SetValue(_window, true);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            try
+            {
+                for (var i = 0; i < iterations; i++)
+                {
+                    var row = (uint)(20 + i * 6);
+                    var step = Stopwatch.StartNew();
+                    _addOrMoveAdditionalSelection(new CellAddress(_anchor.Sheet, row, 40), true);
+                    PumpDispatcher();
+                    step.Stop();
+                    timings.Add(step.Elapsed.TotalMilliseconds);
+                }
+            }
+            finally
+            {
+                _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionToolbarRefresh?.Invoke();
+                _completeDragSelectionStatusRefresh();
+            }
+
+            total.Stop();
+            return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+        }
+
+        public MeasurementResult MeasureRepeatedDragSelectionTarget(int iterations)
+        {
+            var target = new CellAddress(_anchor.Sheet, 120, 40);
+            _extendSelection(_anchor, target);
+            PumpDispatcher();
+
+            var timings = new List<double>(iterations);
+            _dragSelectActive.SetValue(_window, true);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            try
+            {
+                for (var i = 0; i < iterations; i++)
+                {
+                    var stepStarted = Stopwatch.GetTimestamp();
+                    _extendSelection(_anchor, target);
+                    timings.Add(Stopwatch.GetElapsedTime(stepStarted).TotalMilliseconds);
+                }
+            }
+            finally
+            {
+                _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionStatusRefresh();
+            }
+
+            total.Stop();
+            return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+        }
+
+        public MeasurementResult MeasureRepeatedAdditionalSelectionTarget(int iterations)
+        {
+            var target = new CellAddress(_anchor.Sheet, 120, 40);
+            _addOrMoveAdditionalSelection(_anchor, false);
+            PumpDispatcher();
+            _dragSelectActive.SetValue(_window, true);
+            _addOrMoveAdditionalSelection(target, true);
+            PumpDispatcher();
+
+            var timings = new List<double>(iterations);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            try
+            {
+                for (var i = 0; i < iterations; i++)
+                {
+                    var stepStarted = Stopwatch.GetTimestamp();
+                    _addOrMoveAdditionalSelection(target, true);
+                    timings.Add(Stopwatch.GetElapsedTime(stepStarted).TotalMilliseconds);
+                }
+            }
+            finally
+            {
+                _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionToolbarRefresh?.Invoke();
+                _completeDragSelectionStatusRefresh();
+            }
+
+            total.Stop();
+            return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
+        }
+
+        public bool RepeatedDragSelectionTargetLeavesStatusPendingClear()
+        {
+            var target = new CellAddress(_anchor.Sheet, 120, 40);
+            _extendSelection(_anchor, target);
+            PumpDispatcher();
+            _dragSelectActive.SetValue(_window, true);
+            _dragSelectStatusRefreshPending.SetValue(_window, false);
+
+            try
+            {
+                _extendSelection(_anchor, target);
+                return IsStatusRefreshPending() is false;
+            }
+            finally
+            {
+                _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionStatusRefresh();
+            }
+        }
+
+        public bool RepeatedAdditionalSelectionTargetLeavesPendingRefreshClear()
+        {
+            var target = new CellAddress(_anchor.Sheet, 120, 40);
+            _addOrMoveAdditionalSelection(_anchor, false);
+            PumpDispatcher();
+            _dragSelectActive.SetValue(_window, true);
+            _addOrMoveAdditionalSelection(target, true);
+            PumpDispatcher();
+            _dragSelectStatusRefreshPending.SetValue(_window, false);
+            _dragSelectToolbarRefreshPending.SetValue(_window, false);
+
+            try
+            {
+                _addOrMoveAdditionalSelection(target, true);
+                return IsStatusRefreshPending() is false && IsToolbarRefreshPending() is false;
+            }
+            finally
+            {
+                _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionToolbarRefresh?.Invoke();
+                _completeDragSelectionStatusRefresh();
+            }
+        }
+
+        private bool IsStatusRefreshPending() =>
+            _dragSelectStatusRefreshPending.GetValue(_window) is true;
+
+        private bool IsToolbarRefreshPending() =>
+            _dragSelectToolbarRefreshPending.GetValue(_window) is true;
+
         public static SelectionDragHarness Create()
         {
             var workbook = new Workbook("Book1");
-            var sheet = workbook.AddSheet("Sheet1");
-            for (uint row = 1; row <= 600; row++)
-            {
-                for (uint col = 1; col <= 40; col++)
-                    sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * col));
-            }
+            workbook.AddSheet("Sheet1");
 
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
@@ -467,6 +881,13 @@ public sealed class PerformanceReviewMeasurementTests
             };
 
             window.Show();
+            var sheet = workbookRef.Current.Sheets[0];
+            for (uint row = 1; row <= 600; row++)
+            {
+                for (uint col = 1; col <= 40; col++)
+                    sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * col));
+            }
+
             window.UpdateLayout();
             PumpDispatcher();
             return new SelectionDragHarness(window, sheet.Id);

@@ -182,17 +182,7 @@ public sealed partial class XlsxFileAdapter
             cell.IgnoreFormulaError = true;
         }
         if (layout.IgnoredErrors.ExistingCellOnlyRanges.Count > 0)
-        {
-            foreach (var (address, cell) in sheet.EnumerateCells())
-            {
-                var comparableAddress = new CellAddress(
-                    layout.IgnoredErrors.ExistingCellOnlyRanges[0].Start.Sheet,
-                    address.Row,
-                    address.Col);
-                if (layout.IgnoredErrors.ExistingCellOnlyRanges.Any(range => range.Contains(comparableAddress)))
-                    cell.IgnoreFormulaError = true;
-            }
-        }
+            ApplyExistingCellOnlyIgnoredErrors(sheet, layout.IgnoredErrors.ExistingCellOnlyRanges);
         sheet.IgnoredErrorsMetadata = layout.IgnoredErrorsMetadata;
         foreach (var watchedCell in layout.CellWatches)
         {
@@ -254,5 +244,143 @@ public sealed partial class XlsxFileAdapter
         sheet.PrimaryViewMetadata = layout.PrimaryViewMetadata;
         sheet.FullCalculationOnLoad = layout.FullCalculationOnLoad;
         sheet.PhoneticProperties = layout.PhoneticProperties;
+    }
+
+    private static void ApplyExistingCellOnlyIgnoredErrors(Sheet sheet, IReadOnlyList<GridRange> ranges)
+    {
+        var occupiedCells = sheet.GetOccupiedCellMap();
+        if (occupiedCells.Count == 0 || ranges.Count == 0)
+            return;
+
+        if (HasRangeContainingUsedCells(sheet, ranges))
+        {
+            foreach (var cell in occupiedCells.Values)
+                cell.IgnoreFormulaError = true;
+            return;
+        }
+
+        var orderedRanges = ranges
+            .OrderBy(range => range.Start.Row)
+            .ThenBy(range => range.End.Row)
+            .ToArray();
+        var orderedCells = occupiedCells
+            .OrderBy(pair => pair.Key.Row)
+            .ThenBy(pair => pair.Key.Col);
+        var activeRanges = new List<GridRange>();
+        var nextRangeIndex = 0;
+        uint currentRow = 0;
+        List<(uint StartCol, uint EndCol)> rowIntervals = [];
+
+        foreach (var pair in orderedCells)
+        {
+            var row = pair.Key.Row;
+            if (row != currentRow)
+            {
+                currentRow = row;
+                while (nextRangeIndex < orderedRanges.Length &&
+                       orderedRanges[nextRangeIndex].Start.Row <= row)
+                {
+                    activeRanges.Add(orderedRanges[nextRangeIndex]);
+                    nextRangeIndex++;
+                }
+
+                for (var i = activeRanges.Count - 1; i >= 0; i--)
+                {
+                    if (activeRanges[i].End.Row < row)
+                        activeRanges.RemoveAt(i);
+                }
+
+                rowIntervals = BuildMergedIgnoredErrorColumnIntervals(activeRanges, row);
+            }
+
+            if (ContainsColumn(rowIntervals, pair.Key.Col))
+                pair.Value.IgnoreFormulaError = true;
+        }
+    }
+
+    private static bool HasRangeContainingUsedCells(Sheet sheet, IReadOnlyList<GridRange> ranges)
+    {
+        if (sheet.GetUsedRange() is not { } usedRange)
+            return false;
+
+        foreach (var range in ranges)
+        {
+            if (range.Start.Row <= usedRange.Start.Row &&
+                range.End.Row >= usedRange.End.Row &&
+                range.Start.Col <= usedRange.Start.Col &&
+                range.End.Col >= usedRange.End.Col)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static List<(uint StartCol, uint EndCol)> BuildMergedIgnoredErrorColumnIntervals(
+        List<GridRange> activeRanges,
+        uint row)
+    {
+        var intervals = new List<(uint StartCol, uint EndCol)>(activeRanges.Count);
+        foreach (var range in activeRanges)
+        {
+            if (row >= range.Start.Row && row <= range.End.Row)
+                intervals.Add((range.Start.Col, range.End.Col));
+        }
+
+        if (intervals.Count <= 1)
+            return intervals;
+
+        intervals.Sort(static (left, right) =>
+        {
+            var startCompare = left.StartCol.CompareTo(right.StartCol);
+            return startCompare != 0
+                ? startCompare
+                : left.EndCol.CompareTo(right.EndCol);
+        });
+
+        var writeIndex = 0;
+        for (var readIndex = 1; readIndex < intervals.Count; readIndex++)
+        {
+            var current = intervals[readIndex];
+            var merged = intervals[writeIndex];
+            if (current.StartCol <= merged.EndCol + 1)
+            {
+                intervals[writeIndex] = (merged.StartCol, Math.Max(merged.EndCol, current.EndCol));
+                continue;
+            }
+
+            writeIndex++;
+            intervals[writeIndex] = current;
+        }
+
+        intervals.RemoveRange(writeIndex + 1, intervals.Count - writeIndex - 1);
+        return intervals;
+    }
+
+    private static bool ContainsColumn(IReadOnlyList<(uint StartCol, uint EndCol)> intervals, uint col)
+    {
+        var low = 0;
+        var high = intervals.Count - 1;
+        while (low <= high)
+        {
+            var mid = low + ((high - low) / 2);
+            var interval = intervals[mid];
+            if (col < interval.StartCol)
+            {
+                high = mid - 1;
+                continue;
+            }
+
+            if (col > interval.EndCol)
+            {
+                low = mid + 1;
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
     }
 }

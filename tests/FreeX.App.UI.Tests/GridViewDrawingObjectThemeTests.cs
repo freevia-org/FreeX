@@ -209,10 +209,10 @@ public sealed class GridViewDrawingObjectThemeTests
             source.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)..
             source.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)];
         var drawTextBoxEffect = source[
-            source.IndexOf("private static void DrawTextBoxThemeEffect", StringComparison.Ordinal)..
-            source.IndexOf("private static void DrawShapeThemeEffect", StringComparison.Ordinal)];
+            source.IndexOf("private void DrawTextBoxThemeEffect", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)];
         var drawShapeEffect = source[
-            source.IndexOf("private static void DrawShapeThemeEffect", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawShapeThemeEffect", StringComparison.Ordinal)..
             source.IndexOf("public static DrawingObjectColors ResolveDrawingShapeColors", StringComparison.Ordinal)];
 
         renderTextBoxes.Should().Contain("var themeEffect = WorkbookThemeEffectStyle.FromTheme(WorkbookTheme);");
@@ -233,8 +233,8 @@ public sealed class GridViewDrawingObjectThemeTests
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
         var authoredEffect = source[
-            source.IndexOf("private static void DrawShapeAuthoredEffect", StringComparison.Ordinal)..
-            source.IndexOf("private static void DrawTextBoxThemeEffect", StringComparison.Ordinal)];
+            source.IndexOf("private void DrawShapeAuthoredEffect", StringComparison.Ordinal)..
+            source.IndexOf("private void DrawTextBoxThemeEffect", StringComparison.Ordinal)];
 
         authoredEffect.Should().Contain("shape.GetEffectiveEffectPreset()");
         authoredEffect.Should().Contain("DrawingShapeEffectPreset.Shadow");
@@ -463,6 +463,44 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void DrawingObjectHitTesting_HonorsPictureRotation()
+    {
+        RunOnStaThread(() =>
+        {
+            var sheetId = SheetId.New();
+            var picture = new PictureModel
+            {
+                Id = Guid.NewGuid(),
+                Anchor = new CellAddress(sheetId, 1, 1),
+                Width = 80,
+                Height = 40,
+                RotationDegrees = 90,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                Viewport = new ViewportModel(
+                    [],
+                    [new RowMetric(1, 24, 0), new RowMetric(2, 24, 24)],
+                    [new ColMetric(1, 80, 0), new ColMetric(2, 80, 80)]),
+                Pictures = [picture]
+            };
+
+            grid.TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect)
+                .Should().BeTrue();
+
+            var hitTestDrawingObject = typeof(GridView).GetMethod(
+                "HitTestDrawingObject",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var centerHit = hitTestDrawingObject!.Invoke(grid, [new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2)]);
+            var cornerHit = hitTestDrawingObject.Invoke(grid, [new Point(rect.Left + 5, rect.Top + 5)]);
+
+            centerHit!.GetType().GetField("Item1")!.GetValue(centerHit).Should().Be(picture.Id);
+            cornerHit!.GetType().GetField("Item1")!.GetValue(cornerHit).Should().Be(Guid.Empty);
+        });
+    }
+
+    [Fact]
     public void DrawingObjectHitTesting_ChoosesTopmostRenderedObject()
     {
         RunOnStaThread(() =>
@@ -528,6 +566,17 @@ public sealed class GridViewDrawingObjectThemeTests
         hitTestBlock.Should().Contain("for (var i = Pictures.Count - 1; i >= 0; i--)");
         hitTestBlock.Should().Contain("for (var i = DrawingShapes.Count - 1; i >= 0; i--)");
         hitTestBlock.Should().NotContain(".Reverse()");
+    }
+
+    [Fact]
+    public void DrawingObjectHitTesting_UsesRotatedBodyChecks()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
+
+        source.Should().Contain("ContainsRotatedInclusive(r, pos, t.RotationDegrees)");
+        source.Should().Contain("ContainsRotatedInclusive(r, pos, p.RotationDegrees)");
+        source.Should().Contain("ContainsRotatedInclusive(r, pos, s.RotationDegrees)");
+        source.Should().Contain("var radians = -rotationDegrees * Math.PI / 180.0;");
     }
 
     [Fact]

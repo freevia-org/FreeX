@@ -22,6 +22,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
     private GridRange? _printAreaSnapshot;
     private List<uint>? _columnPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
+    private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Insert {_count} Column(s)";
@@ -47,6 +48,8 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         if (maxOccupied > 0 && maxOccupied + _count > Model.CellAddress.MaxCol)
             return new CommandOutcome(false,
                 ErrorMessage: $"Cannot insert {_count} column(s): data would be pushed past the last column ({Model.CellAddress.MaxCol}).");
+
+        _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
         _movedSnapshot = sheet.EnumerateCells()
             .Where(p => p.Address.Col >= _beforeCol)
@@ -85,6 +88,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftSortedSetUp(sheet.ColumnPageBreaks, _beforeCol, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(sheet);
         RowColumnShiftHelpers.ShiftChartColumnsUp(sheet, _sheetId, _beforeCol, _count);
+        RowColumnShiftHelpers.ShiftAddressBearingColumnsUp(ctx.Workbook, sheet, _addressStateSnapshot, _beforeCol, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
         sheet.ReplaceMergedRegions(RowColumnShiftHelpers.InsertColumnsIntoMergedRegions(
@@ -129,6 +133,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         sheet.PrintArea = _printAreaSnapshot;
         RowColumnShiftHelpers.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
+        RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 }
 
@@ -153,6 +158,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
     private GridRange? _printAreaSnapshot;
     private List<uint>? _columnPageBreakSnapshot;
     private List<GridRange>? _chartSnapshot;
+    private AddressBearingStateSnapshot? _addressStateSnapshot;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
 
     public string Label => $"Delete {_count} Column(s)";
@@ -171,6 +177,8 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
             return protectedOutcome;
 
         uint endCol = _startCol + _count - 1;
+
+        _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
         _deletedSnapshot = sheet.EnumerateCells()
             .Where(p => p.Address.Col >= _startCol && p.Address.Col <= endCol)
@@ -216,6 +224,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         RowColumnShiftHelpers.ShiftSortedSetDown(sheet.ColumnPageBreaks, _startCol, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(sheet);
         RowColumnShiftHelpers.ShiftChartColumnsDown(sheet, _sheetId, _startCol, _count);
+        RowColumnShiftHelpers.ShiftAddressBearingColumnsDown(ctx.Workbook, sheet, _addressStateSnapshot, _startCol, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
         sheet.ReplaceMergedRegions(RowColumnShiftHelpers.DeleteColumnsFromMergedRegions(
@@ -261,5 +270,6 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         sheet.PrintArea = _printAreaSnapshot;
         RowColumnShiftHelpers.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
+        RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
     }
 }
