@@ -15,6 +15,7 @@ public sealed class DotNetProjectReferencesPreflightTests
         script.Should().Contain("Get-ChildItem -LiteralPath $resolvedProjectRoot -Filter \"*.csproj\" -File -Recurse");
         script.Should().Contain("*_wpftmp.csproj");
         script.Should().Contain("$segments -contains \".worktrees\"");
+        script.Should().Contain("$segments -contains \".claude\"");
         script.Should().Contain("ProjectReference");
         script.Should().Contain("Duplicate ProjectReference target");
         script.Should().Contain("ProjectReference target escapes project root");
@@ -35,17 +36,19 @@ public sealed class DotNetProjectReferencesPreflightTests
     }
 
     [Fact]
-    public void DotNetProjectReferencesPreflight_IgnoresTransientAndNestedWorktreeProjects()
+    public void DotNetProjectReferencesPreflight_IgnoresTransientAndNestedAgentWorktreeProjects()
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), "freex-project-reference-preflight-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "FreeX.App.Host"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch"));
+        Directory.CreateDirectory(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Scratch"));
 
         try
         {
             File.WriteAllText(Path.Combine(tempDirectory, "src", "FreeX.App.Host", "FreeX.App.Host.csproj"), "<Project />");
             File.WriteAllText(Path.Combine(tempDirectory, "src", "FreeX.App.Host", "FreeX.App.Host_abc123_wpftmp.csproj"), "<Project><ItemGroup><ProjectReference Include=\"Missing.csproj\" /></ItemGroup></Project>");
             File.WriteAllText(Path.Combine(tempDirectory, ".worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project><ItemGroup><ProjectReference Include=\"Missing.csproj\" /></ItemGroup></Project>");
+            File.WriteAllText(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Scratch", "Scratch.csproj"), "<Project><ItemGroup><ProjectReference Include=\"Missing.csproj\" /></ItemGroup></Project>");
             var scriptPath = WorkspaceFileLocator.Find("tools", "Test-DotNetProjectReferences.ps1");
 
             var result = RunPowerShellScript(scriptPath, Path.GetTempPath(), $"-ProjectRoot \"{tempDirectory}\"");
