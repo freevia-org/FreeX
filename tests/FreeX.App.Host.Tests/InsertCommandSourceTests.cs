@@ -123,6 +123,8 @@ public sealed class InsertCommandSourceTests
 
         insertSource.Should().Contain("HyperlinkDialogPrefill.FromCell(");
         insertSource.Should().Contain("new HyperlinkDialog(prefill.Target, prefill.DisplayText)");
+        insertSource.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
+        insertSource.Should().Contain("var address = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId).Start;");
         insertSource.Should().Contain("new SetHyperlinkCommand(");
         insertSource.Should().Contain("new HyperlinkMetadata(");
         insertSource.Should().Contain("ToCoreHyperlinkTargetKind(dialog.Result.LinkType)");

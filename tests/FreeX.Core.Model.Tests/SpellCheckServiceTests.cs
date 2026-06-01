@@ -121,6 +121,18 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void FindIssuesInCell_TracksIssueTextSpansForCurrentOccurrenceActions()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+
+        var issues = SpellCheckService.FindIssuesInCell(address, "Fix teh and the the value.");
+
+        issues.Select(issue => (issue.Word, issue.StartIndex, issue.Length)).Should().Equal(
+            ("teh", 4, 3),
+            ("the the", 12, 7));
+    }
+
+    [Fact]
     public void PlanKnownCorrections_ReplacesAllKnownWholeWordsPreservingCapitalization()
     {
         var wb = new Workbook("test");
@@ -237,6 +249,30 @@ public sealed class SpellCheckServiceTests
         var corrected = SpellCheckService.ApplyCorrection(issue, "the");
 
         corrected.Should().Be("Please review the file.");
+    }
+
+    [Fact]
+    public void ApplyCorrection_ReplacesOnlyTheCurrentGeneratedIssueOccurrence()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+        var issues = SpellCheckService.FindIssuesInCell(address, "teh first and teh second");
+
+        var correctedFirst = SpellCheckService.ApplyCorrection(issues[0], "the");
+        var correctedSecond = SpellCheckService.ApplyCorrection(issues[1], "the");
+
+        correctedFirst.Should().Be("the first and teh second");
+        correctedSecond.Should().Be("teh first and the second");
+    }
+
+    [Fact]
+    public void ApplyCorrectionToAllOccurrences_PreservesEachOccurrenceCasingStyle()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+        var issue = SpellCheckService.FindIssuesInCell(address, "teh TEH Teh").First();
+
+        var corrected = SpellCheckService.ApplyCorrectionToAllOccurrences(issue, "the");
+
+        corrected.Should().Be("the THE The");
     }
 
     [Theory]
