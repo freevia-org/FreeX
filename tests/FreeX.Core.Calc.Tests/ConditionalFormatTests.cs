@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -24,6 +25,70 @@ public class ConditionalFormatTests
 
     private static DisplayCell GetCell(ViewportModel vp, uint row, uint col) =>
         vp.Cells.Single(c => c.Row == row && c.Col == col);
+
+    [Fact]
+    public void Benchmark_ConditionalFormatFormulaThresholds_ReportsTiming()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        for (uint row = 1; row <= 120; row++)
+        {
+            for (uint col = 1; col <= 40; col++)
+            {
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), Cell.FromValue(new NumberValue(row * col)));
+            }
+        }
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 120, 40)),
+            Priority = 1,
+            RuleType = CfRuleType.ColorScale,
+            UseThreeColorScale = true,
+            MinThresholdType = CfThresholdType.Min,
+            MidThresholdType = CfThresholdType.Formula,
+            MidThresholdValue = "$A$1+600",
+            MaxThresholdType = CfThresholdType.Max,
+            MinColor = new RgbColor(0, 0, 255),
+            MidColor = new RgbColor(255, 255, 255),
+            MaxColor = new RgbColor(255, 0, 0)
+        });
+
+        var service = new ViewportService();
+        var request = new ViewportRequest(1, 1, 2_600, 3_000);
+        for (var i = 0; i < 2; i++)
+            service.GetViewport(wb, sheet.Id, request);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(10);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        ViewportModel? viewport = null;
+        for (var i = 0; i < 10; i++)
+        {
+            var step = Stopwatch.StartNew();
+            viewport = service.GetViewport(wb, sheet.Id, request);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        timings.Sort();
+        var mean = timings.Sum() / timings.Count;
+        var p95 = timings[(int)Math.Min(timings.Count - 1, Math.Ceiling(timings.Count * 0.95) - 1)];
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            "PERF CF_FORMULA_THRESHOLDS " +
+            $"steps={timings.Count} cells={viewport!.Cells.Count:N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={mean:F2} " +
+            $"p95_ms={p95:F2} max_ms={timings[^1]:F2} allocated_bytes={allocated:N0}");
+
+        viewport.Cells.Should().HaveCount(4_800);
+        total.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
+    }
 
     [Fact]
     public void ConditionalFormatAggregates_DoNotEnumerateEveryCellInLargeAppliesToRanges()
@@ -127,15 +192,23 @@ public class ConditionalFormatTests
     [Fact]
     public void FormulaConditionalFormatEvaluation_DoesNotSerializeShiftedFormulaPerDisplayedCell()
     {
-        var source = File.ReadAllText(FindWorkspaceFile(
+        var formulaSource = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.Core.Calc", "ViewportService.ConditionalFormatFormulas.cs"));
+        var evaluatorSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
 
-        source.Should().NotContain(
+        formulaSource.Should().NotContain(
             "FormulaSerializer.Serialize",
             "viewport formula conditional formats should evaluate cached shifted ASTs instead of serializing formula text per cell");
-        source.Should().NotContain(
+        formulaSource.Should().NotContain(
             "Evaluate(\"=\" + formulaText",
             "serializing shifted formulas back to text makes FormulaEvaluator parse the same rule again per visible cell");
+        evaluatorSource.Should().Contain(
+            "PrecomputeThresholdFormulaCaches(sheet)",
+            "formula thresholds should be parsed once while building the conditional-format viewport context");
+        evaluatorSource.Should().NotContain(
+            "new FormulaEvaluator().Evaluate(formula",
+            "formula thresholds should reuse cached ASTs instead of parsing text for every displayed cell");
     }
 
     [Fact]
