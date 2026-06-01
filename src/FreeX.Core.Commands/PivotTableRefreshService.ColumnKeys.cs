@@ -44,16 +44,75 @@ public static partial class PivotTableRefreshService
         return true;
     }
 
+    private static PivotKey BuildColumnKey(
+        IReadOnlyList<ScalarValue> row,
+        IReadOnlyList<PivotFieldModel> columnFields) =>
+        new(columnFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray());
+
+    private static PivotColumnRowMap BuildColumnRowsByKey(
+        IEnumerable<IReadOnlyList<ScalarValue>> rows,
+        IReadOnlyList<PivotFieldModel> columnFields)
+    {
+        var rowCapacity = rows is ICollection<IReadOnlyList<ScalarValue>> collection ? collection.Count : 0;
+        var map = new PivotColumnRowMap(rowCapacity);
+        foreach (var row in rows)
+        {
+            var key = BuildColumnKey(row, columnFields);
+            if (!map.RowsByKey.TryGetValue(key, out var keyRows))
+            {
+                keyRows = [];
+                map.RowsByKey.Add(key, keyRows);
+            }
+
+            keyRows.Add(row);
+            map.RowsInSourceOrder.Add((row, key));
+        }
+
+        return map;
+    }
+
+    private static IReadOnlyList<IReadOnlyList<ScalarValue>> RowsForColumnKey(
+        PivotColumnRowMap rowsByColumnKey,
+        PivotKey columnKey) =>
+        rowsByColumnKey.RowsByKey.TryGetValue(columnKey, out var rows)
+            ? rows
+            : Array.Empty<IReadOnlyList<ScalarValue>>();
+
+    private static List<IReadOnlyList<ScalarValue>> RowsForColumnKeys(
+        PivotColumnRowMap rowsByColumnKey,
+        IReadOnlyList<PivotKey> columnKeys)
+    {
+        var visibleKeys = new HashSet<PivotKey>(columnKeys);
+        var visibleRowCapacity = 0;
+        foreach (var columnKey in columnKeys)
+        {
+            if (rowsByColumnKey.RowsByKey.TryGetValue(columnKey, out var rows))
+                visibleRowCapacity += rows.Count;
+        }
+
+        var visibleRows = new List<IReadOnlyList<ScalarValue>>(visibleRowCapacity);
+        foreach (var (row, key) in rowsByColumnKey.RowsInSourceOrder)
+        {
+            if (visibleKeys.Contains(key))
+                visibleRows.Add(row);
+        }
+
+        return visibleRows;
+    }
+
     private static List<PivotKey> BuildColumnKeys(
         Workbook workbook,
         PivotTableModel pivotTable,
         IReadOnlyList<IReadOnlyList<ScalarValue>> rows,
-        IReadOnlyList<PivotFieldModel> columnFields)
+        IReadOnlyList<PivotFieldModel> columnFields,
+        PivotColumnRowMap? rowsByColumnKey = null)
     {
-        var keys = rows
-            .Select(row => new PivotKey(columnFields.Select(field => GroupKeyText(row[field.SourceFieldIndex], field)).ToArray()))
-            .Distinct()
-            .ToList();
+        var keys = rowsByColumnKey is null
+            ? rows
+                .Select(row => BuildColumnKey(row, columnFields))
+                .Distinct()
+                .ToList()
+            : rowsByColumnKey.RowsByKey.Keys.ToList();
 
         if (!pivotTable.ShowItemsWithNoDataOnColumns || columnFields.Count == 0)
             return keys.Order(PivotKeyComparer.Instance).ToList();
@@ -158,5 +217,17 @@ public static partial class PivotTableRefreshService
         public IEnumerator<IReadOnlyList<ScalarValue>> GetEnumerator() => rows.GetEnumerator();
 
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    private sealed class PivotColumnRowMap
+    {
+        public PivotColumnRowMap(int rowCapacity)
+        {
+            RowsInSourceOrder = new List<(IReadOnlyList<ScalarValue> Row, PivotKey Key)>(rowCapacity);
+        }
+
+        public Dictionary<PivotKey, List<IReadOnlyList<ScalarValue>>> RowsByKey { get; } = [];
+
+        public List<(IReadOnlyList<ScalarValue> Row, PivotKey Key)> RowsInSourceOrder { get; }
     }
 }
