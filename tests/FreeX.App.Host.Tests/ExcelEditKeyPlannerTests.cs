@@ -347,4 +347,18 @@ public sealed class ExcelEditKeyPlannerTests
         intent.Action.Should().Be(ExcelEditKeyAction.None);
         intent.Target.Should().BeNull();
     }
+
+    [Fact]
+    public void GetIntent_DoesNotTreatDirectAltShiftEnterAsLineBreakInsertion()
+    {
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            Key.Enter,
+            ModifierKeys.Alt | ModifierKeys.Shift,
+            Current,
+            pageSize: 20,
+            allowFormulaBarNavigationKeys: false);
+
+        intent.Action.Should().Be(ExcelEditKeyAction.None);
+        intent.Target.Should().BeNull();
+    }
 }
