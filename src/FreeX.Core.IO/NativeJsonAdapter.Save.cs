@@ -17,7 +17,6 @@ public sealed partial class NativeJsonAdapter
     {
         SaveStreamPreparer.TruncateFromCurrentPosition(stream);
 
-        var styleDtoCache = new Dictionary<StyleId, CellStyleDto?>(workbook.StyleCount);
         var dto = new WorkbookDto
         {
             FileFormat = NativeFileFormat,
@@ -112,7 +111,7 @@ public sealed partial class NativeJsonAdapter
                 .Where(cache => cache.CacheId > 0)
                 .Select(ToPivotCacheDto)
                 .ToList(),
-            CellStyles = ToCellStyleTable(workbook, styleDtoCache),
+            CellStyles = ToCellStyleTable(workbook),
             Sheets = workbook.Sheets.Select(s => new SheetDto
             {
                 Name = s.Name,
@@ -297,8 +296,8 @@ public sealed partial class NativeJsonAdapter
                     .Select(validation => ToDataValidationDto(validation, s.Id))
                     .ToList(),
                 ConditionalFormats = ToConditionalFormatDtos(s.ConditionalFormats, s.Id),
-                Cells = ToCellDtos(workbook, s, styleDtoCache),
-                StyleOnlyCells = ToStyleOnlyCellDtos(workbook, s, styleDtoCache)
+                Cells = new CellDtoSequence(s),
+                StyleOnlyCells = new StyleOnlyCellDtoSequence(s)
             }).ToList()
         };
 
@@ -307,16 +306,13 @@ public sealed partial class NativeJsonAdapter
         JsonSerializer.Serialize(stream, dto, SaveOptions);
     }
 
-    private static List<CellDto> ToCellDtos(
-        Workbook workbook,
-        Sheet sheet,
-        Dictionary<StyleId, CellStyleDto?> styleDtoCache)
+    private static void WriteCellDtos(Utf8JsonWriter writer, Sheet sheet, JsonSerializerOptions options)
     {
         var cells = sheet.GetOccupiedCellMap();
         if (cells.Count == 0)
-            return [];
+            return;
 
-        var result = new List<CellDto>(cells.Count);
+        var dto = new CellDto();
         foreach (var entry in cells)
         {
             var (row, col) = entry.Key;
@@ -327,29 +323,23 @@ public sealed partial class NativeJsonAdapter
             var address = new CellAddress(sheet.Id, row, col);
             var cell = entry.Value;
             var serializedValue = NativeJsonScalarValueMapper.SerializeWithType(cell.Value);
-            result.Add(new CellDto
-            {
-                Address = address.ToA1(),
-                Value = serializedValue.Value,
-                ValueType = serializedValue.ValueType,
-                Formula = cell.HasFormula ? NormalizeNativeFormulaText(cell.FormulaText!) : null,
-                IgnoreFormulaError = cell.IgnoreFormulaError,
-                StyleId = GetNativeStyleId(cell.StyleId)
-            });
+            dto.Address = address.ToA1();
+            dto.Value = serializedValue.Value;
+            dto.ValueType = serializedValue.ValueType;
+            dto.Formula = cell.HasFormula ? NormalizeNativeFormulaText(cell.FormulaText!) : null;
+            dto.IgnoreFormulaError = cell.IgnoreFormulaError;
+            dto.StyleId = GetNativeStyleId(cell.StyleId);
+            dto.Style = null;
+            CellDtoJsonConverter.WriteCell(writer, dto, options);
         }
-
-        return result;
     }
 
-    private static List<StyleOnlyCellDto> ToStyleOnlyCellDtos(
-        Workbook workbook,
-        Sheet sheet,
-        Dictionary<StyleId, CellStyleDto?> styleDtoCache)
+    private static void WriteStyleOnlyCellDtos(Utf8JsonWriter writer, Sheet sheet, JsonSerializerOptions options)
     {
         if (!sheet.HasStyleOnlyCells)
-            return [];
+            return;
 
-        var result = new List<StyleOnlyCellDto>();
+        var dto = new StyleOnlyCellDto();
         foreach (var entry in sheet.GetStyleOnlyEntries())
         {
             var (row, col) = entry.Key;
@@ -357,23 +347,19 @@ public sealed partial class NativeJsonAdapter
                 !NativeJsonValueSanitizer.IsValidColumnIndex(col))
                 continue;
 
-            result.Add(new StyleOnlyCellDto
-            {
-                Address = new CellAddress(sheet.Id, row, col).ToA1(),
-                StyleId = GetNativeStyleId(entry.StyleId, includeDefault: true)
-            });
+            dto.Address = new CellAddress(sheet.Id, row, col).ToA1();
+            dto.StyleId = GetNativeStyleId(entry.StyleId, includeDefault: true);
+            dto.Style = null;
+            StyleOnlyCellDtoJsonConverter.WriteCell(writer, dto, options);
         }
-
-        return result;
     }
 
-    private static List<CellStyleDto>? ToCellStyleTable(
-        Workbook workbook,
-        Dictionary<StyleId, CellStyleDto?> styleDtoCache)
+    private static List<CellStyleDto>? ToCellStyleTable(Workbook workbook)
     {
         if (workbook.StyleCount <= 1)
             return null;
 
+        var styleDtoCache = new Dictionary<StyleId, CellStyleDto?>(workbook.StyleCount);
         var styles = new List<CellStyleDto>(workbook.StyleCount);
         for (var i = 0; i < workbook.StyleCount; i++)
             styles.Add(GetCachedCellStyleDto(workbook, styleDtoCache, new StyleId(i), includeDefault: true)!);
