@@ -8,7 +8,7 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class UiAutomationCatalogSnapshotTests
 {
-    [Fact]
+    [UiE2eFact]
     [Trait("Category", "UIE2E")]
     public void VisibleControls_MatchCatalogSnapshotExpectations()
     {
@@ -47,7 +47,7 @@ public sealed class UiAutomationCatalogSnapshotTests
         snapshot.Should().Contain(control => control.AutomationId == "AddSheetButton" && control.Name == UiText.Get("MainWindow_AutomationName_InsertSheet") && control.ControlType == "Button");
     }
 
-    [Fact]
+    [UiE2eFact]
     [Trait("Category", "UIE2E")]
     public void VisibleDialogEntryPointControls_ExposeInvokePattern()
     {
@@ -65,7 +65,7 @@ public sealed class UiAutomationCatalogSnapshotTests
         AssertVisibleButtonExposesInvokePattern(root, run.ProcessId, "BackstageOptionsButton", UiText.Get("MainWindow_AutomationName_Options"));
     }
 
-    [Fact]
+    [UiE2eFact]
     [Trait("Category", "UIE2E")]
     public void VisibleShellControls_ExposeExpectedAutomationPatterns()
     {

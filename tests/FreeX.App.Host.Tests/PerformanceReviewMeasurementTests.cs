@@ -63,6 +63,8 @@ public sealed class PerformanceReviewMeasurementTests
 
             var resize = harness.MeasureWindowResizeSequence(widths, iterations: 3);
             var forcedCompact = harness.MeasureForcedCompactSequence(widths, iterations: 3);
+            var fallbackDiagnostics = harness.FallbackDiagnostics;
+            var adaptiveDiagnostics = harness.AdaptiveDiagnostics;
 
             Console.WriteLine(
                 "PERF RIBBON_RESIZE " +
@@ -74,6 +76,19 @@ public sealed class PerformanceReviewMeasurementTests
                 $"steps={forcedCompact.StepCount} total_ms={forcedCompact.TotalMilliseconds:F2} " +
                 $"mean_ms={forcedCompact.MeanMilliseconds:F2} p95_ms={forcedCompact.P95Milliseconds:F2} " +
                 $"max_ms={forcedCompact.MaxMilliseconds:F2} allocated_bytes={forcedCompact.AllocatedBytes:N0}");
+            Console.WriteLine(
+                "PERF RIBBON_DIAGNOSTICS " +
+                $"fallback_requests={fallbackDiagnostics.RequestCount:N0} " +
+                $"fallback_posts={fallbackDiagnostics.PostedCount:N0} " +
+                $"fallback_executed={fallbackDiagnostics.ExecutedCount:N0} " +
+                $"first_frame_layouts={fallbackDiagnostics.FirstFrameLayoutUpdateCount:N0} " +
+                $"group_measurements={adaptiveDiagnostics.GroupMeasurementCount:N0} " +
+                $"snapshot_captures={adaptiveDiagnostics.CompactSnapshotCaptureCount:N0} " +
+                $"threshold_rebuilds={adaptiveDiagnostics.ResizeThresholdRebuildCount:N0} " +
+                $"layout_plan_computes={adaptiveDiagnostics.LayoutPlanComputeCount:N0} " +
+                $"layout_plan_hits={adaptiveDiagnostics.LayoutPlanCacheHitCount:N0} " +
+                $"measured_overflow_checks={adaptiveDiagnostics.MeasuredOverflowMeasurementCount:N0} " +
+                $"applied_state_skips={adaptiveDiagnostics.AppliedStateSkipCount:N0}");
 
             resize.StepCount.Should().Be(widths.Length * 3);
             forcedCompact.StepCount.Should().Be(widths.Length * 3);
@@ -380,6 +395,10 @@ public sealed class PerformanceReviewMeasurementTests
             total.Stop();
             return MeasurementResult.From(timings, total.Elapsed.TotalMilliseconds, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
         }
+
+        public RibbonFallbackDiagnosticsSnapshot FallbackDiagnostics => _window.GetRibbonFallbackDiagnosticsForTests();
+
+        public RibbonAdaptiveDiagnosticsSnapshot AdaptiveDiagnostics => _window.GetRibbonAdaptiveDiagnosticsForTests();
 
         public static RibbonResizeHarness Create()
         {
