@@ -29,8 +29,8 @@ internal static class RibbonAdaptiveStateApplicator
             }
 
             changedGroupCount++;
-            collapsedButtons[i].Visibility = Visibility.Collapsed;
-            groupSnapshots[i].Group.Visibility = Visibility.Visible;
+            SetIfChanged(collapsedButtons[i], UIElement.VisibilityProperty, Visibility.Collapsed);
+            SetIfChanged(groupSnapshots[i].Group, UIElement.VisibilityProperty, Visibility.Visible);
 
             switch (plannedState)
             {
@@ -48,8 +48,8 @@ internal static class RibbonAdaptiveStateApplicator
                             : MainWindow.RibbonCompactLevel.IconOnly);
                     break;
                 case RibbonAdaptiveGroupState.Collapsed:
-                    groupSnapshots[i].Group.Visibility = Visibility.Collapsed;
-                    collapsedButtons[i].Visibility = Visibility.Visible;
+                    SetIfChanged(groupSnapshots[i].Group, UIElement.VisibilityProperty, Visibility.Collapsed);
+                    SetIfChanged(collapsedButtons[i], UIElement.VisibilityProperty, Visibility.Visible);
                     break;
             }
         }
@@ -62,15 +62,15 @@ internal static class RibbonAdaptiveStateApplicator
         var footprint = RibbonCollapsedGroupPresentationPlanner.CreateFootprint(availableWidth);
         foreach (var button in collapsedButtons)
         {
-            button.Width = footprint.Width;
-            button.Margin = footprint.Margin;
-            button.Padding = footprint.Padding;
+            SetIfChanged(button, FrameworkElement.WidthProperty, footprint.Width);
+            SetIfChanged(button, FrameworkElement.MarginProperty, footprint.Margin);
+            SetIfChanged(button, Control.PaddingProperty, footprint.Padding);
 
             if (TryGetCollapsedRibbonButtonCaption(button, out var caption))
                 ApplyCollapsedRibbonButtonCaptionFootprint(caption, footprint);
 
             if (TryGetCollapsedRibbonButtonTextIcon(button, out var icon))
-                icon.FontSize = footprint.IconFontSize;
+                SetIfChanged(icon, TextBlock.FontSizeProperty, footprint.IconFontSize);
         }
     }
 
@@ -79,18 +79,24 @@ internal static class RibbonAdaptiveStateApplicator
         MainWindow.RibbonCompactLevel level)
     {
         foreach (var label in snapshot.CommandLabels)
-            label.Visibility = level == MainWindow.RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
+            SetIfChanged(
+                label,
+                UIElement.VisibilityProperty,
+                level == MainWindow.RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible);
 
         foreach (var buttonSnapshot in snapshot.Buttons)
         {
             if (buttonSnapshot.HasCompactWidths)
             {
-                buttonSnapshot.Button.Width = level switch
-                {
-                    MainWindow.RibbonCompactLevel.Full => buttonSnapshot.FullWidth,
-                    MainWindow.RibbonCompactLevel.SmallWithLabels => buttonSnapshot.IsLargeButton ? double.NaN : buttonSnapshot.FullWidth,
-                    _ => buttonSnapshot.CompactWidth
-                };
+                SetIfChanged(
+                    buttonSnapshot.Button,
+                    FrameworkElement.WidthProperty,
+                    level switch
+                    {
+                        MainWindow.RibbonCompactLevel.Full => buttonSnapshot.FullWidth,
+                        MainWindow.RibbonCompactLevel.SmallWithLabels => buttonSnapshot.IsLargeButton ? double.NaN : buttonSnapshot.FullWidth,
+                        _ => buttonSnapshot.CompactWidth
+                    });
             }
 
             ApplyButton(buttonSnapshot, level);
@@ -117,14 +123,19 @@ internal static class RibbonAdaptiveStateApplicator
     {
         if (snapshot.IsCheckOrRadioButton)
         {
-            snapshot.Button.HorizontalContentAlignment = HorizontalAlignment.Left;
+            SetIfChanged(snapshot.Button, Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Left);
             if (snapshot.Content is not null)
-                snapshot.Content.HorizontalAlignment = HorizontalAlignment.Left;
+                SetIfChanged(snapshot.Content, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Left);
             return;
         }
 
         foreach (var label in snapshot.Labels)
-            label.Visibility = level == MainWindow.RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible;
+        {
+            SetIfChanged(
+                label,
+                UIElement.VisibilityProperty,
+                level == MainWindow.RibbonCompactLevel.IconOnly ? Visibility.Collapsed : Visibility.Visible);
+        }
 
         var isSmallOrMedium = snapshot.ContentLayout is RibbonCommandContentLayout.Small or RibbonCommandContentLayout.Medium;
         if (snapshot.HasContentLayout &&
@@ -136,13 +147,13 @@ internal static class RibbonAdaptiveStateApplicator
 
         if (!isSmallOrMedium)
         {
-            snapshot.Button.HorizontalContentAlignment = HorizontalAlignment.Center;
+            SetIfChanged(snapshot.Button, Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center);
 
             if (snapshot.Content is not null)
-                snapshot.Content.HorizontalAlignment = HorizontalAlignment.Center;
+                SetIfChanged(snapshot.Content, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
 
             foreach (var stack in snapshot.HorizontalStacks)
-                stack.HorizontalAlignment = HorizontalAlignment.Center;
+                SetIfChanged(stack, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         }
 
         if (snapshot.HasContentLayout &&
@@ -330,41 +341,48 @@ internal static class RibbonAdaptiveStateApplicator
         TextBlock caption,
         RibbonCollapsedGroupFootprint footprint)
     {
-        caption.Visibility = footprint.CaptionVisibility;
-        caption.FontSize = footprint.CaptionFontSize;
-        caption.MaxWidth = footprint.CaptionMaxWidth;
-        caption.TextWrapping = TextWrapping.NoWrap;
-        caption.TextTrimming = TextTrimming.CharacterEllipsis;
-        caption.TextAlignment = TextAlignment.Center;
+        SetIfChanged(caption, UIElement.VisibilityProperty, footprint.CaptionVisibility);
+        SetIfChanged(caption, TextBlock.FontSizeProperty, footprint.CaptionFontSize);
+        SetIfChanged(caption, FrameworkElement.MaxWidthProperty, footprint.CaptionMaxWidth);
+        SetIfChanged(caption, TextBlock.TextWrappingProperty, TextWrapping.NoWrap);
+        SetIfChanged(caption, TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+        SetIfChanged(caption, TextBlock.TextAlignmentProperty, TextAlignment.Center);
     }
 
     private static void ApplySmallButtonLayout(
         MainWindow.RibbonCompactButtonSnapshot snapshot,
         MainWindow.RibbonCompactLevel level)
     {
-        snapshot.Button.HorizontalAlignment = HorizontalAlignment.Left;
+        SetIfChanged(snapshot.Button, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Left);
 
         if (snapshot.SmallSpacerColumn is not null)
         {
-            snapshot.SmallSpacerColumn.Width = level == MainWindow.RibbonCompactLevel.IconOnly
-                ? new GridLength(0)
-                : new GridLength(5);
+            SetIfChanged(
+                snapshot.SmallSpacerColumn,
+                ColumnDefinition.WidthProperty,
+                level == MainWindow.RibbonCompactLevel.IconOnly
+                    ? new GridLength(0)
+                    : new GridLength(5));
         }
 
+        var smallGrid = snapshot.SmallGrid!;
         if (level == MainWindow.RibbonCompactLevel.IconOnly)
         {
-            snapshot.SmallGrid!.HorizontalAlignment = HorizontalAlignment.Center;
+            SetIfChanged(smallGrid, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
             // Keep the command icon aligned with 24px icon-only peers while the menu lane extends to the right.
-            snapshot.SmallGrid.Margin = GetSmallButtonDropdownColumn(snapshot.SmallGrid) is { } dropdownColumn
-                ? new Thickness(-dropdownColumn.Width.Value, 0, 0, 0)
-                : new Thickness(0);
-            snapshot.Button.HorizontalContentAlignment = HorizontalAlignment.Center;
+            SetIfChanged(
+                smallGrid,
+                FrameworkElement.MarginProperty,
+                GetSmallButtonDropdownColumn(smallGrid) is { } dropdownColumn
+                    ? new Thickness(-dropdownColumn.Width.Value, 0, 0, 0)
+                    : new Thickness(0));
+            SetIfChanged(snapshot.Button, Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center);
         }
         else
         {
-            snapshot.SmallGrid!.HorizontalAlignment = HorizontalAlignment.Left;
-            snapshot.SmallGrid.Margin = new Thickness(0);
-            snapshot.Button.HorizontalContentAlignment = HorizontalAlignment.Left;
+            SetIfChanged(smallGrid, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Left);
+            SetIfChanged(smallGrid, FrameworkElement.MarginProperty, new Thickness(0));
+            SetIfChanged(snapshot.Button, Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Left);
         }
     }
 
@@ -402,44 +420,50 @@ internal static class RibbonAdaptiveStateApplicator
 
         if (level == MainWindow.RibbonCompactLevel.Full)
         {
-            snapshot.LargeStack.Orientation = Orientation.Vertical;
-            snapshot.LargeStack.HorizontalAlignment = HorizontalAlignment.Center;
-            snapshot.Button.Height = 76;
-            snapshot.LargeIconSlot.Width = 34;
-            snapshot.LargeIconSlot.Height = 34;
-            snapshot.LargeIconSlot.Margin = new Thickness(0, 0, 0, 2);
+            SetIfChanged(snapshot.LargeStack, StackPanel.OrientationProperty, Orientation.Vertical);
+            SetIfChanged(snapshot.LargeStack, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            SetIfChanged(snapshot.Button, FrameworkElement.HeightProperty, 76d);
+            SetIfChanged(snapshot.LargeIconSlot, FrameworkElement.WidthProperty, 34d);
+            SetIfChanged(snapshot.LargeIconSlot, FrameworkElement.HeightProperty, 34d);
+            SetIfChanged(snapshot.LargeIconSlot, FrameworkElement.MarginProperty, new Thickness(0, 0, 0, 2));
             if (snapshot.LargeIconChild is not null)
             {
-                snapshot.LargeIconChild.Width = 32;
-                snapshot.LargeIconChild.Height = 32;
+                SetIfChanged(snapshot.LargeIconChild, FrameworkElement.WidthProperty, 32d);
+                SetIfChanged(snapshot.LargeIconChild, FrameworkElement.HeightProperty, 32d);
             }
-            snapshot.LargeLabelBlock.TextWrapping = TextWrapping.Wrap;
-            snapshot.LargeLabelBlock.MaxWidth = 96;
-            snapshot.LargeLabelBlock.TextTrimming = TextTrimming.None;
-            snapshot.LargeLabelBlock.HorizontalAlignment = HorizontalAlignment.Center;
-            snapshot.LargeLabelBlock.TextAlignment = TextAlignment.Center;
-            snapshot.Button.HorizontalContentAlignment = HorizontalAlignment.Center;
+            SetIfChanged(snapshot.LargeLabelBlock, TextBlock.TextWrappingProperty, TextWrapping.Wrap);
+            SetIfChanged(snapshot.LargeLabelBlock, FrameworkElement.MaxWidthProperty, 96d);
+            SetIfChanged(snapshot.LargeLabelBlock, TextBlock.TextTrimmingProperty, TextTrimming.None);
+            SetIfChanged(snapshot.LargeLabelBlock, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            SetIfChanged(snapshot.LargeLabelBlock, TextBlock.TextAlignmentProperty, TextAlignment.Center);
+            SetIfChanged(snapshot.Button, Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center);
         }
         else
         {
-            snapshot.LargeStack.Orientation = Orientation.Horizontal;
-            snapshot.LargeStack.HorizontalAlignment = HorizontalAlignment.Left;
-            snapshot.Button.Height = 48;
-            snapshot.LargeIconSlot.Width = 24;
-            snapshot.LargeIconSlot.Height = 24;
-            snapshot.LargeIconSlot.Margin = new Thickness(0, 0, 5, 0);
+            SetIfChanged(snapshot.LargeStack, StackPanel.OrientationProperty, Orientation.Horizontal);
+            SetIfChanged(snapshot.LargeStack, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Left);
+            SetIfChanged(snapshot.Button, FrameworkElement.HeightProperty, 48d);
+            SetIfChanged(snapshot.LargeIconSlot, FrameworkElement.WidthProperty, 24d);
+            SetIfChanged(snapshot.LargeIconSlot, FrameworkElement.HeightProperty, 24d);
+            SetIfChanged(snapshot.LargeIconSlot, FrameworkElement.MarginProperty, new Thickness(0, 0, 5, 0));
             if (snapshot.LargeIconChild is not null)
             {
-                snapshot.LargeIconChild.Width = 24;
-                snapshot.LargeIconChild.Height = 24;
+                SetIfChanged(snapshot.LargeIconChild, FrameworkElement.WidthProperty, 24d);
+                SetIfChanged(snapshot.LargeIconChild, FrameworkElement.HeightProperty, 24d);
             }
-            snapshot.LargeLabelBlock.TextWrapping = TextWrapping.NoWrap;
-            snapshot.LargeLabelBlock.MaxWidth = 90;
-            snapshot.LargeLabelBlock.TextTrimming = TextTrimming.CharacterEllipsis;
-            snapshot.LargeLabelBlock.HorizontalAlignment = HorizontalAlignment.Left;
-            snapshot.LargeLabelBlock.TextAlignment = TextAlignment.Left;
-            snapshot.Button.HorizontalContentAlignment = HorizontalAlignment.Left;
+            SetIfChanged(snapshot.LargeLabelBlock, TextBlock.TextWrappingProperty, TextWrapping.NoWrap);
+            SetIfChanged(snapshot.LargeLabelBlock, FrameworkElement.MaxWidthProperty, 90d);
+            SetIfChanged(snapshot.LargeLabelBlock, TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+            SetIfChanged(snapshot.LargeLabelBlock, FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Left);
+            SetIfChanged(snapshot.LargeLabelBlock, TextBlock.TextAlignmentProperty, TextAlignment.Left);
+            SetIfChanged(snapshot.Button, Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Left);
         }
+    }
+
+    private static void SetIfChanged<T>(DependencyObject target, DependencyProperty property, T value)
+    {
+        if (!EqualityComparer<T>.Default.Equals((T)target.GetValue(property), value))
+            target.SetValue(property, value);
     }
 
     private static string GetRibbonGroupName(FrameworkElement group) =>
