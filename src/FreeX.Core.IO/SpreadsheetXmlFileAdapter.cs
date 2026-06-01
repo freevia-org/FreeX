@@ -1057,7 +1057,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         {
             NumberValue number when double.IsFinite(number.Value) => ("Number", number.Value.ToString("R", CultureInfo.InvariantCulture)),
             NumberValue number => ("String", number.Value.ToString("R", CultureInfo.InvariantCulture)),
-            DateTimeValue dateTime => ("DateTime", dateTime.ToDateTime().ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture)),
+            DateTimeValue dateTime when double.IsFinite(dateTime.Value) => ("DateTime", dateTime.ToDateTime().ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture)),
+            DateTimeValue dateTime => ("String", dateTime.Value.ToString("R", CultureInfo.InvariantCulture)),
             BoolValue boolean => ("Boolean", boolean.Value ? "1" : "0"),
             ErrorValue error => ("Error", error.Code),
             TextValue textValue => ("String", textValue.Value),

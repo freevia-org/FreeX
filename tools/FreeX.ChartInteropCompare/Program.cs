@@ -26,6 +26,7 @@ internal static class ChartInteropCompare
     private const int AverageHashSize = 16;
     private const double MinimumNonWhiteRatio = 0.01;
     private const int XlOpenXmlWorkbook = 51;
+    private const double ExcelPointsPerPixel = 72.0 / 96.0;
     private const string ExcelProcessName = "EXCEL";
 
     public static int Run(string[] args)
@@ -263,14 +264,24 @@ internal static class ChartInteropCompare
             dynamic chart;
             if (chartCase.Kind == ChartFixtureKind.Stock)
             {
-                dynamic chartObject = worksheet.ChartObjects().Add(320, 40, 560, 360);
+                dynamic chartObject = worksheet.ChartObjects().Add(
+                    ToExcelPoints(320),
+                    ToExcelPoints(40),
+                    ToExcelPoints(560),
+                    ToExcelPoints(360));
                 chart = chartObject.Chart;
                 chart.SetSourceData(sourceRange, 2);
                 chart.ChartType = chartCase.ExcelChartType;
             }
             else
             {
-                dynamic shape = worksheet.Shapes.AddChart2(201, chartCase.ExcelChartType, 320, 40, 560, 360);
+                dynamic shape = worksheet.Shapes.AddChart2(
+                    201,
+                    chartCase.ExcelChartType,
+                    ToExcelPoints(320),
+                    ToExcelPoints(40),
+                    ToExcelPoints(560),
+                    ToExcelPoints(360));
                 chart = shape.Chart;
                 chart.SetSourceData(sourceRange);
             }
@@ -301,6 +312,8 @@ internal static class ChartInteropCompare
             TryCloseWorkbook(workbookObject);
         }
     }
+
+    private static double ToExcelPoints(double pixels) => pixels * ExcelPointsPerPixel;
 
     private static void RoundTripExcelWorkbookThroughFreeX(
         dynamic excel,
