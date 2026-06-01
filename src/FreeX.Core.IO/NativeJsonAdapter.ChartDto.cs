@@ -243,6 +243,7 @@ public sealed partial class NativeJsonAdapter
         public ThemeColorReferenceDto? SeriesLineThemeColor { get; set; }
         public double SeriesLineThickness { get; set; } = 1;
         public ChartLineDashStyle SeriesLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
+        public HistogramBinningModel? HistogramBinning { get; set; }
         public bool ShowUpDownBars { get; set; }
         public int? UpDownBarGapWidth { get; set; }
         public CellColor? UpBarFillColor { get; set; }

@@ -243,6 +243,10 @@ public sealed class ChartModel
     public WorkbookThemeColorReference? SeriesLineThemeColor { get; set; }
     public double SeriesLineThickness { get; set; } = 1;
     public ChartLineDashStyle SeriesLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
+
+    /// <summary>Histogram bin configuration (Excel "Format Axis ▸ Bins"); null means automatic binning.</summary>
+    public HistogramBinningModel? HistogramBinning { get; set; }
+
     public bool ShowUpDownBars { get; set; }
     public int? UpDownBarGapWidth { get; set; }
     public CellColor? UpBarFillColor { get; set; }
