@@ -192,7 +192,9 @@ public sealed partial class XlsxFileAdapter
     {
         var worksheetXml = LoadXml(worksheetEntry);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var rowColumnLayout = XlsxWorksheetRowColumnLayoutReader.Read(worksheetXml, worksheetNs);
+        var sheetDataLayout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(worksheetXml, worksheetNs);
+        var rowColumnLayout = sheetDataLayout.RowColumnLayout;
+        var cellLayout = sheetDataLayout.CellLayout;
 
         var protection = worksheetXml.Root?.Element(worksheetNs + "sheetProtection");
         var isProtected = IsTruthy(protection?.Attribute("sheet")?.Value);
@@ -244,8 +246,6 @@ public sealed partial class XlsxFileAdapter
         var sortState = XlsxWorksheetSortStateMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sortState"));
         var singleXmlCells = XlsxWorksheetSingleXmlCellMapper.Read(worksheetXml.Root?.Element(worksheetNs + "singleXmlCells"));
         var additionalViews = XlsxWorksheetAdditionalViewMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sheetViews"));
-        var cachedFormulaErrors = XlsxWorksheetCellLayoutReader.ReadCachedFormulaErrors(worksheetXml, worksheetNs);
-        var explicitStyleOnlyCells = XlsxWorksheetCellLayoutReader.ReadExplicitStyleOnlyCells(worksheetXml, worksheetNs);
         var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
         var codeName = sheetPr?.Attribute("codeName")?.Value;
 
@@ -324,8 +324,8 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetLayoutMetadataReader.ReadWorksheetPrimaryViewMetadata(sheetView),
             XlsxWorksheetPageBreaksMetadataReader.Read(rowBreaks, CellAddress.MaxRow),
             XlsxWorksheetPageBreaksMetadataReader.Read(colBreaks, CellAddress.MaxCol),
-            cachedFormulaErrors,
-            explicitStyleOnlyCells,
+            cellLayout.CachedFormulaErrors,
+            cellLayout.ExplicitStyleOnlyCells,
             codeName);
     }
 
