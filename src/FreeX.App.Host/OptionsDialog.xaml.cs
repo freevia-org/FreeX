@@ -50,7 +50,8 @@ public partial class OptionsDialog : Window
 
         OptSheetCount.Text = _opts.DefaultSheetCount.ToString();
         OptUserName.Text   = _opts.UserName;
-        OptShowScreenTips.IsChecked = true;
+        OptCollapseRibbon.IsChecked = _opts.CollapseRibbonAutomatically;
+        OptShowScreenTips.IsChecked = _opts.ShowScreenTips;
 
         // Formulas
         OptCalcAuto.IsChecked   =  _opts.AutoCalculate;
@@ -323,6 +324,8 @@ public partial class OptionsDialog : Window
             DefaultFontSize   = defaultFontSize,
             DefaultSheetCount = defaultSheetCount,
             UserName          = string.IsNullOrWhiteSpace(OptUserName.Text) ? _opts.UserName : OptUserName.Text.Trim(),
+            CollapseRibbonAutomatically = OptCollapseRibbon.IsChecked == true,
+            ShowScreenTips = OptShowScreenTips.IsChecked == true,
             AutoCalculate     = OptCalcAuto.IsChecked == true,
             UseR1C1ReferenceStyle = OptR1C1.IsChecked == true,
             ShowFormulaBar     = OptShowFormulaBar.IsChecked == true,
