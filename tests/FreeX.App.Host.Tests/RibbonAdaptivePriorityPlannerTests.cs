@@ -254,6 +254,6 @@ public sealed class RibbonAdaptivePriorityPlannerTests
         RibbonAdaptivePriorityPlanner.RequiresMeasuredCorrection(
                 ["Clipboard", "Font", "Alignment", "Number", "Styles", "Cells", "Editing"])
             .Should()
-            .BeFalse("Home should trust its deterministic profile so transient measured overflow does not collapse primary groups");
+            .BeTrue("Home needs the measured overflow guard at common desktop widths where WPF command rows are wider than the deterministic profile");
     }
 }

@@ -22,7 +22,8 @@ internal static class RibbonAdaptiveTabProfiles
             [
                 Protected(1366, []),
                 Protected(1500, ["Editing"])
-            ]),
+            ],
+            RequiresMeasuredCorrection: true),
         new(
             Name: "Insert",
             CatalogId: "InsertTab",
@@ -98,8 +99,8 @@ internal static class RibbonAdaptiveTabProfiles
             ],
             RuntimeVisibility:
             [
-                Runtime(1465, "Outline", RibbonAdaptiveGroupState.Collapsed),
-                Runtime(1465, "Sort & Filter", RibbonAdaptiveGroupState.Collapsed)
+                Runtime(1120, "Sort & Filter", RibbonAdaptiveGroupState.IconOnly),
+                Runtime(1120, "Data Tools", RibbonAdaptiveGroupState.IconOnly)
             ],
             ProtectedGroups:
             [
