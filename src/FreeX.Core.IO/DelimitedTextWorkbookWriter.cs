@@ -29,6 +29,8 @@ internal static class DelimitedTextWorkbookWriter
 
     public static void Save(Workbook workbook, Stream stream, char delimiter)
     {
+        SaveStreamPreparer.TruncateFromCurrentPosition(stream);
+
         if (workbook.Sheets.Count == 0) return;
 
         var sheet = workbook.Sheets[0];
