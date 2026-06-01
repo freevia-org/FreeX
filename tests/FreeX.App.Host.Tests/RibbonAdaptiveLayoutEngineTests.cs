@@ -351,6 +351,32 @@ public sealed class RibbonAdaptiveLayoutEngineTests
     }
 
     [Fact]
+    public void TryCollapseOneMoreGroup_ReportsChangedIndexAndPreviousState()
+    {
+        var states = new[]
+        {
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.IconOnly,
+            RibbonAdaptiveGroupState.SmallWithLabels
+        };
+
+        var collapsed = RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(
+            states,
+            preserveFirstGroup: false,
+            protectedGroupIndexes: null,
+            out var changedIndex,
+            out var previousState);
+
+        collapsed.Should().BeTrue();
+        changedIndex.Should().Be(2);
+        previousState.Should().Be(RibbonAdaptiveGroupState.SmallWithLabels);
+        states.Should().Equal(
+            RibbonAdaptiveGroupState.Full,
+            RibbonAdaptiveGroupState.IconOnly,
+            RibbonAdaptiveGroupState.Collapsed);
+    }
+
+    [Fact]
     public void TryCollapseOneMoreGroup_PreservesFirstGroupWhenRequested()
     {
         var states = new[]
