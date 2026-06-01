@@ -533,6 +533,27 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void NameBoxEnter_WithPaddedCellReference_NavigatesRefreshesFormulaBarAndReturnsFocusToGrid()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(5, 3, "padded target cell");
+            harness.SetCellAddressBoxText("  C5  ");
+
+            harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
+
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 5, 3),
+                new CellAddress(harness.CurrentSheetId, 5, 3)));
+            harness.CellAddressBoxText.Should().Be("C5");
+            harness.FormulaBarText.Should().Be("padded target cell");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void NameBoxEnter_WithRangeReference_SelectsRangeAndRefreshesFormulaBarFromStartCell()
     {
         StaTestRunner.Run(() =>
