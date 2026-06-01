@@ -57,6 +57,8 @@ public partial class MainWindow
         if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
         _dragSheetTabId = tab.Id;
         _dragSheetTabStart = e.GetPosition(SheetTabsControl);
+        if (sender is System.Windows.UIElement element)
+            element.CaptureMouse();
         _currentSheetId = tab.Id;
         UpdateGroupedSheetsForClick(tab.Id);
         UpdateViewport();
@@ -70,6 +72,8 @@ public partial class MainWindow
         if (e.LeftButton != MouseButtonState.Pressed)
         {
             _dragSheetTabId = null;
+            if (sender is System.Windows.UIElement element && element.IsMouseCaptured)
+                element.ReleaseMouseCapture();
             return;
         }
 
@@ -96,6 +100,13 @@ public partial class MainWindow
     }
 
     private void SheetTab_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        _dragSheetTabId = null;
+        if (sender is System.Windows.UIElement element && element.IsMouseCaptured)
+            element.ReleaseMouseCapture();
+    }
+
+    private void SheetTab_LostMouseCapture(object sender, MouseEventArgs e)
     {
         _dragSheetTabId = null;
     }
