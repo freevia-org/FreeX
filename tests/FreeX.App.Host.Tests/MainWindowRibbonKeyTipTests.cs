@@ -558,6 +558,18 @@ public sealed class MainWindowRibbonKeyTipTests
             harness.StatusZoomText.Should().Be($"{expectedFitPercent}%");
             harness.KeyTipScope.Should().Be("None");
             harness.OverlayBadgeTexts.Should().BeEmpty();
+
+            harness.OpenRibbonMenu(Key.H, Key.B);
+            harness.HandleKeyTip(Key.S);
+
+            harness.KeyTipScope.Should().Be("Menu");
+            harness.ActiveMenuItemSubmenuIsOpen("Line Style").Should().BeTrue();
+            harness.ActiveMenuItemGestureText("Dashed").Should().Be("D");
+
+            harness.HandleKeyTip(Key.D);
+
+            harness.KeyTipScope.Should().Be("None");
+            harness.OverlayBadgeTexts.Should().BeEmpty();
         });
     }
 
@@ -1172,7 +1184,7 @@ public sealed class MainWindowRibbonKeyTipTests
 
             harness.KeyTipScope.Should().Be("Menu");
             harness.ActiveMenuItemSubmenuIsOpen("Icon Sets").Should().BeTrue();
-            harness.ActiveMenuItemGestureText("3 Arrows").Should().Be("I3");
+            harness.ActiveMenuItemGestureText("3 Arrows").Should().Be("3");
 
             harness.HandleKeyTip(Key.D3);
 

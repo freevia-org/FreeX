@@ -120,12 +120,12 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>Restores this window to Normal state and positions it at the given work-area bounds (View Side by Side).</summary>
+    /// <summary>Restores this window to Normal state and positions it at the given work-area bounds.</summary>
     /// <remarks>
-    /// <see cref="SideBySideLayoutPlanner"/> returns bounds relative to the work-area origin, so we
-    /// offset by <see cref="SystemParameters.WorkArea"/> here (matching Reset Window Position). This
-    /// keeps the tiling correct when the work area does not start at the screen origin, e.g. a
-    /// top/left taskbar or a secondary monitor with non-zero coordinates.
+    /// Window layout planners return bounds relative to the work-area origin, so we offset by
+    /// <see cref="SystemParameters.WorkArea"/> here (matching Reset Window Position). This keeps the
+    /// layout correct when the work area does not start at the screen origin, e.g. a top/left
+    /// taskbar or a secondary monitor with non-zero coordinates.
     /// </remarks>
     public void TileToWorkArea(Rect bounds)
     {

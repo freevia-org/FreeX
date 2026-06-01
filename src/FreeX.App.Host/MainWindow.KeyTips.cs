@@ -316,6 +316,7 @@ public partial class MainWindow
         button.ContextMenu = menu;
         menu.PlacementTarget = button;
         menu.Placement = PlacementMode.Bottom;
+        RibbonMenuKeyTipScopePlanner.ApplyScopedInputGestureText(menu);
         menu.IsOpen = true;
 
         if (enterKeyTipMenuScope || _ribbonKeyTipMode.IsActive)
@@ -328,6 +329,7 @@ public partial class MainWindow
         _activeRibbonKeyTipItemsControl = menu;
         _ribbonKeyTipScope = RibbonKeyTipScope.Menu;
         _ribbonKeyTipSequence = "";
+        RibbonMenuKeyTipScopePlanner.ApplyScopedInputGestureText(menu);
         InvalidateVisibleKeyTipElementCache();
         InvalidateActiveMenuKeyTipItems();
         ClearKeyTipOverlay();
@@ -335,8 +337,11 @@ public partial class MainWindow
 
     private bool TryOpenActiveMenuItemSubmenuKeyTip(string keyTip)
     {
-        if (_activeRibbonKeyTipItemsControl is null ||
-            !RibbonTooltip.TryOpenSubmenuForKeyTip(_activeRibbonKeyTipItemsControl, keyTip, out var submenu) ||
+        if (_activeRibbonKeyTipItemsControl is null)
+            return false;
+
+        var scopePrefix = RibbonMenuKeyTipScopePlanner.GetScopePrefix(_activeRibbonKeyTipItemsControl);
+        if (!RibbonTooltip.TryOpenSubmenuForKeyTip(_activeRibbonKeyTipItemsControl, keyTip, scopePrefix, out var submenu) ||
             submenu is null)
         {
             return false;
@@ -344,6 +349,7 @@ public partial class MainWindow
 
         _activeRibbonKeyTipItemsControl = submenu;
         _ribbonKeyTipSequence = "";
+        RibbonMenuKeyTipScopePlanner.ApplyScopedInputGestureText(submenu);
         InvalidateActiveMenuKeyTipItems();
         return true;
     }
@@ -353,7 +359,11 @@ public partial class MainWindow
         if (_activeRibbonKeyTipItemsControl is null)
             return false;
 
-        var match = RibbonKeyTipRouting.ResolveMenuItem(GetEnabledActiveMenuItems(_activeRibbonKeyTipItemsControl), keyTip);
+        var scopePrefix = RibbonMenuKeyTipScopePlanner.GetScopePrefix(_activeRibbonKeyTipItemsControl);
+        var match = RibbonKeyTipRouting.ResolveMenuItem(
+            GetEnabledActiveMenuItems(_activeRibbonKeyTipItemsControl),
+            keyTip,
+            scopePrefix);
         if (match is null)
             return false;
 
@@ -366,7 +376,10 @@ public partial class MainWindow
 
     private bool HasActiveMenuItemKeyTipPrefix(string keyTipPrefix) =>
         _activeRibbonKeyTipItemsControl is not null &&
-        RibbonKeyTipRouting.HasMenuItemKeyTipPrefix(GetEnabledActiveMenuItems(_activeRibbonKeyTipItemsControl), keyTipPrefix);
+        RibbonKeyTipRouting.HasMenuItemKeyTipPrefix(
+            GetEnabledActiveMenuItems(_activeRibbonKeyTipItemsControl),
+            keyTipPrefix,
+            RibbonMenuKeyTipScopePlanner.GetScopePrefix(_activeRibbonKeyTipItemsControl));
 
     private IReadOnlyList<MenuItem> GetEnabledActiveMenuItems(ItemsControl itemsControl)
     {

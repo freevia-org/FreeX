@@ -198,6 +198,30 @@ public sealed class RibbonTooltipTests
     }
 
     [Fact]
+    public void TryOpenSubmenuForKeyTip_WithScopePrefixOpensPrefixedChildByLocalSuffix()
+    {
+        RunSta(() =>
+        {
+            var parent = new MenuItem { Header = "Highlight Cells Rules" };
+            RibbonTooltip.SetKeyTip(parent, "H");
+            var child = new MenuItem { Header = "Greater Than..." };
+            RibbonTooltip.SetKeyTip(child, "HG");
+            child.Items.Add(new MenuItem { Header = "Format Rule..." });
+            parent.Items.Add(child);
+            var menu = new ContextMenu();
+            menu.Items.Add(parent);
+            menu.IsOpen = true;
+            parent.IsSubmenuOpen = true;
+
+            RibbonTooltip.TryOpenSubmenuForKeyTip(parent, "G", "H", out var openedSubmenu).Should().BeTrue();
+
+            openedSubmenu.Should().BeSameAs(child);
+            child.IsSubmenuOpen.Should().BeTrue();
+            menu.IsOpen = false;
+        });
+    }
+
+    [Fact]
     public void TryOpenSubmenuForKeyTip_RestoresSubmenuStateWhenNoNestedMatch()
     {
         RunSta(() =>

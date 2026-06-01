@@ -125,6 +125,7 @@ public partial class MainWindow
         var tab = (sender as System.Windows.FrameworkElement)?.DataContext as SheetTabViewModel;
         if (tab is null) return;
         RenameSheetFromTab(tab);
+        e.Handled = true;
     }
 
     private void RenameSheetFromTab(SheetTabViewModel tab)
