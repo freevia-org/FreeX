@@ -63,12 +63,19 @@ public partial class MainWindow
     private void SheetGrid_MouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
     {
         int notches = ViewportScrollCalculator.NormalizeWheelNotches(e.Delta);
+        var horizontal = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
         if (SheetGrid.Viewport is { } wheelViewport)
         {
             var wheelPos = e.GetPosition(SheetGrid);
-            _activeSplitPaneRegion = FreeX.App.UI.GridView.HitTestViewportCell(wheelViewport, _currentSheetId, wheelPos) is null
-                ? FreeX.App.UI.SplitPaneRegion.BottomRight
-                : FreeX.App.UI.GridView.HitTestSplitPaneRegion(wheelViewport, wheelPos);
+            var wheelTarget = FreeX.App.UI.GridView.ResolveSplitPaneWheelTarget(
+                wheelViewport,
+                _currentSheetId,
+                wheelPos,
+                SheetGrid.ActualWidth,
+                SheetGrid.ActualHeight,
+                horizontal);
+            _activeSplitPaneRegion = wheelTarget.Region;
+            horizontal = wheelTarget.Horizontal;
         }
 
         if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
@@ -80,7 +87,6 @@ public partial class MainWindow
             return;
         }
 
-        var horizontal = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
         if (SheetGrid.Viewport?.SplitPanes is not null &&
             !FreeX.App.UI.GridView.CanScrollSplitPaneRegion(_activeSplitPaneRegion, horizontal))
         {
