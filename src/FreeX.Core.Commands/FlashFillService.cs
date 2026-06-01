@@ -41,6 +41,7 @@ public static partial class FlashFillService
             ?? TryDigitMask(examples)
             ?? TryDateNormalization(examples)
             ?? TryPhoneNumberNormalization(examples)
+            ?? TryUsAddressComponentExtraction(examples)
             ?? TryStripThousandSeparators(examples)
             ?? TryExtractDigitsOnly(examples)
             ?? TryExtractFinalDigitRun(examples)
