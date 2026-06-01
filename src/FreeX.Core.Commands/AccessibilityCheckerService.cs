@@ -22,7 +22,8 @@ public enum AccessibilityIssueKind
     ChartMissingAxisTitle,
     GenericChartAxisTitle,
     LowContrastCellText,
-    LowContrastChartText
+    LowContrastChartText,
+    LowContrastObjectText
 }
 
 public sealed record AccessibilityIssue(
@@ -34,6 +35,8 @@ public sealed record AccessibilityIssue(
 
 public static class AccessibilityCheckerService
 {
+    private const double DefaultObjectTextFontSize = 11d;
+
     public static IReadOnlyList<AccessibilityIssue> FindIssues(Workbook workbook)
     {
         var issues = new List<AccessibilityIssue>();
@@ -85,6 +88,7 @@ public static class AccessibilityCheckerService
                     continue;
 
                 AddAltTextIssue(issues, sheet, textBox.Anchor, "Text box", textBox.AltText);
+                AddLowContrastTextBoxTextIssue(issues, workbook, sheet, textBox);
             }
 
             foreach (var (address, target) in sheet.Hyperlinks)
@@ -355,6 +359,34 @@ public static class AccessibilityCheckerService
                 $"Cell text should have at least {contrast.MinimumContrastRatio:0.0}:1 contrast against its fill."));
         }
     }
+
+    private static void AddLowContrastTextBoxTextIssue(
+        List<AccessibilityIssue> issues,
+        Workbook workbook,
+        Sheet sheet,
+        TextBoxModel textBox)
+    {
+        if (string.IsNullOrWhiteSpace(textBox.Text))
+            return;
+
+        var textColor = ResolveDefaultObjectTextColor(workbook.Theme);
+        var background = textBox.GetEffectiveFillColor(workbook.Theme, CellColor.White);
+        var minimumContrastRatio = MinimumTextContrastRatio(DefaultObjectTextFontSize, bold: false);
+        if (ContrastRatio(textColor, background) >= minimumContrastRatio)
+            return;
+
+        issues.Add(new AccessibilityIssue(
+            AccessibilityIssueKind.LowContrastObjectText,
+            sheet.Id,
+            sheet.Name,
+            textBox.Anchor.ToA1(),
+            $"Text box text should have at least {minimumContrastRatio:0.0}:1 contrast against its fill."));
+    }
+
+    private static CellColor ResolveDefaultObjectTextColor(WorkbookTheme theme) =>
+        theme.ObjectDefaults?.Text?.TextThemeColor?.Resolve(theme) ??
+        theme.ObjectDefaults?.Text?.TextColor ??
+        CellColor.Black;
 
     private static ConditionalContrastRuleSet? GetConditionalContrastRules(
         Workbook workbook,
