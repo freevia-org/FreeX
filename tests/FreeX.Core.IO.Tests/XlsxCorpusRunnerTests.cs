@@ -625,6 +625,36 @@ public class XlsxCorpusRunnerTests
     }
 
     [Fact]
+    public void GeneratedLinkedDataTypesRetentionPackage_LinksRichValueDataToStructurePart()
+    {
+        using var package = XlsxCorpusFixtureFactory.CreateKnownGapRetentionPackage("generated-linked-data-types-001");
+        var report = XlsxFeatureInspector.Inspect(package);
+        report.Features.Select(feature => feature.Kind).Distinct().Should().BeEquivalentTo(
+            new[] { XlsxUnsupportedFeatureKind.LinkedDataTypes });
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+
+        var richValueDataEntry = archive.GetEntry("xl/richData/rdrichvalue.xml");
+        var richValueStructureEntry = archive.GetEntry("xl/richData/rdRichValueStructure.xml");
+        var richValueDataRelsEntry = archive.GetEntry("xl/richData/_rels/rdrichvalue.xml.rels");
+        richValueDataEntry.Should().NotBeNull();
+        richValueStructureEntry.Should().NotBeNull();
+        richValueDataRelsEntry.Should().NotBeNull();
+
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XDocument richValueDataRelsXml;
+        using (var stream = richValueDataRelsEntry!.Open())
+            richValueDataRelsXml = XDocument.Load(stream);
+
+        richValueDataRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Where(relationship =>
+                relationship.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValueStructure" &&
+                relationship.Attribute("Target")?.Value == "rdRichValueStructure.xml")
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public void GeneratedMetadataPassRows_RetainCriticalPackagePartsAfterModelEdit()
     {
         var rows = ReadManifestRows()
