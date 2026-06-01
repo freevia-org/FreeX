@@ -244,6 +244,51 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void Benchmark_SaveStyleOnlyWorkbook_ReportsTiming()
+    {
+        const int iterations = 3;
+        var workbook = CreateStyleOnlyModelWorkbook();
+        var adapter = new XlsxFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_SAVE_STYLE_ONLY " +
+            $"sheets={StyleOnlySaveSheetCount} rows={StyleOnlySaveRowsPerSheet} " +
+            $"style_only_cols={StyleOnlySaveColumnsPerSheet} run_width={StyleOnlySaveRunWidth} " +
+            $"style_only_cells={StyleOnlySaveSheetCount * StyleOnlySaveRowsPerSheet * StyleOnlySaveColumnsPerSheet} " +
+            $"steps={iterations} package_bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Benchmark_SaveLoadedDenseWorkbook_ReportsTiming()
     {
         const int iterations = 3;
@@ -793,6 +838,10 @@ public sealed class XlsxFileAdapterPerformanceTests
     private const int DenseSheetCount = 8;
     private const int DenseRowsPerSheet = 80;
     private const int DenseColumnsPerSheet = 24;
+    private const int StyleOnlySaveSheetCount = 2;
+    private const int StyleOnlySaveRowsPerSheet = 600;
+    private const int StyleOnlySaveColumnsPerSheet = 72;
+    private const int StyleOnlySaveRunWidth = 8;
     private const int WorksheetNativeMetadataSheetCount = 8;
     private const int WorksheetNativeMetadataRowsPerSheet = 40;
     private const int WorksheetReplayMetadataSheetCount = 8;
@@ -909,6 +958,49 @@ public sealed class XlsxFileAdapterPerformanceTests
                     sheet.SetCell(
                         new CellAddress(sheet.Id, row, col),
                         new NumberValue(row * col + sheetIndex));
+                }
+            }
+        }
+
+        return workbook;
+    }
+
+    private static Workbook CreateStyleOnlyModelWorkbook()
+    {
+        var workbook = new Workbook("Style-only IO");
+        var styleIds = new[]
+        {
+            workbook.RegisterStyle(new CellStyle
+            {
+                FillColor = new CellColor(221, 235, 247),
+                BorderBottom = new CellBorder(BorderStyle.Thin, new CellColor(91, 155, 213))
+            }),
+            workbook.RegisterStyle(new CellStyle
+            {
+                FillColor = new CellColor(226, 239, 218),
+                BorderBottom = new CellBorder(BorderStyle.Thin, new CellColor(112, 173, 71))
+            }),
+            workbook.RegisterStyle(new CellStyle
+            {
+                FillColor = new CellColor(252, 228, 214),
+                BorderBottom = new CellBorder(BorderStyle.Thin, new CellColor(237, 125, 49))
+            })
+        };
+
+        for (var sheetIndex = 1; sheetIndex <= StyleOnlySaveSheetCount; sheetIndex++)
+        {
+            var sheet = workbook.AddSheet($"Styled blanks {sheetIndex}");
+            for (uint row = 1; row <= StyleOnlySaveRowsPerSheet; row++)
+            {
+                sheet.SetCell(
+                    new CellAddress(sheet.Id, row, 1),
+                    new NumberValue(row + (uint)sheetIndex));
+
+                for (uint col = 3; col < 3 + StyleOnlySaveColumnsPerSheet; col++)
+                {
+                    var runIndex = (col - 3) / StyleOnlySaveRunWidth;
+                    var styleIndex = (int)((runIndex + row + (uint)sheetIndex) % (uint)styleIds.Length);
+                    sheet.SetStyleOnly(row, col, styleIds[styleIndex]);
                 }
             }
         }
