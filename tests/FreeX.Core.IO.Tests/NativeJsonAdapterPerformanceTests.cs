@@ -136,12 +136,75 @@ public sealed class NativeJsonAdapterPerformanceTests
         allocatedBytes.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void Benchmark_SaveWorkbookReferences_ReportsTimingAndAllocatedBytes()
+    {
+        const int iterations = 3;
+        var workbook = CreateWorkbookReferencesWorkbook();
+        var adapter = new NativeJsonAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF NATIVE_JSON_SAVE_WORKBOOK_REFERENCES " +
+            $"sheets={ReferenceSheetCount} watched={ReferenceWatchesPerSheet * ReferenceSheetCount:N0} " +
+            $"scenarios={ReferenceScenarioCount:N0} changes_per_scenario={ReferenceScenarioChangesPerScenario:N0} " +
+            $"steps={iterations} bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+        allocatedBytes.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void SaveWorkbookReferences_UsesIndexedSheetLookup()
+    {
+        var source = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "NativeJsonAdapter.Save.cs"));
+
+        source.Should().Contain("workbook.GetSheet(address.Sheet)");
+        source.Should().Contain("workbook.GetSheet(change.Address.Sheet)");
+        source.Should().NotContain("workbook.Sheets.FirstOrDefault(s => s.Id.Equals(address.Sheet))");
+        source.Should().NotContain("workbook.Sheets.FirstOrDefault(s => s.Id.Equals(change.Address.Sheet))");
+    }
+
     private const int DenseSheetCount = 4;
     private const int DenseRowsPerSheet = 160;
     private const int DenseColumnsPerSheet = 80;
     private const int RepeatedStyleSheetCount = 3;
     private const int RepeatedStyleRowsPerSheet = 140;
     private const int RepeatedStyleColumnsPerSheet = 70;
+    private const int ReferenceSheetCount = 32;
+    private const int ReferenceWatchesPerSheet = 80;
+    private const int ReferenceScenarioCount = 240;
+    private const int ReferenceScenarioChangesPerScenario = 12;
 
     private static Workbook CreateDenseWorkbook()
     {
@@ -213,5 +276,57 @@ public sealed class NativeJsonAdapterPerformanceTests
         }
 
         return workbook;
+    }
+
+    private static Workbook CreateWorkbookReferencesWorkbook()
+    {
+        var workbook = new Workbook("Native JSON Workbook References");
+        var sheets = new List<Sheet>(ReferenceSheetCount);
+        for (var sheetIndex = 1; sheetIndex <= ReferenceSheetCount; sheetIndex++)
+            sheets.Add(workbook.AddSheet($"Reference {sheetIndex}"));
+
+        foreach (var sheet in sheets)
+        {
+            for (uint row = 1; row <= ReferenceWatchesPerSheet; row++)
+            {
+                var address = new CellAddress(sheet.Id, row, 1);
+                sheet.SetCell(address, new NumberValue(row));
+                workbook.WatchedCells.Add(address);
+            }
+        }
+
+        for (var scenarioIndex = 0; scenarioIndex < ReferenceScenarioCount; scenarioIndex++)
+        {
+            var changes = new List<ScenarioCellValue>(ReferenceScenarioChangesPerScenario);
+            for (var changeIndex = 0; changeIndex < ReferenceScenarioChangesPerScenario; changeIndex++)
+            {
+                var sheet = sheets[(scenarioIndex + changeIndex) % sheets.Count];
+                var row = (uint)(1 + (scenarioIndex + changeIndex) % ReferenceWatchesPerSheet);
+                var address = new CellAddress(sheet.Id, row, (uint)(2 + changeIndex % 4));
+                changes.Add(new ScenarioCellValue(address, new NumberValue(scenarioIndex * 100 + changeIndex)));
+            }
+
+            workbook.Scenarios.Add(new WorkbookScenario(
+                $"Scenario {scenarioIndex + 1}",
+                changes,
+                Comment: "Reference-heavy save benchmark"));
+        }
+
+        return workbook;
+    }
+
+    private static string FindRepoFile(params string[] relativeParts)
+    {
+        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = dir.Parent;
+        }
+
+        return Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(relativeParts).ToArray());
     }
 }
