@@ -57,15 +57,24 @@ public static partial class DataValidationService
     /// Returns all validation rules that apply to the given cell address.
     /// </summary>
     public static IEnumerable<DataValidation> GetApplicable(Sheet sheet, CellAddress addr)
-        => sheet.DataValidations.Where(dv => AppliesTo(dv, addr));
+    {
+        foreach (var rule in sheet.DataValidations)
+        {
+            if (AppliesTo(rule, addr))
+                yield return rule;
+        }
+    }
 
     public static bool AppliesTo(DataValidation dv, CellAddress addr) =>
-        dv.AppliesTo.Contains(addr) || dv.AdditionalRanges.Any(range => range.Contains(addr));
+        dv.AppliesTo.Contains(addr) || AdditionalRangeContains(dv.AdditionalRanges, addr);
 
     public static InputPrompt? GetInputPrompt(Sheet sheet, CellAddress addr)
     {
-        foreach (var rule in GetApplicable(sheet, addr))
+        foreach (var rule in sheet.DataValidations)
         {
+            if (!AppliesTo(rule, addr))
+                continue;
+
             if (!rule.ShowInputMessage)
                 continue;
 
@@ -78,6 +87,17 @@ public static partial class DataValidationService
         }
 
         return null;
+    }
+
+    private static bool AdditionalRangeContains(IReadOnlyList<GridRange> ranges, CellAddress addr)
+    {
+        for (var i = 0; i < ranges.Count; i++)
+        {
+            if (ranges[i].Contains(addr))
+                return true;
+        }
+
+        return false;
     }
 
     public static IReadOnlyList<string> GetListItems(DataValidation dv, Sheet sheet, Workbook? workbook = null)
