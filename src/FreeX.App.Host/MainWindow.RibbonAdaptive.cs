@@ -202,18 +202,36 @@ public partial class MainWindow
         }
 
         var appliedCorrection = false;
-        var previousStates = plannedStates.ToArray();
+        var previousState = plannedStates[primaryIndex];
         plannedStates[primaryIndex] = RibbonAdaptiveGroupState.Full;
-        appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
+        appliedCorrection |= ApplyRibbonAdaptiveStateAt(
+            groupSnapshots,
+            collapsedButtons,
+            primaryIndex,
+            plannedStates[primaryIndex],
+            previousState,
+            availableWidth) > 0;
 
         var protectedGroupIndexes = GetMeasuredRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
         {
-            previousStates = plannedStates.ToArray();
-            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: primaryIndex == 0, protectedGroupIndexes))
+            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(
+                    plannedStates,
+                    preserveFirstGroup: primaryIndex == 0,
+                    protectedGroupIndexes,
+                    out var changedIndex,
+                    out previousState))
+            {
                 break;
+            }
 
-            appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
+            appliedCorrection |= ApplyRibbonAdaptiveStateAt(
+                groupSnapshots,
+                collapsedButtons,
+                changedIndex,
+                plannedStates[changedIndex],
+                previousState,
+                availableWidth) > 0;
         }
 
         return appliedCorrection;
@@ -450,11 +468,23 @@ public partial class MainWindow
         var runtimeVisibilityProtectedGroupIndexes = GetMeasuredRuntimeVisibilityProtectedGroupIndexes(adaptiveGroups, availableWidth, selectedTabHeader);
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
         {
-            var previousStates = plannedStates.ToArray();
-            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: availableWidth > 760, protectedGroupIndexes))
+            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(
+                    plannedStates,
+                    preserveFirstGroup: availableWidth > 760,
+                    protectedGroupIndexes,
+                    out var changedIndex,
+                    out var previousState))
+            {
                 break;
+            }
 
-            appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
+            appliedCorrection |= ApplyRibbonAdaptiveStateAt(
+                groupSnapshots,
+                collapsedButtons,
+                changedIndex,
+                plannedStates[changedIndex],
+                previousState,
+                availableWidth) > 0;
         }
 
         var relaxedProtectedGroupIndexes = availableWidth >= 1000
@@ -462,11 +492,23 @@ public partial class MainWindow
             : runtimeVisibilityProtectedGroupIndexes;
         while (RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
         {
-            var previousStates = plannedStates.ToArray();
-            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(plannedStates, preserveFirstGroup: false, relaxedProtectedGroupIndexes))
+            if (!RibbonAdaptiveLayoutEngine.TryCollapseOneMoreGroup(
+                    plannedStates,
+                    preserveFirstGroup: false,
+                    relaxedProtectedGroupIndexes,
+                    out var changedIndex,
+                    out var previousState))
+            {
                 break;
+            }
 
-            appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
+            appliedCorrection |= ApplyRibbonAdaptiveStateAt(
+                groupSnapshots,
+                collapsedButtons,
+                changedIndex,
+                plannedStates[changedIndex],
+                previousState,
+                availableWidth) > 0;
         }
 
         return appliedCorrection;
@@ -605,18 +647,28 @@ public partial class MainWindow
                 if (!RibbonAdaptiveLayoutEngine.TryGetNextExpandedState(currentState, out var expandedState))
                     continue;
 
-                var previousStates = plannedStates.ToArray();
                 plannedStates[index] = expandedState;
-                appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, previousStates, availableWidth) > 0;
+                appliedCorrection |= ApplyRibbonAdaptiveStateAt(
+                    groupSnapshots,
+                    collapsedButtons,
+                    index,
+                    expandedState,
+                    currentState,
+                    availableWidth) > 0;
                 if (!RibbonRowOverflowsMeasuredCached(activePanel, measurementCacheKey, availableWidth, plannedStates))
                 {
                     madeProgress = true;
                     continue;
                 }
 
-                var expandedStates = plannedStates.ToArray();
                 plannedStates[index] = currentState;
-                appliedCorrection |= ApplyRibbonAdaptiveStates(groupSnapshots, collapsedButtons, plannedStates, expandedStates, availableWidth) > 0;
+                appliedCorrection |= ApplyRibbonAdaptiveStateAt(
+                    groupSnapshots,
+                    collapsedButtons,
+                    index,
+                    currentState,
+                    expandedState,
+                    availableWidth) > 0;
             }
         }
 
@@ -690,6 +742,26 @@ public partial class MainWindow
             collapsedButtons,
             plannedStates,
             previousStates,
+            availableWidth);
+        _ribbonAdaptiveStateApplyCount++;
+        _ribbonAdaptiveStateChangedGroupCount += changedGroupCount;
+        return changedGroupCount;
+    }
+
+    private int ApplyRibbonAdaptiveStateAt(
+        IReadOnlyList<RibbonCompactGroupSnapshot> groupSnapshots,
+        IReadOnlyList<Button> collapsedButtons,
+        int index,
+        RibbonAdaptiveGroupState plannedState,
+        RibbonAdaptiveGroupState previousState,
+        double availableWidth = 0)
+    {
+        var changedGroupCount = RibbonAdaptiveStateApplicator.ApplyStateAt(
+            groupSnapshots,
+            collapsedButtons,
+            index,
+            plannedState,
+            previousState,
             availableWidth);
         _ribbonAdaptiveStateApplyCount++;
         _ribbonAdaptiveStateChangedGroupCount += changedGroupCount;
