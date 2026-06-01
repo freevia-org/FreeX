@@ -297,6 +297,32 @@ public partial class MainWindow
                 normalizedCommandName is "calculate now" or
                     "calculate sheet" or
                     "calculation options",
+            "DataGetTransformGroup" =>
+                normalizedCommandName is "get data",
+            "DataQueriesConnectionsGroup" =>
+                normalizedCommandName is "refresh all",
+            "DataToolsGroup" =>
+                normalizedCommandName is "text to columns" or
+                    "flash fill" or
+                    "remove duplicates" or
+                    "data validation" or
+                    "consolidate",
+            "DataForecastGroup" =>
+                normalizedCommandName is "what-if analysis" or
+                    "forecast sheet",
+            "DataOutlineGroup" =>
+                normalizedCommandName is "group" or
+                    "ungroup" or
+                    "subtotal" or
+                    "collapse group" or
+                    "expand group",
+            "HelpHelpGroup" =>
+                normalizedCommandName is "help online" or
+                    "feedback" or
+                    "copy diagnostics" or
+                    "check for updates" or
+                    "about freex" or
+                    "legal notices",
             _ => false
         };
     }
@@ -1541,12 +1567,16 @@ public partial class MainWindow
             return false;
 
         var label = GetRibbonButtonDisplayLabel(button);
+        var plannedLayout = RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
         var layoutKind = IsFixedHeightIconOnlyRibbonButton(button, hadUnreplacedIcon, hadRibbonCommandLabel) ||
                          (!hadUnreplacedIcon &&
                           hadRibbonCommandLabel &&
-                          button.Height is > 0 and <= 34)
+                          button.Height is > 0 and <= 34 &&
+                          !ShouldPromoteExplicitCompactRibbonButton(button, commandName, plannedLayout))
             ? RibbonCommandLayoutKind.Small
-            : RibbonCommandPresentationPlanner.GetLayoutKind(commandName, label);
+            : plannedLayout;
+        if (ShouldUsePlannedRibbonCommandWidth(button, commandName, layoutKind))
+            button.Width = 0;
         ApplyRibbonCommandSize(button, layoutKind);
         if (layoutKind is RibbonCommandLayoutKind.Small)
         {

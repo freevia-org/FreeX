@@ -98,14 +98,14 @@ internal static class RibbonAdaptiveTabProfiles
             ],
             RuntimeVisibility:
             [
-                Runtime(1120, "Sort & Filter", RibbonAdaptiveGroupState.IconOnly),
-                Runtime(1120, "Data Tools", RibbonAdaptiveGroupState.IconOnly)
+                Runtime(1465, "Outline", RibbonAdaptiveGroupState.Collapsed),
+                Runtime(1120, "Sort & Filter", RibbonAdaptiveGroupState.IconOnly)
             ],
             ProtectedGroups:
             [
                 Protected(900, ["Data Tools", "Forecast"]),
                 Protected(1120, ["Sort & Filter", "Data Tools", "Forecast"]),
-                Protected(double.PositiveInfinity, ["Sort & Filter"])
+                Protected(double.PositiveInfinity, ["Data Tools", "Forecast"])
             ],
             RequiresMeasuredCorrection: true),
         new(
