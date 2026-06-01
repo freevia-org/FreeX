@@ -119,17 +119,13 @@ internal static partial class XlsxChartXmlWriter
             yield return new XElement(chartExNs + "series",
                 new XAttribute("layoutId", ToChartExSeriesLayoutId(chart.Type)),
                 new XElement(chartExNs + "dataId", new XAttribute("val", dataId)),
-                BuildChartExSeriesLayoutPr(chart, chartExNs),
-                chart.Type == ChartType.Pareto
-                    ? new XElement(chartExNs + "axisId", "1")
-                    : null);
+                BuildChartExSeriesLayoutPr(chart, chartExNs));
 
             if (chart.Type == ChartType.Pareto)
             {
                 yield return new XElement(chartExNs + "series",
                     new XAttribute("layoutId", "paretoLine"),
-                    new XAttribute("ownerIdx", seriesIndex.ToString(CultureInfo.InvariantCulture)),
-                    new XElement(chartExNs + "axisId", "2"));
+                    new XAttribute("ownerIdx", seriesIndex.ToString(CultureInfo.InvariantCulture)));
             }
         }
     }
