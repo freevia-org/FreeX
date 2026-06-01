@@ -13,6 +13,8 @@ public sealed class ToolbarVisualStateCache
     private readonly Queue<Source> _stateOrder = [];
     private Source? _lastSource;
     private ToolbarVisualState? _lastState;
+    private Source? _previousSource;
+    private ToolbarVisualState? _previousState;
 
     public bool TryGet(
         WorkbookId workbookId,
@@ -26,10 +28,16 @@ public sealed class ToolbarVisualStateCache
             return true;
         }
 
+        if (_previousSource == source && _previousState is { } previous)
+        {
+            PromoteRecent(source, previous);
+            state = previous;
+            return true;
+        }
+
         if (_states.TryGetValue(source, out cached))
         {
-            _lastSource = source;
-            _lastState = cached;
+            PromoteRecent(source, cached);
             state = cached;
             return true;
         }
@@ -47,8 +55,7 @@ public sealed class ToolbarVisualStateCache
         _states[source] = state;
         _stateOrder.Enqueue(source);
         TrimCachedStates();
-        _lastSource = source;
-        _lastState = state;
+        PromoteRecent(source, state);
         return state;
     }
 
@@ -82,6 +89,22 @@ public sealed class ToolbarVisualStateCache
         _stateOrder.Clear();
         _lastSource = null;
         _lastState = null;
+        _previousSource = null;
+        _previousState = null;
+    }
+
+    private void PromoteRecent(Source source, ToolbarVisualState state)
+    {
+        if (_lastSource == source)
+        {
+            _lastState = state;
+            return;
+        }
+
+        _previousSource = _lastSource;
+        _previousState = _lastState;
+        _lastSource = source;
+        _lastState = state;
     }
 
     private void TrimCachedStates()
