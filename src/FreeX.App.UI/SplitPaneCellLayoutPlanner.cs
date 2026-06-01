@@ -179,16 +179,24 @@ public static class SplitPaneCellLayoutPlanner
             if (mergedRegions is not { Count: > 0 } || cells.Count == 0)
                 return Empty;
 
-            var queryRows = BuildQueryRows(cells);
+            var queryCells = BuildQueryCells(cells);
             var mergesByRow = new Dictionary<uint, List<GridRange>>();
             foreach (var mergedRegion in mergedRegions)
             {
-                var startRow = Math.Max(mergedRegion.Start.Row, queryRows.MinRow);
-                var endRow = Math.Min(mergedRegion.End.Row, queryRows.MaxRow);
+                if (mergedRegion.End.Row < queryCells.MinRow ||
+                    mergedRegion.Start.Row > queryCells.MaxRow ||
+                    mergedRegion.End.Col < queryCells.MinCol ||
+                    mergedRegion.Start.Col > queryCells.MaxCol)
+                {
+                    continue;
+                }
+
+                var startRow = Math.Max(mergedRegion.Start.Row, queryCells.MinRow);
+                var endRow = Math.Min(mergedRegion.End.Row, queryCells.MaxRow);
                 if (startRow > endRow)
                     continue;
 
-                AddMergeRows(mergesByRow, queryRows, mergedRegion, startRow, endRow);
+                AddMergeRows(mergesByRow, queryCells, mergedRegion, startRow, endRow);
             }
 
             return new MergeRangeIndex(mergesByRow);
@@ -196,18 +204,18 @@ public static class SplitPaneCellLayoutPlanner
 
         private static void AddMergeRows(
             Dictionary<uint, List<GridRange>> mergesByRow,
-            QueryRows queryRows,
+            QueryCells queryCells,
             GridRange mergedRegion,
             uint startRow,
             uint endRow)
         {
             var intersectedRowSpan = endRow - startRow + 1;
-            if (intersectedRowSpan <= queryRows.Rows.Count)
+            if (intersectedRowSpan <= queryCells.Rows.Count)
             {
                 var row = startRow;
                 while (true)
                 {
-                    if (queryRows.Rows.Contains(row))
+                    if (queryCells.Rows.Contains(row))
                         AddMergeRow(mergesByRow, row, mergedRegion);
 
                     if (row == endRow)
@@ -218,7 +226,7 @@ public static class SplitPaneCellLayoutPlanner
                 return;
             }
 
-            foreach (var row in queryRows.Rows)
+            foreach (var row in queryCells.Rows)
             {
                 if (row >= startRow && row <= endRow)
                     AddMergeRow(mergesByRow, row, mergedRegion);
@@ -239,11 +247,13 @@ public static class SplitPaneCellLayoutPlanner
             rowMerges.Add(mergedRegion);
         }
 
-        private static QueryRows BuildQueryRows(IReadOnlyList<DisplayCell> cells)
+        private static QueryCells BuildQueryCells(IReadOnlyList<DisplayCell> cells)
         {
             var rows = new HashSet<uint>();
             var minRow = uint.MaxValue;
             var maxRow = uint.MinValue;
+            var minCol = uint.MaxValue;
+            var maxCol = uint.MinValue;
 
             foreach (var cell in cells)
             {
@@ -253,9 +263,13 @@ public static class SplitPaneCellLayoutPlanner
                     minRow = cell.Row;
                 if (cell.Row > maxRow)
                     maxRow = cell.Row;
+                if (cell.Col < minCol)
+                    minCol = cell.Col;
+                if (cell.Col > maxCol)
+                    maxCol = cell.Col;
             }
 
-            return new QueryRows(rows, minRow, maxRow);
+            return new QueryCells(rows, minRow, maxRow, minCol, maxCol);
         }
 
         public GridRange? Find(uint row, uint col)
@@ -272,9 +286,11 @@ public static class SplitPaneCellLayoutPlanner
             return null;
         }
 
-        private readonly record struct QueryRows(
+        private readonly record struct QueryCells(
             HashSet<uint> Rows,
             uint MinRow,
-            uint MaxRow);
+            uint MaxRow,
+            uint MinCol,
+            uint MaxCol);
     }
 }
