@@ -284,6 +284,11 @@ public sealed class MainWindowMouseSelectionSourceTests
         var cellSelection = mouseDown[
             mouseDown.IndexOf("if (hitAddress is { } newAddr)", StringComparison.Ordinal)..];
 
+        mouseDown.Should().Contain("if (pos.X >= 0 && pos.Y >= 0 && (pos.X < rowHeaderW || pos.Y < colHeaderH))");
+        mouseDown.IndexOf("if (pos.X >= 0 && pos.Y >= 0 && (pos.X < rowHeaderW || pos.Y < colHeaderH))", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseDown.IndexOf("if (pos.X < rowHeaderW && pos.Y < colHeaderH)", StringComparison.Ordinal));
+
         topLeftSelection.Should().Contain("SelectAll();");
         topLeftSelection.Should().Contain("e.Handled = true;");
         topLeftSelection.IndexOf("e.Handled = true;", StringComparison.Ordinal)
