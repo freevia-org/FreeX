@@ -22,6 +22,8 @@ internal static class NativeJsonScalarValueMapper
         BlankValue => default,
         NumberValue n when double.IsFinite(n.Value) => new SerializedScalarValue(FormatNumber(n.Value), "n"),
         NumberValue n => new SerializedScalarValue(FormatNumber(n.Value), "t"),
+        DateTimeValue d when double.IsFinite(d.Value) => new SerializedScalarValue(FormatNumber(d.Value), "d"),
+        DateTimeValue d => new SerializedScalarValue(FormatNumber(d.Value), "t"),
         BoolValue b => new SerializedScalarValue(b.Value ? "TRUE" : "FALSE", "b"),
         TextValue t => new SerializedScalarValue(t.Value, "t"),
         ErrorValue e => new SerializedScalarValue(e.Code, "e"),
@@ -32,6 +34,7 @@ internal static class NativeJsonScalarValueMapper
     {
         BlankValue => null,
         NumberValue n => FormatNumber(n.Value),
+        DateTimeValue d => FormatNumber(d.Value),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         TextValue t => t.Value,
         ErrorValue e => e.Code,
@@ -42,6 +45,8 @@ internal static class NativeJsonScalarValueMapper
     {
         NumberValue n when double.IsFinite(n.Value) => "n",
         NumberValue => "t",
+        DateTimeValue d when double.IsFinite(d.Value) => "d",
+        DateTimeValue => "t",
         BoolValue => "b",
         TextValue => "t",
         ErrorValue => "e",
@@ -57,6 +62,9 @@ internal static class NativeJsonScalarValueMapper
         {
             "n" => TryParseFiniteNumber(value, out var d)
                 ? new NumberValue(d)
+                : new TextValue(value),
+            "d" => TryParseFiniteNumber(value, out var d)
+                ? new DateTimeValue(d)
                 : new TextValue(value),
             "b" => bool.TryParse(value, out var b)
                 ? new BoolValue(b)
