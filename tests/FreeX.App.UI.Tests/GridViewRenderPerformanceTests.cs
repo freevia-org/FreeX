@@ -155,20 +155,30 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void RenderHeaders_AvoidsPerHeaderLinqSelectionScans()
+    public void RenderHeaders_WalksSelectionIntervalsInsteadOfScanningRangesPerHeader()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
         var renderSelectedHeaders = source[
             source.IndexOf("private void RenderSelectedHeaders(", StringComparison.Ordinal)..
             source.IndexOf("private void DrawColumnHeader(", StringComparison.Ordinal)];
+        var buildSelectionIntervals = source[
+            source.IndexOf("private static IReadOnlyList<HeaderSelectionInterval> BuildHeaderSelectionIntervals(", StringComparison.Ordinal)..
+            source.IndexOf("private static bool IsHeaderSelected(", StringComparison.Ordinal)];
+        var isHeaderSelected = source[
+            source.IndexOf("private static bool IsHeaderSelected(", StringComparison.Ordinal)..
+            source.IndexOf("internal static string FormatColumnHeader", StringComparison.Ordinal)];
         var renderFreezeDivider = source[
             source.IndexOf("private void RenderFreezeDivider(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void RenderHeaders(DrawingContext dc)", StringComparison.Ordinal)];
 
-        renderSelectedHeaders.Should().Contain("IsColumnHeaderSelected(col.Col, selectedRanges, selRange)");
-        renderSelectedHeaders.Should().Contain("IsRowHeaderSelected(row.Row, selectedRanges, selRange)");
-        source.Should().Contain("foreach (var range in selectedRanges)");
+        renderSelectedHeaders.Should().Contain("BuildColumnHeaderSelectionIntervals(selectedRanges, selRange)");
+        renderSelectedHeaders.Should().Contain("BuildRowHeaderSelectionIntervals(selectedRanges, selRange)");
+        renderSelectedHeaders.Should().Contain("IsHeaderSelected(col.Col, columnIntervals, ref columnIntervalIndex)");
+        renderSelectedHeaders.Should().Contain("IsHeaderSelected(row.Row, rowIntervals, ref rowIntervalIndex)");
+        buildSelectionIntervals.Should().Contain("intervals.Sort");
+        isHeaderSelected.Should().Contain("while (intervalIndex < intervals.Count && index > intervals[intervalIndex].End)");
         renderSelectedHeaders.Should().NotContain(".Any(");
+        renderSelectedHeaders.Should().NotContain("foreach (var range in selectedRanges)");
         renderFreezeDivider.Should().Contain("FindRowMetric(Viewport.RowMetrics, fp.Rows)");
         renderFreezeDivider.Should().Contain("FindColMetric(Viewport.ColMetrics, fp.Cols)");
         renderFreezeDivider.Should().NotContain("FirstOrDefault");
