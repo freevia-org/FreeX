@@ -14,29 +14,53 @@ public sealed class ToolbarVisualStateCache
     private Source? _lastSource;
     private ToolbarVisualState? _lastState;
 
-    public ToolbarVisualState GetOrCreate(
+    public bool TryGet(
         WorkbookId workbookId,
         StyleId styleId,
-        Func<ToolbarVisualState> create)
+        out ToolbarVisualState state)
     {
         var source = new Source(workbookId, styleId);
         if (_lastSource == source && _lastState is { } cached)
-            return cached;
+        {
+            state = cached;
+            return true;
+        }
 
         if (_states.TryGetValue(source, out cached))
         {
             _lastSource = source;
             _lastState = cached;
-            return cached;
+            state = cached;
+            return true;
         }
 
-        var state = create();
+        state = null!;
+        return false;
+    }
+
+    public ToolbarVisualState AddOrUpdate(
+        WorkbookId workbookId,
+        StyleId styleId,
+        ToolbarVisualState state)
+    {
+        var source = new Source(workbookId, styleId);
         _states[source] = state;
         _stateOrder.Enqueue(source);
         TrimCachedStates();
         _lastSource = source;
         _lastState = state;
         return state;
+    }
+
+    public ToolbarVisualState GetOrCreate(
+        WorkbookId workbookId,
+        StyleId styleId,
+        Func<ToolbarVisualState> create)
+    {
+        if (TryGet(workbookId, styleId, out var cached))
+            return cached;
+
+        return AddOrUpdate(workbookId, styleId, create());
     }
 
     public bool TryGetCurrent(WorkbookId workbookId, StyleId styleId, out ToolbarVisualState state)

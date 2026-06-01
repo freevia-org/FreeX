@@ -168,13 +168,12 @@ public partial class MainWindow
             return;
         }
         var styleId = sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default;
-        if (_toolbarVisualStateCache.TryGetCurrent(_workbook.Id, styleId, out _))
-            return;
-
-        var state = _toolbarVisualStateCache.GetOrCreate(
-            _workbook.Id,
-            styleId,
-            () => ToolbarVisualState.From(_workbook.GetStyle(styleId)));
+        var state = _toolbarVisualStateCache.TryGet(_workbook.Id, styleId, out var cachedState)
+            ? cachedState
+            : _toolbarVisualStateCache.AddOrUpdate(
+                _workbook.Id,
+                styleId,
+                ToolbarVisualState.From(_workbook.GetStyle(styleId)));
         if (state == _lastToolbarVisualState)
             return;
 
