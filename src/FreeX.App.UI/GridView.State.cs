@@ -194,8 +194,10 @@ public partial class GridView
             foreach (var rowMetric in rowMetrics)
             {
                 var row = rowMetric.Row;
-                if (row < merge.Start.Row || row > merge.End.Row)
+                if (row < merge.Start.Row)
                     continue;
+                if (row > merge.End.Row)
+                    break;
 
                 if (!result.TryGetValue(row, out var rowMerges))
                 {
