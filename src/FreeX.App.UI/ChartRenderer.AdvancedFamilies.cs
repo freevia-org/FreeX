@@ -17,7 +17,8 @@ public static partial class ChartRenderer
         uint dataStartRow, uint endRow, uint dataStartCol,
         WorkbookTheme theme)
     {
-        var values = new List<(string Label, double Value)>();
+        var totalsByLabel = new Dictionary<string, double>(StringComparer.Ordinal);
+        var labels = new List<string>();
         var total = 0.0;
         for (uint r = dataStartRow; r <= endRow; r++)
         {
@@ -27,14 +28,21 @@ public static partial class ChartRenderer
                 var label = (int)(r - dataStartRow) < categories.Count
                     ? categories[(int)(r - dataStartRow)]
                     : $"Item {r - dataStartRow + 1}";
-                values.Add((label, v));
+                if (!totalsByLabel.ContainsKey(label))
+                    labels.Add(label);
+                totalsByLabel[label] = totalsByLabel.TryGetValue(label, out var current) ? current + v : v;
                 total += v;
             }
         }
 
+        var values = new List<(string Label, double Value)>(labels.Count);
+        for (var i = 0; i < labels.Count; i++)
+            values.Add((labels[i], totalsByLabel[labels[i]]));
         values.Sort((a, b) => b.Value.CompareTo(a.Value));
         if (values.Count == 0) return model;
 
+        // Excel-native Pareto carries owner-linked chartEx metadata that ChartModel does not expose;
+        // this renderer keeps a local approximation with aggregated bars and a percentage axis.
         var bars = new RectangleBarSeries { FillColor = OxyColor.FromRgb(68, 114, 196) };
         var cumulativeLine = new LineSeries
         {
@@ -71,7 +79,9 @@ public static partial class ChartRenderer
             Key = "right",
             Title = "%",
             Minimum = 0,
-            Maximum = 100
+            Maximum = 100,
+            MajorStep = 20,
+            LabelFormatter = value => value.ToString("0", CultureInfo.InvariantCulture) + "%"
         });
 
         return model;
