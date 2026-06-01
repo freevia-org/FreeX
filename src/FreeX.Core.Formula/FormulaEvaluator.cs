@@ -29,6 +29,10 @@ public sealed class FormulaEvaluator
     private static readonly object ParsedFormulaCacheGate = new();
     private static readonly Dictionary<string, FormulaNode> ParsedFormulaCache = new(StringComparer.Ordinal);
     private static readonly Queue<string> ParsedFormulaCacheOrder = new();
+    private static readonly BoolValue TrueValue = new(true);
+    private static readonly BoolValue FalseValue = new(false);
+
+    private SheetEvalContext? _singleSheetEvalContext;
 
     private static readonly HashSet<string> AggregateFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -180,7 +184,9 @@ public sealed class FormulaEvaluator
         {
             _evalDepth = 0;
             var ast = GetOrParseFormula(formulaText);
-            var context = new SheetEvalContext(sheet, workbook, this, currentCell);
+            var context = workbook is null && currentCell is null
+                ? GetSingleSheetEvalContext(sheet)
+                : new SheetEvalContext(sheet, workbook, this, currentCell);
             return NormalizeTopLevelResult(EvaluateNode(ast, context));
         }
         catch (FormulaEvalException ex)
@@ -201,13 +207,26 @@ public sealed class FormulaEvaluator
         try
         {
             _evalDepth = 0;
-            var context = new SheetEvalContext(sheet, workbook, this, currentCell);
+            var context = workbook is null && currentCell is null
+                ? GetSingleSheetEvalContext(sheet)
+                : new SheetEvalContext(sheet, workbook, this, currentCell);
             return NormalizeTopLevelResult(EvaluateNode(ast, context));
         }
         catch (FormulaEvalException ex)
         {
             return ErrorFromCode(ex.ErrorCode);
         }
+    }
+
+    private SheetEvalContext GetSingleSheetEvalContext(Sheet sheet)
+    {
+        var cached = _singleSheetEvalContext;
+        if (cached is not null && ReferenceEquals(cached.SourceSheet, sheet))
+            return cached;
+
+        cached = new SheetEvalContext(sheet, null, this, null);
+        _singleSheetEvalContext = cached;
+        return cached;
     }
 
     private static ScalarValue NormalizeTopLevelResult(ScalarValue value) =>
@@ -264,7 +283,7 @@ public sealed class FormulaEvaluator
             {
                 NumberNode n => new NumberValue(n.Value),
                 StringNode s => new TextValue(s.Value),
-                BooleanNode b => new BoolValue(b.Value),
+                BooleanNode b => b.Value ? TrueValue : FalseValue,
                 OmittedArgumentNode => BlankValue.Instance,
                 ArrayConstantNode array => EvaluateArrayConstant(array, context),
                 ErrorNode err => err.Error,
@@ -412,12 +431,8 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue PowerScalarOp(ScalarValue left, ScalarValue right)
     {
-        var a = CoerceToNumber(left);
-        var b = CoerceToNumber(right);
-        if (a is ErrorValue errA) return errA;
-        if (b is ErrorValue errB) return errB;
-        double baseVal = ((NumberValue)a).Value;
-        double exp = ((NumberValue)b).Value;
+        if (!TryCoerceToNumberValue(left, out var baseVal)) return NumericCoercionError(left);
+        if (!TryCoerceToNumberValue(right, out var exp)) return NumericCoercionError(right);
         if (baseVal == 0 && exp <= 0) return exp == 0 ? ErrorValue.Num : ErrorValue.DivByZero;
         double result = Math.Pow(baseVal, exp);
         return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
@@ -447,12 +462,8 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue ArithScalarOp(ScalarValue left, ScalarValue right, ArithmeticKind kind)
     {
-        var a = CoerceToNumber(left);
-        var b = CoerceToNumber(right);
-        if (a is ErrorValue errA) return errA;
-        if (b is ErrorValue errB) return errB;
-        var leftNumber = ((NumberValue)a).Value;
-        var rightNumber = ((NumberValue)b).Value;
+        if (!TryCoerceToNumberValue(left, out var leftNumber)) return NumericCoercionError(left);
+        if (!TryCoerceToNumberValue(right, out var rightNumber)) return NumericCoercionError(right);
         double result = kind switch
         {
             ArithmeticKind.Add => leftNumber + rightNumber,
@@ -467,13 +478,10 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue DivideScalarOp(ScalarValue left, ScalarValue right)
     {
-        var a = CoerceToNumber(left);
-        var b = CoerceToNumber(right);
-        if (a is ErrorValue errA) return errA;
-        if (b is ErrorValue errB) return errB;
-        var divisor = ((NumberValue)b).Value;
+        if (!TryCoerceToNumberValue(left, out var dividend)) return NumericCoercionError(left);
+        if (!TryCoerceToNumberValue(right, out var divisor)) return NumericCoercionError(right);
         if (divisor == 0) return ErrorValue.DivByZero;
-        double result = ((NumberValue)a).Value / divisor;
+        double result = dividend / divisor;
         return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
     }
 
@@ -546,7 +554,7 @@ public sealed class FormulaEvaluator
         if (left is ErrorValue errL) return errL;
         if (right is ErrorValue errR) return errR;
         var cmp = CompareValues(left, right);
-        return new BoolValue(cmp == 0);
+        return cmp == 0 ? TrueValue : FalseValue;
     }
 
     private static ScalarValue CompareOpNotEqual(ScalarValue left, ScalarValue right)
@@ -562,7 +570,7 @@ public sealed class FormulaEvaluator
         if (left is ErrorValue errL) return errL;
         if (right is ErrorValue errR) return errR;
         var cmp = CompareValues(left, right);
-        return new BoolValue(cmp != 0);
+        return cmp != 0 ? TrueValue : FalseValue;
     }
 
     private static ScalarValue CompareOpLessThan(ScalarValue left, ScalarValue right)
@@ -578,7 +586,7 @@ public sealed class FormulaEvaluator
         if (left is ErrorValue errL) return errL;
         if (right is ErrorValue errR) return errR;
         var cmp = CompareValues(left, right);
-        return new BoolValue(cmp < 0);
+        return cmp < 0 ? TrueValue : FalseValue;
     }
 
     private static ScalarValue CompareOpGreaterThan(ScalarValue left, ScalarValue right)
@@ -594,7 +602,7 @@ public sealed class FormulaEvaluator
         if (left is ErrorValue errL) return errL;
         if (right is ErrorValue errR) return errR;
         var cmp = CompareValues(left, right);
-        return new BoolValue(cmp > 0);
+        return cmp > 0 ? TrueValue : FalseValue;
     }
 
     private static ScalarValue CompareOpLessOrEqual(ScalarValue left, ScalarValue right)
@@ -610,7 +618,7 @@ public sealed class FormulaEvaluator
         if (left is ErrorValue errL) return errL;
         if (right is ErrorValue errR) return errR;
         var cmp = CompareValues(left, right);
-        return new BoolValue(cmp <= 0);
+        return cmp <= 0 ? TrueValue : FalseValue;
     }
 
     private static ScalarValue CompareOpGreaterOrEqual(ScalarValue left, ScalarValue right)
@@ -626,7 +634,7 @@ public sealed class FormulaEvaluator
         if (left is ErrorValue errL) return errL;
         if (right is ErrorValue errR) return errR;
         var cmp = CompareValues(left, right);
-        return new BoolValue(cmp >= 0);
+        return cmp >= 0 ? TrueValue : FalseValue;
     }
 
     private static int CompareValues(ScalarValue left, ScalarValue right)
@@ -676,9 +684,8 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue NegateScalarOp(ScalarValue v)
     {
-        var n = CoerceToNumber(v);
-        if (n is ErrorValue err) return err;
-        return new NumberValue(-((NumberValue)n).Value);
+        if (!TryCoerceToNumberValue(v, out var number)) return NumericCoercionError(v);
+        return new NumberValue(-number);
     }
 
     private static ScalarValue PercentOp(ScalarValue v)
@@ -686,9 +693,8 @@ public sealed class FormulaEvaluator
 
     private static ScalarValue PercentScalarOp(ScalarValue v)
     {
-        var n = CoerceToNumber(v);
-        if (n is ErrorValue err) return err;
-        return new NumberValue(((NumberValue)n).Value / 100.0);
+        if (!TryCoerceToNumberValue(v, out var number)) return NumericCoercionError(v);
+        return new NumberValue(number / 100.0);
     }
 
     private static ScalarValue ElementwiseUnaryOp(ScalarValue value, Func<ScalarValue, ScalarValue> scalarOp)
@@ -1458,7 +1464,7 @@ public sealed class FormulaEvaluator
                 value = new TextValue(text.Value);
                 return true;
             case BooleanNode boolean:
-                value = new BoolValue(boolean.Value);
+                value = boolean.Value ? TrueValue : FalseValue;
                 return true;
             case NumberNode number:
                 value = new NumberValue(number.Value);
@@ -1840,7 +1846,7 @@ public sealed class FormulaEvaluator
         if (taken is null) return ErrorValue.Value;
         if (taken.Value)  return EvaluateArrayOperand(node.Arguments[1], context);
         if (node.Arguments.Count == 3) return EvaluateArrayOperand(node.Arguments[2], context);
-        return new BoolValue(false);
+        return FalseValue;
     }
 
     private ScalarValue EvaluateIfConditionRange(FunctionCallNode node, IEvalContext context, RangeValue conditionRange)
@@ -1877,7 +1883,7 @@ public sealed class FormulaEvaluator
                     ? trueBranch ??= EvaluateArrayOperand(node.Arguments[1], context)
                     : falseBranch ??= node.Arguments.Count == 3
                         ? EvaluateArrayOperand(node.Arguments[2], context)
-                        : new BoolValue(false);
+                        : FalseValue;
 
                 cells[r, c] = selected is RangeValue selectedRange
                     ? PickRangeElementForArrayResult(selectedRange, r, c, conditionRange.RowCount, conditionRange.ColCount)
@@ -2123,14 +2129,14 @@ public sealed class FormulaEvaluator
         var arg = node.Arguments[0];
         return arg switch
         {
-            CellRefNode cell  => new BoolValue(cell.SheetName is null || context.SheetExists(cell.SheetName)),
-            RangeRefNode rng  => new BoolValue(rng.SheetName is null || context.SheetExists(rng.SheetName)),
-            FullColumnRangeRefNode col => new BoolValue(col.SheetName is null || context.SheetExists(col.SheetName)),
-            FullRowRangeRefNode row => new BoolValue(row.SheetName is null || context.SheetExists(row.SheetName)),
-            NamedRangeNode nm => new BoolValue(context.TryResolveNamedRange(nm.Name) is not null),
+            CellRefNode cell  => cell.SheetName is null || context.SheetExists(cell.SheetName) ? TrueValue : FalseValue,
+            RangeRefNode rng  => rng.SheetName is null || context.SheetExists(rng.SheetName) ? TrueValue : FalseValue,
+            FullColumnRangeRefNode col => col.SheetName is null || context.SheetExists(col.SheetName) ? TrueValue : FalseValue,
+            FullRowRangeRefNode row => row.SheetName is null || context.SheetExists(row.SheetName) ? TrueValue : FalseValue,
+            NamedRangeNode nm => context.TryResolveNamedRange(nm.Name) is not null ? TrueValue : FalseValue,
             FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT"
                 => EvaluateReferenceReturningIsRef(fn, context),
-            _                 => new BoolValue(false)
+            _                 => FalseValue
         };
     }
 
@@ -2139,8 +2145,8 @@ public sealed class FormulaEvaluator
         var value = EvaluateNode(node, context);
 
         return value is ErrorValue error
-            ? error == ErrorValue.Ref ? new BoolValue(false) : error
-            : new BoolValue(true);
+            ? error == ErrorValue.Ref ? FalseValue : error
+            : TrueValue;
     }
 
     private ScalarValue EvaluateIsFormula(FunctionCallNode node, IEvalContext context)
@@ -2156,7 +2162,7 @@ public sealed class FormulaEvaluator
             var cell = sheetName is not null
                 ? context.TryGetCell(sheetName, r.Start.Row, r.Start.Col)
                 : context.TryGetCell(r.Start.Row, r.Start.Col);
-            return new BoolValue(cell?.HasFormula == true);
+            return cell?.HasFormula == true ? TrueValue : FalseValue;
         }
         if (arg is CellRefNode cellRef)
         {
@@ -2165,7 +2171,7 @@ public sealed class FormulaEvaluator
             var cell = cellRef.SheetName is not null
                 ? context.TryGetCell(cellRef.SheetName, cellRef.Row, cellRef.ColumnNumber)
                 : context.TryGetCell(cellRef.Row, cellRef.ColumnNumber);
-            return new BoolValue(cell?.HasFormula == true);
+            return cell?.HasFormula == true ? TrueValue : FalseValue;
         }
         if (arg is RangeRefNode rangeRef)
         {
@@ -2174,7 +2180,7 @@ public sealed class FormulaEvaluator
             var cell = rangeRef.SheetName is not null
                 ? context.TryGetCell(rangeRef.SheetName, rangeRef.Start.Row, rangeRef.Start.ColumnNumber)
                 : context.TryGetCell(rangeRef.Start.Row, rangeRef.Start.ColumnNumber);
-            return new BoolValue(cell?.HasFormula == true);
+            return cell?.HasFormula == true ? TrueValue : FalseValue;
         }
         if (arg is FullColumnRangeRefNode fullColumnRangeRef)
             return EvaluateIsFormula(new FunctionCallNode(node.FunctionName, [ToRangeRef(fullColumnRangeRef)]), context);
@@ -2188,7 +2194,7 @@ public sealed class FormulaEvaluator
             var cell = range.SheetName is not null
                 ? context.TryGetCell(range.SheetName, range.StartRow, range.StartCol)
                 : context.TryGetCell(range.StartRow, range.StartCol);
-            return new BoolValue(cell?.HasFormula == true);
+            return cell?.HasFormula == true ? TrueValue : FalseValue;
         }
         return ErrorValue.Value;
     }
@@ -2611,6 +2617,45 @@ public sealed class FormulaEvaluator
         _ => ErrorValue.Value
     };
 
+    private static bool TryCoerceToNumberValue(ScalarValue value, out double number)
+    {
+        if (value is NumberValue n)
+        {
+            number = n.Value;
+            return true;
+        }
+
+        if (value is BoolValue b)
+        {
+            number = b.Value ? 1 : 0;
+            return true;
+        }
+
+        if (value is BlankValue)
+        {
+            number = 0;
+            return true;
+        }
+
+        if (value is DateTimeValue dt)
+        {
+            number = dt.Value;
+            return true;
+        }
+
+        if (value is TextValue t && ExcelTextNumberParser.TryParse(t.Value, out var parsed))
+        {
+            number = parsed;
+            return true;
+        }
+
+        number = 0;
+        return false;
+    }
+
+    private static ErrorValue NumericCoercionError(ScalarValue value) =>
+        value is ErrorValue error ? error : ErrorValue.Value;
+
     private static string ValueToString(ScalarValue v) => v switch
     {
         TextValue t => t.Value,
@@ -2760,6 +2805,8 @@ public sealed class FormulaEvaluator
         private readonly FreeX.Core.Model.CellAddress? _currentCellAddress;
         private Dictionary<string, FreeX.Core.Model.Sheet?>? _sheetNameCache;
 
+        public readonly Sheet SourceSheet;
+
         public SheetEvalContext(
             Sheet sheet,
             FreeX.Core.Model.Workbook? workbook,
@@ -2767,6 +2814,7 @@ public sealed class FormulaEvaluator
             FreeX.Core.Model.CellAddress? currentCellAddress)
         {
             _sheet = sheet;
+            SourceSheet = sheet;
             _workbook = workbook;
             _evaluator = evaluator;
             _currentCellAddress = currentCellAddress;
