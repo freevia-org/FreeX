@@ -40,6 +40,35 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_SimplifiedStylesheetRoot_GeneratesSpreadsheetMl()
+    {
+        using var source = StreamFromString("<rows><row sheet=\"Simplified\" label=\"Alpha\" amount=\"42.5\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <ss:Workbook xsl:version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="{/rows/row/@sheet}">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="/rows/row/@label" /></ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="/rows/row/@amount" /></ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .Contain("<ss:Workbook")
+            .And.Contain("ss:Name=\"Simplified\"")
+            .And.Contain("<ss:Data ss:Type=\"String\">Alpha</ss:Data>")
+            .And.Contain("<ss:Data ss:Type=\"Number\">42.5</ss:Data>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_Success_ReturnsRewoundOutputStream()
     {
         using var source = StreamFromString("<rows />");

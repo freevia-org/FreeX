@@ -1369,6 +1369,33 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromSimplifiedStylesheetRoot()
+    {
+        using var source = StreamFromString("<rows><row sheet=\"Simplified\" label=\"Alpha\" amount=\"42.5\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <ss:Workbook xsl:version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Worksheet ss:Name="{/rows/row/@sheet}">
+                <ss:Table>
+                  <ss:Row>
+                    <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="/rows/row/@label" /></ss:Data></ss:Cell>
+                    <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="/rows/row/@amount" /></ss:Data></ss:Cell>
+                  </ss:Row>
+                </ss:Table>
+              </ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Simplified");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Alpha"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(42.5));
+    }
+
+    [Fact]
     public void LoadTransformed_LoadsDisableOutputEscapingSpreadsheetMlOutput()
     {
         using var source = StreamFromString("""
