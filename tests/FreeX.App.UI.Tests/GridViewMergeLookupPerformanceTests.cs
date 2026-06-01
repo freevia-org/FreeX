@@ -45,6 +45,8 @@ public sealed class GridViewMergeLookupPerformanceTests
         rowIndexMethod.Should().Contain("merge.End.Col < firstColumn");
         rowIndexMethod.Should().Contain("merge.Start.Col > lastColumn");
         rowIndexMethod.Should().Contain("foreach (var rowMetric in rowMetrics)");
+        rowIndexMethod.Should().Contain("if (row > merge.End.Row)");
+        rowIndexMethod.Should().Contain("break;");
         rowIndexMethod.Should().NotContain("r <= merge.End.Row");
         rowIndexMethod.Should().NotContain("c <= merge.End.Col");
     }

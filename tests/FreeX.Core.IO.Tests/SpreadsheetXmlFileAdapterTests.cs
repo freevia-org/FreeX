@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
@@ -1013,6 +1014,54 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Benchmark_SaveDenseWorkbook_ReportsTimingAndAllocatedBytes()
+    {
+        const int iterations = 3;
+        const int sheetCount = 2;
+        const int rowCount = 120;
+        const int columnCount = 80;
+        var workbook = CreateDenseWorkbook(sheetCount, rowCount, columnCount);
+        var adapter = new SpreadsheetXmlFileAdapter();
+
+        using (var warmup = new MemoryStream())
+            adapter.Save(workbook, warmup);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var stream = new MemoryStream();
+            var step = Stopwatch.StartNew();
+            adapter.Save(workbook, stream);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stream.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF SPREADSHEET_XML_SAVE_DENSE " +
+            $"sheets={sheetCount} rows={rowCount} cols={columnCount} " +
+            $"steps={iterations} bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+        allocatedBytes.Should().BeGreaterThan(0);
+        packageSizes.Should().OnlyContain(size => size > 0);
+    }
+
+    [Fact]
     public void LoadTransformed_AppliesSafeXsltAndLoadsSpreadsheetMlOutput()
     {
         using var source = StreamFromString("""
@@ -1909,6 +1958,52 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
     private static MemoryStream StreamFromString(string value) =>
         new(Encoding.UTF8.GetBytes(value));
+
+    private static Workbook CreateDenseWorkbook(int sheetCount, int rowCount, int columnCount)
+    {
+        var workbook = new Workbook("SpreadsheetML Dense");
+        var currency = workbook.RegisterStyle(new CellStyle { NumberFormat = "$#,##0.00" });
+        var percent = workbook.RegisterStyle(new CellStyle { NumberFormat = "0.00%" });
+        for (var sheetIndex = 1; sheetIndex <= sheetCount; sheetIndex++)
+        {
+            var sheet = workbook.AddSheet($"Sheet {sheetIndex}");
+            for (uint row = 1; row <= rowCount; row++)
+            {
+                for (uint column = 1; column <= columnCount; column++)
+                {
+                    var address = new CellAddress(sheet.Id, row, column);
+                    var selector = (row + column + (uint)sheetIndex) % 11;
+                    if (selector == 0)
+                    {
+                        sheet.SetCell(address, new Cell
+                        {
+                            FormulaText = $"SUM(A{Math.Max(1u, row - 1)}:A{row})",
+                            Value = new NumberValue(row + column),
+                            StyleId = currency
+                        });
+                    }
+                    else if (selector == 1)
+                    {
+                        sheet.SetCell(address, new Cell
+                        {
+                            Value = new NumberValue(row * column),
+                            StyleId = percent
+                        });
+                    }
+                    else if (selector == 2)
+                    {
+                        sheet.SetCell(address, new TextValue($"R{row}C{column}"));
+                    }
+                    else
+                    {
+                        sheet.SetCell(address, new NumberValue(row + column + (uint)sheetIndex));
+                    }
+                }
+            }
+        }
+
+        return workbook;
+    }
 
     private static MemoryStream PositionedStreamFromString(string prefix, string value)
     {

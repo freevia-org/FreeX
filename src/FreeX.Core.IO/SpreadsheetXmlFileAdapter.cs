@@ -808,6 +808,14 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
     private static IEnumerable<XElement> ToRowElements(Sheet sheet, IReadOnlyDictionary<StyleId, string> styleIds)
     {
+        if (CanStreamValueCellRows(sheet))
+        {
+            foreach (var rowElement in ToValueCellRowElements(sheet, styleIds))
+                yield return rowElement;
+
+            yield break;
+        }
+
         var cellsByRow = EnumerateXmlCells(sheet)
             .GroupBy(entry => entry.Row)
             .ToDictionary(group => group.Key, group => group.OrderBy(cell => cell.Col).ToList());
@@ -822,23 +830,73 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             yield return ToRowElement(sheet, rowIndex, cellsByRow.GetValueOrDefault(rowIndex) ?? [], styleIds);
     }
 
+    private static bool CanStreamValueCellRows(Sheet sheet) =>
+        sheet.MergedRegions.Count == 0 &&
+        sheet.Hyperlinks.Count == 0 &&
+        sheet.HyperlinkMetadata.Count == 0 &&
+        sheet.Comments.Count == 0 &&
+        !sheet.HasStyleOnlyCells;
+
+    private static IEnumerable<XElement> ToValueCellRowElements(
+        Sheet sheet,
+        IReadOnlyDictionary<StyleId, string> styleIds)
+    {
+        using var cellEnumerator = sheet.GetOccupiedCellMap()
+            .OrderBy(entry => entry.Key.Row)
+            .ThenBy(entry => entry.Key.Col)
+            .GetEnumerator();
+        using var layoutRowEnumerator = sheet.RowHeights.Keys
+            .Where(IsValidRowLayoutIndex)
+            .Concat(sheet.HiddenRows.Where(IsValidRowLayoutIndex))
+            .Distinct()
+            .OrderBy(row => row)
+            .GetEnumerator();
+
+        var hasCell = cellEnumerator.MoveNext();
+        var hasLayoutRow = layoutRowEnumerator.MoveNext();
+        while (hasCell || hasLayoutRow)
+        {
+            var cellRow = hasCell ? cellEnumerator.Current.Key.Row : uint.MaxValue;
+            var layoutRow = hasLayoutRow ? layoutRowEnumerator.Current : uint.MaxValue;
+            var rowIndex = cellRow <= layoutRow ? cellRow : layoutRow;
+            var rowElement = CreateRowElement(sheet, rowIndex);
+
+            while (hasCell && cellEnumerator.Current.Key.Row == rowIndex)
+            {
+                var (key, cell) = cellEnumerator.Current;
+                rowElement.Add(ToCellElement(
+                    new SpreadsheetXmlCell(rowIndex, key.Col, cell, null, null, null, null),
+                    styleIds));
+                hasCell = cellEnumerator.MoveNext();
+            }
+
+            yield return rowElement;
+
+            if (hasLayoutRow && layoutRowEnumerator.Current == rowIndex)
+                hasLayoutRow = layoutRowEnumerator.MoveNext();
+        }
+    }
+
     private static XElement ToRowElement(
         Sheet sheet,
         uint rowIndex,
         IEnumerable<SpreadsheetXmlCell> cells,
         IReadOnlyDictionary<StyleId, string> styleIds)
     {
-        var rowElement = new XElement(
-            SpreadsheetNs + "Row",
-            new XAttribute(SpreadsheetIndexAttribute, rowIndex),
-            ToRowHeightAttribute(sheet, rowIndex),
-            sheet.HiddenRows.Contains(rowIndex) ? new XAttribute(SpreadsheetHiddenAttribute, "1") : null);
+        var rowElement = CreateRowElement(sheet, rowIndex);
 
         foreach (var cell in cells)
             rowElement.Add(ToCellElement(cell, styleIds));
 
         return rowElement;
     }
+
+    private static XElement CreateRowElement(Sheet sheet, uint rowIndex) =>
+        new(
+            SpreadsheetNs + "Row",
+            new XAttribute(SpreadsheetIndexAttribute, rowIndex),
+            ToRowHeightAttribute(sheet, rowIndex),
+            sheet.HiddenRows.Contains(rowIndex) ? new XAttribute(SpreadsheetHiddenAttribute, "1") : null);
 
     private static XAttribute? ToRowHeightAttribute(Sheet sheet, uint rowIndex) =>
         sheet.RowHeights.TryGetValue(rowIndex, out var height) && IsPositiveFinite(height)
