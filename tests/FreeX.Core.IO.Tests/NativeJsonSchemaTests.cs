@@ -221,6 +221,34 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_TreatsNullSheetCellCollectionsAsEmpty()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullCells",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Cells": null,
+                  "StyleOnlyCells": null
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var workbook = new NativeJsonAdapter().Load(stream);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Sheet1");
+        sheet.GetCell(1, 1).Should().BeNull();
+        sheet.HasStyleOnlyCells.Should().BeFalse();
+    }
+
+    [Fact]
     public void Load_AcceptsLegacyUnversionedNativeJsonAndMigratesOnSave()
     {
         const string legacyJson = """
