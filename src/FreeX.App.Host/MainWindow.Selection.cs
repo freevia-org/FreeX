@@ -1,5 +1,5 @@
 using System;
-using System.Linq;
+using System.Collections;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -792,10 +792,6 @@ public partial class MainWindow
         HideValidationDropdown();
         ClearCommentPreview();
 
-        var ranges = SheetGrid.SelectedRanges is { Count: > 0 }
-            ? SheetGrid.SelectedRanges.ToList()
-            : SheetGrid.SelectedRange is { } currentRange ? [currentRange] : [];
-
         if (!extendSelection)
             _selectionAnchor = target;
 
@@ -808,11 +804,10 @@ public partial class MainWindow
 
         _selectionCursor = target;
         var activeRange = new GridRange(anchor, target);
-
-        if (ranges.Count > 0 && SheetGrid.SelectedRange is { } currentActive && ranges[^1] == currentActive)
-            ranges[^1] = activeRange;
-        else
-            ranges.Add(activeRange);
+        var ranges = CreateAdditionalSelectionRanges(
+            SheetGrid.SelectedRanges,
+            SheetGrid.SelectedRange,
+            activeRange);
 
         SheetGrid.SelectedRanges = ranges;
         SheetGrid.SelectedRange = activeRange;
@@ -864,7 +859,8 @@ public partial class MainWindow
     {
         if (_dragSelectActive)
         {
-            _dragSelectToolbarRefreshPending = true;
+            if (!CanSkipSelectionDragToolbarRefresh())
+                _dragSelectToolbarRefreshPending = true;
             return;
         }
 
@@ -877,6 +873,9 @@ public partial class MainWindow
             return;
 
         _dragSelectToolbarRefreshPending = false;
+        if (CanSkipSelectionDragToolbarRefresh())
+            return;
+
         RefreshToolbar();
     }
 
@@ -1030,4 +1029,82 @@ public partial class MainWindow
         e.Handled = true;
     }
 
+    private static IReadOnlyList<GridRange> CreateAdditionalSelectionRanges(
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridRange? currentActive,
+        GridRange activeRange)
+    {
+        var hasExistingRanges = selectedRanges is { Count: > 0 };
+        var ranges = selectedRanges as MutableSelectionRanges ??
+            (hasExistingRanges
+                ? new MutableSelectionRanges(selectedRanges!)
+                : new MutableSelectionRanges(activeRange));
+
+        if (ranges.Count > 0 &&
+            currentActive is { } active &&
+            ranges[ranges.Count - 1] == active)
+        {
+            ranges.ReplaceLast(activeRange);
+        }
+        else if (hasExistingRanges)
+        {
+            ranges.Add(activeRange);
+        }
+        else
+        {
+            ranges.ReplaceLast(activeRange);
+        }
+
+        return ranges;
+    }
+
+    private sealed class MutableSelectionRanges : IReadOnlyList<GridRange>
+    {
+        private GridRange[] _ranges;
+
+        public MutableSelectionRanges(GridRange range)
+        {
+            _ranges = [range];
+            Count = 1;
+        }
+
+        public MutableSelectionRanges(IReadOnlyList<GridRange> ranges)
+        {
+            Count = ranges.Count;
+            _ranges = new GridRange[Math.Max(Count, 1)];
+            for (var i = 0; i < Count; i++)
+                _ranges[i] = ranges[i];
+        }
+
+        public int Count { get; private set; }
+
+        public GridRange this[int index] => _ranges[index];
+
+        public void ReplaceLast(GridRange range)
+        {
+            if (Count == 0)
+            {
+                Add(range);
+                return;
+            }
+
+            _ranges[Count - 1] = range;
+        }
+
+        public void Add(GridRange range)
+        {
+            if (Count == _ranges.Length)
+                Array.Resize(ref _ranges, Math.Max(Count * 2, 1));
+
+            _ranges[Count++] = range;
+        }
+
+        public IEnumerator<GridRange> GetEnumerator()
+        {
+            for (var i = 0; i < Count; i++)
+                yield return _ranges[i];
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
 }

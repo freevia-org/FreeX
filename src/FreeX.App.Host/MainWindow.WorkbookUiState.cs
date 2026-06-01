@@ -201,6 +201,24 @@ public partial class MainWindow
         }
     }
 
+    private bool CanSkipSelectionDragToolbarRefresh() =>
+        IsQuickAccessToolbarCommandStateStableForSelectionDrag() &&
+        IsToolbarVisualStateCurrentForSelection();
+
+    private bool IsToolbarVisualStateCurrentForSelection()
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return _lastToolbarVisualState is null;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return _lastToolbarVisualState is null;
+
+        var styleId = sheet.GetCell(range.Start)?.StyleId ?? StyleId.Default;
+        return _toolbarVisualStateCache.TryGetCurrent(_workbook.Id, styleId, out var state) &&
+            state == _lastToolbarVisualState;
+    }
+
     private static void SetToggleCheckedIfChanged(ToggleButton button, bool? value)
     {
         if (button.IsChecked != value)

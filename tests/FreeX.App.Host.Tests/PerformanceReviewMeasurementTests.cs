@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -216,6 +217,22 @@ public sealed class PerformanceReviewMeasurementTests
 
             using var additionalHarness = SelectionDragHarness.Create();
             additionalHarness.RepeatedAdditionalSelectionTargetLeavesPendingRefreshClear().Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void AdditionalSelectionDragWithUnchangedStyleSource_DoesNotQueueToolbarOrProbeQat()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = SelectionDragHarness.Create();
+
+            var result = harness.MeasureUnchangedStyleAdditionalSelectionToolbarChurn();
+
+            result.ToolbarRefreshQueued.Should().BeFalse();
+            result.CanUndoProbeCount.Should().Be(0);
+            result.CanRedoProbeCount.Should().Be(0);
+            result.ToolbarWriteCount.Should().Be(0);
         });
     }
 
@@ -646,6 +663,7 @@ public sealed class PerformanceReviewMeasurementTests
     private sealed class SelectionDragHarness : IDisposable
     {
         private readonly MainWindow _window;
+        private readonly CountingCommandBus _commandBus;
         private readonly Action<CellAddress, CellAddress> _extendSelection;
         private readonly Action<CellAddress, bool> _addOrMoveAdditionalSelection;
         private readonly Action _completeDragSelectionStatusRefresh;
@@ -655,9 +673,10 @@ public sealed class PerformanceReviewMeasurementTests
         private readonly FieldInfo _dragSelectToolbarRefreshPending;
         private readonly CellAddress _anchor;
 
-        private SelectionDragHarness(MainWindow window, SheetId sheetId)
+        private SelectionDragHarness(MainWindow window, SheetId sheetId, CountingCommandBus commandBus)
         {
             _window = window;
+            _commandBus = commandBus;
             _anchor = new CellAddress(sheetId, 1, 1);
             var extendSelection = typeof(MainWindow)
                 .GetMethod("ExtendSelection", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -852,11 +871,73 @@ public sealed class PerformanceReviewMeasurementTests
             }
         }
 
+        public ToolbarDragRefreshProbeResult MeasureUnchangedStyleAdditionalSelectionToolbarChurn()
+        {
+            _addOrMoveAdditionalSelection(_anchor, false);
+            PumpDispatcher();
+            var toolbarWrites = AttachToolbarWriteCounter();
+            _commandBus.ResetQuickAccessProbeCounts();
+
+            _dragSelectActive.SetValue(_window, true);
+            try
+            {
+                _addOrMoveAdditionalSelection(new CellAddress(_anchor.Sheet, 20, 40), true);
+                PumpDispatcher();
+                var queuedDuringDrag = IsToolbarRefreshPending();
+                _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionToolbarRefresh?.Invoke();
+                PumpDispatcher();
+
+                return new ToolbarDragRefreshProbeResult(
+                    queuedDuringDrag,
+                    _commandBus.CanUndoProbeCount,
+                    _commandBus.CanRedoProbeCount,
+                    toolbarWrites.Count);
+            }
+            finally
+            {
+                _dragSelectActive.SetValue(_window, false);
+                _completeDragSelectionToolbarRefresh?.Invoke();
+                _completeDragSelectionStatusRefresh();
+            }
+        }
+
         private bool IsStatusRefreshPending() =>
             _dragSelectStatusRefreshPending.GetValue(_window) is true;
 
         private bool IsToolbarRefreshPending() =>
             _dragSelectToolbarRefreshPending.GetValue(_window) is true;
+
+        private ToolbarWriteCounter AttachToolbarWriteCounter()
+        {
+            var counter = new ToolbarWriteCounter();
+            foreach (var name in new[]
+            {
+                "BoldButton",
+                "ItalicButton",
+                "UnderlineButton",
+                "StrikeButton",
+                "AlignTopBtn",
+                "AlignMiddleBtn",
+                "AlignBottomBtn",
+                "AlignLeftBtn",
+                "AlignCenterBtn",
+                "AlignRightBtn",
+                "WrapTextBtn"
+            })
+            {
+                if (_window.FindName(name) is ToggleButton toggle)
+                    counter.Attach(toggle);
+            }
+
+            foreach (var name in new[] { "FontNameBox", "FontSizeBox" })
+            {
+                if (_window.FindName(name) is ComboBox comboBox)
+                    counter.Attach(comboBox);
+            }
+
+            return counter;
+        }
 
         public static SelectionDragHarness Create()
         {
@@ -866,10 +947,11 @@ public sealed class PerformanceReviewMeasurementTests
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();
+            var commandBus = new CountingCommandBus(new CommandBus(_ => new TestCommandContext(workbookRef.Current)));
             var window = new MainWindow(
                 NullLogger<MainWindow>.Instance,
                 new ViewportService(),
-                new CommandBus(_ => new TestCommandContext(workbookRef.Current)),
+                commandBus,
                 new RecalcEngine(graph, evaluator),
                 Array.Empty<IFileAdapter>(),
                 workbookRef,
@@ -890,7 +972,7 @@ public sealed class PerformanceReviewMeasurementTests
 
             window.UpdateLayout();
             PumpDispatcher();
-            return new SelectionDragHarness(window, sheet.Id);
+            return new SelectionDragHarness(window, sheet.Id, commandBus);
         }
 
         public void Dispose()
@@ -898,6 +980,68 @@ public sealed class PerformanceReviewMeasurementTests
             MainWindowTestCleanup.CloseWithoutSavePrompt(_window);
         }
     }
+
+    private sealed class ToolbarWriteCounter
+    {
+        public int Count { get; private set; }
+
+        public void Attach(ToggleButton toggleButton)
+        {
+            toggleButton.Checked += (_, _) => Count++;
+            toggleButton.Unchecked += (_, _) => Count++;
+            toggleButton.Indeterminate += (_, _) => Count++;
+        }
+
+        public void Attach(ComboBox comboBox)
+        {
+            comboBox.SelectionChanged += (_, _) => Count++;
+        }
+    }
+
+    private sealed class CountingCommandBus(ICommandBus inner) : ICommandBus
+    {
+        public int CanUndoProbeCount { get; private set; }
+
+        public int CanRedoProbeCount { get; private set; }
+
+        public CommandOutcome Execute(WorkbookId workbookId, IWorkbookCommand command) =>
+            inner.Execute(workbookId, command);
+
+        public CommandOutcome ExecuteRepeatable(WorkbookId workbookId, Func<IWorkbookCommand> commandFactory) =>
+            inner.ExecuteRepeatable(workbookId, commandFactory);
+
+        public CommandOutcome Undo(WorkbookId workbookId) => inner.Undo(workbookId);
+
+        public CommandOutcome Redo(WorkbookId workbookId) => inner.Redo(workbookId);
+
+        public bool CanUndo(WorkbookId workbookId)
+        {
+            CanUndoProbeCount++;
+            return inner.CanUndo(workbookId);
+        }
+
+        public bool CanRedo(WorkbookId workbookId)
+        {
+            CanRedoProbeCount++;
+            return inner.CanRedo(workbookId);
+        }
+
+        public CommandOutcome RepeatLast(WorkbookId workbookId) => inner.RepeatLast(workbookId);
+
+        public bool CanRepeat(WorkbookId workbookId) => inner.CanRepeat(workbookId);
+
+        public void ResetQuickAccessProbeCounts()
+        {
+            CanUndoProbeCount = 0;
+            CanRedoProbeCount = 0;
+        }
+    }
+
+    private sealed record ToolbarDragRefreshProbeResult(
+        bool ToolbarRefreshQueued,
+        int CanUndoProbeCount,
+        int CanRedoProbeCount,
+        int ToolbarWriteCount);
 
     private sealed record MeasurementResult(
         int StepCount,

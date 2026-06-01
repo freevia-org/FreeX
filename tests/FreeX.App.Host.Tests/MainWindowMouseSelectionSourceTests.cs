@@ -573,4 +573,19 @@ public sealed class MainWindowMouseSelectionSourceTests
         refreshHelper.Should().Contain("RefreshToolbar();");
         mouseUp.Should().Contain("CompleteDragSelectionToolbarRefresh();");
     }
+
+    [Fact]
+    public void AdditionalDragSelectionReusesOwnedRangesInsteadOfCloningList()
+    {
+        var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "MainWindow.Selection.cs"));
+
+        var addSelection = selectionSource[
+            selectionSource.IndexOf("private void AddOrMoveAdditionalSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private bool IsSelectionExtensionUnchanged", StringComparison.Ordinal)];
+
+        addSelection.Should().Contain("CreateAdditionalSelectionRanges(");
+        addSelection.Should().NotContain(".ToList()");
+        selectionSource.Should().Contain("private sealed class MutableSelectionRanges");
+    }
 }
