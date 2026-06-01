@@ -123,6 +123,33 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Save_WritesNonFiniteSpreadsheetMlDateTimesAsTextCells()
+    {
+        var workbook = new Workbook("NonFiniteDates");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new DateTimeValue(double.NaN));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new DateTimeValue(double.PositiveInfinity));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new DateTimeValue(double.NegativeInfinity));
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+
+        stream.Position = 0;
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var data = document.Descendants(ss + "Data").ToArray();
+        data.Select(element => element.Attribute(ss + "Type")!.Value).Should().Equal("String", "String", "String");
+        data.Select(element => element.Value).Should().Equal("NaN", "Infinity", "-Infinity");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.GetCell(1, 1)!.Value.Should().Be(new TextValue("NaN"));
+        loaded.GetCell(1, 2)!.Value.Should().Be(new TextValue("Infinity"));
+        loaded.GetCell(1, 3)!.Value.Should().Be(new TextValue("-Infinity"));
+    }
+
+    [Fact]
     public void Load_TrimsSpreadsheetMlBooleanText()
     {
         using var stream = StreamFromString("""
@@ -1649,6 +1676,51 @@ public sealed class SpreadsheetXmlFileAdapterTests
         sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(42.5));
         sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("Beta"));
         sheet.GetCell(2, 2)!.Value.Should().Be(new NumberValue(7.25));
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromVariablesAndAggregates()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row label="Alpha" amount="42.5" />
+              <row label="Beta" amount="7.25" />
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:variable name="sheetName" select="'Variable Summary'" />
+              <xsl:template match="/rows">
+                <xsl:variable name="rowCount" select="count(row)" />
+                <xsl:variable name="total" select="sum(row/@amount)" />
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="{$sheetName}">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String">Rows</ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="$rowCount" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String">Total</ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="$total" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Variable Summary");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Rows"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(2));
+        sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("Total"));
+        sheet.GetCell(2, 2)!.Value.Should().Be(new NumberValue(49.75));
     }
 
     [Fact]

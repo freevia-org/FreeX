@@ -17,16 +17,20 @@ public partial class MainWindow
             return;
 
         if (SheetGrid.SelectedRange is not { } range ||
-            _workbook.GetSheet(_currentSheetId) is not { } sheet ||
-            TryGetCellOverlayRect(range.Start) is not { } rect)
+            _workbook.GetSheet(_currentSheetId) is not { } sheet)
         {
             HideValidationDropdown();
             return;
         }
 
-        var rule = DataValidationService.GetApplicable(sheet, range.Start)
-            .FirstOrDefault(dv => dv.Type == DvType.List && dv.ShowDropdown);
+        var rule = FindValidationDropdownRule(sheet, range.Start);
         if (rule is null)
+        {
+            HideValidationDropdown();
+            return;
+        }
+
+        if (TryGetCellOverlayRect(range.Start) is not { } rect)
         {
             HideValidationDropdown();
             return;
@@ -57,6 +61,21 @@ public partial class MainWindow
         EditOverlay.IsHitTestVisible = true;
     }
 
+    private static DataValidation? FindValidationDropdownRule(Sheet sheet, CellAddress address)
+    {
+        foreach (var rule in sheet.DataValidations)
+        {
+            if (rule.Type == DvType.List &&
+                rule.ShowDropdown &&
+                DataValidationService.AppliesTo(rule, address))
+            {
+                return rule;
+            }
+        }
+
+        return null;
+    }
+
     private void EnsureValidationDropdown()
     {
         if (_validationDropdown is not null)
@@ -79,10 +98,10 @@ public partial class MainWindow
 
     private void HideValidationDropdown()
     {
-        if (_validationDropdown is not null)
+        if (_validationDropdown is { Visibility: not Visibility.Collapsed })
             _validationDropdown.Visibility = Visibility.Collapsed;
 
-        if (_inlineEditor?.IsVisible != true)
+        if (_inlineEditor?.IsVisible != true && EditOverlay.IsHitTestVisible)
             EditOverlay.IsHitTestVisible = false;
     }
 

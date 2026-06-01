@@ -199,7 +199,9 @@ public sealed class KeyboardShortcutMatcherTests
     [Theory]
     [InlineData(Key.N, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.NewWorkbook)]
     [InlineData(Key.O, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenWorkbook)]
+    [InlineData(Key.F12, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenWorkbook)]
     [InlineData(Key.S, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SaveWorkbook)]
+    [InlineData(Key.F12, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.SaveWorkbook)]
     [InlineData(Key.C, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Copy)]
     [InlineData(Key.Insert, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Copy)]
     [InlineData(Key.X, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.Cut)]
@@ -242,6 +244,7 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.U, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.ToggleFormulaBarExpansion)]
     [InlineData(Key.Q, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.QuickAnalysis)]
     [InlineData(Key.P, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenPrintPreview)]
+    [InlineData(Key.F12, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.OpenPrintPreview)]
     [InlineData(Key.V, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.PasteValues)]
     [InlineData(Key.L, Key.None, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.ToggleFilter)]
     [InlineData(Key.L, Key.None, ModifierKeys.Control | ModifierKeys.Alt, KeyboardCommandShortcut.ReapplyFilter)]
@@ -303,6 +306,9 @@ public sealed class KeyboardShortcutMatcherTests
 
     [Theory]
     [InlineData(Key.System, Key.Back, ModifierKeys.Alt, KeyboardCommandShortcut.Undo)]
+    [InlineData(Key.System, Key.F12, ModifierKeys.Control, KeyboardCommandShortcut.OpenWorkbook)]
+    [InlineData(Key.System, Key.F12, ModifierKeys.Shift, KeyboardCommandShortcut.SaveWorkbook)]
+    [InlineData(Key.System, Key.F12, ModifierKeys.Control | ModifierKeys.Shift, KeyboardCommandShortcut.OpenPrintPreview)]
     [InlineData(Key.System, Key.F1, ModifierKeys.Alt, KeyboardCommandShortcut.InsertEmbeddedChart)]
     [InlineData(Key.System, Key.F1, ModifierKeys.Alt | ModifierKeys.Shift, KeyboardCommandShortcut.InsertWorksheet)]
     [InlineData(Key.System, Key.OemPlus, ModifierKeys.Alt, KeyboardCommandShortcut.AutoSum)]
@@ -328,6 +334,25 @@ public sealed class KeyboardShortcutMatcherTests
 
         result.Should().BeTrue();
         shortcut.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.F4, ModifierKeys.Alt)]
+    [InlineData(Key.F4, ModifierKeys.Shift)]
+    [InlineData(Key.F5, ModifierKeys.Control)]
+    [InlineData(Key.F5, ModifierKeys.Shift)]
+    [InlineData(Key.F5, ModifierKeys.Alt)]
+    [InlineData(Key.F7, ModifierKeys.Control)]
+    [InlineData(Key.F7, ModifierKeys.Shift)]
+    [InlineData(Key.F7, ModifierKeys.Alt)]
+    [InlineData(Key.F11, ModifierKeys.Control)]
+    [InlineData(Key.F11, ModifierKeys.Alt)]
+    [InlineData(Key.F12, ModifierKeys.Alt)]
+    public void TryGetCommandShortcut_PlainFunctionKeyCommandsRequireExactModifiers(Key key, ModifierKeys modifiers)
+    {
+        var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, Key.None, modifiers, out _);
+
+        result.Should().BeFalse();
     }
 
     [Theory]

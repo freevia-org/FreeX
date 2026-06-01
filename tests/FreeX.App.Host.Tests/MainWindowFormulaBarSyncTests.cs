@@ -373,6 +373,27 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void UseInFormulaInsertion_InsertsDefinedNameAtFormulaBarCaret()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaBarText("=SUM(,B1)");
+            harness.SetFormulaBarCaretIndex("=SUM(".Length);
+
+            harness.InsertDefinedNameIntoFormula("SalesData");
+
+            harness.FormulaBarText.Should().Be("=SUM(SalesData,B1)");
+            harness.FormulaBarCaretIndex.Should().Be("=SUM(SalesData".Length);
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.CellText(1, 1).Should().Be("original");
+        });
+    }
+
+    [Fact]
     public void EditInFormulaBar_LoadsActiveCellFormulaAndFocusesFormulaBar()
     {
         StaTestRunner.Run(() =>
@@ -776,6 +797,12 @@ public sealed class MainWindowFormulaBarSyncTests
         public void SetFormulaBarText(string text)
         {
             ((TextBox)_window.FindName("FormulaBar")).Text = text;
+            PumpDispatcher();
+        }
+
+        public void SetFormulaBarCaretIndex(int caretIndex)
+        {
+            ((TextBox)_window.FindName("FormulaBar")).CaretIndex = caretIndex;
             PumpDispatcher();
         }
 
