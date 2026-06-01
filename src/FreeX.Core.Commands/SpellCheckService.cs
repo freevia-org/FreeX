@@ -34,6 +34,9 @@ public static partial class SpellCheckService
                 if (cell.HasFormula || cell.Value is not TextValue textValue)
                     continue;
 
+                if (!HasSpellCheckIssueCandidate(textValue.Value))
+                    continue;
+
                 sheetIssues.AddRange(FindIssuesInCell(address, textValue.Value));
             }
 
@@ -114,6 +117,9 @@ public static partial class SpellCheckService
             foreach (var (address, cell) in sheet.EnumerateCells())
             {
                 if (cell.HasFormula || cell.Value is not TextValue textValue)
+                    continue;
+
+                if (!HasKnownCorrectionCandidate(textValue.Value))
                     continue;
 
                 var corrected = ApplyKnownCorrections(textValue.Value, out var replacementCount);
@@ -315,18 +321,58 @@ public static partial class SpellCheckService
     private static bool EqualWordsIgnoreCase(ReadOnlySpan<char> left, ReadOnlySpan<char> right) =>
         left.Equals(right, StringComparison.OrdinalIgnoreCase);
 
+    private static bool HasSpellCheckIssueCandidate(string text)
+    {
+        WordToken? previousWord = null;
+        var index = 0;
+        while (TryReadNextWord(text, index, out var word))
+        {
+            index = word.End;
+            var wordSpan = text.AsSpan(word.Start, word.Length);
+            if (TryGetKnownCorrection(wordSpan, out _))
+                return true;
+
+            if (previousWord is { } previous &&
+                previous.Length >= 2 &&
+                word.Length >= 2 &&
+                IsWhitespaceOnly(text, previous.End, word.Start) &&
+                EqualWordsIgnoreCase(text.AsSpan(previous.Start, previous.Length), wordSpan))
+            {
+                return true;
+            }
+
+            previousWord = word;
+        }
+
+        return false;
+    }
+
+    private static bool HasKnownCorrectionCandidate(string text)
+    {
+        var index = 0;
+        while (TryReadNextWord(text, index, out var word))
+        {
+            index = word.End;
+            if (TryGetKnownCorrection(text.AsSpan(word.Start, word.Length), out _))
+                return true;
+        }
+
+        return false;
+    }
+
     private static bool TryGetKnownCorrection(ReadOnlySpan<char> word, out string suggestion)
     {
+        var first = word.Length > 0 ? ToAsciiLowerInvariant(word[0]) : '\0';
         switch (word.Length)
         {
             case 3:
-                if (EqualWord(word, "teh"))
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "teh"))
                 {
                     suggestion = "the";
                     return true;
                 }
 
-                if (EqualWord(word, "adn"))
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "adn"))
                 {
                     suggestion = "and";
                     return true;
@@ -334,7 +380,7 @@ public static partial class SpellCheckService
 
                 break;
             case 5:
-                if (EqualWord(word, "wierd"))
+                if (first == 'w' && EqualAsciiWordIgnoreCase(word, "wierd"))
                 {
                     suggestion = "weird";
                     return true;
@@ -342,19 +388,19 @@ public static partial class SpellCheckService
 
                 break;
             case 6:
-                if (EqualWord(word, "adress"))
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "adress"))
                 {
                     suggestion = "address";
                     return true;
                 }
 
-                if (EqualWord(word, "untill"))
+                if (first == 'u' && EqualAsciiWordIgnoreCase(word, "untill"))
                 {
                     suggestion = "until";
                     return true;
                 }
 
-                if (EqualWord(word, "sucess"))
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "sucess"))
                 {
                     suggestion = "success";
                     return true;
@@ -362,13 +408,13 @@ public static partial class SpellCheckService
 
                 break;
             case 7:
-                if (EqualWord(word, "recieve"))
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "recieve"))
                 {
                     suggestion = "receive";
                     return true;
                 }
 
-                if (EqualWord(word, "occured"))
+                if (first == 'o' && EqualAsciiWordIgnoreCase(word, "occured"))
                 {
                     suggestion = "occurred";
                     return true;
@@ -376,25 +422,25 @@ public static partial class SpellCheckService
 
                 break;
             case 8:
-                if (EqualWord(word, "seperate"))
+                if (first == 's' && EqualAsciiWordIgnoreCase(word, "seperate"))
                 {
                     suggestion = "separate";
                     return true;
                 }
 
-                if (EqualWord(word, "calender"))
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "calender"))
                 {
                     suggestion = "calendar";
                     return true;
                 }
 
-                if (EqualWord(word, "recomend"))
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "recomend"))
                 {
                     suggestion = "recommend";
                     return true;
                 }
 
-                if (EqualWord(word, "tommorow"))
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "tommorow"))
                 {
                     suggestion = "tomorrow";
                     return true;
@@ -402,7 +448,7 @@ public static partial class SpellCheckService
 
                 break;
             case 9:
-                if (EqualWord(word, "goverment"))
+                if (first == 'g' && EqualAsciiWordIgnoreCase(word, "goverment"))
                 {
                     suggestion = "government";
                     return true;
@@ -410,19 +456,19 @@ public static partial class SpellCheckService
 
                 break;
             case 10:
-                if (EqualWord(word, "definately"))
+                if (first == 'd' && EqualAsciiWordIgnoreCase(word, "definately"))
                 {
                     suggestion = "definitely";
                     return true;
                 }
 
-                if (EqualWord(word, "acommodate"))
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "acommodate"))
                 {
                     suggestion = "accommodate";
                     return true;
                 }
 
-                if (EqualWord(word, "publically"))
+                if (first == 'p' && EqualAsciiWordIgnoreCase(word, "publically"))
                 {
                     suggestion = "publicly";
                     return true;
@@ -430,7 +476,7 @@ public static partial class SpellCheckService
 
                 break;
             case 14:
-                if (EqualWord(word, "recomendations"))
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "recomendations"))
                 {
                     suggestion = "recommendations";
                     return true;
@@ -443,8 +489,22 @@ public static partial class SpellCheckService
         return false;
     }
 
-    private static bool EqualWord(ReadOnlySpan<char> word, string expected) =>
-        word.Equals(expected, StringComparison.OrdinalIgnoreCase);
+    private static bool EqualAsciiWordIgnoreCase(ReadOnlySpan<char> word, string expected)
+    {
+        if (word.Length != expected.Length)
+            return false;
+
+        for (var index = 0; index < word.Length; index++)
+        {
+            if (ToAsciiLowerInvariant(word[index]) != expected[index])
+                return false;
+        }
+
+        return true;
+    }
+
+    private static char ToAsciiLowerInvariant(char value) =>
+        value is >= 'A' and <= 'Z' ? (char)(value | 0x20) : value;
 
     [GeneratedRegex(@"(?ix)
         (?:

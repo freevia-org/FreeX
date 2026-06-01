@@ -1,3 +1,4 @@
+using System.Buffers;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -44,26 +45,20 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         if (_direction == InsertCellsShiftDirection.Right)
         {
             uint width = _range.ColCount;
-            var maxOccupied = sheet.EnumerateCells()
-                .Where(p => p.Address.Row >= _range.Start.Row && p.Address.Row <= _range.End.Row && p.Address.Col >= _range.Start.Col)
-                .Select(p => p.Address.Col)
-                .DefaultIfEmpty(0u).Max();
-            if (maxOccupied > 0 && maxOccupied + width > CellAddress.MaxCol)
+            var capture = CaptureCellsForMove(sheet, CellShiftRegion.Rightward(_range));
+            if (capture.MaxCol > 0 && capture.MaxCol + width > CellAddress.MaxCol)
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last column ({CellAddress.MaxCol}).");
-            _snapshot = CaptureCells(sheet, CellShiftRegion.Rightward(_range));
-            InsertShiftRight(sheet);
+            _snapshot = capture.Snapshot;
+            InsertShiftRight(sheet, capture.Cells);
         }
         else
         {
             uint height = _range.RowCount;
-            var maxOccupied = sheet.EnumerateCells()
-                .Where(p => p.Address.Col >= _range.Start.Col && p.Address.Col <= _range.End.Col && p.Address.Row >= _range.Start.Row)
-                .Select(p => p.Address.Row)
-                .DefaultIfEmpty(0u).Max();
-            if (maxOccupied > 0 && maxOccupied + height > CellAddress.MaxRow)
+            var capture = CaptureCellsForMove(sheet, CellShiftRegion.Downward(_range));
+            if (capture.MaxRow > 0 && capture.MaxRow + height > CellAddress.MaxRow)
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last row ({CellAddress.MaxRow}).");
-            _snapshot = CaptureCells(sheet, CellShiftRegion.Downward(_range));
-            InsertShiftDown(sheet);
+            _snapshot = capture.Snapshot;
+            InsertShiftDown(sheet, capture.Cells);
         }
 
         return new CommandOutcome(true, AffectedCells: _range.AllCells().ToList());
@@ -75,58 +70,109 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         _snapshot.Restore(ctx.GetSheet(_sheetId));
     }
 
-    private void InsertShiftRight(Sheet sheet)
+    private void InsertShiftRight(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
     {
         var width = _range.ColCount;
-        var moved = sheet.EnumerateCells()
-            .Where(item => item.Address.Row >= _range.Start.Row &&
-                           item.Address.Row <= _range.End.Row &&
-                           item.Address.Col >= _range.Start.Col)
-            .ToList();
+        var originalCells = RentOriginalCells(sheet, captured);
+        try
+        {
+            foreach (var (address, _) in captured)
+                sheet.ClearCell(address);
 
-        foreach (var (address, _) in moved)
-            sheet.ClearCell(address);
+            for (var i = 0; i < captured.Count; i++)
+            {
+                var address = captured[i].Address;
+                sheet.SetCell(new CellAddress(address.Sheet, address.Row, address.Col + width), originalCells[i]);
+            }
 
-        foreach (var (address, cell) in moved)
-            sheet.SetCell(new CellAddress(address.Sheet, address.Row, address.Col + width), cell.Clone());
-
-        ClearRange(sheet, _range);
+            ClearRange(sheet, _range);
+        }
+        finally
+        {
+            ReturnOriginalCells(originalCells);
+        }
     }
 
-    private void InsertShiftDown(Sheet sheet)
+    private void InsertShiftDown(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
     {
         var height = _range.RowCount;
-        var moved = sheet.EnumerateCells()
-            .Where(item => item.Address.Col >= _range.Start.Col &&
-                           item.Address.Col <= _range.End.Col &&
-                           item.Address.Row >= _range.Start.Row)
-            .ToList();
+        var originalCells = RentOriginalCells(sheet, captured);
+        try
+        {
+            foreach (var (address, _) in captured)
+                sheet.ClearCell(address);
 
-        foreach (var (address, _) in moved)
-            sheet.ClearCell(address);
+            for (var i = 0; i < captured.Count; i++)
+            {
+                var address = captured[i].Address;
+                sheet.SetCell(new CellAddress(address.Sheet, address.Row + height, address.Col), originalCells[i]);
+            }
 
-        foreach (var (address, cell) in moved)
-            sheet.SetCell(new CellAddress(address.Sheet, address.Row + height, address.Col), cell.Clone());
-
-        ClearRange(sheet, _range);
+            ClearRange(sheet, _range);
+        }
+        finally
+        {
+            ReturnOriginalCells(originalCells);
+        }
     }
 
     internal static CellShiftSnapshot CaptureCells(Sheet sheet, CellShiftRegion region)
+        => CaptureCellsForMove(sheet, region).Snapshot;
+
+    internal static CellShiftCapture CaptureCellsForDelete(Sheet sheet, CellShiftRegion region)
+        => CaptureCellsForMove(sheet, region);
+
+    private static CellShiftCapture CaptureCellsForMove(Sheet sheet, CellShiftRegion region)
     {
-        var cells = new List<(CellAddress Address, Cell Cell)>();
-        foreach (var (address, cell) in sheet.EnumerateCells())
+        var snapshotCells = new List<(CellAddress Address, Cell Cell)>();
+        uint maxRow = 0;
+        uint maxCol = 0;
+
+        foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
         {
-            if (region.Contains(address))
-                cells.Add((address, cell.Clone()));
+            if (!region.Contains(row, col))
+                continue;
+
+            if (row > maxRow)
+                maxRow = row;
+            if (col > maxCol)
+                maxCol = col;
+
+            var address = new CellAddress(sheet.Id, row, col);
+            snapshotCells.Add((address, cell.Clone()));
         }
 
-        return new CellShiftSnapshot(region, cells);
+        return new CellShiftCapture(
+            new CellShiftSnapshot(region, snapshotCells),
+            snapshotCells,
+            maxRow,
+            maxCol);
+    }
+
+    internal static Cell[] RentOriginalCells(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
+    {
+        if (captured.Count == 0)
+            return Array.Empty<Cell>();
+
+        var originalCells = ArrayPool<Cell>.Shared.Rent(captured.Count);
+        for (var i = 0; i < captured.Count; i++)
+            originalCells[i] = sheet.GetCell(captured[i].Address)!;
+        return originalCells;
+    }
+
+    internal static void ReturnOriginalCells(Cell[] originalCells)
+    {
+        if (originalCells.Length != 0)
+            ArrayPool<Cell>.Shared.Return(originalCells, clearArray: true);
     }
 
     internal static void ClearRange(Sheet sheet, GridRange range)
     {
-        foreach (var address in range.AllCells())
-            sheet.ClearCell(address);
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            for (var col = range.Start.Col; col <= range.End.Col; col++)
+                sheet.ClearCell(row, col);
+        }
     }
 }
 
@@ -159,13 +205,15 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
 
         if (_direction == DeleteCellsShiftDirection.Left)
         {
-            _snapshot = InsertCellsCommand.CaptureCells(sheet, CellShiftRegion.Rightward(_range));
-            DeleteShiftLeft(sheet);
+            var capture = InsertCellsCommand.CaptureCellsForDelete(sheet, CellShiftRegion.Rightward(_range));
+            _snapshot = capture.Snapshot;
+            DeleteShiftLeft(sheet, capture.Cells);
         }
         else
         {
-            _snapshot = InsertCellsCommand.CaptureCells(sheet, CellShiftRegion.Downward(_range));
-            DeleteShiftUp(sheet);
+            var capture = InsertCellsCommand.CaptureCellsForDelete(sheet, CellShiftRegion.Downward(_range));
+            _snapshot = capture.Snapshot;
+            DeleteShiftUp(sheet, capture.Cells);
         }
 
         return new CommandOutcome(true, AffectedCells: _range.AllCells().ToList());
@@ -177,38 +225,56 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
         _snapshot.Restore(ctx.GetSheet(_sheetId));
     }
 
-    private void DeleteShiftLeft(Sheet sheet)
+    private void DeleteShiftLeft(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
     {
         var width = _range.ColCount;
-        var moved = sheet.EnumerateCells()
-            .Where(item => item.Address.Row >= _range.Start.Row &&
-                           item.Address.Row <= _range.End.Row &&
-                           item.Address.Col > _range.End.Col)
-            .ToList();
+        var originalCells = InsertCellsCommand.RentOriginalCells(sheet, captured);
+        try
+        {
+            InsertCellsCommand.ClearRange(sheet, _range);
+            foreach (var (address, _) in captured)
+            {
+                if (address.Col > _range.End.Col)
+                    sheet.ClearCell(address);
+            }
 
-        foreach (var address in _range.AllCells())
-            sheet.ClearCell(address);
-        foreach (var (address, _) in moved)
-            sheet.ClearCell(address);
-        foreach (var (address, cell) in moved)
-            sheet.SetCell(new CellAddress(address.Sheet, address.Row, address.Col - width), cell.Clone());
+            for (var i = 0; i < captured.Count; i++)
+            {
+                var address = captured[i].Address;
+                if (address.Col > _range.End.Col)
+                    sheet.SetCell(new CellAddress(address.Sheet, address.Row, address.Col - width), originalCells[i]);
+            }
+        }
+        finally
+        {
+            InsertCellsCommand.ReturnOriginalCells(originalCells);
+        }
     }
 
-    private void DeleteShiftUp(Sheet sheet)
+    private void DeleteShiftUp(Sheet sheet, IReadOnlyList<(CellAddress Address, Cell Cell)> captured)
     {
         var height = _range.RowCount;
-        var moved = sheet.EnumerateCells()
-            .Where(item => item.Address.Col >= _range.Start.Col &&
-                           item.Address.Col <= _range.End.Col &&
-                           item.Address.Row > _range.End.Row)
-            .ToList();
+        var originalCells = InsertCellsCommand.RentOriginalCells(sheet, captured);
+        try
+        {
+            InsertCellsCommand.ClearRange(sheet, _range);
+            foreach (var (address, _) in captured)
+            {
+                if (address.Row > _range.End.Row)
+                    sheet.ClearCell(address);
+            }
 
-        foreach (var address in _range.AllCells())
-            sheet.ClearCell(address);
-        foreach (var (address, _) in moved)
-            sheet.ClearCell(address);
-        foreach (var (address, cell) in moved)
-            sheet.SetCell(new CellAddress(address.Sheet, address.Row - height, address.Col), cell.Clone());
+            for (var i = 0; i < captured.Count; i++)
+            {
+                var address = captured[i].Address;
+                if (address.Row > _range.End.Row)
+                    sheet.SetCell(new CellAddress(address.Sheet, address.Row - height, address.Col), originalCells[i]);
+            }
+        }
+        finally
+        {
+            InsertCellsCommand.ReturnOriginalCells(originalCells);
+        }
     }
 }
 
@@ -221,10 +287,25 @@ internal readonly record struct CellShiftRegion(uint StartRow, uint EndRow, uint
         new(range.Start.Row, CellAddress.MaxRow, range.Start.Col, range.End.Col);
 
     public bool Contains(CellAddress address) =>
-        address.Row >= StartRow &&
-        address.Row <= EndRow &&
-        address.Col >= StartCol &&
-        address.Col <= EndCol;
+        Contains(address.Row, address.Col);
+
+    public bool Contains(uint row, uint col) =>
+        row >= StartRow &&
+        row <= EndRow &&
+        col >= StartCol &&
+        col <= EndCol;
+}
+
+internal sealed class CellShiftCapture(
+    CellShiftSnapshot snapshot,
+    IReadOnlyList<(CellAddress Address, Cell Cell)> cells,
+    uint maxRow,
+    uint maxCol)
+{
+    public CellShiftSnapshot Snapshot { get; } = snapshot;
+    public IReadOnlyList<(CellAddress Address, Cell Cell)> Cells { get; } = cells;
+    public uint MaxRow { get; } = maxRow;
+    public uint MaxCol { get; } = maxCol;
 }
 
 internal sealed class CellShiftSnapshot(
@@ -234,10 +315,10 @@ internal sealed class CellShiftSnapshot(
     public void Restore(Sheet sheet)
     {
         var current = new List<CellAddress>();
-        foreach (var (address, _) in sheet.EnumerateCells())
+        foreach (var ((row, col), _) in sheet.GetOccupiedCellMap())
         {
-            if (region.Contains(address))
-                current.Add(address);
+            if (region.Contains(row, col))
+                current.Add(new CellAddress(sheet.Id, row, col));
         }
 
         foreach (var address in current)
