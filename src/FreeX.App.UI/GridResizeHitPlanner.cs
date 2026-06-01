@@ -24,7 +24,7 @@ public static class GridResizeHitPlanner
         if (viewport is null)
             return new GridResizeHit(GridResizeHitTarget.None, 0, 0);
 
-        if (pointer.Y <= columnHeaderHeight)
+        if (pointer.Y >= 0 && pointer.Y <= columnHeaderHeight)
         {
             var columns = viewport.ColMetrics;
             GridResizeHit? nearestColumnHit = null;
@@ -48,7 +48,7 @@ public static class GridResizeHitPlanner
                 return hit;
         }
 
-        if (pointer.X <= rowHeaderWidth)
+        if (pointer.X >= 0 && pointer.X <= rowHeaderWidth)
         {
             var rows = viewport.RowMetrics;
             GridResizeHit? nearestRowHit = null;
