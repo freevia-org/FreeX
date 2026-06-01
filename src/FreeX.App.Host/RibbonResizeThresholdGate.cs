@@ -7,16 +7,30 @@ internal static class RibbonResizeThresholdGate
         double currentWidth,
         IReadOnlyList<double> thresholds)
     {
-        foreach (var threshold in thresholds)
+        if (thresholds.Count == 0 ||
+            double.IsNaN(previousWidth) ||
+            double.IsNaN(currentWidth))
         {
-            if (CrossedThreshold(previousWidth, currentWidth, threshold))
-                return true;
+            return false;
         }
 
-        return false;
+        return CountThresholdsBelowWidth(previousWidth, thresholds) !=
+            CountThresholdsBelowWidth(currentWidth, thresholds);
     }
 
-    private static bool CrossedThreshold(double previousWidth, double currentWidth, double threshold) =>
-        previousWidth > threshold && currentWidth <= threshold ||
-        previousWidth <= threshold && currentWidth > threshold;
+    private static int CountThresholdsBelowWidth(double width, IReadOnlyList<double> sortedThresholds)
+    {
+        var low = 0;
+        var high = sortedThresholds.Count;
+        while (low < high)
+        {
+            var middle = low + (high - low) / 2;
+            if (width > sortedThresholds[middle])
+                low = middle + 1;
+            else
+                high = middle;
+        }
+
+        return low;
+    }
 }
