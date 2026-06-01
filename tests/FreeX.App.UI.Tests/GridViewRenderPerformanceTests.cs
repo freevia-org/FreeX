@@ -86,6 +86,26 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCells_SkipsOffscreenCellsBeforeTextLayout()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderCells = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderCellBackgroundBase", StringComparison.Ordinal)];
+
+        renderCells.Should().Contain("var visibleRight = ActualWidth;");
+        renderCells.Should().Contain("var visibleBottom = ActualHeight;");
+        source.Should().Contain("private static bool IntersectsVisibleGrid");
+        renderCells.Should().Contain("rect.Left >= visibleRight");
+        renderCells.Should().Contain("if (!IntersectsVisibleGrid(clipRect, visibleLeft, visibleTop, visibleRight, visibleBottom))");
+
+        renderCells.IndexOf("rect.Left >= visibleRight", StringComparison.Ordinal)
+            .Should().BeLessThan(renderCells.IndexOf("var typefaceKey = CreateCellTypefaceKey(style);", StringComparison.Ordinal));
+        renderCells.IndexOf("if (!IntersectsVisibleGrid(clipRect, visibleLeft, visibleTop, visibleRight, visibleBottom))", StringComparison.Ordinal)
+            .Should().BeLessThan(renderCells.IndexOf("dc.DrawText(text, textPoint);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void RenderHeaders_ReusesPixelsPerDipAcrossFormattedTextCalls()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));

@@ -336,6 +336,10 @@ public partial class GridView
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var rowHeaderWidth = ActualRowHeaderWidth;
         var columnHeaderHeight = EffectiveColHeaderHeight;
+        var visibleLeft = rowHeaderWidth;
+        var visibleTop = columnHeaderHeight;
+        var visibleRight = ActualWidth;
+        var visibleBottom = ActualHeight;
         _brushCache.Clear();
         _borderPenCache.Clear();
         _fillPatternPenCache.Clear();
@@ -368,6 +372,8 @@ public partial class GridView
 
                 var rect = new Rect(
                     colMetric.LeftOffset + rowHeaderWidth, rowMetric.TopOffset + columnHeaderHeight, w, h);
+                if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
+                    continue;
 
                 Brush? fill = null;
                 if (bg?.FillColor.HasValue == true)
@@ -398,6 +404,9 @@ public partial class GridView
             double y = rowMetric.TopOffset   + columnHeaderHeight;
             double w = colMetric.Width;
             double h = rowMetric.Height;
+            var rect = new Rect(x, y, w, h);
+            if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
+                continue;
 
             DrawBorderEdge(dc, cell.Style.BorderTop,    new Point(x,     y),     new Point(x + w, y),     _brushCache, _borderPenCache);
             DrawBorderEdge(dc, cell.Style.BorderBottom, new Point(x,     y + h), new Point(x + w, y + h), _brushCache, _borderPenCache);
@@ -417,6 +426,9 @@ public partial class GridView
                 rowMetric.TopOffset + columnHeaderHeight,
                 colMetric.Width,
                 rowMetric.Height);
+            if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
+                continue;
+
             DrawCommentIndicator(dc, rect);
         }
 
@@ -450,6 +462,13 @@ public partial class GridView
 
             var rect = new Rect(
                 colMetric.LeftOffset + rowHeaderWidth, rowMetric.TopOffset + columnHeaderHeight, w, h);
+            if (rect.Bottom <= visibleTop ||
+                rect.Top >= visibleBottom ||
+                rect.Left >= visibleRight)
+            {
+                continue;
+            }
+
             double renderWidth = w;
 
             if (cell.ConditionalIcon is { } icon)
@@ -551,6 +570,9 @@ public partial class GridView
             textY = Math.Max(rect.Top, textY);
 
             var clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);
+            if (!IntersectsVisibleGrid(clipRect, visibleLeft, visibleTop, visibleRight, visibleBottom))
+                continue;
+
             var textPoint = new Point(Math.Round(textX), Math.Round(textY));
             var shouldClipText = ShouldClipText(wrapText, clipRect, text, textPoint);
             if (shouldClipText)
@@ -606,6 +628,17 @@ public partial class GridView
 
         dc.DrawLine(GridPen, new Point(right, top), new Point(right, bottom));
     }
+
+    private static bool IntersectsVisibleGrid(
+        Rect rect,
+        double visibleLeft,
+        double visibleTop,
+        double visibleRight,
+        double visibleBottom) =>
+        rect.Right > visibleLeft &&
+        rect.Left < visibleRight &&
+        rect.Bottom > visibleTop &&
+        rect.Top < visibleBottom;
 
     private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);
 
