@@ -193,7 +193,7 @@ internal static class RibbonAdaptiveLayoutEngine
             return;
 
         while (!StatesFit(groups, states, fixedChromeWidth, availableWidth) &&
-               TryCollapseOneMoreGroup(states, preserveFirstGroup: false, runtimeVisibilityProtectedGroupIndexes))
+               TryCollapseOneMoreGroup(states, preserveFirstGroup: false, protectedGroupIndexes))
         {
         }
     }
