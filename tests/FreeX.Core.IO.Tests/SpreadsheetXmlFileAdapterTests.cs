@@ -1408,6 +1408,48 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromDynamicXsltElementsAndAttributes()
+    {
+        using var source = StreamFromString("<rows><row sheet=\"Dynamic\" label=\"Alpha\" amount=\"42.5\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <xsl:element name="ss:Workbook">
+                  <xsl:element name="ss:Worksheet">
+                    <xsl:attribute name="ss:Name"><xsl:value-of select="row/@sheet" /></xsl:attribute>
+                    <xsl:element name="ss:Table">
+                      <xsl:element name="ss:Row">
+                        <xsl:element name="ss:Cell">
+                          <xsl:element name="ss:Data">
+                            <xsl:attribute name="ss:Type">String</xsl:attribute>
+                            <xsl:value-of select="row/@label" />
+                          </xsl:element>
+                        </xsl:element>
+                        <xsl:element name="ss:Cell">
+                          <xsl:element name="ss:Data">
+                            <xsl:attribute name="ss:Type">Number</xsl:attribute>
+                            <xsl:value-of select="row/@amount" />
+                          </xsl:element>
+                        </xsl:element>
+                      </xsl:element>
+                    </xsl:element>
+                  </xsl:element>
+                </xsl:element>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Dynamic");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Alpha"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(42.5));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlScalarValueTypesAndIndexes()
     {
         using var source = StreamFromString("""
