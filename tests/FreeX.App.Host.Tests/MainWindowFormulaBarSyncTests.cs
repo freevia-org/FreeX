@@ -435,6 +435,8 @@ public sealed class MainWindowFormulaBarSyncTests
                 new CellAddress(harness.CurrentSheetId, 1, 1),
                 new CellAddress(harness.CurrentSheetId, 1, 1)));
             harness.CellAddressBoxText.Should().Be("not a reference");
+            harness.CellAddressBoxFocused.Should().BeTrue();
+            harness.CellAddressBoxSelectionLength.Should().Be(harness.CellAddressBoxText.Length);
             harness.FormulaBarText.Should().Be("active cell");
         });
     }
@@ -568,6 +570,10 @@ public sealed class MainWindowFormulaBarSyncTests
         public bool InlineEditorVisible => InlineEditor?.IsVisible == true;
 
         public bool FormulaBarFocused => IsFocused((TextBox)_window.FindName("FormulaBar"));
+
+        public bool CellAddressBoxFocused => IsFocused((TextBox)_window.FindName("CellAddressBox"));
+
+        public int CellAddressBoxSelectionLength => ((TextBox)_window.FindName("CellAddressBox")).SelectionLength;
 
         public bool SheetGridFocused => IsFocused((SheetGridView)_window.FindName("SheetGrid"));
 

@@ -533,6 +533,39 @@ public sealed class DataToolDialogTests
     }
 
     [Fact]
+    public void TextToColumnsFixedWidthRulerDrag_CancelsOnReleasedButtonOrLostCapture()
+    {
+        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsDialog.cs"));
+        var rulerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsDialog.FixedWidth.cs"));
+
+        var mouseMove = rulerSource[
+            rulerSource.IndexOf("private void FixedWidthRuler_MouseMove", StringComparison.Ordinal)..
+            rulerSource.IndexOf("private void FixedWidthRuler_MouseLeftButtonUp", StringComparison.Ordinal)];
+        var mouseUpAndLostCapture = rulerSource[
+            rulerSource.IndexOf("private void FixedWidthRuler_MouseLeftButtonUp", StringComparison.Ordinal)..
+            rulerSource.IndexOf("private void FixedWidthRuler_MouseRightButtonDown", StringComparison.Ordinal)];
+        var cancelHelper = rulerSource[
+            rulerSource.IndexOf("private void CancelFixedWidthRulerDrag", StringComparison.Ordinal)..
+            rulerSource.IndexOf("private int FindNearestBreakIndex", StringComparison.Ordinal)];
+
+        dialogSource.Should().Contain("_fixedWidthRuler.LostMouseCapture += FixedWidthRuler_LostMouseCapture;");
+        mouseMove.Should().Contain("if (_dragBreakIndex is not { } index)");
+        mouseMove.Should().Contain("if (e.LeftButton != MouseButtonState.Pressed)");
+        mouseMove.Should().Contain("CancelFixedWidthRulerDrag();");
+        mouseMove.Should().Contain("e.Handled = true;");
+        mouseMove.IndexOf("CancelFixedWidthRulerDrag();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseMove.IndexOf("var positions = ParseFixedWidthBreakPositions", StringComparison.Ordinal));
+
+        mouseUpAndLostCapture.Should().Contain("CancelFixedWidthRulerDrag();");
+        mouseUpAndLostCapture.Should().Contain("private void FixedWidthRuler_LostMouseCapture");
+        mouseUpAndLostCapture.Should().Contain("_dragBreakIndex = null;");
+        cancelHelper.Should().Contain("_dragBreakIndex = null;");
+        cancelHelper.Should().Contain("if (_fixedWidthRuler.IsMouseCaptured)");
+        cancelHelper.Should().Contain("_fixedWidthRuler.ReleaseMouseCapture();");
+    }
+
+    [Fact]
     public void TextToColumnsResult_CapturesTextQualifierAndConsecutiveDelimiterChoice()
     {
         var result = TextToColumnsDialog.CreateResult(
