@@ -108,6 +108,16 @@ public sealed partial class XlsxFileAdapter
                 cellCount += sheet.CellCount;
                 if (cellCount > FingerprintCellLimit)
                     return false;
+
+                if (!sheet.HasStyleOnlyCells)
+                    continue;
+
+                foreach (var _ in sheet.GetStyleOnlyEntries())
+                {
+                    cellCount++;
+                    if (cellCount > FingerprintCellLimit)
+                        return false;
+                }
             }
 
             return true;
