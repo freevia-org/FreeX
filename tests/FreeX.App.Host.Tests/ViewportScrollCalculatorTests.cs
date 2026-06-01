@@ -94,21 +94,21 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void MainWindowWheelHandler_RoutesSplitPaneWheelFromPointerPosition()
+    public void MainWindowWheelHandler_RoutesSplitPaneWheelThroughPointerResolvedTarget()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Viewport.cs"));
         var wheelHandler = source[
             source.IndexOf("private void SheetGrid_MouseWheel", StringComparison.Ordinal)..
             source.IndexOf("private void OnAutofillEdgeScrollRequested", StringComparison.Ordinal)];
 
+        wheelHandler.Should().Contain("var horizontal = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;");
         wheelHandler.Should().Contain("var wheelPos = e.GetPosition(SheetGrid);");
-        wheelHandler.Should().Contain("FreeX.App.UI.GridView.HitTestViewportCell(wheelViewport, _currentSheetId, wheelPos) is null");
-        wheelHandler.Should().Contain("? FreeX.App.UI.SplitPaneRegion.BottomRight");
-        wheelHandler.Should().Contain(": FreeX.App.UI.GridView.HitTestSplitPaneRegion(wheelViewport, wheelPos)");
-        wheelHandler.IndexOf("HitTestViewportCell", StringComparison.Ordinal)
-            .Should()
-            .BeLessThan(wheelHandler.IndexOf("HitTestSplitPaneRegion", StringComparison.Ordinal));
-        wheelHandler.IndexOf("HitTestSplitPaneRegion", StringComparison.Ordinal)
+        wheelHandler.Should().Contain("FreeX.App.UI.GridView.ResolveSplitPaneWheelTarget(");
+        wheelHandler.Should().Contain("SheetGrid.ActualWidth");
+        wheelHandler.Should().Contain("SheetGrid.ActualHeight");
+        wheelHandler.Should().Contain("_activeSplitPaneRegion = wheelTarget.Region;");
+        wheelHandler.Should().Contain("horizontal = wheelTarget.Horizontal;");
+        wheelHandler.IndexOf("ResolveSplitPaneWheelTarget", StringComparison.Ordinal)
             .Should()
             .BeLessThan(wheelHandler.IndexOf("CanScrollSplitPaneRegion", StringComparison.Ordinal));
     }
