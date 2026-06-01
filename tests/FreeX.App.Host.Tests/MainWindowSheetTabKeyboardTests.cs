@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -83,6 +84,22 @@ public sealed class MainWindowSheetTabKeyboardTests
             harness.ActiveSheetTabName.Should().Be("Sheet1");
             harness.GroupedSheetTabNames.Should().Equal("Sheet1");
         });
+    }
+
+    [Fact]
+    public void SheetTabMouseMove_CancelsStaleDragWhenLeftButtonIsReleased()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var mouseMove = source[
+            source.IndexOf("private void SheetTab_MouseMove", StringComparison.Ordinal)..
+            source.IndexOf("private void SheetTab_MouseLeftButtonUp", StringComparison.Ordinal)];
+
+        mouseMove.Should().Contain("if (_dragSheetTabId is not { } draggedId)");
+        mouseMove.Should().Contain("if (e.LeftButton != MouseButtonState.Pressed)");
+        mouseMove.Should().Contain("_dragSheetTabId = null;");
+        mouseMove.IndexOf("_dragSheetTabId = null;", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseMove.IndexOf("var current = e.GetPosition(SheetTabsControl);", StringComparison.Ordinal));
     }
 
     [Fact]
