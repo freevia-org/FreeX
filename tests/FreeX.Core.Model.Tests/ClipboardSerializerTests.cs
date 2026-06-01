@@ -42,6 +42,19 @@ public sealed class ClipboardSerializerTests
     }
 
     [Fact]
+    public void DeserializePlainText_TrimsTrailingRowSeparators()
+    {
+        var rows = ClipboardSerializer.Deserialize("alpha\tbravo\r\ncharlie\tdelta\r\n");
+
+        rows.Should().BeEquivalentTo(
+            [
+                new[] { "alpha", "bravo" },
+                new[] { "charlie", "delta" },
+            ],
+            options => options.WithStrictOrdering());
+    }
+
+    [Fact]
     public void Benchmark_SerializeDenseViewport_ReportsTimingAndAllocatedBytes()
     {
         const int rows = 250;
