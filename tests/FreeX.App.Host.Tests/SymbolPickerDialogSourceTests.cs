@@ -62,8 +62,11 @@ public sealed class SymbolPickerDialogSourceTests
         var source = ReadSymbolPickerDialogSources();
 
         source.Should().Contain("void AcceptSelectedSymbol()");
-        source.Should().Contain("button.MouseDoubleClick += (_, _) => AcceptSelectedSymbol();");
-        source.Should().Contain("specialList.MouseDoubleClick += (_, _) => acceptSelectedSymbol();");
+        source.Should().Contain("button.MouseDoubleClick += (_, e) =>");
+        source.Should().Contain("AcceptSelectedSymbol();");
+        source.Should().Contain("specialList.MouseDoubleClick += (_, e) =>");
+        source.Should().Contain("acceptSelectedSymbol();");
+        source.Split("e.Handled = true;").Length.Should().BeGreaterThanOrEqualTo(3);
         source.Should().Contain("insert.Click += (_, _) => acceptSelectedSymbol();");
     }
 
