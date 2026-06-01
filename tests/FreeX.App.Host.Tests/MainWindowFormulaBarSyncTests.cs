@@ -511,6 +511,26 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void UseInFormulaInsertion_InsertsDefinedNameIntoDisplayedActiveFormulaAtCaret()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellFormula(1, 1, "SUM(,B1)");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaBarCaretIndex("=SUM(".Length);
+
+            harness.InsertDefinedNameIntoFormula("SalesData");
+
+            harness.FormulaBarText.Should().Be("=SUM(SalesData,B1)");
+            harness.FormulaBarCaretIndex.Should().Be("=SUM(SalesData".Length);
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.CellFormula(1, 1).Should().Be("SUM(,B1)");
+        });
+    }
+
+    [Fact]
     public void UseInFormulaInsertion_PrependsFormulaPrefixForPlainFormulaBarText()
     {
         StaTestRunner.Run(() =>
