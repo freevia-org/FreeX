@@ -16,7 +16,10 @@ internal sealed record CfEvaluationContext(
     IReadOnlyList<ConditionalFormat> IconRulesByPriority,
     Dictionary<ConditionalFormat, CfAggregateCache> Aggregates,
     Dictionary<ConditionalFormat, CfFormulaCache> Formulas,
-    Dictionary<CfThresholdFormulaKey, FormulaNode> ThresholdFormulas);
+    Dictionary<CfThresholdFormulaKey, FormulaNode> ThresholdFormulas,
+    Dictionary<ConditionalFormat, CfIconSetThresholdCache> IconSetThresholds);
+
+internal sealed record CfIconSetThresholdCache(double[] Values, bool[] GreaterThanOrEqual);
 
 internal sealed record CfFormulaCache(
     FormulaNode Ast,
@@ -62,13 +65,15 @@ internal static class ViewportConditionalFormatEvaluator
     private static readonly Dictionary<ConditionalFormat, CfAggregateCache> EmptyAggregates = new(ReferenceEqualityComparer.Instance);
     private static readonly Dictionary<ConditionalFormat, CfFormulaCache> EmptyFormulas = new(ReferenceEqualityComparer.Instance);
     private static readonly Dictionary<CfThresholdFormulaKey, FormulaNode> EmptyThresholdFormulas = [];
+    private static readonly Dictionary<ConditionalFormat, CfIconSetThresholdCache> EmptyIconSetThresholds = new(ReferenceEqualityComparer.Instance);
     private static readonly FormulaEvaluator ThresholdFormulaEvaluator = new();
     private static readonly CfEvaluationContext EmptyContext = new(
         EmptyRules,
         EmptyRules,
         EmptyAggregates,
         EmptyFormulas,
-        EmptyThresholdFormulas);
+        EmptyThresholdFormulas,
+        EmptyIconSetThresholds);
 
     public static CfEvaluationContext BuildContext(Sheet sheet)
     {
@@ -77,13 +82,16 @@ internal static class ViewportConditionalFormatEvaluator
 
         var rulesByPriority = CopyRulesByPriority(sheet.ConditionalFormats);
         var iconRulesByPriority = CopyIconRulesByPriority(rulesByPriority);
+        var aggregates = PrecomputeAggregates(sheet);
+        var thresholdFormulas = PrecomputeThresholdFormulaCaches(sheet);
 
         return new CfEvaluationContext(
             rulesByPriority,
             iconRulesByPriority,
-            PrecomputeAggregates(sheet),
+            aggregates,
             PrecomputeFormulaCaches(sheet),
-            PrecomputeThresholdFormulaCaches(sheet));
+            thresholdFormulas,
+            PrecomputeIconSetThresholdCaches(sheet, aggregates));
     }
 
     private static ConditionalFormat[] CopyRulesByPriority(IReadOnlyList<ConditionalFormat> rules)
@@ -384,6 +392,73 @@ internal static class ViewportConditionalFormatEvaluator
         return result ?? EmptyThresholdFormulas;
     }
 
+    private static Dictionary<ConditionalFormat, CfIconSetThresholdCache> PrecomputeIconSetThresholdCaches(
+        Sheet sheet,
+        Dictionary<ConditionalFormat, CfAggregateCache> aggregates)
+    {
+        Dictionary<ConditionalFormat, CfIconSetThresholdCache>? result = null;
+        foreach (var cf in sheet.ConditionalFormats)
+        {
+            if (cf.RuleType != CfRuleType.IconSet ||
+                !aggregates.TryGetValue(cf, out var cache))
+                continue;
+
+            var thresholdCount = GetIconSetCount(cf.IconSetStyle) - 1;
+            if (cf.IconSetThresholds.Count < thresholdCount)
+                continue;
+
+            var values = new double[thresholdCount];
+            var comparisons = new bool[thresholdCount];
+            var resolved = true;
+            for (var i = 0; i < thresholdCount; i++)
+            {
+                var threshold = cf.IconSetThresholds[i];
+                if (threshold.Type == CfThresholdType.Formula ||
+                    !TryResolveStaticThreshold(threshold.Type, threshold.Value, cache, out values[i]))
+                {
+                    resolved = false;
+                    break;
+                }
+
+                comparisons[i] = threshold.GreaterThanOrEqual ?? true;
+            }
+
+            if (!resolved)
+                continue;
+
+            result ??= new Dictionary<ConditionalFormat, CfIconSetThresholdCache>(ReferenceEqualityComparer.Instance);
+            result[cf] = new CfIconSetThresholdCache(values, comparisons);
+        }
+
+        return result ?? EmptyIconSetThresholds;
+    }
+
+    private static bool TryResolveStaticThreshold(
+        CfThresholdType type,
+        string? text,
+        CfAggregateCache cache,
+        out double value)
+    {
+        value = 0;
+        return type switch
+        {
+            CfThresholdType.Min => Set(cache.Min, out value),
+            CfThresholdType.Max => Set(cache.Max, out value),
+            CfThresholdType.Number => TryParseDouble(text, out value),
+            CfThresholdType.Percent => TryParseDouble(text, out var percent) &&
+                                       Set(cache.Min + (cache.Max - cache.Min) * (percent / 100d), out value),
+            CfThresholdType.Percentile => TryParseDouble(text, out var percentile) &&
+                                          TryResolvePercentile(cache.SortedValues, percentile, out value),
+            _ => false
+        };
+
+        static bool Set(double input, out double output)
+        {
+            output = input;
+            return double.IsFinite(input);
+        }
+    }
+
     private static void TryAddThresholdFormulaCache(
         ref Dictionary<CfThresholdFormulaKey, FormulaNode>? result,
         ConditionalFormat cf,
@@ -420,6 +495,11 @@ internal static class ViewportConditionalFormatEvaluator
         cfContext.ThresholdFormulas.TryGetValue(new CfThresholdFormulaKey(cf, slot, index), out var ast)
             ? ast
             : null;
+
+    internal static int GetIconSetCount(string? style) =>
+        !string.IsNullOrWhiteSpace(style) && char.IsDigit(style![0])
+            ? Math.Clamp(style[0] - '0', 3, 5)
+            : 3;
 
     public static bool TryGetDouble(ScalarValue value, out double result)
     {
