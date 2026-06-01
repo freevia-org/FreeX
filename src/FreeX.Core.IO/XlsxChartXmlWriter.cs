@@ -286,6 +286,12 @@ internal static partial class XlsxChartXmlWriter
                 ? -27
                 : null;
 
+    private static bool IsClassicStackedBarOrColumnChart(ChartType chartType) =>
+        chartType is ChartType.StackedColumn
+            or ChartType.PercentStackedColumn
+            or ChartType.StackedBar
+            or ChartType.PercentStackedBar;
+
     private static XElement? ToChartBooleanValueXml(XNamespace chartNs, string elementName, bool? value) =>
         value.HasValue
             ? new XElement(chartNs + elementName, new XAttribute("val", value.Value ? "1" : "0"))

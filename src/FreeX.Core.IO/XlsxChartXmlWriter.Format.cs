@@ -6,20 +6,23 @@ namespace FreeX.Core.IO;
 
 internal static partial class XlsxChartXmlWriter
 {
-    private static XElement ToChartTitleXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs) =>
-        new(chartNs + "title",
+    private static XElement ToChartTitleXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
+    {
+        var fontSize = ToEffectiveChartTitleFontSize(chart);
+        return new XElement(chartNs + "title",
             new XElement(chartNs + "tx",
                 new XElement(chartNs + "rich",
-                        // CT_TextBody requires bodyPr before the paragraph(s).
-                        new XElement(drawingNs + "bodyPr"),
-                        new XElement(drawingNs + "p",
-                            new XElement(drawingNs + "r",
-                                ToTextRunProperties(chart.ChartTitleTextThemeColor, chart.ChartTitleTextColor, chart.ChartTitleFontSize, drawingNs),
-                                new XElement(drawingNs + "t", chart.Title))))),
+                    // CT_TextBody requires bodyPr before the paragraph(s).
+                    new XElement(drawingNs + "bodyPr"),
+                    new XElement(drawingNs + "p",
+                        new XElement(drawingNs + "r",
+                            ToTextRunProperties(chart.ChartTitleTextThemeColor, chart.ChartTitleTextColor, fontSize, drawingNs),
+                            new XElement(drawingNs + "t", chart.Title))))),
             ToManualLayoutXml(chart.TitleLayout, chartNs),
             chart.TitleOverlay
                 ? new XElement(chartNs + "overlay", new XAttribute("val", "1"))
                 : null);
+    }
 
     private static XElement? ToAxisTitleXml(
         string? title,
@@ -179,9 +182,10 @@ internal static partial class XlsxChartXmlWriter
         if (!chart.ShowLegend || chart.LegendPosition == ChartLegendPosition.None)
             return null;
 
+        var legendPosition = ToEffectiveLegendPosition(chart);
         return new XElement(chartNs + "legend",
             new XElement(chartNs + "legendPos",
-                new XAttribute("val", ToXlsxLegendPosition(chart.LegendPosition))),
+                new XAttribute("val", ToXlsxLegendPosition(legendPosition))),
             chart.LegendEntries
                 .Where(entry => entry.Index >= 0 && entry.IsDeleted is not null)
                 .Select(entry => new XElement(chartNs + "legendEntry",
@@ -200,6 +204,19 @@ internal static partial class XlsxChartXmlWriter
                 chart.LegendBorderThickness),
             ToLegendTextProperties(chart, chartNs, drawingNs));
     }
+
+    private static double ToEffectiveChartTitleFontSize(ChartModel chart) =>
+        IsClassicStackedBarOrColumnChart(chart.Type) && chart.ChartTitleFontSize == 16
+            ? 14
+            : chart.ChartTitleFontSize;
+
+    private static ChartLegendPosition ToEffectiveLegendPosition(ChartModel chart) =>
+        IsClassicStackedBarOrColumnChart(chart.Type) &&
+        chart.LegendPosition == ChartLegendPosition.Right &&
+        chart.LegendLayout is null &&
+        !chart.LegendOverlay
+            ? ChartLegendPosition.Bottom
+            : chart.LegendPosition;
 
     private static XElement? ToManualLayoutXml(ChartManualLayoutModel? layout, XNamespace chartNs)
     {
