@@ -123,6 +123,41 @@ public sealed class XlsxFileAdapterPerformanceTests
     }
 
     [Fact]
+    public void LoadSourcePackageCapture_ReusesOnlyOwnedPackageBuffers()
+    {
+        var adapterSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.cs"));
+        var snapshotSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SourcePackageSnapshot.cs"));
+
+        adapterSource.Should().Contain("loadPackage.CanReuseBufferForSnapshot");
+        adapterSource.Should().Contain("CanReuseBufferForSnapshot: false");
+        adapterSource.Should().Contain("CanReuseBufferForSnapshot: true");
+        snapshotSource.Should().Contain("allowBufferReuse &&");
+        snapshotSource.Should().Contain("return new XlsxSourcePackage(buffer.Array, buffer.Offset, (int)stream.Length, fingerprint);");
+    }
+
+    [Fact]
+    public void Load_FromCallerOwnedMemoryStream_KeepsSourceSnapshotIndependent()
+    {
+        var package = CreateDenseXlsxPackage();
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(package, writable: true))
+            workbook = adapter.Load(source);
+
+        package[0] = 0;
+        package[1] = 0;
+        package[2] = 0;
+        package[3] = 0;
+        workbook.Sheets[0].SetCell(new CellAddress(workbook.Sheets[0].Id, 1, 1), new NumberValue(42));
+
+        using var saved = new MemoryStream();
+        adapter.Save(workbook, saved);
+        saved.Position = 0;
+
+        adapter.Load(saved).SheetCount.Should().Be(DenseSheetCount);
+    }
+
+    [Fact]
     public void Benchmark_LoadIgnoredErrorAndStyleOnlyMetadataWorkbook_ReportsTiming()
     {
         const int iterations = 3;

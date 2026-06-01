@@ -46,7 +46,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
     private Workbook LoadCore(Stream stream, List<string> warnings)
     {
-        using var packageStream = CreateLoadPackageStream(stream);
+        var loadPackage = CreateLoadPackageStream(stream);
+        using var packageStream = loadPackage.PackageStream;
         var packageParts = XlsxLoadPackageParts.Empty;
         var workbookTheme = WorkbookTheme.Office;
         var workbookMetadata = XlsxWorkbookMetadataSnapshot.Default;
@@ -401,7 +402,10 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         }
 
         SourcePackages.Remove(workbook);
-        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(packageStream, workbook));
+        SourcePackages.Add(workbook, XlsxSourcePackage.Capture(
+            packageStream,
+            workbook,
+            loadPackage.CanReuseBufferForSnapshot));
         return workbook;
     }
 
@@ -544,7 +548,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
              path.Replace('\\', '/').StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static MemoryStream CreateLoadPackageStream(Stream stream)
+    private static LoadPackageStream CreateLoadPackageStream(Stream stream)
     {
         if (stream is MemoryStream memoryStream &&
             memoryStream.CanSeek &&
@@ -561,7 +565,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     publiclyVisible: true);
                 memoryStream.Position = memoryStream.Length;
                 memoryPackageStream.Position = memoryPackageStream.Length;
-                return memoryPackageStream;
+                return new LoadPackageStream(memoryPackageStream, CanReuseBufferForSnapshot: false);
             }
         }
 
@@ -572,8 +576,12 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             ? new MemoryStream((int)remainingLength)
             : new MemoryStream();
         stream.CopyTo(packageStream);
-        return packageStream;
+        return new LoadPackageStream(packageStream, CanReuseBufferForSnapshot: true);
     }
+
+    private readonly record struct LoadPackageStream(
+        MemoryStream PackageStream,
+        bool CanReuseBufferForSnapshot);
 
     private static (MemoryStream PackageStream, XLWorkbook Workbook) OpenClosedXmlWorkbookWithSanitizationFallback(
         MemoryStream packageStream)
