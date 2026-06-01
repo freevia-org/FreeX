@@ -34,6 +34,26 @@ public sealed class DataValidationServiceTests
     }
 
     [Fact]
+    public void ValidateListRange_RechecksSheetValuesAfterSourceRangeChanges()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("Red")));
+
+        var rule = NewListRule(sheet.Id, "=$A$1:$A$5000");
+        rule.ErrorMessage = "No match";
+        var target = new CellAddress(sheet.Id, 10, 1);
+
+        DataValidationService.Validate(rule, new TextValue("Green"), sheet, target, workbook)
+            .Should().Be("No match");
+
+        sheet.SetCell(new CellAddress(sheet.Id, 100, 1), Cell.FromValue(new TextValue("Green")));
+
+        DataValidationService.Validate(rule, new TextValue("Green"), sheet, target, workbook)
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void Benchmark_ValidateLargeRangeListMatch_ReportsTimingAndAllocatedBytes()
     {
         const int itemCount = 5_000;
