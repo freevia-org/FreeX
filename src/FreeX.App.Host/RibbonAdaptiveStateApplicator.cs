@@ -99,6 +99,7 @@ internal static class RibbonAdaptiveStateApplicator
 
     public static bool ShouldUseSmallWithLabelsForIconOnlyGroup(string? catalogId) =>
         catalogId is
+            "DataSortFilterGroup" or
             "DataToolsGroup" or
             "FormulasFormulaAuditingGroup" or
             "ReviewCommentsGroup" or
