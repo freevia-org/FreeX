@@ -404,6 +404,27 @@ public sealed class GridViewSelectionLayoutTests
         rects.Should().BeEmpty();
     }
 
+    [Fact]
+    public void CalculateQuickAnalysisSparklinePreviewRects_SkipsRowsShorterThanPreviewMinimum()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 3),
+            new CellAddress(sheetId, 2, 3));
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 3, 0), new RowMetric(2, 5, 3)],
+            [new ColMetric(3, 72, 64)]);
+
+        var rects = GridView.CalculateQuickAnalysisSparklinePreviewRects(
+            viewport,
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18);
+
+        rects.Should().Equal(new Rect(100, 21, 60, 4));
+    }
+
     private static ViewportModel Viewport() =>
         new(
             [],
