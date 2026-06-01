@@ -104,13 +104,17 @@ internal static class QuickAnalysisPreviewLayoutPlanner
     {
         foreach (var row in viewport.RowMetrics)
         {
-            if (row.Row < range.Start.Row || row.Row > range.End.Row)
+            if (row.Row < range.Start.Row)
                 continue;
+            if (row.Row > range.End.Row)
+                break;
 
             foreach (var col in viewport.ColMetrics)
             {
-                if (col.Col < range.Start.Col || col.Col > range.End.Col)
+                if (col.Col < range.Start.Col)
                     continue;
+                if (col.Col > range.End.Col)
+                    break;
 
                 consumer.Accept(new Rect(
                     col.LeftOffset + rowHeaderWidth + 3,
@@ -146,8 +150,10 @@ internal static class QuickAnalysisPreviewLayoutPlanner
 
         foreach (var row in viewport.RowMetrics)
         {
-            if (row.Row < range.Start.Row || row.Row > range.End.Row)
+            if (row.Row < range.Start.Row)
                 continue;
+            if (row.Row > range.End.Row)
+                break;
 
             var height = Math.Max(4, Math.Floor(row.Height / 3));
             var width = col.Width - 12;
@@ -168,8 +174,12 @@ internal static class QuickAnalysisPreviewLayoutPlanner
     {
         foreach (var col in columns)
         {
-            if (col.Col >= range.Start.Col && col.Col <= range.End.Col)
-                return col;
+            if (col.Col < range.Start.Col)
+                continue;
+            if (col.Col > range.End.Col)
+                break;
+
+            return col;
         }
 
         return null;
