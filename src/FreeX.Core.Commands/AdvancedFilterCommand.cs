@@ -105,18 +105,22 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
         var outputWidth = outputColumns is null ? _listRange.ColCount : (uint)outputColumns.Count;
         var clearWidth = Math.Max(_listRange.ColCount, outputWidth);
         var rowsToReplace = CountCopyRowsToReplace(sheet, rows.Count, clearWidth);
-        _copySnapshot = CreateCopySnapshot(rowsToReplace, clearWidth);
         var outputRowCount = (uint)rows.Count + 1;
         var destinationOverlapsSource = CopyDestinationOverlapsListRange(rowsToReplace, clearWidth);
+        _copySnapshot = destinationOverlapsSource
+            ? CreateCopySnapshot(rowsToReplace, clearWidth)
+            : [];
 
         for (uint r = 0; r < rowsToReplace; r++)
         {
             for (uint c = 0; c < clearWidth; c++)
             {
                 var target = new CellAddress(sheet.Id, _copyTo!.Value.Row + r, _copyTo.Value.Col + c);
-                _copySnapshot.Add((target, sheet.GetCell(target)?.Clone()));
                 if (destinationOverlapsSource || r >= outputRowCount || c >= outputWidth)
+                {
+                    SnapshotCopyTarget(sheet, target);
                     sheet.ClearCell(target);
+                }
             }
         }
 
@@ -147,9 +151,17 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
                     continue;
                 }
 
+                if (!destinationOverlapsSource)
+                    SnapshotCopyTarget(sheet, target);
+
                 sheet.SetCell(target, cellToCopy);
             }
         }
+    }
+
+    private void SnapshotCopyTarget(Sheet sheet, CellAddress target)
+    {
+        _copySnapshot!.Add((target, sheet.GetCell(target)?.Clone()));
     }
 
     private CommandOutcome? GetLockedCopyDestination(Workbook workbook, Sheet sheet, IReadOnlyList<uint> rows)
