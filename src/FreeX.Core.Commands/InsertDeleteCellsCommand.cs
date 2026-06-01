@@ -81,7 +81,6 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             .Where(item => item.Address.Row >= _range.Start.Row &&
                            item.Address.Row <= _range.End.Row &&
                            item.Address.Col >= _range.Start.Col)
-            .OrderByDescending(item => item.Address.Col)
             .ToList();
 
         foreach (var (address, _) in moved)
@@ -100,7 +99,6 @@ public sealed class InsertCellsCommand : IWorkbookCommand
             .Where(item => item.Address.Col >= _range.Start.Col &&
                            item.Address.Col <= _range.End.Col &&
                            item.Address.Row >= _range.Start.Row)
-            .OrderByDescending(item => item.Address.Row)
             .ToList();
 
         foreach (var (address, _) in moved)
@@ -180,7 +178,6 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             .Where(item => item.Address.Row >= _range.Start.Row &&
                            item.Address.Row <= _range.End.Row &&
                            item.Address.Col > _range.End.Col)
-            .OrderBy(item => item.Address.Col)
             .ToList();
 
         foreach (var address in _range.AllCells())
@@ -198,7 +195,6 @@ public sealed class DeleteCellsCommand : IWorkbookCommand
             .Where(item => item.Address.Col >= _range.Start.Col &&
                            item.Address.Col <= _range.End.Col &&
                            item.Address.Row > _range.End.Row)
-            .OrderBy(item => item.Address.Row)
             .ToList();
 
         foreach (var address in _range.AllCells())

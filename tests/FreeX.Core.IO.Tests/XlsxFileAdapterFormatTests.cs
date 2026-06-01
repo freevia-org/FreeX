@@ -90,7 +90,10 @@ public sealed class XlsxFileAdapterFormatTests
         pivotReferencePreserverSource.Should().Contain("PreserveWorksheetPivotTableDefinitions(sourceArchive, targetArchive, context, pivotWorksheetPaths)");
         tableReferencePreserverSource.Should().Contain("GetWorksheetPathsWithTableRelationships(sourceArchive, context)");
         adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream)");
-        styleOnlyStripperSource.Should().Contain("seenStyleIndexes.Add(styleIndex.Value)");
+        styleOnlyStripperSource.Should().Contain("sheetData.Elements(rowName)");
+        styleOnlyStripperSource.Should().Contain("cell.HasElements");
+        styleOnlyStripperSource.Should().Contain("seenStyleIndexes.Add(styleIndex)");
+        styleOnlyStripperSource.Should().NotContain("worksheetXml.Descendants(worksheetNs + \"c\").ToList()");
         sheetXmlLayoutSource.Should().Contain("XlsxWorksheetDrawingPartReader.ReadParts");
         preserveSourcePackageParts.Should().Contain("var sourceParts = InspectSourcePackageParts(sourceArchive)");
         preserveSourcePackageParts.Should().Contain("sourceParts.HasPivotPackageParts");

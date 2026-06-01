@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.IO.Compression;
 using System.Text;
@@ -80,6 +81,55 @@ public sealed class XlsxLoadPackageStreamTests
 
         stripped.Should().NotBeSameAs(package);
         ReadWorksheetCellReferences(stripped).Should().Equal("A1", "C1");
+    }
+
+    [Fact]
+    public void Benchmark_StyleOnlyCellStripper_DuplicateWorksheetReportsTimingAndAllocatedBytes()
+    {
+        const int iterations = 3;
+        using var sourcePackage = CreatePackageWithWorksheet(
+            CreateMostlyMaterializedDuplicateStyleOnlyWorksheetXml(rows: 180, columns: 80),
+            includeLargePayload: false);
+        var payload = sourcePackage.ToArray();
+
+        using (var warmupPackage = new MemoryStream(payload, writable: false))
+        using (var stripped = CreateStyleOnlyStrippedPackage(warmupPackage))
+            stripped.Should().NotBeSameAs(warmupPackage);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var packageSizes = new List<long>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            using var package = new MemoryStream(payload, writable: false);
+            var step = Stopwatch.StartNew();
+            using var stripped = CreateStyleOnlyStrippedPackage(package);
+            step.Stop();
+
+            stripped.Should().NotBeSameAs(package);
+            timings.Add(step.Elapsed.TotalMilliseconds);
+            packageSizes.Add(stripped.Length);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF XLSX_STYLE_ONLY_STRIP_DUPLICATE " +
+            "rows=180 cols=80 repeated_style_only_per_row=1 " +
+            $"steps={iterations} source_bytes={payload.Length:N0} bytes={packageSizes.Max():N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+        allocatedBytes.Should().BeGreaterThan(0);
     }
 
     [Fact]
@@ -226,6 +276,39 @@ public sealed class XlsxLoadPackageStreamTests
                     .AppendLine("\"/>");
             }
 
+            builder.AppendLine("</row>");
+        }
+
+        builder.AppendLine("</sheetData>");
+        builder.AppendLine("</worksheet>");
+        return builder.ToString();
+    }
+
+    private static string CreateMostlyMaterializedDuplicateStyleOnlyWorksheetXml(int rows, int columns)
+    {
+        var styleOnlyColumn = ColumnName(columns + 1);
+        var builder = new StringBuilder();
+        builder.AppendLine("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">""");
+        builder.AppendLine("<sheetData>");
+        for (var row = 1; row <= rows; row++)
+        {
+            builder.Append("<row r=\"").Append(row).AppendLine("\">");
+            for (var column = 1; column <= columns; column++)
+            {
+                builder
+                    .Append("<c r=\"")
+                    .Append(ColumnName(column))
+                    .Append(row)
+                    .Append("\"><v>")
+                    .Append(row * column)
+                    .AppendLine("</v></c>");
+            }
+
+            builder
+                .Append("<c r=\"")
+                .Append(styleOnlyColumn)
+                .Append(row)
+                .AppendLine("\" s=\"1\"/>");
             builder.AppendLine("</row>");
         }
 
