@@ -1055,7 +1055,8 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     {
         var (type, text) = value switch
         {
-            NumberValue number => ("Number", number.Value.ToString("R", CultureInfo.InvariantCulture)),
+            NumberValue number when double.IsFinite(number.Value) => ("Number", number.Value.ToString("R", CultureInfo.InvariantCulture)),
+            NumberValue number => ("String", number.Value.ToString("R", CultureInfo.InvariantCulture)),
             DateTimeValue dateTime => ("DateTime", dateTime.ToDateTime().ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture)),
             BoolValue boolean => ("Boolean", boolean.Value ? "1" : "0"),
             ErrorValue error => ("Error", error.Code),
