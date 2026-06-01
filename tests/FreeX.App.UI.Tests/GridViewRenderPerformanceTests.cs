@@ -773,6 +773,7 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("public static string ResolveColor", StringComparison.Ordinal)..];
 
         source.Should().Contain("private static readonly ConcurrentDictionary<string, ConditionalIconStyleTraits> StyleTraitCache");
+        source.Should().Contain("new(StringComparer.OrdinalIgnoreCase)");
         resolveGlyphKind.Should().Contain("ResolveStyleTraits(icon.Style)");
         resolveGlyphKind.Should().NotContain("Contains(");
         resolveColor.Should().Contain("ResolveStyleTraits(icon.Style).IsGray");
