@@ -441,6 +441,7 @@ public static class AccessibilityCheckerService
 
             return GetEffectiveContrastStyleForApplicableRules(
                     conditionalContrastRules.Rules,
+                    address,
                     cell,
                     conditionalContrastRules.EvaluationCache) ??
                 GetCachedWorkbookStyle(workbook, ref workbookStyleCache, cell.StyleId);
@@ -451,7 +452,7 @@ public static class AccessibilityCheckerService
             if (!rule.AppliesTo.Contains(address))
                 continue;
 
-            if (!IsConditionalFormatTrue(rule, cell.Value, conditionalContrastRules.EvaluationCache))
+            if (!IsConditionalFormatTrue(rule, address, cell.Value, conditionalContrastRules.EvaluationCache))
                 continue;
 
             style = rule.FormatIfTrue!;
@@ -464,13 +465,14 @@ public static class AccessibilityCheckerService
 
     private static CellStyle? GetEffectiveContrastStyleForApplicableRules(
         IReadOnlyList<ConditionalFormat> rules,
+        CellAddress address,
         Cell cell,
         ConditionalFormatEvaluationCache evaluationCache)
     {
         CellStyle? style = null;
         foreach (var rule in rules)
         {
-            if (!IsConditionalFormatTrue(rule, cell.Value, evaluationCache))
+            if (!IsConditionalFormatTrue(rule, address, cell.Value, evaluationCache))
                 continue;
 
             style = rule.FormatIfTrue!;
@@ -515,6 +517,7 @@ public static class AccessibilityCheckerService
 
     private static bool IsConditionalFormatTrue(
         ConditionalFormat rule,
+        CellAddress address,
         ScalarValue value,
         ConditionalFormatEvaluationCache evaluationCache) =>
         rule.RuleType switch
@@ -526,6 +529,7 @@ public static class AccessibilityCheckerService
             CfRuleType.DuplicateValues => evaluationCache.HasDuplicateValue(rule, value),
             CfRuleType.UniqueValues => evaluationCache.HasUniqueValue(rule, value),
             CfRuleType.AboveAverage => evaluationCache.MatchesAverageRule(rule, value),
+            CfRuleType.Top10 => evaluationCache.MatchesTopBottomRule(rule, address),
             CfRuleType.ContainsText => ValueText(value).Contains(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
             CfRuleType.NotContainsText => !ValueText(value).Contains(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
             CfRuleType.BeginsWith => ValueText(value).StartsWith(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
@@ -860,6 +864,7 @@ public static class AccessibilityCheckerService
     {
         private readonly Dictionary<ConditionalFormat, Dictionary<string, int>> _valueCounts = new();
         private readonly Dictionary<ConditionalFormat, RangeAverage> _averages = new();
+        private readonly Dictionary<ConditionalFormat, HashSet<CellAddress>?> _topBottomMatches = new();
 
         public bool HasDuplicateValue(ConditionalFormat rule, ScalarValue value) =>
             TryGetValueCount(rule, value, out var count) && count > 1;
@@ -880,6 +885,9 @@ public static class AccessibilityCheckerService
                 ? number > average.Value
                 : number < average.Value;
         }
+
+        public bool MatchesTopBottomRule(ConditionalFormat rule, CellAddress address) =>
+            GetTopBottomMatches(rule)?.Contains(address) == true;
 
         private bool TryGetValueCount(ConditionalFormat rule, ScalarValue value, out int count)
         {
@@ -941,6 +949,56 @@ public static class AccessibilityCheckerService
                 : new RangeAverage(sum / count, HasValues: true);
             _averages[rule] = average;
             return average;
+        }
+
+        private HashSet<CellAddress>? GetTopBottomMatches(ConditionalFormat rule)
+        {
+            if (_topBottomMatches.TryGetValue(rule, out var matches))
+                return matches;
+
+            var rankedValues = new List<(CellAddress Address, double Value, int Index)>();
+            foreach (var (entry, cell) in occupiedCells)
+            {
+                if (!TryGetNumber(cell.Value, out var number))
+                    continue;
+
+                var address = new CellAddress(sheet.Id, entry.Row, entry.Col);
+                if (!rule.AppliesTo.Contains(address))
+                    continue;
+
+                rankedValues.Add((address, number, rankedValues.Count));
+            }
+
+            if (rankedValues.Count == 0)
+            {
+                _topBottomMatches[rule] = null;
+                return null;
+            }
+
+            var take = Math.Clamp(
+                rule.TopBottomPercent
+                    ? (int)Math.Ceiling(rankedValues.Count * Math.Max(1, rule.TopBottomRank) / 100d)
+                    : rule.TopBottomRank,
+                1,
+                rankedValues.Count);
+            rankedValues.Sort(rule.AboveAverage
+                ? static (left, right) =>
+                {
+                    var valueOrder = right.Value.CompareTo(left.Value);
+                    return valueOrder != 0 ? valueOrder : left.Index.CompareTo(right.Index);
+                }
+                : static (left, right) =>
+                {
+                    var valueOrder = left.Value.CompareTo(right.Value);
+                    return valueOrder != 0 ? valueOrder : left.Index.CompareTo(right.Index);
+                });
+
+            matches = new HashSet<CellAddress>(take);
+            for (var i = 0; i < take; i++)
+                matches.Add(rankedValues[i].Address);
+
+            _topBottomMatches[rule] = matches;
+            return matches;
         }
     }
 
