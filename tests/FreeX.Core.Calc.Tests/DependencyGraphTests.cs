@@ -69,9 +69,9 @@ public class DependencyGraphTests
         afterPlan.Should().Contain("plan.OrderedCells.Count == 0");
         afterPlan.Should().Contain("plan.CyclicCells.Count == 0");
         afterPlan.Should().Contain("_volatileCells.Count == 0");
-        afterPlan.Should().Contain("!HasChangedFormulaCells(workbook, changedCells)");
+        afterPlan.Should().Contain("changedFormulaCells is null");
         afterPlan.Should().Contain("return EmptyReport;");
-        source.Should().Contain("private static bool HasChangedFormulaCells");
+        source.Should().Contain("private static List<CellAddress>? CollectChangedFormulaCells");
         source.Should().NotContain("changedCells.Where");
 
         var workbook = new Workbook();

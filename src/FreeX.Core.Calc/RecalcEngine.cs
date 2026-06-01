@@ -35,10 +35,11 @@ public sealed class RecalcEngine
         // Include volatile cells in the dependency traversal so their dependents appear in the plan
         var changedForTraversal = BuildChangedSetForTraversal(changedCells);
         var plan = _graph.GetRecalcOrder(changedForTraversal);
+        var changedFormulaCells = CollectChangedFormulaCells(workbook, changedCells);
         if (plan.OrderedCells.Count == 0 &&
             plan.CyclicCells.Count == 0 &&
             _volatileCells.Count == 0 &&
-            !HasChangedFormulaCells(workbook, changedCells))
+            changedFormulaCells is null)
         {
             return EmptyReport;
         }
@@ -52,28 +53,31 @@ public sealed class RecalcEngine
         foreach (var cyclic in plan.CyclicCells)
             AddCyclicCell(workbook, cyclic, cyclicCells, seenCyclicCells, errors);
 
-        // Directly-changed formula cells, volatile cells, and downstream dependents all
-        // share one dirty set. Topologically order that set so changed formula roots do
-        // not run before dirty formula precedents.
-        var dirtyCells = new HashSet<CellAddress>();
-
-        foreach (var addr in changedCells)
+        var evaluationPlan = plan;
+        if (_volatileCells.Count > 0 || changedFormulaCells is not null)
         {
-            var sheet = workbook.GetSheet(addr.Sheet);
-            var cell = sheet?.GetCell(addr);
-            if (cell?.HasFormula == true)
+            // Directly-changed formula cells, volatile cells, and downstream dependents
+            // share one dirty set. Topologically order that set so changed formula roots
+            // do not run before dirty formula precedents.
+            var dirtyCells = new HashSet<CellAddress>(
+                plan.OrderedCells.Count + _volatileCells.Count + (changedFormulaCells?.Count ?? 0));
+
+            if (changedFormulaCells is not null)
+            {
+                foreach (var addr in changedFormulaCells)
+                    dirtyCells.Add(addr);
+            }
+
+            foreach (var addr in _volatileCells)
                 dirtyCells.Add(addr);
+
+            foreach (var addr in plan.OrderedCells)
+                dirtyCells.Add(addr);
+
+            evaluationPlan = _graph.GetEvaluationOrder(dirtyCells);
+            foreach (var cyclic in evaluationPlan.CyclicCells)
+                AddCyclicCell(workbook, cyclic, cyclicCells, seenCyclicCells, errors);
         }
-
-        foreach (var addr in _volatileCells)
-            dirtyCells.Add(addr);
-
-        foreach (var addr in plan.OrderedCells)
-            dirtyCells.Add(addr);
-
-        var evaluationPlan = _graph.GetEvaluationOrder(dirtyCells);
-        foreach (var cyclic in evaluationPlan.CyclicCells)
-            AddCyclicCell(workbook, cyclic, cyclicCells, seenCyclicCells, errors);
 
         foreach (var addr in evaluationPlan.OrderedCells)
         {
@@ -160,17 +164,21 @@ public sealed class RecalcEngine
         return allChanged;
     }
 
-    private static bool HasChangedFormulaCells(Workbook workbook, IReadOnlyList<CellAddress> changedCells)
+    private static List<CellAddress>? CollectChangedFormulaCells(Workbook workbook, IReadOnlyList<CellAddress> changedCells)
     {
+        List<CellAddress>? formulaCells = null;
         for (var i = 0; i < changedCells.Count; i++)
         {
             var addr = changedCells[i];
             var sheet = workbook.GetSheet(addr.Sheet);
             if (sheet?.GetCell(addr)?.HasFormula == true)
-                return true;
+            {
+                formulaCells ??= [];
+                formulaCells.Add(addr);
+            }
         }
 
-        return false;
+        return formulaCells;
     }
 
     private static void AddCyclicCell(

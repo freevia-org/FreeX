@@ -10,6 +10,7 @@ namespace FreeX.Core.Calc;
 public sealed partial class ViewportService : IViewportService
 {
     private const int MaxViewportListCapacityHint = 65_536;
+    private const int MaxChartDataCellsPerViewport = 10_000;
 
     public ViewportModel GetViewport(Workbook workbook, SheetId sheetId, ViewportRequest request)
     {
@@ -253,21 +254,34 @@ public sealed partial class ViewportService : IViewportService
         var seen = new HashSet<(SheetId SheetId, uint Row, uint Col)>();
         foreach (var chart in sheet.Charts)
         {
+            if (!chart.IsVisible)
+                continue;
+
             var sourceSheet = workbook.GetSheet(chart.DataRange.Start.Sheet);
             if (sourceSheet is null)
                 continue;
 
+            var sampledCells = 0;
             for (uint row = chart.DataRange.Start.Row; row <= chart.DataRange.End.Row; row++)
             {
                 for (uint col = chart.DataRange.Start.Col; col <= chart.DataRange.End.Col; col++)
                 {
+                    if (sampledCells++ >= MaxChartDataCellsPerViewport)
+                        return chartCells;
+
+                    if (!chart.ShowDataInHiddenRowsAndColumns &&
+                        (sourceSheet.IsRowEffectivelyHidden(row) || sourceSheet.IsColEffectivelyHidden(col)))
+                    {
+                        continue;
+                    }
+
                     if (!seen.Add((sourceSheet.Id, row, col)))
                         continue;
 
                     var cell = sourceSheet.GetCell(row, col);
                     if (cell is null)
                     {
-                        chartCells.Add(new ChartDataCell(sourceSheet.Id, row, col, ""));
+                        chartCells.Add(new ChartDataCell(sourceSheet.Id, row, col, "", BlankValue.Instance));
                         continue;
                     }
 
@@ -281,7 +295,8 @@ public sealed partial class ViewportService : IViewportService
                             sourceSheet,
                             cell,
                             ref style,
-                            EstimateCharacterWidth(sourceSheet.ColumnWidths.GetValueOrDefault(col, sourceSheet.DefaultColumnWidth)))));
+                            EstimateCharacterWidth(sourceSheet.ColumnWidths.GetValueOrDefault(col, sourceSheet.DefaultColumnWidth))),
+                        cell.Value));
                 }
             }
         }

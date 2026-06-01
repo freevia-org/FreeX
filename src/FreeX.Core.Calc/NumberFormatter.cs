@@ -75,7 +75,7 @@ public static partial class NumberFormatter
         }
 
         if (value is DateTimeValue dateTimeValue &&
-            ShouldFormatDateTimeValue(formatString) &&
+            ShouldAttemptSimpleDateTimeFormat(formatString) &&
             TryFormatSimpleDateTime(dateTimeValue.Value, formatString, targetWidthCharacters, out var simpleDateTime))
         {
             return simpleDateTime;

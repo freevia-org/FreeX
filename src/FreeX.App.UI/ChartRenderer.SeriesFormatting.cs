@@ -364,13 +364,13 @@ public static partial class ChartRenderer
         for (uint r = dataStartRow; r <= endRow; r++, i++)
         {
             if (cellLookup.TryGetValue((r, col), out var cell)
-                && double.TryParse(cell.DisplayText, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
+                && TryGetChartNumericValue(cell, out var v))
             {
                 var point = new DataPoint(i, v);
                 series.Points.Add(point);
                 trendPoints?.Add(point);
             }
-            else if (cellLookup.TryGetValue((r, col), out cell) && string.IsNullOrWhiteSpace(cell.DisplayText))
+            else if (cellLookup.TryGetValue((r, col), out cell) && IsChartBlank(cell))
             {
                 if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
                 {
