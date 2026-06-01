@@ -171,11 +171,29 @@ public partial class GridView
     private Dictionary<uint, List<GridRange>> BuildVisibleRowMergeLookup()
     {
         var result = new Dictionary<uint, List<GridRange>>();
-        foreach (var rowMetric in Viewport!.RowMetrics)
+        var rowMetrics = Viewport!.RowMetrics;
+        var colMetrics = Viewport.ColMetrics;
+        if (rowMetrics.Count == 0 || colMetrics.Count == 0)
+            return result;
+
+        var firstRow = rowMetrics[0].Row;
+        var lastRow = rowMetrics[^1].Row;
+        var firstColumn = colMetrics[0].Col;
+        var lastColumn = colMetrics[^1].Col;
+
+        foreach (var merge in MergedRegions!)
         {
-            var row = rowMetric.Row;
-            foreach (var merge in MergedRegions!)
+            if (merge.End.Row < firstRow ||
+                merge.Start.Row > lastRow ||
+                merge.End.Col < firstColumn ||
+                merge.Start.Col > lastColumn)
             {
+                continue;
+            }
+
+            foreach (var rowMetric in rowMetrics)
+            {
+                var row = rowMetric.Row;
                 if (row < merge.Start.Row || row > merge.End.Row)
                     continue;
 
