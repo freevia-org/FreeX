@@ -77,6 +77,9 @@ internal static class RibbonAdaptivePriorityPlanner
         double availableWidth,
         string? selectedTabHeader = null)
     {
+        if (RibbonAdaptiveTabProfiles.DisablesPriorityExpansion(groupNames, selectedTabHeader))
+            return [];
+
         var runtimeStateOverrides = GetRuntimeStateOverrides(availableWidth, groupNames, selectedTabHeader);
         var runtimeVisibilityOverrides = GetRuntimeVisibilityOverrides(availableWidth, groupNames, selectedTabHeader);
         var indexes = new List<int>(groupNames.Count);

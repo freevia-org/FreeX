@@ -15,7 +15,13 @@ internal static class RibbonAdaptiveTabProfiles
             [
                 Rule(900, collapseFromGroup: "Alignment"),
                 Rule(1300, collapseFromGroup: "Styles"),
-                Rule(1366, collapseFromGroup: "Editing")
+                Rule(1366, collapseFromGroup: "Editing"),
+                Rule(1500)
+            ],
+            ProtectedGroups:
+            [
+                Protected(1366, []),
+                Protected(1500, ["Editing"])
             ]),
         new(
             Name: "Insert",
@@ -66,7 +72,7 @@ internal static class RibbonAdaptiveTabProfiles
             ProtectedGroups:
             [
                 Protected(1320, ["Function Library", "Calculation"]),
-                Protected(double.PositiveInfinity, ["Function Library", "Formula Auditing", "Calculation"])
+                Protected(double.PositiveInfinity, ["Function Library", "Defined Names", "Calculation"])
             ],
             RequiresMeasuredCorrection: true),
         new(
@@ -115,9 +121,14 @@ internal static class RibbonAdaptiveTabProfiles
             [
                 Rule(1120, collapseGroups: ["Themes", "Arrange"])
             ],
+            RuntimeVisibility:
+            [
+                Runtime(1120, "Arrange", RibbonAdaptiveGroupState.IconOnly, ["Scale to Fit", "Sheet Options"]),
+                Runtime(1120, "Sheet Options", RibbonAdaptiveGroupState.Collapsed)
+            ],
             ProtectedGroups:
             [
-                Protected(1120, ["Page Setup"]),
+                Protected(1120, ["Themes", "Page Setup", "Arrange"]),
                 Protected(double.PositiveInfinity, ["Page Setup", "Arrange"])
             ],
             RequiresMeasuredCorrection: true),
@@ -131,6 +142,7 @@ internal static class RibbonAdaptiveTabProfiles
                 Rule(1320, collapseGroups: ["Notes", "Protect"]),
                 Rule(1366, collapseGroups: ["Protect"])
             ],
+            RequiresMeasuredCorrection: true,
             DisablePriorityExpansion: true),
         new(
             Name: "View",
@@ -149,11 +161,12 @@ internal static class RibbonAdaptiveTabProfiles
                     760,
                     states: [State("Workbook Views", RibbonAdaptiveGroupState.IconOnly)],
                     collapseGroups: ["Zoom", "Window"]),
-                Rule(1120, collapseGroups: ["Window"])
+                Rule(900, collapseGroups: ["Window"]),
+                Rule(1120)
             ],
             RuntimeVisibility:
             [
-                Runtime(1120, "Window", RibbonAdaptiveGroupState.Collapsed)
+                Runtime(900, "Window", RibbonAdaptiveGroupState.Collapsed)
             ],
             RequiresMeasuredCorrection: true),
         new(
@@ -313,6 +326,11 @@ internal static class RibbonAdaptiveTabProfiles
         return profile is null || profile.RequiresMeasuredCorrection;
     }
 
+    public static bool DisablesPriorityExpansion(
+        IReadOnlyList<string> groupNames,
+        string? selectedTabHeader = null) =>
+        FindProfile(groupNames, selectedTabHeader)?.DisablePriorityExpansion == true;
+
     public static IReadOnlyList<string> GetPriorityProtectedGroupNames(
         IReadOnlyList<string> groupNames,
         double availableWidth,
@@ -418,8 +436,9 @@ internal static class RibbonAdaptiveTabProfiles
     private static RibbonAdaptiveRuntimeStateOverrideRule Runtime(
         double maxWidth,
         string groupName,
-        RibbonAdaptiveGroupState state) =>
-        new(maxWidth, groupName, state);
+        RibbonAdaptiveGroupState state,
+        IReadOnlyList<string>? requiredGroups = null) =>
+        new(maxWidth, groupName, state, requiredGroups ?? []);
 
     private static RibbonAdaptiveProtectedGroupsRule Protected(
         double maxWidth,
@@ -638,6 +657,9 @@ internal static class RibbonAdaptiveTabProfiles
             if (availableWidth > rule.MaxWidth)
                 continue;
 
+            if (!ContainsRequiredGroups(groupNames, rule.RequiredGroups))
+                continue;
+
             if (TryFindGroupIndex(groupNames, rule.GroupName, out var index))
                 decisions.Add(new RibbonAdaptiveRuntimeStateOverride(index, rule.State));
         }
@@ -656,6 +678,9 @@ internal static class RibbonAdaptiveTabProfiles
             if (availableWidth > rule.MaxWidth)
                 continue;
 
+            if (!ContainsRequiredGroups(groupNames, rule.RequiredGroups))
+                continue;
+
             if (TryFindGroupIndex(groupNames, rule.GroupName, out var index) &&
                 index >= 0 &&
                 index < states.Length)
@@ -663,6 +688,19 @@ internal static class RibbonAdaptiveTabProfiles
                 states[index] = rule.State;
             }
         }
+    }
+
+    private static bool ContainsRequiredGroups(
+        IReadOnlyList<string> groupNames,
+        IReadOnlyList<string> requiredGroups)
+    {
+        for (var i = 0; i < requiredGroups.Count; i++)
+        {
+            if (!ContainsGroup(groupNames, requiredGroups[i]))
+                return false;
+        }
+
+        return true;
     }
 
     private sealed record RibbonAdaptiveBreakpointRule(
@@ -680,7 +718,8 @@ internal static class RibbonAdaptiveTabProfiles
     private sealed record RibbonAdaptiveRuntimeStateOverrideRule(
         double MaxWidth,
         string GroupName,
-        RibbonAdaptiveGroupState State);
+        RibbonAdaptiveGroupState State,
+        IReadOnlyList<string> RequiredGroups);
 
     private sealed record RibbonAdaptiveProtectedGroupsRule(
         double MaxWidth,
