@@ -987,6 +987,32 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Save_TruncatesSeekableOutputStreamBeforeWritingSpreadsheetMl()
+    {
+        var largeWorkbook = new Workbook("XmlLarge");
+        var largeSheet = largeWorkbook.AddSheet("Data");
+        largeSheet.SetCell(new CellAddress(largeSheet.Id, 1, 1), new TextValue(new string('x', 8192)));
+        var workbook = new Workbook("XmlTruncate");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Gamma"));
+        using var stream = new MemoryStream();
+
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(largeWorkbook, stream);
+        var largeLength = stream.Length;
+        stream.Position = 0;
+
+        adapter.Save(workbook, stream);
+
+        stream.Position.Should().Be(stream.Length);
+        stream.Length.Should().BeLessThan(largeLength);
+        stream.Position = 0;
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        document.Descendants(ss + "Data").Single().Value.Should().Be("Gamma");
+    }
+
+    [Fact]
     public void LoadTransformed_AppliesSafeXsltAndLoadsSpreadsheetMlOutput()
     {
         using var source = StreamFromString("""
@@ -1025,6 +1051,30 @@ public sealed class SpreadsheetXmlFileAdapterTests
         sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(12.5));
         sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("Beta"));
         sheet.GetCell(2, 2)!.Value.Should().Be(new NumberValue(7.25));
+    }
+
+    [Fact]
+    public void LoadTransformed_LoadsDisableOutputEscapingSpreadsheetMlOutput()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <workbook>&lt;ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"&gt;&lt;ss:Worksheet ss:Name="Generated"&gt;&lt;ss:Table&gt;&lt;ss:Row&gt;&lt;ss:Cell&gt;&lt;ss:Data ss:Type="String"&gt;Alpha&lt;/ss:Data&gt;&lt;/ss:Cell&gt;&lt;/ss:Row&gt;&lt;/ss:Table&gt;&lt;/ss:Worksheet&gt;&lt;/ss:Workbook&gt;</workbook>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml" omit-xml-declaration="yes" />
+              <xsl:template match="/rows">
+                <xsl:value-of select="workbook" disable-output-escaping="yes" />
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Generated");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Alpha"));
     }
 
     [Fact]

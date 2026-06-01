@@ -26,13 +26,11 @@ public static class XsltWorkbookTransform
         ArgumentOutOfRangeException.ThrowIfLessThan(maxInputCharacters, 1);
 
         var transform = LoadStylesheet(stylesheet, maxInputCharacters);
-        var outputSettings = transform.OutputSettings?.Clone() ?? new XmlWriterSettings();
         var output = new BoundedMemoryStream(maxOutputBytes);
         try
         {
             using var sourceReader = CreateSecureReader(sourceXml, maxInputCharacters);
-            using var writer = XmlWriter.Create(output, outputSettings);
-            transform.Transform(sourceReader, arguments: null, writer, documentResolver: null);
+            transform.Transform(sourceReader, arguments: null, output);
         }
         catch (XmlException ex)
         {
