@@ -33,6 +33,7 @@ public static partial class FlashFillService
             ?? TryKnownTitleAndSuffixRemoval(examples)
             ?? TryKnownTitleRemoval(examples)
             ?? TryKnownNameSuffixRemoval(examples)
+            ?? TryKnownOrganizationSuffixRemoval(examples)
             ?? TrySplitPascalCaseWords(examples)
             ?? TryEmailDisplayName(examples)
             ?? TryEmailLocalPartWithoutPlusTag(examples)
