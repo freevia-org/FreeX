@@ -94,7 +94,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
         packageStream.Position = 0;
         var sheetXmlLayoutWarningCount = warnings.Count;
-        var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, warnings);
+        var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, warnings);
         var shouldStripStyleOnlyCells = ShouldStripClosedXmlStyleOnlyCells(
             sheetXmlLayout,
             warnings.Count != sheetXmlLayoutWarningCount);
