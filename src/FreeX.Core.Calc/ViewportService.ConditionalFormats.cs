@@ -7,7 +7,7 @@ public sealed partial class ViewportService
     private static CfEvaluationContext BuildConditionalFormatContext(Sheet sheet, Workbook workbook) =>
         ViewportConditionalFormatEvaluator.BuildContext(sheet, workbook);
 
-    private static CellStyle? EvaluateConditionalFormats(
+    private static CfStyleResult? EvaluateConditionalFormats(
         Sheet sheet,
         CellAddress addr,
         ScalarValue value,
