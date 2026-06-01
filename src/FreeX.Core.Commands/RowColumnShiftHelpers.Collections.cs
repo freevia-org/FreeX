@@ -6,7 +6,6 @@ internal static partial class RowColumnShiftHelpers
     {
         var shifted = values
             .Where(p => p.Key >= start)
-            .OrderByDescending(p => p.Key)
             .ToList();
 
         foreach (var (key, _) in shifted)
@@ -20,7 +19,6 @@ internal static partial class RowColumnShiftHelpers
         var end = start + count - 1;
         var shifted = values
             .Where(p => p.Key > end)
-            .OrderBy(p => p.Key)
             .ToList();
         var removed = values.Keys.Where(key => key >= start && key <= end).ToList();
 
@@ -34,7 +32,7 @@ internal static partial class RowColumnShiftHelpers
 
     internal static void ShiftSortedSetUp(SortedSet<uint> values, uint start, uint count)
     {
-        var shifted = values.Where(value => value >= start).OrderByDescending(value => value).ToList();
+        var shifted = values.Where(value => value >= start).ToList();
         foreach (var value in shifted)
             values.Remove(value);
         foreach (var value in shifted)
@@ -45,7 +43,7 @@ internal static partial class RowColumnShiftHelpers
     {
         var end = start + count - 1;
         var removed = values.Where(value => value >= start && value <= end).ToList();
-        var shifted = values.Where(value => value > end).OrderBy(value => value).ToList();
+        var shifted = values.Where(value => value > end).ToList();
 
         foreach (var value in removed)
             values.Remove(value);
