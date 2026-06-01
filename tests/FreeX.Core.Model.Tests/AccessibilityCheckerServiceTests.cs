@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -895,5 +896,92 @@ public sealed class AccessibilityCheckerServiceTests
 
         AccessibilityCheckerService.FindIssues(workbook)
             .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
+
+    [Fact]
+    public void FindIssues_StreamsOccupiedCellsWithoutCopyingUsedCellDictionary()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "AccessibilityCheckerService.cs"));
+
+        source.Should().NotContain("GetUsedCells()");
+        source.Should().Contain("GetOccupiedCellMap()");
+        source.Should().Contain("GetConditionalContrastRules(sheet)");
+    }
+
+    [Fact]
+    public void Benchmark_LowContrastTextWithConditionalFormats_ReportsTimingAndAllocatedBytes()
+    {
+        const int rows = 20_000;
+        const int ruleCount = 8;
+        const int iterations = 3;
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Orders");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, rows, 1));
+
+        for (uint row = 1; row <= rows; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue($"Order {row}"));
+
+        for (var i = 0; i < ruleCount; i++)
+        {
+            sheet.ConditionalFormats.Add(new ConditionalFormat
+            {
+                AppliesTo = range,
+                Priority = ruleCount - i,
+                RuleType = CfRuleType.NoBlanks,
+                FormatIfTrue = new CellStyle
+                {
+                    FontColor = CellColor.Black,
+                    FillColor = CellColor.White
+                }
+            });
+        }
+
+        AccessibilityCheckerService.FindIssues(workbook);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        IReadOnlyList<AccessibilityIssue> issues = [];
+        for (var i = 0; i < iterations; i++)
+        {
+            var step = Stopwatch.StartNew();
+            issues = AccessibilityCheckerService.FindIssues(workbook);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        Console.WriteLine(
+            "PERF ACCESSIBILITY_LOW_CONTRAST_CF_TEXT " +
+            $"rows={rows} rules={ruleCount} steps={iterations} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        issues.Should().NotContain(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine([dir, .. parts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new FileNotFoundException($"Could not find workspace file: {Path.Combine(parts)}");
     }
 }
