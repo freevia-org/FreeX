@@ -60,6 +60,7 @@ public sealed partial class XlsxFileAdapter
         Dictionary<uint, double> RowHeights,
         Dictionary<uint, double> ColumnWidths,
         IReadOnlyList<(uint Row, uint Col, string Text)> Comments,
+        IReadOnlyList<(uint Row, uint Col, ThreadedComment Comment)> ThreadedComments,
         IReadOnlyList<XlsxChartPackagePart> ChartParts,
         IReadOnlyList<XlsxPicturePackagePart> PictureParts,
         IReadOnlyList<XlsxTextBoxPackagePart> TextBoxParts,
@@ -252,6 +253,7 @@ public sealed partial class XlsxFileAdapter
         var singleXmlCells = XlsxWorksheetSingleXmlCellMapper.Read(worksheetXml.Root?.Element(worksheetNs + "singleXmlCells"));
         var additionalViews = XlsxWorksheetAdditionalViewMapper.Read(worksheetXml.Root?.Element(worksheetNs + "sheetViews"));
         var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
+        var threadedComments = XlsxWorksheetThreadedCommentMapper.Read(archive, worksheetPath);
         var codeName = sheetPr?.Attribute("codeName")?.Value;
 
         return new SheetXmlLayout(
@@ -307,6 +309,7 @@ public sealed partial class XlsxFileAdapter
             rowColumnLayout.RowHeights,
             rowColumnLayout.ColumnWidths,
             comments,
+            threadedComments,
             drawingParts.ChartParts,
             drawingParts.PictureParts,
             drawingParts.TextBoxParts,

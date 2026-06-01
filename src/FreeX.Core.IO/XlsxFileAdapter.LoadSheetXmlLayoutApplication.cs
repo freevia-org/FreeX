@@ -39,6 +39,8 @@ public sealed partial class XlsxFileAdapter
             sheet.ColumnWidths[colNum] = width;
         foreach (var (row, col, text) in layout.Comments)
             sheet.Comments[new CellAddress(sheet.Id, row, col)] = text;
+        foreach (var (row, col, comment) in layout.ThreadedComments)
+            sheet.ThreadedComments[new CellAddress(sheet.Id, row, col)] = comment;
         sheet.BackgroundImage = layout.BackgroundImage;
         sheet.PageHeaderPictures = layout.HeaderFooterPictures.PageHeader;
         sheet.PageFooterPictures = layout.HeaderFooterPictures.PageFooter;
