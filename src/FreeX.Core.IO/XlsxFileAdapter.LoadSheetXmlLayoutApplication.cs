@@ -100,6 +100,7 @@ public sealed partial class XlsxFileAdapter
                 ContentType = picturePart.ContentType,
                 Title = picturePart.Title,
                 AltText = picturePart.AltText,
+                RotationDegrees = picturePart.RotationDegrees,
                 CropLeft = picturePart.CropLeft,
                 CropTop = picturePart.CropTop,
                 CropRight = picturePart.CropRight,

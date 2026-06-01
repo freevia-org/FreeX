@@ -12,7 +12,7 @@ public sealed class CommandParityStatusTests
 
         (string Command, string Status)[] expectedRows =
         [
-            ("Advanced Chart Families", "Deferred"),
+            ("Advanced Chart Families", "Partial"),
             ("Export to PDF/XPS", "Partial"),
             ("Cut (Ctrl+X)", "Implemented"),
             ("Copy (Ctrl+C)", "Implemented"),

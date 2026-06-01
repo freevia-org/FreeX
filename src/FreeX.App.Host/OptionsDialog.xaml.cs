@@ -175,8 +175,10 @@ public partial class OptionsDialog : Window
     private void RefreshQuickAccessToolbarCommandLists(string? selectedAvailableId = null, string? selectedQatId = null)
     {
         var selectedSet = new HashSet<string>(_quickAccessCommandIds, StringComparer.OrdinalIgnoreCase);
+        var filterText = QuickAccessSearchBox.Text ?? string.Empty;
         QuickAccessAvailableCommandsList.ItemsSource = QuickAccessToolbarCatalog.Commands
             .Where(command => !selectedSet.Contains(command.Id))
+            .Where(command => QuickAccessCommandMatchesFilter(command, filterText))
             .Select(CreateQuickAccessCommandChoice)
             .ToList();
         QuickAccessSelectedCommandsList.ItemsSource = _quickAccessCommandIds
@@ -192,6 +194,23 @@ public partial class OptionsDialog : Window
 
     private static QuickAccessCommandChoice CreateQuickAccessCommandChoice(QuickAccessToolbarCommandDefinition command) =>
         new(command.Id, UiText.Get(command.TitleResourceKey));
+
+    private static bool QuickAccessCommandMatchesFilter(
+        QuickAccessToolbarCommandDefinition command,
+        string filterText)
+    {
+        var filter = filterText.Trim();
+        if (string.IsNullOrEmpty(filter))
+            return true;
+
+        return QuickAccessCommandTextMatches(command.Id, filter) ||
+            QuickAccessCommandTextMatches(command.CommandName, filter) ||
+            QuickAccessCommandTextMatches(UiText.Get(command.TitleResourceKey), filter) ||
+            QuickAccessCommandTextMatches(UiText.Get(command.DescriptionResourceKey), filter);
+    }
+
+    private static bool QuickAccessCommandTextMatches(string text, string filter) =>
+        text.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 
     private static void SelectQuickAccessCommand(ListBox listBox, string? commandId)
     {
@@ -217,6 +236,16 @@ public partial class OptionsDialog : Window
 
     private void QuickAccessCommandLists_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
         UpdateQuickAccessToolbarCustomizationButtons();
+
+    private void QuickAccessSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (QuickAccessAvailableCommandsList is null || QuickAccessSelectedCommandsList is null)
+            return;
+
+        var selectedAvailableId = (QuickAccessAvailableCommandsList.SelectedItem as QuickAccessCommandChoice)?.Id;
+        var selectedQatId = (QuickAccessSelectedCommandsList.SelectedItem as QuickAccessCommandChoice)?.Id;
+        RefreshQuickAccessToolbarCommandLists(selectedAvailableId, selectedQatId);
+    }
 
     private void QuickAccessAddButton_Click(object sender, RoutedEventArgs e)
     {

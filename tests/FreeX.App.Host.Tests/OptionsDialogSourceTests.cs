@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Windows;
 using System.Windows.Controls;
 using System.Xml.Linq;
 using FreeX.App.Host;
@@ -223,6 +224,9 @@ public sealed class OptionsDialogSourceTests
         xaml.Should().Contain("x:Name=\"PanelQuickAccessToolbar\"");
         xaml.Should().Contain("Customize the Quick Access Toolbar");
         xaml.Should().Contain("Show Quick Access Toolbar _below the Ribbon");
+        xaml.Should().Contain("x:Name=\"QuickAccessSearchBox\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"QuickAccessToolbarCommandSearchBox\"");
+        xaml.Should().Contain("TextChanged=\"QuickAccessSearchBox_TextChanged\"");
         xaml.Should().Contain("x:Name=\"QuickAccessAvailableCommandsList\"");
         xaml.Should().Contain("x:Name=\"QuickAccessSelectedCommandsList\"");
         xaml.Should().Contain("x:Name=\"QuickAccessAddButton\"");
@@ -237,7 +241,48 @@ public sealed class OptionsDialogSourceTests
         source.Should().Contain("QuickAccessToolbarBelowRibbon = QuickAccessBelowRibbonCheckBox.IsChecked == true");
         source.Should().Contain("QuickAccessToolbarCommands = QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList()");
         source.Should().Contain("QuickAccessToolbarCatalog.DefaultCommandIds");
+        source.Should().Contain("QuickAccessCommandMatchesFilter(command, filterText)");
+        source.Should().Contain("QuickAccessSearchBox_TextChanged");
         source.Should().NotContain("DeferredCommandMessages.QuickAccessToolbarReset()");
+    }
+
+    [Fact]
+    public void OptionsDialog_RuntimeQuickAccessToolbarSearchFiltersAvailableCommandsAndKeepsAddFlow()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new OptionsDialog(new FreeXOptions());
+            dialog.Show();
+            try
+            {
+                var tabList = GetControl<ListBox>(dialog, "TabList");
+                var searchBox = GetControl<TextBox>(dialog, "QuickAccessSearchBox");
+                var availableList = GetControl<ListBox>(dialog, "QuickAccessAvailableCommandsList");
+                var selectedList = GetControl<ListBox>(dialog, "QuickAccessSelectedCommandsList");
+                var addButton = GetControl<Button>(dialog, "QuickAccessAddButton");
+
+                tabList.SelectedIndex = 8;
+                availableList.Items.Count.Should().BeGreaterThan(1);
+
+                searchBox.Text = "bold";
+
+                GetListDisplayNames(availableList).Should().Equal("Bold");
+                addButton.IsEnabled.Should().BeFalse();
+
+                availableList.SelectedIndex = 0;
+                addButton.IsEnabled.Should().BeTrue();
+
+                addButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                GetListDisplayNames(availableList).Should().BeEmpty();
+                GetListDisplayNames(selectedList).Should().Contain("Bold");
+                addButton.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
     }
 
     [Fact]
@@ -347,4 +392,10 @@ public sealed class OptionsDialogSourceTests
         field.Should().NotBeNull();
         return field!.GetValue(dialog).Should().BeOfType<T>().Subject;
     }
+
+    private static IReadOnlyList<string> GetListDisplayNames(ListBox listBox) =>
+        listBox.Items
+            .Cast<object>()
+            .Select(item => item.GetType().GetProperty("DisplayName")?.GetValue(item) as string ?? string.Empty)
+            .ToArray();
 }
