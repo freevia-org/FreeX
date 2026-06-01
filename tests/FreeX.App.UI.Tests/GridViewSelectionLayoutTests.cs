@@ -234,10 +234,15 @@ public sealed class GridViewSelectionLayoutTests
 
         cellPreview.Should().Contain("foreach (var row in viewport.RowMetrics)");
         cellPreview.Should().Contain("foreach (var col in viewport.ColMetrics)");
+        cellPreview.Should().Contain("if (row.Row > range.End.Row)");
+        cellPreview.Should().Contain("if (col.Col > range.End.Col)");
+        cellPreview.Should().Contain("break;");
         cellPreview.Should().NotContain(".Where(");
         cellPreview.Should().NotContain(".ToList()");
         sparklinePreview.Should().Contain("FirstVisibleColumnInRange(viewport.ColMetrics, range)");
         sparklinePreview.Should().Contain("foreach (var row in viewport.RowMetrics)");
+        sparklinePreview.Should().Contain("if (row.Row > range.End.Row)");
+        sparklinePreview.Should().Contain("break;");
         sparklinePreview.Should().NotContain("FirstOrDefault");
         sparklinePreview.Should().NotContain(".Where(");
         sparklinePreview.Should().NotContain(".ToList()");
