@@ -63,7 +63,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(expected);
         _output.WriteLine(
             $"PERF repeated formula text eval iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(4_000_000);
+        allocatedBytes.Should().BeLessThan(1_000_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
@@ -128,7 +128,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         result.Should().Be(expected);
         _output.WriteLine(
             $"PERF repeated boolean coercion formula text eval iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(10_000_000);
+        allocatedBytes.Should().BeLessThan(4_000_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
