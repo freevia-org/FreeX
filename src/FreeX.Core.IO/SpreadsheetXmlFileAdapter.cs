@@ -39,9 +39,12 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         new FileFormatDescriptor(".xml", "XML Spreadsheet 2003", CanOpen: true, CanSave: true)
     ];
 
-    public Workbook Load(Stream stream)
+    public Workbook Load(Stream stream) =>
+        Load(stream, SecureXmlReaderSettings.DefaultMaxCharactersInDocument);
+
+    internal Workbook Load(Stream stream, long maxCharactersInDocument)
     {
-        var document = LoadDocument(stream);
+        var document = LoadDocument(stream, maxCharactersInDocument);
         if (document.Root?.Name != SpreadsheetNs + "Workbook")
             throw new InvalidDataException("The XML document is not an Excel XML Spreadsheet 2003 workbook.");
 
@@ -126,14 +129,9 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         }
     }
 
-    private static XDocument LoadDocument(Stream stream)
+    private static XDocument LoadDocument(Stream stream, long maxCharactersInDocument)
     {
-        var settings = new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            XmlResolver = null
-        };
-        using var reader = XmlReader.Create(stream, settings);
+        using var reader = XmlReader.Create(stream, SecureXmlReaderSettings.Create(maxCharactersInDocument));
         return XDocument.Load(reader, LoadOptions.PreserveWhitespace);
     }
 

@@ -4539,6 +4539,59 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesSheetProtectionPasswordHash()
+    {
+        var workbook = new Workbook("ProtectionHashRetentionTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+        sheet.IsProtected = true;
+        sheet.ProtectionPassword = "secret";
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        var sourcePasswordHash = ReadSheetProtectionAttribute(source, "password");
+        sourcePasswordHash.Should().NotBeNullOrWhiteSpace();
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        ReadSheetProtectionAttribute(saved, "password").Should().Be(sourcePasswordHash);
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_PreservesAdvancedSheetProtectionHashWithoutLegacyPassword()
+    {
+        var workbook = new Workbook("AdvancedProtectionHashRetentionTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddAdvancedSheetProtectionMetadata(source);
+        var sourceHashValue = ReadSheetProtectionAttribute(source, "hashValue");
+        sourceHashValue.Should().Be("abc123");
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 2, 1), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        ReadSheetProtectionAttribute(saved, "hashValue").Should().Be(sourceHashValue);
+        ReadSheetProtectionAttribute(saved, "password").Should().BeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesAdvancedSheetProtectionMetadata()
     {
         var workbook = new Workbook("AdvancedSheetProtectionRetentionTest");
@@ -24783,6 +24836,29 @@ public partial class FileAdapterSmokeTests
     {
         using var stream = entry.Open();
         return XDocument.Load(stream);
+    }
+
+    private static string? ReadSheetProtectionAttribute(Stream packageStream, string attributeName)
+    {
+        var originalPosition = packageStream.CanSeek ? packageStream.Position : 0;
+        if (packageStream.CanSeek)
+            packageStream.Position = 0;
+
+        try
+        {
+            using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            return worksheetXml.Root?
+                .Element(worksheetNs + "sheetProtection")?
+                .Attribute(attributeName)?
+                .Value;
+        }
+        finally
+        {
+            if (packageStream.CanSeek)
+                packageStream.Position = originalPosition;
+        }
     }
 
     private static void ReplacePackageXml(ZipArchive archive, string entryName, XDocument document)

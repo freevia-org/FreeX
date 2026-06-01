@@ -6,7 +6,7 @@ namespace FreeX.Core.IO;
 public static class XsltWorkbookTransform
 {
     internal const long DefaultMaxOutputBytes = 64L * 1024L * 1024L;
-    internal const long DefaultMaxInputCharacters = 64L * 1024L * 1024L;
+    internal const long DefaultMaxInputCharacters = SecureXmlReaderSettings.DefaultMaxCharactersInDocument;
 
     public static MemoryStream TransformToSpreadsheetXml(Stream sourceXml, Stream stylesheet)
         => TransformToSpreadsheetXml(sourceXml, stylesheet, DefaultMaxOutputBytes, DefaultMaxInputCharacters);
@@ -78,14 +78,7 @@ public static class XsltWorkbookTransform
 
     private static XmlReader CreateSecureReader(Stream stream, long maxInputCharacters)
     {
-        var readerSettings = new XmlReaderSettings
-        {
-            DtdProcessing = DtdProcessing.Prohibit,
-            MaxCharactersInDocument = maxInputCharacters,
-            XmlResolver = null
-        };
-
-        return XmlReader.Create(stream, readerSettings);
+        return XmlReader.Create(stream, SecureXmlReaderSettings.Create(maxInputCharacters));
     }
 
     private sealed class BoundedMemoryStream(long maxBytes) : MemoryStream
