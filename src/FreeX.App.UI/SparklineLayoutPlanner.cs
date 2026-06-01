@@ -38,17 +38,36 @@ public static class SparklineLayoutPlanner
         if (values.Count == 0)
             return;
 
+        var firstIndex = -1;
+        var min = 0d;
+        var max = 0d;
+        for (var i = 0; i < values.Count; i++)
+        {
+            var value = values[i];
+            if (!double.IsFinite(value))
+                continue;
+
+            firstIndex = i;
+            min = value;
+            max = value;
+            break;
+        }
+
+        if (firstIndex < 0)
+            return;
+
         if (values.Count == 1)
         {
             consumer.AcceptSinglePoint(new Point(rect.Left + rect.Width / 2, rect.Top + rect.Height / 2));
             return;
         }
 
-        var min = values[0];
-        var max = values[0];
-        for (var i = 1; i < values.Count; i++)
+        for (var i = firstIndex + 1; i < values.Count; i++)
         {
             var value = values[i];
+            if (!double.IsFinite(value))
+                continue;
+
             if (value < min)
                 min = value;
             if (value > max)
@@ -56,17 +75,29 @@ public static class SparklineLayoutPlanner
         }
 
         var span = Math.Abs(max - min) < 0.0000001 ? 1 : max - min;
-        var previous = new Point(
-            rect.Left,
-            rect.Bottom - ((values[0] - min) / span * rect.Height));
-        for (var i = 1; i < values.Count; i++)
+        Point? previous = null;
+        var visiblePointCount = 0;
+        for (var i = firstIndex; i < values.Count; i++)
         {
+            var value = values[i];
+            if (!double.IsFinite(value))
+            {
+                previous = null;
+                continue;
+            }
+
             var point = new Point(
                 rect.Left + rect.Width * i / (values.Count - 1),
-                rect.Bottom - ((values[i] - min) / span * rect.Height));
-            consumer.AcceptSegment(previous, point);
+                rect.Bottom - ((value - min) / span * rect.Height));
+
+            if (previous is { } start)
+                consumer.AcceptSegment(start, point);
             previous = point;
+            visiblePointCount++;
         }
+
+        if (visiblePointCount == 1 && previous is { } singlePoint)
+            consumer.AcceptSinglePoint(singlePoint);
     }
 
     public static SparklineColumnLayout CalculateColumnLayout(IReadOnlyList<double> values, Rect rect, bool winLoss)
@@ -89,6 +120,9 @@ public static class SparklineLayoutPlanner
         var maxAbs = 0d;
         foreach (var value in values)
         {
+            if (!double.IsFinite(value))
+                continue;
+
             var absolute = Math.Abs(value);
             if (absolute > maxAbs)
                 maxAbs = absolute;
@@ -103,6 +137,9 @@ public static class SparklineLayoutPlanner
 
         for (var i = 0; i < values.Count; i++)
         {
+            if (!double.IsFinite(values[i]))
+                continue;
+
             var value = winLoss ? Math.Sign(values[i]) : values[i];
             var height = winLoss
                 ? rect.Height / 2
