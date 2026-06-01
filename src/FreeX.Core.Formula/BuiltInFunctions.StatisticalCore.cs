@@ -696,7 +696,8 @@ public static partial class BuiltInFunctions
         if (k < 0 || k > 1) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(rv);
         if (err is not null) return err;
-        var sorted = nums!.OrderBy(x => x).ToList();
+        var sorted = nums!;
+        sorted.Sort();
         if (sorted.Count == 0) return ErrorValue.Num;
         double rank = k * (sorted.Count - 1);
         int lo = (int)rank;
@@ -722,7 +723,8 @@ public static partial class BuiltInFunctions
         if (k <= 0 || k >= 1) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(rv);
         if (err is not null) return err;
-        var sorted = nums!.OrderBy(x => x).ToList();
+        var sorted = nums!;
+        sorted.Sort();
         int n = sorted.Count;
         if (n == 0) return ErrorValue.Num;
         double rank = k * (n + 1) - 1;
@@ -751,7 +753,8 @@ public static partial class BuiltInFunctions
         if (quart < 0 || quart > 4) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(rv);
         if (err is not null) return err;
-        var sorted = nums!.OrderBy(x => x).ToList();
+        var sorted = nums!;
+        sorted.Sort();
         if (sorted.Count == 0) return ErrorValue.Num;
         if (quart == 0) return NumberResult(sorted[0]);
         if (quart == 4) return NumberResult(sorted[^1]);
@@ -863,7 +866,8 @@ public static partial class BuiltInFunctions
         if (sig < 1) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(rv);
         if (err is not null) return err;
-        var sorted = nums!.OrderBy(v => v).ToList();
+        var sorted = nums!;
+        sorted.Sort();
         int n = sorted.Count;
         if (n == 0 || x < sorted[0] || x > sorted[^1]) return ErrorValue.NA;
         double factor = Math.Pow(10, sig);
@@ -914,7 +918,8 @@ public static partial class BuiltInFunctions
         if (sig < 1) return ErrorValue.Num;
         var (nums, err) = CollectRangeNumbers(rv);
         if (err is not null) return err;
-        var sorted = nums!.OrderBy(v => v).ToList();
+        var sorted = nums!;
+        sorted.Sort();
         int n = sorted.Count;
         if (n == 0 || x < sorted[0] || x > sorted[^1]) return ErrorValue.NA;
         double factor = Math.Pow(10, sig);
