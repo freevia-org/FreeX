@@ -40,24 +40,24 @@ public sealed class XlsxThreadedCommentMapperTests
             .Elements(ContentTypeNs + "Override")
             .Should()
             .Contain(element =>
-                element.Attribute("PartName")?.Value == "/xl/threadedComments/threadedComment1.xml" &&
-                element.Attribute("ContentType")?.Value == "application/vnd.ms-excel.threadedcomments+xml")
+                AttributeValue(element, "PartName") == "/xl/threadedComments/threadedComment1.xml" &&
+                AttributeValue(element, "ContentType") == "application/vnd.ms-excel.threadedcomments+xml")
             .And.Contain(element =>
-                element.Attribute("PartName")?.Value == "/xl/persons/person.xml" &&
-                element.Attribute("ContentType")?.Value == "application/vnd.ms-excel.person+xml");
+                AttributeValue(element, "PartName") == "/xl/persons/person.xml" &&
+                AttributeValue(element, "ContentType") == "application/vnd.ms-excel.person+xml");
 
         workbookRelsXml.Root!
             .Elements(PackageRelNs + "Relationship")
             .Should()
             .Contain(element =>
-                element.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2017/10/relationships/person" &&
-                element.Attribute("Target")?.Value == "persons/person.xml");
+                AttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/person" &&
+                AttributeValue(element, "Target") == "persons/person.xml");
         worksheetRelsXml.Root!
             .Elements(PackageRelNs + "Relationship")
             .Should()
             .Contain(element =>
-                element.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" &&
-                element.Attribute("Target")?.Value == "../threadedComments/threadedComment1.xml");
+                AttributeValue(element, "Type") == "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" &&
+                AttributeValue(element, "Target") == "../threadedComments/threadedComment1.xml");
     }
 
     [Fact]
@@ -109,4 +109,7 @@ public sealed class XlsxThreadedCommentMapperTests
         entry.Should().NotBeNull(path);
         return XlsxPackageXmlEditor.LoadXml(entry!);
     }
+
+    private static string? AttributeValue(XElement element, string name) =>
+        element.Attribute(name)?.Value;
 }
