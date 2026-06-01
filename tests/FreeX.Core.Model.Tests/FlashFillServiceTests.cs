@@ -1437,6 +1437,69 @@ public sealed class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("123 Pine St", "55 Burnside Ave", "1600 Amphitheatre Pkwy")]
+    [InlineData("Seattle", "Portland", "Mountain View")]
+    [InlineData("WA", "OR", "CA")]
+    [InlineData("98101", "97209", "94043")]
+    [InlineData("WA 98101", "OR 97209", "CA 94043")]
+    public void Fill_AddressComponents_ExtractsConsistentStreetCityStateAndZipParts(
+        string firstExpected,
+        string secondExpected,
+        string remainingExpected)
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St, Seattle, WA 98101", firstExpected),
+                ("55 Burnside Ave, Portland, OR 97209", secondExpected)
+            ],
+            ["1600 Amphitheatre Pkwy, Mountain View, CA 94043"]);
+
+        result.Should().BeEquivalentTo([remainingExpected], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_AddressState_UsesStateBeforeZipWhenStreetAndCityTokenCountsVary()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St, Seattle, WA 98101", "WA"),
+                ("55 Burnside Ave, Portland, OR 97209", "OR")
+            ],
+            [
+                "1600 Amphitheatre Pkwy, Mountain View, CA 94043",
+                "1 Congress Ave, Austin, TX 78701"
+            ]);
+
+        result.Should().BeEquivalentTo(["CA", "TX"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_AddressZip5_ExtractsBaseZipFromZipPlusFour()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("500 Market St, San Francisco, CA 94105-1205", "94105"),
+                ("1 Kendall Sq, Cambridge, MA 02139-4307", "02139")
+            ],
+            ["1600 Amphitheatre Pkwy, Mountain View, CA 94043-1351"]);
+
+        result.Should().BeEquivalentTo(["94043"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_AddressComponents_ReturnsNullWhenRemainingAddressIsMalformed()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("123 Pine St, Seattle, WA 98101", "WA"),
+                ("55 Burnside Ave, Portland, OR 97209", "OR")
+            ],
+            ["1600 Amphitheatre Pkwy Mountain View CA 94043"]);
+
+        result.Should().BeNull();
+    }
+
     [Fact]
     public void FillFromColumns_FirstInitialPeriodLast_CombinesSourceColumns()
     {

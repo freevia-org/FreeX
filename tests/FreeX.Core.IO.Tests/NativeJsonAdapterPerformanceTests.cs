@@ -44,6 +44,34 @@ public sealed class NativeJsonAdapterPerformanceTests
     }
 
     [Fact]
+    public void Save_StreamsCellAddressesWithoutChangingA1Payload()
+    {
+        var workbook = new Workbook("Native JSON Address Streaming");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+        sheet.SetCell(new CellAddress(sheet.Id, CellAddress.MaxRow, CellAddress.MaxCol), new TextValue("edge"));
+        sheet.SetStyleOnly(12, CellAddress.MaxCol, StyleId.Default);
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var sheetJson = document.RootElement.GetProperty("Sheets")[0];
+        var cellAddresses = sheetJson
+            .GetProperty("Cells")
+            .EnumerateArray()
+            .Select(cell => cell.GetProperty("Address").GetString())
+            .ToHashSet();
+        var styleOnlyAddress = sheetJson
+            .GetProperty("StyleOnlyCells")[0]
+            .GetProperty("Address")
+            .GetString();
+
+        cellAddresses.Should().Contain(["A1", "XFD1048576"]);
+        styleOnlyAddress.Should().Be("XFD12");
+    }
+
+    [Fact]
     public void Benchmark_SaveDenseWorkbook_ReportsTimingAndAllocatedBytes()
     {
         const int iterations = 3;
@@ -242,6 +270,25 @@ public sealed class NativeJsonAdapterPerformanceTests
         source.Should().Contain("workbook.GetSheet(change.Address.Sheet)");
         source.Should().NotContain("workbook.Sheets.FirstOrDefault(s => s.Id.Equals(address.Sheet))");
         source.Should().NotContain("workbook.Sheets.FirstOrDefault(s => s.Id.Equals(change.Address.Sheet))");
+    }
+
+    [Fact]
+    public void SaveCellWriters_StreamAddressesInsteadOfAllocatingA1Strings()
+    {
+        var saveSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "NativeJsonAdapter.Save.cs"));
+        var dtoSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "NativeJsonAdapter.Dto.cs"));
+
+        saveSource.Should().Contain("CellDtoJsonConverter.WriteCell(writer, dto, options, row, col);");
+        saveSource.Should().Contain("StyleOnlyCellDtoJsonConverter.WriteCell(writer, dto, options, row, col);");
+        saveSource.Should().NotContain("dto.Address = address.ToA1();");
+        saveSource.Should().NotContain("dto.Address = new CellAddress(sheet.Id, row, col).ToA1();");
+        dtoSource.Should().Contain("WriteStringValue(address[..length])");
     }
 
     private const int DenseSheetCount = 4;
