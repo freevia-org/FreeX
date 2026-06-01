@@ -103,6 +103,36 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
+    public void SheetTabDrag_CapturesMouseAndClearsStateOnReleaseOrLostCapture()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
+
+        var mouseDown = source[
+            source.IndexOf("private void SheetTab_MouseLeftButtonDown", StringComparison.Ordinal)..
+            source.IndexOf("private void SheetTab_MouseMove", StringComparison.Ordinal)];
+        var mouseMove = source[
+            source.IndexOf("private void SheetTab_MouseMove", StringComparison.Ordinal)..
+            source.IndexOf("private void SheetTab_MouseLeftButtonUp", StringComparison.Ordinal)];
+        var mouseUpAndLostCapture = source[
+            source.IndexOf("private void SheetTab_MouseLeftButtonUp", StringComparison.Ordinal)..
+            source.IndexOf("private void SheetTab_MouseRightButtonDown", StringComparison.Ordinal)];
+
+        xaml.Should().Contain("LostMouseCapture=\"SheetTab_LostMouseCapture\"");
+        mouseDown.Should().Contain("element.CaptureMouse();");
+        mouseDown.IndexOf("element.CaptureMouse();", StringComparison.Ordinal)
+            .Should()
+            .BeGreaterThan(mouseDown.IndexOf("_dragSheetTabStart = e.GetPosition(SheetTabsControl);", StringComparison.Ordinal));
+        mouseMove.Should().Contain("element.ReleaseMouseCapture();");
+        mouseMove.IndexOf("element.ReleaseMouseCapture();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseMove.IndexOf("var current = e.GetPosition(SheetTabsControl);", StringComparison.Ordinal));
+        mouseUpAndLostCapture.Should().Contain("element.ReleaseMouseCapture();");
+        mouseUpAndLostCapture.Should().Contain("private void SheetTab_LostMouseCapture");
+        mouseUpAndLostCapture.Should().Contain("_dragSheetTabId = null;");
+    }
+
+    [Fact]
     public void SheetTabChrome_ReusesRenderedPathsAcrossRepeatedManyTabNavigationUpdates()
     {
         StaTestRunner.Run(() =>
