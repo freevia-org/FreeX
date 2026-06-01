@@ -22,13 +22,59 @@ public static class WatchWindowService
     }
 
     public static int AddWatches(Workbook workbook, GridRange range)
-        => CountChangedWatches(range, address => AddWatch(workbook, address));
+    {
+        var changed = 0;
+        if (range.CellCount <= int.MaxValue - workbook.WatchedCells.Count)
+            workbook.WatchedCells.EnsureCapacity(workbook.WatchedCells.Count + (int)range.CellCount);
+
+        if (workbook.WatchedCells.Count == 0)
+        {
+            for (var row = range.Start.Row; row <= range.End.Row; row++)
+            {
+                for (var col = range.Start.Col; col <= range.End.Col; col++)
+                {
+                    workbook.WatchedCells.Add(new CellAddress(range.Start.Sheet, row, col));
+                    changed++;
+                }
+            }
+
+            return changed;
+        }
+
+        var existing = new HashSet<CellAddress>(workbook.WatchedCells);
+        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        {
+            for (var col = range.Start.Col; col <= range.End.Col; col++)
+            {
+                var address = new CellAddress(range.Start.Sheet, row, col);
+                if (!existing.Add(address))
+                    continue;
+
+                workbook.WatchedCells.Add(address);
+                changed++;
+            }
+        }
+
+        return changed;
+    }
 
     public static bool RemoveWatch(Workbook workbook, CellAddress address) =>
         workbook.WatchedCells.Remove(address);
 
     public static int RemoveWatches(Workbook workbook, GridRange range)
-        => CountChangedWatches(range, address => RemoveWatch(workbook, address));
+    {
+        var changed = 0;
+        for (var index = workbook.WatchedCells.Count - 1; index >= 0; index--)
+        {
+            if (!range.Contains(workbook.WatchedCells[index]))
+                continue;
+
+            workbook.WatchedCells.RemoveAt(index);
+            changed++;
+        }
+
+        return changed;
+    }
 
     public static IReadOnlyList<CellAddress> GetDeleteTargets(
         IEnumerable<CellAddress> selectedAddresses,
@@ -51,7 +97,10 @@ public static class WatchWindowService
 
     public static IReadOnlyList<WatchWindowEntry> GetEntries(Workbook workbook)
     {
-        var entries = new List<WatchWindowEntry>();
+        if (workbook.WatchedCells.Count == 0)
+            return [];
+
+        var entries = new List<WatchWindowEntry>(workbook.WatchedCells.Count);
         var sheetOrder = workbook.Sheets
             .Select((sheet, index) => (sheet.Id, index))
             .ToDictionary(item => item.Id, item => item.index);
@@ -86,16 +135,4 @@ public static class WatchWindowService
         BlankValue => "",
         _ => value.ToString() ?? ""
     };
-
-    private static int CountChangedWatches(GridRange range, Func<CellAddress, bool> updateWatch)
-    {
-        var changed = 0;
-        foreach (var address in range.AllCells())
-        {
-            if (updateWatch(address))
-                changed++;
-        }
-
-        return changed;
-    }
 }
