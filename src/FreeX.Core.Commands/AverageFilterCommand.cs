@@ -24,6 +24,8 @@ public sealed class AverageFilterCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
+        if (CommandGuards.RejectInvalidFilterRange(_sheetId, _range, _filterColOffset) is { } invalidRange)
+            return invalidRange;
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 

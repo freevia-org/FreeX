@@ -39,7 +39,27 @@ internal static class CommandGuards
             return true;
 
         var current = sheet.GetCell(address);
-        var style = workbook.GetStyle(current?.StyleId ?? StyleId.Default);
+        var styleId = current?.StyleId
+            ?? sheet.GetStyleOnly(address.Row, address.Col)
+            ?? StyleId.Default;
+        var style = workbook.GetStyle(styleId);
         return !style.Locked;
+    }
+
+    public static CommandOutcome? RejectInvalidFilterRange(
+        SheetId sheetId,
+        GridRange range,
+        uint filterColOffset)
+    {
+        if (range.Start.Sheet != sheetId || range.End.Sheet != sheetId)
+            return new CommandOutcome(false, "Filter range must be on the target sheet.");
+
+        if (!WorksheetBounds.IsValidAddress(range.Start) || !WorksheetBounds.IsValidAddress(range.End))
+            return new CommandOutcome(false, "Filter range is outside the worksheet bounds.");
+
+        if (filterColOffset >= range.ColCount)
+            return new CommandOutcome(false, "Filter column offset is outside the filter range.");
+
+        return null;
     }
 }

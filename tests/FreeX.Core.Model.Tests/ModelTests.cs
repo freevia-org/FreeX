@@ -568,6 +568,20 @@ public class GridRangeTests
     }
 
     [Fact]
+    public void Constructor_RejectsEndpointsOnDifferentSheets()
+    {
+        var first = SheetId.New();
+        var second = SheetId.New();
+
+        var act = () => new GridRange(
+            new CellAddress(first, 1, 1),
+            new CellAddress(second, 2, 2));
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("*same sheet*");
+    }
+
+    [Fact]
     public void Parse_ReturnsNormalizedRange()
     {
         var sheet = SheetId.New();

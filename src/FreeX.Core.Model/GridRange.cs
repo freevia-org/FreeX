@@ -11,6 +11,9 @@ public readonly record struct GridRange
 
     public GridRange(CellAddress a, CellAddress b)
     {
+        if (a.Sheet != b.Sheet)
+            throw new ArgumentException("GridRange endpoints must be on the same sheet.", nameof(b));
+
         // Normalize so Start is always top-left, End is always bottom-right.
         Start = new CellAddress(a.Sheet, Math.Min(a.Row, b.Row), Math.Min(a.Col, b.Col));
         End = new CellAddress(a.Sheet, Math.Max(a.Row, b.Row), Math.Max(a.Col, b.Col));
