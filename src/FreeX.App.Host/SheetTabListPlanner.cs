@@ -178,7 +178,8 @@ public static class SheetTabListPlanner
         if (currentIndex < 0)
             currentIndex = 0;
 
-        var nextIndex = Math.Clamp(currentIndex + direction, 0, visibleSheetIds.Count - 1);
+        var step = Math.Sign(direction);
+        var nextIndex = Math.Clamp(currentIndex + step, 0, visibleSheetIds.Count - 1);
         var nextSheetId = visibleSheetIds[nextIndex];
         var anchor = anchorSheetId is { } id && visibleSheetIds.Contains(id)
             ? id
