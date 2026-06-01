@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using FreeX.Core.Model;
 using FreeX.Core.Formula;
 
@@ -10,6 +11,8 @@ public enum DataValidationInvalidEntryAction { Allow, Block, AskToContinue }
 /// </summary>
 public static partial class DataValidationService
 {
+    private static readonly ConditionalWeakTable<Sheet, DataValidationLookupCache> LookupCaches = new();
+
     public sealed record InputPrompt(string Title, string Message);
 
     /// <summary>
@@ -56,38 +59,14 @@ public static partial class DataValidationService
     /// <summary>
     /// Returns all validation rules that apply to the given cell address.
     /// </summary>
-    public static IEnumerable<DataValidation> GetApplicable(Sheet sheet, CellAddress addr)
-    {
-        foreach (var rule in sheet.DataValidations)
-        {
-            if (AppliesTo(rule, addr))
-                yield return rule;
-        }
-    }
+    public static IEnumerable<DataValidation> GetApplicable(Sheet sheet, CellAddress addr) =>
+        GetLookupCache(sheet).GetApplicable(addr);
 
     public static bool AppliesTo(DataValidation dv, CellAddress addr) =>
         dv.AppliesTo.Contains(addr) || AdditionalRangeContains(dv.AdditionalRanges, addr);
 
-    public static InputPrompt? GetInputPrompt(Sheet sheet, CellAddress addr)
-    {
-        foreach (var rule in sheet.DataValidations)
-        {
-            if (!AppliesTo(rule, addr))
-                continue;
-
-            if (!rule.ShowInputMessage)
-                continue;
-
-            var title = rule.PromptTitle?.Trim() ?? "";
-            var message = rule.PromptMessage?.Trim() ?? "";
-            if (title.Length == 0 && message.Length == 0)
-                continue;
-
-            return new InputPrompt(title, message);
-        }
-
-        return null;
-    }
+    public static InputPrompt? GetInputPrompt(Sheet sheet, CellAddress addr) =>
+        GetLookupCache(sheet).GetInputPrompt(addr);
 
     private static bool AdditionalRangeContains(IReadOnlyList<GridRange> ranges, CellAddress addr)
     {
@@ -98,6 +77,164 @@ public static partial class DataValidationService
         }
 
         return false;
+    }
+
+    private static DataValidationLookupCache GetLookupCache(Sheet sheet)
+    {
+        var cache = LookupCaches.GetValue(sheet, static _ => new DataValidationLookupCache());
+        cache.RefreshIfNeeded(sheet.DataValidations);
+        return cache;
+    }
+
+    private sealed class DataValidationLookupCache
+    {
+        private int _version = -1;
+        private int _count = -1;
+        private DataValidation[] _rules = [];
+        private Dictionary<CellAddress, List<int>> _exactRuleIndexes = [];
+        private List<int> _fallbackRuleIndexes = [];
+
+        public void RefreshIfNeeded(DataValidationCollection validations)
+        {
+            if (_version == validations.Version && _count == validations.Count)
+                return;
+
+            _version = validations.Version;
+            _count = validations.Count;
+            _rules = validations.ToArray();
+            _exactRuleIndexes = new Dictionary<CellAddress, List<int>>(Math.Min(_rules.Length, 1024));
+            _fallbackRuleIndexes = [];
+
+            for (var i = 0; i < _rules.Length; i++)
+            {
+                var rule = _rules[i];
+                var hasFallbackRange = AddLookupRange(rule.AppliesTo, i);
+                for (var r = 0; r < rule.AdditionalRanges.Count; r++)
+                    hasFallbackRange |= AddLookupRange(rule.AdditionalRanges[r], i);
+
+                if (hasFallbackRange)
+                    _fallbackRuleIndexes.Add(i);
+            }
+        }
+
+        public IEnumerable<DataValidation> GetApplicable(CellAddress addr)
+        {
+            _exactRuleIndexes.TryGetValue(addr, out var exactIndexes);
+            var exactPosition = 0;
+            var fallbackPosition = 0;
+            var lastYieldedIndex = -1;
+
+            while ((exactIndexes is not null && exactPosition < exactIndexes.Count) ||
+                   fallbackPosition < _fallbackRuleIndexes.Count)
+            {
+                var exactIndex = exactIndexes is not null && exactPosition < exactIndexes.Count
+                    ? exactIndexes[exactPosition]
+                    : int.MaxValue;
+                var fallbackIndex = fallbackPosition < _fallbackRuleIndexes.Count
+                    ? _fallbackRuleIndexes[fallbackPosition]
+                    : int.MaxValue;
+
+                if (exactIndex <= fallbackIndex)
+                {
+                    if (exactIndex != lastYieldedIndex && AppliesTo(_rules[exactIndex], addr))
+                    {
+                        yield return _rules[exactIndex];
+                        lastYieldedIndex = exactIndex;
+                    }
+
+                    exactPosition++;
+                }
+                else
+                {
+                    if (fallbackIndex != lastYieldedIndex && AppliesTo(_rules[fallbackIndex], addr))
+                    {
+                        yield return _rules[fallbackIndex];
+                        lastYieldedIndex = fallbackIndex;
+                    }
+
+                    fallbackPosition++;
+                }
+            }
+        }
+
+        public InputPrompt? GetInputPrompt(CellAddress addr)
+        {
+            _exactRuleIndexes.TryGetValue(addr, out var exactIndexes);
+            var exactPosition = 0;
+            var fallbackPosition = 0;
+            var lastCheckedIndex = -1;
+
+            while ((exactIndexes is not null && exactPosition < exactIndexes.Count) ||
+                   fallbackPosition < _fallbackRuleIndexes.Count)
+            {
+                var exactIndex = exactIndexes is not null && exactPosition < exactIndexes.Count
+                    ? exactIndexes[exactPosition]
+                    : int.MaxValue;
+                var fallbackIndex = fallbackPosition < _fallbackRuleIndexes.Count
+                    ? _fallbackRuleIndexes[fallbackPosition]
+                    : int.MaxValue;
+
+                if (exactIndex <= fallbackIndex)
+                {
+                    if (exactIndex != lastCheckedIndex && AppliesTo(_rules[exactIndex], addr))
+                    {
+                        if (TryCreateInputPrompt(_rules[exactIndex]) is { } prompt)
+                            return prompt;
+
+                        lastCheckedIndex = exactIndex;
+                    }
+
+                    exactPosition++;
+                }
+                else
+                {
+                    if (fallbackIndex != lastCheckedIndex && AppliesTo(_rules[fallbackIndex], addr))
+                    {
+                        if (TryCreateInputPrompt(_rules[fallbackIndex]) is { } prompt)
+                            return prompt;
+
+                        lastCheckedIndex = fallbackIndex;
+                    }
+
+                    fallbackPosition++;
+                }
+            }
+
+            return null;
+        }
+
+        private bool AddLookupRange(GridRange range, int ruleIndex)
+        {
+            if (!IsSingleCellRange(range))
+                return true;
+
+            var address = range.Start;
+            if (!_exactRuleIndexes.TryGetValue(address, out var indexes))
+            {
+                indexes = [];
+                _exactRuleIndexes.Add(address, indexes);
+            }
+
+            if (indexes.Count == 0 || indexes[^1] != ruleIndex)
+                indexes.Add(ruleIndex);
+
+            return false;
+        }
+
+        private static bool IsSingleCellRange(GridRange range) =>
+            range.Start == range.End;
+    }
+
+    private static InputPrompt? TryCreateInputPrompt(DataValidation rule)
+    {
+        if (!rule.ShowInputMessage)
+            return null;
+
+        var title = rule.PromptTitle?.Trim() ?? "";
+        var message = rule.PromptMessage?.Trim() ?? "";
+        return title.Length == 0 && message.Length == 0
+            ? null
+            : new InputPrompt(title, message);
     }
 
     public static IReadOnlyList<string> GetListItems(DataValidation dv, Sheet sheet, Workbook? workbook = null)
