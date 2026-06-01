@@ -104,6 +104,7 @@ public sealed class Lexer
     private Token ReadNumber()
     {
         var start = _pos;
+        var hasDigit = false;
         var hasDecimal = false;
         var hasExponent = false;
 
@@ -112,6 +113,7 @@ public sealed class Lexer
             var c = _text[_pos];
             if (char.IsDigit(c))
             {
+                hasDigit = true;
                 _pos++;
             }
             else if (c == '.' && !hasDecimal && !hasExponent)
@@ -137,6 +139,9 @@ public sealed class Lexer
                 break;
             }
         }
+
+        if (!hasDigit)
+            throw new FormulaParseException($"Expected number at position {start}");
 
         return new Token(TokenType.Number, _text[start.._pos], start);
     }

@@ -8,9 +8,15 @@ public sealed class Parser
 {
     private readonly List<Token> _tokens;
     private int _pos;
+    private int _parseDepth;
+    private int _nestingDepth;
 
     public Parser(List<Token> tokens)
     {
+        if (tokens.Count > FormulaSafetyLimits.MaxParseTokens)
+            throw new FormulaParseException(
+                $"Formula contains too many tokens; maximum is {FormulaSafetyLimits.MaxParseTokens}");
+
         _tokens = tokens;
         _pos = 0;
     }
@@ -49,8 +55,50 @@ public sealed class Parser
         return Advance();
     }
 
+    private ParseDepthFrame EnterParseFrame()
+    {
+        if (_parseDepth >= FormulaSafetyLimits.MaxParseDepth)
+            throw new FormulaParseException(
+                $"Formula nesting is too deep; maximum parse depth is {FormulaSafetyLimits.MaxParseDepth}");
+
+        _parseDepth++;
+        return new ParseDepthFrame(this);
+    }
+
+    private ParseNestingFrame EnterNesting(Token token)
+    {
+        if (_nestingDepth >= FormulaSafetyLimits.MaxParseNesting)
+            throw new FormulaParseException(
+                $"Formula nesting is too deep near '{token.Value}' at position {token.Position}; maximum nesting is {FormulaSafetyLimits.MaxParseNesting}");
+
+        _nestingDepth++;
+        return new ParseNestingFrame(this);
+    }
+
+    private readonly struct ParseDepthFrame : IDisposable
+    {
+        private readonly Parser _parser;
+
+        public ParseDepthFrame(Parser parser) => _parser = parser;
+
+        public void Dispose() => _parser._parseDepth--;
+    }
+
+    private readonly struct ParseNestingFrame : IDisposable
+    {
+        private readonly Parser _parser;
+
+        public ParseNestingFrame(Parser parser) => _parser = parser;
+
+        public void Dispose() => _parser._nestingDepth--;
+    }
+
     // Expression → Comparison
-    private FormulaNode ParseExpression() => ParseComparison();
+    private FormulaNode ParseExpression()
+    {
+        using var frame = EnterParseFrame();
+        return ParseComparison();
+    }
 
     // Comparison → Concatenation (( '=' | '<>' | '<' | '>' | '<=' | '>=' ) Concatenation)*
     private FormulaNode ParseComparison()
@@ -130,6 +178,7 @@ public sealed class Parser
     // Excel gives unary signs higher precedence than exponentiation: -2^2 = (-2)^2.
     private FormulaNode ParsePower()
     {
+        using var frame = EnterParseFrame();
         var left = ParseUnary();
 
         if (Current.Type == TokenType.Power)
@@ -145,6 +194,7 @@ public sealed class Parser
     // Unary -> ('-' | '+') Unary | Postfix
     private FormulaNode ParseUnary()
     {
+        using var frame = EnterParseFrame();
         if (Current.Type == TokenType.Minus)
         {
             Advance();
@@ -210,7 +260,8 @@ public sealed class Parser
             case TokenType.FunctionName:
             {
                 var name = Advance();
-                Expect(TokenType.OpenParen);
+                var openParen = Expect(TokenType.OpenParen);
+                using var nesting = EnterNesting(openParen);
                 var args = ParseArgumentList();
                 Expect(TokenType.CloseParen);
                 return new FunctionCallNode(name.Value, args);
@@ -284,7 +335,8 @@ public sealed class Parser
 
             case TokenType.OpenParen:
             {
-                Advance();
+                var openParen = Advance();
+                using var nesting = EnterNesting(openParen);
                 var expr = ParseExpression();
                 Expect(TokenType.CloseParen);
                 return expr;
@@ -301,7 +353,8 @@ public sealed class Parser
 
     private FormulaNode ParseArrayConstant()
     {
-        Expect(TokenType.OpenBrace);
+        var openBrace = Expect(TokenType.OpenBrace);
+        using var nesting = EnterNesting(openBrace);
         var rows = new List<IReadOnlyList<FormulaNode>>();
         int? expectedColumnCount = null;
 
