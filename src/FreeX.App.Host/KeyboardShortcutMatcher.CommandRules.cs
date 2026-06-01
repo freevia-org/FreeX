@@ -10,7 +10,7 @@ public static partial class KeyboardShortcutMatcher
         new(KeyboardCommandShortcut.NewWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.N),
         new(KeyboardCommandShortcut.OpenWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.O),
         new(KeyboardCommandShortcut.SaveWorkbook, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.S),
-        new(KeyboardCommandShortcut.Copy, (key, modifiers) => (modifiers == ModifierKeys.Control || modifiers == (ModifierKeys.Control | ModifierKeys.Shift)) && key == Key.C ||
+        new(KeyboardCommandShortcut.Copy, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.C ||
             modifiers == ModifierKeys.Control && key == Key.Insert),
         new(KeyboardCommandShortcut.Cut, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.X ||
             modifiers == ModifierKeys.Shift && key == Key.Delete),
