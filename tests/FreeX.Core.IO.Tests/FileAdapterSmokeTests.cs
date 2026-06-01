@@ -147,6 +147,31 @@ public partial class FileAdapterSmokeTests
     // ── XLSX ──────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void NativeJsonAdapter_Save_TruncatesSeekableOutputStreamBeforeWritingJson()
+    {
+        var largeWorkbook = new Workbook("NativeJsonLarge");
+        var largeSheet = largeWorkbook.AddSheet("Sheet1");
+        largeSheet.SetCell(new CellAddress(largeSheet.Id, 1, 1), new TextValue(new string('x', 8192)));
+        var workbook = new Workbook("NativeJsonTruncate");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Saved"));
+        using var stream = new MemoryStream();
+
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(largeWorkbook, stream);
+        var largeLength = stream.Length;
+        stream.Position = 0;
+
+        adapter.Save(workbook, stream);
+
+        stream.Position.Should().Be(stream.Length);
+        stream.Length.Should().BeLessThan(largeLength);
+        stream.Position = 0;
+        using var document = JsonDocument.Parse(stream);
+        document.RootElement.GetProperty("Name").GetString().Should().Be("NativeJsonTruncate");
+    }
+
+    [Fact]
     public void NativeJsonAdapter_RoundTrip_WorkbookFileSharing()
     {
         var workbook = new Workbook("FileSharingNativeJson")

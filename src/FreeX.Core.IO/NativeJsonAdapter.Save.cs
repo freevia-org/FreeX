@@ -15,6 +15,8 @@ public sealed partial class NativeJsonAdapter
 
     public void Save(Workbook workbook, Stream stream)
     {
+        SaveStreamPreparer.TruncateFromCurrentPosition(stream);
+
         var styleDtoCache = new Dictionary<StyleId, CellStyleDto?>(workbook.StyleCount);
         var dto = new WorkbookDto
         {

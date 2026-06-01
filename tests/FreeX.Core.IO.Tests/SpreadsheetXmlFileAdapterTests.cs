@@ -987,6 +987,32 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Save_TruncatesSeekableOutputStreamBeforeWritingSpreadsheetMl()
+    {
+        var largeWorkbook = new Workbook("XmlLarge");
+        var largeSheet = largeWorkbook.AddSheet("Data");
+        largeSheet.SetCell(new CellAddress(largeSheet.Id, 1, 1), new TextValue(new string('x', 8192)));
+        var workbook = new Workbook("XmlTruncate");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Gamma"));
+        using var stream = new MemoryStream();
+
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(largeWorkbook, stream);
+        var largeLength = stream.Length;
+        stream.Position = 0;
+
+        adapter.Save(workbook, stream);
+
+        stream.Position.Should().Be(stream.Length);
+        stream.Length.Should().BeLessThan(largeLength);
+        stream.Position = 0;
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        document.Descendants(ss + "Data").Single().Value.Should().Be("Gamma");
+    }
+
+    [Fact]
     public void LoadTransformed_AppliesSafeXsltAndLoadsSpreadsheetMlOutput()
     {
         using var source = StreamFromString("""
