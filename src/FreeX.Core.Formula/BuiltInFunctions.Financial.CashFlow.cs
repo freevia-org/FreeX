@@ -105,20 +105,67 @@ public static partial class BuiltInFunctions
     {
         double rate = ToNumber(rateValue);
         if (!double.IsFinite(rate) || rate <= -1) return ErrorValue.Num;
-        var (vals, ve) = CollectRangeNumbers(valRange);
-        var (datesRaw, de) = CollectRangeNumbers(dateRange);
-        if (ve is not null) return ve;
-        if (de is not null) return de;
-        var cf = vals!;
-        var ds = datesRaw!;
-        if (cf.Count != ds.Count || cf.Count == 0) return ErrorValue.Num;
-        NormalizeDateSerialsToYearFractions(ds);
+
+        var (valueCount, valueError) = CountRangeNumbers(valRange);
+        if (valueError is not null) return valueError;
+
+        var (dateCount, dateError) = CountRangeNumbers(dateRange);
+        if (dateError is not null) return dateError;
+
+        if (valueCount != dateCount || valueCount == 0) return ErrorValue.Num;
+
+        var dateRow = 0;
+        var dateCol = 0;
+        if (!TryReadNextRangeNumber(dateRange, ref dateRow, ref dateCol, out var firstDateSerial))
+            return ErrorValue.Num;
+
+        var firstDate = SerialToDate(firstDateSerial);
+        var valueRow = 0;
+        var valueCol = 0;
+        dateRow = 0;
+        dateCol = 0;
+
         double result = 0;
-        for (int i = 0; i < cf.Count; i++)
+        for (int i = 0; i < valueCount; i++)
         {
-            result += cf[i] / Math.Pow(1 + rate, ds[i]);
+            if (!TryReadNextRangeNumber(valRange, ref valueRow, ref valueCol, out var cashFlow) ||
+                !TryReadNextRangeNumber(dateRange, ref dateRow, ref dateCol, out var dateSerial))
+                return ErrorValue.Num;
+
+            var yearFraction = (SerialToDate(dateSerial) - firstDate).TotalDays / 365.0;
+            result += cashFlow / Math.Pow(1 + rate, yearFraction);
         }
+
         return NumberResult(result);
+    }
+
+    private static bool TryReadNextRangeNumber(RangeValue range, ref int row, ref int col, out double number)
+    {
+        for (; row < range.RowCount; row++)
+        {
+            for (; col < range.ColCount; col++)
+            {
+                var value = range.Cells[row, col];
+                if (value is NumberValue n)
+                {
+                    number = n.Value;
+                    col++;
+                    return true;
+                }
+
+                if (value is DateTimeValue d)
+                {
+                    number = d.Value;
+                    col++;
+                    return true;
+                }
+            }
+
+            col = 0;
+        }
+
+        number = 0;
+        return false;
     }
 
     private static void NormalizeDateSerialsToYearFractions(List<double> serials)
