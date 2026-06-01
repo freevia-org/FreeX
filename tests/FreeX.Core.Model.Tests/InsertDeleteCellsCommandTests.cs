@@ -227,6 +227,55 @@ public sealed class InsertDeleteCellsCommandTests
         timings.Average().Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void Benchmark_InsertCellsShiftRightSingleRow_ReportsTiming()
+    {
+        const int iterations = 5;
+        var (workbook, sheet, ctx) = SetupDenseShiftWorkbook();
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 200, 2),
+            new CellAddress(sheet.Id, 200, 2));
+
+        var warmup = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Right);
+        warmup.Apply(ctx).Success.Should().BeTrue();
+        warmup.Revert(ctx);
+        sheet.CellCount.Should().Be(DenseCellShiftRows * DenseCellShiftColumns);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(iterations);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var command = new InsertCellsCommand(sheet.Id, range, InsertCellsShiftDirection.Right);
+            var step = Stopwatch.StartNew();
+            command.Apply(ctx).Success.Should().BeTrue();
+            command.Revert(ctx);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        var ordered = timings.OrderBy(value => value).ToArray();
+        var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+        workbook.SheetCount.Should().Be(1);
+        sheet.CellCount.Should().Be(DenseCellShiftRows * DenseCellShiftColumns);
+        sheet.GetValue(200, 1).Should().Be(new NumberValue(200001));
+        sheet.GetValue(200, DenseCellShiftColumns).Should().Be(new NumberValue(200000 + DenseCellShiftColumns));
+        Console.WriteLine(
+            "PERF INSERT_CELLS_SHIFT_RIGHT_SINGLE_ROW " +
+            $"rows={DenseCellShiftRows} cols={DenseCellShiftColumns} moved_cells={DenseCellShiftColumns - 1} " +
+            $"steps={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={timings.Average():F2} " +
+            $"p95_ms={p95:F2} max_ms={ordered[^1]:F2} allocated_bytes={allocatedBytes:N0}");
+
+        timings.Average().Should().BeGreaterThan(0);
+    }
+
     private const int DenseCellShiftRows = 400;
     private const int DenseCellShiftColumns = 80;
 
