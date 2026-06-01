@@ -304,6 +304,31 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarExpandButton_TogglesMultilineEntryAndAccessibilityName()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.FormulaBarAcceptsReturn.Should().BeFalse();
+            harness.FormulaBarHeight.Should().Be(double.NaN);
+            harness.FormulaBarExpandButtonAutomationName.Should().Be(UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));
+
+            harness.ToggleFormulaBarExpansion();
+
+            harness.FormulaBarAcceptsReturn.Should().BeTrue();
+            harness.FormulaBarHeight.Should().Be(84);
+            harness.FormulaBarExpandButtonAutomationName.Should().Be(UiText.Get("MainWindow_AutomationName_CollapseFormulaBar"));
+
+            harness.ToggleFormulaBarExpansion();
+
+            harness.FormulaBarAcceptsReturn.Should().BeFalse();
+            harness.FormulaBarHeight.Should().Be(double.NaN);
+            harness.FormulaBarExpandButtonAutomationName.Should().Be(UiText.Get("MainWindow_AutomationName_ExpandFormulaBar"));
+        });
+    }
+
+    [Fact]
     public void NameBoxEnter_NavigatesRefreshesFormulaBarAndReturnsFocusToGrid()
     {
         StaTestRunner.Run(() =>
@@ -427,6 +452,7 @@ public sealed class MainWindowFormulaBarSyncTests
         private readonly MethodInfo _cellAddressBoxKeyDown;
         private readonly MethodInfo _insertFormulaFunction;
         private readonly MethodInfo _insertDefinedNameIntoFormula;
+        private readonly MethodInfo _formulaBarExpandButtonClick;
 
         private MainWindowHarness(MainWindow window)
         {
@@ -473,6 +499,9 @@ public sealed class MainWindowFormulaBarSyncTests
             _insertDefinedNameIntoFormula = typeof(MainWindow)
                 .GetMethod("InsertDefinedNameIntoFormula", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "InsertDefinedNameIntoFormula");
+            _formulaBarExpandButtonClick = typeof(MainWindow)
+                .GetMethod("FormulaBarExpandBtn_Click", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "FormulaBarExpandBtn_Click");
         }
 
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
@@ -490,6 +519,13 @@ public sealed class MainWindowFormulaBarSyncTests
         public bool FormulaBarFocused => IsFocused((TextBox)_window.FindName("FormulaBar"));
 
         public bool SheetGridFocused => IsFocused((SheetGridView)_window.FindName("SheetGrid"));
+
+        public bool FormulaBarAcceptsReturn => ((TextBox)_window.FindName("FormulaBar")).AcceptsReturn;
+
+        public double FormulaBarHeight => ((TextBox)_window.FindName("FormulaBar")).Height;
+
+        public string FormulaBarExpandButtonAutomationName =>
+            System.Windows.Automation.AutomationProperties.GetName((Button)_window.FindName("FormulaBarExpandBtn"));
 
         public void SetCellText(uint row, uint col, string text)
         {
@@ -582,6 +618,13 @@ public sealed class MainWindowFormulaBarSyncTests
         public void InsertDefinedNameIntoFormula(string name)
         {
             _insertDefinedNameIntoFormula.Invoke(_window, [name]);
+            PumpDispatcher();
+        }
+
+        public void ToggleFormulaBarExpansion()
+        {
+            var button = (Button)_window.FindName("FormulaBarExpandBtn");
+            _formulaBarExpandButtonClick.Invoke(_window, [button, new RoutedEventArgs()]);
             PumpDispatcher();
         }
 
