@@ -36,109 +36,50 @@ public sealed partial class ViewportService : IViewportService
             hasAnyCellComments,
             hasAnyStyleOnlyCells));
         var styleCache = new ViewportStyleCache();
+        var visibleCellSlots = EstimateVisibleCellSlots(rowMetrics.Count, colMetrics.Count);
 
         // Calculate Row Metrics — iterate until we've filled the available height, skipping hidden rows
         // Calculate Column Metrics — iterate until we've filled the available width
         // Retrieve Cells in Viewport
-        foreach (var rowMetric in rowMetrics)
+        if (ShouldScanOccupiedViewportCells(visibleCellSlots, sheet, hasAnyCellComments, hasAnyStyleOnlyCells))
         {
-            foreach (var colMetric in colMetrics)
+            AddOccupiedViewportCells(
+                cells,
+                workbook,
+                sheet,
+                sheetId,
+                rowMetrics,
+                colMetrics,
+                request.IncludeFormulas,
+                cfContext,
+                hasConditionalStyles,
+                hasConditionalIcons,
+                hasAnyCellComments,
+                ref styleCache);
+        }
+        else
+        {
+            HashSet<(uint Row, uint Col)>? seen = null;
+            foreach (var rowMetric in rowMetrics)
             {
-                var cell = sheet.GetCell(rowMetric.Row, colMetric.Col);
-                if (cell != null)
-                {
-                    var style = styleCache.Get(workbook, cell.StyleId);
-                    ConditionalFormatIcon? cfIcon = null;
-                    var hasComment = false;
-
-                    if (hasConditionalStyles || hasConditionalIcons || hasAnyCellComments)
-                        ApplyConditionalVisualsAndComments(
-                            sheet,
-                            sheetId,
-                            rowMetric.Row,
-                            colMetric.Col,
-                            cell.Value,
-                            workbook,
-                            cfContext,
-                            hasConditionalStyles,
-                            hasConditionalIcons,
-                            hasAnyCellComments,
-                            ref style,
-                            out cfIcon,
-                            out hasComment);
-
-                    var displayText = cfIcon?.ShowValue == false
-                        ? ""
-                        : GetDisplayText(workbook, sheet, cell, ref style, EstimateCharacterWidth(colMetric.Width));
-
-                    cells.Add(new DisplayCell(
-                        rowMetric.Row, colMetric.Col,
-                        cell.Value,
-                        displayText,
-                        request.IncludeFormulas ? cell.FormulaText : null,
-                        cell.StyleId,
-                        null,
-                        style,
-                        cfIcon,
-                        hasComment
-                    ));
-                }
-                else
-                {
-                    if (!hasAnyStyleOnlyCells && !hasAnyCellComments)
-                        continue;
-
-                    var styleOnlyId = sheet.GetStyleOnly(rowMetric.Row, colMetric.Col);
-                    if (styleOnlyId.HasValue)
-                    {
-                        var style = styleCache.Get(workbook, styleOnlyId.Value);
-                        ConditionalFormatIcon? cfIcon = null;
-                        var hasComment = false;
-
-                        if (hasConditionalStyles || hasConditionalIcons || hasAnyCellComments)
-                            ApplyConditionalVisualsAndComments(
-                                sheet,
-                                sheetId,
-                                rowMetric.Row,
-                                colMetric.Col,
-                                BlankValue.Instance,
-                                workbook,
-                                cfContext,
-                                hasConditionalStyles,
-                                hasConditionalIcons,
-                                hasAnyCellComments,
-                                ref style,
-                                out cfIcon,
-                                out hasComment);
-
-                        cells.Add(new DisplayCell(
-                            rowMetric.Row, colMetric.Col,
-                            BlankValue.Instance,
-                            "",
-                            null,
-                            styleOnlyId.Value,
-                            null,
-                            style,
-                            cfIcon,
-                            hasComment
-                        ));
-                    }
-                    else if (hasAnyCellComments &&
-                             HasCellComment(sheet, new CellAddress(sheetId, rowMetric.Row, colMetric.Col), hasAnyCellComments))
-                    {
-                        cells.Add(new DisplayCell(
-                            rowMetric.Row,
-                            colMetric.Col,
-                            BlankValue.Instance,
-                            "",
-                            null,
-                            StyleId.Default,
-                            null,
-                            styleCache.Get(workbook, StyleId.Default),
-                            null,
-                            true));
-                    }
-                }
+                foreach (var colMetric in colMetrics)
+                    AddDisplayCell(
+                        cells,
+                        ref seen,
+                        false,
+                        workbook,
+                        sheet,
+                        sheetId,
+                        rowMetric.Row,
+                        colMetric.Col,
+                        EstimateCharacterWidth(colMetric.Width),
+                        request.IncludeFormulas,
+                        cfContext,
+                        hasAnyCellComments,
+                        hasAnyStyleOnlyCells,
+                        hasConditionalStyles,
+                        hasConditionalIcons,
+                        ref styleCache);
             }
         }
 
@@ -213,6 +154,150 @@ public sealed partial class ViewportService : IViewportService
 
     private static int ClampCapacityHint(int capacity) =>
         Math.Clamp(capacity, 0, MaxViewportListCapacityHint);
+
+    private static bool ShouldScanOccupiedViewportCells(
+        int visibleCellSlots,
+        Sheet sheet,
+        bool hasAnyCellComments,
+        bool hasAnyStyleOnlyCells) =>
+        visibleCellSlots > 0 &&
+        (long)sheet.CellCount * 4 < visibleCellSlots &&
+        !hasAnyCellComments &&
+        !hasAnyStyleOnlyCells;
+
+    private static void AddOccupiedViewportCells(
+        List<DisplayCell> cells,
+        Workbook workbook,
+        Sheet sheet,
+        SheetId sheetId,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics,
+        bool includeFormulas,
+        CfEvaluationContext cfContext,
+        bool hasConditionalStyles,
+        bool hasConditionalIcons,
+        bool hasAnyCellComments,
+        ref ViewportStyleCache styleCache)
+    {
+        foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+        {
+            if (!IsVisibleMetricRow(rowMetrics, row) ||
+                !TryGetVisibleColumnTargetWidth(colMetrics, col, out var targetWidthCharacters))
+            {
+                continue;
+            }
+
+            AddCellDisplayCell(
+                cells,
+                workbook,
+                sheet,
+                sheetId,
+                row,
+                col,
+                cell,
+                targetWidthCharacters,
+                includeFormulas,
+                cfContext,
+                hasConditionalStyles,
+                hasConditionalIcons,
+                hasAnyCellComments,
+                ref styleCache);
+        }
+    }
+
+    private static bool IsVisibleMetricRow(IReadOnlyList<RowMetric> rowMetrics, uint row)
+    {
+        if (rowMetrics.Count == 0 || row < rowMetrics[0].Row || row > rowMetrics[^1].Row)
+            return false;
+
+        for (var i = 0; i < rowMetrics.Count; i++)
+        {
+            var metricRow = rowMetrics[i].Row;
+            if (metricRow == row)
+                return true;
+            if (metricRow > row)
+                return false;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetVisibleColumnTargetWidth(
+        IReadOnlyList<ColMetric> colMetrics,
+        uint col,
+        out int targetWidthCharacters)
+    {
+        targetWidthCharacters = 0;
+        if (colMetrics.Count == 0 || col < colMetrics[0].Col || col > colMetrics[^1].Col)
+            return false;
+
+        for (var i = 0; i < colMetrics.Count; i++)
+        {
+            var metric = colMetrics[i];
+            if (metric.Col == col)
+            {
+                targetWidthCharacters = EstimateCharacterWidth(metric.Width);
+                return true;
+            }
+
+            if (metric.Col > col)
+                return false;
+        }
+
+        return false;
+    }
+
+    private static void AddCellDisplayCell(
+        List<DisplayCell> cells,
+        Workbook workbook,
+        Sheet sheet,
+        SheetId sheetId,
+        uint row,
+        uint col,
+        Cell cell,
+        int targetWidthCharacters,
+        bool includeFormulas,
+        CfEvaluationContext cfContext,
+        bool hasConditionalStyles,
+        bool hasConditionalIcons,
+        bool hasAnyCellComments,
+        ref ViewportStyleCache styleCache)
+    {
+        var style = styleCache.Get(workbook, cell.StyleId);
+        ConditionalFormatIcon? cfIcon = null;
+        var hasComment = false;
+        if (hasConditionalStyles || hasConditionalIcons || hasAnyCellComments)
+            ApplyConditionalVisualsAndComments(
+                sheet,
+                sheetId,
+                row,
+                col,
+                cell.Value,
+                workbook,
+                cfContext,
+                hasConditionalStyles,
+                hasConditionalIcons,
+                hasAnyCellComments,
+                ref style,
+                out cfIcon,
+                out hasComment);
+
+        var displayText = cfIcon?.ShowValue == false
+            ? ""
+            : GetDisplayText(workbook, sheet, cell, ref style, targetWidthCharacters);
+
+        cells.Add(new DisplayCell(
+            row,
+            col,
+            cell.Value,
+            displayText,
+            includeFormulas ? cell.FormulaText : null,
+            cell.StyleId,
+            null,
+            style,
+            cfIcon,
+            hasComment));
+    }
 
     private struct ViewportStyleCache
     {
@@ -487,42 +572,21 @@ public sealed partial class ViewportService : IViewportService
             return;
         }
 
-        {
-        var style = styleCache.Get(workbook, cell.StyleId);
-        ConditionalFormatIcon? cfIcon = null;
-        var hasComment = false;
-        if (hasConditionalStyles || hasConditionalIcons || hasAnyCellComments)
-            ApplyConditionalVisualsAndComments(
-                sheet,
-                sheetId,
-                row,
-                col,
-                cell.Value,
-                workbook,
-                cfContext,
-                hasConditionalStyles,
-                hasConditionalIcons,
-                hasAnyCellComments,
-                ref style,
-                out cfIcon,
-                out hasComment);
-
-        var displayText = cfIcon?.ShowValue == false
-            ? ""
-            : GetDisplayText(workbook, sheet, cell, ref style, targetWidthCharacters);
-
-        cells.Add(new DisplayCell(
+        AddCellDisplayCell(
+            cells,
+            workbook,
+            sheet,
+            sheetId,
             row,
             col,
-            cell.Value,
-            displayText,
-            includeFormulas ? cell.FormulaText : null,
-            cell.StyleId,
-            null,
-            style,
-            cfIcon,
-            hasComment));
-        }
+            cell,
+            targetWidthCharacters,
+            includeFormulas,
+            cfContext,
+            hasConditionalStyles,
+            hasConditionalIcons,
+            hasAnyCellComments,
+            ref styleCache);
     }
 
     private static bool AddSeenCell(ref HashSet<(uint Row, uint Col)>? seen, uint row, uint col)
