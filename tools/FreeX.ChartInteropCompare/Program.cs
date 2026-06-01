@@ -82,6 +82,7 @@ internal static class ChartInteropCompare
 
         EvaluateVisualParity(directories, results, options);
         WriteResults(runDirectory, results);
+        TryWriteVisualContactSheets(runDirectory, results);
         Console.WriteLine($"Results: {Path.Combine(runDirectory, "chart_compare_results.csv")}");
         Console.WriteLine($"Visual metrics: {Path.Combine(runDirectory, "visual_metrics.csv")}");
         Console.WriteLine($"Summary: {Path.Combine(runDirectory, "README.md")}");
@@ -886,7 +887,6 @@ internal static class ChartInteropCompare
         }
 
         WriteVisualMetrics(Path.Combine(directories.Root, "visual_metrics.csv"), results);
-        WriteVisualContactSheets(directories.Root, results);
     }
 
     private static void AddImageFailure(List<string> failures, string label, PngMetrics? metrics)
@@ -1008,6 +1008,20 @@ internal static class ChartInteropCompare
         }
 
         File.WriteAllText(path, csv.ToString(), Encoding.UTF8);
+    }
+
+    private static void TryWriteVisualContactSheets(string runDirectory, IReadOnlyList<ChartCompareResult> results)
+    {
+        try
+        {
+            WriteVisualContactSheets(runDirectory, results);
+        }
+        catch (Exception ex)
+        {
+            var error = $"Visual contact sheet generation failed: {ex.GetType().Name}: {ex.Message}";
+            Console.Error.WriteLine(error);
+            File.WriteAllText(Path.Combine(runDirectory, "visual_contact_sheet_errors.txt"), error, Encoding.UTF8);
+        }
     }
 
     private static void WriteVisualContactSheets(string runDirectory, IReadOnlyList<ChartCompareResult> results)
