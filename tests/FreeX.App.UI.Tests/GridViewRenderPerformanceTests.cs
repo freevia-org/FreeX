@@ -404,6 +404,26 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void SelectionOnlyInvalidations_ReuseRenderClipGeometry()
+    {
+        var dispatch = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));
+        var onRender = dispatch[
+            dispatch.IndexOf("protected override void OnRender", StringComparison.Ordinal)..
+            dispatch.IndexOf("private RectangleGeometry GetRenderClipGeometry", StringComparison.Ordinal)];
+        var getRenderClipGeometry = dispatch[
+            dispatch.IndexOf("private RectangleGeometry GetRenderClipGeometry", StringComparison.Ordinal)..
+            dispatch.IndexOf("private void RenderPreSelectionLayers", StringComparison.Ordinal)];
+
+        dispatch.Should().Contain("private RectangleGeometry? _renderClipGeometryCache;");
+        dispatch.Should().Contain("private Rect _renderClipGeometryCacheRect;");
+        onRender.Should().Contain("dc.PushClip(GetRenderClipGeometry(new Rect(0, 0, ActualWidth / zoom, ActualHeight / zoom)));");
+        onRender.Should().NotContain("new RectangleGeometry");
+        getRenderClipGeometry.Should().Contain("_renderClipGeometryCache is { } cached && _renderClipGeometryCacheRect == clipRect");
+        getRenderClipGeometry.Should().Contain("var geometry = new RectangleGeometry(clipRect);");
+        getRenderClipGeometry.Should().Contain("geometry.Freeze();");
+    }
+
+    [Fact]
     public void SelectionOnlyInvalidations_SkipEmptyPostSelectionLayers()
     {
         var dispatch = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderDispatch.cs"));

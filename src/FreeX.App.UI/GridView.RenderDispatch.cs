@@ -5,6 +5,9 @@ namespace FreeX.App.UI;
 
 public partial class GridView
 {
+    private RectangleGeometry? _renderClipGeometryCache;
+    private Rect _renderClipGeometryCacheRect;
+
     protected override void OnRender(DrawingContext dc)
     {
         if (Viewport == null) return;
@@ -13,7 +16,7 @@ public partial class GridView
         var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
         var isLiveResizing = IsLiveResizing;
         var skipHeavyLayers = isLiveResizing || _resizeTarget != ResizeTarget.None;
-        dc.PushClip(new RectangleGeometry(new Rect(0, 0, ActualWidth / zoom, ActualHeight / zoom)));
+        dc.PushClip(GetRenderClipGeometry(new Rect(0, 0, ActualWidth / zoom, ActualHeight / zoom)));
 
         RenderHeaders(dc);
         RenderPreSelectionLayersWithCache(dc, skipHeavyLayers, isLiveResizing);
@@ -22,6 +25,20 @@ public partial class GridView
 
         dc.Pop();
         _selectionVisualOnlyChangePending = false;
+    }
+
+    private RectangleGeometry GetRenderClipGeometry(Rect clipRect)
+    {
+        if (_renderClipGeometryCache is { } cached && _renderClipGeometryCacheRect == clipRect)
+            return cached;
+
+        var geometry = new RectangleGeometry(clipRect);
+        if (geometry.CanFreeze)
+            geometry.Freeze();
+
+        _renderClipGeometryCache = geometry;
+        _renderClipGeometryCacheRect = clipRect;
+        return geometry;
     }
 
     private void RenderPreSelectionLayers(DrawingContext dc, bool skipHeavyLayers, bool isLiveResizing)
