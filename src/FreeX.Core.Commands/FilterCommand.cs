@@ -15,8 +15,8 @@ public sealed class FilterCommand : IWorkbookCommand
     private readonly IReadOnlyList<string> _allowedValues;
 
     // Snapshot of previous hidden-row state for undo
-    private HashSet<uint>? _previousHiddenRows;
-    private HashSet<uint>? _previousFilterHiddenRows;
+    private uint[]? _previousHiddenRows;
+    private uint[]? _previousFilterHiddenRows;
 
     public string Label => _allowedValues.Count == 0 ? "Clear Filter" : "Apply Filter";
 
@@ -85,8 +85,8 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
     private readonly GridRange _range;
     private readonly uint _filterColOffset;
     private readonly CellColor _fillColor;
-    private HashSet<uint>? _previousHiddenRows;
-    private HashSet<uint>? _previousFilterHiddenRows;
+    private uint[]? _previousHiddenRows;
+    private uint[]? _previousFilterHiddenRows;
 
     public string Label => "Filter by Cell Color";
 
@@ -145,8 +145,8 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly uint _filterColOffset;
-    private HashSet<uint>? _previousHiddenRows;
-    private HashSet<uint>? _previousFilterHiddenRows;
+    private uint[]? _previousHiddenRows;
+    private uint[]? _previousFilterHiddenRows;
 
     public string Label => "Filter by No Fill";
 
@@ -204,8 +204,8 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
     private readonly GridRange _range;
     private readonly uint _filterColOffset;
     private readonly CellColor _fontColor;
-    private HashSet<uint>? _previousHiddenRows;
-    private HashSet<uint>? _previousFilterHiddenRows;
+    private uint[]? _previousHiddenRows;
+    private uint[]? _previousFilterHiddenRows;
 
     public string Label => "Filter by Font Color";
 

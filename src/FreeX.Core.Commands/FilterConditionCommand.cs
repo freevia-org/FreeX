@@ -174,8 +174,8 @@ public sealed class FilterConditionCommand : IWorkbookCommand
     private readonly GridRange _range;
     private readonly uint _filterColOffset;
     private readonly IFilterCriterion _criterion;
-    private HashSet<uint>? _previousHiddenRows;
-    private HashSet<uint>? _previousFilterHiddenRows;
+    private uint[]? _previousHiddenRows;
+    private uint[]? _previousFilterHiddenRows;
 
     public string Label => "Apply Filter";
 
