@@ -807,6 +807,64 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromAboveAverageConditionalFormat()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var first = new CellAddress(sheet.Id, 1, 1);
+        var second = new CellAddress(sheet.Id, 2, 1);
+        var third = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(first, new TextValue("10"));
+        sheet.SetCell(second, new TextValue("20"));
+        sheet.SetCell(third, new TextValue("30"));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(first, third),
+            RuleType = CfRuleType.AboveAverage,
+            AboveAverage = true,
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = new CellColor(120, 120, 120),
+                FillColor = new CellColor(130, 130, 130)
+            }
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("A3");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsLowContrastCellText_FromBelowAverageConditionalFormat()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var first = new CellAddress(sheet.Id, 1, 1);
+        var second = new CellAddress(sheet.Id, 2, 1);
+        var third = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(first, new TextValue("10"));
+        sheet.SetCell(second, new TextValue("20"));
+        sheet.SetCell(third, new TextValue("30"));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(first, third),
+            RuleType = CfRuleType.AboveAverage,
+            AboveAverage = false,
+            FormatIfTrue = new CellStyle
+            {
+                FontColor = new CellColor(120, 120, 120),
+                FillColor = new CellColor(130, 130, 130)
+            }
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(issue => issue.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("A1");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_WhenPatternForegroundIsLowContrast()
     {
         var workbook = new Workbook("Accessibility");

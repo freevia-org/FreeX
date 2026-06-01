@@ -269,7 +269,27 @@ public partial class MainWindow
                 RefreshStatusBar();
                 TracePrecedentsForCell(issue.Address, "Trace Error");
             },
-            ShowOptionsDialog)
+            showCalculationSteps: issue =>
+            {
+                NavigateToCell(issue.Address);
+                RefreshSheetTabs();
+                UpdateViewport();
+                RefreshStatusBar();
+
+                var summary = FormulaEvaluationSummaryService.GetSummary(_workbook, issue.Address);
+                if (summary is null)
+                {
+                    _messageService.ShowInfo("Select a cell that contains a formula.", "Evaluate Formula");
+                    return;
+                }
+
+                var evaluationDialog = new EvaluateFormulaDialog(summary)
+                {
+                    Owner = this
+                };
+                evaluationDialog.ShowDialog();
+            },
+            openOptions: ShowOptionsDialog)
         {
             Owner = this
         };

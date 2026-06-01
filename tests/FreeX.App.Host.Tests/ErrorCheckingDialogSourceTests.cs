@@ -170,6 +170,29 @@ public sealed class ErrorCheckingDialogSourceTests
         });
     }
 
+    [Fact]
+    public void ErrorCheckingDialog_ShowCalculationStepsTargetsFormulaIssuesOnly()
+    {
+        var dialogSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ErrorCheckingDialog.cs"));
+        var formulaSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.FormulaCommands.cs"));
+
+        dialogSource.Should().Contain("Action<FormulaErrorIssue>? showCalculationSteps = null");
+        dialogSource.Should().Contain("_showCalculationSteps = showCalculationSteps ?? traceError;");
+        dialogSource.Should().Contain("_showStepsButton.Click += (_, _) => ShowCalculationStepsSelected();");
+        dialogSource.Should().Contain("private static bool HasCalculationSteps(FormulaErrorIssue issue) =>");
+        dialogSource.Should().Contain("!string.IsNullOrWhiteSpace(issue.FormulaText)");
+        dialogSource.Should().Contain("_showStepsButton.IsEnabled = hasSelection &&");
+        dialogSource.Should().Contain("HasCalculationSteps(selectedIssue)");
+        dialogSource.Should().Contain("private void ShowCalculationStepsSelected()");
+        dialogSource.Should().Contain("if (_listView.SelectedItem is FormulaErrorIssue issue && HasCalculationSteps(issue))");
+        dialogSource.Should().Contain("_showCalculationSteps(issue);");
+
+        formulaSource.Should().Contain("showCalculationSteps: issue =>");
+        formulaSource.Should().Contain("FormulaEvaluationSummaryService.GetSummary(_workbook, issue.Address)");
+        formulaSource.Should().Contain("new EvaluateFormulaDialog(summary)");
+        formulaSource.Should().Contain("evaluationDialog.ShowDialog();");
+    }
+
     private static FormulaErrorIssue CreateIssue(SheetId sheetId, uint row) =>
         new(
             sheetId,

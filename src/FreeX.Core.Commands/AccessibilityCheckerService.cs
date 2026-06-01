@@ -525,6 +525,7 @@ public static class AccessibilityCheckerService
             CfRuleType.NoErrors => value is not ErrorValue,
             CfRuleType.DuplicateValues => evaluationCache.HasDuplicateValue(rule, value),
             CfRuleType.UniqueValues => evaluationCache.HasUniqueValue(rule, value),
+            CfRuleType.AboveAverage => evaluationCache.MatchesAverageRule(rule, value),
             CfRuleType.ContainsText => ValueText(value).Contains(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
             CfRuleType.NotContainsText => !ValueText(value).Contains(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
             CfRuleType.BeginsWith => ValueText(value).StartsWith(rule.TextRuleText ?? string.Empty, StringComparison.OrdinalIgnoreCase),
@@ -858,12 +859,27 @@ public static class AccessibilityCheckerService
         IReadOnlyDictionary<(uint Row, uint Col), Cell> occupiedCells)
     {
         private readonly Dictionary<ConditionalFormat, Dictionary<string, int>> _valueCounts = new();
+        private readonly Dictionary<ConditionalFormat, RangeAverage> _averages = new();
 
         public bool HasDuplicateValue(ConditionalFormat rule, ScalarValue value) =>
             TryGetValueCount(rule, value, out var count) && count > 1;
 
         public bool HasUniqueValue(ConditionalFormat rule, ScalarValue value) =>
             TryGetValueCount(rule, value, out var count) && count == 1;
+
+        public bool MatchesAverageRule(ConditionalFormat rule, ScalarValue value)
+        {
+            if (!TryGetNumber(value, out var number))
+                return false;
+
+            var average = GetRangeAverage(rule);
+            if (!average.HasValues)
+                return false;
+
+            return rule.AboveAverage
+                ? number > average.Value
+                : number < average.Value;
+        }
 
         private bool TryGetValueCount(ConditionalFormat rule, ScalarValue value, out int count)
         {
@@ -899,7 +915,36 @@ public static class AccessibilityCheckerService
             _valueCounts[rule] = counts;
             return counts;
         }
+
+        private RangeAverage GetRangeAverage(ConditionalFormat rule)
+        {
+            if (_averages.TryGetValue(rule, out var average))
+                return average;
+
+            double sum = 0;
+            var count = 0;
+            foreach (var (entry, cell) in occupiedCells)
+            {
+                if (!TryGetNumber(cell.Value, out var number))
+                    continue;
+
+                var address = new CellAddress(sheet.Id, entry.Row, entry.Col);
+                if (!rule.AppliesTo.Contains(address))
+                    continue;
+
+                sum += number;
+                count++;
+            }
+
+            average = count == 0
+                ? new RangeAverage(0, HasValues: false)
+                : new RangeAverage(sum / count, HasValues: true);
+            _averages[rule] = average;
+            return average;
+        }
     }
+
+    private readonly record struct RangeAverage(double Value, bool HasValues);
 
     private sealed class CellStyleReferenceComparer : IEqualityComparer<CellStyle>
     {

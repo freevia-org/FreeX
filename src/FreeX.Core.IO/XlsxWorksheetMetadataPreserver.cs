@@ -71,21 +71,23 @@ internal static partial class XlsxWorksheetMetadataPreserver
             var sourceSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "sheetViews");
             var sourceHyperlinks = sourceWorksheetXml.Root?.Element(workbookNs + "hyperlinks");
             var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
-            if (sourceBlocks.Count == 0 &&
-                sourceSheetProperties is null &&
-                sourceSheetFormatProperties is null &&
-                sourceDimension is null &&
-                sourcePrintOptions is null &&
-                sourcePageMargins is null &&
-                sourcePageSetup is null &&
-                sourceHeaderFooter is null &&
-                sourceMergeCells is null &&
-                sourceColumns is null &&
-                sourceSheetData is null &&
-                sourceSheetProtection is null &&
-                sourceSheetViews is null &&
-                sourceHyperlinks is null &&
-                sourceExtensionList is null)
+            if (!HasPreservableSourceWorksheetMetadata(
+                    sourceBlocks,
+                    sourceSheetProperties,
+                    sourceSheetFormatProperties,
+                    sourceDimension,
+                    sourcePrintOptions,
+                    sourcePageMargins,
+                    sourcePageSetup,
+                    sourceHeaderFooter,
+                    sourceMergeCells,
+                    sourceColumns,
+                    sourceSheetData,
+                    sourceSheetProtection,
+                    sourceSheetViews,
+                    sourceHyperlinks,
+                    sourceExtensionList,
+                    workbookNs))
             {
                 continue;
             }
@@ -362,21 +364,23 @@ internal static partial class XlsxWorksheetMetadataPreserver
             var sourceSheetViews = sourceWorksheetXml.Root?.Element(workbookNs + "sheetViews");
             var sourceHyperlinks = sourceWorksheetXml.Root?.Element(workbookNs + "hyperlinks");
             var sourceExtensionList = sourceWorksheetXml.Root?.Element(workbookNs + "extLst");
-            if (sourceBlocks.Count == 0 &&
-                sourceSheetProperties is null &&
-                sourceSheetFormatProperties is null &&
-                sourceDimension is null &&
-                sourcePrintOptions is null &&
-                sourcePageMargins is null &&
-                sourcePageSetup is null &&
-                sourceHeaderFooter is null &&
-                sourceMergeCells is null &&
-                sourceColumns is null &&
-                sourceSheetData is null &&
-                sourceSheetProtection is null &&
-                sourceSheetViews is null &&
-                sourceHyperlinks is null &&
-                sourceExtensionList is null)
+            if (!HasPreservableSourceWorksheetMetadata(
+                    sourceBlocks,
+                    sourceSheetProperties,
+                    sourceSheetFormatProperties,
+                    sourceDimension,
+                    sourcePrintOptions,
+                    sourcePageMargins,
+                    sourcePageSetup,
+                    sourceHeaderFooter,
+                    sourceMergeCells,
+                    sourceColumns,
+                    sourceSheetData,
+                    sourceSheetProtection,
+                    sourceSheetViews,
+                    sourceHyperlinks,
+                    sourceExtensionList,
+                    workbookNs))
             {
                 continue;
             }
