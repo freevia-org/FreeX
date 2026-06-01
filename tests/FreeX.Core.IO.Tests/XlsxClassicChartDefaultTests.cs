@@ -62,11 +62,13 @@ public sealed class XlsxClassicChartDefaultTests
         barChart.Element(ChartNs + "shape")!.Attribute("val")!.Value.Should().Be("box");
         barChart.Element(ChartNs + "overlap").Should().BeNull();
         AssertChildOrder(barChart, "ser", "dLbls", "gapWidth", "shape", "axId");
+        barChart.Elements(ChartNs + "axId").Should().HaveCount(3);
 
         chartXml.Descendants(ChartNs + "catAx").Single()
             .Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be(expectedCategoryAxisPosition);
         chartXml.Descendants(ChartNs + "valAx").Single()
             .Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be(expectedValueAxisPosition);
+        AssertDefaultSeriesAxis(chartXml);
     }
 
     [Theory]
@@ -87,9 +89,7 @@ public sealed class XlsxClassicChartDefaultTests
         if (chartType == ChartType.ThreeDSurface)
             plotChart.Element(ChartNs + "wireframe")!.Attribute("val")!.Value.Should().Be("0");
 
-        var seriesAxis = chartXml.Descendants(ChartNs + "serAx").Should().ContainSingle().Subject;
-        seriesAxis.Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be("b");
-        seriesAxis.Element(ChartNs + "crossAx")!.Attribute("val")!.Value.Should().Be("48672768");
+        AssertDefaultSeriesAxis(chartXml);
     }
 
     [Fact]
@@ -179,6 +179,13 @@ public sealed class XlsxClassicChartDefaultTests
             shapeProperties.Element(DrawingNs + "effectLst").Should().NotBeNull();
             shapeProperties.Element(DrawingNs + "sp3d").Should().NotBeNull();
         }
+    }
+
+    private static void AssertDefaultSeriesAxis(XDocument chartXml)
+    {
+        var seriesAxis = chartXml.Descendants(ChartNs + "serAx").Should().ContainSingle().Subject;
+        seriesAxis.Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be("b");
+        seriesAxis.Element(ChartNs + "crossAx")!.Attribute("val")!.Value.Should().Be("48672768");
     }
 
     private static void AssertChildOrder(XElement parent, params string[] expectedNames)
