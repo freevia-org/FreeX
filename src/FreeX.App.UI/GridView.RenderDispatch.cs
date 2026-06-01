@@ -16,6 +16,16 @@ public partial class GridView
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, ActualWidth / zoom, ActualHeight / zoom)));
 
         RenderHeaders(dc);
+        RenderPreSelectionLayersWithCache(dc, skipHeavyLayers, isLiveResizing);
+        RenderSelection(dc);
+        RenderPostSelectionLayers(dc, skipHeavyLayers);
+
+        dc.Pop();
+        _selectionVisualOnlyChangePending = false;
+    }
+
+    private void RenderPreSelectionLayers(DrawingContext dc, bool skipHeavyLayers, bool isLiveResizing)
+    {
         if (!skipHeavyLayers)
             RenderWorksheetBackground(dc);
         RenderGridLines(dc);
@@ -29,13 +39,17 @@ public partial class GridView
             RenderSparklines(dc);
             RenderQuickAnalysisPreview(dc);
         }
-        RenderSelection(dc);
+    }
+
+    private void RenderPostSelectionLayers(DrawingContext dc, bool skipHeavyLayers)
+    {
         if (!skipHeavyLayers)
         {
             RenderFormulaTraceArrows(dc);
             RenderAutofillPreview(dc);
             RenderMarchingAnts(dc);
         }
+
         RenderFreezeDivider(dc);
         RenderSplitDivider(dc);
         RenderSplitPaneScrollbarChrome(dc);
@@ -64,7 +78,5 @@ public partial class GridView
                     DrawObjectSelectionHandles(dc, selectedRect);
             }
         }
-
-        dc.Pop();
     }
 }
