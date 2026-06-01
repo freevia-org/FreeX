@@ -49,6 +49,54 @@ public partial class MainWindow
         menu.IsOpen = true;
     }
 
+    private void OnWaterfallChartPointContextMenuRequested(ChartModel chart, int pointIndex, System.Windows.Point gridPos)
+    {
+        HideValidationDropdown();
+        ClearCommentPreview();
+
+        var menu = new ContextMenu();
+        foreach (var command in WaterfallChartContextMenuPlanner.BuildCommands(chart, pointIndex))
+        {
+            var item = new MenuItem
+            {
+                Header = command.AccessHeader,
+                IsEnabled = command.IsEnabled,
+                IsCheckable = true,
+                IsChecked = command.IsChecked
+            };
+            item.Click += (_, _) => ToggleWaterfallTotalPoint(chart.Id, pointIndex);
+            menu.Items.Add(item);
+        }
+
+        MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>());
+        menu.PlacementTarget = SheetGrid;
+        menu.Opened += WorksheetContextMenu_Opened;
+        menu.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(SheetGrid.ContextMenu, menu))
+                SheetGrid.ContextMenu = null;
+        };
+        SheetGrid.ContextMenu = menu;
+        PositionWorksheetContextMenu(menu, gridPos);
+        menu.IsOpen = true;
+    }
+
+    private void ToggleWaterfallTotalPoint(Guid chartId, int pointIndex)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var chart = sheet?.Charts.FirstOrDefault(item => item.Id == chartId);
+        if (chart is null)
+            return;
+
+        var setAsTotal = !WaterfallChartContextMenuPlanner.IsPointTotal(chart, pointIndex);
+        if (!TryExecuteCommand(
+                new SetWaterfallTotalPointCommand(_currentSheetId, chart.Id, pointIndex, setAsTotal),
+                "Set as Total"))
+            return;
+
+        UpdateViewport();
+    }
+
     private void OnGridHeaderContextMenuRequested(GridHeaderContextMenuTarget target, uint index, System.Windows.Point gridPos)
     {
         var address = target == GridHeaderContextMenuTarget.Row

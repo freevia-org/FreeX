@@ -41,6 +41,9 @@ public partial class GridView
     /// <summary>Fired when the user activates a rendered PivotChart field button.</summary>
     public event Action<ChartModel, string, System.Windows.Point>? PivotChartFieldButtonRequested;
 
+    /// <summary>Fired when the user right-clicks a waterfall chart point.</summary>
+    public event Action<ChartModel, int, System.Windows.Point>? WaterfallChartPointContextMenuRequested;
+
     /// <summary>Fired when the user releases after dragging a Page Layout margin guide.</summary>
     public event Action<WorksheetPageMargins>? PageMarginsChanged;
 

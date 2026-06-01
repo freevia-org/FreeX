@@ -103,4 +103,35 @@ public partial class GridView
 
         return null;
     }
+
+    public static (ChartModel Chart, int PointIndex)? HitTestWaterfallChartPoint(
+        IReadOnlyList<ChartModel>? charts,
+        Point pos,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        if (charts is null)
+            return null;
+
+        for (var i = charts.Count - 1; i >= 0; i--)
+        {
+            var chart = charts[i];
+            if (!chart.IsVisible || chart.Type != ChartType.Waterfall || chart.Width <= 0 || chart.Height <= 0)
+                continue;
+
+            var pointCount = ChartTypeSupport.GetDataPointCount(chart);
+            if (pointCount <= 0)
+                continue;
+
+            var rect = new Rect(chart.Left + rowHeaderWidth, chart.Top + columnHeaderHeight, chart.Width, chart.Height);
+            if (!ContainsInclusive(rect, pos))
+                continue;
+
+            var relativeX = Math.Clamp((pos.X - rect.Left) / rect.Width, 0, 1);
+            var pointIndex = Math.Clamp((int)Math.Floor(relativeX * pointCount), 0, pointCount - 1);
+            return (chart, pointIndex);
+        }
+
+        return null;
+    }
 }
