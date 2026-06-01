@@ -66,6 +66,7 @@ internal static partial class RowColumnShiftHelpers
             rule.AppliesTo = ShiftRangeRowsUp(rule.AppliesTo, start, count);
             ShiftAdditionalRanges(rule, range => ShiftRangeRowsUp(range, start, count));
         }
+        sheet.DataValidations.NotifyRulesChanged();
         foreach (var rule in sheet.ConditionalFormats)
             rule.AppliesTo = ShiftRangeRowsUp(rule.AppliesTo, start, count);
     }
@@ -82,6 +83,7 @@ internal static partial class RowColumnShiftHelpers
                 ShiftAdditionalRanges(sheet.DataValidations[i], range => ShiftRangeRowsDown(range, start, count));
             }
         }
+        sheet.DataValidations.NotifyRulesChanged();
         for (int i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
         {
             var shifted = ShiftRangeRowsDown(sheet.ConditionalFormats[i].AppliesTo, start, count);
@@ -97,6 +99,7 @@ internal static partial class RowColumnShiftHelpers
             rule.AppliesTo = ShiftRangeColumnsUp(rule.AppliesTo, start, count);
             ShiftAdditionalRanges(rule, range => ShiftRangeColumnsUp(range, start, count));
         }
+        sheet.DataValidations.NotifyRulesChanged();
         foreach (var rule in sheet.ConditionalFormats)
             rule.AppliesTo = ShiftRangeColumnsUp(rule.AppliesTo, start, count);
     }
@@ -113,6 +116,7 @@ internal static partial class RowColumnShiftHelpers
                 ShiftAdditionalRanges(sheet.DataValidations[i], range => ShiftRangeColumnsDown(range, start, count));
             }
         }
+        sheet.DataValidations.NotifyRulesChanged();
         for (int i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
         {
             var shifted = ShiftRangeColumnsDown(sheet.ConditionalFormats[i].AppliesTo, start, count);
