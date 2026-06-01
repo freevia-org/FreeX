@@ -247,6 +247,12 @@ public sealed class ChartModel
     /// <summary>Histogram bin configuration (Excel "Format Axis ▸ Bins"); null means automatic binning.</summary>
     public HistogramBinningModel? HistogramBinning { get; set; }
 
+    /// <summary>
+    /// Waterfall points (0-based) drawn as total/anchor columns (Excel "Set as Total").
+    /// Null falls back to treating the last point as the total; an empty list means no totals.
+    /// </summary>
+    public List<int>? WaterfallTotalPointIndices { get; set; }
+
     public bool ShowUpDownBars { get; set; }
     public int? UpDownBarGapWidth { get; set; }
     public CellColor? UpBarFillColor { get; set; }

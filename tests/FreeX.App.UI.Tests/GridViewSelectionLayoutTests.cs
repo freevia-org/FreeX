@@ -252,10 +252,17 @@ public sealed class GridViewSelectionLayoutTests
             source.IndexOf("private void RenderQuickAnalysisPreview", StringComparison.Ordinal)..
             source.IndexOf("private static void DrawQuickAnalysisColumnChartPreview", StringComparison.Ordinal)];
 
-        renderPreview.Should().Contain("GetRenderCellLookups(Viewport)");
+        renderPreview.Should().Contain("GetRenderCellLookups(viewport)");
         renderPreview.Should().Contain("VisitDataBarPreviewRects(");
+        renderPreview.Should().Contain("new StreamGeometry()");
+        renderPreview.Should().Contain("_quickAnalysisDataBarPreviewGeometryCache");
+        renderPreview.Should().Contain("ReferenceEquals(cached.Viewport, viewport)");
+        renderPreview.Should().Contain("dc.DrawGeometry(QuickAnalysisDataBarPreviewBrush, null, geometry);");
+        renderPreview.Should().Contain("dc.DrawGeometry(QuickAnalysisDataBarPreviewBrush, null, cached.Geometry);");
+        renderPreview.Should().Contain("QuickAnalysisDataBarGeometryConsumer");
         renderPreview.Should().Contain("VisitCellPreviewRects(");
         renderPreview.Should().Contain("VisitSparklinePreviewRects(");
+        renderPreview.Should().NotContain("new FillRectConsumer(dc, QuickAnalysisDataBarPreviewBrush)");
         renderPreview.Should().NotContain("CalculateQuickAnalysisDataBarPreviewRects(");
         renderPreview.Should().NotContain("CalculateQuickAnalysisCellPreviewRects(");
         renderPreview.Should().NotContain("CalculateQuickAnalysisSparklinePreviewRects(");
