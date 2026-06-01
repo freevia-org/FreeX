@@ -106,6 +106,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
         XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipTargets = ReadRelationshipTargetsById(drawingRelsXml.Root, packageRelNs);
 
         foreach (var chartElement in drawingXml.Descendants().Where(element => element.Name == chartNs + "chart" || element.Name == chartExNs + "chart"))
         {
@@ -113,12 +114,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             if (string.IsNullOrWhiteSpace(chartRelId))
                 continue;
 
-            var chartTarget = drawingRelsXml.Root
-                .Elements(packageRelNs + "Relationship")
-                .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, chartRelId, StringComparison.Ordinal))?
-                .Attribute("Target")?
-                .Value;
-            if (string.IsNullOrWhiteSpace(chartTarget))
+            if (!relationshipTargets.TryGetValue(chartRelId, out var chartTarget))
                 continue;
 
             var chartPath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, chartTarget);
@@ -153,6 +149,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var relationshipTargets = ReadRelationshipTargetsById(drawingRelsXml.Root, packageRelNs);
 
         foreach (var pictureElement in drawingXml.Descendants(spreadsheetDrawingNs + "pic"))
         {
@@ -163,12 +160,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             if (string.IsNullOrWhiteSpace(imageRelId))
                 continue;
 
-            var imageTarget = drawingRelsXml.Root
-                .Elements(packageRelNs + "Relationship")
-                .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, imageRelId, StringComparison.Ordinal))?
-                .Attribute("Target")?
-                .Value;
-            if (string.IsNullOrWhiteSpace(imageTarget))
+            if (!relationshipTargets.TryGetValue(imageRelId, out var imageTarget))
                 continue;
 
             var imagePath = XlsxPackagePath.ResolveRelationshipTarget(drawingPath, imageTarget);
@@ -198,6 +190,20 @@ internal static partial class XlsxWorksheetDrawingPartReader
         }
 
         return pictures;
+    }
+
+    private static Dictionary<string, string> ReadRelationshipTargetsById(XElement relationshipRoot, XNamespace packageRelNs)
+    {
+        var targets = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var relationship in relationshipRoot.Elements(packageRelNs + "Relationship"))
+        {
+            var id = relationship.Attribute("Id")?.Value;
+            var target = relationship.Attribute("Target")?.Value;
+            if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(target))
+                targets.TryAdd(id, target);
+        }
+
+        return targets;
     }
 
     private static (IReadOnlyList<XlsxTextBoxPackagePart> TextBoxes, IReadOnlyList<XlsxShapePackagePart> Shapes) ReadShapeParts(
