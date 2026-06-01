@@ -133,7 +133,7 @@ internal static class XlsxWorksheetChartWriter
                 createChartXml(chart, sheet).Save(chartStream);
 
             var styleParts = ChartTypeSupport.IsChartExFamily(chart.Type)
-                ? WriteChartExStyleParts(archive, currentChartIndex)
+                ? WriteChartExStyleParts(archive, currentChartIndex, chart.Type)
                 : (ChartExStylePackageParts?)null;
             if (styleParts is { } chartExParts)
                 chartExStyleParts[currentChartIndex] = chartExParts;
@@ -254,12 +254,12 @@ internal static class XlsxWorksheetChartWriter
         XlsxPackageXmlEditor.ReplaceXml(archive, relsPath, relsXml);
     }
 
-    private static ChartExStylePackageParts WriteChartExStyleParts(ZipArchive archive, int chartIndex)
+    private static ChartExStylePackageParts WriteChartExStyleParts(ZipArchive archive, int chartIndex, ChartType chartType)
     {
         var colorStylePath = $"xl/charts/colors{chartIndex}.xml";
         var stylePath = $"xl/charts/style{chartIndex}.xml";
         XlsxPackageXmlEditor.ReplaceXml(archive, colorStylePath, CreateChartExColorStyleXml());
-        XlsxPackageXmlEditor.ReplaceXml(archive, stylePath, CreateChartExStyleXml());
+        XlsxPackageXmlEditor.ReplaceXml(archive, stylePath, CreateChartExStyleXml(chartType));
         return new ChartExStylePackageParts(colorStylePath, stylePath);
     }
 
@@ -299,106 +299,16 @@ internal static class XlsxWorksheetChartWriter
                 ? null
                 : new XElement(drawingNs + "lumOff", new XAttribute("val", lumOff.Value)));
 
-    private static XDocument CreateChartExStyleXml()
+    private static XDocument CreateChartExStyleXml(ChartType chartType)
     {
-        XNamespace chartStyleNs = "http://schemas.microsoft.com/office/drawing/2012/chartStyle";
-        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        _ = chartType;
 
-        return new XDocument(
-            new XElement(chartStyleNs + "chartStyle",
-                new XAttribute(XNamespace.Xmlns + "cs", chartStyleNs),
-                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
-                new XAttribute("id", "410"),
-                ToChartStyleElement(chartStyleNs, drawingNs, "axisTitle", textSize: 900),
-                ToChartStyleElement(chartStyleNs, drawingNs, "categoryAxis", textSize: 900, includeLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "chartArea", textSize: 1000, includeShapeProperties: true, mods: "allowNoFillOverride allowNoLineOverride"),
-                ToChartStyleElement(chartStyleNs, drawingNs, "dataLabel", textSize: 900),
-                ToChartStyleElement(chartStyleNs, drawingNs, "dataLabelCallout", textSize: 900, includeShapeProperties: true, includeBodyProperties: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "dataPoint", includeShapeProperties: true, usePlaceholderFill: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "dataPoint3D", includeShapeProperties: true, usePlaceholderFill: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "dataPointLine", includeLine: true, usePlaceholderLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "dataPointMarker", includeShapeProperties: true, usePlaceholderFill: true),
-                new XElement(chartStyleNs + "dataPointMarkerLayout", new XAttribute("symbol", "circle"), new XAttribute("size", "5")),
-                ToChartStyleElement(chartStyleNs, drawingNs, "dataPointWireframe", includeLine: true, usePlaceholderLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "dataTable", textSize: 900, includeLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "downBar", includeShapeProperties: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "dropLine", includeLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "errorBar", includeLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "floor"),
-                ToChartStyleElement(chartStyleNs, drawingNs, "gridlineMajor", includeLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "gridlineMinor", includeLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "hiLoLine", includeLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "leaderLine", includeLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "legend", textSize: 900),
-                ToChartStyleElement(chartStyleNs, drawingNs, "plotArea", mods: "allowNoFillOverride allowNoLineOverride"),
-                ToChartStyleElement(chartStyleNs, drawingNs, "plotArea3D", mods: "allowNoFillOverride allowNoLineOverride"),
-                ToChartStyleElement(chartStyleNs, drawingNs, "seriesAxis", textSize: 900, includeLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "seriesLine", includeLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "title", textSize: 1400),
-                ToChartStyleElement(chartStyleNs, drawingNs, "trendline", includeLine: true, usePlaceholderLine: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "trendlineLabel", textSize: 900),
-                ToChartStyleElement(chartStyleNs, drawingNs, "upBar", includeShapeProperties: true),
-                ToChartStyleElement(chartStyleNs, drawingNs, "valueAxis", textSize: 900),
-                ToChartStyleElement(chartStyleNs, drawingNs, "wall")));
+        // Excel emits the same native chartEx style profile for the supported modern chart family.
+        return XDocument.Parse(
+            """
+            <cs:chartStyle xmlns:cs="http://schemas.microsoft.com/office/drawing/2012/chartStyle" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" id="201"><cs:axisTitle><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></cs:fontRef><cs:defRPr sz="1000" kern="1200"/></cs:axisTitle><cs:categoryAxis><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></cs:fontRef><cs:spPr><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="15000"/><a:lumOff val="85000"/></a:schemeClr></a:solidFill><a:round/></a:ln></cs:spPr><cs:defRPr sz="900" kern="1200"/></cs:categoryAxis><cs:chartArea mods="allowNoFillOverride allowNoLineOverride"><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:solidFill><a:schemeClr val="bg1"/></a:solidFill><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="15000"/><a:lumOff val="85000"/></a:schemeClr></a:solidFill><a:round/></a:ln></cs:spPr><cs:defRPr sz="1000" kern="1200"/></cs:chartArea><cs:dataLabel><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"><a:lumMod val="75000"/><a:lumOff val="25000"/></a:schemeClr></cs:fontRef><cs:defRPr sz="900" kern="1200"/></cs:dataLabel><cs:dataLabelCallout><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="dk1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></cs:fontRef><cs:spPr><a:solidFill><a:schemeClr val="lt1"/></a:solidFill><a:ln><a:solidFill><a:schemeClr val="dk1"><a:lumMod val="25000"/><a:lumOff val="75000"/></a:schemeClr></a:solidFill></a:ln></cs:spPr><cs:defRPr sz="900" kern="1200"/><cs:bodyPr rot="0" spcFirstLastPara="1" vertOverflow="clip" horzOverflow="clip" vert="horz" wrap="square" lIns="36576" tIns="18288" rIns="36576" bIns="18288" anchor="ctr" anchorCtr="1"><a:spAutoFit/></cs:bodyPr></cs:dataLabelCallout><cs:dataPoint><cs:lnRef idx="0"/><cs:fillRef idx="1"><cs:styleClr val="auto"/></cs:fillRef><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef></cs:dataPoint><cs:dataPoint3D><cs:lnRef idx="0"/><cs:fillRef idx="1"><cs:styleClr val="auto"/></cs:fillRef><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef></cs:dataPoint3D><cs:dataPointLine><cs:lnRef idx="0"><cs:styleClr val="auto"/></cs:lnRef><cs:fillRef idx="1"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:ln w="28575" cap="rnd"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:round/></a:ln></cs:spPr></cs:dataPointLine><cs:dataPointMarker><cs:lnRef idx="0"><cs:styleClr val="auto"/></cs:lnRef><cs:fillRef idx="1"><cs:styleClr val="auto"/></cs:fillRef><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:ln w="9525"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></cs:spPr></cs:dataPointMarker><cs:dataPointMarkerLayout symbol="circle" size="5"/><cs:dataPointWireframe><cs:lnRef idx="0"><cs:styleClr val="auto"/></cs:lnRef><cs:fillRef idx="1"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:ln w="9525" cap="rnd"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:round/></a:ln></cs:spPr></cs:dataPointWireframe><cs:dataTable><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></cs:fontRef><cs:spPr><a:noFill/><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="15000"/><a:lumOff val="85000"/></a:schemeClr></a:solidFill><a:round/></a:ln></cs:spPr><cs:defRPr sz="900" kern="1200"/></cs:dataTable><cs:downBar><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="dk1"/></cs:fontRef><cs:spPr><a:solidFill><a:schemeClr val="dk1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></a:solidFill><a:ln w="9525"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></a:solidFill></a:ln></cs:spPr></cs:downBar><cs:dropLine><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="35000"/><a:lumOff val="65000"/></a:schemeClr></a:solidFill><a:round/></a:ln></cs:spPr></cs:dropLine><cs:errorBar><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></a:solidFill><a:round/></a:ln></cs:spPr></cs:errorBar><cs:floor><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:noFill/><a:ln><a:noFill/></a:ln></cs:spPr></cs:floor><cs:gridlineMajor><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="15000"/><a:lumOff val="85000"/></a:schemeClr></a:solidFill><a:round/></a:ln></cs:spPr></cs:gridlineMajor><cs:gridlineMinor><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="5000"/><a:lumOff val="95000"/></a:schemeClr></a:solidFill><a:round/></a:ln></cs:spPr></cs:gridlineMinor><cs:hiLoLine><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="75000"/><a:lumOff val="25000"/></a:schemeClr></a:solidFill><a:round/></a:ln></cs:spPr></cs:hiLoLine><cs:leaderLine><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="35000"/><a:lumOff val="65000"/></a:schemeClr></a:solidFill><a:round/></a:ln></cs:spPr></cs:leaderLine><cs:legend><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></cs:fontRef><cs:defRPr sz="900" kern="1200"/></cs:legend><cs:plotArea mods="allowNoFillOverride allowNoLineOverride"><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef></cs:plotArea><cs:plotArea3D mods="allowNoFillOverride allowNoLineOverride"><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef></cs:plotArea3D><cs:seriesAxis><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></cs:fontRef><cs:defRPr sz="900" kern="1200"/></cs:seriesAxis><cs:seriesLine><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:ln w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="35000"/><a:lumOff val="65000"/></a:schemeClr></a:solidFill><a:round/></a:ln></cs:spPr></cs:seriesLine><cs:title><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></cs:fontRef><cs:defRPr sz="1400" b="0" kern="1200" spc="0" baseline="0"/></cs:title><cs:trendline><cs:lnRef idx="0"><cs:styleClr val="auto"/></cs:lnRef><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:ln w="19050" cap="rnd"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="sysDot"/></a:ln></cs:spPr></cs:trendline><cs:trendlineLabel><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></cs:fontRef><cs:defRPr sz="900" kern="1200"/></cs:trendlineLabel><cs:upBar><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="dk1"/></cs:fontRef><cs:spPr><a:solidFill><a:schemeClr val="lt1"/></a:solidFill><a:ln w="9525"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="15000"/><a:lumOff val="85000"/></a:schemeClr></a:solidFill></a:ln></cs:spPr></cs:upBar><cs:valueAxis><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></cs:fontRef><cs:defRPr sz="900" kern="1200"/></cs:valueAxis><cs:wall><cs:lnRef idx="0"/><cs:fillRef idx="0"/><cs:effectRef idx="0"/><cs:fontRef idx="minor"><a:schemeClr val="tx1"/></cs:fontRef><cs:spPr><a:noFill/><a:ln><a:noFill/></a:ln></cs:spPr></cs:wall></cs:chartStyle>
+            """);
     }
-
-    private static XElement ToChartStyleElement(
-        XNamespace chartStyleNs,
-        XNamespace drawingNs,
-        string name,
-        int? textSize = null,
-        bool includeShapeProperties = false,
-        bool includeLine = false,
-        bool includeBodyProperties = false,
-        bool usePlaceholderFill = false,
-        bool usePlaceholderLine = false,
-        string? mods = null) =>
-        new(chartStyleNs + name,
-            string.IsNullOrWhiteSpace(mods) ? null : new XAttribute("mods", mods),
-            new XElement(chartStyleNs + "lnRef", new XAttribute("idx", "0"), usePlaceholderLine ? ToChartStyleColor(chartStyleNs, "auto") : null),
-            new XElement(chartStyleNs + "fillRef", new XAttribute("idx", "0"), usePlaceholderFill ? ToChartStyleColor(chartStyleNs, "auto") : null),
-            new XElement(chartStyleNs + "effectRef", new XAttribute("idx", "0")),
-            new XElement(chartStyleNs + "fontRef",
-                new XAttribute("idx", "minor"),
-                new XElement(drawingNs + "schemeClr", new XAttribute("val", "tx1"))),
-            includeShapeProperties || includeLine
-                ? ToChartStyleShapeProperties(chartStyleNs, drawingNs, includeFill: includeShapeProperties, usePlaceholderFill, usePlaceholderLine)
-                : null,
-            textSize is null
-                ? null
-                : new XElement(chartStyleNs + "defRPr", new XAttribute("sz", textSize.Value)),
-            includeBodyProperties
-                ? new XElement(chartStyleNs + "bodyPr",
-                    new XAttribute("rot", "0"),
-                    new XAttribute("vertOverflow", "clip"),
-                    new XAttribute("horzOverflow", "clip"),
-                    new XAttribute("vert", "horz"),
-                    new XAttribute("wrap", "square"),
-                    new XAttribute("anchor", "ctr"),
-                    new XAttribute("anchorCtr", "1"),
-                    new XElement(drawingNs + "spAutoFit"))
-                : null);
-
-    private static XElement ToChartStyleColor(XNamespace chartStyleNs, string value) =>
-        new(chartStyleNs + "styleClr", new XAttribute("val", value));
-
-    private static XElement ToChartStyleShapeProperties(
-        XNamespace chartStyleNs,
-        XNamespace drawingNs,
-        bool includeFill,
-        bool usePlaceholderFill,
-        bool usePlaceholderLine) =>
-        new(chartStyleNs + "spPr",
-            includeFill
-                ? new XElement(drawingNs + "solidFill",
-                    new XElement(usePlaceholderFill ? drawingNs + "schemeClr" : drawingNs + "srgbClr",
-                        new XAttribute("val", usePlaceholderFill ? "phClr" : "FFFFFF")))
-                : null,
-            new XElement(drawingNs + "ln",
-                new XAttribute("w", "9525"),
-                new XElement(drawingNs + "solidFill",
-                    new XElement(drawingNs + "schemeClr", new XAttribute("val", usePlaceholderLine ? "phClr" : "tx1"))),
-                new XElement(drawingNs + "round")));
 
     private static string GetSameDirectoryRelationshipTarget(string targetPath)
     {
