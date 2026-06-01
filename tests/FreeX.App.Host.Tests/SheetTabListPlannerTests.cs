@@ -145,6 +145,69 @@ public sealed class SheetTabListPlannerTests
         plan.GroupedSheetIds.Should().Equal(first.Id);
     }
 
+    [Theory]
+    [InlineData(2)]
+    [InlineData(10)]
+    public void SelectAdjacentVisibleSheetGroup_TreatsPositiveDirectionAsSingleStep(int direction)
+    {
+        var workbook = new Workbook("Book");
+        var first = workbook.AddSheet("First");
+        var second = workbook.AddSheet("Second");
+        var third = workbook.AddSheet("Third");
+
+        var plan = SheetTabListPlanner.SelectAdjacentVisibleSheetGroup(
+            workbook,
+            first.Id,
+            anchorSheetId: null,
+            direction);
+
+        plan.Should().NotBeNull();
+        plan!.CurrentSheetId.Should().Be(second.Id);
+        plan.GroupedSheetIds.Should().Equal(first.Id, second.Id);
+        plan.GroupedSheetIds.Should().NotContain(third.Id);
+    }
+
+    [Theory]
+    [InlineData(-2)]
+    [InlineData(-10)]
+    public void SelectAdjacentVisibleSheetGroup_TreatsNegativeDirectionAsSingleStep(int direction)
+    {
+        var workbook = new Workbook("Book");
+        var first = workbook.AddSheet("First");
+        var second = workbook.AddSheet("Second");
+        var third = workbook.AddSheet("Third");
+
+        var plan = SheetTabListPlanner.SelectAdjacentVisibleSheetGroup(
+            workbook,
+            third.Id,
+            anchorSheetId: null,
+            direction);
+
+        plan.Should().NotBeNull();
+        plan!.CurrentSheetId.Should().Be(second.Id);
+        plan.GroupedSheetIds.Should().Equal(second.Id, third.Id);
+        plan.GroupedSheetIds.Should().NotContain(first.Id);
+    }
+
+    [Fact]
+    public void SelectAdjacentVisibleSheetGroup_ZeroDirectionKeepsCurrentSheetOnly()
+    {
+        var workbook = new Workbook("Book");
+        workbook.AddSheet("First");
+        var second = workbook.AddSheet("Second");
+        workbook.AddSheet("Third");
+
+        var plan = SheetTabListPlanner.SelectAdjacentVisibleSheetGroup(
+            workbook,
+            second.Id,
+            anchorSheetId: null,
+            direction: 0);
+
+        plan.Should().NotBeNull();
+        plan!.CurrentSheetId.Should().Be(second.Id);
+        plan.GroupedSheetIds.Should().Equal(second.Id);
+    }
+
     [Fact]
     public void Build_HandlesLargeSheetTabListsWithoutMaterializationPenalty()
     {
