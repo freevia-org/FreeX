@@ -11,7 +11,7 @@ public sealed partial class LocalizationResourceTests
     [Fact]
     public void UiText_CommonProperties_ReturnNeutralStrings()
     {
-        using var cultureScope = new CultureScope(currentCulture: "fr-FR", currentUICulture: "fr-FR");
+        using var cultureScope = new CultureScope(currentCulture: "ja-JP", currentUICulture: "ja-JP");
 
         UiText.Ok.Should().Be("_OK");
         UiText.Cancel.Should().Be("_Cancel");
