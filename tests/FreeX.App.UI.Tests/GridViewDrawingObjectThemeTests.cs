@@ -228,6 +228,65 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void DrawingObjectRendering_CullsOffscreenObjectsBeforeExpensiveWork()
+    {
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var pictures = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+
+        var renderCharts = drawingObjects[
+            drawingObjects.IndexOf("private void RenderCharts", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)];
+        var renderTextBoxes = drawingObjects[
+            drawingObjects.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
+        var renderDrawingShapes = drawingObjects[
+            drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)];
+        var renderPictures = pictures[
+            pictures.IndexOf("private void RenderPictures", StringComparison.Ordinal)..
+            pictures.IndexOf("private void DrawPictureSelectionAdorner", StringComparison.Ordinal)];
+        var renderPlaceholders = drawingObjects[
+            drawingObjects.IndexOf("private void RenderObjectPlaceholders", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("public static string CreateObjectPlaceholderLabel", StringComparison.Ordinal)];
+
+        drawingObjects.Should().Contain("private bool IntersectsDrawingViewport(Rect rect, double rotationDegrees)");
+        drawingObjects.Should().Contain("private static Rect CalculateRotatedBounds");
+
+        renderCharts.Should().Contain("if (!IntersectsDrawingViewport(rect, 0, visibleRight, visibleBottom))");
+        renderCharts.Should().Contain("GetCachedChartImage(chart, Viewport, WorkbookTheme)");
+        renderCharts.IndexOf("if (!IntersectsDrawingViewport(rect, 0, visibleRight, visibleBottom))", StringComparison.Ordinal)
+            .Should().BeLessThan(renderCharts.IndexOf("GetCachedChartImage(chart, Viewport, WorkbookTheme)", StringComparison.Ordinal));
+
+        renderTextBoxes.Should().Contain("GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom)");
+        renderTextBoxes.Should().Contain("CanAnchoredObjectReachDrawingViewport(textBox.Anchor");
+        renderTextBoxes.Should().Contain("NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom)");
+        renderTextBoxes.Should().Contain("IntersectsDrawingViewport(rect, textBox.RotationDegrees, visibleRight, visibleBottom)");
+        renderTextBoxes.IndexOf("NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)
+            .Should().BeLessThan(renderTextBoxes.IndexOf("ResolveTextBoxColors(textBox, WorkbookTheme)", StringComparison.Ordinal));
+
+        renderDrawingShapes.Should().Contain("GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom)");
+        renderDrawingShapes.Should().Contain("CanAnchoredObjectReachDrawingViewport(shape.Anchor");
+        renderDrawingShapes.Should().Contain("NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom)");
+        renderDrawingShapes.Should().Contain("IntersectsDrawingViewport(rect, shape.RotationDegrees, visibleRight, visibleBottom)");
+        renderDrawingShapes.IndexOf("NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)
+            .Should().BeLessThan(renderDrawingShapes.IndexOf("ResolveDrawingShapeColors(shape, WorkbookTheme)", StringComparison.Ordinal));
+
+        renderPictures.Should().Contain("GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom)");
+        renderPictures.Should().Contain("CanAnchoredObjectReachDrawingViewport(picture.Anchor");
+        renderPictures.Should().Contain("NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom)");
+        renderPictures.Should().Contain("IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom)");
+        renderPictures.IndexOf("NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)
+            .Should().BeLessThan(renderPictures.IndexOf("TryLoadPictureImage(picture, out var image)", StringComparison.Ordinal));
+
+        renderPlaceholders.Should().Contain("CanAnchoredObjectReachDrawingViewport(shape.Anchor");
+        renderPlaceholders.Should().Contain("NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom)");
+        renderPlaceholders.Should().Contain("IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom)");
+        renderPlaceholders.Should().Contain("IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom)");
+    }
+
+    [Fact]
     public void DrawingObjectRendering_UsesAuthoredEffectPresetMetadata()
     {
         var source = File.ReadAllText(FindWorkspaceFile(
