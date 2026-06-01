@@ -7,6 +7,8 @@ namespace FreeX.Core.Commands;
 /// </summary>
 public static partial class FlashFillService
 {
+    private const string EmailSeparators = "._-";
+
     /// <summary>
     /// Given training examples (source → expected output), detect a pattern
     /// and apply it to the remaining source values.
@@ -156,7 +158,7 @@ public static partial class FlashFillService
     private static Func<string, string?>? TryFullNameEmailPattern(
         IReadOnlyList<(string Source, string Expected)> examples)
     {
-        foreach (var separator in new[] { '.', '_', '-' })
+        foreach (var separator in EmailSeparators)
         {
             var pattern = TrySharedDomainFullNameEmailPattern(
                 examples,
@@ -165,7 +167,7 @@ public static partial class FlashFillService
                 return pattern;
         }
 
-        foreach (var separator in new[] { '.', '_', '-' })
+        foreach (var separator in EmailSeparators)
         {
             var pattern = TrySharedDomainFullNameEmailPattern(
                 examples,
@@ -180,7 +182,7 @@ public static partial class FlashFillService
         if (firstInitialLastPattern is not null)
             return firstInitialLastPattern;
 
-        foreach (var separator in new[] { '.', '_', '-' })
+        foreach (var separator in EmailSeparators)
         {
             var pattern = TrySharedDomainFullNameEmailPattern(
                 examples,
@@ -195,7 +197,7 @@ public static partial class FlashFillService
         if (firstLastInitialPattern is not null)
             return firstLastInitialPattern;
 
-        foreach (var separator in new[] { '.', '_', '-' })
+        foreach (var separator in EmailSeparators)
         {
             var pattern = TrySharedDomainFullNameEmailPattern(
                 examples,
@@ -210,7 +212,7 @@ public static partial class FlashFillService
         if (lastFirstInitialPattern is not null)
             return lastFirstInitialPattern;
 
-        foreach (var separator in new[] { '.', '_', '-' })
+        foreach (var separator in EmailSeparators)
         {
             var pattern = TrySharedDomainFullNameEmailPattern(
                 examples,
@@ -270,12 +272,13 @@ public static partial class FlashFillService
         IReadOnlyList<IReadOnlyList<string>> exampleSources,
         IReadOnlyList<string> exampleOutputs)
     {
-        foreach (var separator in new[] { '.', '_', '-' })
+        foreach (var separator in EmailSeparators)
         {
             var pattern = TrySharedDomainEmailPattern(
                 exampleSources,
                 exampleOutputs,
-                s => GetEmailNameToken(s, 0) + separator + GetEmailNameToken(s, 1));
+                s => GetEmailNameToken(s, 0) + separator + GetEmailNameToken(s, 1),
+                domain => s => CreateLowerTokenPairEmail(s, 0, separator, 1, domain));
             if (pattern is not null)
                 return pattern;
         }
@@ -294,7 +297,7 @@ public static partial class FlashFillService
         if (compactPattern is not null)
             return compactPattern;
 
-        foreach (var separator in new[] { '.', '_', '-' })
+        foreach (var separator in EmailSeparators)
         {
             var pattern = TrySharedDomainEmailPattern(
                 exampleSources,
@@ -311,12 +314,13 @@ public static partial class FlashFillService
         IReadOnlyList<IReadOnlyList<string>> exampleSources,
         IReadOnlyList<string> exampleOutputs)
     {
-        foreach (var separator in new[] { '.', '_', '-' })
+        foreach (var separator in EmailSeparators)
         {
             var pattern = TrySharedDomainEmailPattern(
                 exampleSources,
                 exampleOutputs,
-                s => GetEmailNameToken(s, 1) + separator + GetEmailNameToken(s, 0));
+                s => GetEmailNameToken(s, 1) + separator + GetEmailNameToken(s, 0),
+                domain => s => CreateLowerTokenPairEmail(s, 1, separator, 0, domain));
             if (pattern is not null)
                 return pattern;
         }
@@ -335,7 +339,7 @@ public static partial class FlashFillService
         if (compactPattern is not null)
             return compactPattern;
 
-        foreach (var separator in new[] { '.', '_', '-' })
+        foreach (var separator in EmailSeparators)
         {
             var pattern = TrySharedDomainEmailPattern(
                 exampleSources,
@@ -359,7 +363,7 @@ public static partial class FlashFillService
         if (compactPattern is not null)
             return compactPattern;
 
-        foreach (var separator in new[] { '.', '_', '-' })
+        foreach (var separator in EmailSeparators)
         {
             var pattern = TrySharedDomainEmailPattern(
                 exampleSources,
@@ -381,10 +385,72 @@ public static partial class FlashFillService
         return token.Length == 0 ? string.Empty : char.ToLowerInvariant(token[0]).ToString();
     }
 
+    private static string CreateLowerTokenPairEmail(
+        IReadOnlyList<string> source,
+        int firstIndex,
+        char separator,
+        int secondIndex,
+        string domain)
+    {
+        var first = source[firstIndex];
+        var second = source[secondIndex];
+        GetTrimmedRange(first, out var firstStart, out var firstLength);
+        GetTrimmedRange(second, out var secondStart, out var secondLength);
+
+        var localLength = firstLength + 1 + secondLength;
+        var state = new LowerTokenPairEmailState(
+            first,
+            firstStart,
+            firstLength,
+            second,
+            secondStart,
+            secondLength,
+            separator,
+            domain);
+        return string.Create(
+            localLength + 1 + domain.Length,
+            state,
+            static (destination, state) =>
+            {
+                CopyLowerInvariant(
+                    state.First.AsSpan(state.FirstStart, state.FirstLength),
+                    destination);
+                destination[state.FirstLength] = state.Separator;
+
+                var secondOffset = state.FirstLength + 1;
+                CopyLowerInvariant(
+                    state.Second.AsSpan(state.SecondStart, state.SecondLength),
+                    destination[secondOffset..]);
+
+                var atOffset = secondOffset + state.SecondLength;
+                destination[atOffset] = '@';
+                state.Domain.AsSpan().CopyTo(destination[(atOffset + 1)..]);
+            });
+    }
+
+    private static void GetTrimmedRange(string value, out int start, out int length)
+    {
+        start = 0;
+        var end = value.Length - 1;
+        while (start <= end && char.IsWhiteSpace(value[start]))
+            start++;
+
+        while (end >= start && char.IsWhiteSpace(value[end]))
+            end--;
+
+        length = end - start + 1;
+    }
+
+    private static void CopyLowerInvariant(ReadOnlySpan<char> source, Span<char> destination)
+    {
+        source.ToLowerInvariant(destination);
+    }
+
     private static Func<IReadOnlyList<string>, string>? TrySharedDomainEmailPattern(
         IReadOnlyList<IReadOnlyList<string>> exampleSources,
         IReadOnlyList<string> exampleOutputs,
-        Func<IReadOnlyList<string>, string> localPart)
+        Func<IReadOnlyList<string>, string> localPart,
+        Func<string, Func<IReadOnlyList<string>, string>>? resultFactory = null)
     {
         string? domain = null;
         for (var i = 0; i < exampleSources.Count; i++)
@@ -409,6 +475,26 @@ public static partial class FlashFillService
 
         return domain is null
             ? null
-            : s => localPart(s) + "@" + domain;
+            : resultFactory?.Invoke(domain) ?? (s => localPart(s) + "@" + domain);
+    }
+
+    private readonly struct LowerTokenPairEmailState(
+        string first,
+        int firstStart,
+        int firstLength,
+        string second,
+        int secondStart,
+        int secondLength,
+        char separator,
+        string domain)
+    {
+        public string First { get; } = first;
+        public int FirstStart { get; } = firstStart;
+        public int FirstLength { get; } = firstLength;
+        public string Second { get; } = second;
+        public int SecondStart { get; } = secondStart;
+        public int SecondLength { get; } = secondLength;
+        public char Separator { get; } = separator;
+        public string Domain { get; } = domain;
     }
 }

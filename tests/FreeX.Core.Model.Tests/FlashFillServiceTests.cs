@@ -1510,6 +1510,25 @@ public sealed class FlashFillServiceTests
     }
 
     [Fact]
+    public void FillFromColumns_LastFirstSeparatedEmail_TrimsSourceNameCells()
+    {
+        var result = FlashFillService.FillFromColumns(
+            [
+                [" Ada ", " Lovelace "],
+                [" Grace ", " Hopper "]
+            ],
+            ["lovelace.ada@contoso.com", "hopper.grace@contoso.com"],
+            [
+                [" Alan ", " Turing "],
+                [" Katherine ", " Johnson "]
+            ]);
+
+        result.Should().BeEquivalentTo(
+            ["turing.alan@contoso.com", "johnson.katherine@contoso.com"],
+            o => o.WithStrictOrdering());
+    }
+
+    [Fact]
     public void FillFromColumns_FirstInitialLastEmail_LearnsConstantDomainFromExamples()
     {
         var result = FlashFillService.FillFromColumns(
