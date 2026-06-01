@@ -842,12 +842,7 @@ public sealed class PerformanceReviewMeasurementTests
         public static SelectionDragHarness Create()
         {
             var workbook = new Workbook("Book1");
-            var sheet = workbook.AddSheet("Sheet1");
-            for (uint row = 1; row <= 600; row++)
-            {
-                for (uint col = 1; col <= 40; col++)
-                    sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * col));
-            }
+            workbook.AddSheet("Sheet1");
 
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
@@ -867,6 +862,13 @@ public sealed class PerformanceReviewMeasurementTests
             };
 
             window.Show();
+            var sheet = workbookRef.Current.Sheets[0];
+            for (uint row = 1; row <= 600; row++)
+            {
+                for (uint col = 1; col <= 40; col++)
+                    sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(row * col));
+            }
+
             window.UpdateLayout();
             PumpDispatcher();
             return new SelectionDragHarness(window, sheet.Id);
