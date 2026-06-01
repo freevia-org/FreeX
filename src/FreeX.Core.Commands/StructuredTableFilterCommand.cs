@@ -26,14 +26,13 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
         if (table is null)
             return new CommandOutcome(false, "Table was not found.");
 
-        var filters = BuildFilters(table).ToList();
-        if (filters.Count != table.FilterColumns.Count)
+        var filters = BuildFilters(table);
+        if (filters is null)
             return new CommandOutcome(false, "Table filter refers to a missing column.");
 
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
 
-        for (var row = table.Range.Start.Row + 1; row <= table.Range.End.Row; row++)
-            sheet.FilterHiddenRows.Remove(row);
+        RemoveExistingFilterRows(sheet.FilterHiddenRows, table.Range);
 
         if (filters.Count == 0)
             return new CommandOutcome(true);
@@ -57,19 +56,39 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
         sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
     }
 
-    private static IEnumerable<TableFilterState> BuildFilters(StructuredTableModel table)
+    private static List<TableFilterState>? BuildFilters(StructuredTableModel table)
     {
+        var filters = new List<TableFilterState>(table.FilterColumns.Count);
         foreach (var filterColumn in table.FilterColumns)
         {
             var tableColumnIndex = filterColumn.ColumnId;
             if (tableColumnIndex < 0 || tableColumnIndex >= table.Columns.Count)
-                continue;
+                return null;
 
-            yield return new TableFilterState(
+            filters.Add(new TableFilterState(
                 table.Range.Start.Col + (uint)tableColumnIndex,
                 new HashSet<string>(filterColumn.Values, StringComparer.OrdinalIgnoreCase),
-                filterColumn.IncludeBlank);
+                filterColumn.IncludeBlank));
         }
+
+        if (filters.Count > 1)
+            filters.Sort(static (left, right) => left.EstimatedSelectivity.CompareTo(right.EstimatedSelectivity));
+
+        return filters;
+    }
+
+    private static void RemoveExistingFilterRows(HashSet<uint> filterHiddenRows, GridRange range)
+    {
+        var firstDataRow = range.Start.Row + 1;
+        var lastDataRow = range.End.Row;
+        if (filterHiddenRows.Count < range.RowCount)
+        {
+            filterHiddenRows.RemoveWhere(row => row >= firstDataRow && row <= lastDataRow);
+            return;
+        }
+
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+            filterHiddenRows.Remove(row);
     }
 
     private static bool RowMatchesAllFilters(Sheet sheet, uint row, IReadOnlyList<TableFilterState> filters)
@@ -87,5 +106,8 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
         return true;
     }
 
-    private sealed record TableFilterState(uint Column, HashSet<string> AllowedValues, bool IncludeBlank);
+    private sealed record TableFilterState(uint Column, HashSet<string> AllowedValues, bool IncludeBlank)
+    {
+        public int EstimatedSelectivity => AllowedValues.Count + (IncludeBlank ? 1 : 0);
+    }
 }
