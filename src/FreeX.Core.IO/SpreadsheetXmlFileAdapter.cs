@@ -502,7 +502,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static uint ReadIndex(XElement element, uint fallback)
     {
         var indexText = element.Attribute(SpreadsheetIndexAttribute)?.Value;
-        return uint.TryParse(indexText, NumberStyles.None, CultureInfo.InvariantCulture, out var index) && index >= fallback
+        return TryParseUInt(indexText, out var index) && index >= fallback
             ? index
             : fallback;
     }
@@ -535,7 +535,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static uint ReadMergeExtent(XElement cellElement, XName attributeName)
     {
         var text = cellElement.Attribute(attributeName)?.Value;
-        return uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+        return TryParseUInt(text, out var value)
             ? value
             : 0u;
     }
@@ -543,7 +543,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static uint ReadSpan(XElement element)
     {
         var text = element.Attribute(SpreadsheetSpanAttribute)?.Value;
-        return uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+        return TryParseUInt(text, out var value)
             ? value
             : 0u;
     }
@@ -551,10 +551,13 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
     private static uint ReadPaneSplit(XElement element, XName elementName, uint maxValue)
     {
         var text = element.Element(elementName)?.Value;
-        return uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value <= maxValue
+        return TryParseUInt(text, out var value) && value <= maxValue
             ? value
             : 0u;
     }
+
+    private static bool TryParseUInt(string? text, out uint value) =>
+        uint.TryParse(text?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out value);
 
     private static uint AdvanceColumnIndex(uint columnIndex, uint mergeAcross)
     {
