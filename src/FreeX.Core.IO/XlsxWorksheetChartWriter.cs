@@ -6,8 +6,27 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetChartWriter
 {
-    public static bool HasSupportedCharts(Workbook workbook, Func<ChartModel, bool> isSupportedChart) =>
-        workbook.Sheets.Any(sheet => sheet.Charts.Any(isSupportedChart));
+    public static bool HasSupportedCharts(Workbook workbook, Func<ChartModel, bool> isSupportedChart)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (HasSupportedCharts(sheet, isSupportedChart))
+                return true;
+        }
+
+        return false;
+    }
+
+    public static bool HasSupportedCharts(Sheet sheet, Func<ChartModel, bool> isSupportedChart)
+    {
+        foreach (var chart in sheet.Charts)
+        {
+            if (isSupportedChart(chart))
+                return true;
+        }
+
+        return false;
+    }
 
     public static void Save(
         Stream xlsxStream,

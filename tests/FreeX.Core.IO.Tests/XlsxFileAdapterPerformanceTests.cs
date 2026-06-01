@@ -579,11 +579,28 @@ public sealed class XlsxFileAdapterPerformanceTests
     {
         var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
 
-        source.Should().Contain("HasPivotCustomNumberFormats(workbook)");
-        source.Should().Contain("private static bool HasPivotCustomNumberFormats(Workbook workbook)");
+        source.Should().Contain("featurePlan.HasPivotCustomNumberFormats");
+        source.Should().Contain("private static bool HasPivotCustomNumberFormats(Sheet sheet)");
         source.Should().NotContain(
             "workbook.Sheets.SelectMany(sheet => sheet.PivotTables)",
             "XLSX save post-processing should avoid nested LINQ iterator allocation while deciding whether pivot custom number formats need catalog output");
+    }
+
+    [Fact]
+    public void SavePostProcessing_BatchesWorkbookFeatureDetection()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+
+        source.Should().Contain("var featurePlan = XlsxPostProcessingFeaturePlan.Create(workbook);");
+        source.Should().Contain("private struct XlsxPostProcessingFeaturePlan");
+        source.Should().Contain("foreach (var sheet in workbook.Sheets)");
+        source.Should().Contain("sheet.GetOccupiedCellMap()");
+        source.Should().NotContain(
+            "workbook.Sheets.Any(",
+            "XLSX save post-processing should batch sheet feature checks instead of rescanning every sheet for each optional writer");
+        source.Should().NotContain(
+            "sheet.EnumerateCells().Any",
+            "ignored-error detection should avoid nested LINQ and cell-address iterator allocation");
     }
 
     [Fact]

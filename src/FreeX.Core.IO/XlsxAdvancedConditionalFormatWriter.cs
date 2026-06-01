@@ -12,11 +12,19 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     {
         foreach (var sheet in workbook.Sheets)
         {
-            foreach (var conditionalFormat in sheet.ConditionalFormats)
-            {
-                if (XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(conditionalFormat))
-                    return true;
-            }
+            if (HasAdvancedConditionalFormats(sheet))
+                return true;
+        }
+
+        return false;
+    }
+
+    public static bool HasAdvancedConditionalFormats(Sheet sheet)
+    {
+        foreach (var conditionalFormat in sheet.ConditionalFormats)
+        {
+            if (XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(conditionalFormat))
+                return true;
         }
 
         return false;

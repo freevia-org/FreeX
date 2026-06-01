@@ -7,11 +7,39 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxWorksheetDrawingObjectWriter
 {
-    public static bool HasSupportedObjects(Workbook workbook) =>
-        workbook.Sheets.Any(sheet =>
-            sheet.Pictures.Any(IsSupportedPicture) ||
-            sheet.TextBoxes.Any(IsSupportedTextBox) ||
-            sheet.DrawingShapes.Any(IsSupportedShape));
+    public static bool HasSupportedObjects(Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (HasSupportedObjects(sheet))
+                return true;
+        }
+
+        return false;
+    }
+
+    public static bool HasSupportedObjects(Sheet sheet)
+    {
+        foreach (var picture in sheet.Pictures)
+        {
+            if (IsSupportedPicture(picture))
+                return true;
+        }
+
+        foreach (var textBox in sheet.TextBoxes)
+        {
+            if (IsSupportedTextBox(textBox))
+                return true;
+        }
+
+        foreach (var shape in sheet.DrawingShapes)
+        {
+            if (IsSupportedShape(shape))
+                return true;
+        }
+
+        return false;
+    }
 
     public static void Save(Stream xlsxStream, Workbook workbook)
     {

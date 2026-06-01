@@ -8,6 +8,7 @@ public sealed partial class XlsxFileAdapter
 {
     private static void ApplyPackagePostProcessing(Workbook workbook, Stream packageStream)
     {
+        var featurePlan = XlsxPostProcessingFeaturePlan.Create(workbook);
         XlsxWorkbookWorksheetPathMap? worksheetPathMap = null;
         XlsxWorkbookWorksheetPathMap? GetWorksheetPathMap()
         {
@@ -23,55 +24,55 @@ public sealed partial class XlsxFileAdapter
         packageStream.Position = 0;
         XlsxWorkbookMetadataWriter.SavePostProcessingMetadata(packageStream, workbook);
 
-        if (workbook.Sheets.Any(XlsxWorksheetDimensionDefaultsWriter.HasNonDefaultDimensions))
+        if (featurePlan.HasNonDefaultDimensions)
         {
             packageStream.Position = 0;
             XlsxWorksheetDimensionDefaultsWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.FullCalculationOnLoad))
+        if (featurePlan.HasFullCalculationOnLoad)
         {
             packageStream.Position = 0;
             XlsxWorksheetCalculationPropertyMapper.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(XlsxWorksheetPageSetupMetadataWriter.HasModeledPrinterAttributes))
+        if (featurePlan.HasModeledPrinterAttributes)
         {
             packageStream.Position = 0;
             XlsxWorksheetPageSetupMetadataWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.PhoneticProperties is not null))
+        if (featurePlan.HasPhoneticProperties)
         {
             packageStream.Position = 0;
             XlsxWorksheetPhoneticPropertyMapper.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.AllowEditRanges.Count > 0))
+        if (featurePlan.HasAllowEditRanges)
         {
             packageStream.Position = 0;
             XlsxAllowEditRangeMapper.Save(packageStream, workbook);
         }
 
-        if (XlsxAdvancedConditionalFormatWriter.HasAdvancedConditionalFormats(workbook))
+        if (featurePlan.HasAdvancedConditionalFormats)
         {
             packageStream.Position = 0;
             XlsxAdvancedConditionalFormatWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.Sparklines.Count > 0))
+        if (featurePlan.HasSparklines)
         {
             packageStream.Position = 0;
             XlsxSparklineMapper.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.BackgroundImage is not null))
+        if (featurePlan.HasBackgroundImages)
         {
             packageStream.Position = 0;
             XlsxWorksheetBackgroundReaderWriter.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(XlsxHeaderFooterPictureReaderWriter.HasPictures))
+        if (featurePlan.HasHeaderFooterPictures)
         {
             IReadOnlySet<string>? sheetsToPreserve = null;
             if (SourcePackages.TryGetValue(workbook, out var sourcePackage))
@@ -86,19 +87,19 @@ public sealed partial class XlsxFileAdapter
             XlsxHeaderFooterPictureReaderWriter.Save(packageStream, workbook, sheetsToPreserve);
         }
 
-        if (workbook.Sheets.Any(XlsxWorksheetViewWriter.HasPersistableViewState))
+        if (featurePlan.HasPersistableViewState)
         {
             packageStream.Position = 0;
             XlsxWorksheetViewWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
-        if (workbook.Sheets.Any(sheet => !string.IsNullOrWhiteSpace(sheet.CodeName)))
+        if (featurePlan.HasCodeNames)
         {
             packageStream.Position = 0;
             XlsxWorksheetCodeNameWriter.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.EnumerateCells().Any(pair => pair.Cell.IgnoreFormulaError)))
+        if (featurePlan.HasIgnoredFormulaErrors)
         {
             packageStream.Position = 0;
             XlsxWorksheetDiagnosticsMapper.SaveIgnoredErrors(packageStream, workbook);
@@ -122,13 +123,13 @@ public sealed partial class XlsxFileAdapter
             XlsxCustomViewMapper.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.CustomProperties.Count > 0))
+        if (featurePlan.HasCustomProperties)
         {
             packageStream.Position = 0;
             XlsxWorksheetCustomPropertyMapper.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(XlsxWorksheetPostProcessingMetadataBatchWriter.HasWorksheetElementMetadata))
+        if (featurePlan.HasWorksheetElementMetadata)
         {
             packageStream.Position = 0;
             XlsxWorksheetPostProcessingMetadataBatchWriter.SaveWorksheetElementMetadata(
@@ -146,7 +147,7 @@ public sealed partial class XlsxFileAdapter
             XlsxIndexedColorPaletteMapper.Save(packageStream, workbook);
         }
 
-        if (XlsxWorksheetChartWriter.HasSupportedCharts(workbook, XlsxChartXmlWriter.IsSupportedXlsxChart))
+        if (featurePlan.HasSupportedCharts)
         {
             packageStream.Position = 0;
             XlsxWorksheetChartWriter.Save(
@@ -158,13 +159,13 @@ public sealed partial class XlsxFileAdapter
                 XlsxChartXmlWriter.GetRelationshipType);
         }
 
-        if (XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(workbook))
+        if (featurePlan.HasSupportedDrawingObjects)
         {
             packageStream.Position = 0;
             XlsxWorksheetDrawingObjectWriter.Save(packageStream, workbook);
         }
 
-        if (workbook.Sheets.Any(sheet => sheet.StructuredTables.Count > 0))
+        if (featurePlan.HasStructuredTables)
         {
             packageStream.Position = 0;
             XlsxStructuredTableWriter.Save(packageStream, workbook);
@@ -178,7 +179,7 @@ public sealed partial class XlsxFileAdapter
 
         IReadOnlyDictionary<int, int> numberFormatIdMap = new Dictionary<int, int>();
         if (workbook.NumberFormatCatalog.Count > 0 ||
-            HasPivotCustomNumberFormats(workbook))
+            featurePlan.HasPivotCustomNumberFormats)
         {
             packageStream.Position = 0;
             numberFormatIdMap = XlsxNumberFormatCatalogWriter.Save(packageStream, workbook);
@@ -187,7 +188,7 @@ public sealed partial class XlsxFileAdapter
         var hasSourcePackage = SourcePackages.TryGetValue(workbook, out _);
         if (!hasSourcePackage &&
             workbook.PivotCaches.Count > 0 &&
-            workbook.Sheets.Any(sheet => sheet.PivotTables.Count > 0))
+            featurePlan.HasPivotTables)
         {
             packageStream.Position = 0;
             XlsxPivotTableWriter.Save(packageStream, workbook, numberFormatIdMap);
@@ -223,7 +224,7 @@ public sealed partial class XlsxFileAdapter
 
         SaveSourcePackageIndependentPostProcessingMetadata();
 
-        if (workbook.Sheets.Any(XlsxWorksheetPostProcessingMetadataBatchWriter.HasReplayMetadata))
+        if (featurePlan.HasReplayMetadata)
         {
             packageStream.Position = 0;
             XlsxWorksheetPostProcessingMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());
@@ -241,7 +242,7 @@ public sealed partial class XlsxFileAdapter
 
         void SaveSourcePackageIndependentPostProcessingMetadata()
         {
-            if (workbook.Sheets.Any(XlsxWorksheetSourceIndependentMetadataBatchWriter.HasMetadata))
+            if (featurePlan.HasSourceIndependentMetadata)
             {
                 packageStream.Position = 0;
                 XlsxWorksheetSourceIndependentMetadataBatchWriter.Save(packageStream, workbook, GetWorksheetPathMap());
@@ -249,23 +250,101 @@ public sealed partial class XlsxFileAdapter
         }
     }
 
-    private static bool HasPivotCustomNumberFormats(Workbook workbook)
+    private static bool HasIgnoredFormulaErrors(Sheet sheet)
     {
-        foreach (var sheet in workbook.Sheets)
+        foreach (var pair in sheet.GetOccupiedCellMap())
         {
-            foreach (var pivot in sheet.PivotTables)
+            if (pair.Value.IgnoreFormulaError)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasPivotCustomNumberFormats(Sheet sheet)
+    {
+        foreach (var pivot in sheet.PivotTables)
+        {
+            foreach (var field in pivot.DataFields)
             {
-                foreach (var field in pivot.DataFields)
+                if (field.NumberFormatId is >= 164 &&
+                    !string.IsNullOrWhiteSpace(field.NumberFormatCode))
                 {
-                    if (field.NumberFormatId is >= 164 &&
-                        !string.IsNullOrWhiteSpace(field.NumberFormatCode))
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
         }
 
         return false;
+    }
+
+    private static bool HasSupportedXlsxCharts(Sheet sheet)
+    {
+        foreach (var chart in sheet.Charts)
+        {
+            if (XlsxChartXmlWriter.IsSupportedXlsxChart(chart))
+                return true;
+        }
+
+        return false;
+    }
+
+    private struct XlsxPostProcessingFeaturePlan
+    {
+        public bool HasNonDefaultDimensions;
+        public bool HasFullCalculationOnLoad;
+        public bool HasModeledPrinterAttributes;
+        public bool HasPhoneticProperties;
+        public bool HasAllowEditRanges;
+        public bool HasAdvancedConditionalFormats;
+        public bool HasSparklines;
+        public bool HasBackgroundImages;
+        public bool HasHeaderFooterPictures;
+        public bool HasPersistableViewState;
+        public bool HasCodeNames;
+        public bool HasIgnoredFormulaErrors;
+        public bool HasCustomProperties;
+        public bool HasWorksheetElementMetadata;
+        public bool HasSupportedCharts;
+        public bool HasSupportedDrawingObjects;
+        public bool HasStructuredTables;
+        public bool HasPivotTables;
+        public bool HasPivotCustomNumberFormats;
+        public bool HasReplayMetadata;
+        public bool HasSourceIndependentMetadata;
+
+        public static XlsxPostProcessingFeaturePlan Create(Workbook workbook)
+        {
+            var plan = new XlsxPostProcessingFeaturePlan();
+            foreach (var sheet in workbook.Sheets)
+                plan.Include(sheet);
+
+            return plan;
+        }
+
+        private void Include(Sheet sheet)
+        {
+            HasNonDefaultDimensions |= XlsxWorksheetDimensionDefaultsWriter.HasNonDefaultDimensions(sheet);
+            HasFullCalculationOnLoad |= sheet.FullCalculationOnLoad;
+            HasModeledPrinterAttributes |= XlsxWorksheetPageSetupMetadataWriter.HasModeledPrinterAttributes(sheet);
+            HasPhoneticProperties |= sheet.PhoneticProperties is not null;
+            HasAllowEditRanges |= sheet.AllowEditRanges.Count > 0;
+            HasAdvancedConditionalFormats |= XlsxAdvancedConditionalFormatWriter.HasAdvancedConditionalFormats(sheet);
+            HasSparklines |= sheet.Sparklines.Count > 0;
+            HasBackgroundImages |= sheet.BackgroundImage is not null;
+            HasHeaderFooterPictures |= XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet);
+            HasPersistableViewState |= XlsxWorksheetViewWriter.HasPersistableViewState(sheet);
+            HasCodeNames |= !string.IsNullOrWhiteSpace(sheet.CodeName);
+            HasIgnoredFormulaErrors |= HasIgnoredFormulaErrors(sheet);
+            HasCustomProperties |= sheet.CustomProperties.Count > 0;
+            HasWorksheetElementMetadata |= XlsxWorksheetPostProcessingMetadataBatchWriter.HasWorksheetElementMetadata(sheet);
+            HasSupportedCharts |= HasSupportedXlsxCharts(sheet);
+            HasSupportedDrawingObjects |= XlsxWorksheetDrawingObjectWriter.HasSupportedObjects(sheet);
+            HasStructuredTables |= sheet.StructuredTables.Count > 0;
+            HasPivotTables |= sheet.PivotTables.Count > 0;
+            HasPivotCustomNumberFormats |= HasPivotCustomNumberFormats(sheet);
+            HasReplayMetadata |= XlsxWorksheetPostProcessingMetadataBatchWriter.HasReplayMetadata(sheet);
+            HasSourceIndependentMetadata |= XlsxWorksheetSourceIndependentMetadataBatchWriter.HasMetadata(sheet);
+        }
     }
 }
