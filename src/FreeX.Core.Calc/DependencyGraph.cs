@@ -18,8 +18,8 @@ public sealed class DependencyGraph
     // Cell -> compact range precedents it depends on.
     private readonly Dictionary<CellAddress, List<GridRange>> _rangePrecedents = [];
 
-    // Sheet -> compact ranges and the cells that depend on them.
-    private readonly Dictionary<SheetId, List<RangeDependency>> _rangeDependentsBySheet = [];
+    // Sheet -> compact range index and the cells that depend on those ranges.
+    private readonly Dictionary<SheetId, RangeDependencyIndex> _rangeDependentsBySheet = [];
 
     /// <summary>
     /// Set the dependencies for a cell (what cells its formula references).
@@ -56,7 +56,7 @@ public sealed class DependencyGraph
             {
                 if (!_rangeDependentsBySheet.TryGetValue(range.Start.Sheet, out var deps))
                 {
-                    deps = [];
+                    deps = new RangeDependencyIndex();
                     _rangeDependentsBySheet[range.Start.Sheet] = deps;
                 }
                 deps.Add(new RangeDependency(range, cell));
@@ -99,7 +99,7 @@ public sealed class DependencyGraph
                 if (!_rangeDependentsBySheet.TryGetValue(range.Start.Sheet, out var deps))
                     continue;
 
-                deps.RemoveAll(dep => dep.Dependent.Equals(cell));
+                deps.Remove(new RangeDependency(range, cell));
                 if (deps.Count == 0)
                     _rangeDependentsBySheet.Remove(range.Start.Sheet);
             }
@@ -259,14 +259,9 @@ public sealed class DependencyGraph
             if (_dependents.TryGetValue(cell, out var exactDeps) && exactDeps.Count > 0)
                 return true;
 
-            if (!_rangeDependentsBySheet.TryGetValue(cell.Sheet, out var rangeDeps))
-                continue;
-
-            foreach (var dep in rangeDeps)
-            {
-                if (dep.Range.Contains(cell))
-                    return true;
-            }
+            if (_rangeDependentsBySheet.TryGetValue(cell.Sheet, out var rangeDeps) &&
+                HasAnyRangeDependent(cell, rangeDeps))
+                return true;
         }
 
         return false;
@@ -284,16 +279,7 @@ public sealed class DependencyGraph
             return;
         }
 
-        HashSet<CellAddress>? rangeSeen = null;
-        foreach (var dep in rangeDeps)
-        {
-            if (!dep.Range.Contains(cell))
-                continue;
-
-            rangeSeen ??= [];
-            if (rangeSeen.Add(dep.Dependent) && toRecalc.Add(dep.Dependent))
-                queue.Enqueue(dep.Dependent);
-        }
+        var rangeSeen = EnqueueRangeDependents(cell, rangeDeps, toRecalc, queue);
 
         if (exactDeps is null)
             return;
@@ -335,18 +321,7 @@ public sealed class DependencyGraph
             return;
         }
 
-        HashSet<CellAddress>? rangeSeen = null;
-        foreach (var dep in rangeDeps)
-        {
-            if (!dep.Range.Contains(cell))
-                continue;
-
-            rangeSeen ??= [];
-            if (!rangeSeen.Add(dep.Dependent))
-                continue;
-
-            DecrementInDegree(dep.Dependent, inDegree, ready);
-        }
+        var rangeSeen = DecrementRangeDependentInDegrees(cell, rangeDeps, inDegree, ready);
 
         if (exactDeps is null)
             return;
@@ -391,8 +366,143 @@ public sealed class DependencyGraph
         if (!_rangeDependentsBySheet.TryGetValue(cell.Sheet, out var rangeDeps))
             return null;
 
-        HashSet<CellAddress>? result = null;
-        foreach (var dep in rangeDeps)
+        return CollectRangeDependents(cell, rangeDeps);
+    }
+
+    private static bool HasAnyRangeDependent(CellAddress cell, RangeDependencyIndex rangeDeps) =>
+        HasAnyRangeDependent(cell, rangeDeps.GetRowCandidates(cell.Row)) ||
+        HasAnyRangeDependent(cell, rangeDeps.GetColumnCandidates(cell.Col));
+
+    private static bool HasAnyRangeDependent(
+        CellAddress cell,
+        List<RangeDependency>? candidates)
+    {
+        if (candidates is null)
+            return false;
+
+        foreach (var dep in candidates)
+        {
+            if (dep.Range.Contains(cell))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static HashSet<CellAddress>? EnqueueRangeDependents(
+        CellAddress cell,
+        RangeDependencyIndex rangeDeps,
+        HashSet<CellAddress> toRecalc,
+        Queue<CellAddress> queue)
+    {
+        var rangeSeen = EnqueueRangeDependentCandidates(
+            cell,
+            rangeDeps.GetRowCandidates(cell.Row),
+            null,
+            toRecalc,
+            queue);
+
+        return EnqueueRangeDependentCandidates(
+            cell,
+            rangeDeps.GetColumnCandidates(cell.Col),
+            rangeSeen,
+            toRecalc,
+            queue);
+    }
+
+    private static HashSet<CellAddress>? EnqueueRangeDependentCandidates(
+        CellAddress cell,
+        List<RangeDependency>? candidates,
+        HashSet<CellAddress>? rangeSeen,
+        HashSet<CellAddress> toRecalc,
+        Queue<CellAddress> queue)
+    {
+        if (candidates is null)
+            return rangeSeen;
+
+        foreach (var dep in candidates)
+        {
+            if (!dep.Range.Contains(cell))
+                continue;
+
+            rangeSeen ??= [];
+            if (rangeSeen.Add(dep.Dependent) && toRecalc.Add(dep.Dependent))
+                queue.Enqueue(dep.Dependent);
+        }
+
+        return rangeSeen;
+    }
+
+    private static HashSet<CellAddress>? DecrementRangeDependentInDegrees(
+        CellAddress cell,
+        RangeDependencyIndex rangeDeps,
+        Dictionary<CellAddress, int> inDegree,
+        Queue<CellAddress> ready)
+    {
+        var rangeSeen = DecrementRangeDependentCandidates(
+            cell,
+            rangeDeps.GetRowCandidates(cell.Row),
+            null,
+            inDegree,
+            ready);
+
+        return DecrementRangeDependentCandidates(
+            cell,
+            rangeDeps.GetColumnCandidates(cell.Col),
+            rangeSeen,
+            inDegree,
+            ready);
+    }
+
+    private static HashSet<CellAddress>? DecrementRangeDependentCandidates(
+        CellAddress cell,
+        List<RangeDependency>? candidates,
+        HashSet<CellAddress>? rangeSeen,
+        Dictionary<CellAddress, int> inDegree,
+        Queue<CellAddress> ready)
+    {
+        if (candidates is null)
+            return rangeSeen;
+
+        foreach (var dep in candidates)
+        {
+            if (!dep.Range.Contains(cell))
+                continue;
+
+            rangeSeen ??= [];
+            if (!rangeSeen.Add(dep.Dependent))
+                continue;
+
+            DecrementInDegree(dep.Dependent, inDegree, ready);
+        }
+
+        return rangeSeen;
+    }
+
+    private static HashSet<CellAddress>? CollectRangeDependents(
+        CellAddress cell,
+        RangeDependencyIndex rangeDeps)
+    {
+        var result = CollectRangeDependentCandidates(
+            cell,
+            rangeDeps.GetRowCandidates(cell.Row),
+            null);
+
+        return CollectRangeDependentCandidates(
+            cell,
+            rangeDeps.GetColumnCandidates(cell.Col),
+            result);
+    }
+
+    private static HashSet<CellAddress>? CollectRangeDependentCandidates(
+        CellAddress cell,
+        List<RangeDependency>? candidates,
+        HashSet<CellAddress>? result)
+    {
+        if (candidates is null)
+            return result;
+
+        foreach (var dep in candidates)
         {
             if (dep.Range.Contains(cell))
             {
@@ -454,6 +564,103 @@ public sealed class DependencyGraph
 }
 
 internal readonly record struct RangeDependency(GridRange Range, CellAddress Dependent);
+
+internal sealed class RangeDependencyIndex
+{
+    private const uint RowBucketSize = 256;
+    private const uint ColumnBucketSize = 16;
+
+    private readonly Dictionary<uint, List<RangeDependency>> _rowBuckets = [];
+    private readonly Dictionary<uint, List<RangeDependency>> _columnBuckets = [];
+
+    public int Count { get; private set; }
+
+    public void Add(RangeDependency dependency)
+    {
+        var range = dependency.Range;
+        if (UseRowIndex(range))
+            AddToBuckets(_rowBuckets, dependency, range.Start.Row, range.End.Row, RowBucketSize);
+        else
+            AddToBuckets(_columnBuckets, dependency, range.Start.Col, range.End.Col, ColumnBucketSize);
+
+        Count++;
+    }
+
+    public void Remove(RangeDependency dependency)
+    {
+        var range = dependency.Range;
+        var removed = UseRowIndex(range)
+            ? RemoveFromBuckets(_rowBuckets, dependency, range.Start.Row, range.End.Row, RowBucketSize)
+            : RemoveFromBuckets(_columnBuckets, dependency, range.Start.Col, range.End.Col, ColumnBucketSize);
+
+        if (removed)
+            Count--;
+    }
+
+    public List<RangeDependency>? GetRowCandidates(uint row) =>
+        _rowBuckets.TryGetValue(GetBucket(row, RowBucketSize), out var deps) ? deps : null;
+
+    public List<RangeDependency>? GetColumnCandidates(uint column) =>
+        _columnBuckets.TryGetValue(GetBucket(column, ColumnBucketSize), out var deps) ? deps : null;
+
+    private static bool UseRowIndex(GridRange range) =>
+        GetBucketCount(range.Start.Row, range.End.Row, RowBucketSize) <=
+        GetBucketCount(range.Start.Col, range.End.Col, ColumnBucketSize);
+
+    private static void AddToBuckets(
+        Dictionary<uint, List<RangeDependency>> buckets,
+        RangeDependency dependency,
+        uint start,
+        uint end,
+        uint bucketSize)
+    {
+        var startBucket = GetBucket(start, bucketSize);
+        var endBucket = GetBucket(end, bucketSize);
+
+        for (var bucket = startBucket; bucket <= endBucket; bucket++)
+        {
+            if (!buckets.TryGetValue(bucket, out var deps))
+            {
+                deps = [];
+                buckets[bucket] = deps;
+            }
+
+            deps.Add(dependency);
+        }
+    }
+
+    private static bool RemoveFromBuckets(
+        Dictionary<uint, List<RangeDependency>> buckets,
+        RangeDependency dependency,
+        uint start,
+        uint end,
+        uint bucketSize)
+    {
+        var removed = false;
+        var startBucket = GetBucket(start, bucketSize);
+        var endBucket = GetBucket(end, bucketSize);
+
+        for (var bucket = startBucket; bucket <= endBucket; bucket++)
+        {
+            if (!buckets.TryGetValue(bucket, out var deps))
+                continue;
+
+            if (deps.Remove(dependency))
+                removed = true;
+
+            if (deps.Count == 0)
+                buckets.Remove(bucket);
+        }
+
+        return removed;
+    }
+
+    private static uint GetBucketCount(uint start, uint end, uint bucketSize) =>
+        GetBucket(end, bucketSize) - GetBucket(start, bucketSize) + 1;
+
+    private static uint GetBucket(uint value, uint bucketSize) =>
+        (value - 1) / bucketSize;
+}
 
 /// <summary>Result of computing a recalculation order.</summary>
 public sealed record RecalcPlan(
