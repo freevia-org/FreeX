@@ -78,7 +78,7 @@ public partial class MainWindow
         _dragSelectAddsAdditionalRange = false;
 
         // ── Header area ───────────────────────────────────────────────────────
-        if (pos.X < rowHeaderW || pos.Y < colHeaderH)
+        if (pos.X >= 0 && pos.Y >= 0 && (pos.X < rowHeaderW || pos.Y < colHeaderH))
         {
             // Top-left corner: select all
             if (pos.X < rowHeaderW && pos.Y < colHeaderH)
