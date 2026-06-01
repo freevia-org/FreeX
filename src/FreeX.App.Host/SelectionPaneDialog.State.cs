@@ -41,8 +41,14 @@ public sealed partial class SelectionPaneDialog
 
     private void List_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed ||
-            _dragStartPoint is not { } start ||
+        if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed)
+        {
+            _dragStartPoint = null;
+            _dragItem = null;
+            return;
+        }
+
+        if (_dragStartPoint is not { } start ||
             _dragItem is null)
             return;
 
