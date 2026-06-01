@@ -344,10 +344,10 @@ public sealed class FormulaEvaluator
             BinaryOperator.Divide => DivideOp(left, right),
             BinaryOperator.Power => PowerOp(left, right),
             BinaryOperator.Concatenate => ConcatOp(left, right),
-            BinaryOperator.Equal => CompareOp(left, right, 0),
-            BinaryOperator.NotEqual => CompareOpNot(left, right, 0),
-            BinaryOperator.LessThan => CompareOp(left, right, -1),
-            BinaryOperator.GreaterThan => CompareOp(left, right, 1),
+            BinaryOperator.Equal => CompareOpEqual(left, right),
+            BinaryOperator.NotEqual => CompareOpNotEqual(left, right),
+            BinaryOperator.LessThan => CompareOpLessThan(left, right),
+            BinaryOperator.GreaterThan => CompareOpGreaterThan(left, right),
             BinaryOperator.LessOrEqual => CompareOpLessOrEqual(left, right),
             BinaryOperator.GreaterOrEqual => CompareOpGreaterOrEqual(left, right),
             _ => throw new FormulaEvalException("#VALUE!", $"Unknown operator: {node.Operator}")
@@ -533,30 +533,77 @@ public sealed class FormulaEvaluator
         Multiply
     }
 
-    private static ScalarValue CompareOp(ScalarValue left, ScalarValue right, int expected)
-        => ElementwiseOp(left, right, (l, r) => CompareScalarOp(l, r, expected));
-
-    private static ScalarValue CompareScalarOp(ScalarValue left, ScalarValue right, int expected)
+    private static ScalarValue CompareOpEqual(ScalarValue left, ScalarValue right)
     {
-        if (left is ErrorValue errL) return errL;
-        if (right is ErrorValue errR) return errR;
-        var cmp = CompareValues(left, right);
-        return new BoolValue(cmp == expected);
+        if (left is not RangeValue && right is not RangeValue)
+            return CompareScalarOpEqual(left, right);
+
+        return ElementwiseOp(left, right, CompareScalarOpEqual);
     }
 
-    private static ScalarValue CompareOpNot(ScalarValue left, ScalarValue right, int expected)
-        => ElementwiseOp(left, right, (l, r) => CompareScalarOpNot(l, r, expected));
-
-    private static ScalarValue CompareScalarOpNot(ScalarValue left, ScalarValue right, int expected)
+    private static ScalarValue CompareScalarOpEqual(ScalarValue left, ScalarValue right)
     {
         if (left is ErrorValue errL) return errL;
         if (right is ErrorValue errR) return errR;
         var cmp = CompareValues(left, right);
-        return new BoolValue(cmp != expected);
+        return new BoolValue(cmp == 0);
+    }
+
+    private static ScalarValue CompareOpNotEqual(ScalarValue left, ScalarValue right)
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return CompareScalarOpNotEqual(left, right);
+
+        return ElementwiseOp(left, right, CompareScalarOpNotEqual);
+    }
+
+    private static ScalarValue CompareScalarOpNotEqual(ScalarValue left, ScalarValue right)
+    {
+        if (left is ErrorValue errL) return errL;
+        if (right is ErrorValue errR) return errR;
+        var cmp = CompareValues(left, right);
+        return new BoolValue(cmp != 0);
+    }
+
+    private static ScalarValue CompareOpLessThan(ScalarValue left, ScalarValue right)
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return CompareScalarOpLessThan(left, right);
+
+        return ElementwiseOp(left, right, CompareScalarOpLessThan);
+    }
+
+    private static ScalarValue CompareScalarOpLessThan(ScalarValue left, ScalarValue right)
+    {
+        if (left is ErrorValue errL) return errL;
+        if (right is ErrorValue errR) return errR;
+        var cmp = CompareValues(left, right);
+        return new BoolValue(cmp < 0);
+    }
+
+    private static ScalarValue CompareOpGreaterThan(ScalarValue left, ScalarValue right)
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return CompareScalarOpGreaterThan(left, right);
+
+        return ElementwiseOp(left, right, CompareScalarOpGreaterThan);
+    }
+
+    private static ScalarValue CompareScalarOpGreaterThan(ScalarValue left, ScalarValue right)
+    {
+        if (left is ErrorValue errL) return errL;
+        if (right is ErrorValue errR) return errR;
+        var cmp = CompareValues(left, right);
+        return new BoolValue(cmp > 0);
     }
 
     private static ScalarValue CompareOpLessOrEqual(ScalarValue left, ScalarValue right)
-        => ElementwiseOp(left, right, CompareScalarOpLessOrEqual);
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return CompareScalarOpLessOrEqual(left, right);
+
+        return ElementwiseOp(left, right, CompareScalarOpLessOrEqual);
+    }
 
     private static ScalarValue CompareScalarOpLessOrEqual(ScalarValue left, ScalarValue right)
     {
@@ -567,7 +614,12 @@ public sealed class FormulaEvaluator
     }
 
     private static ScalarValue CompareOpGreaterOrEqual(ScalarValue left, ScalarValue right)
-        => ElementwiseOp(left, right, CompareScalarOpGreaterOrEqual);
+    {
+        if (left is not RangeValue && right is not RangeValue)
+            return CompareScalarOpGreaterOrEqual(left, right);
+
+        return ElementwiseOp(left, right, CompareScalarOpGreaterOrEqual);
+    }
 
     private static ScalarValue CompareScalarOpGreaterOrEqual(ScalarValue left, ScalarValue right)
     {

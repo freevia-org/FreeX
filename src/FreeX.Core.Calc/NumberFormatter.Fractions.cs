@@ -15,6 +15,9 @@ public static partial class NumberFormatter
 
     private static bool IsSimpleFractionFormat(string format)
     {
+        if (format.IndexOf('?') < 0)
+            return false;
+
         var stripped = FractionQuotedTextRegex.Replace(format, "");
         return stripped.Contains("?/?", StringComparison.Ordinal) ||
                stripped.Contains("?/??", StringComparison.Ordinal) ||
@@ -131,6 +134,9 @@ public static partial class NumberFormatter
 
     private static bool IsScientificFormat(string format)
     {
+        if (format.IndexOfAny(['e', 'E']) < 0)
+            return false;
+
         var stripped = FractionQuotedTextRegex.Replace(format, "");
         return ScientificFormatRegex.IsMatch(stripped);
     }
