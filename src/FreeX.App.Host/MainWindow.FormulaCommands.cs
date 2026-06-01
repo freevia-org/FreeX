@@ -74,8 +74,7 @@ public partial class MainWindow
         var dlg = new InsertFunctionDialog();
         if (ShowOwnedDialog(dlg) != true || string.IsNullOrEmpty(dlg.SelectedFormula)) return;
         if (SheetGrid.SelectedRange is null) return;
-        FormulaBar.Text = "=" + dlg.SelectedFormula;
-        EnterEditMode();
+        BeginFormulaBarFunctionEdit("=" + dlg.SelectedFormula);
     }
 
     private void DefineNameBtn_Click(object sender, RoutedEventArgs e)
@@ -409,10 +408,19 @@ public partial class MainWindow
     private void InsertFormulaFunction(string funcName)
     {
         if (SheetGrid.SelectedRange is null) return;
-        FormulaBar.Text = $"={funcName}(";
-        EnterEditMode();
-        FormulaBar.CaretIndex = FormulaBar.Text.Length;
+        BeginFormulaBarFunctionEdit($"={funcName}(");
     }
+
+    private void BeginFormulaBarFunctionEdit(string text)
+    {
+        CaptureFormulaEditCell();
+        _formulaRangeEntryMode = FormulaEditInteractionPlanner.IsFormulaText(text);
+        ClearFormulaReferenceEntrySpan();
+        FormulaBar.Text = text;
+        FocusFormulaBarAtEnd();
+        RefreshFormulaReferenceHighlights();
+    }
+
     private void Formula_IF_Click(object sender, RoutedEventArgs e)      => InsertFormulaFunction("IF");
     private void Formula_AND_Click(object sender, RoutedEventArgs e)     => InsertFormulaFunction("AND");
     private void Formula_OR_Click(object sender, RoutedEventArgs e)      => InsertFormulaFunction("OR");
