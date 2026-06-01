@@ -864,6 +864,47 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_AttributeSet_GeneratesStyledCells()
+    {
+        using var source = StreamFromString("<rows><row amount=\"42.5\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:attribute-set name="moneyCell">
+                <xsl:attribute name="ss:StyleID">money</xsl:attribute>
+              </xsl:attribute-set>
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <ss:Style ss:ID="money">
+                      <ss:NumberFormat ss:Format="$#,##0.00" />
+                    </ss:Style>
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Styled">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell xsl:use-attribute-sets="moneyCell">
+                          <ss:Data ss:Type="Number"><xsl:value-of select="row/@amount" /></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        using var reader = new StreamReader(transformed, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        reader.ReadToEnd().Should()
+            .Contain("<ss:Style ss:ID=\"money\">")
+            .And.Contain("<ss:Cell ss:StyleID=\"money\">")
+            .And.Contain("<ss:Data ss:Type=\"Number\">42.5</ss:Data>");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_StylesheetHtmlOutput_PreservesHtmlSerialization()
     {
         using var source = StreamFromString("<rows><row name=\"April\" /></rows>");
