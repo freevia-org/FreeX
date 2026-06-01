@@ -248,7 +248,7 @@ public static class GridObjectDragPlanner
         {
             var pinnedRows = splitPanes.TopRows ?? [];
             horizontalY = pinnedRows.Count > 0
-                ? columnHeaderHeight + pinnedRows.Sum(row => row.Height)
+                ? columnHeaderHeight + SumRowHeights(pinnedRows)
                 : FindRowMetric(viewport.RowMetrics, splitPanes.Row.Value)?.TopOffset + columnHeaderHeight;
         }
 
@@ -257,17 +257,38 @@ public static class GridObjectDragPlanner
         {
             var pinnedColumns = splitPanes.LeftColumns ?? [];
             verticalX = pinnedColumns.Count > 0
-                ? rowHeaderWidth + pinnedColumns.Sum(column => column.Width)
+                ? rowHeaderWidth + SumColumnWidths(pinnedColumns)
                 : FindColMetric(viewport.ColMetrics, splitPanes.Column.Value)?.LeftOffset + rowHeaderWidth;
         }
 
         return (horizontalY, verticalX);
     }
 
+    private static double SumRowHeights(IReadOnlyList<RowMetric> rows)
+    {
+        var height = 0d;
+        foreach (var row in rows)
+            height += row.Height;
+
+        return height;
+    }
+
+    private static double SumColumnWidths(IReadOnlyList<ColMetric> columns)
+    {
+        var width = 0d;
+        foreach (var column in columns)
+            width += column.Width;
+
+        return width;
+    }
+
     private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row)
     {
         foreach (var metric in metrics)
         {
+            if (metric.Row > row)
+                break;
+
             if (metric.Row == row)
                 return metric;
         }
@@ -279,6 +300,9 @@ public static class GridObjectDragPlanner
     {
         foreach (var metric in metrics)
         {
+            if (metric.Col > column)
+                break;
+
             if (metric.Col == column)
                 return metric;
         }
