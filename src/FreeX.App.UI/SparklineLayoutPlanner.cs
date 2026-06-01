@@ -140,6 +140,8 @@ public static class SparklineLayoutPlanner
         {
             if (!double.IsFinite(values[i]))
                 continue;
+            if (Math.Abs(values[i]) < 0.0000001)
+                continue;
 
             var value = winLoss ? Math.Sign(values[i]) : values[i];
             var height = winLoss
