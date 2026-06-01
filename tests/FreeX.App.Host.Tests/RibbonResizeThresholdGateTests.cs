@@ -1,3 +1,4 @@
+using System.Collections;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -45,5 +46,50 @@ public sealed class RibbonResizeThresholdGateTests
             .CrossedAnyThreshold(previousWidth, currentWidth, [760, 920, 1120, 1320])
             .Should()
             .BeTrue();
+    }
+
+    [Fact]
+    public void CrossedAnyThreshold_UsesBandLookupForSameBandResizeNoise()
+    {
+        var thresholds = new CountingThresholdList(
+            Enumerable
+                .Range(0, 256)
+                .Select(index => 640d + index * 3.5)
+                .ToArray());
+
+        RibbonResizeThresholdGate
+            .CrossedAnyThreshold(1_800.1, 1_800.4, thresholds)
+            .Should()
+            .BeFalse();
+
+        Console.WriteLine(
+            "PERF RIBBON_RESIZE_THRESHOLD_GATE_SAME_BAND " +
+            $"thresholds={thresholds.Count} item_accesses={thresholds.ItemAccessCount} " +
+            $"linear_baseline_accesses={thresholds.Count}");
+        thresholds.ItemAccessCount.Should().BeLessThan(32);
+    }
+
+    private sealed class CountingThresholdList(IReadOnlyList<double> thresholds) : IReadOnlyList<double>
+    {
+        public int ItemAccessCount { get; private set; }
+
+        public double this[int index]
+        {
+            get
+            {
+                ItemAccessCount++;
+                return thresholds[index];
+            }
+        }
+
+        public int Count => thresholds.Count;
+
+        public IEnumerator<double> GetEnumerator()
+        {
+            for (var index = 0; index < Count; index++)
+                yield return this[index];
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }
