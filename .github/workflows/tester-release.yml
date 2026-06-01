@@ -208,6 +208,7 @@ jobs:
         run: |
           $outputRoot = Join-Path $env:RUNNER_TEMP "freex-release"
           $certificatePath = ""
+          $env:FREEX_MSIX_CERTIFICATE_PASSWORD = "${{ secrets.FREEX_MSIX_CERTIFICATE_PASSWORD }}"
           $certificateBase64 = "${{ secrets.FREEX_MSIX_CERTIFICATE_BASE64 }}"
           if (-not [string]::IsNullOrWhiteSpace($certificateBase64)) {
             $certificatePath = Join-Path $env:RUNNER_TEMP "freex-msix-signing.pfx"
@@ -217,10 +218,6 @@ jobs:
           $signArgs = @()
           if (-not [string]::IsNullOrWhiteSpace($certificatePath)) {
             $signArgs += @("-MsixCertificatePath", $certificatePath)
-            $certificatePassword = "${{ secrets.FREEX_MSIX_CERTIFICATE_PASSWORD }}"
-            if (-not [string]::IsNullOrWhiteSpace($certificatePassword)) {
-              $signArgs += @("-MsixCertificatePassword", $certificatePassword)
-            }
             $timestampUrl = "${{ vars.FREEX_MSIX_TIMESTAMP_URL }}"
             if (-not [string]::IsNullOrWhiteSpace($timestampUrl)) {
               $signArgs += @("-MsixTimestampUrl", $timestampUrl)

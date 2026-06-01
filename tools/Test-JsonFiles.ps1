@@ -1,5 +1,5 @@
 param(
-    [string[]]$JsonRoots = @("docs", "release")
+    [string[]]$JsonRoots = @("global.json", "docs", "release")
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,11 +19,20 @@ function Resolve-RepoPath {
 $jsonFiles = New-Object System.Collections.Generic.List[System.IO.FileInfo]
 foreach ($jsonRoot in $JsonRoots) {
     $resolvedJsonRoot = Resolve-RepoPath $jsonRoot
-    if (-not (Test-Path -LiteralPath $resolvedJsonRoot -PathType Container)) {
-        throw "JSON root was not found: $resolvedJsonRoot"
+    if (-not (Test-Path -LiteralPath $resolvedJsonRoot)) {
+        throw "JSON path was not found: $resolvedJsonRoot"
     }
 
-    Get-ChildItem -LiteralPath $resolvedJsonRoot -Filter "*.json" -File -Recurse |
+    $rootItem = Get-Item -LiteralPath $resolvedJsonRoot
+    if ($rootItem -is [System.IO.FileInfo]) {
+        if ($rootItem.Extension -ieq ".json") {
+            $jsonFiles.Add($rootItem)
+        }
+
+        continue
+    }
+
+    Get-ChildItem -LiteralPath $rootItem.FullName -Filter "*.json" -File -Recurse |
         Sort-Object FullName |
         ForEach-Object { $jsonFiles.Add($_) }
 }

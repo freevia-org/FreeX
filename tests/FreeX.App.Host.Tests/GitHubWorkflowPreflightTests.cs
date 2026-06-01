@@ -7,6 +7,40 @@ namespace FreeX.App.Host.Tests;
 public sealed class GitHubWorkflowPreflightTests
 {
     [Fact]
+    public void CiWorkflow_RunsPreflightBuildAndTestsWithReadOnlyPermissions()
+    {
+        var workflow = File.ReadAllText(WorkspaceFileLocator.Find(".github", "workflows", "ci.yml"));
+
+        workflow.Should().Contain("push:");
+        workflow.Should().Contain("pull_request:");
+        workflow.Should().Contain("branches:");
+        workflow.Should().Contain("- main");
+        workflow.Should().Contain("permissions:");
+        workflow.Should().Contain("contents: read");
+        workflow.Should().NotContain("contents: write");
+        workflow.Should().NotContain("pull_request_target");
+        workflow.Should().Contain("runs-on: windows-latest");
+        workflow.Should().Contain("timeout-minutes: 60");
+        workflow.Should().Contain("actions/checkout@v6");
+        workflow.Should().Contain("persist-credentials: false");
+        workflow.Should().Contain("actions/setup-dotnet@v5");
+        workflow.Should().Contain("dotnet-version: 10.0.x");
+        workflow.Should().Contain("powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\\Test-RepositoryPreflight.ps1");
+        workflow.Should().Contain("dotnet restore FreeX.slnx");
+        workflow.Should().Contain("dotnet build FreeX.slnx --configuration Release --no-restore --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1");
+        workflow.Should().Contain("dotnet test FreeX.slnx --configuration Release --no-build --disable-build-servers -p:UseSharedCompilation=false -p:NodeReuse=false /nr:false -m:1");
+    }
+
+    [Fact]
+    public void GlobalJson_PinsDotNetSdkBandWithFeatureRollForward()
+    {
+        var globalJson = File.ReadAllText(WorkspaceFileLocator.Find("global.json"));
+
+        globalJson.Should().Contain("\"version\": \"10.0.100\"");
+        globalJson.Should().Contain("\"rollForward\": \"latestFeature\"");
+    }
+
+    [Fact]
     public void GitHubWorkflowPreflight_ValidatesPinnedActionsAndPermissions()
     {
         var script = File.ReadAllText(WorkspaceFileLocator.Find("tools", "Test-GitHubWorkflows.ps1"));
