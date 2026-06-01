@@ -201,6 +201,8 @@ public sealed class GridViewRenderPerformanceTests
         source.Should().Contain("private static readonly Pen SparklineLinePen");
         renderSparklines.Should().Contain("DrawLineSparkline(dc, values, rect, SparklineLinePen)");
         renderSparklines.Should().Contain("DrawColumnSparkline(dc, values, rect, sparkline.Kind == SparklineKind.WinLoss, SparklinePositiveBrush, SparklineNegativeBrush)");
+        renderSparklines.Should().Contain("dc.PushClip(GetCellClipGeometry(rect));");
+        renderSparklines.Should().NotContain("new RectangleGeometry(rect)");
         source.Should().Contain("SparklineLayoutPlanner.VisitLineLayout(values, rect, ref consumer)");
         source.Should().Contain("SparklineLayoutPlanner.VisitColumnLayout(values, rect, winLoss, ref consumer)");
         source.Should().NotContain("BuildSparklineRowMetricLookup");

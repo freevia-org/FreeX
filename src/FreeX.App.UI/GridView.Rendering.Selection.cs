@@ -7,6 +7,8 @@ namespace FreeX.App.UI;
 
 public partial class GridView
 {
+    private QuickAnalysisDataBarPreviewGeometryCache? _quickAnalysisDataBarPreviewGeometryCache;
+
     // Returns pixel coords for a range, clamped to viewport boundaries.
     private (double? top, double? left, double? bottom, double? right) GetRangePixels(
         ViewportModel vp,
@@ -90,16 +92,7 @@ public partial class GridView
         switch (QuickAnalysisPreviewVisual)
         {
             case GridQuickAnalysisPreviewVisualKind.DataBars:
-                var lookups = GetRenderCellLookups(Viewport);
-                var dataBarConsumer = new FillRectConsumer(dc, QuickAnalysisDataBarPreviewBrush);
-                QuickAnalysisPreviewLayoutPlanner.VisitDataBarPreviewRects(
-                    Viewport,
-                    range,
-                    rowHeaderWidth,
-                    columnHeaderHeight,
-                    lookups.Rows,
-                    lookups.Columns,
-                    ref dataBarConsumer);
+                DrawQuickAnalysisDataBarPreview(dc, range, rowHeaderWidth, columnHeaderHeight);
                 break;
             case GridQuickAnalysisPreviewVisualKind.ColorScale:
                 var colorScaleConsumer = new ColorScaleRectConsumer(dc);
@@ -164,6 +157,53 @@ public partial class GridView
         }
     }
 
+    private void DrawQuickAnalysisDataBarPreview(
+        DrawingContext dc,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var viewport = Viewport!;
+        if (_quickAnalysisDataBarPreviewGeometryCache is { } cached &&
+            ReferenceEquals(cached.Viewport, viewport) &&
+            cached.Range == range &&
+            cached.RowHeaderWidth.Equals(rowHeaderWidth) &&
+            cached.ColumnHeaderHeight.Equals(columnHeaderHeight))
+        {
+            dc.DrawGeometry(QuickAnalysisDataBarPreviewBrush, null, cached.Geometry);
+            return;
+        }
+
+        var lookups = GetRenderCellLookups(viewport);
+        var geometry = new StreamGeometry();
+        var dataBarCount = 0;
+        using (var context = geometry.Open())
+        {
+            var dataBarConsumer = new QuickAnalysisDataBarGeometryConsumer(context);
+            QuickAnalysisPreviewLayoutPlanner.VisitDataBarPreviewRects(
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                lookups.Rows,
+                lookups.Columns,
+                ref dataBarConsumer);
+            dataBarCount = dataBarConsumer.Count;
+        }
+
+        if (dataBarCount == 0)
+            return;
+
+        geometry.Freeze();
+        _quickAnalysisDataBarPreviewGeometryCache = new(
+            viewport,
+            range,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            geometry);
+        dc.DrawGeometry(QuickAnalysisDataBarPreviewBrush, null, geometry);
+    }
+
     private void DrawQuickAnalysisCellOverlays(DrawingContext dc, Brush brush, Pen pen)
     {
         if (Viewport == null || QuickAnalysisPreviewRange is not { } range)
@@ -220,15 +260,36 @@ public partial class GridView
             ref consumer);
     }
 
-    private readonly struct FillRectConsumer(DrawingContext dc, Brush brush) : IQuickAnalysisPreviewRectConsumer
-    {
-        public void Accept(Rect rect) => dc.DrawRectangle(brush, null, rect);
-    }
-
     private readonly struct FillStrokeRectConsumer(DrawingContext dc, Brush brush, Pen pen) : IQuickAnalysisPreviewRectConsumer
     {
         public void Accept(Rect rect) => dc.DrawRectangle(brush, pen, rect);
     }
+
+    private struct QuickAnalysisDataBarGeometryConsumer(StreamGeometryContext context) : IQuickAnalysisPreviewRectConsumer
+    {
+        private readonly StreamGeometryContext _context = context;
+
+        public int Count { get; private set; }
+
+        public void Accept(Rect rect)
+        {
+            if (rect.Width <= 0 || rect.Height <= 0)
+                return;
+
+            _context.BeginFigure(rect.TopLeft, isFilled: true, isClosed: true);
+            _context.LineTo(new Point(rect.Right, rect.Top), isStroked: true, isSmoothJoin: false);
+            _context.LineTo(rect.BottomRight, isStroked: true, isSmoothJoin: false);
+            _context.LineTo(new Point(rect.Left, rect.Bottom), isStroked: true, isSmoothJoin: false);
+            Count++;
+        }
+    }
+
+    private sealed record QuickAnalysisDataBarPreviewGeometryCache(
+        ViewportModel Viewport,
+        GridRange Range,
+        double RowHeaderWidth,
+        double ColumnHeaderHeight,
+        StreamGeometry Geometry);
 
     private struct ColorScaleRectConsumer(DrawingContext dc) : IQuickAnalysisPreviewRectConsumer
     {
