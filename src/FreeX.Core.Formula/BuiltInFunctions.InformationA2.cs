@@ -674,33 +674,32 @@ public static partial class BuiltInFunctions
             case 12:
             {
                 if (nums.Count == 0) return ErrorValue.Num;
-                var s = nums.OrderBy(x => x).ToList();
-                int n = s.Count;
-                return NumberResult(n % 2 == 1 ? s[n / 2] : (s[n / 2 - 1] + s[n / 2]) / 2.0);
+                int n = nums.Count;
+                int mid = n / 2;
+                if (n % 2 == 1) return NumberResult(SelectKthSmallest(nums, mid));
+
+                double lower = SelectKthSmallest(nums, mid - 1);
+                double upper = SelectKthSmallest(nums, mid);
+                return NumberResult((lower + upper) / 2.0);
             }
             case 13: // MODE.SNGL
             {
                 if (nums.Count == 0) return ErrorValue.NA;
-                var counts = nums.GroupBy(x => x).Select(g => (g.Key, Count: g.Count())).ToList();
-                int maxCount = counts.Max(c => c.Count);
-                if (maxCount < 2) return ErrorValue.NA;
-                return NumberResult(counts.First(c => c.Count == maxCount).Key);
+                return AggregateModeSngl(nums);
             }
             case 14: // LARGE
             {
                 if (nums.Count == 0) return ErrorValue.Num;
-                int ki = (int)Math.Truncate(k!.Value);
-                if (ki < 1 || ki > nums.Count) return ErrorValue.Num;
-                var s = nums.OrderByDescending(x => x).ToList();
-                return NumberResult(s[ki - 1]);
+                double kd = Math.Truncate(k!.Value);
+                if (kd < 1 || kd > nums.Count) return ErrorValue.Num;
+                return NumberResult(SelectKthSmallest(nums, nums.Count - (int)kd));
             }
             case 15: // SMALL
             {
                 if (nums.Count == 0) return ErrorValue.Num;
-                int ki = (int)Math.Truncate(k!.Value);
-                if (ki < 1 || ki > nums.Count) return ErrorValue.Num;
-                var s = nums.OrderBy(x => x).ToList();
-                return NumberResult(s[ki - 1]);
+                double kd = Math.Truncate(k!.Value);
+                if (kd < 1 || kd > nums.Count) return ErrorValue.Num;
+                return NumberResult(SelectKthSmallest(nums, (int)kd - 1));
             }
             case 16: // PERCENTILE.INC
             {
@@ -761,25 +760,50 @@ public static partial class BuiltInFunctions
 
     private static double PercentileIncCalc(List<double> nums, double p)
     {
-        var s = nums.OrderBy(x => x).ToList();
-        int n = s.Count;
-        if (n == 1) return s[0];
+        int n = nums.Count;
+        if (n == 1) return nums[0];
         double pos = p * (n - 1);
         int lo = (int)Math.Floor(pos);
         int hi = (int)Math.Ceiling(pos);
-        if (lo == hi) return s[lo];
-        return s[lo] + (pos - lo) * (s[hi] - s[lo]);
+        double lower = SelectKthSmallest(nums, lo);
+        if (lo == hi) return lower;
+        double upper = SelectKthSmallest(nums, hi);
+        return lower + (pos - lo) * (upper - lower);
     }
 
     private static double PercentileExcCalc(List<double> nums, double p)
     {
-        var s = nums.OrderBy(x => x).ToList();
-        int n = s.Count;
+        int n = nums.Count;
         double pos = p * (n + 1) - 1;
         if (pos < 0 || pos > n - 1) throw new FormulaEvalException("#NUM!", "k out of range");
         int lo = (int)Math.Floor(pos);
         int hi = (int)Math.Ceiling(pos);
-        if (lo == hi) return s[lo];
-        return s[lo] + (pos - lo) * (s[hi] - s[lo]);
+        double lower = SelectKthSmallest(nums, lo);
+        if (lo == hi) return lower;
+        double upper = SelectKthSmallest(nums, hi);
+        return lower + (pos - lo) * (upper - lower);
+    }
+
+    private static ScalarValue AggregateModeSngl(List<double> nums)
+    {
+        var counts = new Dictionary<double, int>();
+        var bestCount = 0;
+
+        foreach (var value in nums)
+        {
+            ref int count = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(
+                counts,
+                value,
+                out bool exists);
+            count = exists ? count + 1 : 1;
+
+            if (count > bestCount)
+                bestCount = count;
+        }
+
+        if (bestCount < 2) return ErrorValue.NA;
+        foreach (var value in nums)
+            if (counts[value] == bestCount) return NumberResult(value);
+        return ErrorValue.NA;
     }
 }

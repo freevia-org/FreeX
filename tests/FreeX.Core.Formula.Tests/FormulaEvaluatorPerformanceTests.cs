@@ -251,6 +251,46 @@ public sealed class FormulaEvaluatorPerformanceTests
         AssertLargeRangeSelectionPerformance(formula, expected, maxAllocatedBytes);
     }
 
+    [Theory]
+    [InlineData("=AGGREGATE(12,4,A1:A100000)", 50_000.5d, 4_000_000)]
+    [InlineData("=AGGREGATE(14,4,A1:A100000,10)", 99_991d, 4_000_000)]
+    [InlineData("=AGGREGATE(15,4,A1:A100000,10)", 10d, 4_000_000)]
+    [InlineData("=AGGREGATE(16,4,A1:A100000,0.5)", 50_000.5d, 4_000_000)]
+    [InlineData("=AGGREGATE(18,4,A1:A100000,0.5)", 50_000.5d, 4_000_000)]
+    public void AggregateStatisticalSelectionLargeRanges_AvoidExcessAllocationChurn(
+        string formula,
+        double expected,
+        long maxAllocatedBytes)
+    {
+        AssertLargeRangeSelectionPerformance(formula, expected, maxAllocatedBytes);
+    }
+
+    [Fact]
+    public void AggregateModeLargeRange_AvoidsGroupByMaterialization()
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeModeSheet();
+        const string formula = "=AGGREGATE(13,4,A1:A100000)";
+        const double expected = 42d;
+
+        evaluator.Evaluate(formula, sheet).Should().Be(new NumberValue(expected));
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        result.Should().Be(new NumberValue(expected));
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(8_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
     private void AssertLargeRangeSelectionPerformance(string formula, double expected, long maxAllocatedBytes)
     {
         var evaluator = new FormulaEvaluator();
@@ -496,6 +536,18 @@ public sealed class FormulaEvaluatorPerformanceTests
                     sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue("x"));
                     break;
             }
+        }
+
+        return sheet;
+    }
+
+    private static Sheet MakeModeSheet()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        for (uint row = 1; row <= RowCount; row++)
+        {
+            var value = row % 2 == 0 ? 42d : row;
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(value));
         }
 
         return sheet;
