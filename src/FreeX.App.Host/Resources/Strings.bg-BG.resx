@@ -4551,7 +4551,7 @@
     <value>Извън границите</value>
   </data>
   <data name="MainWindow_Header_PageLayout" xml:space="preserve">
-    <value>Оформление на страницата</value>
+    <value>Страница</value>
   </data>
   <data name="MainWindow_Header_Paste" xml:space="preserve">
     <value>Постави</value>
@@ -4563,7 +4563,7 @@
     <value>Фиксиране към списъка</value>
   </data>
   <data name="MainWindow_Header_PivotTableAnalyze" xml:space="preserve">
-    <value>Анализ на обобщена таблица</value>
+    <value>Анализ</value>
   </data>
   <data name="MainWindow_Header_Portrait" xml:space="preserve">
     <value>Портрет</value>
@@ -13627,13 +13627,13 @@
     <value>Запазване на работна книга</value>
   </data>
   <data name="MainWindow_Header_TableDesign" xml:space="preserve">
-    <value>Проектиране на таблица</value>
+    <value>Таблица</value>
   </data>
   <data name="MainWindow_Content_TableName" xml:space="preserve">
     <value>Име на таблица</value>
   </data>
   <data name="MainWindow_Content_ResizeTable" xml:space="preserve">
-    <value>Преоразмеряване на таблицата</value>
+    <value>Размер на таблица</value>
   </data>
   <data name="MainWindow_Content_SummarizeWithPivotTable" xml:space="preserve">
     <value>Обобщаване с обобщена таблица</value>

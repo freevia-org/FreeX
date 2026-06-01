@@ -16,10 +16,14 @@ internal static class RibbonAdaptiveStateApplicator
         var changedGroupCount = 0;
         for (var i = 0; i < groupSnapshots.Count; i++)
         {
-            if (previousStates is not null &&
-                i < previousStates.Count &&
-                previousStates[i] == plannedStates[i] &&
-                !ShouldKeepRibbonGroupLabelsAtIconWidth(groupSnapshots[i], plannedStates[i], availableWidth))
+            var plannedState = NormalizePlannedState(groupSnapshots[i], plannedStates[i]);
+            var previousState = previousStates is not null && i < previousStates.Count
+                ? NormalizePlannedState(groupSnapshots[i], previousStates[i])
+                : (RibbonAdaptiveGroupState?)null;
+
+            if (previousState is not null &&
+                previousState == plannedState &&
+                !ShouldKeepRibbonGroupLabelsAtIconWidth(groupSnapshots[i], plannedState, availableWidth))
             {
                 continue;
             }
@@ -28,7 +32,7 @@ internal static class RibbonAdaptiveStateApplicator
             collapsedButtons[i].Visibility = Visibility.Collapsed;
             groupSnapshots[i].Group.Visibility = Visibility.Visible;
 
-            switch (plannedStates[i])
+            switch (plannedState)
             {
                 case RibbonAdaptiveGroupState.Full:
                     ApplyGroup(groupSnapshots[i], MainWindow.RibbonCompactLevel.Full);
@@ -92,6 +96,17 @@ internal static class RibbonAdaptiveStateApplicator
             ApplyButton(buttonSnapshot, level);
         }
     }
+
+    public static bool ShouldUseSmallWithLabelsForIconOnlyGroup(string? catalogId) =>
+        catalogId is
+            "DataSortFilterGroup" or
+            "DataToolsGroup" or
+            "FormulasFormulaAuditingGroup" or
+            "ReviewCommentsGroup" or
+            "ViewWindowGroup" or
+            "TableDesignStyleOptionsGroup" or
+            "PivotTableAnalyzeCalculationsGroup" or
+            "PivotTableDesignStyleOptionsGroup";
 
     public static void ApplyButton(
         MainWindow.RibbonCompactButtonSnapshot snapshot,
@@ -215,6 +230,15 @@ internal static class RibbonAdaptiveStateApplicator
         plannedState == RibbonAdaptiveGroupState.IconOnly &&
         availableWidth > 820 &&
         string.Equals(GetRibbonGroupName(snapshot.Group), "Tables", StringComparison.Ordinal);
+
+    private static RibbonAdaptiveGroupState NormalizePlannedState(
+        MainWindow.RibbonCompactGroupSnapshot snapshot,
+        RibbonAdaptiveGroupState plannedState) =>
+        plannedState == RibbonAdaptiveGroupState.IconOnly &&
+        RibbonMetadata.TryGetCatalogId(snapshot.Group, out var catalogId) &&
+        ShouldUseSmallWithLabelsForIconOnlyGroup(catalogId)
+            ? RibbonAdaptiveGroupState.SmallWithLabels
+            : plannedState;
 
     private static bool TryGetCollapsedRibbonButtonCaption(Button button, out TextBlock caption)
     {
