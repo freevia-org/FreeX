@@ -40,21 +40,14 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.InsertRows) is { } protectedOutcome)
             return protectedOutcome;
 
-        var maxOccupied = sheet.EnumerateCells()
-            .Where(p => p.Address.Row >= _beforeRow)
-            .Select(p => p.Address.Row)
-            .DefaultIfEmpty(0u)
-            .Max();
+        var (maxOccupied, movedSnapshot) = CaptureMovedCells(sheet);
         if (maxOccupied > 0 && maxOccupied + _count > Model.CellAddress.MaxRow)
             return new CommandOutcome(false,
                 ErrorMessage: $"Cannot insert {_count} row(s): data would be pushed past the last row ({Model.CellAddress.MaxRow}).");
 
         _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
-        _movedSnapshot = sheet.EnumerateCells()
-            .Where(p => p.Address.Row >= _beforeRow)
-            .Select(p => (p.Address, p.Cell.Clone()))
-            .ToList();
+        _movedSnapshot = movedSnapshot;
 
         foreach (var (addr, _) in _movedSnapshot)
             sheet.ClearCell(addr);
@@ -150,6 +143,25 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
+    }
+
+    private (uint MaxOccupied, List<(CellAddress Addr, Cell Cell)> Moved) CaptureMovedCells(Sheet sheet)
+    {
+        var moved = new List<(CellAddress Addr, Cell Cell)>(sheet.CellCount);
+        uint maxOccupied = 0;
+
+        foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+        {
+            if (row < _beforeRow)
+                continue;
+
+            if (row > maxOccupied)
+                maxOccupied = row;
+
+            moved.Add((new CellAddress(sheet.Id, row, col), cell.Clone()));
+        }
+
+        return (maxOccupied, moved);
     }
 }
 
