@@ -1,5 +1,6 @@
 using FreeX.Core.Model;
 using System;
+using System.Collections.Concurrent;
 using System.Windows;
 
 namespace FreeX.App.UI;
@@ -8,6 +9,7 @@ public static class ConditionalIconLayoutPlanner
 {
     private const double ConditionalIconGutterWidth = 20;
     private const double ConditionalIconSize = 10;
+    private static readonly ConcurrentDictionary<string, ConditionalIconStyleTraits> StyleTraitCache = new(StringComparer.Ordinal);
 
     public static ConditionalIconCellLayout CalculateCellLayout(
         Rect cellRect,
@@ -34,28 +36,45 @@ public static class ConditionalIconLayoutPlanner
 
     public static ConditionalIconGlyphKind ResolveGlyphKind(ConditionalFormatIcon icon)
     {
-        var style = icon.Style ?? "";
+        var traits = ResolveStyleTraits(icon.Style);
+        return traits.GlyphKind;
+    }
+
+    private static ConditionalIconStyleTraits ResolveStyleTraits(string? style)
+    {
+        style ??= "";
+        if (StyleTraitCache.TryGetValue(style, out var cached))
+            return cached;
+
         if (style.Contains("TrafficLights", StringComparison.OrdinalIgnoreCase) ||
             style.Contains("RedToBlack", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.TrafficLight;
+            return CacheStyleTraits(style, ConditionalIconGlyphKind.TrafficLight);
         if (style.Contains("Signs", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.Sign;
+            return CacheStyleTraits(style, ConditionalIconGlyphKind.Sign);
         if (style.Contains("Symbols", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.Symbol;
+            return CacheStyleTraits(style, ConditionalIconGlyphKind.Symbol);
         if (style.Contains("Flags", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.Flag;
+            return CacheStyleTraits(style, ConditionalIconGlyphKind.Flag);
         if (style.Contains("Rating", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.Rating;
+            return CacheStyleTraits(style, ConditionalIconGlyphKind.Rating);
         if (style.Contains("Quarters", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.Quarter;
+            return CacheStyleTraits(style, ConditionalIconGlyphKind.Quarter);
         if (style.Contains("Boxes", StringComparison.OrdinalIgnoreCase))
-            return ConditionalIconGlyphKind.Box;
-        return ConditionalIconGlyphKind.Arrow;
+            return CacheStyleTraits(style, ConditionalIconGlyphKind.Box);
+        return CacheStyleTraits(style, ConditionalIconGlyphKind.Arrow);
+    }
+
+    private static ConditionalIconStyleTraits CacheStyleTraits(string style, ConditionalIconGlyphKind glyphKind)
+    {
+        var traits = new ConditionalIconStyleTraits(
+            glyphKind,
+            style.Contains("Gray", StringComparison.OrdinalIgnoreCase));
+        return StyleTraitCache.GetOrAdd(style, traits);
     }
 
     public static string ResolveColor(ConditionalFormatIcon icon)
     {
-        if (icon.Style.Contains("Gray", StringComparison.OrdinalIgnoreCase))
+        if (ResolveStyleTraits(icon.Style).IsGray)
             return "#666666";
 
         var index = Math.Clamp(icon.IconIndex, 0, Math.Max(0, icon.IconCount - 1));
@@ -84,4 +103,8 @@ public static class ConditionalIconLayoutPlanner
             }
         };
     }
+
+    private readonly record struct ConditionalIconStyleTraits(
+        ConditionalIconGlyphKind GlyphKind,
+        bool IsGray);
 }

@@ -752,6 +752,23 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void ConditionalIconLayoutPlanner_CachesStyleTraitClassification()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "ConditionalIconLayoutPlanner.cs"));
+        var resolveGlyphKind = source[
+            source.IndexOf("public static ConditionalIconGlyphKind ResolveGlyphKind", StringComparison.Ordinal)..
+            source.IndexOf("private static ConditionalIconStyleTraits ResolveStyleTraits", StringComparison.Ordinal)];
+        var resolveColor = source[
+            source.IndexOf("public static string ResolveColor", StringComparison.Ordinal)..];
+
+        source.Should().Contain("private static readonly ConcurrentDictionary<string, ConditionalIconStyleTraits> StyleTraitCache");
+        resolveGlyphKind.Should().Contain("ResolveStyleTraits(icon.Style)");
+        resolveGlyphKind.Should().NotContain("Contains(");
+        resolveColor.Should().Contain("ResolveStyleTraits(icon.Style).IsGray");
+        resolveColor.Should().NotContain("icon.Style.Contains");
+    }
+
+    [Fact]
     public void CalculateSplitDividerLayout_AvoidsLinqMetricScans()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.SplitPanes.cs"));

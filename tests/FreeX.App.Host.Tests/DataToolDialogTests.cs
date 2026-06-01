@@ -1086,9 +1086,12 @@ public sealed class DataToolDialogTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
 
         source.Should().Contain("SubtotalDialogAction.RemoveAll");
-        source.Should().Contain("new RemoveSubtotalRowsCommand(_currentSheetId, currentRange)");
+        source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
+        source.Should().Contain("new RemoveSubtotalRowsCommand(");
+        source.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
+        source.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId)");
         source.Should().Contain("dialog.Result.ReplaceCurrentSubtotals");
-        source.Should().Contain("new CompositeWorkbookCommand(\"Subtotal\", [new RemoveSubtotalRowsCommand(_currentSheetId, currentRange), subtotalCommand])");
+        source.Should().Contain("new CompositeWorkbookCommand(\"Subtotal\", [new RemoveSubtotalRowsCommand(sheetId, sheetRange), subtotalCommand])");
         source.Should().Contain("dialog.Result.PageBreakBetweenGroups");
         source.Should().Contain("dialog.Result.SummaryBelowData");
     }
@@ -2685,8 +2688,13 @@ public sealed class DataToolDialogTests
         source.Should().Contain("UnselectAllButton_Click");
         source.Should().Contain("RefreshColumnLabels");
         source.Should().Contain("HasHeaders");
-        mainWindowSource.Should().Contain("RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders)");
-        mainWindowSource.Should().Contain("UiText.Format(\"MainWindowMessage_RemoveDuplicatesRemovedRows\", command?.RemovedRowCount ?? 0)");
+        mainWindowSource.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
+        mainWindowSource.Should().Contain("var currentRange = SheetGrid.SelectedRange ?? range;");
+        mainWindowSource.Should().Contain("var activeRange = RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders);");
+        mainWindowSource.Should().Contain("GroupedSheetRangePlanner.RemapRangeToSheet(");
+        mainWindowSource.Should().Contain("activeRange,");
+        mainWindowSource.Should().Contain("new RemoveDuplicateRowsCommand(");
+        mainWindowSource.Should().Contain("UiText.Format(\"MainWindowMessage_RemoveDuplicatesRemovedRows\", activeSheetCommand?.RemovedRowCount ?? 0)");
     }
 
     [Fact]
