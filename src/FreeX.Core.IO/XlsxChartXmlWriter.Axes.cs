@@ -146,6 +146,9 @@ internal static partial class XlsxChartXmlWriter
 
         yield return ToCategoryAxisXml(chart, chartNs, drawingNs);
         var valueAxisNumberFormat = ToEffectiveValueAxisNumberFormat(chart);
+        var showValueAxisMajorGridlines = ToEffectiveShowValueAxisMajorGridlines(chart);
+        var valueAxisMajorTickStyle = ToEffectiveAxisMajorTickStyle(chart.Type, chart.YAxisMajorTickStyle);
+        var valueAxisCrossBetween = ToEffectiveValueAxisCrossBetween(chart);
         yield return ToValueAxisXml(
             chart.YAxisTitle,
             chart.YAxisTitleLayout,
@@ -163,12 +166,12 @@ internal static partial class XlsxChartXmlWriter
             valueAxisNumberFormat.Format,
             valueAxisNumberFormat.FormatCode,
             valueAxisNumberFormat.SourceLinked,
-            chart.ShowYAxisMajorGridlines,
+            showValueAxisMajorGridlines,
             chart.ShowYAxisMinorGridlines,
             chart.YAxisMajorGridlineColor,
             chart.YAxisMinorGridlineColor,
             chart.YAxisGridlineThickness,
-            chart.YAxisMajorTickStyle,
+            valueAxisMajorTickStyle,
             chart.YAxisMinorTickStyle,
             chart.YAxisLineColor,
             chart.YAxisLineThickness,
@@ -183,11 +186,12 @@ internal static partial class XlsxChartXmlWriter
             chart.AxisTitleFontSize,
             chart.YAxisCrosses,
             chart.YAxisCrossesAt,
-            chart.YAxisCrossBetween,
+            valueAxisCrossBetween,
             chart.YAxisDisplayUnit,
             chart.YAxisCustomDisplayUnit,
             chartNs,
-            drawingNs);
+            drawingNs,
+            useExcelNativeMajorGridlineStyle: ShouldUseExcelNativeValueAxisMajorGridlineStyle(chart));
 
         var secondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
         if (secondaryIndexes.Count > 0)
@@ -250,7 +254,7 @@ internal static partial class XlsxChartXmlWriter
             ToAxisTitleXml(chart.XAxisTitle, chart.XAxisTitleLayout, chart.AxisTitleTextThemeColor, chart.AxisTitleTextColor, chart.AxisTitleFontSize, chartNs, drawingNs),
             ToAxisGridlinesXml("majorGridlines", chart.ShowXAxisMajorGridlines, chart.XAxisMajorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
             ToAxisGridlinesXml("minorGridlines", chart.ShowXAxisMinorGridlines, chart.XAxisMinorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
-            new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMajorTickStyle))),
+            new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(ToEffectiveAxisMajorTickStyle(chart.Type, chart.XAxisMajorTickStyle)))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMinorTickStyle))),
             new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(chart.ShowXAxisLabels, chart.XAxisTickLabelPosition))),
             ToUnsignedAxisValueXml("tickLblSkip", chart.XAxisLabelSkip, chartNs),
@@ -307,7 +311,8 @@ internal static partial class XlsxChartXmlWriter
         ChartAxisDisplayUnit? displayUnit,
         double? customDisplayUnit,
         XNamespace chartNs,
-        XNamespace drawingNs) =>
+        XNamespace drawingNs,
+        bool useExcelNativeMajorGridlineStyle = false) =>
         new(chartNs + "valAx",
             new XElement(chartNs + "axId", new XAttribute("val", axisId)),
             new XElement(chartNs + "scaling",
@@ -317,12 +322,12 @@ internal static partial class XlsxChartXmlWriter
                 ToAxisBoundXml("min", minimum, chartNs)),
             new XElement(chartNs + "delete", new XAttribute("val", hidden ? "1" : "0")),
             new XElement(chartNs + "axPos", new XAttribute("val", axisPosition)),
+            ToAxisGridlinesXml("majorGridlines", showMajorGridlines, majorGridlineColor, gridlineThickness, chartNs, drawingNs, useExcelNativeMajorGridlineStyle),
+            ToAxisGridlinesXml("minorGridlines", showMinorGridlines, minorGridlineColor, gridlineThickness, chartNs, drawingNs),
             ToAxisTitleXml(title, titleLayout, axisTitleTextThemeColor, axisTitleTextColor, axisTitleFontSize, chartNs, drawingNs),
             new XElement(chartNs + "numFmt",
                 new XAttribute("formatCode", ToXlsxNumberFormatCode(numberFormat, numberFormatCode)),
                 new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(numberFormat, numberFormatSourceLinked))),
-            ToAxisGridlinesXml("majorGridlines", showMajorGridlines, majorGridlineColor, gridlineThickness, chartNs, drawingNs),
-            ToAxisGridlinesXml("minorGridlines", showMinorGridlines, minorGridlineColor, gridlineThickness, chartNs, drawingNs),
             ToAxisUnitXml("majorUnit", majorUnit, chartNs),
             ToAxisUnitXml("minorUnit", minorUnit, chartNs),
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(majorTickStyle))),
@@ -354,10 +359,17 @@ internal static partial class XlsxChartXmlWriter
         CellColor? color,
         double thickness,
         XNamespace chartNs,
-        XNamespace drawingNs)
+        XNamespace drawingNs,
+        bool useExcelNativeMajorGridlineStyle = false)
     {
         if (!visible)
             return null;
+
+        if (useExcelNativeMajorGridlineStyle)
+        {
+            return new XElement(chartNs + elementName,
+                ToExcelNativeMajorGridlineShapeProperties(chartNs, drawingNs));
+        }
 
         return new XElement(chartNs + elementName,
             ToShapeProperties(
@@ -369,6 +381,21 @@ internal static partial class XlsxChartXmlWriter
                 borderColor: color,
                 borderThickness: Math.Clamp(thickness, 0.25, 10)));
     }
+
+    private static XElement ToExcelNativeMajorGridlineShapeProperties(XNamespace chartNs, XNamespace drawingNs) =>
+        new(chartNs + "spPr",
+            new XElement(drawingNs + "ln",
+                new XAttribute("w", 9525),
+                new XAttribute("cap", "flat"),
+                new XAttribute("cmpd", "sng"),
+                new XAttribute("algn", "ctr"),
+                new XElement(drawingNs + "solidFill",
+                    new XElement(drawingNs + "schemeClr",
+                        new XAttribute("val", "tx1"),
+                        new XElement(drawingNs + "lumMod", new XAttribute("val", "15000")),
+                        new XElement(drawingNs + "lumOff", new XAttribute("val", "85000")))),
+                new XElement(drawingNs + "round")),
+            new XElement(drawingNs + "effectLst"));
 
     private static XElement? ToAxisLineShapeProperties(
         CellColor? lineColor,
@@ -435,6 +462,23 @@ internal static partial class XlsxChartXmlWriter
 
         return (chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisNumberFormatSourceLinked);
     }
+
+    private static bool ToEffectiveShowValueAxisMajorGridlines(ChartModel chart) =>
+        chart.ShowYAxisMajorGridlines || ShouldUseExcelNativeValueAxisMajorGridlineStyle(chart);
+
+    private static bool ShouldUseExcelNativeValueAxisMajorGridlineStyle(ChartModel chart) =>
+        IsClassicStackedBarOrColumnChart(chart.Type) &&
+        !chart.ShowYAxisMajorGridlines &&
+        chart.YAxisMajorGridlineColor is null &&
+        chart.YAxisGridlineThickness == 1;
+
+    private static ChartAxisTickStyle ToEffectiveAxisMajorTickStyle(ChartType chartType, ChartAxisTickStyle tickStyle) =>
+        IsClassicStackedBarOrColumnChart(chartType) && tickStyle == ChartAxisTickStyle.Outside
+            ? ChartAxisTickStyle.None
+            : tickStyle;
+
+    private static ChartAxisCrossBetween? ToEffectiveValueAxisCrossBetween(ChartModel chart) =>
+        chart.YAxisCrossBetween ?? (IsClassicStackedBarOrColumnChart(chart.Type) ? ChartAxisCrossBetween.Between : null);
 
     private static string ToXlsxTickLabelPosition(bool showLabels, ChartAxisTickLabelPosition position)
     {

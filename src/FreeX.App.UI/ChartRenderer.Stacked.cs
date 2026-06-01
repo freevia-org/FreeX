@@ -21,6 +21,12 @@ public static partial class ChartRenderer
         bool normalizeToPercent,
         WorkbookTheme theme)
     {
+        var (positiveTotals, negativeTotals) = normalizeToPercent
+            ? CalculateStackedPercentTotals(cellLookup, categories.Count, dataStartRow, endRow, dataStartCol, endCol)
+            : ([], []);
+        var (percentAxisMinimum, percentAxisMaximum) =
+            GetStackedPercentAxisBounds(normalizeToPercent, positiveTotals, negativeTotals);
+
         model.Axes.Add(new LinearAxis
         {
             Position = AxisPosition.Bottom,
@@ -39,15 +45,12 @@ public static partial class ChartRenderer
         {
             Position = AxisPosition.Left,
             Title = chart.YAxisTitle,
-            Minimum = normalizeToPercent ? -100 : double.NaN,
-            Maximum = normalizeToPercent ? 100 : double.NaN
+            Minimum = percentAxisMinimum,
+            Maximum = percentAxisMaximum
         });
 
         var positiveBases = new double[categories.Count];
         var negativeBases = new double[categories.Count];
-        var (positiveTotals, negativeTotals) = normalizeToPercent
-            ? CalculateStackedPercentTotals(cellLookup, categories.Count, dataStartRow, endRow, dataStartCol, endCol)
-            : ([], []);
         for (uint col = dataStartCol; col <= endCol; col++)
         {
             var seriesIndex = (int)(col - dataStartCol);
@@ -116,6 +119,12 @@ public static partial class ChartRenderer
         bool normalizeToPercent,
         WorkbookTheme theme)
     {
+        var (positiveTotals, negativeTotals) = normalizeToPercent
+            ? CalculateStackedPercentTotals(cellLookup, categories.Count, dataStartRow, endRow, dataStartCol, endCol)
+            : ([], []);
+        var (percentAxisMinimum, percentAxisMaximum) =
+            GetStackedPercentAxisBounds(normalizeToPercent, positiveTotals, negativeTotals);
+
         var categoryAxis = new CategoryAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle };
         categoryAxis.Labels.AddRange(categories);
         model.Axes.Add(categoryAxis);
@@ -123,15 +132,12 @@ public static partial class ChartRenderer
         {
             Position = AxisPosition.Bottom,
             Title = chart.XAxisTitle,
-            Minimum = normalizeToPercent ? -100 : double.NaN,
-            Maximum = normalizeToPercent ? 100 : double.NaN
+            Minimum = percentAxisMinimum,
+            Maximum = percentAxisMaximum
         });
 
         var positiveBases = new double[categories.Count];
         var negativeBases = new double[categories.Count];
-        var (positiveTotals, negativeTotals) = normalizeToPercent
-            ? CalculateStackedPercentTotals(cellLookup, categories.Count, dataStartRow, endRow, dataStartCol, endCol)
-            : ([], []);
         for (uint col = dataStartCol; col <= endCol; col++)
         {
             var seriesIndex = (int)(col - dataStartCol);
@@ -206,6 +212,37 @@ public static partial class ChartRenderer
         }
 
         return (positiveTotals, negativeTotals);
+    }
+
+    private static (double Minimum, double Maximum) GetStackedPercentAxisBounds(
+        bool normalizeToPercent,
+        IReadOnlyList<double> positiveTotals,
+        IReadOnlyList<double> negativeTotals)
+    {
+        if (!normalizeToPercent)
+            return (double.NaN, double.NaN);
+
+        var hasPositive = false;
+        for (var index = 0; index < positiveTotals.Count; index++)
+        {
+            if (positiveTotals[index] <= 0)
+                continue;
+
+            hasPositive = true;
+            break;
+        }
+
+        var hasNegative = false;
+        for (var index = 0; index < negativeTotals.Count; index++)
+        {
+            if (negativeTotals[index] <= 0)
+                continue;
+
+            hasNegative = true;
+            break;
+        }
+
+        return (hasNegative ? -100 : 0, hasPositive || !hasNegative ? 100 : 0);
     }
 
     private static double NormalizeStackedValue(
