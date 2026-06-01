@@ -34,6 +34,7 @@ public static class FormulaErrorCheckingRuleCatalog
         new(ErrorValue.Null.Code, "Formulas with invalid intersections", "Flag formulas that result in #NULL!."),
         new(ErrorValue.Spill.Code, "Formulas with blocked spill ranges", "Flag formulas that result in #SPILL!."),
         new(ErrorValue.Circular.Code, "Formulas with circular references", "Flag formulas that result in #CIRCULAR!."),
+        new(FormulaAuditingService.FormulaStoredAsTextErrorCode, "Formulas stored as text", "Flag text cells that begin with an equals sign instead of calculating as formulas."),
         new(FormulaAuditingService.InconsistentFormulaErrorCode, "Formulas inconsistent with nearby formulas", "Flag formulas whose relative reference pattern differs from adjacent formulas."),
         new(FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode, "Formulas which omit cells in a region", "Flag SUM formulas that omit adjacent cells in the region."),
         new(FormulaAuditingService.UnlockedFormulaCellsErrorCode, "Unlocked cells containing formulas", "Flag formula cells that are not locked for worksheet protection."),

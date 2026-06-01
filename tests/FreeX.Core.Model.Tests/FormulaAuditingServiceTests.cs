@@ -219,6 +219,36 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_ReturnsFormulaStoredAsText()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("=SUM(A1:A2)"));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle().Subject;
+
+        issue.Cell.Should().Be("A3");
+        issue.ErrorCode.Should().Be(FormulaAuditingService.FormulaStoredAsTextErrorCode);
+        issue.FormulaText.Should().BeNull();
+        issue.Description.Should().Contain("stored as text");
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_DoesNotReturnFormulaStoredAsTextForActualFormulas()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromFormula("A1*2"));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.FormulaStoredAsTextErrorCode);
+    }
+
+    [Fact]
     public void FindFormulaErrorIssues_ReturnsInconsistentFormulaInRow()
     {
         var wb = new Workbook("test");
@@ -434,6 +464,18 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_SkipsDisabledFormulaStoredAsTextRule()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("=SUM(A1:A2)"));
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.FormulaStoredAsTextErrorCode);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void FindFormulaErrorIssues_SkipsDisabledInconsistentFormulaRule()
     {
         var wb = new Workbook("test");
@@ -544,6 +586,27 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void SetFormulaErrorIgnoredCommand_IgnoresFormulaStoredAsTextIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new TextValue("=SUM(A1:A2)"));
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id).Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.ErrorCode.Should().Be(FormulaAuditingService.FormulaStoredAsTextErrorCode);
+    }
+
+    [Fact]
     public void SetFormulaErrorIgnoredCommand_IgnoresInconsistentFormulaIssues()
     {
         var wb = new Workbook("test");
@@ -647,6 +710,7 @@ public sealed class FormulaAuditingServiceTests
                 (ErrorValue.Null.Code, "Formulas with invalid intersections"),
                 (ErrorValue.Spill.Code, "Formulas with blocked spill ranges"),
                 (ErrorValue.Circular.Code, "Formulas with circular references"),
+                (FormulaAuditingService.FormulaStoredAsTextErrorCode, "Formulas stored as text"),
                 (FormulaAuditingService.InconsistentFormulaErrorCode, "Formulas inconsistent with nearby formulas"),
                 (FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode, "Formulas which omit cells in a region"),
                 (FormulaAuditingService.UnlockedFormulaCellsErrorCode, "Unlocked cells containing formulas"),
