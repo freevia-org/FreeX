@@ -276,6 +276,18 @@ public partial class OptionsDialog : Window
             selectedQatId: _quickAccessCommandIds.ElementAtOrDefault(nextIndex));
     }
 
+    private void QuickAccessAvailableCommandsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        QuickAccessAddButton_Click(sender, e);
+        e.Handled = true;
+    }
+
+    private void QuickAccessSelectedCommandsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        QuickAccessRemoveButton_Click(sender, e);
+        e.Handled = true;
+    }
+
     private void QuickAccessMoveUpButton_Click(object sender, RoutedEventArgs e)
     {
         if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
