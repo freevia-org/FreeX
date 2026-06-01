@@ -15,7 +15,11 @@ public static class ConditionalIconLayoutPlanner
         Rect cellRect,
         ConditionalFormatIcon icon)
     {
-        var size = Math.Min(ConditionalIconSize, Math.Max(6, cellRect.Height - 6));
+        var size = Math.Min(
+            ConditionalIconSize,
+            Math.Min(
+                Math.Max(0, cellRect.Width - 8),
+                Math.Max(0, cellRect.Height - 6)));
         var iconRect = new Rect(
             Math.Round(cellRect.Left + 4),
             Math.Round(cellRect.Top + (cellRect.Height - size) / 2),
