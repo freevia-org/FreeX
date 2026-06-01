@@ -402,6 +402,10 @@ public sealed class KeyboardShortcutMatcherTests
     [InlineData(Key.Subtract, Key.None, ModifierKeys.None)]
     [InlineData(Key.Subtract, Key.None, ModifierKeys.Control)]
     [InlineData(Key.Decimal, Key.None, ModifierKeys.None)]
+    [InlineData(Key.Insert, Key.None, ModifierKeys.None)]
+    [InlineData(Key.Insert, Key.None, ModifierKeys.Control | ModifierKeys.Shift)]
+    [InlineData(Key.Insert, Key.None, ModifierKeys.Control | ModifierKeys.Alt)]
+    [InlineData(Key.Insert, Key.None, ModifierKeys.Shift | ModifierKeys.Alt)]
     public void TryGetCommandShortcut_AliasKeysRequireExactModifiers(Key key, Key systemKey, ModifierKeys modifiers)
     {
         var result = KeyboardShortcutMatcher.TryGetCommandShortcut(key, systemKey, modifiers, out _);
