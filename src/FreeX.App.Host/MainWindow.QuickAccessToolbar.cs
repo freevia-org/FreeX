@@ -74,8 +74,97 @@ public partial class MainWindow
         RibbonTooltip.SetDescription(button, UiText.Get(command.DescriptionResourceKey));
         RibbonMetadata.SetCommandName(button, command.CommandName);
         RibbonMetadata.SetCatalogId(button, command.Id);
+        button.ContextMenu = CreateQuickAccessToolbarCustomizationContextMenu(command.Id);
         button.Click += (_, args) => ExecuteQuickAccessToolbarCommand(command.Id, button, args);
         return button;
+    }
+
+    private void InitializeQuickAccessToolbarCustomizationContextMenus()
+    {
+        RibbonTabs.AddHandler(
+            FrameworkElement.ContextMenuOpeningEvent,
+            new ContextMenuEventHandler(RibbonCommand_ContextMenuOpening),
+            handledEventsToo: true);
+    }
+
+    private void RibbonCommand_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (e.OriginalSource is not DependencyObject source ||
+            !TryFindQuickAccessToolbarCatalogCommand(source, out var placementTarget, out var command))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var menu = CreateQuickAccessToolbarCustomizationContextMenu(command.Id);
+        menu.PlacementTarget = placementTarget;
+        menu.Placement = PlacementMode.MousePoint;
+        menu.IsOpen = true;
+    }
+
+    private bool TryFindQuickAccessToolbarCatalogCommand(
+        DependencyObject source,
+        out ButtonBase placementTarget,
+        out QuickAccessToolbarCommandDefinition command)
+    {
+        for (DependencyObject? current = source; current is not null; current = GetRibbonTreeParent(current))
+        {
+            if (current is not ButtonBase button ||
+                IsQuickAccessToolbarButton(button) ||
+                RibbonMetadata.IsCollapsedGroupButton(button) ||
+                !RibbonMetadata.TryGetCommandName(button, out var commandName) ||
+                !QuickAccessToolbarCatalog.TryGetByCommandName(commandName, out command))
+            {
+                continue;
+            }
+
+            placementTarget = button;
+            return true;
+        }
+
+        placementTarget = null!;
+        command = null!;
+        return false;
+    }
+
+    private ContextMenu CreateQuickAccessToolbarCustomizationContextMenu(string commandId)
+    {
+        var plan = QuickAccessToolbarCustomizationPlanner.CreatePlan(commandId, _options.QuickAccessToolbarCommands);
+        var item = new MenuItem
+        {
+            Header = UiText.Get(plan.HeaderResourceKey),
+            IsEnabled = plan.IsEnabled
+        };
+        AutomationProperties.SetAutomationId(item, plan.AutomationId);
+        item.Click += (_, _) => ApplyQuickAccessToolbarCustomization(plan.CommandId, plan.Action);
+
+        var menu = new ContextMenu();
+        menu.Items.Add(item);
+        return menu;
+    }
+
+    private void ApplyQuickAccessToolbarCustomization(
+        string commandId,
+        QuickAccessToolbarCustomizationAction action)
+    {
+        var commandIds = QuickAccessToolbarCustomizationPlanner.Apply(
+            _options.QuickAccessToolbarCommands,
+            commandId,
+            action);
+        if (_options.QuickAccessToolbarCommands.SequenceEqual(commandIds, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        _options.QuickAccessToolbarCommands = commandIds.ToList();
+        if (!_options.Save())
+        {
+            ShowOwnedMessage(
+                _options.LastPersistenceError ?? "Failed to save Quick Access Toolbar customization.",
+                UiText.Get("Options_QuickAccessToolbar"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+
+        RebuildQuickAccessToolbar();
     }
 
     private void UnregisterQuickAccessToolbarNames()

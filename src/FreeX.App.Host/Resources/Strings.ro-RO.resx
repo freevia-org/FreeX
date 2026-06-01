@@ -4597,6 +4597,12 @@ Trimiteți rapoarte de blocare pentru această versiune de tester?</value>
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Eliminați din listă</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Adăugare la bara de instrumente Acces rapid</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Eliminare din bara de instrumente Acces rapid</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Eliminați pauza de pagină</value>
   </data>

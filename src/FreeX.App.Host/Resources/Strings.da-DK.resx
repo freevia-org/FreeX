@@ -4597,6 +4597,12 @@ Vil du sende nedbrudsrapporter for denne testversion?</value>
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Fjern fra listen</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Føj til værktøjslinjen Hurtig adgang</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Fjern fra værktøjslinjen Hurtig adgang</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Fjern sideskift</value>
   </data>

@@ -4597,6 +4597,12 @@ Ibgħat rapporti tal-ħabta għal din il-bini tat-tester?</value>
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Neħħi mil-lista</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Żid mal-Toolbar għal Aċċess Rapidu</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Neħħi mit-Toolbar għal Aċċess Rapidu</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Neħħi farrad tal-paġna</value>
   </data>

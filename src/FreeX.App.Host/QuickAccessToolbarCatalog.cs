@@ -96,6 +96,11 @@ internal static class QuickAccessToolbarCatalog
     private static readonly IReadOnlyDictionary<string, QuickAccessToolbarCommandDefinition> ById =
         Commands.ToDictionary(command => command.Id, StringComparer.OrdinalIgnoreCase);
 
+    private static readonly IReadOnlyDictionary<string, QuickAccessToolbarCommandDefinition> ByCommandName =
+        Commands
+            .GroupBy(command => command.CommandName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
     public static IReadOnlyList<QuickAccessToolbarCommandDefinition> Normalize(IEnumerable<string>? commandIds)
     {
         var result = new List<QuickAccessToolbarCommandDefinition>();
@@ -123,4 +128,7 @@ internal static class QuickAccessToolbarCatalog
 
     public static bool TryGet(string id, out QuickAccessToolbarCommandDefinition definition) =>
         ById.TryGetValue(id, out definition!);
+
+    public static bool TryGetByCommandName(string commandName, out QuickAccessToolbarCommandDefinition definition) =>
+        ByCommandName.TryGetValue(commandName.Trim(), out definition!);
 }

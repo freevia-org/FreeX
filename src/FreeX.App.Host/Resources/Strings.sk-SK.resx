@@ -4603,6 +4603,12 @@ Pokračovať v ukladaní?</value>
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Odstrániť zo zoznamu</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Pridať na panel s nástrojmi Rýchly prístup</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Odstrániť z panela s nástrojmi Rýchly prístup</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Odstrániť koniec strany</value>
   </data>

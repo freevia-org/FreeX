@@ -4597,6 +4597,12 @@ Kas saata selle testija järgu krahhiaruanded?</value>
   <data name="MainWindow_Header_RemoveFromList" xml:space="preserve">
     <value>Eemalda loendist</value>
   </data>
+  <data name="MainWindow_QatContext_AddToQuickAccessToolbar" xml:space="preserve">
+    <value>_Lisa kiirpääsuribale</value>
+  </data>
+  <data name="MainWindow_QatContext_RemoveFromQuickAccessToolbar" xml:space="preserve">
+    <value>_Eemalda kiirpääsuribalt</value>
+  </data>
   <data name="MainWindow_Header_RemovePageBreak" xml:space="preserve">
     <value>Eemalda lehe katkestus</value>
   </data>
