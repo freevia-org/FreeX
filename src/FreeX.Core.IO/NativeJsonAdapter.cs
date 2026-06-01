@@ -304,7 +304,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
 
             LoadConditionalFormats(sheet, sDto.ConditionalFormats);
 
-            foreach (var cDto in sDto.Cells)
+            foreach (var cDto in sDto.Cells ?? CellDtoSequence.Empty)
             {
                 if (string.IsNullOrEmpty(cDto?.Address)) continue;
                 try
@@ -324,7 +324,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 catch (FormatException) { /* skip cells with unparseable addresses */ }
             }
 
-            foreach (var styleOnlyDto in sDto.StyleOnlyCells)
+            foreach (var styleOnlyDto in sDto.StyleOnlyCells ?? StyleOnlyCellDtoSequence.Empty)
             {
                 if (string.IsNullOrWhiteSpace(styleOnlyDto?.Address) ||
                     (styleOnlyDto.StyleId is null && styleOnlyDto.Style is null))
