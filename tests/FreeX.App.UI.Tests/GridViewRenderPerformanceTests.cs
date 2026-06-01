@@ -964,9 +964,12 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("foreach (var cell in cells)");
         calculateLayouts.Should().NotContain("occupied.Add((cell.Row, cell.Col))");
         buildOccupiedCells.Should().Contain("occupied.Add((cell.Row, cell.Col))");
-        mergeRangeIndex.Should().Contain("var queryRows = BuildQueryRows(cells);");
-        mergeRangeIndex.Should().Contain("if (mergedRegion.End.Row < queryRows.MinRow || mergedRegion.Start.Row > queryRows.MaxRow)");
-        mergeRangeIndex.Should().Contain("foreach (var row in queryRows.Rows)");
+        mergeRangeIndex.Should().Contain("var queryCells = BuildQueryCells(cells);");
+        mergeRangeIndex.Should().Contain("mergedRegion.End.Row < queryCells.MinRow");
+        mergeRangeIndex.Should().Contain("mergedRegion.Start.Row > queryCells.MaxRow");
+        mergeRangeIndex.Should().Contain("mergedRegion.End.Col < queryCells.MinCol");
+        mergeRangeIndex.Should().Contain("mergedRegion.Start.Col > queryCells.MaxCol");
+        mergeRangeIndex.Should().Contain("foreach (var row in queryCells.Rows)");
         calculateLayouts.Should().NotContain(".ToDictionary(");
         calculateLayouts.Should().NotContain(".Where(");
         calculateLayouts.Should().NotContain(".Select(");

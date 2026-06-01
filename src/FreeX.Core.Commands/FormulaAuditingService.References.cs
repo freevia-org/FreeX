@@ -72,6 +72,9 @@ public static partial class FormulaAuditingService
 
     private static bool HasAnyBlankPrecedent(Workbook workbook, SheetId hostSheetId, string formulaText)
     {
+        if (TryHasAnyBlankLocalCellReference(workbook, hostSheetId, formulaText, out var hasBlankLocalReference))
+            return hasBlankLocalReference;
+
         try
         {
             var ast = new Parser(new Lexer(formulaText).Tokenize()).Parse();
@@ -81,6 +84,65 @@ public static partial class FormulaAuditingService
         {
             return false;
         }
+    }
+
+    private static bool TryHasAnyBlankLocalCellReference(
+        Workbook workbook,
+        SheetId hostSheetId,
+        string formulaText,
+        out bool hasBlankPrecedent)
+    {
+        hasBlankPrecedent = false;
+
+        for (var index = 0; index < formulaText.Length; index++)
+        {
+            if (formulaText[index] is '"' or '\'' or '!' or ':' or '[' or ']')
+                return false;
+        }
+
+        for (var index = 0; index < formulaText.Length; index++)
+        {
+            var ch = formulaText[index];
+            if (ch != '$' && !IsAsciiLetter(ch) && ch != '_')
+                continue;
+
+            if (IsFormulaReferenceBoundaryBefore(formulaText, index) &&
+                TryReadFormulaReference(formulaText, index, out var end, out var row, out var col))
+            {
+                if (IsBlankPrecedent(workbook, new CellAddress(hostSheetId, row, col)))
+                {
+                    hasBlankPrecedent = true;
+                    return true;
+                }
+
+                index = end - 1;
+                continue;
+            }
+
+            if (ch == '$')
+                return false;
+
+            var identifierEnd = index + 1;
+            while (identifierEnd < formulaText.Length &&
+                   (IsAsciiLetterDigitOrUnderscore(formulaText[identifierEnd]) || formulaText[identifierEnd] == '.'))
+            {
+                identifierEnd++;
+            }
+
+            var next = identifierEnd;
+            while (next < formulaText.Length && char.IsWhiteSpace(formulaText[next]))
+                next++;
+
+            if (next < formulaText.Length && formulaText[next] == '(')
+            {
+                index = identifierEnd - 1;
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     private static bool ReferencesBlankPrecedent(Workbook workbook, SheetId hostSheetId, FormulaNode node)

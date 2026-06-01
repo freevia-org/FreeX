@@ -414,6 +414,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         XNamespace worksheetNs)
     {
         XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        XNamespace xmNs = "http://schemas.microsoft.com/office/excel/2006/main";
         const string x14CfUri = "{78C0D931-6437-407d-A8EE-F0AAD7539E65}";
 
         var x14CfElements = new List<XElement>(newGradientFalseRules.Count);
@@ -426,8 +427,8 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 new XAttribute("gradient", cf.DataBarGradient ? "1" : "0"),
                 cf.DataBarBorder ? new XAttribute("border", "1") : null,
                 string.IsNullOrWhiteSpace(cf.DataBarAxisPosition) ? null : new XAttribute("axisPosition", cf.DataBarAxisPosition),
-                new XElement(x14Ns + "cfvo", new XAttribute("type", "autoMin")),
-                new XElement(x14Ns + "cfvo", new XAttribute("type", "autoMax")),
+                ToX14DataBarCfvoXml(x14Ns, xmNs, cf.DataBarMinThresholdType, cf.DataBarMinThresholdValue, isMinimum: true),
+                ToX14DataBarCfvoXml(x14Ns, xmNs, cf.DataBarMaxThresholdType, cf.DataBarMaxThresholdValue, isMinimum: false),
                 ToX14ColorXml(x14Ns, "axisColor", cf.DataBarAxisColor),
                 ToX14ColorXml(x14Ns, "negativeFillColor", cf.DataBarNegativeFillColor),
                 ToX14ColorXml(x14Ns, "negativeBorderColor", cf.DataBarNegativeBorderColor));
@@ -448,9 +449,38 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             new XElement(
                 worksheetNs + "ext",
                 new XAttribute(XNamespace.Xmlns + "x14", x14Ns.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "xm", xmNs.NamespaceName),
                 new XAttribute("uri", x14CfUri),
                 new XElement(x14Ns + "conditionalFormattings", x14CfElements))));
     }
+
+    private static XElement ToX14DataBarCfvoXml(
+        XNamespace x14Ns,
+        XNamespace xmNs,
+        CfThresholdType type,
+        string? value,
+        bool isMinimum)
+    {
+        var x14Type = ToX14DataBarCfvoType(type, isMinimum);
+        var element = new XElement(x14Ns + "cfvo", new XAttribute("type", x14Type));
+        if (RequiresX14CfvoFormulaValue(x14Type) && !string.IsNullOrWhiteSpace(value))
+            element.Add(new XElement(xmNs + "f", value));
+
+        return element;
+    }
+
+    private static string ToX14DataBarCfvoType(CfThresholdType type, bool isMinimum) =>
+        type switch
+        {
+            CfThresholdType.Number => "num",
+            CfThresholdType.Percent => "percent",
+            CfThresholdType.Percentile => "percentile",
+            CfThresholdType.Formula => "formula",
+            _ => isMinimum ? "autoMin" : "autoMax"
+        };
+
+    private static bool RequiresX14CfvoFormulaValue(string x14Type) =>
+        x14Type is "num" or "percent" or "percentile" or "formula";
 
     private static XElement? ToX14ColorXml(XNamespace x14Ns, string elementName, RgbColor? color) =>
         color is null

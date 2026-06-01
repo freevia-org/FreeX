@@ -182,9 +182,27 @@ public sealed class GridViewSplitPaneLayoutTests
             source.IndexOf("private static void AddMergeRow(", StringComparison.Ordinal)];
 
         addMergeRows.Should().Contain("var intersectedRowSpan = endRow - startRow + 1;");
-        addMergeRows.Should().Contain("if (intersectedRowSpan <= queryRows.Rows.Count)");
-        addMergeRows.Should().Contain("queryRows.Rows.Contains(row)");
-        addMergeRows.Should().Contain("foreach (var row in queryRows.Rows)");
+        addMergeRows.Should().Contain("if (intersectedRowSpan <= queryCells.Rows.Count)");
+        addMergeRows.Should().Contain("queryCells.Rows.Contains(row)");
+        addMergeRows.Should().Contain("foreach (var row in queryCells.Rows)");
+    }
+
+    [Fact]
+    public void SplitPaneCellLayoutPlanner_PrunesMergedRegionsOutsideQueriedPaneColumns()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
+        var createIndex = source[
+            source.IndexOf("public static MergeRangeIndex Create", StringComparison.Ordinal)..
+            source.IndexOf("private static void AddMergeRows", StringComparison.Ordinal)];
+
+        createIndex.Should().Contain("var queryCells = BuildQueryCells(cells);");
+        createIndex.Should().Contain("mergedRegion.End.Row < queryCells.MinRow");
+        createIndex.Should().Contain("mergedRegion.Start.Row > queryCells.MaxRow");
+        createIndex.Should().Contain("mergedRegion.End.Col < queryCells.MinCol");
+        createIndex.Should().Contain("mergedRegion.Start.Col > queryCells.MaxCol");
+        source.Should().Contain("uint MinCol,");
+        source.Should().Contain("uint MaxCol");
     }
 
     [Fact]
