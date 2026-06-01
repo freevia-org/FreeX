@@ -123,6 +123,33 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Save_WritesNonFiniteSpreadsheetMlDateTimesAsTextCells()
+    {
+        var workbook = new Workbook("NonFiniteDates");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new DateTimeValue(double.NaN));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new DateTimeValue(double.PositiveInfinity));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new DateTimeValue(double.NegativeInfinity));
+
+        using var stream = new MemoryStream();
+        var adapter = new SpreadsheetXmlFileAdapter();
+        adapter.Save(workbook, stream);
+
+        stream.Position = 0;
+        var document = XDocument.Load(stream);
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var data = document.Descendants(ss + "Data").ToArray();
+        data.Select(element => element.Attribute(ss + "Type")!.Value).Should().Equal("String", "String", "String");
+        data.Select(element => element.Value).Should().Equal("NaN", "Infinity", "-Infinity");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream).GetSheetAt(0);
+        loaded.GetCell(1, 1)!.Value.Should().Be(new TextValue("NaN"));
+        loaded.GetCell(1, 2)!.Value.Should().Be(new TextValue("Infinity"));
+        loaded.GetCell(1, 3)!.Value.Should().Be(new TextValue("-Infinity"));
+    }
+
+    [Fact]
     public void Load_TrimsSpreadsheetMlBooleanText()
     {
         using var stream = StreamFromString("""
