@@ -56,7 +56,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
             .Select(p => (p.Address, p.Cell.Clone()))
             .ToList();
 
-        foreach (var (addr, _) in _movedSnapshot.OrderByDescending(p => p.Addr.Col))
+        foreach (var (addr, _) in _movedSnapshot)
             sheet.ClearCell(addr);
 
         foreach (var (addr, cell) in _movedSnapshot)
@@ -191,7 +191,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
 
         foreach (var (addr, _) in _deletedSnapshot) sheet.ClearCell(addr);
 
-        foreach (var (addr, _) in _shiftedSnapshot.OrderBy(p => p.Addr.Col))
+        foreach (var (addr, _) in _shiftedSnapshot)
             sheet.ClearCell(addr);
         foreach (var (addr, cell) in _shiftedSnapshot)
             sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col - _count), cell.Clone());
