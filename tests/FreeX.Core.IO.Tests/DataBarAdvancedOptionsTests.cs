@@ -64,6 +64,25 @@ public sealed class DataBarAdvancedOptionsTests
     }
 
     [Fact]
+    public void Save_DataBarExplicitThresholds_WritesX14CfvoFormulaValues()
+    {
+        var workbook = CreateWorkbookWithAdvancedDataBar();
+        using var stream = new MemoryStream();
+
+        new XlsxFileAdapter().Save(workbook, stream);
+
+        var x14DataBar = ReadWorksheetXml(stream).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
+        var thresholds = x14DataBar.Elements(X14Ns + "cfvo").ToArray();
+        thresholds.Should().HaveCount(2);
+        thresholds[0].Attribute("type")?.Value.Should().Be("num");
+        thresholds[0].Element(XmNs + "f")?.Value.Should().Be("-10");
+        thresholds[0].Attribute("val").Should().BeNull("x14 cfvo values are stored as xm:f children");
+        thresholds[1].Attribute("type")?.Value.Should().Be("percentile");
+        thresholds[1].Element(XmNs + "f")?.Value.Should().Be("90");
+        thresholds[1].Attribute("val").Should().BeNull("x14 cfvo values are stored as xm:f children");
+    }
+
+    [Fact]
     public void Load_DataBarAxisBorderAndNegativeColors_MapsFirstClassProperties()
     {
         using var stream = CreateXlsxWithAdvancedDataBarXml();
@@ -531,4 +550,5 @@ public sealed class DataBarAdvancedOptionsTests
 
     private static readonly XNamespace MainNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace X14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+    private static readonly XNamespace XmNs = "http://schemas.microsoft.com/office/excel/2006/main";
 }
