@@ -327,28 +327,32 @@ public sealed class ScenarioSummaryReportCommand : IWorkbookCommand
 
         var sheetOrder = ScenarioCommandHelpers.BuildSheetOrder(ctx.Workbook);
         var changingCells = ScenarioCommandHelpers.CollectOrderedChangingCells(ctx.Workbook.Scenarios, sheetOrder);
-        var changingCellRows = new Dictionary<CellAddress, int>(changingCells.Count);
-
         for (var rowIndex = 0; rowIndex < changingCells.Count; rowIndex++)
         {
             var address = changingCells[rowIndex];
             var reportRow = (uint)rowIndex + 4;
-            changingCellRows[address] = rowIndex;
             report.SetCell(new CellAddress(report.Id, reportRow, 1), new TextValue(FormatAddress(ctx.Workbook, address)));
         }
 
-        for (var scenarioIndex = 0; scenarioIndex < ctx.Workbook.Scenarios.Count; scenarioIndex++)
+        if (!TryAddSharedChangingCellValues(ctx.Workbook.Scenarios, changingCells, report))
         {
-            var scenario = ctx.Workbook.Scenarios[scenarioIndex];
-            for (var changeIndex = scenario.ChangingCells.Count - 1; changeIndex >= 0; changeIndex--)
-            {
-                var change = scenario.ChangingCells[changeIndex];
-                if (!changingCellRows.TryGetValue(change.Address, out var rowIndex))
-                    continue;
+            var changingCellRows = new Dictionary<CellAddress, int>(changingCells.Count);
+            for (var rowIndex = 0; rowIndex < changingCells.Count; rowIndex++)
+                changingCellRows[changingCells[rowIndex]] = rowIndex;
 
-                report.SetCell(
-                    new CellAddress(report.Id, (uint)rowIndex + 4, (uint)scenarioIndex + 2),
-                    Cell.FromValue(change.Value));
+            for (var scenarioIndex = 0; scenarioIndex < ctx.Workbook.Scenarios.Count; scenarioIndex++)
+            {
+                var scenario = ctx.Workbook.Scenarios[scenarioIndex];
+                for (var changeIndex = scenario.ChangingCells.Count - 1; changeIndex >= 0; changeIndex--)
+                {
+                    var change = scenario.ChangingCells[changeIndex];
+                    if (!changingCellRows.TryGetValue(change.Address, out var rowIndex))
+                        continue;
+
+                    report.SetCell(
+                        new CellAddress(report.Id, (uint)rowIndex + 4, (uint)scenarioIndex + 2),
+                        Cell.FromValue(change.Value));
+                }
             }
         }
 
@@ -356,6 +360,38 @@ public sealed class ScenarioSummaryReportCommand : IWorkbookCommand
             AddResultCellsSection(ctx.Workbook, report, (uint)changingCells.Count + 6);
 
         return new CommandOutcome(true);
+    }
+
+    private static bool TryAddSharedChangingCellValues(
+        IReadOnlyList<WorkbookScenario> scenarios,
+        IReadOnlyList<CellAddress> changingCells,
+        Sheet report)
+    {
+        for (var scenarioIndex = 0; scenarioIndex < scenarios.Count; scenarioIndex++)
+        {
+            var scenarioCells = scenarios[scenarioIndex].ChangingCells;
+            if (scenarioCells.Count != changingCells.Count)
+                return false;
+
+            for (var rowIndex = 0; rowIndex < changingCells.Count; rowIndex++)
+            {
+                if (scenarioCells[rowIndex].Address != changingCells[rowIndex])
+                    return false;
+            }
+        }
+
+        for (var scenarioIndex = 0; scenarioIndex < scenarios.Count; scenarioIndex++)
+        {
+            var scenarioCells = scenarios[scenarioIndex].ChangingCells;
+            for (var rowIndex = 0; rowIndex < scenarioCells.Count; rowIndex++)
+            {
+                report.SetCell(
+                    new CellAddress(report.Id, (uint)rowIndex + 4, (uint)scenarioIndex + 2),
+                    Cell.FromValue(scenarioCells[rowIndex].Value));
+            }
+        }
+
+        return true;
     }
 
     public void Revert(ICommandContext ctx)

@@ -7,7 +7,7 @@ internal sealed record SubtotalPlan(
     SubtotalInsertionPlan GrandTotalRow,
     IReadOnlyList<uint> PageBreakRows);
 
-internal sealed record SubtotalInsertionPlan(
+internal readonly record struct SubtotalInsertionPlan(
     uint InsertRow,
     string Label,
     uint FormulaStartRow,
@@ -137,5 +137,5 @@ internal static class SubtotalPlanBuilder
         _ => ""
     };
 
-    private sealed record GroupSpan(string Label, uint StartRow, uint EndRow);
+    private readonly record struct GroupSpan(string Label, uint StartRow, uint EndRow);
 }

@@ -752,6 +752,23 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void ConditionalIconLayoutPlanner_CachesStyleTraitClassification()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "ConditionalIconLayoutPlanner.cs"));
+        var resolveGlyphKind = source[
+            source.IndexOf("public static ConditionalIconGlyphKind ResolveGlyphKind", StringComparison.Ordinal)..
+            source.IndexOf("private static ConditionalIconStyleTraits ResolveStyleTraits", StringComparison.Ordinal)];
+        var resolveColor = source[
+            source.IndexOf("public static string ResolveColor", StringComparison.Ordinal)..];
+
+        source.Should().Contain("private static readonly ConcurrentDictionary<string, ConditionalIconStyleTraits> StyleTraitCache");
+        resolveGlyphKind.Should().Contain("ResolveStyleTraits(icon.Style)");
+        resolveGlyphKind.Should().NotContain("Contains(");
+        resolveColor.Should().Contain("ResolveStyleTraits(icon.Style).IsGray");
+        resolveColor.Should().NotContain("icon.Style.Contains");
+    }
+
+    [Fact]
     public void CalculateSplitDividerLayout_AvoidsLinqMetricScans()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
@@ -964,9 +981,12 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("foreach (var cell in cells)");
         calculateLayouts.Should().NotContain("occupied.Add((cell.Row, cell.Col))");
         buildOccupiedCells.Should().Contain("occupied.Add((cell.Row, cell.Col))");
-        mergeRangeIndex.Should().Contain("var queryRows = BuildQueryRows(cells);");
-        mergeRangeIndex.Should().Contain("if (mergedRegion.End.Row < queryRows.MinRow || mergedRegion.Start.Row > queryRows.MaxRow)");
-        mergeRangeIndex.Should().Contain("foreach (var row in queryRows.Rows)");
+        mergeRangeIndex.Should().Contain("var queryCells = BuildQueryCells(cells);");
+        mergeRangeIndex.Should().Contain("mergedRegion.End.Row < queryCells.MinRow");
+        mergeRangeIndex.Should().Contain("mergedRegion.Start.Row > queryCells.MaxRow");
+        mergeRangeIndex.Should().Contain("mergedRegion.End.Col < queryCells.MinCol");
+        mergeRangeIndex.Should().Contain("mergedRegion.Start.Col > queryCells.MaxCol");
+        mergeRangeIndex.Should().Contain("foreach (var row in queryCells.Rows)");
         calculateLayouts.Should().NotContain(".ToDictionary(");
         calculateLayouts.Should().NotContain(".Where(");
         calculateLayouts.Should().NotContain(".Select(");
