@@ -19,6 +19,7 @@ public sealed partial class XlsxFileAdapter
         xlWorkbook.CalculateMode = workbook.CalculationMode == WorkbookCalculationMode.Manual
             ? XLCalculateMode.Manual
             : XLCalculateMode.Auto;
+        var styleCache = new Dictionary<StyleId, CellStyle>(workbook.StyleCount);
 
         foreach (var sheet in workbook.Sheets)
         {
@@ -48,7 +49,7 @@ public sealed partial class XlsxFileAdapter
 
                 if (cell.StyleId != StyleId.Default)
                 {
-                    var style = workbook.GetStyle(cell.StyleId);
+                    var style = GetCachedStyle(workbook, styleCache, cell.StyleId);
                     if (!style.Equals(CellStyle.Default))
                         XlsxClosedXmlCellMapper.ApplyStyle(xlCell, style);
                 }
@@ -56,7 +57,7 @@ public sealed partial class XlsxFileAdapter
 
             foreach (var run in GetStyleOnlyRuns(sheet))
             {
-                var style = workbook.GetStyle(run.StyleId);
+                var style = GetCachedStyle(workbook, styleCache, run.StyleId);
                 if (style.Equals(CellStyle.Default))
                     continue;
 
@@ -295,6 +296,20 @@ public sealed partial class XlsxFileAdapter
 
     private static bool CanSavePackageInPlace(Stream stream) =>
         stream.CanRead && stream.CanWrite && stream.CanSeek;
+
+    private static CellStyle GetCachedStyle(
+        Workbook workbook,
+        Dictionary<StyleId, CellStyle> styleCache,
+        StyleId styleId)
+    {
+        if (!styleCache.TryGetValue(styleId, out var style))
+        {
+            style = workbook.GetStyle(styleId);
+            styleCache.Add(styleId, style);
+        }
+
+        return style;
+    }
 
     private static IEnumerable<StyleOnlyRun> GetStyleOnlyRuns(Sheet sheet)
     {
