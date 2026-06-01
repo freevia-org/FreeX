@@ -234,22 +234,28 @@ public partial class MainWindow
         var dialog = new RemoveDuplicatesDialog(columns, genericColumns, hasHeaders) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
-        RemoveDuplicateRowsCommand? command = null;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+        RemoveDuplicateRowsCommand? activeSheetCommand = null;
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Remove Duplicates",
-                range,
-                currentRange =>
+                sheetId =>
                 {
-                    command = new RemoveDuplicateRowsCommand(
-                        _currentSheetId,
-                        RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders),
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var activeRange = RemoveDuplicatesDialog.ExcludeHeaderRow(currentRange, dialog.Result.HasHeaders);
+                    var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(
+                        activeRange,
+                        sheetId);
+                    var command = new RemoveDuplicateRowsCommand(
+                        sheetId,
+                        sheetRange,
                         dialog.Result.SelectedColumnOffsets);
+                    if (sheetId == _currentSheetId)
+                        activeSheetCommand = command;
                     return command;
                 }))
             return;
 
         ShowOwnedMessage(
-            UiText.Format("MainWindowMessage_RemoveDuplicatesRemovedRows", command?.RemovedRowCount ?? 0),
+            UiText.Format("MainWindowMessage_RemoveDuplicatesRemovedRows", activeSheetCommand?.RemovedRowCount ?? 0),
             UiText.Get("MainWindowMessage_RemoveDuplicatesTitle"),
             MessageBoxButton.OK,
             MessageBoxImage.Information);
@@ -405,10 +411,14 @@ public partial class MainWindow
 
         if (dialog.Result.Action == SubtotalDialogAction.RemoveAll)
         {
-            if (!TryExecuteRepeatableCurrentRangeCommand(
+            if (!TryExecuteRepeatableGroupedSheetCommand(
                     "Remove Subtotals",
-                    range,
-                    currentRange => new RemoveSubtotalRowsCommand(_currentSheetId, currentRange),
+                    sheetId =>
+                    {
+                        var currentRange = SheetGrid.SelectedRange ?? range;
+                        var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId);
+                        return new RemoveSubtotalRowsCommand(sheetId, sheetRange);
+                    },
                     out var removeOutcome))
                 return;
 
@@ -417,21 +427,22 @@ public partial class MainWindow
             return;
         }
 
-        if (!TryExecuteRepeatableCurrentRangeCommand(
+        if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Subtotal",
-                range,
-                currentRange =>
+                sheetId =>
                 {
+                    var currentRange = SheetGrid.SelectedRange ?? range;
+                    var sheetRange = GroupedSheetRangePlanner.RemapRangeToSheet(currentRange, sheetId);
                     var subtotalCommand = new SubtotalCommand(
-                        _currentSheetId,
-                        currentRange,
+                        sheetId,
+                        sheetRange,
                         groupByColumnOffset: dialog.Result.GroupColumnOffset,
                         subtotalColumnOffsets: dialog.Result.SubtotalColumnOffsets,
                         functionNumber: dialog.Result.FunctionNumber,
                         pageBreakBetweenGroups: dialog.Result.PageBreakBetweenGroups,
                         summaryBelowData: dialog.Result.SummaryBelowData);
                     return dialog.Result.ReplaceCurrentSubtotals
-                        ? new CompositeWorkbookCommand("Subtotal", [new RemoveSubtotalRowsCommand(_currentSheetId, currentRange), subtotalCommand])
+                        ? new CompositeWorkbookCommand("Subtotal", [new RemoveSubtotalRowsCommand(sheetId, sheetRange), subtotalCommand])
                         : subtotalCommand;
                 },
                 out var outcome))
