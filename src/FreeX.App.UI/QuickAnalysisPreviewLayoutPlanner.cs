@@ -144,7 +144,7 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         ref TConsumer consumer)
         where TConsumer : struct, IQuickAnalysisPreviewRectConsumer
     {
-        var col = FirstVisibleColumnInRange(viewport.ColMetrics, range);
+        var col = FirstVisibleSparklinePreviewColumnInRange(viewport.ColMetrics, range);
         if (col is null)
             return;
 
@@ -159,19 +159,15 @@ internal static class QuickAnalysisPreviewLayoutPlanner
                 continue;
 
             var height = Math.Max(4, Math.Floor(row.Height / 3));
-            var width = col.Width - 12;
-            if (width < 6)
-                continue;
-
             consumer.Accept(new Rect(
                 col.LeftOffset + rowHeaderWidth + 6,
                 row.TopOffset + columnHeaderHeight + Math.Round((row.Height - height) / 2),
-                width,
+                col.Width - 12,
                 height));
         }
     }
 
-    private static ColMetric? FirstVisibleColumnInRange(
+    private static ColMetric? FirstVisibleSparklinePreviewColumnInRange(
         IReadOnlyList<ColMetric> columns,
         GridRange range)
     {
@@ -182,7 +178,8 @@ internal static class QuickAnalysisPreviewLayoutPlanner
             if (col.Col > range.End.Col)
                 break;
 
-            return col;
+            if (col.Width >= 18)
+                return col;
         }
 
         return null;

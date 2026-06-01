@@ -256,7 +256,7 @@ public sealed class GridViewSelectionLayoutTests
             source.IndexOf("public static IReadOnlyList<Rect> CalculateSparklinePreviewRects", StringComparison.Ordinal)];
         var sparklinePreview = source[
             source.IndexOf("internal static void VisitSparklinePreviewRects", StringComparison.Ordinal)..
-            source.IndexOf("private static ColMetric? FirstVisibleColumnInRange", StringComparison.Ordinal)];
+            source.IndexOf("private static ColMetric? FirstVisibleSparklinePreviewColumnInRange", StringComparison.Ordinal)];
 
         cellPreview.Should().Contain("foreach (var row in viewport.RowMetrics)");
         cellPreview.Should().Contain("foreach (var col in viewport.ColMetrics)");
@@ -265,7 +265,7 @@ public sealed class GridViewSelectionLayoutTests
         cellPreview.Should().Contain("break;");
         cellPreview.Should().NotContain(".Where(");
         cellPreview.Should().NotContain(".ToList()");
-        sparklinePreview.Should().Contain("FirstVisibleColumnInRange(viewport.ColMetrics, range)");
+        sparklinePreview.Should().Contain("FirstVisibleSparklinePreviewColumnInRange(viewport.ColMetrics, range)");
         sparklinePreview.Should().Contain("foreach (var row in viewport.RowMetrics)");
         sparklinePreview.Should().Contain("if (row.Row > range.End.Row)");
         sparklinePreview.Should().Contain("break;");
@@ -402,6 +402,27 @@ public sealed class GridViewSelectionLayoutTests
             columnHeaderHeight: 18);
 
         rects.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CalculateQuickAnalysisSparklinePreviewRects_UsesFirstDrawableColumnInRange()
+    {
+        var sheetId = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheetId, 1, 3),
+            new CellAddress(sheetId, 1, 4));
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0)],
+            [new ColMetric(3, 10, 64), new ColMetric(4, 72, 74)]);
+
+        var rects = GridView.CalculateQuickAnalysisSparklinePreviewRects(
+            viewport,
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18);
+
+        rects.Should().Equal(new Rect(110, 25, 60, 6));
     }
 
     [Fact]
