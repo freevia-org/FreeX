@@ -1175,6 +1175,102 @@ public sealed class ChartRendererTests
             series.Should().BeOfType<RectangleBarSeries>().Subject.LabelFormatString.Should().BeNull());
     }
 
+    [Theory]
+    [InlineData(ChartType.PercentStackedColumn, AxisPosition.Left)]
+    [InlineData(ChartType.PercentStackedBar, AxisPosition.Bottom)]
+    public void PercentStackedRenderer_PositiveOnlyDataUsesZeroToHundredAxis(
+        ChartType chartType,
+        AxisPosition valueAxisPosition)
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = chartType,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(1, 3, "South"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "25"),
+                Cell(2, 3, "75"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "40"),
+                Cell(3, 3, "60")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Should().ContainSingle(axis => axis.Position == valueAxisPosition).Subject;
+        axis.Minimum.Should().Be(0);
+        axis.Maximum.Should().Be(100);
+    }
+
+    [Theory]
+    [InlineData(ChartType.PercentStackedColumn, AxisPosition.Left)]
+    [InlineData(ChartType.PercentStackedBar, AxisPosition.Bottom)]
+    public void PercentStackedRenderer_MixedSignsUseNegativeAndPositiveAxis(
+        ChartType chartType,
+        AxisPosition valueAxisPosition)
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = chartType,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 3))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(1, 3, "South"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "25"),
+                Cell(2, 3, "-75")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Should().ContainSingle(axis => axis.Position == valueAxisPosition).Subject;
+        axis.Minimum.Should().Be(-100);
+        axis.Maximum.Should().Be(100);
+    }
+
+    [Theory]
+    [InlineData(ChartType.PercentStackedColumn, AxisPosition.Left)]
+    [InlineData(ChartType.PercentStackedBar, AxisPosition.Bottom)]
+    public void PercentStackedRenderer_NegativeOnlyDataUsesMinusHundredToZeroAxis(
+        ChartType chartType,
+        AxisPosition valueAxisPosition)
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = chartType,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 3))
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "North"),
+                Cell(1, 3, "South"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "-25"),
+                Cell(2, 3, "-75")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Should().ContainSingle(axis => axis.Position == valueAxisPosition).Subject;
+        axis.Minimum.Should().Be(-100);
+        axis.Maximum.Should().Be(0);
+    }
+
     [Fact]
     public void BarRenderer_IgnoresPercentageToggleForNativeValueLabels()
     {

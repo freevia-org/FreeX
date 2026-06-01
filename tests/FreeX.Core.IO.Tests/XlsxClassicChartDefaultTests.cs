@@ -37,12 +37,23 @@ public sealed class XlsxClassicChartDefaultTests
         barChart.Element(ChartNs + "overlap")!.Attribute("val")!.Value.Should().Be("-27");
         AssertChildOrder(barChart, "ser", "dLbls", "gapWidth", "overlap", "serLines", "axId");
 
-        chartXml.Descendants(ChartNs + "catAx").Single()
-            .Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be(expectedCategoryAxisPosition);
-        chartXml.Descendants(ChartNs + "valAx").Single()
-            .Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be(expectedValueAxisPosition);
-        chartXml.Descendants(ChartNs + "valAx").Single()
-            .Element(ChartNs + "numFmt")!.Should().Match<XElement>(element =>
+        chartXml.Descendants(ChartNs + "title").Single()
+            .Descendants(DrawingNs + "rPr").Single()
+            .Attribute("sz")!.Value.Should().Be("1400");
+
+        chartXml.Descendants(ChartNs + "legend").Single()
+            .Element(ChartNs + "legendPos")!.Attribute("val")!.Value.Should().Be("b");
+
+        var categoryAxis = chartXml.Descendants(ChartNs + "catAx").Single();
+        categoryAxis.Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be(expectedCategoryAxisPosition);
+        categoryAxis.Element(ChartNs + "majorTickMark")!.Attribute("val")!.Value.Should().Be("none");
+
+        var valueAxis = chartXml.Descendants(ChartNs + "valAx").Single();
+        valueAxis.Element(ChartNs + "axPos")!.Attribute("val")!.Value.Should().Be(expectedValueAxisPosition);
+        valueAxis.Element(ChartNs + "majorGridlines").Should().NotBeNull();
+        valueAxis.Element(ChartNs + "majorTickMark")!.Attribute("val")!.Value.Should().Be("none");
+        valueAxis.Element(ChartNs + "crossBetween")!.Attribute("val")!.Value.Should().Be("between");
+        valueAxis.Element(ChartNs + "numFmt")!.Should().Match<XElement>(element =>
                 element.Attribute("formatCode")!.Value == expectedValueAxisNumberFormat &&
                 element.Attribute("sourceLinked")!.Value == "1");
     }

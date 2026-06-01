@@ -1167,7 +1167,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         {
             NumberValue number when double.IsFinite(number.Value) => ("Number", number.Value.ToString("R", CultureInfo.InvariantCulture)),
             NumberValue number => ("String", number.Value.ToString("R", CultureInfo.InvariantCulture)),
-            DateTimeValue dateTime when double.IsFinite(dateTime.Value) => ("DateTime", dateTime.ToDateTime().ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture)),
+            DateTimeValue dateTime when TryFormatSpreadsheetDateTime(dateTime, out var formatted) => ("DateTime", formatted),
             DateTimeValue dateTime => ("String", dateTime.Value.ToString("R", CultureInfo.InvariantCulture)),
             BoolValue boolean => ("Boolean", boolean.Value ? "1" : "0"),
             ErrorValue error => ("Error", error.Code),
@@ -1179,6 +1179,23 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             SpreadsheetNs + "Data",
             new XAttribute(SpreadsheetTypeAttribute, type),
             text);
+    }
+
+    private static bool TryFormatSpreadsheetDateTime(DateTimeValue value, out string text)
+    {
+        text = "";
+        if (!double.IsFinite(value.Value))
+            return false;
+
+        try
+        {
+            text = value.ToDateTime().ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
     }
 
     private static string UniqueSheetName(Workbook workbook, string? rawName, int index)

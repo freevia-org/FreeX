@@ -1494,13 +1494,9 @@ internal sealed record VisualExpectation(int HashThreshold, int RoundTripHashThr
     private static readonly IReadOnlyDictionary<string, string> KnownGaps =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["StackedColumn"] = "FreeX-authored stacked column defaults differ from Excel-native stacked column layout/styling.",
-            ["PercentStackedColumn"] = "FreeX-authored percent stacked column defaults differ from Excel-native percent stacked layout/styling.",
             ["ThreeDColumn"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
             ["ThreeDLine"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
             ["ThreeDPie"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
-            ["StackedBar"] = "FreeX-authored stacked bar defaults differ from Excel-native stacked bar layout/styling.",
-            ["PercentStackedBar"] = "FreeX-authored percent stacked bar defaults differ from Excel-native percent stacked layout/styling.",
             ["ThreeDBar"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
             ["ThreeDArea"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling.",
             ["ThreeDSurface"] = "3-D chart defaults differ from Excel-native 3-D perspective/layout/styling."
