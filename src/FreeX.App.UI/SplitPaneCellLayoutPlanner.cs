@@ -13,6 +13,10 @@ public static class SplitPaneCellLayoutPlanner
         if (viewport.SplitPanes is not { } splitPanes)
             return [];
 
+        var cells = splitPanes.Cells ?? [];
+        if (cells.Count == 0)
+            return [];
+
         var topRows = splitPanes.TopRows ?? [];
         var leftColumns = splitPanes.LeftColumns ?? [];
         var topRightColumns = splitPanes.TopRightColumns ?? viewport.ColMetrics;
@@ -21,7 +25,6 @@ public static class SplitPaneCellLayoutPlanner
         var bottomLeftRowLookup = BuildRowLookup(bottomLeftRows);
         var leftColumnLookup = BuildColumnLookup(leftColumns);
         var topRightColumnLookup = BuildColumnLookup(topRightColumns);
-        var cells = splitPanes.Cells ?? [];
         var mergeLookup = MergeRangeIndex.Create(mergedRegions, cells);
         var dividerLayout = GridView.CalculateSplitDividerLayout(viewport);
         var horizontalY = dividerLayout.HorizontalY ?? GridView.ColHeaderHeight;
