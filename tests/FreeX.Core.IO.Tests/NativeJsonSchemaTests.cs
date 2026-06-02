@@ -1028,6 +1028,30 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_DropsNullNativeJsonWorksheetCustomPropertyEntries()
+    {
+        var workbook = new Workbook("NullWorksheetCustomProperties");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        sheet.CustomProperties.Add(null!);
+        sheet.CustomProperties.Add(new WorksheetCustomProperty("", 1));
+        sheet.CustomProperties.Add(new WorksheetCustomProperty("MissingId", 0));
+        sheet.CustomProperties.Add(new WorksheetCustomProperty("ModeledProperty", 7));
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var propertyJson = document.RootElement
+            .GetProperty("Sheets").EnumerateArray().Single()
+            .GetProperty("CustomProperties").EnumerateArray()
+            .Should().ContainSingle().Subject;
+
+        propertyJson.GetProperty("Name").GetString().Should().Be("ModeledProperty");
+        propertyJson.GetProperty("Id").GetInt32().Should().Be(7);
+    }
+
+    [Fact]
     public void Load_DropsNullNativeJsonWorksheetCustomPropertyEntries()
     {
         const string json = """
