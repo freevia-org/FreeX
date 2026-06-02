@@ -1547,6 +1547,36 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_ReadsUtf16SourceAndStylesheetInputs()
+    {
+        using var source = Utf16StreamFromString("""<?xml version="1.0" encoding="utf-16"?><rows><row name="Echo" /></rows>""");
+        using var stylesheet = Utf16StreamFromString("""
+            <?xml version="1.0" encoding="utf-16"?>
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Utf16Inputs">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Utf16Inputs");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Echo"));
+    }
+
+    [Fact]
     public void LoadTransformed_AppliesXsltParametersToGeneratedSpreadsheetMl()
     {
         using var source = StreamFromString("<rows><row amount=\"42.5\" /></rows>");
@@ -4256,6 +4286,9 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
     private static MemoryStream StreamFromString(string value) =>
         new(Encoding.UTF8.GetBytes(value));
+
+    private static MemoryStream Utf16StreamFromString(string value) =>
+        new(Encoding.Unicode.GetPreamble().Concat(Encoding.Unicode.GetBytes(value)).ToArray());
 
     private static Stream NonSeekableStreamFromString(string value) =>
         new NonSeekableReadStream(StreamFromString(value));
