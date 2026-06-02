@@ -98,15 +98,16 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void RenderCells_DoesNotClipStyledTextUnlessItWrapsOrOverflows()
+    public void RenderCells_ClipsTextOnlyWhenLaidOutBoundsOverflow()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
         var shouldClipText = source[
             source.IndexOf("private static bool ShouldClipText(", StringComparison.Ordinal)..
             source.IndexOf("private static Pen UnderlinePenForTextBrush", StringComparison.Ordinal)];
 
-        shouldClipText.Should().Contain("if (wrapText)");
+        shouldClipText.Should().Contain("if (wrapText && text.Height > clipRect.Height + tolerance)");
         shouldClipText.Should().Contain("textPoint.X + text.Width > clipRect.Right + tolerance");
+        shouldClipText.Should().Contain("textPoint.Y + text.Height > clipRect.Bottom + tolerance");
         shouldClipText.Should().NotContain("style is not null || wrapText");
     }
 
@@ -562,6 +563,7 @@ public sealed class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private readonly Dictionary<Brush, Pen> _underlinePenCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<DefaultWrappedTextLayoutKey, FormattedText> _defaultWrappedTextLayoutCache = new();");
+        gridViewSource.Should().Contain("private readonly Dictionary<CellStyle, bool> _defaultTextLayoutStyleCache = new(CellStyleReferenceComparer.Instance);");
         gridViewSource.Should().Contain("private readonly Dictionary<TextWidthLayoutKey, double> _textWidthLayoutCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<ShrinkTextLayoutKey, double> _shrinkTextLayoutCache = new();");
         gridViewSource.Should().Contain("private readonly Dictionary<Rect, RectangleGeometry> _cellClipGeometryCache = new();");
@@ -578,12 +580,14 @@ public sealed class GridViewRenderPerformanceTests
 
         cacheSource.Should().Contain("private FormattedText GetDefaultFormattedText");
         cacheSource.Should().Contain("private FormattedText GetDefaultWrappedFormattedText");
-        cacheSource.Should().Contain("private static bool CanUseDefaultFormattedText");
-        cacheSource.Should().Contain("private static bool CanUseDefaultWrappedFormattedText");
+        cacheSource.Should().Contain("private bool CanUseDefaultFormattedText");
+        cacheSource.Should().Contain("private bool CanUseDefaultWrappedFormattedText");
+        cacheSource.Should().Contain("_defaultTextLayoutStyleCache.TryGetValue");
         cacheSource.Should().Contain("_defaultTextLayoutCache.TryGetValue");
         cacheSource.Should().Contain("_defaultWrappedTextLayoutCache.TryGetValue");
         cacheSource.Should().Contain("_defaultTextLayoutCache.Count >= DefaultTextLayoutCacheLimit");
         cacheSource.Should().Contain("_defaultWrappedTextLayoutCache.Count >= DefaultWrappedTextLayoutCacheLimit");
+        rendering.Should().Contain("_defaultTextLayoutStyleCache.Clear();");
         rendering.Should().Contain("CanUseDefaultFormattedText(style, wrapText)");
         rendering.Should().Contain("CanUseDefaultWrappedFormattedText(style)");
         rendering.Should().Contain("GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip)");
@@ -1203,7 +1207,7 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("public static IReadOnlyList<SplitPaneCellLayout> CalculateLayouts", StringComparison.Ordinal)..
             source.IndexOf("private static bool CanOverflowSplitPaneText", StringComparison.Ordinal)];
         var buildOccupiedCells = source[
-            source.IndexOf("private static HashSet<(uint Row, uint Col)> BuildOccupiedCells", StringComparison.Ordinal)..
+            source.IndexOf("private static SplitPaneOccupiedCellMap BuildOccupiedCells", StringComparison.Ordinal)..
             source.IndexOf("private static double SumEmptyOverflowColumnWidths", StringComparison.Ordinal)];
         var mergeRangeIndex = source[
             source.IndexOf("public static MergeRangeIndex Create", StringComparison.Ordinal)..
@@ -1221,8 +1225,9 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("VisitLayouts(viewport, mergedRegions, editingCell, ref consumer);");
         calculateLayouts.Should().Contain("private struct SplitPaneCellLayoutCollector");
         calculateLayouts.Should().Contain("new List<SplitPaneCellLayout>(_capacity)");
-        calculateLayouts.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
+        calculateLayouts.Should().Contain("SplitPaneOccupiedCellMap? occupied = null;");
         calculateLayouts.Should().Contain("occupied ??= BuildOccupiedCells(cells, editingCell)");
+        calculateLayouts.Should().Contain("SumEmptyOverflowColumnWidths(cell, colMetrics, occupied.Value)");
         calculateLayouts.Should().Contain("foreach (var cell in cells)");
         calculateLayouts.Should().Contain("consumer.AcceptLayout(new SplitPaneCellLayout");
         calculateLayouts.IndexOf("if (cells.Count == 0)", StringComparison.Ordinal)
@@ -1235,8 +1240,11 @@ public sealed class GridViewRenderPerformanceTests
             calculateLayouts.IndexOf("foreach (var cell in cells)", StringComparison.Ordinal)..]
             .Should()
             .NotContain("GridView.CalculateRowHeaderWidth(viewport)");
-        calculateLayouts.Should().NotContain("occupied.Add((cell.Row, cell.Col))");
-        buildOccupiedCells.Should().Contain("occupied.Add((cell.Row, cell.Col))");
+        calculateLayouts.Should().NotContain("spansByRow.Add(cell.Row, spans)");
+        buildOccupiedCells.Should().Contain("spansByRow.Add(cell.Row, spans)");
+        buildOccupiedCells.Should().Contain("AddOccupiedColumn(spans, cell.Col, ref needsNormalize)");
+        buildOccupiedCells.Should().Contain("NormalizeOccupiedColumnSpans(spansByRow)");
+        buildOccupiedCells.Should().Contain("new SplitPaneOccupiedCellMap(spansByRow)");
         mergeRangeIndex.Should().Contain("var queryCells = BuildQueryCells(cells);");
         mergeRangeIndex.Should().Contain("mergedRegion.End.Row < queryCells.MinRow");
         mergeRangeIndex.Should().Contain("mergedRegion.Start.Row > queryCells.MaxRow");
@@ -1254,7 +1262,7 @@ public sealed class GridViewRenderPerformanceTests
         var source = File.ReadAllText(FindWorkspaceFile(
             "src", "FreeX.App.UI", "SplitPaneCellLayoutPlanner.cs"));
 
-        source.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
+        source.Should().Contain("SplitPaneOccupiedCellMap? occupied = null;");
         source.Should().Contain("occupied ??= BuildOccupiedCells(cells, editingCell);");
 
         var sheetId = SheetId.New();

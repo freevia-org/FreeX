@@ -388,6 +388,60 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastTextBoxText_WithObjectDefaultThemeFill()
+    {
+        var workbook = new Workbook("Accessibility")
+        {
+            Theme = WorkbookTheme.Office
+                .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(25, 25, 25))
+                .WithSupplementalMetadata(
+                    [],
+                    hasObjectDefaults: true,
+                    objectDefaults: new WorkbookThemeObjectDefaults(
+                        Shape: new WorkbookThemeShapeObjectDefault(
+                            FillThemeColor: new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1))))
+        };
+        var sheet = workbook.AddSheet("Objects");
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 2),
+            Text = "Object-default callout",
+            AltText = "Object-default callout annotation"
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastObjectText).Subject;
+
+        issue.Location.Should().Be("B4");
+        issue.Message.Should().Be("Text box text should have at least 4.5:1 contrast against its fill.");
+    }
+
+    [Fact]
+    public void FindIssues_TextBoxExplicitFillOverridesObjectDefaultFill()
+    {
+        var workbook = new Workbook("Accessibility")
+        {
+            Theme = WorkbookTheme.Office.WithSupplementalMetadata(
+                [],
+                hasObjectDefaults: true,
+                objectDefaults: new WorkbookThemeObjectDefaults(
+                    Shape: new WorkbookThemeShapeObjectDefault(
+                        FillColor: new CellColor(25, 25, 25))))
+        };
+        var sheet = workbook.AddSheet("Objects");
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 5, 2),
+            Text = "Readable override",
+            AltText = "Readable override annotation",
+            FillColor = CellColor.White
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastObjectText);
+    }
+
+    [Fact]
     public void FindIssues_IgnoresTextBoxTextWithSufficientContrastOrNoText()
     {
         var workbook = new Workbook("Accessibility");
