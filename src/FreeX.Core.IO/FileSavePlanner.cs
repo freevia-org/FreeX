@@ -14,8 +14,7 @@ public static class FileSavePlanner
             return false;
 
         var savePath = currentFilePath.Trim();
-        var extension = Path.GetExtension(savePath);
-        if (string.IsNullOrWhiteSpace(extension))
+        if (!TryGetExtension(savePath, out var extension))
             return false;
 
         var adapter = FileFormatResolver.FindSaveAdapter(adapters, extension, out _);
@@ -24,5 +23,29 @@ public static class FileSavePlanner
 
         target = new FileSaveTarget(savePath, adapter);
         return true;
+    }
+
+    private static bool TryGetExtension(string path, out string extension)
+    {
+        try
+        {
+            extension = Path.GetExtension(path) ?? "";
+            return !string.IsNullOrWhiteSpace(extension);
+        }
+        catch (ArgumentException)
+        {
+            extension = "";
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            extension = "";
+            return false;
+        }
+        catch (PathTooLongException)
+        {
+            extension = "";
+            return false;
+        }
     }
 }

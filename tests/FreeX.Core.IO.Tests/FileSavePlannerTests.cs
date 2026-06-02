@@ -51,6 +51,19 @@ public sealed class FileSavePlannerTests
     }
 
     [Fact]
+    public void TryResolveExistingPath_ReturnsFalseForMalformedCurrentPath()
+    {
+        var adapter = new FakeAdapter([
+            new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true)
+        ]);
+
+        var resolved = FileSavePlanner.TryResolveExistingPath("bad\0Book.xlsx", [adapter], out var target);
+
+        resolved.Should().BeFalse();
+        target.Should().BeNull();
+    }
+
+    [Fact]
     public void TryResolveExistingPath_UsesSharedFileFormatResolver()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.IO", "FileSavePlanner.cs"));
