@@ -235,6 +235,36 @@ public sealed class SheetTabListPlannerTests
         plan.GroupedSheetIds.Should().Equal(second.Id);
     }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(1)]
+    public void SelectAdjacentVisibleSheetGroup_ResetsAnchorWhenCurrentSheetIsMissing(int direction)
+    {
+        var workbook = new Workbook("Book");
+        var first = workbook.AddSheet("First");
+        var second = workbook.AddSheet("Second");
+        var third = workbook.AddSheet("Third");
+
+        var plan = SheetTabListPlanner.SelectAdjacentVisibleSheetGroup(
+            workbook,
+            SheetId.New(),
+            third.Id,
+            direction);
+
+        plan.Should().NotBeNull();
+        plan!.AnchorSheetId.Should().Be(first.Id);
+        if (direction > 0)
+        {
+            plan.CurrentSheetId.Should().Be(second.Id);
+            plan.GroupedSheetIds.Should().Equal(first.Id, second.Id);
+        }
+        else
+        {
+            plan.CurrentSheetId.Should().Be(first.Id);
+            plan.GroupedSheetIds.Should().Equal(first.Id);
+        }
+    }
+
     [Fact]
     public void Build_HandlesLargeSheetTabListsWithoutMaterializationPenalty()
     {

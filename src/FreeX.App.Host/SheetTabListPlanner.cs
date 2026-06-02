@@ -173,13 +173,14 @@ public static class SheetTabListPlanner
             return null;
 
         var currentIndex = visibleSheetIds.IndexOf(currentSheetId);
+        var foundCurrent = currentIndex >= 0;
         if (currentIndex < 0)
             currentIndex = 0;
 
         var step = Math.Sign(direction);
         var nextIndex = Math.Clamp(currentIndex + step, 0, visibleSheetIds.Count - 1);
         var nextSheetId = visibleSheetIds[nextIndex];
-        var anchor = anchorSheetId is { } id && visibleSheetIds.Contains(id)
+        var anchor = foundCurrent && anchorSheetId is { } id && visibleSheetIds.Contains(id)
             ? id
             : visibleSheetIds[currentIndex];
         var selected = SheetGroupSelectionService.SelectRange(visibleSheetIds, anchor, nextSheetId);
