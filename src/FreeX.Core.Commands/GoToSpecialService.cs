@@ -35,6 +35,7 @@ public sealed record GoToSpecialOptions(GoToSpecialValueTypes ValueTypes = GoToS
 
 public static class GoToSpecialService
 {
+    private const int ColumnKeyBits = 15;
     private const int MinimumRuleRangesForIndex = 8;
     private const long MaximumIndexedRuleCells = 250_000;
 
@@ -183,7 +184,7 @@ public static class GoToSpecialService
 
         if (ShouldIndexRuleRanges(rangeCount, coveredCells))
         {
-            var matches = BuildConditionalFormatAddressSet(rules, range, coveredCells);
+            var matches = BuildConditionalFormatAddressKeys(rules, range, coveredCells);
             return MaterializeMatches(range, matches);
         }
 
@@ -208,7 +209,7 @@ public static class GoToSpecialService
 
         if (ShouldIndexRuleRanges(rangeCount, coveredCells))
         {
-            var matches = BuildDataValidationAddressSet(rules, range, coveredCells);
+            var matches = BuildDataValidationAddressKeys(rules, range, coveredCells);
             return MaterializeMatches(range, matches);
         }
 
@@ -277,12 +278,12 @@ public static class GoToSpecialService
         return (false, coveredCells, rangeCount);
     }
 
-    private static HashSet<(uint Row, uint Col)> BuildConditionalFormatAddressSet(
+    private static List<ulong> BuildConditionalFormatAddressKeys(
         List<ConditionalFormat> rules,
         GridRange searchRange,
         long coveredCells)
     {
-        var matches = new HashSet<(uint Row, uint Col)>(GetHashSetCapacity(coveredCells));
+        var matches = new List<ulong>(GetListCapacity(coveredCells));
         for (var i = 0; i < rules.Count; i++)
         {
             if (TryIntersect(rules[i].AppliesTo, searchRange, out var intersection))
@@ -292,12 +293,12 @@ public static class GoToSpecialService
         return matches;
     }
 
-    private static HashSet<(uint Row, uint Col)> BuildDataValidationAddressSet(
+    private static List<ulong> BuildDataValidationAddressKeys(
         List<DataValidation> rules,
         GridRange searchRange,
         long coveredCells)
     {
-        var matches = new HashSet<(uint Row, uint Col)>(GetHashSetCapacity(coveredCells));
+        var matches = new List<ulong>(GetListCapacity(coveredCells));
         for (var i = 0; i < rules.Count; i++)
         {
             var rule = rules[i];
@@ -315,37 +316,49 @@ public static class GoToSpecialService
         return matches;
     }
 
-    private static int GetHashSetCapacity(long coveredCells) =>
+    private static int GetListCapacity(long coveredCells) =>
         coveredCells <= int.MaxValue ? (int)coveredCells : 0;
 
-    private static void AddCells(HashSet<(uint Row, uint Col)> matches, GridRange range)
+    private static void AddCells(List<ulong> matches, GridRange range)
     {
         for (var row = range.Start.Row; row <= range.End.Row; row++)
         {
             for (var col = range.Start.Col; col <= range.End.Col; col++)
-                matches.Add((row, col));
+                matches.Add(CreateAddressKey(row, col));
         }
     }
 
     private static IReadOnlyList<CellAddress> MaterializeMatches(
         GridRange range,
-        HashSet<(uint Row, uint Col)> matches)
+        List<ulong> matches)
     {
         if (matches.Count == 0)
             return [];
 
         var result = new List<CellAddress>(matches.Count);
-        foreach (var (row, col) in matches)
-            result.Add(new CellAddress(range.Start.Sheet, row, col));
-
-        result.Sort(static (left, right) =>
+        matches.Sort();
+        ulong previousKey = 0;
+        for (var index = 0; index < matches.Count; index++)
         {
-            var rowComparison = left.Row.CompareTo(right.Row);
-            return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
-        });
+            var key = matches[index];
+            if (index > 0 && key == previousKey)
+                continue;
+
+            previousKey = key;
+            result.Add(new CellAddress(range.Start.Sheet, GetAddressKeyRow(key), GetAddressKeyColumn(key)));
+        }
 
         return result;
     }
+
+    private static ulong CreateAddressKey(uint row, uint col) =>
+        ((ulong)row << ColumnKeyBits) | col;
+
+    private static uint GetAddressKeyRow(ulong key) =>
+        (uint)(key >> ColumnKeyBits);
+
+    private static uint GetAddressKeyColumn(ulong key) =>
+        (uint)(key & ((1u << ColumnKeyBits) - 1));
 
     private static bool ContainsRange(GridRange outer, GridRange inner) =>
         outer.Start.Sheet == inner.Start.Sheet &&
