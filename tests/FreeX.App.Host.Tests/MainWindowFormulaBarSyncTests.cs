@@ -160,6 +160,26 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void EditInFormulaBar_WithFormulaCell_ShowsEditableFormulaAndPlacesCaretAtEnd()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellFormula(1, 1, "SUM(B1:C1)");
+            harness.SelectActiveCell(1, 1);
+
+            harness.EditActiveCellInFormulaBar();
+
+            harness.FormulaBarText.Should().Be("=SUM(B1:C1)");
+            harness.FormulaBarCaretIndex.Should().Be(harness.FormulaBarText.Length);
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.InlineEditorVisible.Should().BeFalse();
+            harness.CellFormula(1, 1).Should().Be("SUM(B1:C1)");
+        });
+    }
+
+    [Fact]
     public void FormulaBarEscape_RestoresActiveCellTextAndReturnsFocusToGrid()
     {
         StaTestRunner.Run(() =>
