@@ -1419,11 +1419,10 @@ public sealed class MainWindowSourceHygieneTests
         qatSource.Should().Contain("HasSelectionForQuickAccessCommandState()");
         qatSource.Should().Contain("state.WithSelectionContext(");
         qatSource.Should().Contain("_lastQuickAccessCommandStateWorkbookId == _workbook.Id");
-        qatSource.Should().Contain("RibbonMetadata.TryGetCatalogId(button, out var commandId)");
-        qatSource.Should().Contain("QuickAccessCommandStateResolver.CanExecute(commandId, state)");
+        qatSource.Should().Contain("QuickAccessCommandStateResolver.CanExecute(target.Availability, state)");
         qatStateSource.Should().Contain("WithSelectionContext(bool hasActiveWorksheet, bool hasSelection)");
-        qatStateSource.Should().Contain("QuickAccessToolbarCommandIds.Undo => state.CanUndo");
-        qatStateSource.Should().Contain("QuickAccessToolbarCommandIds.Redo => state.CanRedo");
+        qatStateSource.Should().Contain("QuickAccessToolbarCommandIds.Undo => QuickAccessCommandAvailability.Undo");
+        qatStateSource.Should().Contain("QuickAccessToolbarCommandIds.Redo => QuickAccessCommandAvailability.Redo");
         toolbarSource.Should().NotContain("bool CanUndo");
         toolbarSource.Should().NotContain("bool CanRedo");
         cacheSource.Should().Contain("private readonly record struct Source(WorkbookId WorkbookId, StyleId StyleId);");
@@ -2649,7 +2648,7 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.DrawGrid)");
         source.Should().Contain("BeginBorderDrawMode(BorderDrawMode.Erase)");
         source.Should().Contain("ApplyBorderDrawMode");
-        source.Should().Contain("BorderDrawPlanner.CreateDiff");
+        source.Should().Contain("BorderDrawPlanner.CreateCommand");
         source.Should().Contain("BorderShortcutService.GetSingleBorderDiff");
         source.Should().Contain("BorderShortcutService.GetInsideBorderDiff");
         source.Should().Contain("BorderShortcutService.GetTopAndBottomBorderDiff");
