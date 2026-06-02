@@ -46,6 +46,9 @@ public sealed partial class TextToColumnsDialog
 
     private void FixedWidthRuler_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        if (_dragBreakIndex is null && !_fixedWidthRuler.IsMouseCaptured)
+            return;
+
         CancelFixedWidthRulerDrag();
         e.Handled = true;
     }
