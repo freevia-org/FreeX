@@ -31,6 +31,26 @@ public sealed class SortCommand : IWorkbookCommand
     private Dictionary<uint, double>? _rowHeightSnapshot;
     private HashSet<uint>? _hiddenRowsSnapshot;
 
+    private sealed record SortPayloadCapture(
+        SortCellPayload[][] Rows,
+        List<List<(CellAddress Address, Cell? Cell)>> CellSnapshot,
+        Dictionary<CellAddress, string> CommentSnapshot,
+        Dictionary<CellAddress, ThreadedComment> ThreadedCommentSnapshot);
+
+    private readonly struct SortCellPayload
+    {
+        public SortCellPayload(Cell? cell, string? comment, ThreadedComment? threadedComment)
+        {
+            Cell = cell;
+            Comment = comment;
+            ThreadedComment = threadedComment;
+        }
+
+        public Cell? Cell { get; }
+        public string? Comment { get; }
+        public ThreadedComment? ThreadedComment { get; }
+    }
+
     public string Label => _sortKeys.Count == 1
         ? $"Sort {(_sortKeys[0].Ascending ? "Ascending" : "Descending")}"
         : "Sort";
@@ -83,50 +103,29 @@ public sealed class SortCommand : IWorkbookCommand
 
         // Read current state and save snapshot. Redo replays Apply after Revert,
         // so the snapshot must describe the current pre-sort state each time.
-        _snapshot = new List<List<(CellAddress, Cell?)>>(rowCount);
         _rowHeightSnapshot = new Dictionary<uint, double>(sheet.RowHeights);
         _hiddenRowsSnapshot = new HashSet<uint>(sheet.HiddenRows);
-        var rows = new List<(Cell?[] Cells, string?[] Comments, ThreadedComment?[] ThreadedComments, bool HasRowHeight, double RowHeight, bool IsHidden, int OriginalIndex)>(rowCount);
+        var payloadCapture = CapturePayloads(sheet, _sheetId, _range, startRow, startCol, rowCount, colCount);
+        _snapshot = payloadCapture.CellSnapshot;
+        _commentSnapshot = payloadCapture.CommentSnapshot;
+        _threadedCommentSnapshot = payloadCapture.ThreadedCommentSnapshot;
+
+        var rows = new List<(SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, int OriginalIndex)>(rowCount);
 
         for (int ri = 0; ri < rowCount; ri++)
         {
             uint row = startRow + (uint)ri;
-            var rowCells = new Cell?[colCount];
-            var rowComments = new string?[colCount];
-            var rowThreadedComments = new ThreadedComment?[colCount];
-            var snapRow  = new List<(CellAddress, Cell?)>(colCount);
             var hasRowHeight = sheet.RowHeights.TryGetValue(row, out var rowHeight);
             var isHidden = sheet.HiddenRows.Contains(row);
 
-            for (int ci = 0; ci < colCount; ci++)
-            {
-                uint col  = startCol + (uint)ci;
-                var addr  = new CellAddress(_sheetId, row, col);
-                var cell  = sheet.GetCell(addr);
-                sheet.Comments.TryGetValue(addr, out rowComments[ci]);
-                sheet.ThreadedComments.TryGetValue(addr, out rowThreadedComments[ci]);
-                // Two independent clones are required: rowCells is sorted then written back;
-                // snapRow is the undo snapshot. They must be independent copies.
-                rowCells[ci] = cell?.Clone();
-                snapRow.Add((addr, cell?.Clone()));
-            }
-
-            rows.Add((rowCells, rowComments, rowThreadedComments, hasRowHeight, rowHeight, isHidden, ri));
-            _snapshot.Add(snapRow);
+            rows.Add((payloadCapture.Rows[ri], hasRowHeight, rowHeight, isHidden, ri));
         }
-
-        _commentSnapshot = sheet.Comments
-            .Where(p => _range.Contains(p.Key))
-            .ToDictionary(p => p.Key, p => p.Value);
-        _threadedCommentSnapshot = sheet.ThreadedComments
-            .Where(p => _range.Contains(p.Key))
-            .ToDictionary(p => p.Key, p => p.Value);
 
         rows.Sort((a, b) =>
         {
             foreach (var (index, ascending, sortOn, targetColor, customOrder) in keyColIndexes)
             {
-                var cmp = CompareKey(ctx.Workbook, a.Cells[index], b.Cells[index], sortOn, targetColor, customOrder, _options.CaseSensitive);
+                var cmp = CompareKey(ctx.Workbook, a.Payloads[index].Cell, b.Payloads[index].Cell, sortOn, targetColor, customOrder, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -150,22 +149,7 @@ public sealed class SortCommand : IWorkbookCommand
             {
                 uint col  = startCol + (uint)ci;
                 var addr  = new CellAddress(_sheetId, row, col);
-                var cell  = rows[ri].Cells[ci];
-                if (cell is null)
-                    sheet.ClearCell(addr);
-                else
-                    sheet.SetCell(addr, cell.Clone());
-
-                sheet.Comments.Remove(addr);
-                var comment = rows[ri].Comments[ci];
-                if (comment is not null)
-                    sheet.Comments[addr] = comment;
-
-                sheet.ThreadedComments.Remove(addr);
-                var threadedComment = rows[ri].ThreadedComments[ci];
-                if (threadedComment is not null)
-                    sheet.ThreadedComments[addr] = threadedComment;
-
+                WriteCellPayload(sheet, addr, rows[ri].Payloads[ci]);
                 affected.Add(addr);
             }
         }
@@ -184,56 +168,25 @@ public sealed class SortCommand : IWorkbookCommand
         int rowCount,
         int colCount)
     {
-        _snapshot = new List<List<(CellAddress, Cell?)>>(rowCount);
         _rowHeightSnapshot = new Dictionary<uint, double>(sheet.RowHeights);
         _hiddenRowsSnapshot = new HashSet<uint>(sheet.HiddenRows);
+        var payloadCapture = CapturePayloads(sheet, _sheetId, _range, startRow, startCol, rowCount, colCount);
+        _snapshot = payloadCapture.CellSnapshot;
+        _commentSnapshot = payloadCapture.CommentSnapshot;
+        _threadedCommentSnapshot = payloadCapture.ThreadedCommentSnapshot;
 
-        var columns = new List<(Cell?[] Cells, string?[] Comments, ThreadedComment?[] ThreadedComments, int OriginalIndex)>(colCount);
-
-        for (int ri = 0; ri < rowCount; ri++)
-        {
-            uint row = startRow + (uint)ri;
-            var snapRow = new List<(CellAddress, Cell?)>(colCount);
-            for (int ci = 0; ci < colCount; ci++)
-            {
-                uint col = startCol + (uint)ci;
-                var addr = new CellAddress(_sheetId, row, col);
-                snapRow.Add((addr, sheet.GetCell(addr)?.Clone()));
-            }
-            _snapshot.Add(snapRow);
-        }
+        var columns = new List<(SortCellPayload[] Payloads, int OriginalIndex)>(colCount);
 
         for (int ci = 0; ci < colCount; ci++)
         {
-            uint col = startCol + (uint)ci;
-            var cells = new Cell?[rowCount];
-            var comments = new string?[rowCount];
-            var threadedComments = new ThreadedComment?[rowCount];
-
-            for (int ri = 0; ri < rowCount; ri++)
-            {
-                uint row = startRow + (uint)ri;
-                var addr = new CellAddress(_sheetId, row, col);
-                cells[ri] = sheet.GetCell(addr)?.Clone();
-                sheet.Comments.TryGetValue(addr, out comments[ri]);
-                sheet.ThreadedComments.TryGetValue(addr, out threadedComments[ri]);
-            }
-
-            columns.Add((cells, comments, threadedComments, ci));
+            columns.Add((CopyColumnPayloads(payloadCapture.Rows, ci, rowCount), ci));
         }
-
-        _commentSnapshot = sheet.Comments
-            .Where(p => _range.Contains(p.Key))
-            .ToDictionary(p => p.Key, p => p.Value);
-        _threadedCommentSnapshot = sheet.ThreadedComments
-            .Where(p => _range.Contains(p.Key))
-            .ToDictionary(p => p.Key, p => p.Value);
 
         columns.Sort((a, b) =>
         {
             foreach (var (index, ascending, sortOn, targetColor, customOrder) in keyRowIndexes)
             {
-                var cmp = CompareKey(workbook, a.Cells[index], b.Cells[index], sortOn, targetColor, customOrder, _options.CaseSensitive);
+                var cmp = CompareKey(workbook, a.Payloads[index].Cell, b.Payloads[index].Cell, sortOn, targetColor, customOrder, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -249,22 +202,7 @@ public sealed class SortCommand : IWorkbookCommand
             {
                 uint row = startRow + (uint)ri;
                 var addr = new CellAddress(_sheetId, row, col);
-                var cell = columns[ci].Cells[ri];
-                if (cell is null)
-                    sheet.ClearCell(addr);
-                else
-                    sheet.SetCell(addr, cell.Clone());
-
-                sheet.Comments.Remove(addr);
-                var comment = columns[ci].Comments[ri];
-                if (comment is not null)
-                    sheet.Comments[addr] = comment;
-
-                sheet.ThreadedComments.Remove(addr);
-                var threadedComment = columns[ci].ThreadedComments[ri];
-                if (threadedComment is not null)
-                    sheet.ThreadedComments[addr] = threadedComment;
-
+                WriteCellPayload(sheet, addr, columns[ci].Payloads[ri]);
                 affected.Add(addr);
             }
         }
@@ -277,17 +215,104 @@ public sealed class SortCommand : IWorkbookCommand
         if (_snapshot is null) return;
         var sheet = ctx.GetSheet(_sheetId);
 
-        foreach (var snapRow in _snapshot)
+        RestoreCellSnapshot(sheet, _snapshot);
+        RestoreCommentSnapshots(sheet);
+        RowColumnShiftHelpers.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
+        RowColumnShiftHelpers.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
+    }
+
+    private static SortPayloadCapture CapturePayloads(
+        Sheet sheet,
+        SheetId sheetId,
+        GridRange range,
+        uint startRow,
+        uint startCol,
+        int rowCount,
+        int colCount)
+    {
+        var rows = new SortCellPayload[rowCount][];
+        var cellSnapshot = new List<List<(CellAddress, Cell?)>>(rowCount);
+
+        for (int ri = 0; ri < rowCount; ri++)
         {
-            foreach (var (addr, cell) in snapRow)
+            uint row = startRow + (uint)ri;
+            var payloadRow = new SortCellPayload[colCount];
+            var snapRow = new List<(CellAddress, Cell?)>(colCount);
+
+            for (int ci = 0; ci < colCount; ci++)
             {
-                if (cell is null)
-                    sheet.ClearCell(addr);
-                else
-                    sheet.SetCell(addr, cell.Clone());
+                uint col = startCol + (uint)ci;
+                var addr = new CellAddress(sheetId, row, col);
+                payloadRow[ci] = CaptureCellPayload(sheet, addr, out var snapshotCell);
+                snapRow.Add((addr, snapshotCell));
             }
+
+            rows[ri] = payloadRow;
+            cellSnapshot.Add(snapRow);
         }
 
+        var commentSnapshot = sheet.Comments
+            .Where(p => range.Contains(p.Key))
+            .ToDictionary(p => p.Key, p => p.Value);
+        var threadedCommentSnapshot = sheet.ThreadedComments
+            .Where(p => range.Contains(p.Key))
+            .ToDictionary(p => p.Key, p => p.Value);
+
+        return new SortPayloadCapture(rows, cellSnapshot, commentSnapshot, threadedCommentSnapshot);
+    }
+
+    private static SortCellPayload CaptureCellPayload(Sheet sheet, CellAddress address, out Cell? snapshotCell)
+    {
+        var cell = sheet.GetCell(address);
+        sheet.Comments.TryGetValue(address, out var comment);
+        sheet.ThreadedComments.TryGetValue(address, out var threadedComment);
+
+        // The sortable payload and undo snapshot must not share mutable cell instances.
+        snapshotCell = cell?.Clone();
+        return new SortCellPayload(cell?.Clone(), comment, threadedComment);
+    }
+
+    private static SortCellPayload[] CopyColumnPayloads(SortCellPayload[][] rows, int columnIndex, int rowCount)
+    {
+        var column = new SortCellPayload[rowCount];
+        for (int ri = 0; ri < rowCount; ri++)
+            column[ri] = rows[ri][columnIndex];
+
+        return column;
+    }
+
+    private static void WriteCellPayload(Sheet sheet, CellAddress address, SortCellPayload payload)
+    {
+        WriteCellClone(sheet, address, payload.Cell);
+
+        sheet.Comments.Remove(address);
+        if (payload.Comment is not null)
+            sheet.Comments[address] = payload.Comment;
+
+        sheet.ThreadedComments.Remove(address);
+        if (payload.ThreadedComment is not null)
+            sheet.ThreadedComments[address] = payload.ThreadedComment;
+    }
+
+    private static void WriteCellClone(Sheet sheet, CellAddress address, Cell? cell)
+    {
+        if (cell is null)
+            sheet.ClearCell(address);
+        else
+            sheet.SetCell(address, cell.Clone());
+    }
+
+    private static void RestoreCellSnapshot(Sheet sheet, List<List<(CellAddress Address, Cell? Cell)>> snapshot)
+    {
+        foreach (var snapRow in snapshot)
+        {
+            foreach (var (addr, cell) in snapRow)
+                WriteCellClone(sheet, addr, cell);
+        }
+    }
+
+    private void RestoreCommentSnapshots(Sheet sheet)
+    {
         foreach (var addr in _range.AllCells())
         {
             sheet.Comments.Remove(addr);
@@ -305,9 +330,6 @@ public sealed class SortCommand : IWorkbookCommand
             foreach (var (addr, comment) in _threadedCommentSnapshot)
                 sheet.ThreadedComments[addr] = comment;
         }
-
-        RowColumnShiftHelpers.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
-        RowColumnShiftHelpers.RestoreSet(sheet.HiddenRows, _hiddenRowsSnapshot);
     }
 
     private static int CompareKey(Workbook workbook, Cell? a, Cell? b, SortOn sortOn, CellColor? targetColor, CustomSortOrder? customOrder, bool caseSensitive)
