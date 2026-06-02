@@ -73,7 +73,8 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
                 QuickAccessToolbarCommandIds.Open,
                 QuickAccessToolbarCommandIds.Save,
                 QuickAccessToolbarCommandIds.Print
-            ]
+            ],
+            SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh", ""]
         };
 
         options.SaveToPath(_tempDirectory).Should().BeFalse();
@@ -97,6 +98,7 @@ public sealed class FreeXOptionsPersistenceTests : IDisposable
             QuickAccessToolbarCommandIds.Open,
             QuickAccessToolbarCommandIds.Save,
             QuickAccessToolbarCommandIds.Print);
+        reloaded.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
         Directory.EnumerateFiles(_tempDirectory, "*.tmp").Should().BeEmpty();
     }
 

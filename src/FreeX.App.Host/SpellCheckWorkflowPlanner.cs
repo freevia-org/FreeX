@@ -5,6 +5,35 @@ namespace FreeX.App.Host;
 
 public static class SpellCheckWorkflowPlanner
 {
+    public static HashSet<string> CreateCustomDictionary(FreeXOptions options) =>
+        new(
+            FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(options.SpellCheckCustomDictionaryWords),
+            StringComparer.OrdinalIgnoreCase);
+
+    public static bool AddCustomDictionaryWord(
+        FreeXOptions options,
+        ISet<string> customDictionary,
+        string word)
+    {
+        var normalizedWord = FreeXOptions.NormalizeSpellCheckCustomDictionaryWord(word);
+        if (normalizedWord is null)
+            return false;
+
+        customDictionary.Add(normalizedWord);
+
+        var persistedWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(options.SpellCheckCustomDictionaryWords);
+        if (persistedWords.Contains(normalizedWord, StringComparer.OrdinalIgnoreCase))
+        {
+            options.SpellCheckCustomDictionaryWords = persistedWords;
+            return false;
+        }
+
+        persistedWords.Add(normalizedWord);
+        persistedWords.Sort(StringComparer.OrdinalIgnoreCase);
+        options.SpellCheckCustomDictionaryWords = persistedWords;
+        return true;
+    }
+
     public static IReadOnlyList<SpellingIssue> FilterIssues(
         IEnumerable<SpellingIssue> issues,
         ISet<string> ignoredWords,
