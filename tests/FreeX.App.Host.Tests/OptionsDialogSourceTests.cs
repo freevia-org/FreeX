@@ -248,6 +248,7 @@ public sealed class OptionsDialogSourceTests
             "QuickAccessRemoveButton_Click",
             "QuickAccessMoveUpButton_Click",
             "QuickAccessMoveDownButton_Click",
+            "QuickAccessImportExportButton_Click",
             "AddInsGoButton_Click",
             "TrustCenterSettingsButton_Click"
         })
@@ -287,7 +288,10 @@ public sealed class OptionsDialogSourceTests
         xaml.Should().Contain("x:Name=\"QuickAccessMoveUpButton\"");
         xaml.Should().Contain("x:Name=\"QuickAccessMoveDownButton\"");
         xaml.Should().Contain("x:Name=\"QuickAccessResetButton\"");
+        xaml.Should().Contain("x:Name=\"QuickAccessImportExportButton\"");
+        xaml.Should().Contain("AutomationProperties.AutomationId=\"QuickAccessToolbarImportExportButton\"");
         xaml.Should().Contain("Click=\"QuickAccessResetButton_Click\"");
+        xaml.Should().Contain("Click=\"QuickAccessImportExportButton_Click\"");
         xaml.Should().Contain("MouseDoubleClick=\"QuickAccessAvailableCommandsList_MouseDoubleClick\"");
         xaml.Should().Contain("MouseDoubleClick=\"QuickAccessSelectedCommandsList_MouseDoubleClick\"");
 
@@ -303,6 +307,12 @@ public sealed class OptionsDialogSourceTests
         source.Should().Contain("QuickAccessAddButton_Click(sender, e);");
         source.Should().Contain("QuickAccessRemoveButton_Click(sender, e);");
         source.Should().Contain("e.Handled = true;");
+        source.Should().Contain("QuickAccessToolbarCustomizationFile.TryLoad(dialog.FileName)");
+        source.Should().Contain("QuickAccessToolbarCustomizationFile.TrySave(");
+        source.Should().Contain("new OpenFileDialog");
+        source.Should().Contain("new SaveFileDialog");
+        source.Should().Contain("QuickAccessToolbarImportCustomizationMenuItem");
+        source.Should().Contain("QuickAccessToolbarExportCustomizationMenuItem");
         source.Should().NotContain("DeferredCommandMessages.QuickAccessToolbarReset()");
     }
 
