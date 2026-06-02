@@ -35,24 +35,24 @@ public static class SplitPaneScrollbarLayoutPlanner
 
     public static SplitPaneScrollbarHit? HitTestScrollbar(SplitPaneScrollbar? scrollbar, Point pos)
     {
-        if (scrollbar is null || !IsRenderableTrack(scrollbar.Track) || !ContainsInclusive(scrollbar.Track, pos))
+        if (scrollbar is not { } value || !IsRenderableTrack(value.Track) || !ContainsInclusive(value.Track, pos))
             return null;
 
-        var part = ContainsInclusive(scrollbar.Thumb, pos)
+        var part = ContainsInclusive(value.Thumb, pos)
             ? SplitPaneScrollbarPart.Thumb
             : SplitPaneScrollbarPart.Track;
-        return new SplitPaneScrollbarHit(part, scrollbar.Orientation, scrollbar.Region);
+        return new SplitPaneScrollbarHit(part, value.Orientation, value.Region);
     }
 
     public static SplitPaneScrollbarScrollTarget? CalculateScrollTarget(
         SplitPaneScrollbar? scrollbar,
         Point pos)
     {
-        if (scrollbar is null || !IsRenderableTrack(scrollbar.Track) || !ContainsInclusive(scrollbar.Track, pos))
+        if (scrollbar is not { } value || !IsRenderableTrack(value.Track) || !ContainsInclusive(value.Track, pos))
             return null;
 
-        var index = IndexFromTrackPosition(scrollbar, TrackPosition(scrollbar.Orientation, pos));
-        return new SplitPaneScrollbarScrollTarget(scrollbar.Region, scrollbar.Orientation, index);
+        var index = IndexFromTrackPosition(value, TrackPosition(value.Orientation, pos));
+        return new SplitPaneScrollbarScrollTarget(value.Region, value.Orientation, index);
     }
 
     public static SplitPaneScrollbarScrollTarget CalculateThumbDragTarget(
