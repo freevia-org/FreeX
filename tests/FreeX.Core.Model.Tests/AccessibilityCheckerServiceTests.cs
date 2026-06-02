@@ -1007,6 +1007,40 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_ForDisplayedNonTextValues()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Values");
+        var lowContrastStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(120, 120, 120),
+            FillColor = new CellColor(130, 130, 130)
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new Cell
+        {
+            Value = new NumberValue(42),
+            StyleId = lowContrastStyle
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new Cell
+        {
+            Value = new BoolValue(true),
+            StyleId = lowContrastStyle
+        });
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new Cell
+        {
+            Value = ErrorValue.DivByZero,
+            StyleId = lowContrastStyle
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook)
+            .Where(i => i.Kind == AccessibilityIssueKind.LowContrastCellText)
+            .ToList();
+
+        issues.Should().HaveCount(3);
+        issues.Select(i => i.Location).Should().BeEquivalentTo(new[] { "A1", "B1", "C1" });
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_WithDefaultWhiteBackground()
     {
         var workbook = new Workbook("Accessibility");
