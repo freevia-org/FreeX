@@ -559,8 +559,8 @@ public class DataValidationTests
         var prompt = DataValidationService.GetInputPrompt(sheet, new CellAddress(sheet.Id, 1, 1));
 
         prompt.Should().NotBeNull();
-        prompt!.Title.Should().Be("Choose a code");
-        prompt.Message.Should().Be("Pick A, B, or C.");
+        prompt.Value.Title.Should().Be("Choose a code");
+        prompt.Value.Message.Should().Be("Pick A, B, or C.");
     }
 
     [Fact]

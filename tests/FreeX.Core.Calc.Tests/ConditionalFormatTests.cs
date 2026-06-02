@@ -159,6 +159,69 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void Benchmark_ConditionalFormatAndFormulaRules_ReportsTiming()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        for (uint row = 1; row <= 120; row++)
+        {
+            for (uint col = 1; col <= 40; col++)
+            {
+                sheet.SetCell(new CellAddress(sheet.Id, row, col), Cell.FromValue(new NumberValue(row * col)));
+            }
+        }
+
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 50), Cell.FromValue(new NumberValue(600)));
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 120, 40)),
+            Priority = 1,
+            RuleType = CfRuleType.Formula,
+            FormulaText = "AND(A1>0,A1<$AX$1)",
+            FormatIfTrue = new CellStyle { FillColor = new CellColor(198, 239, 206) }
+        });
+
+        var service = new ViewportService();
+        var request = new ViewportRequest(1, 1, 10_000, 3_000);
+        _ = service.GetViewport(wb, sheet.Id, request);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var timings = new List<double>(10);
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        ViewportModel? viewport = null;
+        for (var i = 0; i < 10; i++)
+        {
+            var step = Stopwatch.StartNew();
+            viewport = service.GetViewport(wb, sheet.Id, request);
+            step.Stop();
+            timings.Add(step.Elapsed.TotalMilliseconds);
+        }
+
+        total.Stop();
+        timings.Sort();
+        var mean = timings.Sum() / timings.Count;
+        var p95 = timings[(int)Math.Min(timings.Count - 1, Math.Ceiling(timings.Count * 0.95) - 1)];
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            "PERF CF_AND_FORMULA_RULES " +
+            $"steps={timings.Count} cells={viewport!.Cells.Count:N0} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={mean:F2} " +
+            $"p95_ms={p95:F2} max_ms={timings[^1]:F2} allocated_bytes={allocated:N0}");
+
+        viewport.Cells.Should().HaveCount(4_800);
+        GetCell(viewport, 1, 1).Style!.FillColor.Should().Be(new CellColor(198, 239, 206));
+        GetCell(viewport, 120, 40).Style!.FillColor.Should().NotBe(new CellColor(198, 239, 206));
+        allocated.Should().BeLessThan(
+            10_000_000,
+            "AND-of-comparison formula rules should avoid shifted AST allocation for every displayed cell");
+        total.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Benchmark_ConditionalFormatIconSetThresholds_ReportsTiming()
     {
         var (wb, sheet) = MakeWorkbook();
@@ -359,6 +422,12 @@ public class ConditionalFormatTests
         evaluatorSource.Should().Contain(
             "StaticThresholdFormulaValues",
             "resolved threshold formula values should be reused by color scales and icon sets");
+        evaluatorSource.Should().Contain(
+            "TryCreateSimpleAnd(ast",
+            "AND-of-comparison formula rules should be precomputed once while building the viewport context");
+        formulaSource.Should().Contain(
+            "formulaCache.SimpleAnd",
+            "AND-of-comparison formula rules should use the allocation-light per-cell path");
         evaluatorSource.Should().Contain(
             "IsCurrentCellSensitive",
             "relative or volatile threshold formulas must stay on the per-cell path");
