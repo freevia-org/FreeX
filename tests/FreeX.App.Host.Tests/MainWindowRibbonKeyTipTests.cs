@@ -902,7 +902,7 @@ public sealed class MainWindowRibbonKeyTipTests
     }
 
     [Fact]
-    public void ReviewNoteNavigationKeyTips_MoveAcrossNotesAndThreadedComments()
+    public void ReviewNoteAndCommentNavigationKeyTips_RouteSplitReviewLanes()
     {
         RunSta(() =>
         {
@@ -919,6 +919,14 @@ public sealed class MainWindowRibbonKeyTipTests
 
             harness.HandleDirectTopLevelKeyTip(Key.R).Should().BeTrue();
             harness.HandleKeyTip(Key.N);
+
+            harness.SelectedCellAddress.Should().Be((2u, 2u), "Next Note should cycle simple notes without crossing into threaded comments");
+            harness.KeyTipScope.Should().Be("None");
+
+            harness.HandleDirectTopLevelKeyTip(Key.R).Should().BeTrue();
+            harness.HandleKeyTip(Key.J);
+            harness.KeyTipScope.Should().Be("Commands", "J is the shared Review prefix before Next Comment resolves");
+            harness.HandleKeyTip(Key.C);
 
             harness.SelectedCellAddress.Should().Be((4u, 4u));
             harness.KeyTipScope.Should().Be("None");

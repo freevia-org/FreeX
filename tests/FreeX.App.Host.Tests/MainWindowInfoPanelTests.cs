@@ -42,7 +42,11 @@ public sealed class MainWindowInfoPanelTests
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
 
         source.Should().Contain("var activeSheet = _workbook.GetSheet(_currentSheetId);");
-        source.Should().Contain("BackstageInfoPlanner.Build(_workbook, _currentFilePath, activeSheet)");
+        source.Should().Contain("BackstageInfoPlanner.Build(");
+        source.Should().Contain("_workbook,");
+        source.Should().Contain("_currentFilePath,");
+        source.Should().Contain("activeSheet,");
+        source.Should().Contain("hasSelection: SheetGrid.SelectedRange is not null");
         source.Should().Contain("InfoStatisticsSummary.Text");
         source.Should().Contain("InfoAccessibilitySummary.Text");
         source.Should().Contain("InfoFormulaErrorSummary.Text");

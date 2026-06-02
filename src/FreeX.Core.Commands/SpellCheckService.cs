@@ -639,12 +639,6 @@ public static partial class SpellCheckService
 
                 break;
             case 8:
-                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "arguement"))
-                {
-                    suggestion = "argument";
-                    return true;
-                }
-
                 if (first == 'c' && EqualAsciiWordIgnoreCase(word, "commited"))
                 {
                     suggestion = "committed";
@@ -677,6 +671,12 @@ public static partial class SpellCheckService
 
                 break;
             case 9:
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "arguement"))
+                {
+                    suggestion = "argument";
+                    return true;
+                }
+
                 if (first == 'e' && EqualAsciiWordIgnoreCase(word, "existance"))
                 {
                     suggestion = "existence";
