@@ -1546,6 +1546,60 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotCalculatedItemDialog_FieldListDoubleClickInsertsSelectedFieldAndHandlesMouseEvent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotCalculatedItemDialog(["Region", "Product"], formula: "East+");
+            var fieldList = GetPrivateField<ListBox>(dialog, "_fieldList");
+            var formulaBox = GetPrivateField<TextBox>(dialog, "_formulaBox");
+
+            fieldList.SelectedIndex = 1;
+            formulaBox.SelectionStart = formulaBox.Text.Length;
+            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = Control.MouseDoubleClickEvent
+            };
+
+            fieldList.RaiseEvent(doubleClick);
+
+            doubleClick.Handled.Should().BeTrue();
+            formulaBox.Text.Should().Be("East+Product");
+            formulaBox.SelectionStart.Should().Be("East+Product".Length);
+        });
+    }
+
+    [Fact]
+    public void PivotCalculatedItemDialog_ItemListDoubleClickInsertsSelectedItemAndHandlesMouseEvent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotCalculatedItemDialog(
+                ["Region"],
+                formula: "Region=",
+                itemNamesBySourceFieldIndex: new Dictionary<int, IEnumerable<string>>
+                {
+                    [0] = ["East", "West"]
+                });
+            var itemList = GetPrivateField<ListBox>(dialog, "_itemList");
+            var formulaBox = GetPrivateField<TextBox>(dialog, "_formulaBox");
+
+            itemList.SelectedIndex = 1;
+            formulaBox.SelectionStart = formulaBox.Text.Length;
+            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = Control.MouseDoubleClickEvent
+            };
+
+            itemList.RaiseEvent(doubleClick);
+
+            doubleClick.Handled.Should().BeTrue();
+            formulaBox.Text.Should().Be("Region=West");
+            formulaBox.SelectionStart.Should().Be("Region=West".Length);
+        });
+    }
+
+    [Fact]
     public void PivotChartOptionsDialog_CreateResult_ParsesAndClampsStyle()
     {
         PivotChartOptionsDialog.CreateResult(

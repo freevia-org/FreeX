@@ -226,14 +226,14 @@ public sealed class PivotCalculatedItemDialog : Window
         var insertPanel = PivotDialogLayout.CreateGroupPanel();
         _fieldList.ItemsSource = _fields;
         _fieldList.DisplayMemberPath = nameof(PivotCalculatedItemSourceFieldOption.Name);
-        _fieldList.MouseDoubleClick += (_, _) => InsertSelectedField();
+        _fieldList.MouseDoubleClick += FieldList_MouseDoubleClick;
         AutomationProperties.SetName(_fieldList, UiText.Get("PivotCalculated_AvailableFields"));
         PivotDialogLayout.AddLabeledControl(insertPanel, UiText.Get("PivotCalculated_AvailableFieldsLabel"), _fieldList);
-        insertPanel.Children.Add(CreateInsertButton(UiText.Get("PivotCalculated_InsertField"), InsertSelectedField));
+        insertPanel.Children.Add(CreateInsertButton(UiText.Get("PivotCalculated_InsertField"), () => InsertSelectedField()));
         AutomationProperties.SetName(_itemList, UiText.Get("PivotCalculated_AvailableItems"));
         PivotDialogLayout.AddLabeledControl(insertPanel, UiText.Get("PivotCalculated_AvailableItemsLabel"), _itemList);
-        _itemList.MouseDoubleClick += (_, _) => InsertSelectedItem();
-        insertPanel.Children.Add(CreateInsertButton(UiText.Get("PivotCalculated_InsertItem"), InsertSelectedItem));
+        _itemList.MouseDoubleClick += ItemList_MouseDoubleClick;
+        insertPanel.Children.Add(CreateInsertButton(UiText.Get("PivotCalculated_InsertItem"), () => InsertSelectedItem()));
         stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotCalculated_InsertIntoFormulaGroup"), insertPanel));
 
         stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
@@ -310,22 +310,36 @@ public sealed class PivotCalculatedItemDialog : Window
         _itemList.SelectedIndex = items.Count > 0 ? 0 : -1;
     }
 
-    private void InsertSelectedField()
+    private void FieldList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (InsertSelectedField())
+            e.Handled = true;
+    }
+
+    private void ItemList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (InsertSelectedItem())
+            e.Handled = true;
+    }
+
+    private bool InsertSelectedField()
     {
         var selectedField = _fieldList.SelectedItem as PivotCalculatedItemSourceFieldOption
             ?? _fieldBox.SelectedItem as PivotCalculatedItemSourceFieldOption;
         if (selectedField is null)
-            return;
+            return false;
 
         InsertFormulaText(selectedField.Name);
+        return true;
     }
 
-    private void InsertSelectedItem()
+    private bool InsertSelectedItem()
     {
         if (_itemList.SelectedItem is not string itemName)
-            return;
+            return false;
 
         InsertFormulaText(itemName);
+        return true;
     }
 
     private void InsertFormulaText(string reference)
