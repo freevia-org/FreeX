@@ -91,8 +91,10 @@ public sealed partial class NativeJsonAdapter
             NativeContainerChildXmls = formatDto.NativeContainerChildXmls
         };
         format.IconSetThresholds.AddRange((formatDto.IconSetThresholds ?? [])
+            .OfType<CfThresholdModel>()
             .Where(threshold => Enum.IsDefined(threshold.Type)));
         format.IconOverrides.AddRange((formatDto.IconOverrides ?? [])
+            .OfType<CfIconOverride>()
             .Select(NormalizeCfIconOverride)
             .Where(IsValidCfIconOverride));
         return format;
@@ -140,8 +142,8 @@ public sealed partial class NativeJsonAdapter
             IconSetStyle = NormalizeOptionalText(format.IconSetStyle),
             IconSetShowValue = format.IconSetShowValue,
             IconSetReverse = format.IconSetReverse,
-            IconSetThresholds = [.. format.IconSetThresholds.Where(threshold => Enum.IsDefined(threshold.Type))],
-            IconOverrides = [.. format.IconOverrides.Select(NormalizeCfIconOverride).Where(IsValidCfIconOverride)],
+            IconSetThresholds = [.. format.IconSetThresholds.OfType<CfThresholdModel>().Where(threshold => Enum.IsDefined(threshold.Type))],
+            IconOverrides = [.. format.IconOverrides.OfType<CfIconOverride>().Select(NormalizeCfIconOverride).Where(IsValidCfIconOverride)],
             TopBottomRank = ValidTopBottomRankOrDefault(format.TopBottomRank),
             TopBottomPercent = format.TopBottomPercent,
             TextRuleText = format.TextRuleText,
