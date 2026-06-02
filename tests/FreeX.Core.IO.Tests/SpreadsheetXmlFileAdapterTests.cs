@@ -2967,6 +2967,47 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromWorksheetVisibleAttributeValueTemplates()
+    {
+        using var source = StreamFromString("""
+            <sheets>
+              <sheet name="Hidden report" visible="SheetHidden"/>
+              <sheet name="Audit stash" visible="SheetVeryHidden"/>
+            </sheets>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/sheets">
+                <ss:Workbook>
+                  <xsl:for-each select="sheet">
+                    <ss:Worksheet ss:Name="{@name}" ss:Visible="{@visible}">
+                      <ss:Table>
+                        <ss:Row><ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@name"/></ss:Data></ss:Cell></ss:Row>
+                      </ss:Table>
+                    </ss:Worksheet>
+                  </xsl:for-each>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var hidden = workbook.GetSheetAt(0);
+        var veryHidden = workbook.GetSheetAt(1);
+        hidden.Name.Should().Be("Hidden report");
+        hidden.IsHidden.Should().BeTrue();
+        hidden.IsVeryHidden.Should().BeFalse();
+        hidden.GetCell(1, 1)!.Value.Should().Be(new TextValue("Hidden report"));
+        veryHidden.Name.Should().Be("Audit stash");
+        veryHidden.IsHidden.Should().BeTrue();
+        veryHidden.IsVeryHidden.Should().BeTrue();
+        veryHidden.GetCell(1, 1)!.Value.Should().Be(new TextValue("Audit stash"));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesQuotedSpreadsheetMlNamedRanges()
     {
         using var source = StreamFromString("""

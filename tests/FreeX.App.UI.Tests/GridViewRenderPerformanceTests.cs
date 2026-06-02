@@ -1194,9 +1194,13 @@ public sealed class GridViewRenderPerformanceTests
 
         renderSplitPaneCells.Should().Contain("var wrapText = style?.WrapText == true;");
         renderSplitPaneCells.Should().Contain("var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);");
-        renderSplitPaneCells.Should().Contain("var useDefaultWrappedTextLayout = !useDefaultTextLayout && wrapText && CanUseDefaultWrappedFormattedText(style);");
+        renderSplitPaneCells.Should().Contain("var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;");
+        renderSplitPaneCells.Should().Contain("var wrapTextAlignment = TextAlignment.Left;");
+        renderSplitPaneCells.Should().Contain("if (!useDefaultTextLayout && wrapText)");
+        renderSplitPaneCells.Should().Contain("useDefaultWrappedTextLayout = CanUseDefaultWrappedFormattedText(style);");
         renderSplitPaneCells.Should().Contain("GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)");
         textSetup.Should().NotContain("CreateCellTypeface");
+        textSetup.Should().NotContain("BrushForCellColor");
         renderSplitPaneCells.Should().Contain("text.MaxTextWidth = wrapMaxTextWidth;");
         renderSplitPaneCells.Should().Contain("text.TextAlignment = wrapTextAlignment;");
         renderSplitPaneCells.Should().Contain("if (style?.ShrinkToFit == true && !wrapText)");

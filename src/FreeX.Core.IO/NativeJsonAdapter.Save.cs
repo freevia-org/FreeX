@@ -268,18 +268,22 @@ public sealed partial class NativeJsonAdapter
                     .ToList(),
                 BackgroundImage = ToWorksheetBackgroundDto(s.BackgroundImage),
                 Pictures = s.Pictures
+                    .OfType<PictureModel>()
                     .Where(picture => NativeJsonVisualDtoMapper.IsPictureOnSheet(picture, s.Id))
                     .Select(NativeJsonVisualDtoMapper.FromPicture)
                     .ToList(),
                 TextBoxes = s.TextBoxes
+                    .OfType<TextBoxModel>()
                     .Where(textBox => NativeJsonVisualDtoMapper.IsTextBoxOnSheet(textBox, s.Id))
                     .Select(NativeJsonVisualDtoMapper.FromTextBox)
                     .ToList(),
                 DrawingShapes = s.DrawingShapes
+                    .OfType<DrawingShapeModel>()
                     .Where(shape => NativeJsonVisualDtoMapper.IsDrawingShapeOnSheet(shape, s.Id))
                     .Select(NativeJsonVisualDtoMapper.FromDrawingShape)
                     .ToList(),
                 Sparklines = s.Sparklines
+                    .OfType<SparklineModel>()
                     .Where(sparkline => IsSparklineOnSheet(sparkline, s.Id) && Enum.IsDefined(sparkline.Kind))
                     .Select(ToSparklineDto)
                     .ToList(),
@@ -289,6 +293,7 @@ public sealed partial class NativeJsonAdapter
                     .Select(ToChartDto)
                     .ToList(),
                 PivotTables = s.PivotTables
+                    .OfType<PivotTableModel>()
                     .Select(pivot => ToPivotTableDto(workbook, s, pivot))
                     .OfType<PivotTableDto>()
                     .ToList(),
