@@ -30,9 +30,9 @@ public sealed partial class NativeJsonAdapter
                 PromptTitle = validationDto.PromptTitle,
                 PromptMessage = validationDto.PromptMessage,
                 NativeAttributes = validationDto.NativeAttributes,
-                NativeChildXmls = validationDto.NativeChildXmls,
+                NativeChildXmls = CleanNativeXmlList(validationDto.NativeChildXmls),
                 NativeContainerAttributes = validationDto.NativeContainerAttributes,
-                NativeContainerChildXmls = validationDto.NativeContainerChildXmls
+                NativeContainerChildXmls = CleanNativeXmlList(validationDto.NativeContainerChildXmls)
             };
             foreach (var range in validationDto.AdditionalRanges ?? [])
             {
@@ -80,10 +80,16 @@ public sealed partial class NativeJsonAdapter
         PromptTitle = validation.PromptTitle,
         PromptMessage = validation.PromptMessage,
         NativeAttributes = validation.NativeAttributes is null ? null : new Dictionary<string, string>(validation.NativeAttributes),
-        NativeChildXmls = validation.NativeChildXmls is null ? null : [.. validation.NativeChildXmls],
+        NativeChildXmls = CleanNativeXmlList(validation.NativeChildXmls),
         NativeContainerAttributes = validation.NativeContainerAttributes is null ? null : new Dictionary<string, string>(validation.NativeContainerAttributes),
-        NativeContainerChildXmls = validation.NativeContainerChildXmls is null ? null : [.. validation.NativeContainerChildXmls]
+        NativeContainerChildXmls = CleanNativeXmlList(validation.NativeContainerChildXmls)
     };
+
+    private static List<string>? CleanNativeXmlList(IEnumerable<string>? xmls)
+    {
+        var cleaned = xmls?.Where(xml => !string.IsNullOrWhiteSpace(xml)).ToList();
+        return cleaned is { Count: > 0 } ? cleaned : null;
+    }
 
     private static bool IsSupportedDataValidation(DataValidation validation) =>
         Enum.IsDefined(validation.Type) &&
