@@ -1082,10 +1082,16 @@ public partial class MainWindow
             sheet.Comments,
             sheet.ThreadedComments,
             new CellAddress(_currentSheetId, address.Row, address.Col));
-        SheetGrid.ToolTip = preview;
+        SetCommentPreview(preview);
     }
 
-    private void ClearCommentPreview() => SheetGrid.ToolTip = null;
+    private void ClearCommentPreview() => SetCommentPreview(null);
+
+    private void SetCommentPreview(string? preview)
+    {
+        if (!Equals(SheetGrid.ToolTip, preview))
+            SheetGrid.ToolTip = preview;
+    }
 
     private void SheetGrid_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {

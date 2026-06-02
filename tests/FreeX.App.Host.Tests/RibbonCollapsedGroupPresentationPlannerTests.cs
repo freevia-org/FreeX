@@ -50,6 +50,20 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
     }
 
     [Fact]
+    public void CreateFootprint_ReusesBoxedDependencyPropertyValuesForHotPath()
+    {
+        var compact = RibbonCollapsedGroupPresentationPlanner.CreateFootprint(900);
+        var sameCompactMode = RibbonCollapsedGroupPresentationPlanner.CreateFootprint(760);
+        var normal = RibbonCollapsedGroupPresentationPlanner.CreateFootprint(1000);
+
+        ReferenceEquals(compact.BoxedWidth, sameCompactMode.BoxedWidth).Should().BeTrue();
+        ReferenceEquals(compact.BoxedMargin, sameCompactMode.BoxedMargin).Should().BeTrue();
+        ReferenceEquals(compact.BoxedPadding, sameCompactMode.BoxedPadding).Should().BeTrue();
+        ReferenceEquals(compact.BoxedIconFontSize, sameCompactMode.BoxedIconFontSize).Should().BeTrue();
+        ReferenceEquals(compact.BoxedWidth, normal.BoxedWidth).Should().BeFalse();
+    }
+
+    [Fact]
     public void SetCollapsedButtonFootprint_RebuildsCachedTargetsWhenButtonContentChangesInsideSameMode()
     {
         StaTestRunner.Run(() =>

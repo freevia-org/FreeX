@@ -63,15 +63,15 @@ internal static class RibbonAdaptiveStateApplicator
             if (targets.LastAppliedMode == footprint.Mode)
                 continue;
 
-            SetIfChanged(button, FrameworkElement.WidthProperty, footprint.Width);
-            SetIfChanged(button, FrameworkElement.MarginProperty, footprint.Margin);
-            SetIfChanged(button, Control.PaddingProperty, footprint.Padding);
+            SetIfChanged(button, FrameworkElement.WidthProperty, footprint.BoxedWidth);
+            SetIfChanged(button, FrameworkElement.MarginProperty, footprint.BoxedMargin);
+            SetIfChanged(button, Control.PaddingProperty, footprint.BoxedPadding);
 
             if (targets.Caption is { } caption)
                 ApplyCollapsedRibbonButtonCaptionFootprint(caption, footprint);
 
             if (targets.Icon is { } icon)
-                SetIfChanged(icon, TextBlock.FontSizeProperty, footprint.IconFontSize);
+                SetIfChanged(icon, TextBlock.FontSizeProperty, footprint.BoxedIconFontSize);
 
             targets.LastAppliedMode = footprint.Mode;
         }
@@ -407,9 +407,9 @@ internal static class RibbonAdaptiveStateApplicator
         TextBlock caption,
         RibbonCollapsedGroupFootprint footprint)
     {
-        SetIfChanged(caption, UIElement.VisibilityProperty, footprint.CaptionVisibility);
-        SetIfChanged(caption, TextBlock.FontSizeProperty, footprint.CaptionFontSize);
-        SetIfChanged(caption, FrameworkElement.MaxWidthProperty, footprint.CaptionMaxWidth);
+        SetIfChanged(caption, UIElement.VisibilityProperty, footprint.BoxedCaptionVisibility);
+        SetIfChanged(caption, TextBlock.FontSizeProperty, footprint.BoxedCaptionFontSize);
+        SetIfChanged(caption, FrameworkElement.MaxWidthProperty, footprint.BoxedCaptionMaxWidth);
     }
 
     private static void ApplyCollapsedRibbonButtonCaptionStaticFootprint(TextBlock caption)
