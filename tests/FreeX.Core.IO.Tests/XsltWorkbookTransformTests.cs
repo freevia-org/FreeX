@@ -1270,6 +1270,63 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_WorksheetOptionsDynamicValues_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <view sheet="Frozen report" rows="2" cols="3" showGridlines="false" printGridlines="true"/>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+                xmlns:x="urn:schemas-microsoft-com:office:excel">
+              <xsl:template match="/view">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="{@sheet}">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@sheet"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                    <x:WorksheetOptions>
+                      <xsl:if test="@showGridlines = 'false'">
+                        <x:DoNotDisplayGridlines/>
+                      </xsl:if>
+                      <xsl:if test="@printGridlines = 'true'">
+                        <x:Print><x:Gridlines/></x:Print>
+                      </xsl:if>
+                      <x:FreezePanes/>
+                      <x:FrozenNoSplit/>
+                      <x:SplitHorizontal><xsl:value-of select="@rows"/></x:SplitHorizontal>
+                      <x:TopRowBottomPane><xsl:value-of select="@rows"/></x:TopRowBottomPane>
+                      <x:SplitVertical><xsl:value-of select="@cols"/></x:SplitVertical>
+                      <x:LeftColumnRightPane><xsl:value-of select="@cols"/></x:LeftColumnRightPane>
+                    </x:WorksheetOptions>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        XNamespace x = "urn:schemas-microsoft-com:office:excel";
+        var worksheet = XDocument.Load(transformed).Descendants(ss + "Worksheet").Single();
+        var options = worksheet.Element(x + "WorksheetOptions")!;
+
+        worksheet.Attribute(ss + "Name")!.Value.Should().Be("Frozen report");
+        options.Element(x + "DoNotDisplayGridlines").Should().NotBeNull();
+        options.Element(x + "Print")?.Element(x + "Gridlines").Should().NotBeNull();
+        options.Element(x + "FreezePanes").Should().NotBeNull();
+        options.Element(x + "FrozenNoSplit").Should().NotBeNull();
+        options.Element(x + "SplitHorizontal")!.Value.Should().Be("2");
+        options.Element(x + "TopRowBottomPane")!.Value.Should().Be("2");
+        options.Element(x + "SplitVertical")!.Value.Should().Be("3");
+        options.Element(x + "LeftColumnRightPane")!.Value.Should().Be("3");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NamedRangeAttributeValueTemplate_GeneratesSpreadsheetMl()
     {
         using var source = StreamFromString("""
