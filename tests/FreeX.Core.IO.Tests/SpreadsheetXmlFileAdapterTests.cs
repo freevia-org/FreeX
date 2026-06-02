@@ -1660,6 +1660,41 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_LoadsDefaultNamespaceSpreadsheetMlOutput()
+    {
+        using var source = StreamFromString("""
+            <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <Worksheet ss:Name="DefaultNamespace">
+                <Table>
+                  <Row>
+                    <Cell><Data ss:Type="String">Juliet</Data></Cell>
+                    <Cell><Data ss:Type="Number">21.25</Data></Cell>
+                  </Row>
+                </Table>
+              </Worksheet>
+            </Workbook>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="@*|node()">
+                <xsl:copy>
+                  <xsl:apply-templates select="@*|node()" />
+                </xsl:copy>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("DefaultNamespace");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Juliet"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(21.25));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromWhitespaceRules()
     {
         using var source = StreamFromString("""

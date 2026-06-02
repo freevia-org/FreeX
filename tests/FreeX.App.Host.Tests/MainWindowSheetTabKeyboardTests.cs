@@ -69,6 +69,37 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
+    public void SheetTabViewport_LeavesTopInsetForChromeStroke()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(sheetCount: 6);
+            var window = harness.Window;
+
+            window.UpdateLayout();
+            PumpDispatcher();
+            window.UpdateLayout();
+
+            var row = (FrameworkElement)window.FindName("SheetTabsRowGrid");
+            var scroller = (FrameworkElement)window.FindName("SheetTabsScroller");
+            var chromeLayer = (FrameworkElement)window.FindName("SheetTabsChromeLayer");
+            var overlayLayer = (FrameworkElement)window.FindName("SheetTabsOverlayLayer");
+
+            var rowBounds = BoundsRelativeToWindow(row, window);
+            var scrollerBounds = BoundsRelativeToWindow(scroller, window);
+            var chromeBounds = BoundsRelativeToWindow(chromeLayer, window);
+            var overlayBounds = BoundsRelativeToWindow(overlayLayer, window);
+
+            scrollerBounds.Top.Should().BeGreaterThan(rowBounds.Top + 0.5, "the clipped viewport needs breathing room above tab text and focus visuals");
+            chromeBounds.Top.Should().BeGreaterThan(rowBounds.Top + 0.5, "the drawn tab chrome stroke should not start on the row's clipping edge");
+            overlayBounds.Top.Should().BeApproximately(chromeBounds.Top, 0.25);
+            rowBounds.Height.Should().BeGreaterThan(scroller.ActualHeight);
+            chromeBounds.Bottom.Should().BeLessThanOrEqualTo(rowBounds.Bottom + 0.5);
+            overlayBounds.Bottom.Should().BeLessThanOrEqualTo(rowBounds.Bottom + 0.5);
+        });
+    }
+
+    [Fact]
     public void ArrowKeyOnAddSheetButton_DoesNotRouteAsFocusedSheetTabNavigation()
     {
         StaTestRunner.Run(() =>
