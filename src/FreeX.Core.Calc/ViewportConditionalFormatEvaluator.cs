@@ -782,8 +782,7 @@ internal static class ViewportConditionalFormatEvaluator
 
     private static FormulaNode ParseFormulaText(string? text)
     {
-        var formula = text is { Length: > 0 } && text[0] == '=' ? text : "=" + text;
-        return new Parser(new Lexer(formula).Tokenize()).Parse();
+        return FormulaEvaluator.ParseFormula(text ?? string.Empty);
     }
 
     internal static FormulaNode? GetThresholdFormula(

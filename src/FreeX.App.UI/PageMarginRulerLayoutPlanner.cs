@@ -49,21 +49,15 @@ public static class PageMarginRulerLayoutPlanner
         bool showRulers = true)
     {
         if (!showRulers) return null;
-        if (ContainsInclusive(handles.Left, pos))
+        if (RectHitTest.ContainsInclusive(handles.Left, pos))
             return WorksheetPageMarginEdge.Left;
-        if (ContainsInclusive(handles.Right, pos))
+        if (RectHitTest.ContainsInclusive(handles.Right, pos))
             return WorksheetPageMarginEdge.Right;
-        if (ContainsInclusive(handles.Top, pos))
+        if (RectHitTest.ContainsInclusive(handles.Top, pos))
             return WorksheetPageMarginEdge.Top;
-        if (ContainsInclusive(handles.Bottom, pos))
+        if (RectHitTest.ContainsInclusive(handles.Bottom, pos))
             return WorksheetPageMarginEdge.Bottom;
 
         return null;
     }
-
-    private static bool ContainsInclusive(Rect rect, Point pos) =>
-        pos.X >= rect.Left &&
-        pos.X <= rect.Right &&
-        pos.Y >= rect.Top &&
-        pos.Y <= rect.Bottom;
 }

@@ -246,8 +246,16 @@ public sealed class FormulaEvaluator
     private static ScalarValue NormalizeTopLevelResult(ScalarValue value) =>
         value is LambdaValue ? ErrorValue.Calc : value;
 
+    /// <summary>
+    /// Parse a formula string using the shared text-to-AST cache. The returned AST is shared and should be treated as immutable.
+    /// </summary>
+    public static FormulaNode ParseFormula(string formulaText) =>
+        GetOrParseFormula(formulaText);
+
     private static FormulaNode GetOrParseFormula(string formulaText)
     {
+        formulaText = NormalizeFormulaCacheKey(formulaText);
+
         lock (ParsedFormulaCacheGate)
         {
             if (ParsedFormulaCache.TryGetValue(formulaText, out var cached))
@@ -281,6 +289,11 @@ public sealed class FormulaEvaluator
         var parser = new Parser(tokens);
         return parser.Parse();
     }
+
+    private static string NormalizeFormulaCacheKey(string formulaText) =>
+        formulaText is { Length: > 0 } && formulaText[0] == '='
+            ? formulaText[1..]
+            : formulaText;
 
     /// <summary>
     /// Evaluate an AST node recursively.
