@@ -58,6 +58,31 @@ internal static class GridDrawingObjectPlanner
         return true;
     }
 
+    public static bool TryCreateAnchoredObjectRect(
+        IReadOnlyDictionary<uint, RowMetric> rows,
+        IReadOnlyDictionary<uint, ColMetric> columns,
+        CellAddress anchor,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double width,
+        double height,
+        double minimumWidth,
+        double minimumHeight,
+        out Rect rect)
+    {
+        rect = default;
+        if (!rows.TryGetValue(anchor.Row, out var row) ||
+            !columns.TryGetValue(anchor.Col, out var col))
+            return false;
+
+        rect = new Rect(
+            col.LeftOffset + rowHeaderWidth,
+            row.TopOffset + columnHeaderHeight,
+            Math.Max(minimumWidth, width),
+            Math.Max(minimumHeight, height));
+        return true;
+    }
+
     public static string GetNativeControlCaption(string? caption, string name, string? shapeName)
     {
         if (!string.IsNullOrWhiteSpace(caption))
