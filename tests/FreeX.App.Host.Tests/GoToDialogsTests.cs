@@ -173,6 +173,29 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
+    public void GoToDialogReferenceList_DoubleClickWithoutSelectionDoesNotHandleMouseEvent()
+    {
+        var sheetId = SheetId.New();
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new GoToDialog(sheetId, defaultAddress: "A1", recentReferences: ["D10"]);
+            var historyList = GetPrivateControl<ListBox>(dialog, "_historyList");
+            historyList.SelectedItem = null;
+
+            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = Control.MouseDoubleClickEvent
+            };
+
+            historyList.RaiseEvent(doubleClick);
+
+            doubleClick.Handled.Should().BeFalse();
+            dialog.DialogResult.Should().BeNull();
+            dialog.SelectedRange.Should().BeNull();
+        });
+    }
+
+    [Fact]
     public void GoToDialogInvalidReference_RefocusesAndSelectsReferenceBox()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "GoToDialog.cs"));
