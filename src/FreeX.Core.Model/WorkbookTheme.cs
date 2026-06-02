@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 
 namespace FreeX.Core.Model;
@@ -17,7 +18,8 @@ public sealed record WorkbookTheme(
     string? NativeThemeSupplementXml = null,
     IReadOnlyList<WorkbookThemeAlternateColorScheme> AlternateColorSchemes = null!,
     bool HasObjectDefaults = false,
-    WorkbookThemeObjectDefaults? ObjectDefaults = null)
+    WorkbookThemeObjectDefaults? ObjectDefaults = null,
+    WorkbookThemeEffectDefaults? EffectDefaults = null)
 {
     private static readonly IReadOnlyDictionary<WorkbookThemeColorSlot, CellColor> OfficeColors =
         new Dictionary<WorkbookThemeColorSlot, CellColor>
@@ -70,17 +72,20 @@ public sealed record WorkbookTheme(
     public WorkbookTheme WithEffects(string effectsName)
     {
         var normalizedEffectsName = string.IsNullOrWhiteSpace(effectsName) ? Office.EffectsName : effectsName.Trim();
+        var renamedFormatSchemeXml = RenameNativeFormatScheme(NativeFormatSchemeXml, normalizedEffectsName);
         return this with
         {
             EffectsName = normalizedEffectsName,
-            NativeFormatSchemeXml = RenameNativeFormatScheme(NativeFormatSchemeXml, normalizedEffectsName)
+            NativeFormatSchemeXml = renamedFormatSchemeXml,
+            EffectDefaults = ReadFormatSchemeEffectDefaults(renamedFormatSchemeXml)
         };
     }
 
     public WorkbookTheme WithNativeFormatSchemeXml(string? formatSchemeXml) =>
         this with
         {
-            NativeFormatSchemeXml = string.IsNullOrWhiteSpace(formatSchemeXml) ? null : formatSchemeXml.Trim()
+            NativeFormatSchemeXml = string.IsNullOrWhiteSpace(formatSchemeXml) ? null : formatSchemeXml.Trim(),
+            EffectDefaults = ReadFormatSchemeEffectDefaults(formatSchemeXml)
         };
 
     public WorkbookTheme WithNativeColorSchemeXml(string? colorSchemeXml) =>
@@ -150,6 +155,95 @@ public sealed record WorkbookTheme(
             return null;
         }
     }
+
+    private static WorkbookThemeEffectDefaults? ReadFormatSchemeEffectDefaults(string? formatSchemeXml)
+    {
+        if (string.IsNullOrWhiteSpace(formatSchemeXml))
+            return null;
+
+        try
+        {
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var formatScheme = XElement.Parse(formatSchemeXml);
+            if (formatScheme.Name != drawingNs + "fmtScheme")
+                return null;
+
+            var outerShadow = formatScheme
+                .Element(drawingNs + "effectStyleLst")?
+                .Elements(drawingNs + "effectStyle")
+                .Select(effectStyle => FindOuterShadow(effectStyle, drawingNs))
+                .FirstOrDefault(shadow => shadow is not null);
+            if (outerShadow is null)
+                return null;
+
+            var opacity = ReadShadowOpacity(outerShadow, drawingNs);
+            var distancePixels = ReadPositiveCoordinatePixels(outerShadow.Attribute("dist")?.Value);
+            var directionRadians = ReadAngleRadians(outerShadow.Attribute("dir")?.Value);
+            var offsetX = CleanZero(Math.Round(Math.Cos(directionRadians) * distancePixels, 3));
+            var offsetY = CleanZero(Math.Round(Math.Sin(directionRadians) * distancePixels, 3));
+
+            return new WorkbookThemeEffectDefaults(opacity, offsetX, offsetY);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static XElement? FindOuterShadow(XElement effectStyle, XNamespace drawingNs) =>
+        effectStyle
+            .Element(drawingNs + "effectLst")?
+            .Element(drawingNs + "outerShdw")
+        ?? effectStyle
+            .Element(drawingNs + "effectDag")?
+            .Descendants(drawingNs + "outerShdw")
+            .FirstOrDefault();
+
+    private static double ReadShadowOpacity(XElement outerShadow, XNamespace drawingNs)
+    {
+        var alphaText = outerShadow
+            .Elements()
+            .Select(color => color.Element(drawingNs + "alpha")?.Attribute("val")?.Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+        return int.TryParse(alphaText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var alpha)
+            ? Math.Clamp(alpha / 100000d, 0, 1)
+            : 1;
+    }
+
+    private static double ReadPositiveCoordinatePixels(string? coordinateText)
+    {
+        if (!double.TryParse(
+                coordinateText,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var coordinate) ||
+            coordinate <= 0)
+        {
+            return 0;
+        }
+
+        const double emusPerInch = 914400d;
+        const double pixelsPerInch = 96d;
+        return coordinate / emusPerInch * pixelsPerInch;
+    }
+
+    private static double ReadAngleRadians(string? angleText)
+    {
+        if (!double.TryParse(
+                angleText,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var angle))
+        {
+            return 0;
+        }
+
+        return angle / 60000d * Math.PI / 180d;
+    }
+
+    private static double CleanZero(double value) =>
+        Math.Abs(value) < 0.0005 ? 0 : value;
 }
 
 public enum WorkbookThemeColorSlot
@@ -204,6 +298,14 @@ public sealed record WorkbookThemeTextObjectDefault(
     WorkbookThemeColorReference? TextThemeColor = null,
     CellColor? TextColor = null,
     string? Typeface = null);
+
+public sealed record WorkbookThemeEffectDefaults(
+    double ShadowOpacity = 0,
+    double ShadowOffsetX = 0,
+    double ShadowOffsetY = 0)
+{
+    public bool HasShadow => ShadowOpacity > 0;
+}
 
 public readonly record struct WorkbookThemeColorReference(
     WorkbookThemeColorSlot Slot,
