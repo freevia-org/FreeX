@@ -327,61 +327,128 @@ public partial class GridView
     {
         if (Viewport is null || ObjectDisplayMode == GridObjectDisplayMode.Nothing) return default;
 
+        if (HasExplicitDrawingObjectZOrder())
+        {
+            var order = GetNormalizedDrawingObjectZOrder();
+            for (var index = order.Count - 1; index >= 0; index--)
+            {
+                var entry = order[index];
+                if (entry.Kind == SelectionPaneObjectKind.TextBox &&
+                    FindTextBox(entry.Id) is { } textBox &&
+                    TryHitTextBox(textBox, pos, out var textBoxHit))
+                {
+                    return textBoxHit;
+                }
+
+                if (entry.Kind == SelectionPaneObjectKind.Picture &&
+                    FindPicture(entry.Id) is { } picture &&
+                    TryHitPicture(picture, pos, out var pictureHit))
+                {
+                    return pictureHit;
+                }
+
+                if (entry.Kind == SelectionPaneObjectKind.Shape &&
+                    FindDrawingShape(entry.Id) is { } shape &&
+                    TryHitDrawingShape(shape, pos, out var shapeHit))
+                {
+                    return shapeHit;
+                }
+            }
+
+            return default;
+        }
+
         if (TextBoxes is not null)
             for (var i = TextBoxes.Count - 1; i >= 0; i--)
             {
-                var t = TextBoxes[i];
-                if (t.IsVisible &&
-                    TryCreateAnchoredObjectRect(
-                        t.Anchor,
-                        t.Width,
-                        t.Height,
-                        MinimumTextBoxObjectWidth,
-                        MinimumTextBoxObjectHeight,
-                        out var r) &&
-                    ContainsRotatedInclusive(r, pos, t.RotationDegrees))
-                {
-                    return (t.Id, ObjectKind.TextBox, r, t.Anchor);
-                }
+                if (TryHitTextBox(TextBoxes[i], pos, out var hit))
+                    return hit;
             }
 
         if (Pictures is not null)
             for (var i = Pictures.Count - 1; i >= 0; i--)
             {
-                var p = Pictures[i];
-                if (p.IsVisible &&
-                    TryCreateAnchoredObjectRect(
-                        p.Anchor,
-                        p.Width,
-                        p.Height,
-                        MinimumPictureObjectWidth,
-                        MinimumPictureObjectHeight,
-                        out var r) &&
-                    ContainsRotatedInclusive(r, pos, p.RotationDegrees))
-                {
-                    return (p.Id, ObjectKind.Picture, r, p.Anchor);
-                }
+                if (TryHitPicture(Pictures[i], pos, out var hit))
+                    return hit;
             }
 
         if (DrawingShapes is not null)
             for (var i = DrawingShapes.Count - 1; i >= 0; i--)
             {
-                var s = DrawingShapes[i];
-                if (s.IsVisible &&
-                    TryCreateAnchoredObjectRect(
-                        s.Anchor,
-                        s.Width,
-                        s.Height,
-                        MinimumShapeObjectWidth,
-                        MinimumShapeObjectHeight,
-                        out var r) &&
-                    ContainsRotatedInclusive(r, pos, s.RotationDegrees))
-                {
-                    return (s.Id, ObjectKind.Shape, r, s.Anchor);
-                }
+                if (TryHitDrawingShape(DrawingShapes[i], pos, out var hit))
+                    return hit;
             }
 
         return default;
+    }
+
+    private bool TryHitTextBox(
+        TextBoxModel textBox,
+        Point pos,
+        out (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) hit)
+    {
+        if (textBox.IsVisible &&
+            TryCreateAnchoredObjectRect(
+                textBox.Anchor,
+                textBox.Width,
+                textBox.Height,
+                MinimumTextBoxObjectWidth,
+                MinimumTextBoxObjectHeight,
+                out var rect) &&
+            ContainsRotatedInclusive(rect, pos, textBox.RotationDegrees))
+        {
+            hit = (textBox.Id, ObjectKind.TextBox, rect, textBox.Anchor);
+            return true;
+        }
+
+        hit = default;
+        return false;
+    }
+
+    private bool TryHitPicture(
+        PictureModel picture,
+        Point pos,
+        out (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) hit)
+    {
+        if (picture.IsVisible &&
+            TryCreateAnchoredObjectRect(
+                picture.Anchor,
+                picture.Width,
+                picture.Height,
+                MinimumPictureObjectWidth,
+                MinimumPictureObjectHeight,
+                out var rect) &&
+            ContainsRotatedInclusive(rect, pos, picture.RotationDegrees))
+        {
+            hit = (picture.Id, ObjectKind.Picture, rect, picture.Anchor);
+            return true;
+        }
+
+        hit = default;
+        return false;
+    }
+
+    private bool TryHitDrawingShape(
+        DrawingShapeModel shape,
+        Point pos,
+        out (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) hit)
+    {
+        if (shape.IsVisible &&
+            TryCreateAnchoredObjectRect(
+                shape.Anchor,
+                shape.Width,
+                shape.Height,
+                MinimumShapeObjectWidth,
+                MinimumShapeObjectHeight,
+                out var rect) &&
+            ContainsRotatedInclusive(rect, pos, shape.RotationDegrees))
+        {
+            hit = (shape.Id, ObjectKind.Shape, rect, shape.Anchor);
+            return true;
+        }
+
+        hit = default;
+        return false;
     }
 
     private static bool ContainsRotatedInclusive(Rect rect, Point pos, double rotationDegrees)

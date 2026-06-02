@@ -68,7 +68,7 @@ internal static class SelectionPaneDialogStatePlanner
         bool forward)
     {
         var currentIndex = FindIndex(items, selectedId);
-        var targetIndex = FindSameKindMoveTargetIndex(items, currentIndex, forward);
+        var targetIndex = FindMoveTargetIndex(items, currentIndex, forward);
         if (targetIndex < 0)
             return null;
 
@@ -107,7 +107,7 @@ internal static class SelectionPaneDialogStatePlanner
         return new SelectionPaneDropVisualPlan(targetId, placement, dragPlan is not null);
     }
 
-    public static int FindSameKindMoveTargetIndex(
+    public static int FindMoveTargetIndex(
         IReadOnlyList<SelectionPaneDialogItemState> items,
         int currentIndex,
         bool forward)
@@ -118,12 +118,16 @@ internal static class SelectionPaneDialogStatePlanner
         var step = forward ? -1 : 1;
         for (var index = currentIndex + step; index >= 0 && index < items.Count; index += step)
         {
-            if (items[index].Kind == items[currentIndex].Kind)
+            if (CanReorderKinds(items[currentIndex].Kind, items[index].Kind))
                 return index;
         }
 
         return -1;
     }
+
+    public static bool CanReorderKinds(SelectionPaneObjectKind draggedKind, SelectionPaneObjectKind targetKind) =>
+        draggedKind == targetKind ||
+        DrawingObjectZOrder.IsSupportedKind(draggedKind) && DrawingObjectZOrder.IsSupportedKind(targetKind);
 
     public static IReadOnlyList<SelectionPaneVisibilityChange> CreateVisibilityChanges(
         IReadOnlyList<SelectionPaneItem> originalItems,
@@ -189,7 +193,7 @@ internal static class SelectionPaneDialogStatePlanner
 
         var dragged = items[draggedIndex];
         var target = items[targetIndex];
-        if (dragged.Kind != target.Kind)
+        if (!CanReorderKinds(dragged.Kind, target.Kind))
             return null;
 
         return CreateDragMovePlan(dragged.Kind, dragged.Id, draggedIndex, targetIndex, placement);
@@ -207,7 +211,7 @@ internal static class SelectionPaneDialogStatePlanner
 
         var dragged = currentOrder[draggedIndex];
         var target = currentOrder[targetIndex];
-        if (dragged.Kind != target.Kind)
+        if (!CanReorderKinds(dragged.Kind, target.Kind))
             return null;
 
         return CreateDragMovePlan(dragged.Kind, dragged.Id, draggedIndex, targetIndex, placement);

@@ -116,24 +116,26 @@ public sealed class ShapeCommandTests
     }
 
     [Fact]
-    public void BringDrawingShapeForwardCommand_MovesShapeLaterAndUndoRestores()
+    public void BringDrawingShapeForwardCommand_MovesShapeThroughMixedSupportedStackAndUndoRestores()
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var ctx = new SimpleCtx(wb);
         var back = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Kind = DrawingShapeKind.Rectangle };
-        var front = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Kind = DrawingShapeKind.Ellipse };
+        var front = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
         sheet.DrawingShapes.Add(back);
-        sheet.DrawingShapes.Add(front);
+        sheet.Pictures.Add(front);
 
         var command = new BringDrawingShapeForwardCommand(sheet.Id, back.Id);
 
         command.Apply(ctx).Success.Should().BeTrue();
-        sheet.DrawingShapes.Should().Equal(front, back);
+        sheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, front.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, back.Id));
 
         command.Revert(ctx);
 
-        sheet.DrawingShapes.Should().Equal(back, front);
+        sheet.DrawingObjectZOrder.Should().BeEmpty();
     }
 
     [Fact]
@@ -155,24 +157,30 @@ public sealed class ShapeCommandTests
     }
 
     [Fact]
-    public void SendDrawingShapeBackwardCommand_MovesShapeEarlierAndUndoRestores()
+    public void SendDrawingShapeBackwardCommand_MovesShapeThroughMixedSupportedStackAndUndoRestores()
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var ctx = new SimpleCtx(wb);
-        var back = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Kind = DrawingShapeKind.Rectangle };
+        var back = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
         var front = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), Kind = DrawingShapeKind.Ellipse };
-        sheet.DrawingShapes.Add(back);
+        sheet.Pictures.Add(back);
         sheet.DrawingShapes.Add(front);
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, back.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, front.Id));
 
         var command = new SendDrawingShapeBackwardCommand(sheet.Id, front.Id);
 
         command.Apply(ctx).Success.Should().BeTrue();
-        sheet.DrawingShapes.Should().Equal(front, back);
+        sheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, front.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, back.Id));
 
         command.Revert(ctx);
 
-        sheet.DrawingShapes.Should().Equal(back, front);
+        sheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, back.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, front.Id));
     }
 
     [Fact]

@@ -128,6 +128,10 @@ public class SheetTabCommandTests
             AltText = "Process box",
             IsSourceLoaded = true
         });
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, sheet.Pictures[1].Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, sheet.DrawingShapes[0].Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, sheet.TextBoxes[0].Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, sheet.Pictures[0].Id));
 
         var command = new DuplicateSheetCommand(sheet.Id);
 
@@ -232,6 +236,11 @@ public class SheetTabCommandTests
         copiedShape.HasShadowEffect.Should().BeTrue();
         copiedShape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Glow);
         copiedShape.IsSourceLoaded.Should().BeTrue();
+        copy.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, copiedImage.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, copiedShape.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, copiedTextBox.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, copiedPicture.Id));
 
         command.Revert(ctx);
 

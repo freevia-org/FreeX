@@ -48,24 +48,29 @@ public sealed class SelectionPaneCommandTests
     }
 
     [Fact]
-    public void MoveSelectionPaneObjectCommand_MovesPictureWithinItsStackAndUndoRestores()
+    public void MoveSelectionPaneObjectCommand_MovesPictureWithinMixedSupportedStackAndUndoRestores()
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var ctx = new SimpleCtx(wb);
-        var back = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
-        var front = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 2) };
-        sheet.Pictures.Add(back);
-        sheet.Pictures.Add(front);
+        var back = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
+        var middle = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 2) };
+        var front = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 3) };
+        sheet.DrawingShapes.Add(back);
+        sheet.Pictures.Add(middle);
+        sheet.TextBoxes.Add(front);
 
-        var command = new MoveSelectionPaneObjectCommand(sheet.Id, SelectionPaneObjectKind.Picture, back.Id, forward: true);
+        var command = new MoveSelectionPaneObjectCommand(sheet.Id, SelectionPaneObjectKind.Picture, middle.Id, forward: true);
 
         command.Apply(ctx).Success.Should().BeTrue();
-        sheet.Pictures.Should().Equal(front, back);
+        sheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, back.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, front.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, middle.Id));
 
         command.Revert(ctx);
 
-        sheet.Pictures.Should().Equal(back, front);
+        sheet.DrawingObjectZOrder.Should().BeEmpty();
     }
 
     [Fact]
