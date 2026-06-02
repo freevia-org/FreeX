@@ -1,0 +1,749 @@
+using FreeX.Core.Model;
+
+namespace FreeX.Core.Formula;
+
+public sealed partial class FormulaEvaluator
+{
+    private static bool TryEvaluateRangeOnlyFastAggregate(
+        string functionName,
+        IReadOnlyList<FormulaNode> arguments,
+        IEvalContext context,
+        out ScalarValue result)
+    {
+        result = BlankValue.Instance;
+        if (!TryGetFastAggregateKind(functionName, out var kind))
+            return false;
+
+        var ranges = new List<FastAggregateRange>(arguments.Count);
+        for (var index = 0; index < arguments.Count; index++)
+        {
+            var resolution = TryResolveFastAggregateRange(kind, arguments[index], context, out var range, out var error);
+            if (resolution == FastAggregateRangeResolution.Unsupported)
+                return false;
+
+            if (error is not null)
+            {
+                if (ranges.Count > 0 &&
+                    TryFindFastRangeOnlyImmediateError(kind, ranges, context, out var priorError))
+                    result = priorError;
+                else
+                    result = error;
+
+                return true;
+            }
+
+            ranges.Add(range);
+        }
+
+        result = EvaluateFastRangeOnlyAggregate(kind, ranges, context);
+        return true;
+    }
+
+    private static ScalarValue EvaluateFastRangeOnlyAggregate(
+        FastAggregateKind kind,
+        IReadOnlyList<FastAggregateRange> ranges,
+        IEvalContext context)
+    {
+        return kind switch
+        {
+            FastAggregateKind.Sum => EvaluateFastRangeOnlySum(ranges, context),
+            FastAggregateKind.Average => EvaluateFastRangeOnlyAverage(ranges, context),
+            FastAggregateKind.Min => EvaluateFastRangeOnlyMinMax(ranges, context, findMax: false),
+            FastAggregateKind.Max => EvaluateFastRangeOnlyMinMax(ranges, context, findMax: true),
+            FastAggregateKind.CountBlank => EvaluateFastRangeOnlyCountBlank(ranges, context),
+            FastAggregateKind.StdevS => EvaluateFastRangeOnlyVariance(ranges, context, sample: true, squareRoot: true),
+            FastAggregateKind.StdevP => EvaluateFastRangeOnlyVariance(ranges, context, sample: false, squareRoot: true),
+            FastAggregateKind.VarS => EvaluateFastRangeOnlyVariance(ranges, context, sample: true, squareRoot: false),
+            FastAggregateKind.VarP => EvaluateFastRangeOnlyVariance(ranges, context, sample: false, squareRoot: false),
+            _ => EvaluateFastRangeOnlyCount(ranges, context)
+        };
+    }
+
+    private static bool TryFindFastRangeOnlyImmediateError(
+        FastAggregateKind kind,
+        IReadOnlyList<FastAggregateRange> ranges,
+        IEvalContext context,
+        out ErrorValue error)
+    {
+        error = null!;
+        if (kind is FastAggregateKind.Count or FastAggregateKind.CountBlank)
+            return false;
+
+        foreach (var range in ranges)
+        {
+            if (context is SheetEvalContext sheetContext)
+            {
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null)
+                {
+                    error = ErrorValue.Ref;
+                    return true;
+                }
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        _ = TryDirectRangeNumber(sheet.GetValue(row, col), out _, out var cellError);
+                        if (cellError is not null)
+                        {
+                            error = cellError;
+                            return true;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        _ = TryDirectRangeNumber(value, out _, out var cellError);
+                        if (cellError is not null)
+                        {
+                            error = cellError;
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static ScalarValue EvaluateFastRangeOnlySum(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
+    {
+        double total = 0;
+        foreach (var range in ranges)
+        {
+            if (context is SheetEvalContext sheetContext)
+            {
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null) return ErrorValue.Ref;
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = sheet.GetValue(row, col);
+                        if (TryDirectRangeNumber(value, out var number, out var error))
+                        {
+                            total += number;
+                        }
+                        else if (error is not null)
+                        {
+                            return error;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        if (TryDirectRangeNumber(value, out var number, out var error))
+                        {
+                            total += number;
+                        }
+                        else if (error is not null)
+                        {
+                            return error;
+                        }
+                    }
+                }
+            }
+        }
+
+        return double.IsFinite(total) ? new NumberValue(total) : ErrorValue.Num;
+    }
+
+    private static ScalarValue EvaluateFastRangeOnlyAverage(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
+    {
+        double total = 0;
+        long count = 0;
+        foreach (var range in ranges)
+        {
+            if (context is SheetEvalContext sheetContext)
+            {
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null) return ErrorValue.Ref;
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = sheet.GetValue(row, col);
+                        if (TryDirectRangeNumber(value, out var number, out var error))
+                        {
+                            total += number;
+                            count++;
+                        }
+                        else if (error is not null)
+                        {
+                            return error;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        if (TryDirectRangeNumber(value, out var number, out var error))
+                        {
+                            total += number;
+                            count++;
+                        }
+                        else if (error is not null)
+                        {
+                            return error;
+                        }
+                    }
+                }
+            }
+        }
+
+        return count == 0
+            ? ErrorValue.DivByZero
+            : double.IsFinite(total / count) ? new NumberValue(total / count) : ErrorValue.Num;
+    }
+
+    private static ScalarValue EvaluateFastRangeOnlyMinMax(
+        IReadOnlyList<FastAggregateRange> ranges,
+        IEvalContext context,
+        bool findMax)
+    {
+        double? result = null;
+        foreach (var range in ranges)
+        {
+            if (context is SheetEvalContext sheetContext)
+            {
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null) return ErrorValue.Ref;
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = sheet.GetValue(row, col);
+                        if (TryDirectRangeNumber(value, out var number, out var error))
+                        {
+                            if (result is null ||
+                                (findMax ? number > result.Value : number < result.Value))
+                            {
+                                result = number;
+                            }
+                        }
+                        else if (error is not null)
+                        {
+                            return error;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        if (TryDirectRangeNumber(value, out var number, out var error))
+                        {
+                            if (result is null ||
+                                (findMax ? number > result.Value : number < result.Value))
+                            {
+                                result = number;
+                            }
+                        }
+                        else if (error is not null)
+                        {
+                            return error;
+                        }
+                    }
+                }
+            }
+        }
+
+        return result is null
+            ? new NumberValue(0)
+            : double.IsFinite(result.Value) ? new NumberValue(result.Value) : ErrorValue.Num;
+    }
+
+    private static ScalarValue EvaluateFastRangeOnlyCount(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
+    {
+        long count = 0;
+        foreach (var range in ranges)
+        {
+            if (context is SheetEvalContext sheetContext)
+            {
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null) return ErrorValue.Ref;
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = sheet.GetValue(row, col);
+                        if (value is NumberValue or DateTimeValue)
+                            count++;
+                    }
+                }
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        if (value is NumberValue or DateTimeValue)
+                            count++;
+                    }
+                }
+            }
+        }
+
+        return new NumberValue(count);
+    }
+
+    private static ScalarValue EvaluateFastRangeOnlyCountBlank(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
+    {
+        long count = 0;
+        foreach (var range in ranges)
+        {
+            if (context is SheetEvalContext sheetContext)
+            {
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null) return ErrorValue.Ref;
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = sheet.GetValue(row, col);
+
+                        if (value is BlankValue || value is TextValue { Value.Length: 0 })
+                            count++;
+                    }
+                }
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+
+                        if (value is BlankValue || value is TextValue { Value.Length: 0 })
+                            count++;
+                    }
+                }
+            }
+        }
+
+        return new NumberValue(count);
+    }
+
+    private static ScalarValue EvaluateFastRangeOnlyVariance(
+        IReadOnlyList<FastAggregateRange> ranges,
+        IEvalContext context,
+        bool sample,
+        bool squareRoot)
+    {
+        long count = 0;
+        double mean = 0;
+        double m2 = 0;
+
+        foreach (var range in ranges)
+        {
+            if (context is SheetEvalContext sheetContext)
+            {
+                var sheet = ResolveFastAggregateSheet(range, sheetContext);
+                if (sheet is null) return ErrorValue.Ref;
+
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        if (!AccumulateFastVarianceValue(sheet.GetValue(row, col), ref count, ref mean, ref m2, out var error))
+                            return error!;
+                    }
+                }
+            }
+            else
+            {
+                for (var row = range.StartRow; row <= range.EndRow; row++)
+                {
+                    for (var col = range.StartCol; col <= range.EndCol; col++)
+                    {
+                        var value = range.SheetName is not null
+                            ? context.GetCellValue(range.SheetName, row, col)
+                            : context.GetCellValue(row, col);
+                        if (!AccumulateFastVarianceValue(value, ref count, ref mean, ref m2, out var error))
+                            return error!;
+                    }
+                }
+            }
+        }
+
+        if (count == 0 || (sample && count < 2))
+            return ErrorValue.DivByZero;
+
+        var variance = m2 / (sample ? count - 1 : count);
+        var result = squareRoot ? Math.Sqrt(variance) : variance;
+        return double.IsFinite(result) ? new NumberValue(result) : ErrorValue.Num;
+    }
+
+    private static bool AccumulateFastVarianceValue(
+        ScalarValue value,
+        ref long count,
+        ref double mean,
+        ref double m2,
+        out ErrorValue? error)
+    {
+        if (!TryDirectRangeNumber(value, out var number, out error))
+            return error is null;
+
+        count++;
+        var delta = number - mean;
+        mean += delta / count;
+        m2 += delta * (number - mean);
+        return true;
+    }
+
+    private static Sheet? ResolveFastAggregateSheet(FastAggregateRange range, SheetEvalContext context)
+        => context.ResolveSheetForFastRange(range.SheetName);
+
+    // Intersect a full-column/full-row range with the target sheet's used (populated) extent.
+    // Returns false when there is nothing to aggregate (empty sheet or no overlap), in which
+    // case the caller should treat the range as containing zero cells. When the context cannot
+    // resolve a sheet (non-sheet context), the range is left unchanged.
+    private static bool TryClampFullRangeToUsed(
+        string? sheetName,
+        IEvalContext context,
+        ref uint startRow,
+        ref uint startCol,
+        ref uint endRow,
+        ref uint endCol)
+    {
+        if (context is not SheetEvalContext sheetContext)
+            return true;
+
+        var sheet = sheetContext.ResolveSheetForFastRange(sheetName);
+        if (sheet is null)
+            return true;
+
+        if (sheet.GetUsedRange() is not { } used)
+            return false;
+
+        var clampedStartRow = Math.Max(startRow, used.Start.Row);
+        var clampedEndRow = Math.Min(endRow, used.End.Row);
+        var clampedStartCol = Math.Max(startCol, used.Start.Col);
+        var clampedEndCol = Math.Min(endCol, used.End.Col);
+
+        if (clampedStartRow > clampedEndRow || clampedStartCol > clampedEndCol)
+            return false;
+
+        startRow = clampedStartRow;
+        endRow = clampedEndRow;
+        startCol = clampedStartCol;
+        endCol = clampedEndCol;
+        return true;
+    }
+
+    private static FastAggregateRangeResolution TryResolveFastAggregateRange(
+        FastAggregateKind kind,
+        FormulaNode argument,
+        IEvalContext context,
+        out FastAggregateRange range,
+        out ErrorValue? error)
+    {
+        range = default;
+        error = null;
+
+        if (TryAsRangeRef(argument, out var rangeRef))
+        {
+            if (rangeRef.SheetName is not null && !context.SheetExists(rangeRef.SheetName))
+            {
+                error = ErrorValue.Ref;
+                return FastAggregateRangeResolution.Error;
+            }
+
+            var startRow = Math.Min(rangeRef.Start.Row, rangeRef.End.Row);
+            var startCol = Math.Min(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber);
+            var endRow = Math.Max(rangeRef.Start.Row, rangeRef.End.Row);
+            var endCol = Math.Max(rangeRef.Start.ColumnNumber, rangeRef.End.ColumnNumber);
+
+            // Full-column (A:C) / full-row (1:5) ranges nominally span 1,048,576 rows or
+            // 16,384 columns. Excel aggregates only the populated extent; clamping to the
+            // sheet's used range gives the same numeric result, keeps us under the streaming
+            // cap (so e.g. SUM(A:C) no longer wrongly returns #REF!), and is far faster.
+            // COUNTBLANK is excluded: it must count blanks across the whole nominal range.
+            if (argument is FullColumnRangeRefNode or FullRowRangeRefNode
+                && kind != FastAggregateKind.CountBlank)
+            {
+                if (!TryClampFullRangeToUsed(rangeRef.SheetName, context, ref startRow, ref startCol, ref endRow, ref endCol))
+                {
+                    // No populated cells overlap the range: emit an empty range (endRow < startRow
+                    // so every aggregate loop iterates zero cells -> SUM/COUNT 0, AVERAGE #DIV/0!, etc.).
+                    range = new FastAggregateRange(rangeRef.SheetName, 1, 1, 0, 0);
+                    return FastAggregateRangeResolution.Range;
+                }
+            }
+
+            var resolvedRange = new FastAggregateRange(rangeRef.SheetName, startRow, startCol, endRow, endCol);
+
+            if (!TryAcceptFastAggregateRange(resolvedRange, kind, out error))
+                return FastAggregateRangeResolution.Error;
+
+            range = resolvedRange;
+            return FastAggregateRangeResolution.Range;
+        }
+
+        if (argument is FunctionCallNode { FunctionName: "INDIRECT" } indirect)
+        {
+            if (!TryBuildLiteralIndirectArguments(indirect, out var indirectArgs, out error))
+                return error is null
+                    ? FastAggregateRangeResolution.Unsupported
+                    : FastAggregateRangeResolution.Error;
+
+            if (!BuiltInFunctions.TryResolveIndirectRangeReference(indirectArgs, context, out var indirectRange, out var indirectError))
+            {
+                error = indirectError as ErrorValue;
+                return error is null
+                    ? FastAggregateRangeResolution.Unsupported
+                    : FastAggregateRangeResolution.Error;
+            }
+
+            var resolvedRange = new FastAggregateRange(
+                indirectRange.SheetName,
+                Math.Min(indirectRange.StartRow, indirectRange.EndRow),
+                Math.Min(indirectRange.StartCol, indirectRange.EndCol),
+                Math.Max(indirectRange.StartRow, indirectRange.EndRow),
+                Math.Max(indirectRange.StartCol, indirectRange.EndCol));
+
+            if (!TryAcceptFastAggregateRange(resolvedRange, kind, out error))
+                return FastAggregateRangeResolution.Error;
+
+            range = resolvedRange;
+            return FastAggregateRangeResolution.Range;
+        }
+
+        if (argument is NamedRangeNode named)
+        {
+            if (context.TryResolveLambdaBinding(named.Name) is not null)
+                return FastAggregateRangeResolution.Unsupported;
+
+            var resolvedNamedRange = context.TryResolveNamedRange(named.Name);
+            if (resolvedNamedRange is null)
+                return FastAggregateRangeResolution.Unsupported;
+
+            var gridRange = resolvedNamedRange.Value;
+            var resolvedRange = new FastAggregateRange(
+                context.TryGetSheetName(gridRange.Start.Sheet),
+                gridRange.Start.Row,
+                gridRange.Start.Col,
+                gridRange.End.Row,
+                gridRange.End.Col);
+
+            if (!TryAcceptFastAggregateRange(resolvedRange, kind, out error))
+                return FastAggregateRangeResolution.Error;
+
+            range = resolvedRange;
+            return FastAggregateRangeResolution.Range;
+        }
+
+        return FastAggregateRangeResolution.Unsupported;
+    }
+
+    private static bool TryAcceptFastAggregateRange(FastAggregateRange range, FastAggregateKind kind, out ErrorValue? error)
+    {
+        error = null;
+        var cellCount = FormulaSafetyLimits.GetRangeCellCount(
+            range.StartRow,
+            range.StartCol,
+            range.EndRow,
+            range.EndCol);
+        var maxCells = kind is FastAggregateKind.StdevS or FastAggregateKind.StdevP or FastAggregateKind.VarS or FastAggregateKind.VarP
+            ? FormulaSafetyLimits.MaxMaterializedRangeCells
+            : FormulaSafetyLimits.MaxStreamingRangeCells;
+        if (cellCount <= maxCells)
+            return true;
+
+        error = ErrorValue.Ref;
+        return false;
+    }
+
+    private static bool TryBuildLiteralIndirectArguments(
+        FunctionCallNode node,
+        out IReadOnlyList<ScalarValue> args,
+        out ErrorValue? error)
+    {
+        args = [];
+        error = null;
+        if (node.Arguments.Count is < 1 or > 2)
+        {
+            error = ErrorValue.Value;
+            return false;
+        }
+
+        if (!TryBuildLiteralIndirectArgument(node.Arguments[0], out var refText, out error))
+            return false;
+
+        if (node.Arguments.Count == 1)
+        {
+            args = [refText];
+            return true;
+        }
+
+        if (!TryBuildLiteralIndirectArgument(node.Arguments[1], out var useA1, out error))
+            return false;
+
+        args = [refText, useA1];
+        return true;
+    }
+
+    private static bool TryBuildLiteralIndirectArgument(
+        FormulaNode node,
+        out ScalarValue value,
+        out ErrorValue? error)
+    {
+        value = BlankValue.Instance;
+        error = null;
+        switch (node)
+        {
+            case StringNode text:
+                value = new TextValue(text.Value);
+                return true;
+            case BooleanNode boolean:
+                value = boolean.Value ? TrueValue : FalseValue;
+                return true;
+            case NumberNode number:
+                value = new NumberValue(number.Value);
+                return true;
+            case OmittedArgumentNode:
+                value = BlankValue.Instance;
+                return true;
+            case ErrorNode errorNode:
+                error = errorNode.Error;
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryGetFastAggregateKind(string functionName, out FastAggregateKind kind)
+    {
+        switch (functionName)
+        {
+            case "SUM":
+                kind = FastAggregateKind.Sum;
+                return true;
+            case "AVERAGE":
+                kind = FastAggregateKind.Average;
+                return true;
+            case "MIN":
+                kind = FastAggregateKind.Min;
+                return true;
+            case "MAX":
+                kind = FastAggregateKind.Max;
+                return true;
+            case "COUNT":
+                kind = FastAggregateKind.Count;
+                return true;
+            case "COUNTBLANK":
+                kind = FastAggregateKind.CountBlank;
+                return true;
+            case "STDEV":
+            case "STDEV.S":
+                kind = FastAggregateKind.StdevS;
+                return true;
+            case "STDEVP":
+            case "STDEV.P":
+                kind = FastAggregateKind.StdevP;
+                return true;
+            case "VAR":
+            case "VAR.S":
+                kind = FastAggregateKind.VarS;
+                return true;
+            case "VARP":
+            case "VAR.P":
+                kind = FastAggregateKind.VarP;
+                return true;
+            default:
+                kind = default;
+                return false;
+        }
+    }
+
+    private readonly record struct FastAggregateRange(
+        string? SheetName,
+        uint StartRow,
+        uint StartCol,
+        uint EndRow,
+        uint EndCol);
+
+    private enum FastAggregateKind
+    {
+        Sum,
+        Average,
+        Min,
+        Max,
+        Count,
+        CountBlank,
+        StdevS,
+        StdevP,
+        VarS,
+        VarP
+    }
+
+    private enum FastAggregateRangeResolution
+    {
+        Unsupported,
+        Range,
+        Error
+    }
+
+    private static bool TryDirectRangeNumber(ScalarValue value, out double number, out ErrorValue? error)
+    {
+        number = 0;
+        error = null;
+        switch (value)
+        {
+            case ErrorValue e:
+                error = e;
+                return false;
+            case NumberValue n:
+                number = n.Value;
+                return true;
+            case DateTimeValue d:
+                number = d.Value;
+                return true;
+            default:
+                return false;
+        }
+    }
+}
