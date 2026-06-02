@@ -271,6 +271,38 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversExpandedCommonProofingMisspellings()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Alot of thier neccessary maintainance was mispelled, with a commited arguement about the reciept and existance."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Alot", "A lot"),
+            ("thier", "their"),
+            ("neccessary", "necessary"),
+            ("maintainance", "maintenance"),
+            ("mispelled", "misspelled"),
+            ("commited", "committed"),
+            ("arguement", "argument"),
+            ("reciept", "receipt"),
+            ("existance", "existence"));
+        plan.IssueCount.Should().Be(9);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "A lot of their necessary maintenance was misspelled, with a committed argument about the receipt and existence.");
+        plan.Edits[0].ReplacementCount.Should().Be(9);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_DoesNotRewriteIgnoredAddressSpansButCorrectsProse()
     {
         var wb = new Workbook("test");
