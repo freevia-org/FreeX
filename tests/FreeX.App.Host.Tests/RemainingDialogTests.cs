@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using static FreeX.App.Host.Tests.DispatcherTestPump;
 
 namespace FreeX.App.Host.Tests;
 
@@ -1612,12 +1613,4 @@ public sealed class RemainingDialogTests
         return field!.GetValue(instance).Should().BeOfType<T>().Subject;
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new DispatcherFrame();
-        Dispatcher.CurrentDispatcher.BeginInvoke(
-            DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        Dispatcher.PushFrame(frame);
-    }
 }

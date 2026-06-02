@@ -2,10 +2,10 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Threading;
 using FluentAssertions;
 using FreeX.App.Host;
 using Xunit;
+using static FreeX.App.Host.Tests.DispatcherTestPump;
 
 namespace FreeX.App.Host.Tests;
 
@@ -75,12 +75,4 @@ public sealed class DialogFocusTests
         });
     }
 
-    private static void PumpDispatcher()
-    {
-        var frame = new DispatcherFrame();
-        Dispatcher.CurrentDispatcher.BeginInvoke(
-            DispatcherPriority.Background,
-            new Action(() => frame.Continue = false));
-        Dispatcher.PushFrame(frame);
-    }
 }
