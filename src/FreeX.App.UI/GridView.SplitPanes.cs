@@ -194,7 +194,8 @@ public partial class GridView
 
     public static CellAddress? HitTestViewportCell(ViewportModel viewport, SheetId sheetId, Point pos)
     {
-        if (pos.X < CalculateRowHeaderWidth(viewport) || pos.Y < ColHeaderHeight)
+        var rowHeaderWidth = CalculateRowHeaderWidth(viewport);
+        if (pos.X < rowHeaderWidth || pos.Y < ColHeaderHeight)
             return null;
 
         if (viewport.SplitPanes is { } splitPanes)
@@ -225,12 +226,12 @@ public partial class GridView
                 : ColHeaderHeight;
             var colOrigin = region is SplitPaneRegion.TopRight or SplitPaneRegion.BottomRight && verticalX.HasValue
                 ? verticalX.Value
-                : CalculateRowHeaderWidth(viewport);
+                : rowHeaderWidth;
 
             return HitTestMetrics(sheetId, pos, rows, cols, rowOrigin, colOrigin);
         }
 
-        return HitTestMetrics(sheetId, pos, viewport.RowMetrics, viewport.ColMetrics, ColHeaderHeight, CalculateRowHeaderWidth(viewport));
+        return HitTestMetrics(sheetId, pos, viewport.RowMetrics, viewport.ColMetrics, ColHeaderHeight, rowHeaderWidth);
     }
 
     public static SplitPaneRegion HitTestSplitPaneRegion(ViewportModel viewport, Point pos)
