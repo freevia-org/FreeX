@@ -823,6 +823,23 @@ public sealed class NativeJsonSchemaTests
             Reference = "A1:B2",
             Conditions = null!
         };
+        sheet.AutoFilter = new WorksheetAutoFilterModel("A1:B3", null);
+        sheet.AutoFilter.FilterColumns.Add(null!);
+        sheet.AutoFilter.FilterColumns.Add(new WorksheetAutoFilterColumnModel(
+            0,
+            null!,
+            IncludeBlank: false,
+            CustomFilters: [null!, new WorksheetAutoFilterCustomFilterModel("equal", "A")],
+            CustomFiltersAnd: false,
+            CustomFiltersAndRaw: null,
+            NativeCustomFiltersAttributes: null,
+            Top10: null,
+            DynamicFilter: null,
+            ColorFilter: null,
+            IconFilter: null,
+            DateGroups: [null!, new WorksheetAutoFilterDateGroupItemModel(Year: 2026, DateTimeGrouping: "year")],
+            NativeFiltersAttributes: null,
+            NativeFilterXmls: null!));
 
         using var stream = new MemoryStream();
         new NativeJsonAdapter().Save(workbook, stream);
@@ -833,6 +850,61 @@ public sealed class NativeJsonSchemaTests
             .EnumerateArray().Should().BeEmpty();
         sheetJson.GetProperty("SortState").GetProperty("Conditions")
             .EnumerateArray().Should().BeEmpty();
+        var filterColumn = sheetJson.GetProperty("AutoFilter").GetProperty("FilterColumns")
+            .EnumerateArray().Should().ContainSingle().Subject;
+        filterColumn.GetProperty("Values").EnumerateArray().Should().BeEmpty();
+        filterColumn.GetProperty("CustomFilters").EnumerateArray().Should().ContainSingle();
+        filterColumn.GetProperty("DateGroups").EnumerateArray().Should().ContainSingle();
+        filterColumn.GetProperty("NativeFilterXmls").EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Load_DropsNullNativeJsonWorksheetAutoFilterChildEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullWorksheetAutoFilterChildren",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "AutoFilter": {
+                    "Reference": "A1:B3",
+                    "FilterColumns": [
+                      null,
+                      {
+                        "ColumnId": 0,
+                        "Values": [ null, "A" ],
+                        "CustomFilters": [
+                          null,
+                          { "Operator": "equal", "Value": "A" }
+                        ],
+                        "DateGroups": [
+                          null,
+                          { "Year": 2026, "DateTimeGrouping": "year" }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var filterColumn = new NativeJsonAdapter().Load(stream).GetSheetAt(0).AutoFilter!.FilterColumns
+            .Should().ContainSingle().Subject;
+
+        filterColumn.ColumnId.Should().Be(0);
+        filterColumn.Values.Should().ContainSingle().Which.Should().Be("A");
+        var customFilter = filterColumn.CustomFilters.Should().ContainSingle().Subject;
+        customFilter.Operator.Should().Be("equal");
+        customFilter.Value.Should().Be("A");
+        var dateGroup = filterColumn.DateGroups.Should().ContainSingle().Subject;
+        dateGroup.Year.Should().Be(2026);
+        dateGroup.DateTimeGrouping.Should().Be("year");
     }
 
     [Fact]
