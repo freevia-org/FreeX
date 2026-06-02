@@ -293,6 +293,64 @@ public partial class OptionsDialog : Window
         e.Handled = true;
     }
 
+    private void QuickAccessAvailableCommandsList_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (TryHandleQuickAccessAvailableCommandsListKey(e.Key))
+            e.Handled = true;
+    }
+
+    private bool TryHandleQuickAccessAvailableCommandsListKey(Key key)
+    {
+        if (key is not (Key.Enter or Key.Return) ||
+            QuickAccessAvailableCommandsList.SelectedItem is not QuickAccessCommandChoice)
+        {
+            return false;
+        }
+
+        QuickAccessAddButton_Click(
+            QuickAccessAddButton,
+            new RoutedEventArgs(ButtonBase.ClickEvent, QuickAccessAddButton));
+        return true;
+    }
+
+    private void QuickAccessSelectedCommandsList_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (TryHandleQuickAccessSelectedCommandsListKey(e.Key, Keyboard.Modifiers))
+            e.Handled = true;
+    }
+
+    private bool TryHandleQuickAccessSelectedCommandsListKey(Key key, ModifierKeys modifiers)
+    {
+        if ((modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            if (key == Key.Up && QuickAccessMoveUpButton.IsEnabled)
+            {
+                QuickAccessMoveUpButton_Click(
+                    QuickAccessMoveUpButton,
+                    new RoutedEventArgs(ButtonBase.ClickEvent, QuickAccessMoveUpButton));
+                return true;
+            }
+
+            if (key == Key.Down && QuickAccessMoveDownButton.IsEnabled)
+            {
+                QuickAccessMoveDownButton_Click(
+                    QuickAccessMoveDownButton,
+                    new RoutedEventArgs(ButtonBase.ClickEvent, QuickAccessMoveDownButton));
+                return true;
+            }
+
+            return false;
+        }
+
+        if (key is not (Key.Delete or Key.Back) || !QuickAccessRemoveButton.IsEnabled)
+            return false;
+
+        QuickAccessRemoveButton_Click(
+            QuickAccessRemoveButton,
+            new RoutedEventArgs(ButtonBase.ClickEvent, QuickAccessRemoveButton));
+        return true;
+    }
+
     private void QuickAccessMoveUpButton_Click(object sender, RoutedEventArgs e)
     {
         if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
