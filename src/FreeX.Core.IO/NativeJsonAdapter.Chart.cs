@@ -86,7 +86,7 @@ public sealed partial class NativeJsonAdapter
                 LegendBorderThemeColor = ToThemeColorReference(chartDto.LegendBorderThemeColor),
                 LegendBorderThickness = chartDto.LegendBorderThickness,
                 LegendFontSize = chartDto.LegendFontSize,
-                LegendEntries = chartDto.LegendEntries?.ToList() ?? [],
+                LegendEntries = NonNullChartList(chartDto.LegendEntries),
                 DoughnutHoleSize = chartDto.DoughnutHoleSize,
                 FirstSliceAngle = chartDto.FirstSliceAngle,
                 ExplodedSliceIndex = chartDto.ExplodedSliceIndex,
@@ -269,9 +269,9 @@ public sealed partial class NativeJsonAdapter
                 ShowSecondaryAxis = chartDto.ShowSecondaryAxis,
                 SecondaryAxisSeriesIndexes = chartDto.SecondaryAxisSeriesIndexes ?? [],
                 ComboLineSeriesIndexes = chartDto.ComboLineSeriesIndexes ?? [],
-                SeriesFormats = chartDto.SeriesFormats ?? [],
-                SeriesDataLabelFormats = chartDto.SeriesDataLabelFormats ?? [],
-                PointDataLabelFormats = chartDto.PointDataLabelFormats ?? [],
+                SeriesFormats = NonNullChartList(chartDto.SeriesFormats),
+                SeriesDataLabelFormats = NonNullChartList(chartDto.SeriesDataLabelFormats),
+                PointDataLabelFormats = NonNullChartList(chartDto.PointDataLabelFormats),
                 UseComboLineForSecondarySeries = chartDto.UseComboLineForSecondarySeries,
                 Left = chartDto.Left,
                 Top = chartDto.Top,
@@ -299,6 +299,10 @@ public sealed partial class NativeJsonAdapter
                 BorderThemeColor = ToThemeColorReference(dto.BorderThemeColor),
                 BorderThickness = dto.BorderThickness
             };
+
+    private static List<T> NonNullChartList<T>(IEnumerable<T?>? values)
+        where T : class =>
+        values?.OfType<T>().ToList() ?? [];
 
 }
 
