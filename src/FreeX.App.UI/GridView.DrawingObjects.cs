@@ -242,9 +242,10 @@ public partial class GridView
 
         var textWidth = Math.Max(1, rect.Width - 8);
         var textHeight = Math.Max(1, rect.Height - 8);
+        var textClipRect = new Rect(rect.Left + 4, rect.Top + 4, textWidth, textHeight);
         var text = GetDrawingObjectText(textBox.Text, TextBrush, 12, textWidth, textHeight, pixelsPerDip);
 
-        dc.PushClip(GetDrawingObjectClipGeometry(new Rect(rect.Left + 4, rect.Top + 4, textWidth, textHeight)));
+        dc.PushClip(GetDrawingObjectClipGeometry(textClipRect));
         dc.DrawText(text, new Point(rect.Left + 4, rect.Top + 4));
         dc.Pop();
         if (rotationPushed) dc.Pop();
