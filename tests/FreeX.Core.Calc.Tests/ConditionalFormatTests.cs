@@ -460,6 +460,23 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void ColorScaleThresholdResolution_ReusesCachedStaticThresholds()
+    {
+        var evaluatorSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var colorScaleSource = evaluatorSource[
+            evaluatorSource.IndexOf("private static CellStyle? ComputeColorScaleStyle", StringComparison.Ordinal)..
+            evaluatorSource.IndexOf("internal static bool TryResolveThreshold", StringComparison.Ordinal)];
+
+        evaluatorSource.Should().Contain("CfColorScaleThresholdCache");
+        evaluatorSource.Should().Contain("PrecomputeColorScaleThresholdCaches(sheet, aggregates, staticThresholdFormulaValues)");
+        colorScaleSource.Should().Contain("cfContext.ColorScaleThresholds.TryGetValue");
+        colorScaleSource.Should().Contain("cachedThresholds.Min");
+        colorScaleSource.Should().Contain("cachedThresholds.Mid");
+        colorScaleSource.Should().Contain("GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMid)");
+    }
+
+    [Fact]
     public void ColorScale_LargeSparseRange_UsesOccupiedCellsForAggregates()
     {
         var (wb, sheet) = MakeWorkbook();
