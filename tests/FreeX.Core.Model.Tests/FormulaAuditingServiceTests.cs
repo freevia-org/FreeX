@@ -249,6 +249,64 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_ReturnsInconsistentCalculatedColumnFormulaInTable()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sales");
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.InconsistentFormulaErrorCode);
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 4, 3)),
+            HeaderRowCount = 1
+        });
+        sheet.StructuredTables[0].Columns.Add(new StructuredTableColumnModel(1, "Region"));
+        sheet.StructuredTables[0].Columns.Add(new StructuredTableColumnModel(2, "Sales"));
+        sheet.StructuredTables[0].Columns.Add(new StructuredTableColumnModel(3, "Double", CalculatedColumnFormula: "[@Sales]*2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), Cell.FromFormula("[@Sales]*2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), Cell.FromFormula("[@Sales]*3"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), Cell.FromFormula("[@Sales]*2"));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.InconsistentCalculatedColumnFormulaErrorCode).Subject;
+
+        issue.SheetName.Should().Be("Sales");
+        issue.Cell.Should().Be("C3");
+        issue.FormulaText.Should().Be("=[@Sales]*3");
+        issue.Description.Should().Contain("calculated column formula");
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_SkipsDisabledInconsistentCalculatedColumnFormulaRule()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sales");
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.InconsistentCalculatedColumnFormulaErrorCode);
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.InconsistentFormulaErrorCode);
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 2)),
+            HeaderRowCount = 1
+        });
+        sheet.StructuredTables[0].Columns.Add(new StructuredTableColumnModel(1, "Sales"));
+        sheet.StructuredTables[0].Columns.Add(new StructuredTableColumnModel(2, "Double", CalculatedColumnFormula: "[@Sales]*2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromFormula("[@Sales]*2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), Cell.FromFormula("[@Sales]*3"));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void FindFormulaErrorIssues_ReturnsInconsistentFormulaInRow()
     {
         var wb = new Workbook("test");
@@ -607,6 +665,41 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void SetFormulaErrorIgnoredCommand_IgnoresInconsistentCalculatedColumnFormulaIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sales");
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.InconsistentFormulaErrorCode);
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 2)),
+            HeaderRowCount = 1
+        });
+        sheet.StructuredTables[0].Columns.Add(new StructuredTableColumnModel(1, "Sales"));
+        sheet.StructuredTables[0].Columns.Add(new StructuredTableColumnModel(2, "Double", CalculatedColumnFormula: "[@Sales]*2"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromFormula("[@Sales]*2"));
+        var address = new CellAddress(sheet.Id, 3, 2);
+        sheet.SetCell(address, Cell.FromFormula("[@Sales]*3"));
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id).Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.ErrorCode.Should().Be(FormulaAuditingService.InconsistentCalculatedColumnFormulaErrorCode);
+    }
+
+    [Fact]
     public void SetFormulaErrorIgnoredCommand_IgnoresInconsistentFormulaIssues()
     {
         var wb = new Workbook("test");
@@ -711,6 +804,7 @@ public sealed class FormulaAuditingServiceTests
                 (ErrorValue.Spill.Code, "Formulas with blocked spill ranges"),
                 (ErrorValue.Circular.Code, "Formulas with circular references"),
                 (FormulaAuditingService.FormulaStoredAsTextErrorCode, "Formulas stored as text"),
+                (FormulaAuditingService.InconsistentCalculatedColumnFormulaErrorCode, "Inconsistent calculated column formula in tables"),
                 (FormulaAuditingService.InconsistentFormulaErrorCode, "Formulas inconsistent with nearby formulas"),
                 (FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode, "Formulas which omit cells in a region"),
                 (FormulaAuditingService.UnlockedFormulaCellsErrorCode, "Unlocked cells containing formulas"),
