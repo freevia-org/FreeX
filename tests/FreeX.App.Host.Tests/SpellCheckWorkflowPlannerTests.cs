@@ -27,6 +27,37 @@ public sealed class SpellCheckWorkflowPlannerTests
     }
 
     [Fact]
+    public void FilterIssues_RemovesIgnoredWordsCaseInsensitively()
+    {
+        var sheet = SheetId.New();
+        var kept = Issue(new CellAddress(sheet, 2, 1), "adn", "adn value");
+
+        var filtered = SpellCheckWorkflowPlanner.FilterIssues(
+            [
+                Issue(new CellAddress(sheet, 1, 1), "TEH", "TEH value"),
+                kept
+            ],
+            new HashSet<string> { "teh" },
+            new HashSet<(CellAddress Address, string Word)>());
+
+        filtered.Should().ContainSingle().Which.Should().Be(kept);
+    }
+
+    [Fact]
+    public void SpellCheckWorkflow_RoutesAddToDictionaryThroughCustomDictionaryScan()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "MainWindow.ReviewCommands.cs"));
+
+        source.Should().Contain("var customDictionary = new HashSet<string>(StringComparer.OrdinalIgnoreCase);");
+        source.Should().Contain("SpellCheckService.FindIssues(_workbook, _currentSheetId, customDictionary)");
+        source.Should().Contain("dialog.Result.Action == SpellCheckDialogAction.Add");
+        source.Should().Contain("customDictionary.Add(issue.Word);");
+    }
+
+    [Fact]
     public void FilterIssues_ScansLargeIssueListsInOnePass()
     {
         var sheet = SheetId.New();

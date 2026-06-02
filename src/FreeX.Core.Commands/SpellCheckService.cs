@@ -24,7 +24,10 @@ public sealed record SpellingCorrectionPlan(
 
 public static partial class SpellCheckService
 {
-    public static IReadOnlyList<SpellingIssue> FindIssues(Workbook workbook, SheetId? sheetId = null)
+    public static IReadOnlyList<SpellingIssue> FindIssues(
+        Workbook workbook,
+        SheetId? sheetId = null,
+        IReadOnlySet<string>? customDictionary = null)
     {
         List<SpellingIssue>? result = null;
 
@@ -36,10 +39,10 @@ public static partial class SpellCheckService
                 if (cell.HasFormula || cell.Value is not TextValue textValue)
                     continue;
 
-                if (!HasSpellCheckIssueCandidate(textValue.Value))
+                if (!HasSpellCheckIssueCandidate(textValue.Value, customDictionary))
                     continue;
 
-                var cellIssues = FindIssuesInCell(address, textValue.Value);
+                var cellIssues = FindIssuesInCell(address, textValue.Value, customDictionary);
                 if (cellIssues.Count == 0)
                     continue;
 
@@ -66,7 +69,10 @@ public static partial class SpellCheckService
     /// Returns every known-correction issue found in one literal text cell.
     /// Formula cells are intentionally handled by callers and are not edited as text.
     /// </summary>
-    public static IReadOnlyList<SpellingIssue> FindIssuesInCell(CellAddress address, string text)
+    public static IReadOnlyList<SpellingIssue> FindIssuesInCell(
+        CellAddress address,
+        string text,
+        IReadOnlySet<string>? customDictionary = null)
     {
         List<SpellingIssue>? issues = null;
         var ignoredSpans = FindIgnoredSpans(text);
@@ -82,7 +88,8 @@ public static partial class SpellCheckService
             }
 
             var wordSpan = text.AsSpan(word.Start, word.Length);
-            if (TryGetKnownCorrection(wordSpan, out var suggestion))
+            var isKnownCorrection = TryGetKnownCorrection(wordSpan, out var suggestion);
+            if (isKnownCorrection && !ContainsCustomDictionaryEntry(customDictionary, wordSpan))
             {
                 var wordText = wordSpan.ToString();
                 issues ??= [];
@@ -94,7 +101,8 @@ public static partial class SpellCheckService
                 word.Length >= 2 &&
                 IsWhitespaceOnly(text, previous.End, word.Start) &&
                 EqualWordsIgnoreCase(text.AsSpan(previous.Start, previous.Length), wordSpan) &&
-                !TryGetKnownCorrection(wordSpan, out _))
+                !isKnownCorrection &&
+                !ContainsCustomDictionaryEntry(customDictionary, text.AsSpan(previous.Start, word.End - previous.Start)))
             {
                 issues ??= [];
                 issues.Add(new SpellingIssue(
@@ -359,7 +367,7 @@ public static partial class SpellCheckService
     private static bool EqualWordsIgnoreCase(ReadOnlySpan<char> left, ReadOnlySpan<char> right) =>
         left.Equals(right, StringComparison.OrdinalIgnoreCase);
 
-    private static bool HasSpellCheckIssueCandidate(string text)
+    private static bool HasSpellCheckIssueCandidate(string text, IReadOnlySet<string>? customDictionary)
     {
         WordToken? previousWord = null;
         var index = 0;
@@ -367,19 +375,39 @@ public static partial class SpellCheckService
         {
             index = word.End;
             var wordSpan = text.AsSpan(word.Start, word.Length);
-            if (TryGetKnownCorrection(wordSpan, out _))
+            var isKnownCorrection = TryGetKnownCorrection(wordSpan, out _);
+            if (isKnownCorrection && !ContainsCustomDictionaryEntry(customDictionary, wordSpan))
                 return true;
 
             if (previousWord is { } previous &&
                 previous.Length >= 2 &&
                 word.Length >= 2 &&
                 IsWhitespaceOnly(text, previous.End, word.Start) &&
-                EqualWordsIgnoreCase(text.AsSpan(previous.Start, previous.Length), wordSpan))
+                EqualWordsIgnoreCase(text.AsSpan(previous.Start, previous.Length), wordSpan) &&
+                !isKnownCorrection &&
+                !ContainsCustomDictionaryEntry(customDictionary, text.AsSpan(previous.Start, word.End - previous.Start)))
             {
                 return true;
             }
 
             previousWord = word;
+        }
+
+        return false;
+    }
+
+    private static bool ContainsCustomDictionaryEntry(IReadOnlySet<string>? customDictionary, ReadOnlySpan<char> candidate)
+    {
+        if (customDictionary is null || customDictionary.Count == 0)
+            return false;
+
+        foreach (var entry in customDictionary)
+        {
+            if (string.IsNullOrWhiteSpace(entry))
+                continue;
+
+            if (entry.AsSpan().Trim().Equals(candidate, StringComparison.OrdinalIgnoreCase))
+                return true;
         }
 
         return false;

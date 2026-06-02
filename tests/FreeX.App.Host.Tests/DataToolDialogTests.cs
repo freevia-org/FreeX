@@ -558,8 +558,13 @@ public sealed class DataToolDialogTests
             .BeLessThan(mouseMove.IndexOf("var positions = ParseFixedWidthBreakPositions", StringComparison.Ordinal));
 
         mouseUpAndLostCapture.Should().Contain("CancelFixedWidthRulerDrag();");
+        mouseUpAndLostCapture.Should().Contain("if (_dragBreakIndex is null && !_fixedWidthRuler.IsMouseCaptured)");
+        mouseUpAndLostCapture.Should().Contain("return;");
         mouseUpAndLostCapture.Should().Contain("private void FixedWidthRuler_LostMouseCapture");
         mouseUpAndLostCapture.Should().Contain("_dragBreakIndex = null;");
+        mouseUpAndLostCapture.IndexOf("if (_dragBreakIndex is null && !_fixedWidthRuler.IsMouseCaptured)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(mouseUpAndLostCapture.IndexOf("CancelFixedWidthRulerDrag();", StringComparison.Ordinal));
         cancelHelper.Should().Contain("_dragBreakIndex = null;");
         cancelHelper.Should().Contain("if (_fixedWidthRuler.IsMouseCaptured)");
         cancelHelper.Should().Contain("_fixedWidthRuler.ReleaseMouseCapture();");
@@ -586,6 +591,22 @@ public sealed class DataToolDialogTests
         rightClick.IndexOf("UpdateFixedWidthBreakPositions(RemoveFixedWidthBreakPosition(positions, nearest));", StringComparison.Ordinal)
             .Should()
             .BeLessThan(rightClick.IndexOf("e.Handled = true;", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TextToColumnsModeSwitch_CancelsFixedWidthRulerDragWhenLeavingFixedWidth()
+    {
+        var wizardSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "TextToColumnsDialog.Wizard.cs"));
+
+        var refreshMode = wizardSource[
+            wizardSource.IndexOf("private void RefreshMode", StringComparison.Ordinal)..
+            wizardSource.IndexOf("private void FocusCurrentWizardStepTarget", StringComparison.Ordinal)];
+
+        refreshMode.Should().Contain("if (_fixedWidthButton.IsChecked != true)");
+        refreshMode.Should().Contain("CancelFixedWidthRulerDrag();");
+        refreshMode.IndexOf("CancelFixedWidthRulerDrag();", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(refreshMode.IndexOf("_fixedWidthRuler.IsEnabled = plan.FixedWidthControlsEnabled;", StringComparison.Ordinal));
     }
 
     [Fact]

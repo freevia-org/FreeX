@@ -139,6 +139,9 @@ public sealed partial class TextToColumnsDialog
 
     private void RefreshMode()
     {
+        if (_fixedWidthButton.IsChecked != true)
+            CancelFixedWidthRulerDrag();
+
         var plan = TextToColumnsWizardPlanner.CreateModePlan(
             _fixedWidthButton.IsChecked == true,
             _otherBox.IsChecked == true);
