@@ -96,13 +96,22 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         packageStream.Position = 0;
         var sheetXmlLayoutWarningCount = warnings.Count;
         var sheetXmlLayout = LoadSheetXmlLayout(packageStream, stylesXml, workbookTheme, indexedColors, warnings);
+        var sheetXmlLayoutHadWarnings = warnings.Count != sheetXmlLayoutWarningCount;
         var shouldStripStyleOnlyCells = ShouldStripClosedXmlStyleOnlyCells(
             sheetXmlLayout,
-            warnings.Count != sheetXmlLayoutWarningCount);
+            sheetXmlLayoutHadWarnings);
         packageStream.Position = 0;
         var closedXmlLoad = OpenClosedXmlWorkbookWithSanitizationFallback(packageStream, shouldStripStyleOnlyCells);
         using var closedXmlPackageStream = closedXmlLoad.PackageStream;
         using var xlWorkbook = closedXmlLoad.Workbook;
+        var worksheetsWithPreservableSourceMetadata = GetWorksheetsWithPreservableSourceMetadata(
+            sheetXmlLayout,
+            sheetXmlLayoutHadWarnings,
+            xlWorkbook.Worksheets.Count);
+        var hasUnsupportedConditionalFormatting = GetHasUnsupportedConditionalFormatting(
+            sheetXmlLayout,
+            sheetXmlLayoutHadWarnings,
+            xlWorkbook.Worksheets.Count);
         var workbook = new Workbook("Untitled");
         workbook.Theme = workbookTheme;
         workbook.Uses1904DateSystem = workbookMetadata.Uses1904DateSystem;
@@ -413,7 +422,9 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         SourcePackages.Add(workbook, XlsxSourcePackage.Capture(
             packageStream,
             workbook,
-            loadPackage.CanReuseBufferForSnapshot));
+            loadPackage.CanReuseBufferForSnapshot,
+            worksheetsWithPreservableSourceMetadata,
+            hasUnsupportedConditionalFormatting));
         return workbook;
     }
 
@@ -423,6 +434,37 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         sheetXmlLayoutHadWarnings ||
         sheetXmlLayout.Count == 0 ||
         sheetXmlLayout.Values.Any(static layout => layout.HasStyleOnlyCells);
+
+    private static IReadOnlySet<string>? GetWorksheetsWithPreservableSourceMetadata(
+        IReadOnlyDictionary<string, SheetXmlLayout> sheetXmlLayout,
+        bool sheetXmlLayoutHadWarnings,
+        int expectedSheetCount)
+    {
+        if (sheetXmlLayoutHadWarnings || sheetXmlLayout.Count != expectedSheetCount)
+            return null;
+
+        var worksheetsWithMetadata = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (sheetName, layout) in sheetXmlLayout)
+            if (layout.HasPreservableSourceWorksheetMetadata)
+                worksheetsWithMetadata.Add(sheetName);
+
+        return worksheetsWithMetadata;
+    }
+
+    private static bool? GetHasUnsupportedConditionalFormatting(
+        IReadOnlyDictionary<string, SheetXmlLayout> sheetXmlLayout,
+        bool sheetXmlLayoutHadWarnings,
+        int expectedSheetCount)
+    {
+        if (sheetXmlLayoutHadWarnings || sheetXmlLayout.Count != expectedSheetCount)
+            return null;
+
+        foreach (var layout in sheetXmlLayout.Values)
+            if (layout.HasUnsupportedConditionalFormatting)
+                return true;
+
+        return false;
+    }
 
     private static void LoadMergedRegions(IXLWorksheet xlSheet, Sheet sheet)
     {
