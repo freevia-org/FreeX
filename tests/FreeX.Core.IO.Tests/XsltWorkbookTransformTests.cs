@@ -1317,6 +1317,51 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_RowColumnStyleAttributeValueTemplates_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <report columnStyle="money" rowStyle="percent" first="0.875" second="42.5"/>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/report">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <ss:Style ss:ID="money"><ss:NumberFormat ss:Format="$#,##0.00"/></ss:Style>
+                    <ss:Style ss:ID="percent"><ss:NumberFormat ss:Format="0.00%"/></ss:Style>
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Style Layout AVT">
+                    <ss:Table>
+                      <ss:Column ss:StyleID="{@columnStyle}"/>
+                      <ss:Row ss:StyleID="{@rowStyle}">
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="@first"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="@second"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var document = XDocument.Load(transformed);
+        var column = document.Descendants(ss + "Column").Single();
+        var rows = document.Descendants(ss + "Row").ToList();
+
+        column.Attribute(ss + "StyleID")!.Value.Should().Be("money");
+        rows[0].Attribute(ss + "StyleID")!.Value.Should().Be("percent");
+        rows[0].Element(ss + "Cell")!.Element(ss + "Data")!.Value.Should().Be("0.875");
+        rows[1].Element(ss + "Cell")!.Element(ss + "Data")!.Value.Should().Be("42.5");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_WorksheetOptionsDynamicValues_GenerateSpreadsheetMl()
     {
         using var source = StreamFromString("""

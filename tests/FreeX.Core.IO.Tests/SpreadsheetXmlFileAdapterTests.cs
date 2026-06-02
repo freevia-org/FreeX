@@ -3387,6 +3387,48 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromRowColumnStyleAttributeValueTemplates()
+    {
+        using var source = StreamFromString("""
+            <report columnStyle="money" rowStyle="percent" first="0.875" second="42.5"/>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/report">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <ss:Style ss:ID="money"><ss:NumberFormat ss:Format="$#,##0.00"/></ss:Style>
+                    <ss:Style ss:ID="percent"><ss:NumberFormat ss:Format="0.00%"/></ss:Style>
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Style Layout AVT">
+                    <ss:Table>
+                      <ss:Column ss:StyleID="{@columnStyle}"/>
+                      <ss:Row ss:StyleID="{@rowStyle}">
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="@first"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="@second"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Style Layout AVT");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new NumberValue(0.875));
+        workbook.GetStyle(sheet.GetCell(1, 1)!.StyleId).NumberFormat.Should().Be("0.00%");
+        sheet.GetCell(2, 1)!.Value.Should().Be(new NumberValue(42.5));
+        workbook.GetStyle(sheet.GetCell(2, 1)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromWorksheetOptionsDynamicValues()
     {
         using var source = StreamFromString("""
