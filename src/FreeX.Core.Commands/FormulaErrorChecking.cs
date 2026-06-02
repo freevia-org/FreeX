@@ -37,7 +37,7 @@ public static class FormulaErrorCheckingRuleCatalog
         new(FormulaAuditingService.FormulaStoredAsTextErrorCode, "Formulas stored as text", "Flag text cells that begin with an equals sign instead of calculating as formulas."),
         new(FormulaAuditingService.InconsistentCalculatedColumnFormulaErrorCode, "Inconsistent calculated column formula in tables", "Flag table calculated-column formulas that differ from the column formula."),
         new(FormulaAuditingService.InconsistentFormulaErrorCode, "Formulas inconsistent with nearby formulas", "Flag formulas whose relative reference pattern differs from adjacent formulas."),
-        new(FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode, "Formulas which omit cells in a region", "Flag SUM formulas that omit adjacent cells in the region."),
+        new(FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode, "Formulas which omit cells in a region", "Flag aggregate formulas that omit adjacent cells in the region."),
         new(FormulaAuditingService.UnlockedFormulaCellsErrorCode, "Unlocked cells containing formulas", "Flag formula cells that are not locked for worksheet protection."),
         new(FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells", "Flag formulas that refer to blank cells."),
         new(FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits", "Flag text dates whose year is entered with only two digits."),
