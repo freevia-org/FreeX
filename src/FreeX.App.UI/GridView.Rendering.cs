@@ -730,7 +730,9 @@ public partial class GridView
         var top = columnHeaderHeight;
         var right = left + Viewport.ColMetrics[^1].LeftOffset + Viewport.ColMetrics[^1].Width;
         var bottom = top + Viewport.RowMetrics[^1].TopOffset + Viewport.RowMetrics[^1].Height;
-        var rect = new Rect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
+        var visibleRight = Math.Min(right, ActualWidth);
+        var visibleBottom = Math.Min(bottom, ActualHeight);
+        var rect = new Rect(left, top, Math.Max(0, visibleRight - left), Math.Max(0, visibleBottom - top));
         if (rect.Width <= 0 || rect.Height <= 0)
             return;
 
@@ -743,18 +745,26 @@ public partial class GridView
         foreach (var row in Viewport.RowMetrics)
         {
             var y = top + row.TopOffset;
-            dc.DrawLine(GridPen, new Point(left, y), new Point(right, y));
+            if (y > visibleBottom)
+                break;
+
+            dc.DrawLine(GridPen, new Point(left, y), new Point(visibleRight, y));
         }
 
-        dc.DrawLine(GridPen, new Point(left, bottom), new Point(right, bottom));
+        if (bottom <= visibleBottom)
+            dc.DrawLine(GridPen, new Point(left, bottom), new Point(visibleRight, bottom));
 
         foreach (var column in Viewport.ColMetrics)
         {
             var x = left + column.LeftOffset;
-            dc.DrawLine(GridPen, new Point(x, top), new Point(x, bottom));
+            if (x > visibleRight)
+                break;
+
+            dc.DrawLine(GridPen, new Point(x, top), new Point(x, visibleBottom));
         }
 
-        dc.DrawLine(GridPen, new Point(right, top), new Point(right, bottom));
+        if (right <= visibleRight)
+            dc.DrawLine(GridPen, new Point(right, top), new Point(right, visibleBottom));
     }
 
     private static bool IntersectsVisibleGrid(

@@ -703,9 +703,15 @@ public sealed class GridViewRenderPerformanceTests
         renderCells.Should().Contain("if (hasCellSurfaces || hasMergedSurfaces)");
         renderCells.Should().Contain("if (bg is null && !merge.HasValue)");
         renderCells.Should().Contain("continue;");
+        backgroundBase.Should().Contain("var visibleRight = Math.Min(right, ActualWidth);");
+        backgroundBase.Should().Contain("var visibleBottom = Math.Min(bottom, ActualHeight);");
         backgroundBase.Should().Contain("dc.DrawRectangle(Brushes.White, null, rect);");
         backgroundBase.Should().Contain("foreach (var row in Viewport.RowMetrics)");
+        backgroundBase.Should().Contain("if (y > visibleBottom)");
+        backgroundBase.Should().Contain("dc.DrawLine(GridPen, new Point(left, y), new Point(visibleRight, y));");
         backgroundBase.Should().Contain("foreach (var column in Viewport.ColMetrics)");
+        backgroundBase.Should().Contain("if (x > visibleRight)");
+        backgroundBase.Should().Contain("dc.DrawLine(GridPen, new Point(x, top), new Point(x, visibleBottom));");
     }
 
     [Fact]

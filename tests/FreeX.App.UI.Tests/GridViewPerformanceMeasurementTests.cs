@@ -358,6 +358,54 @@ public sealed class GridViewPerformanceMeasurementTests
     }
 
     [Fact]
+    public void Benchmark_RenderQuickAnalysisDataBarPreview_NoPositiveValues_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const int iterations = 24;
+            const int width = 1440;
+            const int height = 900;
+            var grid = CreateQuickAnalysisGrid(
+                width,
+                height,
+                GridQuickAnalysisPreviewVisualKind.DataBars,
+                (row, column) => -((row.Row * 7) + (column.Col * 3)),
+                includeDisplayText: false);
+
+            RenderOnce(grid, width, height);
+            RenderOnce(grid, width, height);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var timings = new List<double>(iterations);
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            for (var i = 0; i < iterations; i++)
+            {
+                var step = Stopwatch.StartNew();
+                RenderOnce(grid, width, height);
+                step.Stop();
+                timings.Add(step.Elapsed.TotalMilliseconds);
+            }
+
+            total.Stop();
+            var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            var ordered = timings.OrderBy(value => value).ToArray();
+            var p95 = ordered[Math.Clamp((int)Math.Ceiling(ordered.Length * 0.95) - 1, 0, ordered.Length - 1)];
+
+            Console.WriteLine(
+                "PERF GRID_RENDER_QUICK_ANALYSIS_DATABARS_NONPOSITIVE " +
+                $"steps={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+                $"mean_ms={timings.Average():F2} p95_ms={p95:F2} max_ms={ordered[^1]:F2} " +
+                $"allocated_bytes={allocatedBytes:N0}");
+
+            timings.Average().Should().BeGreaterThan(0);
+        });
+    }
+
+    [Fact]
     public void Benchmark_CalculateQuickAnalysisDataBarPreviewRects_NoNumericCells_ReportsTiming()
     {
         const int iterations = 64;
@@ -1261,7 +1309,9 @@ public sealed class GridViewPerformanceMeasurementTests
     private static GridView CreateQuickAnalysisGrid(
         double width,
         double height,
-        GridQuickAnalysisPreviewVisualKind visual)
+        GridQuickAnalysisPreviewVisualKind visual,
+        Func<RowMetric, ColMetric, double>? valueFactory = null,
+        bool includeDisplayText = true)
     {
         const int rowCount = 80;
         const int columnCount = 26;
@@ -1282,12 +1332,15 @@ public sealed class GridViewPerformanceMeasurementTests
         {
             foreach (var column in columns)
             {
-                var value = (row.Row * 7) + (column.Col * 3);
+                var value = valueFactory?.Invoke(row, column) ?? ((row.Row * 7) + (column.Col * 3));
+                var displayText = includeDisplayText
+                    ? value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : "";
                 cells.Add(new DisplayCell(
                     row.Row,
                     column.Col,
                     new NumberValue(value),
-                    value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    displayText,
                     null,
                     StyleId.Default,
                     null,

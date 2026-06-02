@@ -361,7 +361,11 @@ public sealed class GridViewSelectionLayoutTests
         renderPreview.Should().Contain("_quickAnalysisDataBarPreviewGeometryCache");
         renderPreview.Should().Contain("ReferenceEquals(cached.Viewport, viewport)");
         renderPreview.Should().Contain("dc.DrawGeometry(QuickAnalysisDataBarPreviewBrush, null, geometry);");
-        renderPreview.Should().Contain("dc.DrawGeometry(QuickAnalysisDataBarPreviewBrush, null, cached.Geometry);");
+        renderPreview.Should().Contain("cached.Geometry is { } cachedGeometry");
+        renderPreview.Should().Contain("dc.DrawGeometry(QuickAnalysisDataBarPreviewBrush, null, cachedGeometry);");
+        renderPreview.Should().Contain("max <= 0");
+        renderPreview.Should().Contain("Geometry: null");
+        renderPreview.Should().Contain("StreamGeometry? Geometry");
         renderPreview.Should().Contain("QuickAnalysisDataBarGeometryConsumer");
         renderPreview.Should().Contain("VisitCellPreviewRects(");
         renderPreview.Should().Contain("VisitSparklinePreviewRects(");

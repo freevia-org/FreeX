@@ -185,12 +185,22 @@ public partial class GridView
             cached.RowHeaderWidth.Equals(rowHeaderWidth) &&
             cached.ColumnHeaderHeight.Equals(columnHeaderHeight))
         {
-            dc.DrawGeometry(QuickAnalysisDataBarPreviewBrush, null, cached.Geometry);
+            if (cached.Geometry is { } cachedGeometry)
+                dc.DrawGeometry(QuickAnalysisDataBarPreviewBrush, null, cachedGeometry);
             return;
         }
 
-        if (!QuickAnalysisPreviewLayoutPlanner.TryCalculateDataBarPreviewMax(viewport, range, out var max))
+        if (!QuickAnalysisPreviewLayoutPlanner.TryCalculateDataBarPreviewMax(viewport, range, out var max) ||
+            max <= 0)
+        {
+            _quickAnalysisDataBarPreviewGeometryCache = new(
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                Geometry: null);
             return;
+        }
 
         var lookups = GetRenderCellLookups(viewport);
         var geometry = new StreamGeometry();
@@ -211,7 +221,15 @@ public partial class GridView
         }
 
         if (dataBarCount == 0)
+        {
+            _quickAnalysisDataBarPreviewGeometryCache = new(
+                viewport,
+                range,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                Geometry: null);
             return;
+        }
 
         geometry.Freeze();
         _quickAnalysisDataBarPreviewGeometryCache = new(
@@ -308,7 +326,7 @@ public partial class GridView
         GridRange Range,
         double RowHeaderWidth,
         double ColumnHeaderHeight,
-        StreamGeometry Geometry);
+        StreamGeometry? Geometry);
 
     private struct ColorScaleRectConsumer(DrawingContext dc) : IQuickAnalysisPreviewRectConsumer
     {
