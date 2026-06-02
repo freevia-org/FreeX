@@ -15,6 +15,7 @@ public static class WatchWindowService
 {
     private const int ColumnKeyBits = 15;
     private const int RowAndColumnKeyBits = 36;
+    private const int LinearSheetLookupThreshold = 16;
 
     public static bool AddWatch(Workbook workbook, CellAddress address)
     {
@@ -104,13 +105,8 @@ public static class WatchWindowService
         if (workbook.WatchedCells.Count == 0)
             return [];
 
-        var entries = new List<WatchWindowEntry>(workbook.WatchedCells.Count);
-        var sheetIndexes = new Dictionary<SheetId, int>(workbook.Sheets.Count);
-        for (var index = 0; index < workbook.Sheets.Count; index++)
-        {
-            var sheet = workbook.Sheets[index];
-            sheetIndexes[sheet.Id] = index;
-        }
+        var sheets = workbook.Sheets;
+        var sheetIndexes = CreateSheetIndexMap(sheets);
 
         var sortKeys = ArrayPool<ulong>.Shared.Rent(workbook.WatchedCells.Count);
         var addresses = ArrayPool<CellAddress>.Shared.Rent(workbook.WatchedCells.Count);
@@ -119,7 +115,7 @@ public static class WatchWindowService
             var validCount = 0;
             foreach (var address in workbook.WatchedCells)
             {
-                if (!sheetIndexes.TryGetValue(address.Sheet, out var sheetIndex))
+                if (!TryGetSheetIndex(sheets, sheetIndexes, address.Sheet, out var sheetIndex))
                     continue;
 
                 sortKeys[validCount] = CreateSortKey(sheetIndex, address);
@@ -129,17 +125,18 @@ public static class WatchWindowService
 
             Array.Sort(sortKeys, addresses, 0, validCount);
 
+            var entries = new WatchWindowEntry[validCount];
             for (var index = 0; index < validCount; index++)
             {
                 var address = addresses[index];
-                var sheet = workbook.Sheets[GetSheetIndex(sortKeys[index])];
+                var sheet = sheets[GetSheetIndex(sortKeys[index])];
                 var cell = sheet.GetCell(address);
-                entries.Add(new WatchWindowEntry(
+                entries[index] = new WatchWindowEntry(
                     sheet.Id,
                     sheet.Name,
                     address,
                     FormatValue(cell?.Value ?? BlankValue.Instance),
-                    cell?.HasFormula == true ? "=" + cell.FormulaText : null));
+                    cell?.HasFormula == true ? "=" + cell.FormulaText : null);
             }
 
             return entries;
@@ -157,6 +154,40 @@ public static class WatchWindowService
         address.Col;
 
     private static int GetSheetIndex(ulong sortKey) => (int)(sortKey >> RowAndColumnKeyBits);
+
+    private static Dictionary<SheetId, int>? CreateSheetIndexMap(IReadOnlyList<Sheet> sheets)
+    {
+        if (sheets.Count <= LinearSheetLookupThreshold)
+            return null;
+
+        var sheetIndexes = new Dictionary<SheetId, int>(sheets.Count);
+        for (var index = 0; index < sheets.Count; index++)
+        {
+            var sheet = sheets[index];
+            sheetIndexes[sheet.Id] = index;
+        }
+
+        return sheetIndexes;
+    }
+
+    private static bool TryGetSheetIndex(
+        IReadOnlyList<Sheet> sheets,
+        Dictionary<SheetId, int>? sheetIndexes,
+        SheetId sheetId,
+        out int sheetIndex)
+    {
+        if (sheetIndexes is not null)
+            return sheetIndexes.TryGetValue(sheetId, out sheetIndex);
+
+        for (sheetIndex = 0; sheetIndex < sheets.Count; sheetIndex++)
+        {
+            if (sheets[sheetIndex].Id == sheetId)
+                return true;
+        }
+
+        sheetIndex = -1;
+        return false;
+    }
 
     private static string FormatValue(ScalarValue value) => value switch
     {
