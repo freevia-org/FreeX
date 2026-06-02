@@ -3882,7 +3882,9 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
         var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
 
-        act.Should().Throw<Exception>();
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*External document access*")
+            .WithInnerException<XsltException>();
     }
 
     [Fact]
@@ -3901,6 +3903,31 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
         act.Should().Throw<InvalidDataException>()
             .WithMessage("*External document access*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void LoadTransformed_RejectsStylesheetScript()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:msxsl="urn:schemas-microsoft-com:xslt"
+                xmlns:user="urn:freex-test-script">
+              <msxsl:script language="C#" implements-prefix="user">
+                public string Value() { return "blocked"; }
+              </msxsl:script>
+              <xsl:template match="/">
+                <xsl:value-of select="user:Value()"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*External document access and script are disabled*")
             .WithInnerException<XsltException>();
     }
 
