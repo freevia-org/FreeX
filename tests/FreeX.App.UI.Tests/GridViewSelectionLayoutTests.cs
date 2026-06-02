@@ -404,6 +404,8 @@ public sealed class GridViewSelectionLayoutTests
 
         getRangePixels.Should().Contain("if (top.HasValue && bottom.HasValue)");
         getRangePixels.Should().Contain("if (left.HasValue && right.HasValue)");
+        getRangePixels.Should().Contain("if (row.Row > range.End.Row)");
+        getRangePixels.Should().Contain("if (col.Col > range.End.Col)");
         getRangePixels.Should().Contain("break;");
     }
 
