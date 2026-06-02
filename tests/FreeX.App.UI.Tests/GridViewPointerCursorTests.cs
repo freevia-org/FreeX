@@ -220,6 +220,8 @@ public sealed class GridViewPointerCursorTests
         mouseDownBlock.Should().Contain("_splitPaneScrollbarDragPointerOffset = 0;");
         mouseDownBlock.IndexOf("if (!_splitPaneScrollbarDragging)", StringComparison.Ordinal)
             .Should().BeLessThan(mouseDownBlock.IndexOf("CalculateSplitPaneScrollbarInteractionTarget", StringComparison.Ordinal));
+        mouseDownBlock.Should().Contain("CalculateSplitPaneScrollbarInteractionTarget(Viewport, chrome, scrollbarHit, pos)");
+        mouseDownBlock.Should().NotContain("CalculateSplitPaneScrollbarInteractionTarget(Viewport, chrome, pos)");
     }
 
     [Fact]

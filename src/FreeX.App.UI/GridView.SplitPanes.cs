@@ -187,6 +187,13 @@ public partial class GridView
         Point pos) =>
         SplitPaneViewportChrome.CalculateInteractionTarget(viewport, chrome, pos);
 
+    public static SplitPaneScrollbarScrollTarget? CalculateSplitPaneScrollbarInteractionTarget(
+        ViewportModel viewport,
+        SplitPaneScrollbarChrome chrome,
+        SplitPaneScrollbarHit hit,
+        Point pos) =>
+        SplitPaneViewportChrome.CalculateInteractionTarget(viewport, chrome, hit, pos);
+
     public static IReadOnlyList<SplitPaneCellLayout> CalculateSplitPaneCellLayouts(
         ViewportModel viewport,
         IReadOnlyList<GridRange>? mergedRegions = null,

@@ -113,6 +113,15 @@ public static class SplitPaneViewportChrome
         if (HitTestScrollbar(chrome, pos) is not { } hit)
             return null;
 
+        return CalculateInteractionTarget(viewport, chrome, hit, pos);
+    }
+
+    public static SplitPaneScrollbarScrollTarget? CalculateInteractionTarget(
+        ViewportModel viewport,
+        SplitPaneScrollbarChrome chrome,
+        SplitPaneScrollbarHit hit,
+        Point pos)
+    {
         if (hit.Part == SplitPaneScrollbarPart.Thumb)
             return null;
 

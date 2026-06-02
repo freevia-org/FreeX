@@ -842,6 +842,21 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void CalculateSplitPaneScrollbarInteractionTarget_ReusesKnownTrackHit()
+    {
+        var viewport = SplitViewport();
+        var chrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, actualWidth: 500, actualHeight: 300);
+        var pos = new Point(chrome.HorizontalTopRight!.Thumb.Right + 12, chrome.HorizontalTopRight.Track.Top + 2);
+        var hit = new SplitPaneScrollbarHit(
+            SplitPaneScrollbarPart.Track,
+            SplitPaneScrollbarOrientation.Horizontal,
+            SplitPaneRegion.TopRight);
+
+        GridView.CalculateSplitPaneScrollbarInteractionTarget(viewport, chrome, hit, pos)
+            .Should().Be(new SplitPaneScrollbarScrollTarget(SplitPaneRegion.TopRight, SplitPaneScrollbarOrientation.Horizontal, 12));
+    }
+
+    [Fact]
     public void CalculateSplitPaneScrollbarThumbDragTarget_PreservesPointerOffsetInsideThumb()
     {
         var viewport = SplitViewport();
