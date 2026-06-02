@@ -1,0 +1,87 @@
+using FluentAssertions;
+using FreeX.App.Host;
+
+namespace FreeX.App.Host.Tests;
+
+public sealed class LocalAccountPlannerTests
+{
+    [Fact]
+    public void Create_BuildsLocalIdentityStorageAndSharingStatus()
+    {
+        var plan = LocalAccountPlanner.Create(
+            new FreeXOptions { UserName = "Analyst" },
+            @"C:\Work\Budget.xlsx",
+            "Budget.xlsx",
+            userNameProvider: () => "quinn",
+            userDomainProvider: () => "DESKTOP",
+            machineNameProvider: () => "FREEX-PC",
+            optionsPathProvider: () => @"C:\Users\quinn\AppData\Roaming\FreeX\options.json",
+            fileExists: path => path == @"C:\Work\Budget.xlsx");
+
+        plan.Title.Should().Be("Account");
+        plan.WorkbookStatus.Should().Be(@"Budget.xlsx (C:\Work\Budget.xlsx)");
+        plan.SharingStatus.Should().Be("Ready for Windows Share from the saved local file.");
+        plan.Details.Should().ContainEquivalentOf(new LocalAccountDetail("FreeX user name", "Analyst"));
+        plan.Details.Should().ContainEquivalentOf(new LocalAccountDetail("Windows account", @"DESKTOP\quinn"));
+        plan.Details.Should().ContainEquivalentOf(new LocalAccountDetail("Device", "FREEX-PC"));
+        plan.Details.Should().Contain(detail =>
+            detail.Label == "Options file" &&
+            detail.Value == @"C:\Users\quinn\AppData\Roaming\FreeX\options.json");
+        plan.Details.Should().Contain(detail =>
+            detail.Label == "Microsoft 365 services" &&
+            detail.Value.Contains("coauthoring"));
+    }
+
+    [Fact]
+    public void Create_ReportsSaveAsRequiredForUnsavedOrMissingWorkbookPaths()
+    {
+        var unsaved = LocalAccountPlanner.Create(
+            new FreeXOptions { UserName = "" },
+            null,
+            "Book1",
+            userNameProvider: () => "quinn",
+            userDomainProvider: () => "",
+            machineNameProvider: () => "FREEX-PC",
+            optionsPathProvider: () => "options.json",
+            fileExists: _ => false);
+
+        unsaved.WorkbookStatus.Should().Be("Book1 (not saved yet)");
+        unsaved.SharingStatus.Should().Be("Save As is required before Windows Share can send the workbook.");
+        unsaved.Details.Should().ContainEquivalentOf(new LocalAccountDetail("FreeX user name", "quinn"));
+
+        var missing = LocalAccountPlanner.Create(
+            new FreeXOptions { UserName = "Analyst" },
+            @"C:\Missing\Book1.xlsx",
+            "Book1",
+            userNameProvider: () => "quinn",
+            userDomainProvider: () => "",
+            machineNameProvider: () => "FREEX-PC",
+            optionsPathProvider: () => "options.json",
+            fileExists: _ => false);
+
+        missing.WorkbookStatus.Should().Be(@"Book1 (saved path missing: C:\Missing\Book1.xlsx)");
+        missing.SharingStatus.Should().Be("Save As is required before Windows Share can send the workbook.");
+    }
+
+    [Fact]
+    public void FormatMessageBody_IncludesTheNoMicrosoftAccountBoundaryAndLocalDetails()
+    {
+        var plan = LocalAccountPlanner.Create(
+            new FreeXOptions { UserName = "Analyst" },
+            @"C:\Work\Budget.xlsx",
+            "Budget.xlsx",
+            userNameProvider: () => "quinn",
+            userDomainProvider: () => "DESKTOP",
+            machineNameProvider: () => "FREEX-PC",
+            optionsPathProvider: () => "options.json",
+            fileExists: _ => true);
+
+        var message = DeferredCommandMessages.LocalAccountInfo(plan);
+
+        message.Body.Should().Contain("Microsoft account integration is not implemented");
+        message.Body.Should().Contain("FreeX user name: Analyst");
+        message.Body.Should().Contain(@"Windows account: DESKTOP\quinn");
+        message.Body.Should().Contain("Sharing: Ready for Windows Share");
+        message.Body.Should().Contain("Microsoft 365 services: Not connected");
+    }
+}

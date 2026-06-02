@@ -503,7 +503,8 @@ public partial class MainWindow
 
     private void SsAccountBtn_Click(object sender, RoutedEventArgs e)
     {
-        var message = DeferredCommandMessages.LocalAccountInfo();
+        var plan = LocalAccountPlanner.Create(_options, _currentFilePath, _workbook.Name);
+        var message = DeferredCommandMessages.LocalAccountInfo(plan);
         ShowOwnedMessage(
             message.Body,
             message.Title,
