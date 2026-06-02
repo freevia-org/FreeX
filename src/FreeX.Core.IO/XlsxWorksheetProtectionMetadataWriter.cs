@@ -1,4 +1,3 @@
-using System.Xml;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -65,7 +64,7 @@ internal static class XlsxWorksheetProtectionMetadataWriter
                         continue;
                     }
 
-                    TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
+                    XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(protection, attribute.Key, attribute.Value);
                 }
 
                 protection.Elements().Remove();
@@ -118,20 +117,4 @@ internal static class XlsxWorksheetProtectionMetadataWriter
         root.Add(protection);
     }
 
-    private static bool TrySetNativeAttribute(XElement element, string name, string value)
-    {
-        try
-        {
-            element.SetAttributeValue(XName.Get(name), value);
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-        catch (XmlException)
-        {
-            return false;
-        }
-    }
 }

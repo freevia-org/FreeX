@@ -11,7 +11,7 @@ public sealed class WorkbookProtectionCommandTests
     public void ProtectWorkbookCommand_ProtectsStructureAndUndoRestores()
     {
         var wb = new Workbook("test");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new ProtectWorkbookCommand("secret");
 
@@ -30,7 +30,7 @@ public sealed class WorkbookProtectionCommandTests
     {
         var wb = new Workbook("test");
         wb.IsStructureProtected = true;
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var outcome = new AddSheetCommand("Blocked").Apply(ctx);
 
@@ -46,7 +46,7 @@ public sealed class WorkbookProtectionCommandTests
         var s1 = wb.AddSheet("One");
         wb.AddSheet("Two");
         wb.IsStructureProtected = true;
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         new RenameSheetCommand(s1.Id, "Renamed").Apply(ctx).Success.Should().BeFalse();
         new RemoveSheetCommand(s1.Id).Apply(ctx).Success.Should().BeFalse();
@@ -54,11 +54,5 @@ public sealed class WorkbookProtectionCommandTests
 
         wb.GetSheetAt(0).Name.Should().Be("One");
         wb.SheetCount.Should().Be(2);
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }

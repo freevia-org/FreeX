@@ -19,7 +19,7 @@ public sealed class FormulaEvaluatorPerformanceTests
     [Fact]
     public void FunctionArgumentClassification_UsesCachedLookupSets()
     {
-        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "FormulaEvaluator.cs"));
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Formula", "FormulaEvaluator.FunctionClassification.cs"));
         var classificationHelpers = source[
             source.IndexOf("private static bool IsAggregateFunction", StringComparison.Ordinal)..];
 

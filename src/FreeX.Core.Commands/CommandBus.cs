@@ -51,14 +51,15 @@ public sealed class CommandBus : ICommandBus
             return new CommandOutcome(false, "Nothing to undo");
 
         var ctx = _contextFactory(workbookId);
-        var command = stack.PopUndo();
+        var entry = stack.PopUndo();
+        var command = entry.Command;
         try
         {
             command.Revert(ctx);
         }
         catch (Exception ex)
         {
-            stack.RollbackPopUndo(command); // restore the command so the undo chain is intact
+            stack.RollbackPopUndo(entry); // restore the command so the undo chain is intact
             return new CommandOutcome(false, $"Undo failed: {ex.Message}");
         }
 
@@ -72,7 +73,8 @@ public sealed class CommandBus : ICommandBus
             return new CommandOutcome(false, "Nothing to redo");
 
         var ctx = _contextFactory(workbookId);
-        var command = stack.PopRedo();
+        var entry = stack.PopRedo();
+        var command = entry.Command;
         CommandOutcome outcome;
         try
         {
@@ -80,14 +82,14 @@ public sealed class CommandBus : ICommandBus
         }
         catch (Exception ex)
         {
-            stack.PushRedo(command); // restore so the user can retry
+            stack.PushRedo(entry); // restore so the user can retry
             return new CommandOutcome(false, $"Redo failed: {ex.Message}");
         }
 
         if (outcome.Success)
-            stack.PushWithoutClearingRedo(command, EstimateBytes(command));
+            stack.PushWithoutClearingRedo(entry);
         else
-            stack.PushRedo(command); // restore so the user can retry
+            stack.PushRedo(entry); // restore so the user can retry
 
         return outcome with { AffectedCells = outcome.AffectedCells ?? GetAffectedCells(command) };
     }
@@ -127,12 +129,14 @@ public sealed class CommandBus : ICommandBus
     private static int EstimateBytes(IWorkbookCommand command) =>
         command is IEstimatesMemory mem ? mem.EstimatedBytes : DefaultCommandBytes;
 
+    private readonly record struct CommandStackEntry(IWorkbookCommand Command, int Bytes);
+
     private sealed class CommandStack
     {
         private readonly int _maxDepth;
         private readonly int _maxBytes;
-        private readonly LinkedList<(IWorkbookCommand Command, int Bytes)> _undoStack = new();
-        private readonly Stack<IWorkbookCommand> _redoStack = new();
+        private readonly LinkedList<CommandStackEntry> _undoStack = new();
+        private readonly Stack<CommandStackEntry> _redoStack = new();
         private int _undoStackBytes;
 
         /// <summary>Running total of estimated bytes held in the undo stack.</summary>
@@ -149,18 +153,22 @@ public sealed class CommandBus : ICommandBus
 
         public void Push(IWorkbookCommand command, int bytes)
         {
-            _undoStack.AddLast((command, bytes));
-            _undoStackBytes += bytes;
+            PushUndoEntry(new CommandStackEntry(command, bytes));
             _redoStack.Clear(); // New action invalidates redo history
 
             TrimUndoStack();
         }
 
-        public void PushWithoutClearingRedo(IWorkbookCommand command, int bytes)
+        public void PushWithoutClearingRedo(CommandStackEntry entry)
         {
-            _undoStack.AddLast((command, bytes));
-            _undoStackBytes += bytes;
+            PushUndoEntry(entry);
             TrimUndoStack();
+        }
+
+        private void PushUndoEntry(CommandStackEntry entry)
+        {
+            _undoStack.AddLast(entry);
+            _undoStackBytes += entry.Bytes;
         }
 
         private void TrimUndoStack()
@@ -173,23 +181,23 @@ public sealed class CommandBus : ICommandBus
             }
         }
 
-        public IWorkbookCommand PopUndo()
+        public CommandStackEntry PopUndo()
         {
             var entry = _undoStack.Last!.Value;
             _undoStack.RemoveLast();
             _undoStackBytes -= entry.Bytes;
-            _redoStack.Push(entry.Command);
-            return entry.Command;
+            _redoStack.Push(entry);
+            return entry;
         }
 
-        public IWorkbookCommand PopRedo()
+        public CommandStackEntry PopRedo()
         {
             return _redoStack.Pop();
         }
 
-        public void PushRedo(IWorkbookCommand command)
+        public void PushRedo(CommandStackEntry entry)
         {
-            _redoStack.Push(command);
+            _redoStack.Push(entry);
         }
 
         /// <summary>
@@ -197,17 +205,14 @@ public sealed class CommandBus : ICommandBus
         /// back on top of the undo stack.  Call this when <see cref="IWorkbookCommand.Revert"/>
         /// throws so the undo chain is not permanently broken.
         /// </summary>
-        public void RollbackPopUndo(IWorkbookCommand command)
+        public void RollbackPopUndo(CommandStackEntry entry)
         {
             // PopUndo pushed the command onto the redo stack — reverse that first.
-            if (_redoStack.Count > 0 && ReferenceEquals(_redoStack.Peek(), command))
+            if (_redoStack.Count > 0 && ReferenceEquals(_redoStack.Peek().Command, entry.Command))
                 _redoStack.Pop();
 
             // Put the command back at the top of the undo stack.
-            // Use the same byte estimate that was subtracted during PopUndo.
-            var bytes = command is IEstimatesMemory mem ? mem.EstimatedBytes : DefaultCommandBytes;
-            _undoStack.AddLast((command, bytes));
-            _undoStackBytes += bytes;
+            PushUndoEntry(entry);
         }
     }
 }

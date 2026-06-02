@@ -117,6 +117,56 @@ public sealed class DrawingTargetResolverTests
     }
 
     [Fact]
+    public void GetTargetDrawingZOrderObject_PrefersFrontMostSelectedDrawingObject()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var selected = new CellAddress(sheet.Id, 2, 2);
+        var shape = new DrawingShapeModel { Anchor = selected };
+        var picture = new PictureModel { Anchor = selected };
+        var textBox = new TextBoxModel { Anchor = selected };
+        sheet.DrawingShapes.Add(shape);
+        sheet.Pictures.Add(picture);
+        sheet.TextBoxes.Add(textBox);
+        sheet.DrawingObjectZOrder.AddRange(
+        [
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id)
+        ]);
+
+        var target = DrawingTargetResolver.GetTargetDrawingZOrderObject(sheet, selected);
+
+        target.Should().NotBeNull();
+        target!.Kind.Should().Be(SelectionPaneObjectKind.TextBox);
+        target.Id.Should().Be(textBox.Id);
+    }
+
+    [Fact]
+    public void GetTargetDrawingZOrderObject_HonorsPreferredKindForGroupedArrangeCommands()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var selected = new CellAddress(sheet.Id, 2, 2);
+        var picture = new PictureModel { Anchor = selected };
+        var textBox = new TextBoxModel { Anchor = selected };
+        sheet.Pictures.Add(picture);
+        sheet.TextBoxes.Add(textBox);
+        sheet.DrawingObjectZOrder.AddRange(
+        [
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id)
+        ]);
+
+        var target = DrawingTargetResolver.GetTargetDrawingZOrderObject(
+            sheet,
+            selected,
+            SelectionPaneObjectKind.Picture);
+
+        target.Should().NotBeNull();
+        target!.Kind.Should().Be(SelectionPaneObjectKind.Picture);
+        target.Id.Should().Be(picture.Id);
+    }
+
+    [Fact]
     public void ResolverScansVisibleItemsWithoutAllocatingFilteredLists()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "DrawingTargetResolver.cs"));

@@ -93,41 +93,42 @@ public partial class MainWindow
             return RibbonCompactUpdateResult.SkippedAppliedState;
         }
 
-        var plannedStates = plannedStatesSource.ToArray();
         var changedGroupCount = ApplyRibbonAdaptiveStates(
             groupSnapshots,
             collapsedButtons,
-            plannedStates,
+            plannedStatesSource,
             _ribbonAdaptiveStateDiffInvalidated ? null : _lastRibbonAdaptiveAppliedStates,
             availableWidth);
         var visualStateChanged = changedGroupCount > 0;
         visualStateChanged |= SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
         var shouldApplyMeasuredCorrection = layout.RequiresMeasuredCorrection;
         var needsMeasuredPrimaryCorrection = shouldApplyMeasuredCorrection &&
-            NeedsDataPrimaryGroupCorrection(adaptiveGroups, plannedStates, availableWidth, selectedTabHeader);
+            NeedsDataPrimaryGroupCorrection(adaptiveGroups, plannedStatesSource, availableWidth, selectedTabHeader);
         var requiresMeasuredCorrection = cachedCorrectionNeedsExpansion ||
             shouldApplyMeasuredCorrection &&
             (needsMeasuredPrimaryCorrection ||
              !hasCachedCorrection ||
-             RibbonRowOverflowsMeasuredCached(activePanel, cacheKey, availableWidth, plannedStates));
+             RibbonRowOverflowsMeasuredCached(activePanel, cacheKey, availableWidth, plannedStatesSource));
         var measuredCorrectionApplied = false;
+        IReadOnlyList<RibbonAdaptiveGroupState> appliedStates = plannedStatesSource;
         if (requiresMeasuredCorrection)
         {
+            var plannedStates = plannedStatesSource.ToArray();
             measuredCorrectionApplied |= ApplyRibbonMeasuredPrimaryFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
             measuredCorrectionApplied |= ApplyRibbonMeasuredOverflowFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
             measuredCorrectionApplied |= ApplyRibbonMeasuredExpansionFallback(activePanel, groupSnapshots, collapsedButtons, plannedStates, adaptiveGroups, cacheKey, availableWidth, selectedTabHeader);
+            appliedStates = plannedStates;
         }
 
         visualStateChanged |= SetCollapsedRibbonButtonFootprintIfNeeded(collapsedButtons, availableWidth);
-        appliedStateKey = CreateRibbonAppliedStateKey(availableWidth, plannedStates);
-        var appliedStates = plannedStates;
+        appliedStateKey = CreateRibbonAppliedStateKey(availableWidth, appliedStates);
         if (!hasCachedCorrection || requiresMeasuredCorrection)
             _ribbonCorrectedStateCache[correctionCacheKey] = appliedStates;
         _lastRibbonAdaptiveAppliedStateKey = appliedStateKey;
         _lastRibbonAdaptiveAppliedStates = appliedStates;
         _ribbonAdaptiveStateDiffInvalidated = false;
 
-        var compacted = plannedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
+        var compacted = appliedStates.Any(state => state != RibbonAdaptiveGroupState.Full);
         _ribbonCompact = compacted;
         if (measuredCorrectionApplied)
             return RibbonCompactUpdateResult.MeasuredCorrectionApplied;
