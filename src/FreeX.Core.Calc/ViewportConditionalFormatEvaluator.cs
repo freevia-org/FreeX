@@ -106,7 +106,7 @@ internal static class ViewportConditionalFormatEvaluator
             PrecomputeFormulaCaches(sheet),
             thresholdFormulas,
             staticThresholdFormulaValues,
-            PrecomputeIconSetThresholdCaches(sheet, aggregates),
+            PrecomputeIconSetThresholdCaches(sheet, aggregates, staticThresholdFormulaValues),
             PrecomputeDefaultMergedFormatStyles(rulesByPriority));
     }
 
@@ -557,7 +557,8 @@ internal static class ViewportConditionalFormatEvaluator
 
     private static Dictionary<ConditionalFormat, CfIconSetThresholdCache> PrecomputeIconSetThresholdCaches(
         Sheet sheet,
-        Dictionary<ConditionalFormat, CfAggregateCache> aggregates)
+        Dictionary<ConditionalFormat, CfAggregateCache> aggregates,
+        Dictionary<CfThresholdFormulaKey, double> staticThresholdFormulaValues)
     {
         Dictionary<ConditionalFormat, CfIconSetThresholdCache>? result = null;
         foreach (var cf in sheet.ConditionalFormats)
@@ -576,8 +577,18 @@ internal static class ViewportConditionalFormatEvaluator
             for (var i = 0; i < thresholdCount; i++)
             {
                 var threshold = cf.IconSetThresholds[i];
-                if (threshold.Type == CfThresholdType.Formula ||
-                    !TryResolveStaticThreshold(threshold.Type, threshold.Value, cache, out values[i]))
+                if (threshold.Type == CfThresholdType.Formula)
+                {
+                    if (!staticThresholdFormulaValues.TryGetValue(
+                            new CfThresholdFormulaKey(cf, CfThresholdFormulaSlot.IconSet, i),
+                            out values[i]) ||
+                        !double.IsFinite(values[i]))
+                    {
+                        resolved = false;
+                        break;
+                    }
+                }
+                else if (!TryResolveStaticThreshold(threshold.Type, threshold.Value, cache, out values[i]))
                 {
                     resolved = false;
                     break;
@@ -1269,6 +1280,7 @@ internal static class ViewportConditionalFormatEvaluator
                 sheet,
                 workbook,
                 addr,
+                cf.AppliesTo.Start,
                 GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMin),
                 GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMin),
                 out var min) ||
@@ -1279,6 +1291,7 @@ internal static class ViewportConditionalFormatEvaluator
                 sheet,
                 workbook,
                 addr,
+                cf.AppliesTo.Start,
                 GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMax),
                 GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMax),
                 out var max))
@@ -1296,6 +1309,7 @@ internal static class ViewportConditionalFormatEvaluator
                                sheet,
                                workbook,
                                addr,
+                               cf.AppliesTo.Start,
                                GetStaticThresholdFormulaValue(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMid),
                                GetThresholdFormula(cfContext, cf, CfThresholdFormulaSlot.ColorScaleMid),
                                out var mid) &&
@@ -1316,6 +1330,7 @@ internal static class ViewportConditionalFormatEvaluator
         Sheet sheet,
         Workbook workbook,
         CellAddress currentCell,
+        CellAddress anchorCell,
         double? staticFormulaValue,
         FormulaNode? formulaAst,
         out double value)
@@ -1332,7 +1347,7 @@ internal static class ViewportConditionalFormatEvaluator
                                           TryResolvePercentile(cache.SortedValues, percentile, out value),
             CfThresholdType.Formula => staticFormulaValue.HasValue
                 ? Set(staticFormulaValue.Value, out value)
-                : TryEvaluateThresholdFormula(formulaAst, sheet, workbook, currentCell, out value),
+                : TryEvaluateThresholdFormula(formulaAst, sheet, workbook, anchorCell, currentCell, out value),
             _ => false
         };
 
@@ -1368,6 +1383,31 @@ internal static class ViewportConditionalFormatEvaluator
         var weight = position - lower;
         value = sortedValues[lower] + (sortedValues[upper] - sortedValues[lower]) * weight;
         return true;
+    }
+
+    private static bool TryEvaluateThresholdFormula(
+        FormulaNode? ast,
+        Sheet sheet,
+        Workbook workbook,
+        CellAddress anchorCell,
+        CellAddress currentCell,
+        out double value)
+    {
+        value = 0;
+        if (ast is null)
+            return false;
+
+        try
+        {
+            var shiftedAst = GetShiftedConditionalFormatFormula(ast, anchorCell, currentCell);
+            var result = ThresholdFormulaEvaluator.Evaluate(shiftedAst, sheet, workbook, currentCell);
+            return TryGetDouble(result, out value);
+        }
+        catch
+        {
+            value = 0;
+            return false;
+        }
     }
 
     private static bool TryEvaluateThresholdFormula(
