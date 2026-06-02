@@ -26,7 +26,19 @@ public enum CellStylePreset
     Accent3_20,
     Accent4_20,
     Accent5_20,
-    Accent6_20
+    Accent6_20,
+    Accent1_40,
+    Accent2_40,
+    Accent3_40,
+    Accent4_40,
+    Accent5_40,
+    Accent6_40,
+    Accent1_60,
+    Accent2_60,
+    Accent3_60,
+    Accent4_60,
+    Accent5_60,
+    Accent6_60
 }
 
 public static class CellStyleDiffPlanner
@@ -137,12 +149,24 @@ public static class CellStyleDiffPlanner
                 Bold: true,
                 BorderTop: new CellBorder(BorderStyle.Thin, CellColor.Black),
                 BorderBottom: new CellBorder(BorderStyle.Double, CellColor.Black)),
-            CellStylePreset.Accent1_20 => Accent20(theme, WorkbookThemeColorSlot.Accent1),
-            CellStylePreset.Accent2_20 => Accent20(theme, WorkbookThemeColorSlot.Accent2),
-            CellStylePreset.Accent3_20 => Accent20(theme, WorkbookThemeColorSlot.Accent3),
-            CellStylePreset.Accent4_20 => Accent20(theme, WorkbookThemeColorSlot.Accent4),
-            CellStylePreset.Accent5_20 => Accent20(theme, WorkbookThemeColorSlot.Accent5),
-            CellStylePreset.Accent6_20 => Accent20(theme, WorkbookThemeColorSlot.Accent6),
+            CellStylePreset.Accent1_20 => AccentDepth(theme, WorkbookThemeColorSlot.Accent1, 0.8),
+            CellStylePreset.Accent2_20 => AccentDepth(theme, WorkbookThemeColorSlot.Accent2, 0.8),
+            CellStylePreset.Accent3_20 => AccentDepth(theme, WorkbookThemeColorSlot.Accent3, 0.8),
+            CellStylePreset.Accent4_20 => AccentDepth(theme, WorkbookThemeColorSlot.Accent4, 0.8),
+            CellStylePreset.Accent5_20 => AccentDepth(theme, WorkbookThemeColorSlot.Accent5, 0.8),
+            CellStylePreset.Accent6_20 => AccentDepth(theme, WorkbookThemeColorSlot.Accent6, 0.8),
+            CellStylePreset.Accent1_40 => AccentDepth(theme, WorkbookThemeColorSlot.Accent1, 0.6),
+            CellStylePreset.Accent2_40 => AccentDepth(theme, WorkbookThemeColorSlot.Accent2, 0.6),
+            CellStylePreset.Accent3_40 => AccentDepth(theme, WorkbookThemeColorSlot.Accent3, 0.6),
+            CellStylePreset.Accent4_40 => AccentDepth(theme, WorkbookThemeColorSlot.Accent4, 0.6),
+            CellStylePreset.Accent5_40 => AccentDepth(theme, WorkbookThemeColorSlot.Accent5, 0.6),
+            CellStylePreset.Accent6_40 => AccentDepth(theme, WorkbookThemeColorSlot.Accent6, 0.6),
+            CellStylePreset.Accent1_60 => AccentDepth(theme, WorkbookThemeColorSlot.Accent1, 0.4),
+            CellStylePreset.Accent2_60 => AccentDepth(theme, WorkbookThemeColorSlot.Accent2, 0.4),
+            CellStylePreset.Accent3_60 => AccentDepth(theme, WorkbookThemeColorSlot.Accent3, 0.4),
+            CellStylePreset.Accent4_60 => AccentDepth(theme, WorkbookThemeColorSlot.Accent4, 0.4),
+            CellStylePreset.Accent5_60 => AccentDepth(theme, WorkbookThemeColorSlot.Accent5, 0.4),
+            CellStylePreset.Accent6_60 => AccentDepth(theme, WorkbookThemeColorSlot.Accent6, 0.4),
             _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null)
         };
 
@@ -160,9 +184,9 @@ public static class CellStyleDiffPlanner
             BorderLeft: border);
     }
 
-    private static StyleDiff Accent20(WorkbookTheme theme, WorkbookThemeColorSlot slot) =>
+    private static StyleDiff AccentDepth(WorkbookTheme theme, WorkbookThemeColorSlot slot, double tint) =>
         new(
-            FillColor: theme.ResolveColor(slot, 0.8),
+            FillColor: theme.ResolveColor(slot, tint),
             FontColor: CellColor.Black,
             BorderBottom: new CellBorder(BorderStyle.Thin, theme.GetColor(slot)));
 
