@@ -3642,6 +3642,25 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_TerminatingMessage_ReportsTransformDiagnostic()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:message terminate="yes">adapter stop</xsl:message>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*XSLT transform failed*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
     public void LoadTransformed_RejectsStylesheetInclude()
     {
         using var source = StreamFromString("<rows/>");
