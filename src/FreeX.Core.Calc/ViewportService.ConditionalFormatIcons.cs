@@ -134,6 +134,7 @@ public sealed partial class ViewportService
                     sheet,
                     workbook,
                     addr,
+                    rule.AppliesTo.Start,
                     ViewportConditionalFormatEvaluator.GetStaticThresholdFormulaValue(
                         cfContext,
                         rule,

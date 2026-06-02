@@ -3626,6 +3626,22 @@ public sealed class SpreadsheetXmlFileAdapterTests
         stylesheet.CanRead.Should().BeTrue();
     }
 
+    [Fact]
+    public void LoadTransformed_EmptyStylesheet_ReportsTransformStylesheetDiagnostic()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString(string.Empty);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+        source.Position.Should().Be(0);
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(0, 1, "maxOutputBytes")]
     [InlineData(1, 0, "maxInputCharacters")]
@@ -3821,6 +3837,28 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_InvalidStylesheetExpression_ReportsTransformStylesheetDiagnostic()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:value-of select="count("/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+        source.Position.Should().Be(0);
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void LoadTransformed_RejectsExternalDocumentFunction()
     {
         using var source = StreamFromString("<rows/>");
@@ -3964,6 +4002,26 @@ public sealed class SpreadsheetXmlFileAdapterTests
               <xsl:output method="text"/>
               <xsl:template match="/">
                 <xsl:text>&lt;ss:Workbook</xsl:text>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*XSLT transform output*")
+            .WithInnerException<XmlException>();
+    }
+
+    [Fact]
+    public void LoadTransformed_WrapsTextTransformOutputWithXsltContext()
+    {
+        using var source = StreamFromString("<rows><row name=\"India\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="text" />
+              <xsl:template match="/rows">
+                <xsl:value-of select="row/@name" />
               </xsl:template>
             </xsl:stylesheet>
             """);
