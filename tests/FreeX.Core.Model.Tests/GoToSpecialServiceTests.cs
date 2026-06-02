@@ -379,6 +379,7 @@ public sealed class GoToSpecialServiceTests
             $"PERF GOTO_SPECIAL_DEPENDENTS_FORMULA_SCAN selected_rows={selectedRows} formulas={formulas} " +
             $"steps={iterations} total_ms={elapsed.TotalMilliseconds:F2} allocated_bytes={allocated} matches={count}");
         count.Should().Be(formulas);
+        allocated.Should().BeLessThan(1_250_000);
     }
 
     private static void Set(Sheet sheet, uint row, uint col, string value) =>

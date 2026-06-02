@@ -84,11 +84,11 @@ public sealed partial class NativeJsonAdapter
             DateOccurringPeriod = ValidDateOccurringPeriodOrDefault(formatDto.DateOccurringPeriod),
             StopIfTrue = formatDto.StopIfTrue,
             NativeAttributes = formatDto.NativeAttributes,
-            NativeChildXmls = formatDto.NativeChildXmls,
+            NativeChildXmls = CleanNativeXmlList(formatDto.NativeChildXmls),
             NativePayloadAttributes = formatDto.NativePayloadAttributes,
-            NativePayloadChildXmls = formatDto.NativePayloadChildXmls,
+            NativePayloadChildXmls = CleanNativeXmlList(formatDto.NativePayloadChildXmls),
             NativeContainerAttributes = formatDto.NativeContainerAttributes,
-            NativeContainerChildXmls = formatDto.NativeContainerChildXmls
+            NativeContainerChildXmls = CleanNativeXmlList(formatDto.NativeContainerChildXmls)
         };
         format.IconSetThresholds.AddRange((formatDto.IconSetThresholds ?? [])
             .OfType<CfThresholdModel>()
@@ -150,11 +150,11 @@ public sealed partial class NativeJsonAdapter
             DateOccurringPeriod = ValidDateOccurringPeriodOrDefault(format.DateOccurringPeriod),
             StopIfTrue = format.StopIfTrue,
             NativeAttributes = format.NativeAttributes,
-            NativeChildXmls = format.NativeChildXmls,
+            NativeChildXmls = CleanNativeXmlList(format.NativeChildXmls),
             NativePayloadAttributes = format.NativePayloadAttributes,
-            NativePayloadChildXmls = format.NativePayloadChildXmls,
+            NativePayloadChildXmls = CleanNativeXmlList(format.NativePayloadChildXmls),
             NativeContainerAttributes = format.NativeContainerAttributes,
-            NativeContainerChildXmls = format.NativeContainerChildXmls
+            NativeContainerChildXmls = CleanNativeXmlList(format.NativeContainerChildXmls)
         };
 
     private static bool IsSupportedConditionalFormat(ConditionalFormat format) =>

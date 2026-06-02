@@ -73,6 +73,21 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void GetDirectDependents_ReturnsFormulaCellsWithAbsoluteLocalReferences()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var target = new CellAddress(sheet.Id, 2, 1);
+        var dependent = new CellAddress(sheet.Id, 5, 3);
+
+        sheet.SetCell(dependent, Cell.FromFormula("$A$2*2"));
+
+        FormulaAuditingService.GetDirectDependents(wb, target)
+            .Should()
+            .Equal(dependent);
+    }
+
+    [Fact]
     public void GetDependentTraceArrows_ReturnsMultiLevelFormulaChain()
     {
         var wb = new Workbook("test");
@@ -930,6 +945,7 @@ public sealed class FormulaAuditingServiceTests
 
         Console.WriteLine(
             $"PERF FORMULA_AUDIT_SPARSE_FORMULAS occupied={sheet.CellCount} formulas={sheet.FormulaCellCount} steps={steps} total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={meanMs:F2} max_ms={maxStepMs:F2} allocated_bytes={allocatedBytes}");
+        allocatedBytes.Should().BeLessThan(6_800_000);
     }
 
     private static string FindWorkspaceFile(params string[] parts)

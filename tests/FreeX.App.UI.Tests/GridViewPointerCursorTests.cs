@@ -220,6 +220,8 @@ public sealed class GridViewPointerCursorTests
         mouseDownBlock.Should().Contain("_splitPaneScrollbarDragPointerOffset = 0;");
         mouseDownBlock.IndexOf("if (!_splitPaneScrollbarDragging)", StringComparison.Ordinal)
             .Should().BeLessThan(mouseDownBlock.IndexOf("CalculateSplitPaneScrollbarInteractionTarget", StringComparison.Ordinal));
+        mouseDownBlock.Should().Contain("CalculateSplitPaneScrollbarInteractionTarget(Viewport, chrome, scrollbarHit, pos)");
+        mouseDownBlock.Should().NotContain("CalculateSplitPaneScrollbarInteractionTarget(Viewport, chrome, pos)");
     }
 
     [Fact]
@@ -232,7 +234,7 @@ public sealed class GridViewPointerCursorTests
             source.IndexOf("if (_splitPaneScrollbarDragging)", mouseUpStart, StringComparison.Ordinal)..
             source.IndexOf("if (_autofillDragging)", mouseUpStart, StringComparison.Ordinal)];
 
-        mouseUpBlock.Should().Contain("_splitPaneScrollbarDragSource is not null");
+        mouseUpBlock.Should().Contain("_splitPaneScrollbarDragSource is { } dragSource");
         mouseUpBlock.Should().Contain("CalculateSplitPaneScrollbarThumbDragTarget(");
         mouseUpBlock.Should().Contain("_splitPaneScrollbarDragPointerOffset");
         mouseUpBlock.Should().NotContain("CalculateSplitPaneScrollbarScrollTarget(chrome, pos)");

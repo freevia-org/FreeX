@@ -10,6 +10,7 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     private readonly List<Button> _quickAccessToolbarButtons = [];
+    private readonly List<QuickAccessToolbarStateTarget> _quickAccessToolbarStateTargets = [];
     private readonly HashSet<string> _registeredQuickAccessToolbarNames = new(StringComparer.Ordinal);
 
     private void RebuildQuickAccessToolbar()
@@ -18,6 +19,7 @@ public partial class MainWindow
         TitleBarQatPanel.Children.Clear();
         BelowRibbonQatPanel.Children.Clear();
         _quickAccessToolbarButtons.Clear();
+        _quickAccessToolbarStateTargets.Clear();
 
         var commands = QuickAccessToolbarCatalog.Normalize(_options.QuickAccessToolbarCommands);
         _options.QuickAccessToolbarCommands = commands.Select(command => command.Id).ToList();
@@ -33,6 +35,9 @@ public partial class MainWindow
             var button = CreateQuickAccessToolbarButton(command, index + 1, showBelowRibbon);
             targetPanel.Children.Add(button);
             _quickAccessToolbarButtons.Add(button);
+            _quickAccessToolbarStateTargets.Add(new(
+                button,
+                QuickAccessCommandStateResolver.GetAvailability(command.Id)));
             RegisterName(command.AutomationId, button);
             _registeredQuickAccessToolbarNames.Add(command.AutomationId);
         }
@@ -238,14 +243,11 @@ public partial class MainWindow
             return;
         }
 
-        foreach (var button in _quickAccessToolbarButtons)
+        foreach (var target in _quickAccessToolbarStateTargets)
         {
-            if (!RibbonMetadata.TryGetCatalogId(button, out var commandId))
-                continue;
-
-            var isEnabled = QuickAccessCommandStateResolver.CanExecute(commandId, state);
-            if (button.IsEnabled != isEnabled)
-                button.IsEnabled = isEnabled;
+            var isEnabled = QuickAccessCommandStateResolver.CanExecute(target.Availability, state);
+            if (target.Button.IsEnabled != isEnabled)
+                target.Button.IsEnabled = isEnabled;
         }
 
         _lastQuickAccessCommandState = state;
@@ -387,4 +389,8 @@ public partial class MainWindow
         button.IsChecked = button.IsChecked != true;
         handler(button, new RoutedEventArgs(ButtonBase.ClickEvent, button));
     }
+
+    private readonly record struct QuickAccessToolbarStateTarget(
+        Button Button,
+        QuickAccessCommandAvailability Availability);
 }

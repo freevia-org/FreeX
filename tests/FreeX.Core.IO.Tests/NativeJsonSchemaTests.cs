@@ -908,6 +908,48 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsNullNativeJsonWorksheetDimensionEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullWorksheetDimensions",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "RowHeights": [
+                    null,
+                    { "Index": 2, "Value": 24.5 }
+                  ],
+                  "ColumnWidths": [
+                    null,
+                    { "Index": 3, "Value": 14.25 }
+                  ],
+                  "RowOutlineLevels": [
+                    null,
+                    { "Index": 4, "Value": 2 }
+                  ],
+                  "ColOutlineLevels": [
+                    null,
+                    { "Index": 5, "Value": 3 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sheet = new NativeJsonAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.RowHeights.Should().Contain(new KeyValuePair<uint, double>(2, 24.5));
+        sheet.ColumnWidths.Should().Contain(new KeyValuePair<uint, double>(3, 14.25));
+        sheet.RowOutlineLevels.Should().Contain(new KeyValuePair<uint, int>(4, 2));
+        sheet.ColOutlineLevels.Should().Contain(new KeyValuePair<uint, int>(5, 3));
+    }
+
+    [Fact]
     public void Save_TreatsNullNativeJsonChartListsAsEmpty()
     {
         var workbook = new Workbook("NullChartLists");
@@ -1046,7 +1088,10 @@ public sealed class NativeJsonSchemaTests
         {
             AppliesTo = GridRange.Parse("A1:A3", sheet.Id),
             RuleType = CfRuleType.IconSet,
-            IconSetStyle = "3Arrows"
+            IconSetStyle = "3Arrows",
+            NativeChildXmls = [null!, " ", "<x:ext />"],
+            NativePayloadChildXmls = [null!, "", "<x:payload />"],
+            NativeContainerChildXmls = [null!, " ", "<x:container />"]
         };
         format.IconSetThresholds.Add(null!);
         format.IconSetThresholds.Add(new CfThresholdModel(CfThresholdType.Number, "5"));
@@ -1064,6 +1109,48 @@ public sealed class NativeJsonSchemaTests
             .Should().ContainSingle().Which.GetProperty("Value").GetString().Should().Be("5");
         formatJson.GetProperty("IconOverrides").EnumerateArray()
             .Should().ContainSingle().Which.GetProperty("IconSet").GetString().Should().Be("3Arrows");
+        formatJson.GetProperty("NativeChildXmls").EnumerateArray()
+            .Should().ContainSingle().Which.GetString().Should().Be("<x:ext />");
+        formatJson.GetProperty("NativePayloadChildXmls").EnumerateArray()
+            .Should().ContainSingle().Which.GetString().Should().Be("<x:payload />");
+        formatJson.GetProperty("NativeContainerChildXmls").EnumerateArray()
+            .Should().ContainSingle().Which.GetString().Should().Be("<x:container />");
+    }
+
+    [Fact]
+    public void Load_DropsNullNativeJsonConditionalFormatNativeChildXmlEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullConditionalFormatNativeChildXmls",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "ConditionalFormats": [
+                    {
+                      "AppliesTo": "A1:A3",
+                      "RuleType": 6,
+                      "IconSetStyle": "3Arrows",
+                      "NativeChildXmls": [ null, " ", "<x:ext />" ],
+                      "NativePayloadChildXmls": [ null, "", "<x:payload />" ],
+                      "NativeContainerChildXmls": [ null, " ", "<x:container />" ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var format = new NativeJsonAdapter().Load(stream).GetSheetAt(0).ConditionalFormats
+            .Should().ContainSingle().Subject;
+
+        format.NativeChildXmls.Should().ContainSingle().Which.Should().Be("<x:ext />");
+        format.NativePayloadChildXmls.Should().ContainSingle().Which.Should().Be("<x:payload />");
+        format.NativeContainerChildXmls.Should().ContainSingle().Which.Should().Be("<x:container />");
     }
 
     [Fact]

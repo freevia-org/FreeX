@@ -94,10 +94,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                     property.Id,
                     ToWorksheetCustomPropertyMetadata(property.Metadata)));
             }
-            foreach (var entry in sDto.RowHeights ?? [])
+            foreach (var entry in (sDto.RowHeights ?? []).OfType<UIntDoubleDto>())
                 if (NativeJsonValueSanitizer.IsValidRowIndex(entry.Index) && NativeJsonValueSanitizer.IsPositiveFinite(entry.Value))
                     sheet.RowHeights[entry.Index] = entry.Value;
-            foreach (var entry in sDto.ColumnWidths ?? [])
+            foreach (var entry in (sDto.ColumnWidths ?? []).OfType<UIntDoubleDto>())
                 if (NativeJsonValueSanitizer.IsValidColumnIndex(entry.Index) && NativeJsonValueSanitizer.IsPositiveFinite(entry.Value))
                     sheet.ColumnWidths[entry.Index] = entry.Value;
             foreach (var row in sDto.HiddenRows ?? [])
@@ -109,10 +109,10 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var column in sDto.HiddenCols ?? [])
                 if (NativeJsonValueSanitizer.IsValidColumnIndex(column))
                     sheet.HiddenCols.Add(column);
-            foreach (var entry in sDto.RowOutlineLevels ?? [])
+            foreach (var entry in (sDto.RowOutlineLevels ?? []).OfType<UIntIntDto>())
                 if (NativeJsonValueSanitizer.IsValidRowIndex(entry.Index) && NativeJsonValueSanitizer.IsValidOutlineLevel(entry.Value))
                     sheet.RowOutlineLevels[entry.Index] = entry.Value;
-            foreach (var entry in sDto.ColOutlineLevels ?? [])
+            foreach (var entry in (sDto.ColOutlineLevels ?? []).OfType<UIntIntDto>())
                 if (NativeJsonValueSanitizer.IsValidColumnIndex(entry.Index) && NativeJsonValueSanitizer.IsValidOutlineLevel(entry.Value))
                     sheet.ColOutlineLevels[entry.Index] = entry.Value;
             sheet.OutlineSummaryBelow = sDto.OutlineSummaryBelow;

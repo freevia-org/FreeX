@@ -152,6 +152,9 @@ internal static class NativeJsonVisualDtoMapper
         FillColor = shape.FillColor is { } fill ? FormatColor(fill) : null,
         OutlineColor = shape.OutlineColor is { } outline ? FormatColor(outline) : null,
         GradientFillEndColor = shape.GradientFillEndColor is { } gradientEnd ? FormatColor(gradientEnd) : null,
+        GradientFillDirection = ValidEnumOrDefault(
+            shape.GetEffectiveGradientFillDirection(),
+            DrawingShapeGradientDirection.DiagonalDown),
         FillThemeColor = FromThemeColorReference(shape.FillThemeColor),
         OutlineThemeColor = FromThemeColorReference(shape.OutlineThemeColor),
         HasShadowEffect = shape.GetEffectiveEffectPreset() == DrawingShapeEffectPreset.Shadow,
@@ -186,6 +189,9 @@ internal static class NativeJsonVisualDtoMapper
                 FillColor = shapeDto.FillColor is { } fill ? ParseColor(fill) : null,
                 OutlineColor = shapeDto.OutlineColor is { } outline ? ParseColor(outline) : null,
                 GradientFillEndColor = shapeDto.GradientFillEndColor is { } gradientEnd ? ParseColor(gradientEnd) : null,
+                GradientFillDirection = ValidEnumOrDefault(
+                    shapeDto.GradientFillDirection,
+                    DrawingShapeGradientDirection.DiagonalDown),
                 FillThemeColor = ToThemeColorReference(shapeDto.FillThemeColor),
                 OutlineThemeColor = ToThemeColorReference(shapeDto.OutlineThemeColor),
                 HasShadowEffect = effectPreset == DrawingShapeEffectPreset.Shadow,
@@ -304,6 +310,7 @@ internal class DrawingShapeDto
     public string? FillColor { get; set; }
     public string? OutlineColor { get; set; }
     public string? GradientFillEndColor { get; set; }
+    public DrawingShapeGradientDirection GradientFillDirection { get; set; } = DrawingShapeGradientDirection.DiagonalDown;
     public ThemeColorReferenceDto? FillThemeColor { get; set; }
     public ThemeColorReferenceDto? OutlineThemeColor { get; set; }
     public bool HasShadowEffect { get; set; }

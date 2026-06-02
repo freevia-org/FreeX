@@ -187,6 +187,13 @@ public partial class GridView
         Point pos) =>
         SplitPaneViewportChrome.CalculateInteractionTarget(viewport, chrome, pos);
 
+    public static SplitPaneScrollbarScrollTarget? CalculateSplitPaneScrollbarInteractionTarget(
+        ViewportModel viewport,
+        SplitPaneScrollbarChrome chrome,
+        SplitPaneScrollbarHit hit,
+        Point pos) =>
+        SplitPaneViewportChrome.CalculateInteractionTarget(viewport, chrome, hit, pos);
+
     public static IReadOnlyList<SplitPaneCellLayout> CalculateSplitPaneCellLayouts(
         ViewportModel viewport,
         IReadOnlyList<GridRange>? mergedRegions = null,
@@ -327,6 +334,9 @@ public partial class GridView
         foreach (var row in mainRows)
         {
             var top = ColHeaderHeight + topHeight + row.TopOffset;
+            if (y < top)
+                break;
+
             if (y >= top && y <= top + row.Height)
                 return row.Row;
         }
@@ -357,6 +367,9 @@ public partial class GridView
         foreach (var column in mainColumns)
         {
             var left = ActualRowHeaderWidth + leftWidth + column.LeftOffset;
+            if (x < left)
+                break;
+
             if (x >= left && x <= left + column.Width)
                 return column.Col;
         }

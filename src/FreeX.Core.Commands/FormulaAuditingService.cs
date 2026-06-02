@@ -40,10 +40,22 @@ public static partial class FormulaAuditingService
 
         foreach (var sheet in workbook.Sheets)
         {
-            foreach (var (formulaAddress, cell) in sheet.EnumerateCells())
+            foreach (var formulaAddress in sheet.EnumerateFormulaCells())
             {
-                if (cell.HasFormula != true || string.IsNullOrWhiteSpace(cell.FormulaText))
+                var cell = sheet.GetCell(formulaAddress);
+                if (cell?.HasFormula != true || string.IsNullOrWhiteSpace(cell.FormulaText))
                     continue;
+
+                if (TryFormulaContainsLocalReferenceInRange(
+                        cell.FormulaText,
+                        sheet.Id,
+                        precedentRange,
+                        out var containsLocalReference))
+                {
+                    if (containsLocalReference)
+                        result.Add(formulaAddress);
+                    continue;
+                }
 
                 var precedents = ExtractPrecedents(workbook, sheet.Id, cell.FormulaText);
                 if (ContainsAny(precedents, precedentRange))
@@ -61,6 +73,65 @@ public static partial class FormulaAuditingService
                 return true;
 
         return false;
+    }
+
+    private static bool TryFormulaContainsLocalReferenceInRange(
+        string formulaText,
+        SheetId hostSheetId,
+        GridRange range,
+        out bool containsReference)
+    {
+        containsReference = false;
+
+        for (var index = 0; index < formulaText.Length; index++)
+        {
+            if (formulaText[index] is '"' or '\'' or '!' or ':' or '[' or ']')
+                return false;
+        }
+
+        for (var index = 0; index < formulaText.Length; index++)
+        {
+            var ch = formulaText[index];
+            if (ch != '$' && !IsAsciiLetter(ch) && ch != '_')
+                continue;
+
+            if (IsFormulaReferenceBoundaryBefore(formulaText, index) &&
+                TryReadFormulaReference(formulaText, index, out var end, out var row, out var col))
+            {
+                if (hostSheetId == range.Start.Sheet &&
+                    range.Contains(new CellAddress(hostSheetId, row, col)))
+                {
+                    containsReference = true;
+                }
+
+                index = end - 1;
+                continue;
+            }
+
+            if (ch == '$')
+                return false;
+
+            var identifierEnd = index + 1;
+            while (identifierEnd < formulaText.Length &&
+                   (IsAsciiLetterDigitOrUnderscore(formulaText[identifierEnd]) || formulaText[identifierEnd] == '.'))
+            {
+                identifierEnd++;
+            }
+
+            var next = identifierEnd;
+            while (next < formulaText.Length && char.IsWhiteSpace(formulaText[next]))
+                next++;
+
+            if (next < formulaText.Length && formulaText[next] == '(')
+            {
+                index = identifierEnd - 1;
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     public static IReadOnlyList<FormulaTraceArrow> GetDependentTraceArrows(Workbook workbook, CellAddress address)

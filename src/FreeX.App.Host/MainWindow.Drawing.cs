@@ -426,7 +426,7 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new ShapeGradientDialog { Owner = this };
+        var dialog = new ShapeGradientDialog(shape.GetEffectiveGradientFillDirection()) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         if (!TryExecuteRepeatableGroupedSheetCommand(
@@ -435,7 +435,8 @@ public partial class MainWindow
                     sheetId,
                     GetTargetDrawingShape(sheetId)?.Id ?? Guid.Empty,
                     dialog.Result.StartColor,
-                    dialog.Result.EndColor)))
+                    dialog.Result.EndColor,
+                    dialog.Result.Direction)))
             return;
 
         SetActiveCell(shape.Anchor);
