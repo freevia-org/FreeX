@@ -192,6 +192,7 @@ public sealed class MainWindowSheetTabKeyboardTests
     [Theory]
     [InlineData(Key.Enter)]
     [InlineData(Key.Escape)]
+    [InlineData(Key.Tab)]
     public void NonNavigationKeyOnFocusedSheetTab_DoesNotRouteAsSheetTabNavigation(Key key)
     {
         StaTestRunner.Run(() =>
