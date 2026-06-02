@@ -2111,6 +2111,48 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromCommentAttributeValueTemplates()
+    {
+        using var source = StreamFromString("""
+            <notes>
+              <note label="Total" author="Finance" text="Check generated total"/>
+            </notes>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/notes">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Comments">
+                    <ss:Table>
+                      <xsl:for-each select="note">
+                        <ss:Row>
+                          <ss:Cell>
+                            <ss:Data ss:Type="String"><xsl:value-of select="@label"/></ss:Data>
+                            <ss:Comment ss:Author="{@author}">
+                              <ss:Data><xsl:value-of select="@text"/></ss:Data>
+                            </ss:Comment>
+                          </ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Comments");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.GetCell(address)!.Value.Should().Be(new TextValue("Total"));
+        sheet.Comments[address].Should().Be("Check generated total");
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromNumberInstruction()
     {
         using var source = StreamFromString("""
