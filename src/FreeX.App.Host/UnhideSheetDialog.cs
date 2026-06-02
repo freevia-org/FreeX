@@ -79,18 +79,19 @@ public sealed class UnhideSheetDialog : Window
         _okButton.IsEnabled = _sheetBox.SelectedItem is string sheetName && !string.IsNullOrWhiteSpace(sheetName);
     }
 
-    private void Accept()
+    private bool Accept()
     {
         if (_sheetBox.SelectedItem is not string sheetName)
-            return;
+            return false;
 
         Result = CreateResult(sheetName);
         DialogResult = true;
+        return true;
     }
 
     private void SheetBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        Accept();
-        e.Handled = true;
+        if (Accept())
+            e.Handled = true;
     }
 }
