@@ -251,9 +251,9 @@ public sealed partial class NativeJsonAdapter
                 SeriesLineThickness = chartDto.SeriesLineThickness,
                 SeriesLineDashStyle = chartDto.SeriesLineDashStyle,
                 HistogramBinning = chartDto.HistogramBinning,
-                WaterfallTotalPointIndices = chartDto.WaterfallTotalPointIndices is null
-                    ? null
-                    : [.. chartDto.WaterfallTotalPointIndices],
+                WaterfallTotalPointIndices = SanitizeWaterfallTotalPointIndices(
+                    chartDto.Type,
+                    chartDto.WaterfallTotalPointIndices),
                 ShowUpDownBars = chartDto.ShowUpDownBars,
                 UpDownBarGapWidth = chartDto.UpDownBarGapWidth,
                 UpBarFillColor = chartDto.UpBarFillColor,

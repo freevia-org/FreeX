@@ -737,6 +737,21 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderSplitPaneCells_ReusesDoubleUnderlinePensWithinRenderPass()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderSplitPaneCells = source[
+            source.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+
+        renderSplitPaneCells.Should().Contain("_underlinePenCache.Clear();");
+        renderSplitPaneCells.Should().Contain("if (style?.DoubleUnderline == true)");
+        renderSplitPaneCells.Should().Contain("UnderlinePenForTextBrush(textBrush, _underlinePenCache)");
+        renderSplitPaneCells.Should().Contain("dc.DrawLine(underlinePen, new Point(textX, uY), new Point(textX + text.Width, uY));");
+        renderSplitPaneCells.Should().NotContain("new Pen(textBrush");
+    }
+
+    [Fact]
     public void ConditionalIconGlyphRenderer_ReusesFrozenBrushesAndPens()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "ConditionalIconGlyphRenderer.cs"));

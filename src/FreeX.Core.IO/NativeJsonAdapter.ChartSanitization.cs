@@ -196,6 +196,7 @@ public sealed partial class NativeJsonAdapter
         var dataPointCount = ChartTypeSupport.GetDataPointCount(chart);
         if (chart.ExplodedSliceIndex < 0 || chart.ExplodedSliceIndex >= dataPointCount)
             chart.ExplodedSliceIndex = -1;
+        chart.WaterfallTotalPointIndices = SanitizeWaterfallTotalPointIndices(chart.Type, chart.WaterfallTotalPointIndices);
 
         var seriesCount = ChartTypeSupport.GetDataSeriesCount(chart);
         chart.SecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes
@@ -270,6 +271,18 @@ public sealed partial class NativeJsonAdapter
     {
         var normalized = value % 360;
         return normalized < 0 ? normalized + 360 : normalized;
+    }
+
+    private static List<int>? SanitizeWaterfallTotalPointIndices(ChartType chartType, IEnumerable<int>? indices)
+    {
+        if (indices is null || chartType != ChartType.Waterfall)
+            return null;
+
+        return indices
+            .Where(index => index >= 0)
+            .Distinct()
+            .Order()
+            .ToList();
     }
 
     private static void ClearXAxisBounds(ChartModel chart)
