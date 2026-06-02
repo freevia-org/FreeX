@@ -109,6 +109,18 @@ public sealed class SheetTabListPlannerTests
         SheetTabListPlanner.AdjacentVisibleSheet(workbook, SheetId.New(), 1).Should().Be(second.Id);
     }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    public void AdjacentVisibleSheet_RecoversMissingCurrentToFirstVisibleWhenNotMovingForward(int direction)
+    {
+        var workbook = new Workbook("Book");
+        var first = workbook.AddSheet("First");
+        workbook.AddSheet("Second");
+
+        SheetTabListPlanner.AdjacentVisibleSheet(workbook, SheetId.New(), direction).Should().Be(first.Id);
+    }
+
     [Fact]
     public void SelectAdjacentVisibleSheetGroup_ExtendsFromAnchorAcrossVisibleSheets()
     {

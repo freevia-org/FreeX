@@ -151,9 +151,7 @@ public static class SheetTabListPlanner
         if (foundCurrent)
             return previousVisible;
 
-        return direction > 0
-            ? secondVisible ?? firstVisible
-            : firstVisible;
+        return MissingCurrentFallback(firstVisible.Value, secondVisible, direction);
     }
 
     public static SheetKeyboardGroupSelectionPlan? SelectAdjacentVisibleSheetGroup(
@@ -188,4 +186,9 @@ public static class SheetTabListPlanner
 
         return new SheetKeyboardGroupSelectionPlan(nextSheetId, anchor, selected);
     }
+
+    private static SheetId MissingCurrentFallback(SheetId firstVisible, SheetId? secondVisible, int direction) =>
+        direction > 0
+            ? secondVisible ?? firstVisible
+            : firstVisible;
 }
