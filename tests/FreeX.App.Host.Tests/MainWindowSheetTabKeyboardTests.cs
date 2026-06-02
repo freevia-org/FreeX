@@ -85,15 +85,25 @@ public sealed class MainWindowSheetTabKeyboardTests
             var chromeLayer = (FrameworkElement)window.FindName("SheetTabsChromeLayer");
             var overlayLayer = (FrameworkElement)window.FindName("SheetTabsOverlayLayer");
 
+            harness.FocusCurrentSheetTab().Should().BeTrue();
+            window.UpdateLayout();
+            PumpDispatcher();
+            window.UpdateLayout();
+
+            var focusedTab = Keyboard.FocusedElement.Should().BeAssignableTo<FrameworkElement>().Subject;
             var rowBounds = BoundsRelativeToWindow(row, window);
             var scrollerBounds = BoundsRelativeToWindow(scroller, window);
             var chromeBounds = BoundsRelativeToWindow(chromeLayer, window);
             var overlayBounds = BoundsRelativeToWindow(overlayLayer, window);
+            var focusedTabBounds = BoundsRelativeToWindow(focusedTab, window);
 
             scrollerBounds.Top.Should().BeGreaterThan(rowBounds.Top + 0.5, "the clipped viewport needs breathing room above tab text and focus visuals");
             chromeBounds.Top.Should().BeGreaterThan(rowBounds.Top + 0.5, "the drawn tab chrome stroke should not start on the row's clipping edge");
             overlayBounds.Top.Should().BeApproximately(chromeBounds.Top, 0.25);
+            scroller.ActualHeight.Should().BeGreaterThanOrEqualTo(30);
             rowBounds.Height.Should().BeGreaterThan(scroller.ActualHeight);
+            focusedTabBounds.Top.Should().BeGreaterThanOrEqualTo(scrollerBounds.Top - 0.5);
+            focusedTabBounds.Bottom.Should().BeLessThanOrEqualTo(scrollerBounds.Bottom + 0.5, "the focused sheet tab chrome must fit inside the clipped viewport");
             chromeBounds.Bottom.Should().BeLessThanOrEqualTo(rowBounds.Bottom + 0.5);
             overlayBounds.Bottom.Should().BeLessThanOrEqualTo(rowBounds.Bottom + 0.5);
         });

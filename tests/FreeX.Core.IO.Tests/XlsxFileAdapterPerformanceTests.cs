@@ -976,10 +976,27 @@ public sealed class XlsxFileAdapterPerformanceTests
 
         saveSource.Should().Contain("var styleCache = new Dictionary<StyleId, CellStyle>(workbook.StyleCount);");
         saveSource.Should().Contain("GetCachedStyle(workbook, styleCache, cell.StyleId)");
-        saveSource.Should().Contain("GetCachedStyle(workbook, styleCache, run.StyleId)");
+        saveSource.Should().Contain("GetCachedStyle(workbook, styleCache, seed.StyleId)");
         saveSource.Should().Contain("style = workbook.GetStyle(styleId);");
         saveSource.Should().NotContain("workbook.GetStyle(cell.StyleId)");
-        saveSource.Should().NotContain("workbook.GetStyle(run.StyleId)");
+        saveSource.Should().NotContain("workbook.GetStyle(seed.StyleId)");
+    }
+
+    [Fact]
+    public void Save_ExpandsStyleOnlyCellsInPostProcessingAfterClosedXmlStyleSeeding()
+    {
+        var saveSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.Save.cs"));
+        var postProcessingSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxFileAdapter.SavePostProcessing.cs"));
+        var writerSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxStyleOnlyCellWriter.cs"));
+
+        saveSource.Should().Contain("ApplyStyleOnlySeedCells");
+        saveSource.Should().Contain("XlsxStyleOnlyCellWriter.GetSeedCells(sheet)");
+        saveSource.Should().NotContain("GetStyleOnlyRuns");
+        postProcessingSource.Should().Contain("featurePlan.HasStyleOnlyCells");
+        postProcessingSource.Should().Contain("XlsxStyleOnlyCellWriter.Save(packageStream, workbook, GetWorksheetPathMap());");
+        writerSource.Should().Contain("ReadSeedStyleIndexes");
+        writerSource.Should().Contain("ApplyStyleOnlyCells");
+        writerSource.Should().Contain("UpdateDimension");
     }
 
     [Fact]

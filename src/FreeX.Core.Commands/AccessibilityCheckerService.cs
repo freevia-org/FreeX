@@ -71,7 +71,7 @@ public static class AccessibilityCheckerService
                 if (!picture.IsVisible)
                     continue;
 
-                AddAltTextIssue(issues, sheet, picture.Anchor, "Picture", picture.AltText);
+                AddAltTextIssue(issues, sheet, picture.Anchor, "Picture", picture.AltText, picture.Title, picture.Name);
             }
 
             foreach (var shape in sheet.DrawingShapes)
@@ -79,7 +79,7 @@ public static class AccessibilityCheckerService
                 if (!shape.IsVisible)
                     continue;
 
-                AddAltTextIssue(issues, sheet, shape.Anchor, "Shape", shape.AltText);
+                AddAltTextIssue(issues, sheet, shape.Anchor, "Shape", shape.AltText, shape.Title, shape.Name);
             }
 
             foreach (var textBox in sheet.TextBoxes)
@@ -87,7 +87,7 @@ public static class AccessibilityCheckerService
                 if (!textBox.IsVisible)
                     continue;
 
-                AddAltTextIssue(issues, sheet, textBox.Anchor, "Text box", textBox.AltText);
+                AddAltTextIssue(issues, sheet, textBox.Anchor, "Text box", textBox.AltText, textBox.Title, textBox.Name);
                 AddLowContrastTextBoxTextIssue(issues, workbook, sheet, textBox);
             }
 
@@ -964,15 +964,28 @@ public static class AccessibilityCheckerService
         anchor.ToA1(),
         $"{objectType} is missing alternate text.");
 
-    private static void AddAltTextIssue(List<AccessibilityIssue> issues, Sheet sheet, CellAddress anchor, string objectType, string? altText)
+    private static void AddAltTextIssue(
+        List<AccessibilityIssue> issues,
+        Sheet sheet,
+        CellAddress anchor,
+        string objectType,
+        string? altText,
+        string? title,
+        string? name)
     {
-        if (string.IsNullOrWhiteSpace(altText))
+        var hasAccessibleText = false;
+        foreach (var candidate in GetObjectAccessibleTextCandidates(altText, title, name))
         {
-            issues.Add(MissingAltText(sheet, anchor, objectType));
-            return;
+            hasAccessibleText = true;
+            if (!AccessibilityTextRules.IsGenericAltText(candidate))
+                return;
         }
 
-        if (AccessibilityTextRules.IsGenericAltText(altText))
+        if (!hasAccessibleText)
+        {
+            issues.Add(MissingAltText(sheet, anchor, objectType));
+        }
+        else
         {
             issues.Add(new AccessibilityIssue(
                 AccessibilityIssueKind.GenericAltText,
@@ -981,6 +994,16 @@ public static class AccessibilityCheckerService
                 anchor.ToA1(),
                 $"{objectType} alternate text should describe the object."));
         }
+    }
+
+    private static IEnumerable<string> GetObjectAccessibleTextCandidates(string? altText, string? title, string? name)
+    {
+        if (!string.IsNullOrWhiteSpace(altText))
+            yield return altText;
+        if (!string.IsNullOrWhiteSpace(title))
+            yield return title;
+        if (!string.IsNullOrWhiteSpace(name))
+            yield return name;
     }
 
     private static string? ReadHeaderText(Sheet sheet, CellAddress headerAddress, string? columnName)

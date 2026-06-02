@@ -337,6 +337,74 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_AllowsDrawingObjectTitleOrNameWhenAltDescriptionIsMissingOrGeneric()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = PictureKind.Image,
+            AltText = "Image",
+            Title = "Regional revenue map"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            Name = "Approval workflow callout"
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Text = "Risk summary",
+            Title = "Risk summary callout",
+            FillColor = CellColor.White
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Where(i => i.Kind is AccessibilityIssueKind.MissingAltText or AccessibilityIssueKind.GenericAltText)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public void FindIssues_FlagsGenericDrawingObjectTitleOrNameWithoutDescriptiveAltText()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Objects");
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            Kind = PictureKind.Image,
+            Title = "Picture 1"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            Name = "Shape 2"
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 1),
+            Text = "Risk summary",
+            Name = "TextBox 3",
+            FillColor = CellColor.White
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook)
+            .Where(i => i.Kind == AccessibilityIssueKind.GenericAltText)
+            .ToList();
+
+        issues.Select(i => i.Location).Should().Equal("A1", "A2", "A3");
+        issues.Select(i => i.Message).Should().Equal(
+            "Picture alternate text should describe the object.",
+            "Shape alternate text should describe the object.",
+            "Text box alternate text should describe the object.");
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastTextBoxText_WithExplicitFill()
     {
         var workbook = new Workbook("Accessibility");

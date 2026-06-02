@@ -627,18 +627,39 @@ public sealed class SelectionPanePlannerTests
     }
 
     [Fact]
-    public void SelectionPaneDialog_ListKeyboardShortcutsRenameAndToggleVisibility()
+    public void SelectionPaneDialog_ListKeyboardShortcutsRenameToggleVisibilityAndReorder()
     {
         var source = ReadSelectionPaneDialogSources();
 
         source.Should().Contain("_list.KeyDown += List_KeyDown;");
         source.Should().Contain("private void List_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("TryHandleListReorderShortcut(e)");
+        source.Should().Contain("private bool TryHandleListReorderShortcut(KeyEventArgs e)");
+        source.Should().Contain("ModifierKeys.Control");
+        source.Should().Contain("e.Key == Key.Up");
+        source.Should().Contain("AcceptMove(SelectionPaneDialogAction.MoveUp)");
+        source.Should().Contain("e.Key == Key.Down");
+        source.Should().Contain("AcceptMove(SelectionPaneDialogAction.MoveDown)");
         source.Should().Contain("if (e.Key == Key.F2)");
         source.Should().Contain("FocusRenameBox();");
         source.Should().Contain("if (e.Key == Key.Space)");
         source.Should().Contain("ToggleSelectedVisibility();");
         source.Should().Contain("private void FocusRenameBox()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_renameBox);");
+    }
+
+    [Fact]
+    public void SelectionPaneDialog_ObjectListHelpTextDocumentsKeyboardShortcuts()
+    {
+        var resources = File.ReadAllText(WorkspaceFileLocator.Find(
+            "src",
+            "FreeX.App.Host",
+            "Resources",
+            "Strings.resx"));
+
+        resources.Should().Contain("Ctrl+Up or Ctrl+Down");
+        resources.Should().Contain("Press F2 to rename");
+        resources.Should().Contain("Space to show or hide");
     }
 
     [Fact]

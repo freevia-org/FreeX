@@ -104,6 +104,9 @@ public sealed partial class SelectionPaneDialog
 
     private void List_KeyDown(object sender, KeyEventArgs e)
     {
+        if (TryHandleListReorderShortcut(e))
+            return;
+
         if (e.Key == Key.F2)
         {
             FocusRenameBox();
@@ -116,6 +119,28 @@ public sealed partial class SelectionPaneDialog
             ToggleSelectedVisibility();
             e.Handled = true;
         }
+    }
+
+    private bool TryHandleListReorderShortcut(KeyEventArgs e)
+    {
+        if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control)
+            return false;
+
+        if (e.Key == Key.Up)
+        {
+            AcceptMove(SelectionPaneDialogAction.MoveUp);
+            e.Handled = true;
+            return true;
+        }
+
+        if (e.Key == Key.Down)
+        {
+            AcceptMove(SelectionPaneDialogAction.MoveDown);
+            e.Handled = true;
+            return true;
+        }
+
+        return false;
     }
 
     private void DragReorder(
