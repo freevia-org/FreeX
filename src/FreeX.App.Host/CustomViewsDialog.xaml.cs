@@ -41,6 +41,9 @@ public sealed partial class CustomViewsDialog : Window
 
     private void ViewsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
+        if (ViewsList.SelectedItem is not CustomViewViewModel)
+            return;
+
         ShowButton_Click(sender, e);
         e.Handled = true;
     }

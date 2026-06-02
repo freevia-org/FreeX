@@ -73,6 +73,31 @@ public sealed class CustomViewsDialogXamlTests
     }
 
     [Fact]
+    public void DialogList_DoubleClickWithoutSelectionDoesNotShowView()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Custom views");
+            workbook.AddSheet("Sheet1");
+            var commandBus = new CapturingCommandBus();
+            var dialog = new CustomViewsDialog(workbook, commandBus);
+            var viewsList = (ListView)dialog.FindName("ViewsList");
+
+            viewsList.SelectedItem = null;
+            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = Control.MouseDoubleClickEvent
+            };
+
+            viewsList.RaiseEvent(doubleClick);
+
+            doubleClick.Handled.Should().BeFalse();
+            dialog.ViewApplied.Should().BeFalse();
+            commandBus.LastCommand.Should().BeNull();
+        });
+    }
+
+    [Fact]
     public void Dialog_ExposesKeyboardAccessKeys()
     {
         var document = XamlLocalizationTestHelper.LoadLocalizedXaml("CustomViewsDialog.xaml");
