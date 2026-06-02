@@ -84,6 +84,31 @@ public sealed class XlsxLoadPackageStreamTests
     }
 
     [Fact]
+    public void StyleOnlyCellStripper_PreservesStyledValueCellsWhileRemovingDuplicateStyleOnlyCells()
+    {
+        using var package = CreatePackageWithWorksheet(
+            """
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+              <sheetData>
+                <row r="1">
+                  <c r="A1" s="1"><v>42</v></c>
+                  <c r="B1" s="1"/>
+                  <c r="C1" s="1"/>
+                  <c r="D1" s="2"/>
+                  <c r="E1" s="2"/>
+                </row>
+              </sheetData>
+            </worksheet>
+            """,
+            includeLargePayload: false);
+
+        using var stripped = CreateStyleOnlyStrippedPackage(package);
+
+        stripped.Should().NotBeSameAs(package);
+        ReadWorksheetCellReferences(stripped).Should().Equal("A1", "B1", "D1");
+    }
+
+    [Fact]
     public void Benchmark_StyleOnlyCellStripper_DuplicateWorksheetReportsTimingAndAllocatedBytes()
     {
         const int iterations = 3;
