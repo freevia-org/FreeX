@@ -7,6 +7,53 @@ namespace FreeX.Core.Model.Tests;
 public sealed class FilterCommandTests
 {
     [Fact]
+    public void FilterCommand_ReapplyingSameFilter_RevertKeepsCurrentRowsHidden()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Drop"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Keep"));
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1));
+        var ctx = new SimpleCtx(wb);
+
+        var first = new FilterCommand(sheet.Id, range, 0, ["Keep"]);
+        first.Apply(ctx).Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([2u]);
+
+        var second = new FilterCommand(sheet.Id, range, 0, ["Keep"]);
+        second.Apply(ctx).Success.Should().BeTrue();
+        second.Revert(ctx);
+
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([2u]);
+    }
+
+    [Fact]
+    public void FilterCommand_RevertChangedFilterRestoresPreviousFilterRows()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Status"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Drop"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Keep"));
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1));
+        var ctx = new SimpleCtx(wb);
+
+        new FilterCommand(sheet.Id, range, 0, ["Keep"]).Apply(ctx).Success.Should().BeTrue();
+        var changed = new FilterCommand(sheet.Id, range, 0, ["Drop"]);
+        changed.Apply(ctx).Success.Should().BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u]);
+
+        changed.Revert(ctx);
+
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([2u]);
+    }
+
+    [Fact]
     public void TopBottomFilter_KeepsTopTiesByRowAndPreservesRowsOutsideRange()
     {
         var wb = new Workbook("test");

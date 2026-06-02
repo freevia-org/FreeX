@@ -1,4 +1,6 @@
 using FreeX.Core.Model;
+using System.Globalization;
+using System.Text;
 
 namespace FreeX.Core.Commands;
 
@@ -40,9 +42,8 @@ public sealed class FilterCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
-        // Snapshot existing hidden-row state for undo
-        _previousHiddenRows = [.. sheet.HiddenRows];
-        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+        _previousHiddenRows = null;
+        _previousFilterHiddenRows = null;
 
         uint filterCol  = _range.Start.Col + _filterColOffset;
         uint startRow   = _range.Start.Row;
@@ -50,6 +51,10 @@ public sealed class FilterCommand : IWorkbookCommand
 
         if (_allowedValues.Count == 0)
         {
+            if (!FilterHiddenRowUpdater.ContainsAnyInRange(sheet.FilterHiddenRows, _range))
+                return new CommandOutcome(true);
+
+            SnapshotHiddenRows(sheet);
             FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
             return new CommandOutcome(true);
         }
@@ -60,7 +65,12 @@ public sealed class FilterCommand : IWorkbookCommand
         {
             var value = sheet.GetValue(row, filterCol);
             var text  = FilterValueFormatter.ToText(value);
-            FilterHiddenRowUpdater.SetVisible(sheet.FilterHiddenRows, row, allowed.Contains(text));
+            var shouldHide = !allowed.Contains(text);
+            if (sheet.FilterHiddenRows.Contains(row) == shouldHide)
+                continue;
+
+            SnapshotHiddenRows(sheet);
+            FilterHiddenRowUpdater.SetHidden(sheet.FilterHiddenRows, row, shouldHide);
         }
 
         return new CommandOutcome(true);
@@ -77,6 +87,14 @@ public sealed class FilterCommand : IWorkbookCommand
             sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
     }
 
+    private void SnapshotHiddenRows(Sheet sheet)
+    {
+        if (_previousHiddenRows is not null)
+            return;
+
+        _previousHiddenRows = [.. sheet.HiddenRows];
+        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+    }
 }
 
 public sealed class CellFillColorFilterCommand : IWorkbookCommand
@@ -289,12 +307,17 @@ internal readonly struct FilterAllowedValueMatcher
 
 internal static class FilterHiddenRowUpdater
 {
+    public static void SetHidden(HashSet<uint> filterHiddenRows, uint row, bool hidden)
+    {
+        if (hidden)
+            filterHiddenRows.Add(row);
+        else
+            filterHiddenRows.Remove(row);
+    }
+
     public static void SetVisible(HashSet<uint> filterHiddenRows, uint row, bool visible)
     {
-        if (visible)
-            filterHiddenRows.Remove(row);
-        else
-            filterHiddenRows.Add(row);
+        SetHidden(filterHiddenRows, row, !visible);
     }
 
     public static void ClearRange(HashSet<uint> filterHiddenRows, GridRange range)
@@ -314,6 +337,34 @@ internal static class FilterHiddenRowUpdater
         for (var row = firstDataRow; row <= lastDataRow; row++)
             filterHiddenRows.Remove(row);
     }
+
+    public static bool ContainsAnyInRange(HashSet<uint> filterHiddenRows, GridRange range)
+    {
+        var firstDataRow = range.Start.Row + 1;
+        var lastDataRow = range.End.Row;
+        if (filterHiddenRows.Count == 0 || firstDataRow > lastDataRow)
+            return false;
+
+        var dataRowCount = lastDataRow - firstDataRow + 1;
+        if ((uint)filterHiddenRows.Count < dataRowCount)
+        {
+            foreach (var row in filterHiddenRows)
+            {
+                if (row >= firstDataRow && row <= lastDataRow)
+                    return true;
+            }
+
+            return false;
+        }
+
+        for (var row = firstDataRow; row <= lastDataRow; row++)
+        {
+            if (filterHiddenRows.Contains(row))
+                return true;
+        }
+
+        return false;
+    }
 }
 
 internal static class FilterValueFormatter
@@ -321,11 +372,52 @@ internal static class FilterValueFormatter
     public static string ToText(ScalarValue value) => value switch
     {
         TextValue t => t.Value,
-        NumberValue n => n.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        NumberValue n => n.Value.ToString(CultureInfo.InvariantCulture),
         BoolValue b => b.Value ? "TRUE" : "FALSE",
         DateTimeValue dt => dt.ToDateTime().ToString("yyyy-MM-dd"),
         BlankValue => "",
         ErrorValue e => e.Code,
         _ => ""
     };
+
+    public static void AppendText(StringBuilder builder, ScalarValue value)
+    {
+        switch (value)
+        {
+            case TextValue text:
+                builder.Append(text.Value);
+                break;
+            case NumberValue number:
+                AppendInvariant(builder, number.Value);
+                break;
+            case BoolValue boolean:
+                builder.Append(boolean.Value ? "TRUE" : "FALSE");
+                break;
+            case DateTimeValue dateTime:
+                AppendDate(builder, dateTime);
+                break;
+            case ErrorValue error:
+                builder.Append(error.Code);
+                break;
+        }
+    }
+
+    private static void AppendInvariant(StringBuilder builder, double value)
+    {
+        Span<char> buffer = stackalloc char[32];
+        if (value.TryFormat(buffer, out var charsWritten, provider: CultureInfo.InvariantCulture))
+            builder.Append(buffer[..charsWritten]);
+        else
+            builder.Append(value.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static void AppendDate(StringBuilder builder, DateTimeValue value)
+    {
+        Span<char> buffer = stackalloc char[10];
+        var date = value.ToDateTime();
+        if (date.TryFormat(buffer, out var charsWritten, "yyyy-MM-dd", CultureInfo.InvariantCulture))
+            builder.Append(buffer[..charsWritten]);
+        else
+            builder.Append(date.ToString("yyyy-MM-dd"));
+    }
 }
