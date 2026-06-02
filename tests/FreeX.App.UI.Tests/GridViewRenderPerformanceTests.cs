@@ -1040,10 +1040,13 @@ public sealed class GridViewRenderPerformanceTests
         calculateLayouts.Should().Contain("var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);");
         calculateLayouts.Should().Contain("var verticalX = dividerLayout.VerticalX ?? rowHeaderWidth;");
         calculateLayouts.Should().Contain("? rowHeaderWidth + column.LeftOffset");
-        calculateLayouts.Should().Contain("new List<SplitPaneCellLayout>(cells.Count)");
+        calculateLayouts.Should().Contain("VisitLayouts(viewport, mergedRegions, editingCell, ref consumer);");
+        calculateLayouts.Should().Contain("private struct SplitPaneCellLayoutCollector");
+        calculateLayouts.Should().Contain("new List<SplitPaneCellLayout>(_capacity)");
         calculateLayouts.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
         calculateLayouts.Should().Contain("occupied ??= BuildOccupiedCells(cells, editingCell)");
         calculateLayouts.Should().Contain("foreach (var cell in cells)");
+        calculateLayouts.Should().Contain("consumer.AcceptLayout(new SplitPaneCellLayout");
         calculateLayouts.IndexOf("if (cells.Count == 0)", StringComparison.Ordinal)
             .Should()
             .BeLessThan(calculateLayouts.IndexOf("BuildRowLookup(topRows)", StringComparison.Ordinal));
@@ -1160,16 +1163,18 @@ public sealed class GridViewRenderPerformanceTests
         var renderSplitPaneCells = rendering[
             rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
             rendering.IndexOf("private GridRange? FindMerge", StringComparison.Ordinal)];
-        var setup = renderSplitPaneCells[..renderSplitPaneCells.IndexOf("foreach (var layout in CalculateSplitPaneCellLayouts", StringComparison.Ordinal)];
-        var loop = renderSplitPaneCells[
-            renderSplitPaneCells.IndexOf("foreach (var layout in CalculateSplitPaneCellLayouts", StringComparison.Ordinal)..];
+        var setup = renderSplitPaneCells[..renderSplitPaneCells.IndexOf("var consumer = new SplitPaneCellRenderConsumer", StringComparison.Ordinal)];
+        var renderConsumer = renderSplitPaneCells[
+            renderSplitPaneCells.IndexOf("private readonly struct SplitPaneCellRenderConsumer", StringComparison.Ordinal)..];
 
         setup.Should().Contain("var topLeftClip = FrozenClipGeometry(clips.TopLeft)");
         setup.Should().Contain("var bottomRightClip = FrozenClipGeometry(clips.BottomRight)");
-        loop.Should().Contain("GetSplitPaneClipGeometryForRegion(");
-        loop.Should().Contain("layout.Region");
-        loop.Should().NotContain("new RectangleGeometry(clipRect)");
-        loop.Should().NotContain("GetSplitPaneClipRectForCell");
+        renderSplitPaneCells.Should().Contain("SplitPaneCellLayoutPlanner.VisitLayouts(Viewport, MergedRegions, EditingCell, ref consumer);");
+        renderConsumer.Should().Contain("GetSplitPaneClipGeometryForRegion(");
+        renderConsumer.Should().Contain("layout.Region");
+        renderConsumer.Should().Contain("grid.RenderSplitPaneCell(dc, layout, gridPen, pixelsPerDip);");
+        renderConsumer.Should().NotContain("new RectangleGeometry(clipRect)");
+        renderConsumer.Should().NotContain("GetSplitPaneClipRectForCell");
         rendering.Should().Contain("geometry.Freeze();");
         splitPanes.Should().Contain("public readonly record struct SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region)");
     }
