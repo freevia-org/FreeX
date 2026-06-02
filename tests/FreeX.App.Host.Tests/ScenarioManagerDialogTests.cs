@@ -505,7 +505,7 @@ public sealed class ScenarioManagerDialogTests
 
         source.Should().Contain("_scenarioList.MouseDoubleClick += ScenarioList_MouseDoubleClick;");
         source.Should().Contain("_showButton = AddActionButton(sideButtons, UiText.Get(\"ScenarioManager_Show\"), ScenarioManagerAction.Show, isEnabled: _scenarioList.SelectedItem is not null, isDefault: _scenarioList.SelectedItem is not null);");
-        source.Should().Contain("private void AcceptSelectedScenario()");
+        source.Should().Contain("private bool AcceptSelectedScenario()");
         source.Should().Contain("Accept(ScenarioManagerAction.Show);");
         source.Should().Contain("private void ScenarioList_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
         source.Should().Contain("e.Handled = true;");
