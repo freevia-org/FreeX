@@ -193,6 +193,7 @@ public partial class GridView
         _fillPatternPenCache.Clear();
         _typefaceCache.Clear();
         _underlinePenCache.Clear();
+        _defaultTextLayoutStyleCache.Clear();
         var gridPen = ShowGridLines ? GridPen : null;
         var consumer = new SplitPaneCellRenderConsumer(
             this,
@@ -440,6 +441,7 @@ public partial class GridView
         _fillPatternPenCache.Clear();
         _typefaceCache.Clear();
         _underlinePenCache.Clear();
+        _defaultTextLayoutStyleCache.Clear();
         RenderCellBackgroundBase(dc, rowHeaderWidth, columnHeaderHeight);
 
         var hasCellSurfaces = styleLookup.Count > 0;
@@ -886,10 +888,10 @@ public partial class GridView
         FormattedText text,
         Point textPoint)
     {
-        if (wrapText)
+        const double tolerance = 0.5;
+        if (wrapText && text.Height > clipRect.Height + tolerance)
             return true;
 
-        const double tolerance = 0.5;
         return textPoint.X < clipRect.Left - tolerance ||
             textPoint.Y < clipRect.Top - tolerance ||
             textPoint.X + text.Width > clipRect.Right + tolerance ||
