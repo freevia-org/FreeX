@@ -53,11 +53,11 @@ public partial class GridView
 
     private static void DrawSplitScrollbar(DrawingContext dc, SplitPaneScrollbar? scrollbar)
     {
-        if (scrollbar is null)
+        if (scrollbar is not { } value)
             return;
 
-        dc.DrawRectangle(SplitScrollbarTrackBrush, SplitScrollbarPen, scrollbar.Track);
-        dc.DrawRectangle(SplitScrollbarThumbBrush, SplitScrollbarPen, scrollbar.Thumb);
+        dc.DrawRectangle(SplitScrollbarTrackBrush, SplitScrollbarPen, value.Track);
+        dc.DrawRectangle(SplitScrollbarThumbBrush, SplitScrollbarPen, value.Thumb);
     }
 
     public static SplitDividerLayout CalculateSplitDividerLayout(ViewportModel viewport)
@@ -442,7 +442,7 @@ public partial class GridView
 public sealed record SplitDividerLayout(double? HorizontalY, double? VerticalX);
 public readonly record struct SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region);
 public sealed record SplitDividerDragTarget(uint? Row, uint? Column);
-public sealed record SplitPaneScrollbarChrome(
+public readonly record struct SplitPaneScrollbarChrome(
     SplitPaneScrollbar? HorizontalTopRight,
     SplitPaneScrollbar? VerticalBottomLeft);
 public sealed record SplitPaneScrollbar(
@@ -452,11 +452,11 @@ public sealed record SplitPaneScrollbar(
     Rect Thumb,
     int VisibleSpan,
     uint MaxStartIndex);
-public sealed record SplitPaneScrollbarHit(
+public readonly record struct SplitPaneScrollbarHit(
     SplitPaneScrollbarPart Part,
     SplitPaneScrollbarOrientation Orientation,
     SplitPaneRegion Region);
-public sealed record SplitPaneScrollbarScrollTarget(
+public readonly record struct SplitPaneScrollbarScrollTarget(
     SplitPaneRegion Region,
     SplitPaneScrollbarOrientation Orientation,
     uint Index);
