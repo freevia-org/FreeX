@@ -38,6 +38,18 @@ public sealed class HomeCellStyleCommandSourceTests
     [InlineData("20% - Accent 4", "A4", "CellStyleAccent4_20MenuItem_Click", "Accent4_20")]
     [InlineData("20% - Accent 5", "A5", "CellStyleAccent5_20MenuItem_Click", "Accent5_20")]
     [InlineData("20% - Accent 6", "A6", "CellStyleAccent6_20MenuItem_Click", "Accent6_20")]
+    [InlineData("40% - Accent 1", "B1", "CellStyleAccent1_40MenuItem_Click", "Accent1_40")]
+    [InlineData("40% - Accent 2", "B2", "CellStyleAccent2_40MenuItem_Click", "Accent2_40")]
+    [InlineData("40% - Accent 3", "B3", "CellStyleAccent3_40MenuItem_Click", "Accent3_40")]
+    [InlineData("40% - Accent 4", "B4", "CellStyleAccent4_40MenuItem_Click", "Accent4_40")]
+    [InlineData("40% - Accent 5", "B5", "CellStyleAccent5_40MenuItem_Click", "Accent5_40")]
+    [InlineData("40% - Accent 6", "B6", "CellStyleAccent6_40MenuItem_Click", "Accent6_40")]
+    [InlineData("60% - Accent 1", "C1", "CellStyleAccent1_60MenuItem_Click", "Accent1_60")]
+    [InlineData("60% - Accent 2", "C2", "CellStyleAccent2_60MenuItem_Click", "Accent2_60")]
+    [InlineData("60% - Accent 3", "C3", "CellStyleAccent3_60MenuItem_Click", "Accent3_60")]
+    [InlineData("60% - Accent 4", "C4", "CellStyleAccent4_60MenuItem_Click", "Accent4_60")]
+    [InlineData("60% - Accent 5", "C5", "CellStyleAccent5_60MenuItem_Click", "Accent5_60")]
+    [InlineData("60% - Accent 6", "C6", "CellStyleAccent6_60MenuItem_Click", "Accent6_60")]
     public void CellStyleMenuItems_RouteToPlannerPresets(
         string header,
         string keyTip,

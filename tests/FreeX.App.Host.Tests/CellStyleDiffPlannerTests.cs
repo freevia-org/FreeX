@@ -228,17 +228,11 @@ public sealed class CellStyleDiffPlannerTests
     }
 
     [Fact]
-    public void CellStylePreset_Accent20Presets_DifferByFillColorAndUseReadableFontAndBorder()
+    public void CellStylePreset_AccentDepthPresets_DifferByFillColorAndUseReadableFontAndBorder()
     {
-        var presets = new[]
-        {
-            CellStylePreset.Accent1_20,
-            CellStylePreset.Accent2_20,
-            CellStylePreset.Accent3_20,
-            CellStylePreset.Accent4_20,
-            CellStylePreset.Accent5_20,
-            CellStylePreset.Accent6_20
-        };
+        var presets = AccentDepthPresetData()
+            .Select(row => (CellStylePreset)row[0])
+            .ToArray();
 
         var diffs = presets.Select(CellStyleDiffPlanner.GetCellStylePresetDiff).ToList();
 
@@ -251,21 +245,47 @@ public sealed class CellStyleDiffPlannerTests
         });
     }
 
-    [Fact]
-    public void CellStylePreset_Accent20Presets_CanResolveFromWorkbookTheme()
+    [Theory]
+    [MemberData(nameof(AccentDepthPresetData))]
+    public void CellStylePreset_AccentDepthPresets_ResolveFromWorkbookTheme(
+        CellStylePreset preset,
+        WorkbookThemeColorSlot slot,
+        double expectedTint)
     {
         var theme = WorkbookTheme.Office
             .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(100, 150, 200))
-            .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(40, 80, 120));
+            .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(40, 80, 120))
+            .WithColor(WorkbookThemeColorSlot.Accent3, new CellColor(20, 60, 100))
+            .WithColor(WorkbookThemeColorSlot.Accent4, new CellColor(10, 50, 90))
+            .WithColor(WorkbookThemeColorSlot.Accent5, new CellColor(80, 20, 100))
+            .WithColor(WorkbookThemeColorSlot.Accent6, new CellColor(30, 120, 60));
 
-        var accent1 = CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Accent1_20, theme);
-        var accent2 = CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Accent2_20, theme);
+        var diff = CellStyleDiffPlanner.GetCellStylePresetDiff(preset, theme);
 
-        accent1.FillColor.Should().Be(theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.8));
-        accent1.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, theme.GetColor(WorkbookThemeColorSlot.Accent1)));
-        accent2.FillColor.Should().Be(theme.ResolveColor(WorkbookThemeColorSlot.Accent2, 0.8));
-        accent2.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, theme.GetColor(WorkbookThemeColorSlot.Accent2)));
-        accent1.FontColor.Should().Be(CellColor.Black);
-        accent2.FontColor.Should().Be(CellColor.Black);
+        diff.FillColor.Should().Be(theme.ResolveColor(slot, expectedTint));
+        diff.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, theme.GetColor(slot)));
+        diff.FontColor.Should().Be(CellColor.Black);
+    }
+
+    public static IEnumerable<object[]> AccentDepthPresetData()
+    {
+        yield return [CellStylePreset.Accent1_20, WorkbookThemeColorSlot.Accent1, 0.8];
+        yield return [CellStylePreset.Accent2_20, WorkbookThemeColorSlot.Accent2, 0.8];
+        yield return [CellStylePreset.Accent3_20, WorkbookThemeColorSlot.Accent3, 0.8];
+        yield return [CellStylePreset.Accent4_20, WorkbookThemeColorSlot.Accent4, 0.8];
+        yield return [CellStylePreset.Accent5_20, WorkbookThemeColorSlot.Accent5, 0.8];
+        yield return [CellStylePreset.Accent6_20, WorkbookThemeColorSlot.Accent6, 0.8];
+        yield return [CellStylePreset.Accent1_40, WorkbookThemeColorSlot.Accent1, 0.6];
+        yield return [CellStylePreset.Accent2_40, WorkbookThemeColorSlot.Accent2, 0.6];
+        yield return [CellStylePreset.Accent3_40, WorkbookThemeColorSlot.Accent3, 0.6];
+        yield return [CellStylePreset.Accent4_40, WorkbookThemeColorSlot.Accent4, 0.6];
+        yield return [CellStylePreset.Accent5_40, WorkbookThemeColorSlot.Accent5, 0.6];
+        yield return [CellStylePreset.Accent6_40, WorkbookThemeColorSlot.Accent6, 0.6];
+        yield return [CellStylePreset.Accent1_60, WorkbookThemeColorSlot.Accent1, 0.4];
+        yield return [CellStylePreset.Accent2_60, WorkbookThemeColorSlot.Accent2, 0.4];
+        yield return [CellStylePreset.Accent3_60, WorkbookThemeColorSlot.Accent3, 0.4];
+        yield return [CellStylePreset.Accent4_60, WorkbookThemeColorSlot.Accent4, 0.4];
+        yield return [CellStylePreset.Accent5_60, WorkbookThemeColorSlot.Accent5, 0.4];
+        yield return [CellStylePreset.Accent6_60, WorkbookThemeColorSlot.Accent6, 0.4];
     }
 }
