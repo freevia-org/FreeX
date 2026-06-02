@@ -86,7 +86,7 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             }
             foreach (var property in sDto.CustomProperties ?? [])
             {
-                if (string.IsNullOrWhiteSpace(property?.Name) || property.Id <= 0)
+                if (property is null || string.IsNullOrWhiteSpace(property.Name) || property.Id <= 0)
                     continue;
 
                 sheet.CustomProperties.Add(new WorksheetCustomProperty(
