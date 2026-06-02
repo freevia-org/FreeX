@@ -604,6 +604,70 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_DropsNullNativeJsonThreadedCommentReplyEntries()
+    {
+        var workbook = new Workbook("NullThreadedCommentReplies");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.ThreadedComments[new CellAddress(sheet.Id, 1, 1)] = new ThreadedComment("Parent")
+        {
+            Replies =
+            [
+                null!,
+                new CommentReply("Kept", "Reviewer")
+            ]
+        };
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var replies = document.RootElement
+            .GetProperty("Sheets").EnumerateArray().Single()
+            .GetProperty("ThreadedComments").EnumerateArray().Single()
+            .GetProperty("Replies").EnumerateArray()
+            .ToList();
+
+        replies.Should().ContainSingle();
+        replies[0].GetProperty("Text").GetString().Should().Be("Kept");
+        replies[0].GetProperty("Author").GetString().Should().Be("Reviewer");
+    }
+
+    [Fact]
+    public void Load_DropsNullNativeJsonThreadedCommentReplyEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullThreadedCommentReplies",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "ThreadedComments": [
+                    {
+                      "Address": "A1",
+                      "Text": "Parent",
+                      "Replies": [
+                        null,
+                        { "Author": "Nobody" },
+                        { "Text": "Kept", "Author": "Reviewer" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var comment = new NativeJsonAdapter().Load(stream).GetSheetAt(0).ThreadedComments
+            .Should().ContainSingle().Subject.Value;
+
+        comment.Replies.Should().ContainSingle().Which.Should().Be(new CommentReply("Kept", "Reviewer"));
+    }
+
+    [Fact]
     public void Save_SkipsOutOfBoundsNativeJsonRanges()
     {
         var workbook = new Workbook("InvalidRanges");
