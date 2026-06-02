@@ -293,6 +293,7 @@ public sealed partial class NativeJsonAdapter
                     .OfType<PivotTableDto>()
                     .ToList(),
                 DataValidations = s.DataValidations
+                    .OfType<DataValidation>()
                     .Where(validation => IsDataValidationOnSheet(validation, s.Id) && IsSupportedDataValidation(validation))
                     .Select(validation => ToDataValidationDto(validation, s.Id))
                     .ToList(),
