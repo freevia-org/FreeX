@@ -814,7 +814,7 @@ public sealed class MainWindowSourceHygieneTests
         shareMethod.Should().Contain("SaveWorkbookWithDialogAsync()");
         shareMethod.Should().Contain("FileSavePlanner.TryResolveExistingPath(plan.Path, _fileAdapters, out var target)");
         shareMethod.Should().Contain("SaveWorkbookToTargetAsync(target!)");
-        shareMethod.Should().Contain("_shareService.ShareFileAsync(this, _currentFilePath, _workbook.Name)");
+        shareMethod.Should().Contain("_shareService.ShareFileAsync(this, sharePath, _workbook.Name)");
 
         reviewSource.Should().Contain("private async void ShareWorkbookBtn_Click(object sender, RoutedEventArgs e) => await ShareWorkbookAsync();");
         backstageSource.Should().Contain("await ShareWorkbookAsync();");
