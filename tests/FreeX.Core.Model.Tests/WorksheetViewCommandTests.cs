@@ -11,7 +11,7 @@ public sealed class WorksheetViewCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
 
         var command = new SetWorksheetOutlineSymbolsCommand(sheet.Id, showOutlineSymbols: false);
 
@@ -28,7 +28,7 @@ public sealed class WorksheetViewCommandTests
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         sheet.ShowOutlineSymbols = false;
 
         var command = new SetWorksheetOutlineSymbolsCommand(sheet.Id, showOutlineSymbols: true);
@@ -39,11 +39,5 @@ public sealed class WorksheetViewCommandTests
         command.Revert(ctx);
 
         sheet.ShowOutlineSymbols.Should().BeFalse();
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }

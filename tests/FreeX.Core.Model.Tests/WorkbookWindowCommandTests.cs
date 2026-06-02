@@ -11,7 +11,7 @@ public sealed class WorkbookWindowCommandTests
     public void SetWorkbookWindowArrangementCommand_SetsArrangementAndUndoRestores()
     {
         var workbook = new Workbook("test");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         workbook.WindowArrangement = WorkbookWindowArrangement.Horizontal;
 
         var command = new SetWorkbookWindowArrangementCommand(WorkbookWindowArrangement.Tiled);
@@ -28,18 +28,12 @@ public sealed class WorkbookWindowCommandTests
     public void SetWorkbookWindowArrangementCommand_RejectsInvalidArrangement()
     {
         var workbook = new Workbook("test");
-        var ctx = new SimpleCtx(workbook);
+        var ctx = new TestCommandContext(workbook);
         workbook.WindowArrangement = WorkbookWindowArrangement.Vertical;
 
         var outcome = new SetWorkbookWindowArrangementCommand((WorkbookWindowArrangement)99).Apply(ctx);
 
         outcome.Success.Should().BeFalse();
         workbook.WindowArrangement.Should().Be(WorkbookWindowArrangement.Vertical);
-    }
-
-    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }
