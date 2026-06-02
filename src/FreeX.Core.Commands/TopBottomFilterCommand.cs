@@ -11,8 +11,7 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
     private readonly uint _count;
     private readonly bool _top;
     private readonly bool _percent;
-    private uint[]? _previousHiddenRows;
-    private uint[]? _previousFilterHiddenRows;
+    private FilterUndoSnapshot _undoSnapshot;
 
     public string Label => (_top, _percent) switch
     {
@@ -53,15 +52,14 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousHiddenRows = null;
-        _previousFilterHiddenRows = null;
+        _undoSnapshot.Reset();
 
         if (_count == 0)
         {
             if (!FilterHiddenRowUpdater.ContainsAnyInRange(sheet.FilterHiddenRows, _range))
                 return new CommandOutcome(true);
 
-            SnapshotHiddenRows(sheet);
+            _undoSnapshot.CaptureIfNeeded(sheet);
             FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
             return new CommandOutcome(true);
         }
@@ -103,15 +101,11 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        if (_previousHiddenRows is null)
+        if (!_undoSnapshot.HasSnapshot)
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        sheet.HiddenRows.Clear();
-        sheet.HiddenRows.UnionWith(_previousHiddenRows);
-        sheet.FilterHiddenRows.Clear();
-        if (_previousFilterHiddenRows is not null)
-            sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
+        _undoSnapshot.Restore(sheet);
     }
 
     private int GetPercentKeepCount(Sheet sheet, uint filterCol, uint firstDataRow, uint lastDataRow)
@@ -180,7 +174,7 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
             if (sheet.FilterHiddenRows.Contains(row) == !visible)
                 continue;
 
-            SnapshotHiddenRows(sheet);
+            _undoSnapshot.CaptureIfNeeded(sheet);
             FilterHiddenRowUpdater.SetHidden(sheet.FilterHiddenRows, row, !visible);
         }
     }
@@ -197,7 +191,7 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
             if (sheet.FilterHiddenRows.Contains(row) == !visible)
                 continue;
 
-            SnapshotHiddenRows(sheet);
+            _undoSnapshot.CaptureIfNeeded(sheet);
             FilterHiddenRowUpdater.SetHidden(sheet.FilterHiddenRows, row, !visible);
         }
     }
@@ -255,12 +249,4 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         return candidate.Row > other.Row;
     }
 
-    private void SnapshotHiddenRows(Sheet sheet)
-    {
-        if (_previousHiddenRows is not null)
-            return;
-
-        _previousHiddenRows = [.. sheet.HiddenRows];
-        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
-    }
 }
