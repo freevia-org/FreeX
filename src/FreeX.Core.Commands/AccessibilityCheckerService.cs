@@ -709,7 +709,7 @@ public static class AccessibilityCheckerService
         value switch
         {
             TextValue text => !string.IsNullOrWhiteSpace(text.Value),
-            DateTimeValue => true,
+            NumberValue or BoolValue or DateTimeValue or ErrorValue => true,
             _ => false
         };
 
