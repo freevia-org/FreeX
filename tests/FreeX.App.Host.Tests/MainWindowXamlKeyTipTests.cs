@@ -1291,7 +1291,19 @@ public sealed class MainWindowXamlKeyTipTests
             "20% - Accent 3",
             "20% - Accent 4",
             "20% - Accent 5",
-            "20% - Accent 6"
+            "20% - Accent 6",
+            "40% - Accent 1",
+            "40% - Accent 2",
+            "40% - Accent 3",
+            "40% - Accent 4",
+            "40% - Accent 5",
+            "40% - Accent 6",
+            "60% - Accent 1",
+            "60% - Accent 2",
+            "60% - Accent 3",
+            "60% - Accent 4",
+            "60% - Accent 5",
+            "60% - Accent 6"
         ]);
 
         source.Should().Contain("ApplyCellStylePreset(CellStylePreset preset)");
@@ -1330,6 +1342,18 @@ public sealed class MainWindowXamlKeyTipTests
             CellStylePreset.Accent4_20 => "20% - Accent 4",
             CellStylePreset.Accent5_20 => "20% - Accent 5",
             CellStylePreset.Accent6_20 => "20% - Accent 6",
+            CellStylePreset.Accent1_40 => "40% - Accent 1",
+            CellStylePreset.Accent2_40 => "40% - Accent 2",
+            CellStylePreset.Accent3_40 => "40% - Accent 3",
+            CellStylePreset.Accent4_40 => "40% - Accent 4",
+            CellStylePreset.Accent5_40 => "40% - Accent 5",
+            CellStylePreset.Accent6_40 => "40% - Accent 6",
+            CellStylePreset.Accent1_60 => "60% - Accent 1",
+            CellStylePreset.Accent2_60 => "60% - Accent 2",
+            CellStylePreset.Accent3_60 => "60% - Accent 3",
+            CellStylePreset.Accent4_60 => "60% - Accent 4",
+            CellStylePreset.Accent5_60 => "60% - Accent 5",
+            CellStylePreset.Accent6_60 => "60% - Accent 6",
             _ => preset.ToString()
         };
 

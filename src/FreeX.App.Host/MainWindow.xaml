@@ -924,6 +924,18 @@
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_20Accent4}" local:RibbonTooltip.KeyTip="A4" Click="CellStyleAccent4_20MenuItem_Click" local:RibbonMetadata.CommandName="20% - Accent 4"/>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_20Accent5}" local:RibbonTooltip.KeyTip="A5" Click="CellStyleAccent5_20MenuItem_Click" local:RibbonMetadata.CommandName="20% - Accent 5"/>
                                             <MenuItem Header="{local:Loc Key=MainWindow_Header_20Accent6}" local:RibbonTooltip.KeyTip="A6" Click="CellStyleAccent6_20MenuItem_Click" local:RibbonMetadata.CommandName="20% - Accent 6"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_40Accent1}" local:RibbonTooltip.KeyTip="B1" Click="CellStyleAccent1_40MenuItem_Click" local:RibbonMetadata.CommandName="40% - Accent 1"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_40Accent2}" local:RibbonTooltip.KeyTip="B2" Click="CellStyleAccent2_40MenuItem_Click" local:RibbonMetadata.CommandName="40% - Accent 2"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_40Accent3}" local:RibbonTooltip.KeyTip="B3" Click="CellStyleAccent3_40MenuItem_Click" local:RibbonMetadata.CommandName="40% - Accent 3"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_40Accent4}" local:RibbonTooltip.KeyTip="B4" Click="CellStyleAccent4_40MenuItem_Click" local:RibbonMetadata.CommandName="40% - Accent 4"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_40Accent5}" local:RibbonTooltip.KeyTip="B5" Click="CellStyleAccent5_40MenuItem_Click" local:RibbonMetadata.CommandName="40% - Accent 5"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_40Accent6}" local:RibbonTooltip.KeyTip="B6" Click="CellStyleAccent6_40MenuItem_Click" local:RibbonMetadata.CommandName="40% - Accent 6"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_60Accent1}" local:RibbonTooltip.KeyTip="C1" Click="CellStyleAccent1_60MenuItem_Click" local:RibbonMetadata.CommandName="60% - Accent 1"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_60Accent2}" local:RibbonTooltip.KeyTip="C2" Click="CellStyleAccent2_60MenuItem_Click" local:RibbonMetadata.CommandName="60% - Accent 2"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_60Accent3}" local:RibbonTooltip.KeyTip="C3" Click="CellStyleAccent3_60MenuItem_Click" local:RibbonMetadata.CommandName="60% - Accent 3"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_60Accent4}" local:RibbonTooltip.KeyTip="C4" Click="CellStyleAccent4_60MenuItem_Click" local:RibbonMetadata.CommandName="60% - Accent 4"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_60Accent5}" local:RibbonTooltip.KeyTip="C5" Click="CellStyleAccent5_60MenuItem_Click" local:RibbonMetadata.CommandName="60% - Accent 5"/>
+                                            <MenuItem Header="{local:Loc Key=MainWindow_Header_60Accent6}" local:RibbonTooltip.KeyTip="C6" Click="CellStyleAccent6_60MenuItem_Click" local:RibbonMetadata.CommandName="60% - Accent 6"/>
                                         </ContextMenu>
                                     </Button.ContextMenu>
                                     <StackPanel HorizontalAlignment="Center">
