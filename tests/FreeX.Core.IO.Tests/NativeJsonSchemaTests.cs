@@ -1145,7 +1145,7 @@ public sealed class NativeJsonSchemaTests
         workbook.Scenarios.Add(new WorkbookScenario("NoChanges", null!));
         workbook.Scenarios.Add(new WorkbookScenario(
             "Kept",
-            [new ScenarioCellValue(validAddress, new TextValue("kept"))]));
+            [null!, new ScenarioCellValue(validAddress, new TextValue("kept"))]));
 
         using var stream = new MemoryStream();
         new NativeJsonAdapter().Save(workbook, stream);
