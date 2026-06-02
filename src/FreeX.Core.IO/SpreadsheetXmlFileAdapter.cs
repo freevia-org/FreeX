@@ -76,18 +76,6 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         SaveStreamPreparer.TruncateFromCurrentPosition(stream);
 
         var styleIds = CreateNumberFormatStyleIds(workbook);
-        var document = new XDocument(
-            new XDeclaration("1.0", "utf-8", null),
-            new XProcessingInstruction("mso-application", "progid=\"Excel.Sheet\""),
-            new XElement(
-                SpreadsheetNs + "Workbook",
-                new XAttribute(XNamespace.Xmlns + "ss", SpreadsheetNs),
-                new XAttribute(XNamespace.Xmlns + "o", OfficeNs),
-                new XAttribute(XNamespace.Xmlns + "x", ExcelNs),
-                ToStylesElement(workbook, styleIds),
-                ToNamesElement(workbook),
-                workbook.Sheets.Select(sheet => ToWorksheetElement(sheet, styleIds))));
-
         var settings = new XmlWriterSettings
         {
             Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
@@ -97,7 +85,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
             NewLineHandling = NewLineHandling.Replace
         };
         using var writer = XmlWriter.Create(stream, settings);
-        document.Save(writer);
+        WriteWorkbook(writer, workbook, styleIds);
     }
 
     public static Workbook LoadTransformed(Stream sourceXml, Stream stylesheet)
@@ -586,129 +574,457 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         return styleIds;
     }
 
-    private static XElement? ToStylesElement(Workbook workbook, IReadOnlyDictionary<StyleId, string> styleIds)
+    private static void WriteWorkbook(
+        XmlWriter writer,
+        Workbook workbook,
+        IReadOnlyDictionary<StyleId, string> styleIds)
+    {
+        writer.WriteStartDocument();
+        writer.WriteProcessingInstruction("mso-application", "progid=\"Excel.Sheet\"");
+        writer.WriteStartElement("ss", "Workbook", SpreadsheetNs.NamespaceName);
+        writer.WriteAttributeString("xmlns", "ss", null, SpreadsheetNs.NamespaceName);
+        writer.WriteAttributeString("xmlns", "o", null, OfficeNs.NamespaceName);
+        writer.WriteAttributeString("xmlns", "x", null, ExcelNs.NamespaceName);
+
+        WriteStylesElement(writer, workbook, styleIds);
+        WriteNamesElement(writer, workbook);
+
+        foreach (var sheet in workbook.Sheets)
+            WriteWorksheetElement(writer, sheet, styleIds);
+
+        writer.WriteEndElement();
+        writer.WriteEndDocument();
+    }
+
+    private static void WriteStylesElement(
+        XmlWriter writer,
+        Workbook workbook,
+        IReadOnlyDictionary<StyleId, string> styleIds)
     {
         if (styleIds.Count == 0)
-            return null;
+            return;
 
-        return new XElement(
-            SpreadsheetNs + "Styles",
-            styleIds.Select(entry => new XElement(
-                SpreadsheetNs + "Style",
-                new XAttribute(SpreadsheetIdAttribute, entry.Value),
-                new XElement(
-                    SpreadsheetNs + "NumberFormat",
-                    new XAttribute(SpreadsheetFormatAttribute, workbook.GetStyle(entry.Key).NumberFormat)))));
+        WriteSpreadsheetStartElement(writer, "Styles");
+        foreach (var (styleId, styleName) in styleIds)
+        {
+            WriteSpreadsheetStartElement(writer, "Style");
+            WriteSpreadsheetAttribute(writer, SpreadsheetIdAttribute, styleName);
+            WriteSpreadsheetStartElement(writer, "NumberFormat");
+            WriteSpreadsheetAttribute(writer, SpreadsheetFormatAttribute, workbook.GetStyle(styleId).NumberFormat);
+            writer.WriteEndElement();
+            writer.WriteEndElement();
+        }
+
+        writer.WriteEndElement();
     }
 
-    private static XElement? ToNamesElement(Workbook workbook)
+    private static void WriteNamesElement(XmlWriter writer, Workbook workbook)
     {
-        var names = workbook.NamedRanges
-            .OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(entry => ToNamedRangeElement(workbook, entry.Key, entry.Value))
-            .OfType<XElement>()
-            .ToList();
+        var wroteNames = false;
+        foreach (var (name, range) in workbook.NamedRanges.OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            if (!TryFormatNamedRangeRefersTo(workbook, name, range, out var refersTo))
+                continue;
 
-        return names.Count == 0
-            ? null
-            : new XElement(SpreadsheetNs + "Names", names);
+            if (!wroteNames)
+            {
+                WriteSpreadsheetStartElement(writer, "Names");
+                wroteNames = true;
+            }
+
+            WriteSpreadsheetStartElement(writer, "NamedRange");
+            WriteSpreadsheetAttribute(writer, SpreadsheetNameAttribute, name);
+            WriteSpreadsheetAttribute(writer, SpreadsheetRefersToAttribute, refersTo);
+            writer.WriteEndElement();
+        }
+
+        if (wroteNames)
+            writer.WriteEndElement();
     }
 
-    private static XElement? ToNamedRangeElement(Workbook workbook, string name, GridRange range)
+    private static bool TryFormatNamedRangeRefersTo(
+        Workbook workbook,
+        string name,
+        GridRange range,
+        out string refersTo)
     {
+        refersTo = "";
         if (workbook.ValidateNamedRangeName(name) is not null ||
             workbook.GetSheet(range.Start.Sheet) is not { } sheet ||
             !IsValidGridRange(range))
         {
-            return null;
+            return false;
         }
 
-        return new XElement(
-            SpreadsheetNs + "NamedRange",
-            new XAttribute(SpreadsheetNameAttribute, name),
-            new XAttribute(SpreadsheetRefersToAttribute, FormatNamedRangeRefersTo(sheet.Name, range)));
+        refersTo = FormatNamedRangeRefersTo(sheet.Name, range);
+        return true;
     }
 
-    private static XElement ToWorksheetElement(Sheet sheet, IReadOnlyDictionary<StyleId, string> styleIds) =>
-        new(
-            SpreadsheetNs + "Worksheet",
-            new XAttribute(SpreadsheetNameAttribute, sheet.Name),
-            ToWorksheetVisibilityAttribute(sheet),
-            new XElement(
-                SpreadsheetNs + "Table",
-                ToTableElements(sheet, styleIds)),
-            ToWorksheetOptionsElement(sheet));
+    private static void WriteWorksheetElement(
+        XmlWriter writer,
+        Sheet sheet,
+        IReadOnlyDictionary<StyleId, string> styleIds)
+    {
+        WriteSpreadsheetStartElement(writer, "Worksheet");
+        WriteSpreadsheetAttribute(writer, SpreadsheetNameAttribute, sheet.Name);
+        WriteWorksheetVisibilityAttribute(writer, sheet);
 
-    private static XElement? ToWorksheetOptionsElement(Sheet sheet)
+        WriteSpreadsheetStartElement(writer, "Table");
+        WriteTableElements(writer, sheet, styleIds);
+        writer.WriteEndElement();
+
+        WriteWorksheetOptionsElement(writer, sheet);
+        writer.WriteEndElement();
+    }
+
+    private static void WriteWorksheetOptionsElement(XmlWriter writer, Sheet sheet)
     {
         var frozenRows = sheet.FrozenRows is > 0 and <= CellAddress.MaxRow ? sheet.FrozenRows : 0;
         var frozenCols = sheet.FrozenCols is > 0 and <= CellAddress.MaxCol ? sheet.FrozenCols : 0;
         if (sheet.ShowGridlines && !sheet.PrintGridlines && frozenRows == 0 && frozenCols == 0)
-            return null;
+            return;
 
-        return new XElement(
-            ExcelNs + "WorksheetOptions",
-            sheet.ShowGridlines ? null : new XElement(ExcelNs + "DoNotDisplayGridlines"),
-            sheet.PrintGridlines
-                ? new XElement(ExcelNs + "Print", new XElement(ExcelNs + "Gridlines"))
-                : null,
-            frozenRows > 0 || frozenCols > 0
-                ? new object?[]
-                {
-                    new XElement(ExcelNs + "FreezePanes"),
-                    new XElement(ExcelNs + "FrozenNoSplit"),
-                    frozenRows > 0 ? new XElement(ExcelNs + "SplitHorizontal", frozenRows.ToString(CultureInfo.InvariantCulture)) : null,
-                    frozenRows > 0 ? new XElement(ExcelNs + "TopRowBottomPane", frozenRows.ToString(CultureInfo.InvariantCulture)) : null,
-                    frozenCols > 0 ? new XElement(ExcelNs + "SplitVertical", frozenCols.ToString(CultureInfo.InvariantCulture)) : null,
-                    frozenCols > 0 ? new XElement(ExcelNs + "LeftColumnRightPane", frozenCols.ToString(CultureInfo.InvariantCulture)) : null
-                }
-                : null);
+        writer.WriteStartElement("x", "WorksheetOptions", ExcelNs.NamespaceName);
+        if (!sheet.ShowGridlines)
+            WriteExcelEmptyElement(writer, "DoNotDisplayGridlines");
+
+        if (sheet.PrintGridlines)
+        {
+            writer.WriteStartElement("x", "Print", ExcelNs.NamespaceName);
+            WriteExcelEmptyElement(writer, "Gridlines");
+            writer.WriteEndElement();
+        }
+
+        if (frozenRows > 0 || frozenCols > 0)
+        {
+            WriteExcelEmptyElement(writer, "FreezePanes");
+            WriteExcelEmptyElement(writer, "FrozenNoSplit");
+            if (frozenRows > 0)
+            {
+                WriteExcelTextElement(writer, "SplitHorizontal", frozenRows.ToString(CultureInfo.InvariantCulture));
+                WriteExcelTextElement(writer, "TopRowBottomPane", frozenRows.ToString(CultureInfo.InvariantCulture));
+            }
+
+            if (frozenCols > 0)
+            {
+                WriteExcelTextElement(writer, "SplitVertical", frozenCols.ToString(CultureInfo.InvariantCulture));
+                WriteExcelTextElement(writer, "LeftColumnRightPane", frozenCols.ToString(CultureInfo.InvariantCulture));
+            }
+        }
+
+        writer.WriteEndElement();
     }
 
-    private static IEnumerable<XElement> ToTableElements(Sheet sheet, IReadOnlyDictionary<StyleId, string> styleIds) =>
-        ToColumnElements(sheet).Concat(ToRowElements(sheet, styleIds));
+    private static void WriteTableElements(
+        XmlWriter writer,
+        Sheet sheet,
+        IReadOnlyDictionary<StyleId, string> styleIds)
+    {
+        WriteColumnElements(writer, sheet);
+        WriteRowElements(writer, sheet, styleIds);
+    }
 
-    private static XAttribute? ToWorksheetVisibilityAttribute(Sheet sheet)
+    private static void WriteWorksheetVisibilityAttribute(XmlWriter writer, Sheet sheet)
     {
         if (sheet.IsVeryHidden)
-            return new XAttribute(SpreadsheetVisibleAttribute, "SheetVeryHidden");
+        {
+            WriteSpreadsheetAttribute(writer, SpreadsheetVisibleAttribute, "SheetVeryHidden");
+            return;
+        }
 
-        return sheet.IsHidden
-            ? new XAttribute(SpreadsheetVisibleAttribute, "SheetHidden")
-            : null;
+        if (sheet.IsHidden)
+            WriteSpreadsheetAttribute(writer, SpreadsheetVisibleAttribute, "SheetHidden");
+    }
+
+    private static void WriteColumnElements(XmlWriter writer, Sheet sheet)
+    {
+        var columnIndexes = sheet.ColumnWidths.Keys
+            .Where(IsValidColumnLayoutIndex)
+            .Concat(sheet.HiddenCols.Where(IsValidColumnLayoutIndex))
+            .Distinct()
+            .OrderBy(column => column);
+
+        foreach (var columnIndex in columnIndexes)
+        {
+            WriteSpreadsheetStartElement(writer, "Column");
+            WriteSpreadsheetAttribute(writer, SpreadsheetIndexAttribute, columnIndex);
+            WriteColumnWidthAttribute(writer, sheet, columnIndex);
+            if (sheet.HiddenCols.Contains(columnIndex))
+                WriteSpreadsheetAttribute(writer, SpreadsheetHiddenAttribute, "1");
+            writer.WriteEndElement();
+        }
+    }
+
+    private static void WriteColumnWidthAttribute(XmlWriter writer, Sheet sheet, uint columnIndex)
+    {
+        if (sheet.ColumnWidths.TryGetValue(columnIndex, out var width) && IsPositiveFinite(width))
+            WriteSpreadsheetAttribute(writer, SpreadsheetWidthAttribute, width.ToString("R", CultureInfo.InvariantCulture));
+    }
+
+    private static void WriteRowElements(
+        XmlWriter writer,
+        Sheet sheet,
+        IReadOnlyDictionary<StyleId, string> styleIds)
+    {
+        if (CanStreamValueCellRows(sheet))
+        {
+            WriteValueCellRowElements(writer, sheet, styleIds);
+            return;
+        }
+
+        var cells = BuildSortedXmlCells(sheet);
+        var layoutRows = BuildSortedRowLayoutIndexes(sheet);
+
+        var cellIndex = 0;
+        var layoutRowIndex = 0;
+        while (cellIndex < cells.Count || layoutRowIndex < layoutRows.Count)
+        {
+            var cellRow = cellIndex < cells.Count ? cells[cellIndex].Row : uint.MaxValue;
+            var layoutRow = layoutRowIndex < layoutRows.Count ? layoutRows[layoutRowIndex] : uint.MaxValue;
+            var rowIndex = cellRow <= layoutRow ? cellRow : layoutRow;
+            WriteRowStart(writer, sheet, rowIndex);
+
+            while (cellIndex < cells.Count && cells[cellIndex].Row == rowIndex)
+            {
+                WriteCellElement(writer, cells[cellIndex], styleIds);
+                cellIndex++;
+            }
+
+            writer.WriteEndElement();
+
+            if (layoutRow == rowIndex)
+                layoutRowIndex++;
+        }
+    }
+
+    private static void WriteValueCellRowElements(
+        XmlWriter writer,
+        Sheet sheet,
+        IReadOnlyDictionary<StyleId, string> styleIds)
+    {
+        var occupiedCells = sheet.GetOccupiedCellMap();
+        var layoutRows = BuildSortedRowLayoutIndexes(sheet);
+        if (IsRowColumnOrdered(occupiedCells))
+        {
+            WriteOrderedValueCellRowElements(writer, sheet, occupiedCells, layoutRows, styleIds);
+            return;
+        }
+
+        var cellsByRow = BuildValueCellsByRow(occupiedCells);
+        var cellRows = new List<uint>(cellsByRow.Keys);
+        cellRows.Sort();
+
+        var cellRowIndex = 0;
+        var layoutRowIndex = 0;
+        while (cellRowIndex < cellRows.Count || layoutRowIndex < layoutRows.Count)
+        {
+            var cellRow = cellRowIndex < cellRows.Count ? cellRows[cellRowIndex] : uint.MaxValue;
+            var layoutRow = layoutRowIndex < layoutRows.Count ? layoutRows[layoutRowIndex] : uint.MaxValue;
+            var rowIndex = cellRow <= layoutRow ? cellRow : layoutRow;
+            WriteRowStart(writer, sheet, rowIndex);
+
+            if (cellRow == rowIndex)
+            {
+                foreach (var cell in cellsByRow[rowIndex])
+                {
+                    WriteCellElement(
+                        writer,
+                        new SpreadsheetXmlCell(rowIndex, cell.Col, cell.Cell, null, null, null, null),
+                        styleIds);
+                }
+
+                cellRowIndex++;
+            }
+
+            writer.WriteEndElement();
+
+            if (layoutRow == rowIndex)
+                layoutRowIndex++;
+        }
+    }
+
+    private static void WriteOrderedValueCellRowElements(
+        XmlWriter writer,
+        Sheet sheet,
+        IReadOnlyDictionary<(uint Row, uint Col), Cell> cells,
+        IReadOnlyList<uint> layoutRows,
+        IReadOnlyDictionary<StyleId, string> styleIds)
+    {
+        using var cellEnumerator = cells.GetEnumerator();
+        var hasCell = cellEnumerator.MoveNext();
+        var layoutRowIndex = 0;
+        while (hasCell || layoutRowIndex < layoutRows.Count)
+        {
+            while (hasCell && !IsValidCellAddress(cellEnumerator.Current.Key.Row, cellEnumerator.Current.Key.Col))
+                hasCell = cellEnumerator.MoveNext();
+
+            var cellRow = hasCell ? cellEnumerator.Current.Key.Row : uint.MaxValue;
+            var layoutRow = layoutRowIndex < layoutRows.Count ? layoutRows[layoutRowIndex] : uint.MaxValue;
+            var rowIndex = cellRow <= layoutRow ? cellRow : layoutRow;
+            WriteRowStart(writer, sheet, rowIndex);
+
+            while (hasCell && cellEnumerator.Current.Key.Row == rowIndex)
+            {
+                var (key, cell) = cellEnumerator.Current;
+                if (IsValidCellAddress(key.Row, key.Col))
+                {
+                    WriteCellElement(
+                        writer,
+                        new SpreadsheetXmlCell(rowIndex, key.Col, cell, null, null, null, null),
+                        styleIds);
+                }
+
+                hasCell = cellEnumerator.MoveNext();
+            }
+
+            writer.WriteEndElement();
+
+            if (layoutRow == rowIndex)
+                layoutRowIndex++;
+        }
+    }
+
+    private static void WriteRowStart(XmlWriter writer, Sheet sheet, uint rowIndex)
+    {
+        WriteSpreadsheetStartElement(writer, "Row");
+        WriteSpreadsheetAttribute(writer, SpreadsheetIndexAttribute, rowIndex);
+        WriteRowHeightAttribute(writer, sheet, rowIndex);
+        if (sheet.HiddenRows.Contains(rowIndex))
+            WriteSpreadsheetAttribute(writer, SpreadsheetHiddenAttribute, "1");
+    }
+
+    private static void WriteRowHeightAttribute(XmlWriter writer, Sheet sheet, uint rowIndex)
+    {
+        if (sheet.RowHeights.TryGetValue(rowIndex, out var height) && IsPositiveFinite(height))
+            WriteSpreadsheetAttribute(writer, SpreadsheetHeightAttribute, height.ToString("R", CultureInfo.InvariantCulture));
+    }
+
+    private static void WriteCellElement(
+        XmlWriter writer,
+        SpreadsheetXmlCell cell,
+        IReadOnlyDictionary<StyleId, string> styleIds)
+    {
+        WriteSpreadsheetStartElement(writer, "Cell");
+        WriteSpreadsheetAttribute(writer, SpreadsheetIndexAttribute, cell.Col);
+        if (styleIds.TryGetValue(cell.Cell.StyleId, out var styleName))
+            WriteSpreadsheetAttribute(writer, SpreadsheetStyleIdAttribute, styleName);
+
+        if (cell.MergeRange is { } mergeRange)
+        {
+            if (mergeRange.ColCount > 1)
+                WriteSpreadsheetAttribute(writer, SpreadsheetMergeAcrossAttribute, mergeRange.ColCount - 1);
+            if (mergeRange.RowCount > 1)
+                WriteSpreadsheetAttribute(writer, SpreadsheetMergeDownAttribute, mergeRange.RowCount - 1);
+        }
+
+        if (cell.Cell.FormulaText is { Length: > 0 } formulaText)
+            WriteSpreadsheetAttribute(writer, SpreadsheetFormulaAttribute, formulaText.StartsWith("=", StringComparison.Ordinal) ? formulaText : $"={formulaText}");
+
+        if (!string.IsNullOrWhiteSpace(cell.HyperlinkTarget))
+        {
+            WriteSpreadsheetAttribute(writer, SpreadsheetHrefAttribute, cell.HyperlinkTarget);
+            if (!string.IsNullOrWhiteSpace(cell.HyperlinkMetadata?.ScreenTip))
+                WriteSpreadsheetAttribute(writer, SpreadsheetHrefScreenTipAttribute, cell.HyperlinkMetadata.ScreenTip);
+        }
+
+        if (cell.Cell.Value is not BlankValue)
+            WriteDataElement(writer, cell.Cell.Value);
+
+        if (!string.IsNullOrWhiteSpace(cell.Comment))
+        {
+            WriteSpreadsheetStartElement(writer, "Comment");
+            WriteSpreadsheetAttribute(writer, SpreadsheetAuthorAttribute, "FreeX");
+            WriteSpreadsheetTextElement(writer, "Data", cell.Comment);
+            writer.WriteEndElement();
+        }
+
+        writer.WriteEndElement();
+    }
+
+    private static void WriteDataElement(XmlWriter writer, ScalarValue value)
+    {
+        var (type, text) = value switch
+        {
+            NumberValue number when double.IsFinite(number.Value) => ("Number", number.Value.ToString("R", CultureInfo.InvariantCulture)),
+            NumberValue number => ("String", number.Value.ToString("R", CultureInfo.InvariantCulture)),
+            DateTimeValue dateTime when TryFormatSpreadsheetDateTime(dateTime, out var formatted) => ("DateTime", formatted),
+            DateTimeValue dateTime => ("String", dateTime.Value.ToString("R", CultureInfo.InvariantCulture)),
+            BoolValue boolean => ("Boolean", boolean.Value ? "1" : "0"),
+            ErrorValue error => ("Error", error.Code),
+            TextValue textValue => ("String", textValue.Value),
+            _ => ("String", "")
+        };
+
+        WriteSpreadsheetStartElement(writer, "Data");
+        WriteSpreadsheetAttribute(writer, SpreadsheetTypeAttribute, type);
+        writer.WriteString(text);
+        writer.WriteEndElement();
+    }
+
+    private static void WriteSpreadsheetStartElement(XmlWriter writer, string localName) =>
+        writer.WriteStartElement("ss", localName, SpreadsheetNs.NamespaceName);
+
+    private static void WriteSpreadsheetTextElement(XmlWriter writer, string localName, string value)
+    {
+        WriteSpreadsheetStartElement(writer, localName);
+        writer.WriteString(value);
+        writer.WriteEndElement();
+    }
+
+    private static void WriteSpreadsheetAttribute(XmlWriter writer, XName name, uint value) =>
+        WriteSpreadsheetAttribute(writer, name, value.ToString(CultureInfo.InvariantCulture));
+
+    private static void WriteSpreadsheetAttribute(XmlWriter writer, XName name, string value) =>
+        writer.WriteAttributeString("ss", name.LocalName, SpreadsheetNs.NamespaceName, value);
+
+    private static void WriteExcelEmptyElement(XmlWriter writer, string localName)
+    {
+        writer.WriteStartElement("x", localName, ExcelNs.NamespaceName);
+        writer.WriteEndElement();
+    }
+
+    private static void WriteExcelTextElement(XmlWriter writer, string localName, string value)
+    {
+        writer.WriteStartElement("x", localName, ExcelNs.NamespaceName);
+        writer.WriteString(value);
+        writer.WriteEndElement();
     }
 
     private static List<SpreadsheetXmlCell> BuildSortedXmlCells(Sheet sheet)
     {
-        var mergeStarts = new Dictionary<(uint Row, uint Col), GridRange>();
-        foreach (var region in sheet.MergedRegions.Where(IsValidGridRange))
-            mergeStarts.TryAdd((region.Start.Row, region.Start.Col), region);
-
-        var emitted = new HashSet<(uint Row, uint Col)>();
-        var cells = new List<SpreadsheetXmlCell>();
-
-        foreach (var (address, cell) in sheet.EnumerateCells()
-                     .Where(entry => IsValidCellAddress(entry.Address.Row, entry.Address.Col))
-                     .OrderBy(entry => entry.Address.Row)
-                     .ThenBy(entry => entry.Address.Col))
+        var mergeStarts = new Dictionary<(uint Row, uint Col), GridRange>(sheet.MergedRegions.Count);
+        foreach (var region in sheet.MergedRegions)
         {
+            if (IsValidGridRange(region))
+                mergeStarts.TryAdd((region.Start.Row, region.Start.Col), region);
+        }
+
+        var cellCapacity = EstimateRichCellCapacity(sheet);
+        var emitted = new HashSet<(uint Row, uint Col)>(cellCapacity);
+        var cells = new List<SpreadsheetXmlCell>(cellCapacity);
+
+        foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
+        {
+            if (!IsValidCellAddress(row, col))
+                continue;
+
+            var address = new CellAddress(sheet.Id, row, col);
             if (IsCoveredByMergeNonAnchor(sheet, address))
                 continue;
 
-            mergeStarts.TryGetValue((address.Row, address.Col), out var mergeRange);
+            mergeStarts.TryGetValue((row, col), out var mergeRange);
             sheet.Hyperlinks.TryGetValue(address, out var hyperlinkTarget);
             sheet.HyperlinkMetadata.TryGetValue(address, out var hyperlinkMetadata);
             sheet.Comments.TryGetValue(address, out var comment);
-            emitted.Add((address.Row, address.Col));
-            cells.Add(new SpreadsheetXmlCell(address.Row, address.Col, cell, mergeRange, hyperlinkTarget, hyperlinkMetadata, comment));
+            emitted.Add((row, col));
+            cells.Add(new SpreadsheetXmlCell(row, col, cell, mergeRange, hyperlinkTarget, hyperlinkMetadata, comment));
         }
 
-        foreach (var (address, hyperlinkTarget) in sheet.Hyperlinks
-                     .Where(entry => IsValidCellAddress(entry.Key.Row, entry.Key.Col) &&
-                                     !emitted.Contains((entry.Key.Row, entry.Key.Col)))
-                     .OrderBy(entry => entry.Key.Row)
-                     .ThenBy(entry => entry.Key.Col))
+        foreach (var (address, hyperlinkTarget) in sheet.Hyperlinks)
         {
+            if (!IsValidCellAddress(address.Row, address.Col) || emitted.Contains((address.Row, address.Col)))
+                continue;
+
             if (IsCoveredByMergeNonAnchor(sheet, address))
                 continue;
 
@@ -726,12 +1042,11 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 comment));
         }
 
-        foreach (var (address, comment) in sheet.Comments
-                     .Where(entry => IsValidCellAddress(entry.Key.Row, entry.Key.Col) &&
-                                     !emitted.Contains((entry.Key.Row, entry.Key.Col)))
-                     .OrderBy(entry => entry.Key.Row)
-                     .ThenBy(entry => entry.Key.Col))
+        foreach (var (address, comment) in sheet.Comments)
         {
+            if (!IsValidCellAddress(address.Row, address.Col) || emitted.Contains((address.Row, address.Col)))
+                continue;
+
             if (IsCoveredByMergeNonAnchor(sheet, address))
                 continue;
 
@@ -747,13 +1062,15 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 Comment: comment));
         }
 
-        foreach (var (key, styleId) in sheet.GetStyleOnlyEntries()
-                     .Where(entry => IsValidCellAddress(entry.Key.Row, entry.Key.Col) &&
-                                     !emitted.Contains((entry.Key.Row, entry.Key.Col)) &&
-                                     entry.StyleId != StyleId.Default)
-                     .OrderBy(entry => entry.Key.Row)
-                     .ThenBy(entry => entry.Key.Col))
+        foreach (var (key, styleId) in sheet.GetStyleOnlyEntries())
         {
+            if (!IsValidCellAddress(key.Row, key.Col) ||
+                emitted.Contains((key.Row, key.Col)) ||
+                styleId == StyleId.Default)
+            {
+                continue;
+            }
+
             var address = new CellAddress(sheet.Id, key.Row, key.Col);
             if (IsCoveredByMergeNonAnchor(sheet, address))
                 continue;
@@ -770,12 +1087,14 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
                 Comment: null));
         }
 
-        foreach (var mergeRange in sheet.MergedRegions
-                     .Where(region => IsValidGridRange(region) &&
-                                      !emitted.Contains((region.Start.Row, region.Start.Col)))
-                     .OrderBy(region => region.Start.Row)
-                     .ThenBy(region => region.Start.Col))
+        foreach (var mergeRange in sheet.MergedRegions)
         {
+            if (!IsValidGridRange(mergeRange) ||
+                emitted.Contains((mergeRange.Start.Row, mergeRange.Start.Col)))
+            {
+                continue;
+            }
+
             cells.Add(new SpreadsheetXmlCell(
                 mergeRange.Start.Row,
                 mergeRange.Start.Col,
@@ -794,6 +1113,18 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         return cells;
     }
 
+    private static int EstimateRichCellCapacity(Sheet sheet)
+    {
+        var capacity = sheet.CellCount;
+        capacity = AddClamped(capacity, sheet.Hyperlinks.Count);
+        capacity = AddClamped(capacity, sheet.Comments.Count);
+        capacity = AddClamped(capacity, sheet.MergedRegions.Count);
+        return capacity;
+    }
+
+    private static int AddClamped(int value, int add) =>
+        value > int.MaxValue - add ? int.MaxValue : value + add;
+
     private static bool IsCoveredByMergeNonAnchor(Sheet sheet, CellAddress address) =>
         sheet.GetMergeRegion(address) is { } mergeRange &&
         (mergeRange.Start.Row != address.Row || mergeRange.Start.Col != address.Col);
@@ -807,116 +1138,12 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         IsValidCellAddress(range.Start.Row, range.Start.Col) &&
         IsValidCellAddress(range.End.Row, range.End.Col);
 
-    private static IEnumerable<XElement> ToColumnElements(Sheet sheet)
-    {
-        var columnIndexes = sheet.ColumnWidths.Keys
-            .Where(IsValidColumnLayoutIndex)
-            .Concat(sheet.HiddenCols.Where(IsValidColumnLayoutIndex))
-            .Distinct()
-            .OrderBy(column => column);
-
-        foreach (var columnIndex in columnIndexes)
-        {
-            yield return new XElement(
-                SpreadsheetNs + "Column",
-                new XAttribute(SpreadsheetIndexAttribute, columnIndex),
-                ToColumnWidthAttribute(sheet, columnIndex),
-                sheet.HiddenCols.Contains(columnIndex) ? new XAttribute(SpreadsheetHiddenAttribute, "1") : null);
-        }
-    }
-
-    private static XAttribute? ToColumnWidthAttribute(Sheet sheet, uint columnIndex) =>
-        sheet.ColumnWidths.TryGetValue(columnIndex, out var width) && IsPositiveFinite(width)
-            ? new XAttribute(SpreadsheetWidthAttribute, width.ToString("R", CultureInfo.InvariantCulture))
-            : null;
-
-    private static IEnumerable<XElement> ToRowElements(Sheet sheet, IReadOnlyDictionary<StyleId, string> styleIds)
-    {
-        if (CanStreamValueCellRows(sheet))
-        {
-            foreach (var rowElement in ToValueCellRowElements(sheet, styleIds))
-                yield return rowElement;
-
-            yield break;
-        }
-
-        var cells = BuildSortedXmlCells(sheet);
-        var layoutRows = BuildSortedRowLayoutIndexes(sheet);
-
-        var cellIndex = 0;
-        var layoutRowIndex = 0;
-        while (cellIndex < cells.Count || layoutRowIndex < layoutRows.Count)
-        {
-            var cellRow = cellIndex < cells.Count ? cells[cellIndex].Row : uint.MaxValue;
-            var layoutRow = layoutRowIndex < layoutRows.Count ? layoutRows[layoutRowIndex] : uint.MaxValue;
-            var rowIndex = cellRow <= layoutRow ? cellRow : layoutRow;
-            var rowElement = CreateRowElement(sheet, rowIndex);
-
-            while (cellIndex < cells.Count && cells[cellIndex].Row == rowIndex)
-            {
-                rowElement.Add(ToCellElement(cells[cellIndex], styleIds));
-                cellIndex++;
-            }
-
-            yield return rowElement;
-
-            if (layoutRow == rowIndex)
-                layoutRowIndex++;
-        }
-    }
-
     private static bool CanStreamValueCellRows(Sheet sheet) =>
         sheet.MergedRegions.Count == 0 &&
         sheet.Hyperlinks.Count == 0 &&
         sheet.HyperlinkMetadata.Count == 0 &&
         sheet.Comments.Count == 0 &&
         !sheet.HasStyleOnlyCells;
-
-    private static IEnumerable<XElement> ToValueCellRowElements(
-        Sheet sheet,
-        IReadOnlyDictionary<StyleId, string> styleIds)
-    {
-        var occupiedCells = sheet.GetOccupiedCellMap();
-        var layoutRows = BuildSortedRowLayoutIndexes(sheet);
-        if (IsRowColumnOrdered(occupiedCells))
-        {
-            foreach (var rowElement in ToOrderedValueCellRowElements(sheet, occupiedCells, layoutRows, styleIds))
-                yield return rowElement;
-
-            yield break;
-        }
-
-        var cellsByRow = BuildValueCellsByRow(occupiedCells);
-        var cellRows = new List<uint>(cellsByRow.Keys);
-        cellRows.Sort();
-
-        var cellRowIndex = 0;
-        var layoutRowIndex = 0;
-        while (cellRowIndex < cellRows.Count || layoutRowIndex < layoutRows.Count)
-        {
-            var cellRow = cellRowIndex < cellRows.Count ? cellRows[cellRowIndex] : uint.MaxValue;
-            var layoutRow = layoutRowIndex < layoutRows.Count ? layoutRows[layoutRowIndex] : uint.MaxValue;
-            var rowIndex = cellRow <= layoutRow ? cellRow : layoutRow;
-            var rowElement = CreateRowElement(sheet, rowIndex);
-
-            if (cellRow == rowIndex)
-            {
-                foreach (var cell in cellsByRow[rowIndex])
-                {
-                    rowElement.Add(ToCellElement(
-                        new SpreadsheetXmlCell(rowIndex, cell.Col, cell.Cell, null, null, null, null),
-                        styleIds));
-                }
-
-                cellRowIndex++;
-            }
-
-            yield return rowElement;
-
-            if (layoutRow == rowIndex)
-                layoutRowIndex++;
-        }
-    }
 
     private static bool IsRowColumnOrdered(IReadOnlyDictionary<(uint Row, uint Col), Cell> cells)
     {
@@ -934,45 +1161,6 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         }
 
         return true;
-    }
-
-    private static IEnumerable<XElement> ToOrderedValueCellRowElements(
-        Sheet sheet,
-        IReadOnlyDictionary<(uint Row, uint Col), Cell> cells,
-        IReadOnlyList<uint> layoutRows,
-        IReadOnlyDictionary<StyleId, string> styleIds)
-    {
-        using var cellEnumerator = cells.GetEnumerator();
-        var hasCell = cellEnumerator.MoveNext();
-        var layoutRowIndex = 0;
-        while (hasCell || layoutRowIndex < layoutRows.Count)
-        {
-            while (hasCell && !IsValidCellAddress(cellEnumerator.Current.Key.Row, cellEnumerator.Current.Key.Col))
-                hasCell = cellEnumerator.MoveNext();
-
-            var cellRow = hasCell ? cellEnumerator.Current.Key.Row : uint.MaxValue;
-            var layoutRow = layoutRowIndex < layoutRows.Count ? layoutRows[layoutRowIndex] : uint.MaxValue;
-            var rowIndex = cellRow <= layoutRow ? cellRow : layoutRow;
-            var rowElement = CreateRowElement(sheet, rowIndex);
-
-            while (hasCell && cellEnumerator.Current.Key.Row == rowIndex)
-            {
-                var (key, cell) = cellEnumerator.Current;
-                if (IsValidCellAddress(key.Row, key.Col))
-                {
-                    rowElement.Add(ToCellElement(
-                        new SpreadsheetXmlCell(rowIndex, key.Col, cell, null, null, null, null),
-                        styleIds));
-                }
-
-                hasCell = cellEnumerator.MoveNext();
-            }
-
-            yield return rowElement;
-
-            if (layoutRow == rowIndex)
-                layoutRowIndex++;
-        }
     }
 
     private static Dictionary<uint, List<SpreadsheetXmlValueCell>> BuildValueCellsByRow(
@@ -1034,32 +1222,6 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
         return rows;
     }
-
-    private static XElement ToRowElement(
-        Sheet sheet,
-        uint rowIndex,
-        IEnumerable<SpreadsheetXmlCell> cells,
-        IReadOnlyDictionary<StyleId, string> styleIds)
-    {
-        var rowElement = CreateRowElement(sheet, rowIndex);
-
-        foreach (var cell in cells)
-            rowElement.Add(ToCellElement(cell, styleIds));
-
-        return rowElement;
-    }
-
-    private static XElement CreateRowElement(Sheet sheet, uint rowIndex) =>
-        new(
-            SpreadsheetNs + "Row",
-            new XAttribute(SpreadsheetIndexAttribute, rowIndex),
-            ToRowHeightAttribute(sheet, rowIndex),
-            sheet.HiddenRows.Contains(rowIndex) ? new XAttribute(SpreadsheetHiddenAttribute, "1") : null);
-
-    private static XAttribute? ToRowHeightAttribute(Sheet sheet, uint rowIndex) =>
-        sheet.RowHeights.TryGetValue(rowIndex, out var height) && IsPositiveFinite(height)
-            ? new XAttribute(SpreadsheetHeightAttribute, height.ToString("R", CultureInfo.InvariantCulture))
-            : null;
 
     private static bool IsValidRowLayoutIndex(uint rowIndex) =>
         rowIndex is >= 1 and <= CellAddress.MaxRow;
@@ -1165,64 +1327,6 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         sheetName.Any(ch => !char.IsLetterOrDigit(ch) && ch != '_')
             ? $"'{sheetName.Replace("'", "''", StringComparison.Ordinal)}'"
             : sheetName;
-
-    private static XElement ToCellElement(SpreadsheetXmlCell cell, IReadOnlyDictionary<StyleId, string> styleIds)
-    {
-        var element = new XElement(SpreadsheetNs + "Cell", new XAttribute(SpreadsheetIndexAttribute, cell.Col));
-        if (styleIds.TryGetValue(cell.Cell.StyleId, out var styleName))
-            element.SetAttributeValue(SpreadsheetStyleIdAttribute, styleName);
-
-        if (cell.MergeRange is { } mergeRange)
-        {
-            if (mergeRange.ColCount > 1)
-                element.SetAttributeValue(SpreadsheetMergeAcrossAttribute, mergeRange.ColCount - 1);
-            if (mergeRange.RowCount > 1)
-                element.SetAttributeValue(SpreadsheetMergeDownAttribute, mergeRange.RowCount - 1);
-        }
-
-        if (cell.Cell.FormulaText is { Length: > 0 } formulaText)
-            element.SetAttributeValue(SpreadsheetFormulaAttribute, formulaText.StartsWith("=", StringComparison.Ordinal) ? formulaText : $"={formulaText}");
-
-        if (!string.IsNullOrWhiteSpace(cell.HyperlinkTarget))
-        {
-            element.SetAttributeValue(SpreadsheetHrefAttribute, cell.HyperlinkTarget);
-            if (!string.IsNullOrWhiteSpace(cell.HyperlinkMetadata?.ScreenTip))
-                element.SetAttributeValue(SpreadsheetHrefScreenTipAttribute, cell.HyperlinkMetadata.ScreenTip);
-        }
-
-        if (cell.Cell.Value is not BlankValue)
-            element.Add(ToDataElement(cell.Cell.Value));
-
-        if (!string.IsNullOrWhiteSpace(cell.Comment))
-        {
-            element.Add(new XElement(
-                SpreadsheetNs + "Comment",
-                new XAttribute(SpreadsheetAuthorAttribute, "FreeX"),
-                new XElement(SpreadsheetNs + "Data", cell.Comment)));
-        }
-
-        return element;
-    }
-
-    private static XElement ToDataElement(ScalarValue value)
-    {
-        var (type, text) = value switch
-        {
-            NumberValue number when double.IsFinite(number.Value) => ("Number", number.Value.ToString("R", CultureInfo.InvariantCulture)),
-            NumberValue number => ("String", number.Value.ToString("R", CultureInfo.InvariantCulture)),
-            DateTimeValue dateTime when TryFormatSpreadsheetDateTime(dateTime, out var formatted) => ("DateTime", formatted),
-            DateTimeValue dateTime => ("String", dateTime.Value.ToString("R", CultureInfo.InvariantCulture)),
-            BoolValue boolean => ("Boolean", boolean.Value ? "1" : "0"),
-            ErrorValue error => ("Error", error.Code),
-            TextValue textValue => ("String", textValue.Value),
-            _ => ("String", "")
-        };
-
-        return new XElement(
-            SpreadsheetNs + "Data",
-            new XAttribute(SpreadsheetTypeAttribute, type),
-            text);
-    }
 
     private static bool TryFormatSpreadsheetDateTime(DateTimeValue value, out string text)
     {
