@@ -1084,4 +1084,28 @@ public partial class MainWindow
         => ApplyCellStylePreset(CellStylePreset.Accent5_20);
     private void CellStyleAccent6_20MenuItem_Click(object sender, RoutedEventArgs e)
         => ApplyCellStylePreset(CellStylePreset.Accent6_20);
+    private void CellStyleAccent1_40MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent1_40);
+    private void CellStyleAccent2_40MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent2_40);
+    private void CellStyleAccent3_40MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent3_40);
+    private void CellStyleAccent4_40MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent4_40);
+    private void CellStyleAccent5_40MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent5_40);
+    private void CellStyleAccent6_40MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent6_40);
+    private void CellStyleAccent1_60MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent1_60);
+    private void CellStyleAccent2_60MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent2_60);
+    private void CellStyleAccent3_60MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent3_60);
+    private void CellStyleAccent4_60MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent4_60);
+    private void CellStyleAccent5_60MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent5_60);
+    private void CellStyleAccent6_60MenuItem_Click(object sender, RoutedEventArgs e)
+        => ApplyCellStylePreset(CellStylePreset.Accent6_60);
 }

@@ -163,6 +163,31 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderHeaders_CachesRowLabelsAcrossRenderPasses()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var drawRowHeader = source[
+            source.IndexOf("private void DrawRowHeader", StringComparison.Ordinal)..
+            source.IndexOf("private static IReadOnlyList<HeaderSelectionInterval>", StringComparison.Ordinal)];
+        var formatRowHeader = source[
+            source.IndexOf("internal static string FormatRowHeader", StringComparison.Ordinal)..];
+
+        source.Should().Contain("private static readonly ConcurrentDictionary<uint, string> RowHeaderCache = new();");
+        drawRowHeader.Should().Contain("FormatRowHeader(row.Row)");
+        drawRowHeader.Should().NotContain("row.Row.ToString");
+        formatRowHeader.Should().Contain("RowHeaderCache.GetOrAdd(row");
+        formatRowHeader.Should().Contain("rowNumber.ToString(CultureInfo.InvariantCulture)");
+
+        var formatter = typeof(GridView).GetMethod(
+            "FormatRowHeader",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        formatter.Should().NotBeNull();
+        formatter!.Invoke(null, [1u]).Should().Be("1");
+        formatter.Invoke(null, [1_048_576u]).Should().Be("1048576");
+    }
+
+    [Fact]
     public void RenderHeaders_WalksSelectionIntervalsInsteadOfScanningRangesPerHeader()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
@@ -411,6 +436,8 @@ public sealed class GridViewRenderPerformanceTests
             .Should().BeLessThan(onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal));
         onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal)
             .Should().BeLessThan(onRender.IndexOf("RenderPostSelectionLayers", StringComparison.Ordinal));
+        onRender.IndexOf("RenderPostSelectionLayers", StringComparison.Ordinal)
+            .Should().BeLessThan(onRender.IndexOf("_selectionVisualOnlyChangePending = false;", StringComparison.Ordinal));
     }
 
     [Fact]

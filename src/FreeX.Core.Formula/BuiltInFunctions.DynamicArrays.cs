@@ -1003,6 +1003,9 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue UniqueSingleColumn(RangeValue arr, bool exactlyOnce)
     {
+        if (!exactlyOnce)
+            return UniqueSingleColumnAllOccurrences(arr);
+
         var keyIndex  = new Dictionary<ScalarValue, int>(arr.RowCount, UniqueScalarComparer.Instance);
         var rowOfKey  = new List<int>(arr.RowCount);
         List<int>? keyCounts = exactlyOnce ? new List<int>(arr.RowCount) : null;
@@ -1040,6 +1043,30 @@ public static partial class BuiltInFunctions
         }
 
         return new RangeValue(result);
+    }
+
+    private static ScalarValue UniqueSingleColumnAllOccurrences(RangeValue arr)
+    {
+        var seen = new HashSet<ScalarValue>(arr.RowCount, UniqueScalarComparer.Instance);
+        var result = new ScalarValue[arr.RowCount, 1];
+        var selectedCount = 0;
+
+        for (int r = 0; r < arr.RowCount; r++)
+        {
+            var value = arr.Cells[r, 0];
+            if (!seen.Add(value))
+                continue;
+
+            result[selectedCount, 0] = value;
+            selectedCount++;
+        }
+
+        if (selectedCount == 0) return ErrorValue.Calc;
+        if (selectedCount == arr.RowCount) return new RangeValue(result);
+
+        var trimmed = new ScalarValue[selectedCount, 1];
+        Array.Copy(result, trimmed, selectedCount);
+        return new RangeValue(trimmed);
     }
 
     private sealed class UniqueScalarComparer : IEqualityComparer<ScalarValue>

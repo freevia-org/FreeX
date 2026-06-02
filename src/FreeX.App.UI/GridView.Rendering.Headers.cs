@@ -10,6 +10,7 @@ namespace FreeX.App.UI;
 public partial class GridView
 {
     private static readonly ConcurrentDictionary<uint, string> ColumnHeaderCache = new();
+    private static readonly ConcurrentDictionary<uint, string> RowHeaderCache = new();
     private DrawingGroup? _headerBaseLayerCache;
     private HeaderBaseLayerCacheKey _headerBaseLayerCacheKey;
 
@@ -188,7 +189,7 @@ public partial class GridView
         dc.DrawRectangle(background, GridPen, rect);
 
         var text = GetDefaultFormattedText(
-            row.Row.ToString(CultureInfo.InvariantCulture),
+            FormatRowHeader(row.Row),
             11,
             pixelsPerDip);
 
@@ -247,4 +248,7 @@ public partial class GridView
         useR1C1ReferenceStyle
             ? column.ToString(CultureInfo.InvariantCulture)
             : ColumnHeaderCache.GetOrAdd(column, static col => CellAddress.NumberToColumnName(col));
+
+    internal static string FormatRowHeader(uint row) =>
+        RowHeaderCache.GetOrAdd(row, static rowNumber => rowNumber.ToString(CultureInfo.InvariantCulture));
 }
