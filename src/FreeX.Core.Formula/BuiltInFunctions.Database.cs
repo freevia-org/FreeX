@@ -134,30 +134,49 @@ public static partial class BuiltInFunctions
         return true;
     }
 
-    private static ScalarValue DSum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    private static ScalarValue EvaluateDatabaseNumericAggregate(
+        IReadOnlyList<ScalarValue> args,
+        Func<List<double>, ScalarValue> aggregate)
     {
         if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
         var (nums, e) = DatabaseExtractNumeric(db, f, cr);
         if (e is not null) return e;
-        return NumberResult(nums.Sum());
+        return aggregate(nums);
     }
+
+    private static bool TryDatabaseVariance(List<double> nums, bool sample, out double variance)
+    {
+        variance = 0;
+        if (nums.Count < (sample ? 2 : 1)) return false;
+
+        double mean = nums.Average();
+        double sumSquares = nums.Sum(x => (x - mean) * (x - mean));
+        variance = sumSquares / (sample ? nums.Count - 1 : nums.Count);
+        return true;
+    }
+
+    private static ScalarValue DatabaseVariance(List<double> nums, bool sample)
+        => TryDatabaseVariance(nums, sample, out double variance)
+            ? NumberResult(variance)
+            : ErrorValue.DivByZero;
+
+    private static ScalarValue DatabaseStdDev(List<double> nums, bool sample)
+        => TryDatabaseVariance(nums, sample, out double variance)
+            ? NumberResult(Math.Sqrt(variance))
+            : ErrorValue.DivByZero;
+
+    private static ScalarValue DSum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+        => EvaluateDatabaseNumericAggregate(args, nums => NumberResult(nums.Sum()));
 
     private static ScalarValue DAverage(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
-        if (e is not null) return e;
-        if (nums.Count == 0) return ErrorValue.DivByZero;
-        return NumberResult(nums.Average());
-    }
+        => EvaluateDatabaseNumericAggregate(args, nums =>
+        {
+            if (nums.Count == 0) return ErrorValue.DivByZero;
+            return NumberResult(nums.Average());
+        });
 
     private static ScalarValue DCount(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
-        if (e is not null) return e;
-        return new NumberValue(nums.Count);
-    }
+        => EvaluateDatabaseNumericAggregate(args, nums => new NumberValue(nums.Count));
 
     private static ScalarValue DCountA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -181,76 +200,38 @@ public static partial class BuiltInFunctions
     }
 
     private static ScalarValue DMax(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
-        if (e is not null) return e;
-        if (nums.Count == 0) return ErrorValue.Num;
-        return NumberResult(nums.Max());
-    }
+        => EvaluateDatabaseNumericAggregate(args, nums =>
+        {
+            if (nums.Count == 0) return ErrorValue.Num;
+            return NumberResult(nums.Max());
+        });
 
     private static ScalarValue DMin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
-        if (e is not null) return e;
-        if (nums.Count == 0) return ErrorValue.Num;
-        return NumberResult(nums.Min());
-    }
+        => EvaluateDatabaseNumericAggregate(args, nums =>
+        {
+            if (nums.Count == 0) return ErrorValue.Num;
+            return NumberResult(nums.Min());
+        });
 
     private static ScalarValue DProduct(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
-        if (e is not null) return e;
-        if (nums.Count == 0) return new NumberValue(1);
-        double prod = 1;
-        foreach (var x in nums) prod *= x;
-        return NumberResult(prod);
-    }
+        => EvaluateDatabaseNumericAggregate(args, nums =>
+        {
+            if (nums.Count == 0) return new NumberValue(1);
+            double prod = 1;
+            foreach (var x in nums) prod *= x;
+            return NumberResult(prod);
+        });
 
     private static ScalarValue DStdev(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
-        if (e is not null) return e;
-        if (nums.Count < 2) return ErrorValue.DivByZero;
-        double mean = nums.Average();
-        double s = nums.Sum(x => (x - mean) * (x - mean)) / (nums.Count - 1);
-        return NumberResult(Math.Sqrt(s));
-    }
+        => EvaluateDatabaseNumericAggregate(args, nums => DatabaseStdDev(nums, sample: true));
 
     private static ScalarValue DStdevP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
-        if (e is not null) return e;
-        if (nums.Count == 0) return ErrorValue.DivByZero;
-        double mean = nums.Average();
-        double s = nums.Sum(x => (x - mean) * (x - mean)) / nums.Count;
-        return NumberResult(Math.Sqrt(s));
-    }
+        => EvaluateDatabaseNumericAggregate(args, nums => DatabaseStdDev(nums, sample: false));
 
     private static ScalarValue DVar(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
-        if (e is not null) return e;
-        if (nums.Count < 2) return ErrorValue.DivByZero;
-        double mean = nums.Average();
-        double s = nums.Sum(x => (x - mean) * (x - mean)) / (nums.Count - 1);
-        return NumberResult(s);
-    }
+        => EvaluateDatabaseNumericAggregate(args, nums => DatabaseVariance(nums, sample: true));
 
     private static ScalarValue DVarP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-    {
-        if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
-        if (e is not null) return e;
-        if (nums.Count == 0) return ErrorValue.DivByZero;
-        double mean = nums.Average();
-        double s = nums.Sum(x => (x - mean) * (x - mean)) / nums.Count;
-        return NumberResult(s);
-    }
+        => EvaluateDatabaseNumericAggregate(args, nums => DatabaseVariance(nums, sample: false));
 
 }
