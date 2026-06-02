@@ -427,6 +427,29 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void WorksheetBackgroundRenderer_ReusesFrozenTiledBrush()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var renderWorksheetBackground = source[
+            source.IndexOf("private void RenderWorksheetBackground", StringComparison.Ordinal)..
+            source.IndexOf("private ImageBrush GetWorksheetBackgroundBrush", StringComparison.Ordinal)];
+        var getBrush = source[
+            source.IndexOf("private ImageBrush GetWorksheetBackgroundBrush", StringComparison.Ordinal)..
+            source.IndexOf("private static bool TryLoadWorksheetBackgroundImage", StringComparison.Ordinal)];
+
+        source.Should().Contain("private ImageBrush? _worksheetBackgroundBrushCache;");
+        source.Should().Contain("private WorksheetBackgroundBrushCacheKey _worksheetBackgroundBrushCacheKey;");
+        source.Should().Contain("private readonly record struct WorksheetBackgroundBrushCacheKey(");
+        renderWorksheetBackground.Should().Contain("var brush = GetWorksheetBackgroundBrush(WorksheetBackground, image);");
+        renderWorksheetBackground.Should().NotContain("new ImageBrush");
+        getBrush.Should().Contain("_worksheetBackgroundBrushCache is { } cached && _worksheetBackgroundBrushCacheKey == key");
+        getBrush.Should().Contain("new ImageBrush(image)");
+        getBrush.Should().Contain("if (brush.CanFreeze)");
+        getBrush.Should().Contain("brush.Freeze();");
+        getBrush.Should().Contain("_worksheetBackgroundBrushCache = brush;");
+    }
+
+    [Fact]
     public void CommentMarkerRenderer_PaintsRedTriangleAtCellTopRight()
     {
         RunOnStaThread(() =>
