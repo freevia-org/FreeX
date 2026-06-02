@@ -3299,8 +3299,8 @@ public sealed class SpreadsheetXmlFileAdapterTests
     public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromRowColumnLayoutAttributeValueTemplates()
     {
         using var source = StreamFromString("""
-            <layout columnIndex="2" columnSpan="1" width="22.75" columnHidden="1"
-                    rowIndex="3" rowSpan="1" height="28.5" rowHidden="1">
+            <layout columnIndex="2" columnSpan="1" width="22.75" columnHidden="TRUE"
+                    rowIndex="3" rowSpan="1" height="28.5" rowHidden="TRUE">
               <cell value="Layout"/>
             </layout>
             """);

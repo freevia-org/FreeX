@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace FreeX.App.Host.Tests;
 
@@ -509,6 +510,26 @@ public sealed class ScenarioManagerDialogTests
         source.Should().Contain("private void ScenarioList_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
         source.Should().Contain("e.Handled = true;");
         source.Should().Contain("_showButton.IsDefault = hasSelection;");
+    }
+
+    [Fact]
+    public void ScenarioListDoubleClick_WithoutSelectionDoesNotHandleMouseEvent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ScenarioManagerDialog(new Workbook("test"));
+            var scenarioList = GetField<ListBox>(dialog, "_scenarioList");
+            scenarioList.SelectedItem = null;
+
+            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = Control.MouseDoubleClickEvent
+            };
+            scenarioList.RaiseEvent(doubleClick);
+
+            doubleClick.Handled.Should().BeFalse();
+            dialog.DialogResult.Should().BeNull();
+        });
     }
 
     [Fact]
