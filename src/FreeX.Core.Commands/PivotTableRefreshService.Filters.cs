@@ -11,14 +11,37 @@ public static partial class PivotTableRefreshService
     {
         foreach (var field in fields)
         {
-            var selectedItems = (field.SelectedItems ?? [])
-                .Where(item => !string.IsNullOrWhiteSpace(item) && !string.Equals(item, "(All)", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            if (selectedItems.Count > 0)
+            if (field.SelectedItems is { Count: > 0 } selectedItems)
             {
-                if (!selectedItems.Contains(GroupKeyText(row[field.SourceFieldIndex], field), StringComparer.CurrentCultureIgnoreCase))
-                    return false;
-                continue;
+                var hasExplicitSelection = false;
+                var matchesExplicitSelection = false;
+                string? rowKey = null;
+
+                for (var index = 0; index < selectedItems.Count; index++)
+                {
+                    var selectedItem = selectedItems[index];
+                    if (string.IsNullOrWhiteSpace(selectedItem) ||
+                        string.Equals(selectedItem, "(All)", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    hasExplicitSelection = true;
+                    rowKey ??= GroupKeyText(row[field.SourceFieldIndex], field);
+                    if (!string.Equals(rowKey, selectedItem, StringComparison.CurrentCultureIgnoreCase))
+                        continue;
+
+                    matchesExplicitSelection = true;
+                    break;
+                }
+
+                if (hasExplicitSelection)
+                {
+                    if (!matchesExplicitSelection)
+                        return false;
+
+                    continue;
+                }
             }
 
             if (string.IsNullOrWhiteSpace(field.SelectedItem) ||
@@ -155,7 +178,7 @@ public static partial class PivotTableRefreshService
     {
         foreach (var filter in pivotTable.LabelFilters)
         {
-            var rowFieldIndex = rowFields.ToList().FindIndex(field => field.SourceFieldIndex == filter.SourceFieldIndex);
+            var rowFieldIndex = IndexOfSourceField(rowFields, filter.SourceFieldIndex);
             if (rowFieldIndex < 0)
                 continue;
 
@@ -174,7 +197,7 @@ public static partial class PivotTableRefreshService
     {
         foreach (var filter in pivotTable.LabelFilters)
         {
-            var fieldIndex = fields.ToList().FindIndex(field => field.SourceFieldIndex == filter.SourceFieldIndex);
+            var fieldIndex = IndexOfSourceField(fields, filter.SourceFieldIndex);
             if (fieldIndex < 0)
                 continue;
 
