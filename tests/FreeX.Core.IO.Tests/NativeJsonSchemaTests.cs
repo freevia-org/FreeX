@@ -856,6 +856,35 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_DropsNullNativeJsonConditionalFormatChildEntries()
+    {
+        var workbook = new Workbook("NullConditionalFormatChildEntries");
+        var sheet = workbook.AddSheet("Sheet1");
+        var format = new ConditionalFormat
+        {
+            AppliesTo = GridRange.Parse("A1:A3", sheet.Id),
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "3Arrows"
+        };
+        format.IconSetThresholds.Add(null!);
+        format.IconSetThresholds.Add(new CfThresholdModel(CfThresholdType.Number, "5"));
+        format.IconOverrides.Add(null!);
+        format.IconOverrides.Add(new CfIconOverride("  3Arrows  ", 1));
+        sheet.ConditionalFormats.Add(format);
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var formatJson = document.RootElement.GetProperty("Sheets").EnumerateArray().Single()
+            .GetProperty("ConditionalFormats").EnumerateArray().Single();
+        formatJson.GetProperty("IconSetThresholds").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("Value").GetString().Should().Be("5");
+        formatJson.GetProperty("IconOverrides").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("IconSet").GetString().Should().Be("3Arrows");
+    }
+
+    [Fact]
     public void Save_DropsNullNativeJsonDrawingAndSparklineEntries()
     {
         var workbook = new Workbook("NullDrawingEntries");

@@ -77,10 +77,11 @@ public partial class GridView
 
             if (splitPanes.Column is { } splitColumn)
             {
+                var rowHeaderWidth = CalculateRowHeaderWidth(viewport);
                 var pinnedColumns = splitPanes.LeftColumns ?? [];
                 verticalX = pinnedColumns.Count > 0
-                    ? CalculateRowHeaderWidth(viewport) + SumColumnWidths(pinnedColumns)
-                    : FindColMetric(viewport.ColMetrics, splitColumn)?.LeftOffset + CalculateRowHeaderWidth(viewport);
+                    ? rowHeaderWidth + SumColumnWidths(pinnedColumns)
+                    : FindColMetric(viewport.ColMetrics, splitColumn)?.LeftOffset + rowHeaderWidth;
             }
         }
 
