@@ -575,6 +575,50 @@ public class PerformanceBenchmarkTests
             "the split-pane hot path should allocate the dedupe set only when pane regions can overlap");
     }
 
+    [Fact]
+    public void Benchmark_SparseOccupiedViewportCells_ReportsMetricLookupTiming()
+    {
+        var workbook = new Workbook("Benchmark");
+        var sheet = workbook.AddSheet("Sheet1");
+        var service = new ViewportService();
+        const uint visibleRows = 2_000;
+        const uint occupiedCells = 5_000;
+        const int iterations = 60;
+
+        for (uint i = 0; i < occupiedCells; i++)
+        {
+            var row = (i % visibleRows) + 1;
+            var col = 1_000 + i;
+            sheet.SetCell(new CellAddress(sheet.Id, row, col), new NumberValue(i));
+        }
+
+        var request = new ViewportRequest(1, 1, 40_000, 2_400);
+        service.GetViewport(workbook, sheet.Id, request);
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+        {
+            var viewport = service.GetViewport(workbook, sheet.Id, request);
+            if (viewport.Cells.Count != 0)
+                throw new Xunit.Sdk.XunitException("Sparse out-of-column viewport should not materialize display cells.");
+        }
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Sparse occupied viewport metric lookup: {iterations:N0} iterations, {occupiedCells:N0} occupied cells, " +
+            $"{sw.Elapsed.TotalMilliseconds:F2}ms, {allocated:N0} bytes allocated, " +
+            $"{allocated / iterations:N0} bytes/iteration");
+        Console.WriteLine(
+            $"PERF SPARSE_OCCUPIED_VIEWPORT iterations={iterations:N0} total_ms={sw.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={allocated:N0} bytes_per_iteration={allocated / iterations:N0}");
+
+        (sw.Elapsed.TotalMilliseconds / iterations).Should().BeLessThan(
+            25.0,
+            "sparse viewport construction should avoid repeated linear metric scans for every occupied cell");
+    }
+
     /// <summary>
     /// Benchmark: Memory usage for 1,000,000 cells (values only, no formulas).
     /// Target: <200MB
