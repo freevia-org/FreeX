@@ -193,10 +193,14 @@ public partial class GridView
         _fillPatternPenCache.Clear();
         _typefaceCache.Clear();
         _underlinePenCache.Clear();
+        var gridPen = ShowGridLines ? GridPen : null;
         foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions, EditingCell))
         {
             var cell = layout.Cell;
             var rect = layout.Rect;
+            if (rect.Width <= 0 || rect.Height <= 0)
+                continue;
+
             var style = cell.Style;
             var clipGeometry = GetSplitPaneClipGeometryForRegion(
                 layout.Region,
@@ -210,7 +214,8 @@ public partial class GridView
             if (style?.FillColor is { } fillColor)
                 fill = BrushForCellColor(fillColor, _brushCache);
 
-            dc.DrawRectangle(fill, GridPen, rect);
+            if (fill is not null || gridPen is not null)
+                dc.DrawRectangle(fill, gridPen, rect);
             DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
 
             if (style is not null && HasVisibleCellBorder(style))
@@ -250,8 +255,6 @@ public partial class GridView
             var wrapText = style?.WrapText == true;
             var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
             Brush textBrush = TextBrush;
-            if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
-                textBrush = BrushForCellColor(fontColor, _brushCache);
 
             var indentPx = (style?.IndentLevel ?? 0) * 8.0;
             if (style?.ShrinkToFit == true && !wrapText)
@@ -269,15 +272,20 @@ public partial class GridView
                     pixelsPerDip);
             }
 
-            var wrapMaxTextWidth = Math.Max(1, rect.Width - 4);
-            var wrapTextAlignment = hAlign switch
-            {
-                CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
-                CellHAlign.Right => TextAlignment.Right,
-                _ => TextAlignment.Left
-            };
             var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);
-            var useDefaultWrappedTextLayout = !useDefaultTextLayout && wrapText && CanUseDefaultWrappedFormattedText(style);
+            var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
+            var wrapTextAlignment = TextAlignment.Left;
+            var useDefaultWrappedTextLayout = false;
+            if (!useDefaultTextLayout && wrapText)
+            {
+                wrapTextAlignment = hAlign switch
+                {
+                    CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
+                    CellHAlign.Right => TextAlignment.Right,
+                    _ => TextAlignment.Left
+                };
+                useDefaultWrappedTextLayout = CanUseDefaultWrappedFormattedText(style);
+            }
             FormattedText text;
             if (useDefaultTextLayout)
             {
@@ -291,6 +299,8 @@ public partial class GridView
             {
                 var typefaceKey = CreateCellTypefaceKey(style);
                 var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
+                if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
+                    textBrush = BrushForCellColor(fontColor, _brushCache);
                 text = new FormattedText(
                         cell.DisplayText,
                         CultureInfo.CurrentCulture,

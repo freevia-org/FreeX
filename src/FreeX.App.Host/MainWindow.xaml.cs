@@ -260,6 +260,7 @@ public partial class MainWindow : Window, IWorkbookWindow
         SheetGrid.ObjectResized += OnObjectResized;
         SheetGrid.ObjectResizedWithAnchor += OnObjectResizedWithAnchor;
         SheetGrid.ObjectRotated += OnObjectRotated;
+        SheetGrid.PictureCropped += OnPictureCropped;
         SheetGrid.MouseMove  += SheetGrid_MouseMove;
         SheetGrid.MouseUp    += SheetGrid_MouseUp;
         SheetGrid.MouseWheel += SheetGrid_MouseWheel;

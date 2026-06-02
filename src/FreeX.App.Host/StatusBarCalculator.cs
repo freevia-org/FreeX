@@ -115,15 +115,15 @@ public static class StatusBarCalculator
     public static string GetReadyStatusText(Sheet sheet, CellAddress activeCell)
     {
         var prompt = DataValidationService.GetInputPrompt(sheet, activeCell);
-        if (prompt is null)
+        if (prompt is not { } inputPrompt)
             return UiText.Get("MainWindow_Text_Ready");
 
-        if (prompt.Title.Length == 0)
-            return prompt.Message;
+        if (inputPrompt.Title.Length == 0)
+            return inputPrompt.Message;
 
-        if (prompt.Message.Length == 0)
-            return prompt.Title;
+        if (inputPrompt.Message.Length == 0)
+            return inputPrompt.Title;
 
-        return $"{prompt.Title}: {prompt.Message}";
+        return $"{inputPrompt.Title}: {inputPrompt.Message}";
     }
 }

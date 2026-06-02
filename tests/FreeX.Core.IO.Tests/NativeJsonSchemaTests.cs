@@ -681,6 +681,70 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_TreatsNullNativeJsonWorkbookMetadataListsAsEmpty()
+    {
+        var workbook = new Workbook("NullWorkbookMetadataLists")
+        {
+            FunctionGroups = new WorkbookFunctionGroupsModel
+            {
+                BuiltInGroupCount = "16",
+                Groups = null!
+            },
+            SmartTags = new WorkbookSmartTagMetadataModel
+            {
+                Show = "all",
+                Types = null!
+            },
+            AdditionalViews = new WorkbookAdditionalViewsModel
+            {
+                NativeAttributes = new Dictionary<string, string> { ["xr:uid"] = "{views}" },
+                Views = null!
+            }
+        };
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var root = document.RootElement;
+        root.GetProperty("FunctionGroups").GetProperty("Groups").EnumerateArray().Should().BeEmpty();
+        root.GetProperty("SmartTags").GetProperty("Types").EnumerateArray().Should().BeEmpty();
+        root.GetProperty("AdditionalViews").GetProperty("Views").EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Save_TreatsNullNativeJsonWorksheetMetadataListsAsEmpty()
+    {
+        var workbook = new Workbook("NullWorksheetMetadataLists");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SmartTags = new WorksheetSmartTagsModel
+        {
+            NativeXml = "<smartTags />",
+            Cells = null!
+        };
+        sheet.SingleXmlCells = new WorksheetSingleXmlCellsModel
+        {
+            NativeAttributes = new Dictionary<string, string> { ["xr:uid"] = "{singleXmlCells}" },
+            Cells = null!
+        };
+        sheet.AdditionalViews = new WorksheetAdditionalViewsModel
+        {
+            NativeAttributes = new Dictionary<string, string> { ["xr:uid"] = "{sheetViews}" },
+            Views = null!
+        };
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var sheetJson = document.RootElement.GetProperty("Sheets").EnumerateArray().Single();
+        sheetJson.GetProperty("SmartTags").GetProperty("Cells").EnumerateArray().Should().BeEmpty();
+        sheetJson.GetProperty("SingleXmlCells").GetProperty("Cells").EnumerateArray().Should().BeEmpty();
+        sheetJson.GetProperty("AdditionalViews").GetProperty("Views").EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
     public void Save_TreatsNullNativeJsonChartListsAsEmpty()
     {
         var workbook = new Workbook("NullChartLists");
@@ -762,6 +826,94 @@ public sealed class NativeJsonSchemaTests
             .GetProperty("Sheets").EnumerateArray().Single()
             .GetProperty("DataValidations").EnumerateArray()
             .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Save_DropsNullNativeJsonDrawingAndSparklineEntries()
+    {
+        var workbook = new Workbook("NullDrawingEntries");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        sheet.Pictures.Add(null!);
+        sheet.TextBoxes.Add(null!);
+        sheet.DrawingShapes.Add(null!);
+        sheet.Sparklines.Add(null!);
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var sheetJson = document.RootElement.GetProperty("Sheets").EnumerateArray().Single();
+        sheetJson.GetProperty("Pictures").EnumerateArray().Should().BeEmpty();
+        sheetJson.GetProperty("TextBoxes").EnumerateArray().Should().BeEmpty();
+        sheetJson.GetProperty("DrawingShapes").EnumerateArray().Should().BeEmpty();
+        sheetJson.GetProperty("Sparklines").EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Save_DropsNullNativeJsonPivotTableEntries()
+    {
+        var workbook = new Workbook("NullPivotTableEntries");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        sheet.PivotTables.Add(null!);
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        document.RootElement
+            .GetProperty("Sheets").EnumerateArray().Single()
+            .GetProperty("PivotTables").EnumerateArray()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Save_DropsNullNativeJsonPivotCacheEntries()
+    {
+        var workbook = new Workbook("NullPivotCacheEntries");
+        workbook.AddSheet("Sheet1");
+
+        workbook.PivotCaches.Add(null!);
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        document.RootElement
+            .GetProperty("PivotCaches").EnumerateArray()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Save_DropsNullNativeJsonWorkbookViewAndScenarioEntries()
+    {
+        var workbook = new Workbook("NullWorkbookViewAndScenarioEntries");
+        var sheet = workbook.AddSheet("Sheet1");
+        var validAddress = new CellAddress(sheet.Id, 1, 1);
+
+        workbook.CustomViews.Add(null!);
+        workbook.CustomViews.Add(new WorkbookCustomView("EmptySheets", null!));
+        workbook.Scenarios.Add(null!);
+        workbook.Scenarios.Add(new WorkbookScenario("NoChanges", null!));
+        workbook.Scenarios.Add(new WorkbookScenario(
+            "Kept",
+            [new ScenarioCellValue(validAddress, new TextValue("kept"))]));
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var customViewJson = document.RootElement
+            .GetProperty("CustomViews").EnumerateArray().Should().ContainSingle().Subject;
+        customViewJson.GetProperty("Name").GetString().Should().Be("EmptySheets");
+        customViewJson.GetProperty("Sheets").EnumerateArray().Should().BeEmpty();
+
+        var scenarioJson = document.RootElement
+            .GetProperty("Scenarios").EnumerateArray().Should().ContainSingle().Subject;
+        scenarioJson.GetProperty("Name").GetString().Should().Be("Kept");
+        scenarioJson.GetProperty("ChangingCells").EnumerateArray()
+            .Should().ContainSingle().Which.GetProperty("Address").GetString().Should().Be("A1");
     }
 
     [Fact]

@@ -344,6 +344,45 @@ public class CommentCommandTests
         sheet.ThreadedComments[addr].Should().Be(original);
     }
 
+    [Fact]
+    public void UpdateThreadedCommentReplyCommand_AppliesResolvedStateAsPartOfReplyEditAndUndoRestoresThread()
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var original = new ThreadedComment("Root", "Quinn")
+        {
+            Replies = [new CommentReply("First", "Codex")]
+        };
+        sheet.ThreadedComments[addr] = original;
+
+        var command = new UpdateThreadedCommentReplyCommand(
+            sheet.Id,
+            addr,
+            replyIndex: 0,
+            text: "Updated first",
+            isResolved: true,
+            timestampUtc: ModifiedAtUtc);
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ThreadedComments[addr].Should().BeEquivalentTo(original with
+        {
+            IsResolved = true,
+            ModifiedAtUtc = ModifiedAtUtc,
+            Replies =
+            [
+                new CommentReply("Updated first", "Codex")
+                {
+                    ModifiedAtUtc = ModifiedAtUtc
+                }
+            ]
+        });
+
+        command.Revert(ctx);
+
+        sheet.ThreadedComments[addr].Should().Be(original);
+    }
+
     [Theory]
     [InlineData(-1)]
     [InlineData(1)]
@@ -413,6 +452,42 @@ public class CommentCommandTests
                 new CommentReply("First", "Codex"),
                 new CommentReply("Third", "Reviewer")
             ]
+        });
+
+        command.Revert(ctx);
+
+        sheet.ThreadedComments[addr].Should().Be(original);
+    }
+
+    [Fact]
+    public void DeleteThreadedCommentReplyCommand_AppliesResolvedStateAsPartOfReplyDeleteAndUndoRestoresThread()
+    {
+        var (_, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var original = new ThreadedComment("Root", "Quinn")
+        {
+            Replies =
+            [
+                new CommentReply("First", "Codex"),
+                new CommentReply("Second", "User")
+            ]
+        };
+        sheet.ThreadedComments[addr] = original;
+
+        var command = new DeleteThreadedCommentReplyCommand(
+            sheet.Id,
+            addr,
+            replyIndex: 0,
+            isResolved: true,
+            timestampUtc: ModifiedAtUtc);
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ThreadedComments[addr].Should().BeEquivalentTo(original with
+        {
+            IsResolved = true,
+            ModifiedAtUtc = ModifiedAtUtc,
+            Replies = [new CommentReply("Second", "User")]
         });
 
         command.Revert(ctx);
