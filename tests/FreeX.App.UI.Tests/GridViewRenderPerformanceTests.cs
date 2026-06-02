@@ -1161,6 +1161,20 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderSplitPaneCells_RespectsHiddenGridLinesForDefaultCellBorders()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderSplitPaneCells = rendering[
+            rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+
+        renderSplitPaneCells.Should().Contain("var gridPen = ShowGridLines ? GridPen : null;");
+        renderSplitPaneCells.Should().Contain("dc.DrawRectangle(fill, gridPen, rect);");
+        renderSplitPaneCells.Should().Contain("DrawBorderEdge(dc, style.BorderTop");
+        renderSplitPaneCells.Should().NotContain("dc.DrawRectangle(fill, GridPen, rect);");
+    }
+
+    [Fact]
     public void RenderSplitPaneCells_ClipsConditionalIconTextToAdjustedTextRect()
     {
         var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
