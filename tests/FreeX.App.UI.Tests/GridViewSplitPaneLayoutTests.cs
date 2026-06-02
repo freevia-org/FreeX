@@ -672,6 +672,24 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void SplitPaneScrollbarLayoutPlanner_IgnoresCollapsedTracks()
+    {
+        var scrollbar = new SplitPaneScrollbar(
+            SplitPaneScrollbarOrientation.Horizontal,
+            SplitPaneRegion.TopRight,
+            new Rect(100, 20, 0, 10),
+            new Rect(100, 21, 0, 8),
+            VisibleSpan: 10,
+            MaxStartIndex: 191);
+        var point = new Point(scrollbar.Track.Left, scrollbar.Track.Top + 2);
+
+        SplitPaneScrollbarLayoutPlanner.HitTestScrollbar(scrollbar, point)
+            .Should().BeNull();
+        SplitPaneScrollbarLayoutPlanner.CalculateScrollTarget(scrollbar, point)
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void SplitPaneScrollbarLayoutPlanner_ClampsThumbToTrackWhenFirstVisibleExceedsLastStart()
     {
         var track = new Rect(100, 20, 200, 10);
