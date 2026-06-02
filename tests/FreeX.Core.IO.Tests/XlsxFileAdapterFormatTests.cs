@@ -157,9 +157,11 @@ public sealed class XlsxFileAdapterFormatTests
         tableReferencePreserverSource.Should().Contain("GetWorksheetPathsWithTableRelationships(sourceArchive, context)");
         adapterSource.Should().Contain("XlsxClosedXmlStyleOnlyCellStripper.Create(packageStream)");
         adapterSource.Should().Contain("stripStyleOnlyCells");
-        styleOnlyStripperSource.Should().Contain("sheetData.Elements(rowName)");
-        styleOnlyStripperSource.Should().Contain("cell.HasElements");
+        styleOnlyStripperSource.Should().Contain("XmlWriter.Create(output, writerSettings)");
+        styleOnlyStripperSource.Should().Contain("reader.IsEmptyElement");
+        styleOnlyStripperSource.Should().Contain("XNode.ReadFrom(reader)");
         styleOnlyStripperSource.Should().Contain("seenStyleIndexes.Add(styleIndex)");
+        styleOnlyStripperSource.Should().NotContain("XDocument.Load(sourceStream)");
         styleOnlyStripperSource.Should().NotContain("worksheetXml.Descendants(worksheetNs + \"c\").ToList()");
         sheetXmlLayoutSource.Should().Contain("XlsxWorksheetDrawingPartReader.ReadParts");
         preserveSourcePackageParts.Should().Contain("var sourceParts = InspectSourcePackageParts(sourceArchive)");

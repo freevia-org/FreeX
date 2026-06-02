@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -65,7 +66,7 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
         }
     }
 
-    private static XDocument? TryStripWorksheet(ZipArchiveEntry sourceEntry)
+    private static byte[]? TryStripWorksheet(ZipArchiveEntry sourceEntry)
     {
         if (!IsWorksheetXml(sourceEntry))
             return null;
@@ -77,8 +78,7 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
         }
 
         using var sourceStream = sourceEntry.Open();
-        var worksheetXml = XDocument.Load(sourceStream);
-        return StripRedundantStyleOnlyCells(worksheetXml) ? worksheetXml : null;
+        return StripRedundantStyleOnlyCells(sourceStream);
     }
 
     private static bool ContainsDuplicateStyleOnlyCells(Stream worksheetStream)
@@ -146,11 +146,11 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
         sourceStream.CopyTo(targetStream);
     }
 
-    private static void WriteEntry(ZipArchiveEntry sourceEntry, ZipArchive strippedArchive, XDocument worksheetXml)
+    private static void WriteEntry(ZipArchiveEntry sourceEntry, ZipArchive strippedArchive, byte[] worksheetXml)
     {
         var targetEntry = CreateTargetEntry(sourceEntry, strippedArchive);
         using var targetStream = targetEntry.Open();
-        worksheetXml.Save(targetStream);
+        targetStream.Write(worksheetXml);
     }
 
     private static ZipArchiveEntry CreateTargetEntry(ZipArchiveEntry sourceEntry, ZipArchive strippedArchive)
@@ -164,42 +164,127 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 
-    private static bool StripRedundantStyleOnlyCells(XDocument worksheetXml)
+    private static byte[]? StripRedundantStyleOnlyCells(Stream worksheetStream)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var sheetData = worksheetXml.Root?.Element(worksheetNs + "sheetData");
-        if (sheetData is null)
-            return false;
-
-        var rowName = worksheetNs + "row";
         var cellName = worksheetNs + "c";
         var seenStyleIndexes = new HashSet<string>(StringComparer.Ordinal);
-        List<XElement>? cellsToRemove = null;
-        foreach (var row in sheetData.Elements(rowName))
+        var changed = false;
+
+        var readerSettings = new XmlReaderSettings
         {
-            foreach (var cell in row.Elements(cellName))
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            IgnoreComments = false,
+            IgnoreProcessingInstructions = false
+        };
+        using var reader = XmlReader.Create(worksheetStream, readerSettings);
+        using var output = new MemoryStream();
+        var writerSettings = new XmlWriterSettings
+        {
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            OmitXmlDeclaration = true,
+            ConformanceLevel = ConformanceLevel.Auto
+        };
+        using (var writer = XmlWriter.Create(output, writerSettings))
+        {
+            var hasNode = reader.Read();
+            while (hasNode)
             {
-                if (cell.HasElements)
-                    continue;
+                if (reader.NodeType == XmlNodeType.Element &&
+                    reader.LocalName == cellName.LocalName &&
+                    reader.NamespaceURI == cellName.NamespaceName &&
+                    reader.GetAttribute("s") is { Length: > 0 } styleIndex)
+                {
+                    if (reader.IsEmptyElement)
+                    {
+                        if (!seenStyleIndexes.Add(styleIndex))
+                        {
+                            changed = true;
+                        }
+                        else
+                        {
+                            WriteCurrentNode(reader, writer);
+                        }
 
-                var styleIndex = cell.Attribute("s")?.Value;
-                if (string.IsNullOrEmpty(styleIndex))
-                    continue;
+                        hasNode = reader.Read();
+                        continue;
+                    }
 
-                if (seenStyleIndexes.Add(styleIndex))
-                    continue;
+                    var cell = (XElement)XNode.ReadFrom(reader);
+                    if (!cell.HasElements && !seenStyleIndexes.Add(styleIndex))
+                    {
+                        changed = true;
+                        continue;
+                    }
 
-                cellsToRemove ??= new List<XElement>();
-                cellsToRemove.Add(cell);
+                    cell.WriteTo(writer);
+                    hasNode = reader.ReadState != ReadState.EndOfFile;
+                    continue;
+                }
+
+                WriteCurrentNode(reader, writer);
+                hasNode = reader.Read();
             }
         }
 
-        if (cellsToRemove is null)
-            return false;
+        return changed ? output.ToArray() : null;
+    }
 
-        foreach (var cell in cellsToRemove)
-            cell.Remove();
+    private static void WriteCurrentNode(XmlReader reader, XmlWriter writer)
+    {
+        switch (reader.NodeType)
+        {
+            case XmlNodeType.Element:
+                writer.WriteStartElement(reader.Prefix, reader.LocalName, reader.NamespaceURI);
+                if (reader.HasAttributes)
+                {
+                    while (reader.MoveToNextAttribute())
+                    {
+                        writer.WriteStartAttribute(reader.Prefix, reader.LocalName, reader.NamespaceURI);
+                        writer.WriteString(reader.Value);
+                        writer.WriteEndAttribute();
+                    }
 
-        return true;
+                    reader.MoveToElement();
+                }
+
+                if (reader.IsEmptyElement)
+                    writer.WriteEndElement();
+                break;
+
+            case XmlNodeType.EndElement:
+                writer.WriteFullEndElement();
+                break;
+
+            case XmlNodeType.Text:
+                writer.WriteString(reader.Value);
+                break;
+
+            case XmlNodeType.CDATA:
+                writer.WriteCData(reader.Value);
+                break;
+
+            case XmlNodeType.Whitespace:
+            case XmlNodeType.SignificantWhitespace:
+                writer.WriteWhitespace(reader.Value);
+                break;
+
+            case XmlNodeType.Comment:
+                writer.WriteComment(reader.Value);
+                break;
+
+            case XmlNodeType.ProcessingInstruction:
+                writer.WriteProcessingInstruction(reader.Name, reader.Value);
+                break;
+
+            case XmlNodeType.DocumentType:
+                writer.WriteDocType(reader.Name, reader.GetAttribute("PUBLIC"), reader.GetAttribute("SYSTEM"), reader.Value);
+                break;
+
+            case XmlNodeType.EntityReference:
+                writer.WriteEntityRef(reader.Name);
+                break;
+        }
     }
 }
