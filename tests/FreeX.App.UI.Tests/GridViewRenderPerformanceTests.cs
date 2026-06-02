@@ -830,6 +830,30 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void CalculateSplitDividerDragTarget_StopsSortedMetricScansAfterPointer()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var findSplitRow = source[
+            source.IndexOf("private static uint? FindSplitRow", StringComparison.Ordinal)..
+            source.IndexOf("private static uint? FindSplitColumn", StringComparison.Ordinal)];
+        var findSplitColumn = source[
+            source.IndexOf("private static uint? FindSplitColumn", StringComparison.Ordinal)..
+            source.IndexOf("private static uint IncrementWithinLimit", StringComparison.Ordinal)];
+
+        findSplitRow.Should().Contain("foreach (var row in mainRows)");
+        findSplitRow.Should().Contain("if (y < top)");
+        findSplitRow.Should().Contain("break;");
+        findSplitRow.IndexOf("if (y < top)", StringComparison.Ordinal)
+            .Should().BeLessThan(findSplitRow.IndexOf("if (y >= top && y <= top + row.Height)", StringComparison.Ordinal));
+
+        findSplitColumn.Should().Contain("foreach (var column in mainColumns)");
+        findSplitColumn.Should().Contain("if (x < left)");
+        findSplitColumn.Should().Contain("break;");
+        findSplitColumn.IndexOf("if (x < left)", StringComparison.Ordinal)
+            .Should().BeLessThan(findSplitColumn.IndexOf("if (x >= left && x <= left + column.Width)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SplitPaneDividerHandles_ReuseFrozenStaticPen()
     {
         var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));

@@ -908,6 +908,48 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsNullNativeJsonWorksheetDimensionEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullWorksheetDimensions",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "RowHeights": [
+                    null,
+                    { "Index": 2, "Value": 24.5 }
+                  ],
+                  "ColumnWidths": [
+                    null,
+                    { "Index": 3, "Value": 14.25 }
+                  ],
+                  "RowOutlineLevels": [
+                    null,
+                    { "Index": 4, "Value": 2 }
+                  ],
+                  "ColOutlineLevels": [
+                    null,
+                    { "Index": 5, "Value": 3 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sheet = new NativeJsonAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.RowHeights.Should().Contain(new KeyValuePair<uint, double>(2, 24.5));
+        sheet.ColumnWidths.Should().Contain(new KeyValuePair<uint, double>(3, 14.25));
+        sheet.RowOutlineLevels.Should().Contain(new KeyValuePair<uint, int>(4, 2));
+        sheet.ColOutlineLevels.Should().Contain(new KeyValuePair<uint, int>(5, 3));
+    }
+
+    [Fact]
     public void Save_TreatsNullNativeJsonChartListsAsEmpty()
     {
         var workbook = new Workbook("NullChartLists");

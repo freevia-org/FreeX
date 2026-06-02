@@ -3554,6 +3554,32 @@ public sealed class SpreadsheetXmlFileAdapterTests
         stylesheet.CanRead.Should().BeTrue();
     }
 
+    [Fact]
+    public void LoadTransformed_NullSource_ThrowsArgumentNullException()
+    {
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/"><rows/></xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(null!, stylesheet);
+
+        act.Should().Throw<ArgumentNullException>()
+            .Where(exception => exception.ParamName == "sourceXml");
+    }
+
+    [Fact]
+    public void LoadTransformed_NullStylesheet_ThrowsArgumentNullException()
+    {
+        using var source = StreamFromString("<rows/>");
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, null!);
+
+        act.Should().Throw<ArgumentNullException>()
+            .Where(exception => exception.ParamName == "stylesheet");
+    }
+
     [Theory]
     [InlineData(0, 1, "maxOutputBytes")]
     [InlineData(1, 0, "maxInputCharacters")]

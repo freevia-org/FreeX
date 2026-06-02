@@ -54,6 +54,26 @@ public sealed class DataValidationServiceTests
     }
 
     [Fact]
+    public void GetListItemsRange_RechecksSheetValuesAfterSourceRangeChanges()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new TextValue("Red")));
+
+        var rule = NewListRule(sheet.Id, "=$A$1:$A$2");
+
+        DataValidationService.GetListItems(rule, sheet, workbook)
+            .Should()
+            .Equal("Red", BlankValue.Instance.ToString());
+
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new TextValue("Green")));
+
+        DataValidationService.GetListItems(rule, sheet, workbook)
+            .Should()
+            .Equal("Red", "Green");
+    }
+
+    [Fact]
     public void GetInputPrompt_RebuildsLookupAfterSameCountRuleReplacement()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1");
@@ -214,6 +234,58 @@ public sealed class DataValidationServiceTests
 
         prompt.Should().Be(new DataValidationService.InputPrompt("Input", $"Rule {ruleCount}"));
         allocatedBytes.Should().BeLessThan(6_000);
+    }
+
+    [Fact]
+    public void Benchmark_GetListItemsLargeSameSheetRange_ReportsTimingAndAllocatedBytes()
+    {
+        const int itemCount = 5_000;
+        const int steps = 50;
+
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        for (uint row = 1; row <= itemCount; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), Cell.FromValue(new TextValue($"Item {row}")));
+
+        var rule = NewListRule(sheet.Id, $"=$A$1:$A${itemCount}");
+
+        var firstItems = DataValidationService.GetListItems(rule, sheet, workbook);
+        firstItems.Should().HaveCount(itemCount);
+        firstItems[^1].Should().Be($"Item {itemCount}");
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var timings = new double[steps];
+        var total = Stopwatch.StartNew();
+        IReadOnlyList<string>? items = null;
+
+        for (var i = 0; i < steps; i++)
+        {
+            var step = Stopwatch.StartNew();
+            items = DataValidationService.GetListItems(rule, sheet, workbook);
+            step.Stop();
+            timings[i] = step.Elapsed.TotalMilliseconds;
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        Console.WriteLine(
+            "PERF DATAVALIDATION_GET_LIST_ITEMS_RANGE " +
+            $"items={itemCount} steps={steps} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={timings.Average():F2} " +
+            $"p95_ms={timings.OrderBy(x => x).ElementAt((int)Math.Ceiling(steps * 0.95) - 1):F2} " +
+            $"max_ms={timings.Max():F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        items.Should().NotBeNull();
+        items!.Should().HaveCount(itemCount);
+        items[^1].Should().Be($"Item {itemCount}");
+        allocatedBytes.Should().BeLessThan(4_000_000);
     }
 
     private static DataValidation NewListRule(SheetId sheetId, string formula1) =>

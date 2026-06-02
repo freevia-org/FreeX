@@ -1063,6 +1063,8 @@ public sealed partial class NativeJsonAdapter
         public string Address { get; set; } = "";
         [JsonIgnore]
         public ulong ParsedAddress { get; set; }
+        [JsonIgnore]
+        public char ParsedValueType { get; set; }
         public string? Value { get; set; }
         public string? ValueType { get; set; }
         public string? Formula { get; set; }
@@ -1303,6 +1305,11 @@ public sealed partial class NativeJsonAdapter
         private static ReadOnlySpan<byte> IgnoreFormulaErrorProperty => "IgnoreFormulaError"u8;
         private static ReadOnlySpan<byte> StyleIdProperty => "StyleId"u8;
         private static ReadOnlySpan<byte> StyleProperty => "Style"u8;
+        private static ReadOnlySpan<byte> NumberValueType => "n"u8;
+        private static ReadOnlySpan<byte> DateTimeValueType => "d"u8;
+        private static ReadOnlySpan<byte> BooleanValueType => "b"u8;
+        private static ReadOnlySpan<byte> TextValueType => "t"u8;
+        private static ReadOnlySpan<byte> ErrorValueType => "e"u8;
         private static readonly JsonEncodedText AddressName = JsonEncodedText.Encode(nameof(CellDto.Address));
         private static readonly JsonEncodedText ValueName = JsonEncodedText.Encode(nameof(CellDto.Value));
         private static readonly JsonEncodedText ValueTypeName = JsonEncodedText.Encode(nameof(CellDto.ValueType));
@@ -1354,7 +1361,8 @@ public sealed partial class NativeJsonAdapter
                 else if (reader.ValueTextEquals(ValueTypeProperty))
                 {
                     reader.Read();
-                    dto.ValueType = reader.TokenType == JsonTokenType.Null ? null : reader.GetString();
+                    dto.ParsedValueType = ReadValueTypeToken(ref reader, out var valueType);
+                    dto.ValueType = valueType;
                 }
                 else if (reader.ValueTextEquals(FormulaProperty))
                 {
@@ -1393,6 +1401,32 @@ public sealed partial class NativeJsonAdapter
             }
 
             throw new JsonException();
+        }
+
+        private static char ReadValueTypeToken(ref Utf8JsonReader reader, out string? valueType)
+        {
+            valueType = null;
+            if (reader.TokenType == JsonTokenType.Null)
+                return '\0';
+            if (reader.TokenType != JsonTokenType.String)
+            {
+                reader.Skip();
+                return '\0';
+            }
+
+            if (reader.ValueTextEquals(NumberValueType))
+                return 'n';
+            if (reader.ValueTextEquals(DateTimeValueType))
+                return 'd';
+            if (reader.ValueTextEquals(BooleanValueType))
+                return 'b';
+            if (reader.ValueTextEquals(TextValueType))
+                return 't';
+            if (reader.ValueTextEquals(ErrorValueType))
+                return 'e';
+
+            valueType = reader.GetString();
+            return '\0';
         }
 
         public override void Write(Utf8JsonWriter writer, CellDto value, JsonSerializerOptions options)
