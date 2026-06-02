@@ -132,6 +132,34 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
+    [Fact]
+    public void ParserRepeatedIdentifierFormula_AvoidsIdentifierAllocationChurn()
+    {
+        const string formula =
+            "=SUM(A1:B20,Data_Sheet!$C$1:$D$20)+AVERAGE(TableName[Amount])+IF(TRUE,MAX($E$1:$E$20),MIN($F$1:$F$20))";
+        const int iterations = 20_000;
+
+        new Parser(new Lexer(formula).Tokenize()).Parse().Should().BeOfType<BinaryOpNode>();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        FormulaNode node = new NumberNode(0);
+        for (var iteration = 0; iteration < iterations; iteration++)
+            node = new Parser(new Lexer(formula).Tokenize()).Parse();
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        node.Should().BeOfType<BinaryOpNode>();
+        _output.WriteLine(
+            $"PERF parser repeated identifier formula iterations={iterations:N0} elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(110_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
     [Theory]
     [InlineData("=SUM(A1:A100000)", 5_000_050_000d)]
     [InlineData("=AVERAGE(A1:A100000)", 50_000.5d)]
