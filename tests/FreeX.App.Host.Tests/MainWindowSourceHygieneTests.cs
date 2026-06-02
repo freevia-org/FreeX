@@ -2257,9 +2257,10 @@ public sealed class MainWindowSourceHygieneTests
         gridStatusSource.Should().Contain("_statusBarDisplayStateCache.GetReady(UiText.Get(\"MainWindow_Text_Ready\"))");
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "StatusBarDisplayState.cs"))
             .Should()
-            .Contain("UiText.Format(\"StatusBar_CountFormat\", stats.Count)")
-            .And.Contain("UiText.Format(\"StatusBar_NumericalCountFormat\", stats.NumericalCount)")
-            .And.Contain("UiText.Format(\"StatusBar_SumFormat\", StatusBarCalculator.FormatNumber(stats.Sum))");
+            .Contain("FormatStatusText(\"StatusBar_CountFormat\", stats.Count)")
+            .And.Contain("FormatStatusText(\"StatusBar_NumericalCountFormat\", stats.NumericalCount)")
+            .And.Contain("FormatStatusText(\"StatusBar_SumFormat\", sumNumber)")
+            .And.Contain("FormatNumberWithReuse");
         gridStatusSource.Should().Contain("if (stats.Count == 0)");
     }
 
