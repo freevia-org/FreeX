@@ -1220,6 +1220,56 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_RowColumnLayoutAttributeValueTemplates_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <layout columnIndex="2" columnSpan="1" width="22.75" columnHidden="1"
+                    rowIndex="3" rowSpan="1" height="28.5" rowHidden="1">
+              <cell value="Layout"/>
+            </layout>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/layout">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Layout AVT">
+                    <ss:Table>
+                      <ss:Column ss:Index="{@columnIndex}" ss:Span="{@columnSpan}" ss:Width="{@width}" ss:Hidden="{@columnHidden}"/>
+                      <ss:Row ss:Index="{@rowIndex}" ss:Span="{@rowSpan}" ss:Height="{@height}" ss:Hidden="{@rowHidden}">
+                        <ss:Cell ss:Index="{@columnIndex}">
+                          <ss:Data ss:Type="String"><xsl:value-of select="cell/@value"/></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var document = XDocument.Load(transformed);
+        var column = document.Descendants(ss + "Column").Single();
+        var row = document.Descendants(ss + "Row").Single();
+        var cell = document.Descendants(ss + "Cell").Single();
+
+        column.Attribute(ss + "Index")!.Value.Should().Be("2");
+        column.Attribute(ss + "Span")!.Value.Should().Be("1");
+        column.Attribute(ss + "Width")!.Value.Should().Be("22.75");
+        column.Attribute(ss + "Hidden")!.Value.Should().Be("1");
+        row.Attribute(ss + "Index")!.Value.Should().Be("3");
+        row.Attribute(ss + "Span")!.Value.Should().Be("1");
+        row.Attribute(ss + "Height")!.Value.Should().Be("28.5");
+        row.Attribute(ss + "Hidden")!.Value.Should().Be("1");
+        cell.Attribute(ss + "Index")!.Value.Should().Be("2");
+        cell.Element(ss + "Data")!.Value.Should().Be("Layout");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NamedRangeAttributeValueTemplate_GeneratesSpreadsheetMl()
     {
         using var source = StreamFromString("""
