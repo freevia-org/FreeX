@@ -28,6 +28,27 @@ internal static class GridDrawingObjectPlanner
         return true;
     }
 
+    public static bool TryCreateDrawingAnchorRect(
+        IReadOnlyDictionary<uint, RowMetric> rows,
+        IReadOnlyDictionary<uint, ColMetric> columns,
+        DrawingAnchorRange anchor,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        out Rect rect)
+    {
+        rect = default;
+        if (!TryGetAnchorPoints(rows, columns, anchor, rowHeaderWidth, columnHeaderHeight, out var topLeft, out var bottomRight))
+            return false;
+
+        var width = bottomRight.X - topLeft.X;
+        var height = bottomRight.Y - topLeft.Y;
+        if (width <= 0 || height <= 0)
+            return false;
+
+        rect = new Rect(topLeft.X, topLeft.Y, width, height);
+        return true;
+    }
+
     public static Rect EnsureMinimumControlRect(Rect rect) =>
         new(rect.Left, rect.Top, Math.Max(80, rect.Width), Math.Max(44, rect.Height));
 
@@ -135,6 +156,42 @@ internal static class GridDrawingObjectPlanner
 
         if (!TryFindAnchorColumns(viewport.ColMetrics, anchor.From.Column + 1, anchor.To.Column + 1, out var fromColumn, out var toColumn) ||
             !TryFindAnchorRows(viewport.RowMetrics, anchor.From.Row + 1, anchor.To.Row + 1, out var fromRow, out var toRow))
+            return false;
+
+        topLeft = new Point(
+            rowHeaderWidth + fromColumn.LeftOffset + EmusToPixels(anchor.From.ColumnOffsetEmu),
+            columnHeaderHeight + fromRow.TopOffset + EmusToPixels(anchor.From.RowOffsetEmu));
+        bottomRight = new Point(
+            rowHeaderWidth + toColumn.LeftOffset + EmusToPixels(anchor.To.ColumnOffsetEmu),
+            columnHeaderHeight + toRow.TopOffset + EmusToPixels(anchor.To.RowOffsetEmu));
+        return true;
+    }
+
+    private static bool TryGetAnchorPoints(
+        IReadOnlyDictionary<uint, RowMetric> rows,
+        IReadOnlyDictionary<uint, ColMetric> columns,
+        DrawingAnchorRange anchor,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        out Point topLeft,
+        out Point bottomRight)
+    {
+        topLeft = default;
+        bottomRight = default;
+        if (anchor.From.Column == uint.MaxValue ||
+            anchor.To.Column == uint.MaxValue ||
+            anchor.From.Row == uint.MaxValue ||
+            anchor.To.Row == uint.MaxValue)
+            return false;
+
+        var fromColumnIndex = anchor.From.Column + 1;
+        var toColumnIndex = anchor.To.Column + 1;
+        var fromRowIndex = anchor.From.Row + 1;
+        var toRowIndex = anchor.To.Row + 1;
+        if (!columns.TryGetValue(fromColumnIndex, out var fromColumn) ||
+            !columns.TryGetValue(toColumnIndex, out var toColumn) ||
+            !rows.TryGetValue(fromRowIndex, out var fromRow) ||
+            !rows.TryGetValue(toRowIndex, out var toRow))
             return false;
 
         topLeft = new Point(

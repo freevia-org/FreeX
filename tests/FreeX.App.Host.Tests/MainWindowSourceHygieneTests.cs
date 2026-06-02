@@ -2402,13 +2402,34 @@ public sealed class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void ReviewCommentNavigation_IncludesThreadedComments()
+    public void WorksheetContextMenuShowNotes_UsesNoteOnlyWorkflow()
+    {
+        var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs"));
+        var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "WorksheetContextMenuPlanner.cs"));
+
+        source.Should().Contain("case WorksheetContextMenuAction.ShowNotes:");
+        source.Should().Contain("ReviewShowNotesBtn_Click(this, new RoutedEventArgs());");
+        source.Should().NotContain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());");
+        plannerSource.Should().Contain("new(\"Show Notes\", WorksheetContextMenuAction.ShowNotes, AccessHeader: \"_Show Notes\", IsEnabled: state.HasNote)");
+        plannerSource.Should().NotContain("IsEnabled: state.HasNote || state.HasThreadedComment");
+    }
+
+    [Fact]
+    public void ReviewCommentAndNoteNavigation_KeepsThreadedCommentsAndNotesSeparate()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
 
-        source.Should().Contain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
-        source.Should().Contain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
-        source.Should().Contain("sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0");
+        source.Should().Contain("CommentNavigationPlanner.FormatThreadedCommentList(sheet.ThreadedComments)");
+        source.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(sheet.ThreadedComments)");
+        source.Should().Contain("sheet.ThreadedComments.Count == 0");
+        source.Should().Contain("private void ReviewPrevNoteBtn_Click(");
+        source.Should().Contain("private void ReviewNextNoteBtn_Click(");
+        source.Should().Contain("private void ReviewShowNotesBtn_Click(");
+        source.Should().Contain("CommentNavigationPlanner.FormatNoteList(sheet.Comments)");
+        source.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(sheet.Comments)");
+        source.Should().Contain("sheet.Comments.Count == 0");
+        source.Should().NotContain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
+        source.Should().NotContain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
     }
 
     [Fact]
@@ -2681,17 +2702,18 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().Contain("SpellCheckDialogAction.Add");
         source.Should().Contain("while (true)");
         source.Should().Contain("SpellCheckWorkflowPlanner.FilterIssues(");
-        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllEdits(issues, issue.Word, replacement)");
-        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementEdit(issue, replacement)");
+        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(issues, issue.Word, replacement)");
+        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, replacement)");
         source.Should().NotContain("BuildSpellCheckEdits");
-        source.Should().Contain("TryExecuteSpellCheckEdits");
-        source.Should().Contain("new EditCellsCommand(_currentSheetId, edits)");
+        source.Should().Contain("TryExecuteSpellCheckCommand");
+        source.Should().Contain("TryExecuteCommand(command, \"Spell Check\")");
         source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
 
         var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SpellCheckWorkflowPlanner.cs"));
         plannerSource.Should().Contain("ContainsIgnoredWord(ignoredWords, issue.Word)");
-        plannerSource.Should().Contain("ignoredIssues.Contains((issue.Address, issue.Word))");
+        plannerSource.Should().Contain("ignoredIssues.Contains(CreateIssueKey(issue))");
         plannerSource.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
+        plannerSource.Should().Contain("SpellingIssueSource.ThreadedCommentReply");
     }
 
     [Fact]

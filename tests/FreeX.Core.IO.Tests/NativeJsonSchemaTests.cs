@@ -179,6 +179,79 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsMalformedNativeJsonHeaderFooterPicturePayloads()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "HeaderFooterPictures",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "PageHeaderPictures": {
+                    "Left": {
+                      "ImageBase64": "not-base64!",
+                      "ContentType": "image/png",
+                      "FileName": "broken.png",
+                      "Width": 120,
+                      "Height": 48
+                    },
+                    "Center": {
+                      "ImageBase64": "AQIDBA==",
+                      "ContentType": "image/png",
+                      "FileName": "logo.png",
+                      "Width": 144,
+                      "Height": 64
+                    }
+                  }
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sheet = new NativeJsonAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.PageHeaderPictures.Left.Should().BeNull();
+        sheet.PageHeaderPictures.Center.Should().NotBeNull();
+        sheet.PageHeaderPictures.Center!.ImageBytes.Should().Equal([1, 2, 3, 4]);
+        sheet.PageHeaderPictures.Center.ContentType.Should().Be("image/png");
+        sheet.PageHeaderPictures.Center.FileName.Should().Be("logo.png");
+        sheet.PageHeaderPictures.Center.Width.Should().Be(144);
+        sheet.PageHeaderPictures.Center.Height.Should().Be(64);
+    }
+
+    [Fact]
+    public void Load_DropsMalformedNativeJsonWorksheetBackgroundPayloads()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "BackgroundImage",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "BackgroundImage": {
+                    "ImageBase64": "not-base64!",
+                    "ContentType": "image/png",
+                    "FileName": "background.png"
+                  }
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sheet = new NativeJsonAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.BackgroundImage.Should().BeNull();
+    }
+
+    [Fact]
     public void Save_WritesNonFiniteNativeJsonNumbersAsTextCells()
     {
         var workbook = new Workbook("NonFinite");
@@ -1518,6 +1591,136 @@ public sealed class NativeJsonSchemaTests
         sheetJson.GetProperty("TextBoxes").EnumerateArray().Should().BeEmpty();
         sheetJson.GetProperty("DrawingShapes").EnumerateArray().Should().BeEmpty();
         sheetJson.GetProperty("Sparklines").EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Load_DropsMalformedNativeJsonPictureEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "MalformedPictures",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Pictures": [
+                    null,
+                    {
+                      "Name": "Kept",
+                      "Anchor": "B2",
+                      "Kind": 1,
+                      "ImageBase64": "AQIDBA==",
+                      "ContentType": "image/png",
+                      "Width": 144,
+                      "Height": 96,
+                      "Cells": [
+                        null,
+                        { "RowOffset": 1, "ColumnOffset": 2, "Text": "snapshot" }
+                      ]
+                    },
+                    { "Name": "BadAnchor", "Anchor": "not-an-address" },
+                    { "Name": "BadLinkedRange", "Anchor": "C3", "LinkedSourceRange": "not-a-range" },
+                    { "Name": "BadImage", "Anchor": "D4", "ImageBase64": "not-base64!" }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var picture = new NativeJsonAdapter().Load(stream).GetSheetAt(0).Pictures
+            .Should().ContainSingle().Subject;
+
+        picture.Name.Should().Be("Kept");
+        picture.Anchor.ToA1().Should().Be("B2");
+        picture.Kind.Should().Be(PictureKind.Image);
+        picture.ImageBytes.Should().Equal([1, 2, 3, 4]);
+        picture.ContentType.Should().Be("image/png");
+        picture.Width.Should().Be(144);
+        picture.Height.Should().Be(96);
+        picture.Cells.Should().ContainSingle()
+            .Which.Should().Be(new PictureCellSnapshot(1, 2, "snapshot"));
+    }
+
+    [Fact]
+    public void Load_DropsMalformedNativeJsonTextBoxAndShapeEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "MalformedDrawingObjects",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "TextBoxes": [
+                    null,
+                    { "Name": "Kept Text", "Anchor": "C3", "Text": "review", "Width": 180, "Height": 80 },
+                    { "Name": "Bad Text", "Anchor": "not-an-address", "Text": "dropped" }
+                  ],
+                  "DrawingShapes": [
+                    null,
+                    { "Name": "Kept Shape", "Anchor": "D4", "Kind": 1, "Width": 120, "Height": 70 },
+                    { "Name": "Bad Shape", "Anchor": "not-an-address", "Kind": 0 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sheet = new NativeJsonAdapter().Load(stream).GetSheetAt(0);
+
+        var textBox = sheet.TextBoxes.Should().ContainSingle().Subject;
+        textBox.Name.Should().Be("Kept Text");
+        textBox.Anchor.ToA1().Should().Be("C3");
+        textBox.Text.Should().Be("review");
+        textBox.Width.Should().Be(180);
+        textBox.Height.Should().Be(80);
+
+        var shape = sheet.DrawingShapes.Should().ContainSingle().Subject;
+        shape.Name.Should().Be("Kept Shape");
+        shape.Anchor.ToA1().Should().Be("D4");
+        shape.Kind.Should().Be(DrawingShapeKind.Ellipse);
+        shape.Width.Should().Be(120);
+        shape.Height.Should().Be(70);
+    }
+
+    [Fact]
+    public void Load_DropsMalformedNativeJsonSparklineEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "MalformedSparklines",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Sparklines": [
+                    null,
+                    { "DataRange": "A1:C1", "Location": "D1", "Kind": 1 },
+                    { "DataRange": "not-a-range", "Location": "D2", "Kind": 0 },
+                    { "DataRange": "A3:C3", "Location": "not-an-address", "Kind": 0 },
+                    { "DataRange": "A4:C4", "Location": "D4", "Kind": 99 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sparkline = new NativeJsonAdapter().Load(stream).GetSheetAt(0).Sparklines
+            .Should().ContainSingle().Subject;
+
+        sparkline.DataRange.Start.ToA1().Should().Be("A1");
+        sparkline.DataRange.End.ToA1().Should().Be("C1");
+        sparkline.Location.ToA1().Should().Be("D1");
+        sparkline.Kind.Should().Be(SparklineKind.Column);
     }
 
     [Fact]

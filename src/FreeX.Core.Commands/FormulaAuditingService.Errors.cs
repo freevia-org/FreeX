@@ -75,6 +75,7 @@ public static partial class FormulaAuditingService
         var result = new List<FormulaErrorIssue>();
         result.AddRange(FindLiteralFormulaErrorIssues(workbook, sheetId));
         result.AddRange(FindFormulaCellIssues(workbook, sheetId));
+        result.AddRange(FindInvalidDataValidationIssues(workbook, sheetId));
 
         if (result.Count <= 1)
             return result;
@@ -175,16 +176,33 @@ public static partial class FormulaAuditingService
             : left.Address.Col.CompareTo(right.Address.Col);
     }
 
-    internal static bool HasIgnorableFormulaIssue(Workbook workbook, SheetId sheetId, CellAddress address, Cell cell) =>
-        cell.Value is ErrorValue ||
-        (!cell.HasFormula && cell.Value is TextValue text && IsNumberStoredAsText(text.Value)) ||
-        (!cell.HasFormula && cell.Value is TextValue dateText && IsTextDateWithTwoDigitYear(dateText.Value)) ||
-        IsFormulaStoredAsText(cell) ||
-        FormulaRefersToBlankCells(workbook, sheetId, cell) ||
-        IsInconsistentCalculatedColumnFormula(workbook, sheetId, address, cell) ||
-        IsInconsistentFormula(workbook, sheetId, address) ||
-        FormulaOmitsAdjacentCells(workbook, sheetId, cell) ||
-        IsUnlockedFormulaCell(workbook, cell);
+    internal static bool HasIgnorableFormulaIssue(Workbook workbook, SheetId sheetId, CellAddress address, Cell cell)
+    {
+        var disabledCodes = workbook.DisabledFormulaErrorCodes;
+        return
+            (cell.Value is ErrorValue error && !disabledCodes.Contains(error.Code)) ||
+            (!disabledCodes.Contains(NumberStoredAsTextErrorCode) &&
+                !cell.HasFormula &&
+                cell.Value is TextValue text &&
+                IsNumberStoredAsText(text.Value)) ||
+            (!disabledCodes.Contains(TwoDigitYearTextDateErrorCode) &&
+                !cell.HasFormula &&
+                cell.Value is TextValue dateText &&
+                IsTextDateWithTwoDigitYear(dateText.Value)) ||
+            (!disabledCodes.Contains(FormulaStoredAsTextErrorCode) &&
+                IsFormulaStoredAsText(cell)) ||
+            (!disabledCodes.Contains(FormulaRefersToBlankCellsErrorCode) &&
+                FormulaRefersToBlankCells(workbook, sheetId, cell)) ||
+            (!disabledCodes.Contains(InconsistentCalculatedColumnFormulaErrorCode) &&
+                IsInconsistentCalculatedColumnFormula(workbook, sheetId, address, cell)) ||
+            (!disabledCodes.Contains(InconsistentFormulaErrorCode) &&
+                IsInconsistentFormula(workbook, sheetId, address)) ||
+            (!disabledCodes.Contains(FormulaOmitsAdjacentCellsErrorCode) &&
+                FormulaOmitsAdjacentCells(workbook, sheetId, cell)) ||
+            (!disabledCodes.Contains(UnlockedFormulaCellsErrorCode) &&
+                IsUnlockedFormulaCell(workbook, cell)) ||
+            IsInvalidDataValidationEntry(workbook, sheetId, address, cell);
+    }
 
     private static IEnumerable<FormulaErrorIssue> FindFormulaRefersToBlankCellsIssues(Workbook workbook, SheetId? sheetId)
     {
@@ -1075,6 +1093,69 @@ public static partial class FormulaAuditingService
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.None,
                 out _);
+
+        return false;
+    }
+
+    private static IEnumerable<FormulaErrorIssue> FindInvalidDataValidationIssues(Workbook workbook, SheetId? sheetId)
+    {
+        if (workbook.DisabledFormulaErrorCodes.Contains(DataValidationErrorCode))
+            yield break;
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            if (sheet.DataValidations.Count == 0)
+                continue;
+
+            foreach (var (address, cell) in sheet.EnumerateCells())
+            {
+                if (cell.IgnoreFormulaError ||
+                    cell.HasFormula ||
+                    !TryGetInvalidDataValidationDescription(workbook, sheet, address, cell, out var description))
+                {
+                    continue;
+                }
+
+                yield return new FormulaErrorIssue(
+                    sheet.Id,
+                    sheet.Name,
+                    address,
+                    address.ToA1(),
+                    DataValidationErrorCode,
+                    null,
+                    description);
+            }
+        }
+    }
+
+    private static bool IsInvalidDataValidationEntry(Workbook workbook, SheetId sheetId, CellAddress address, Cell cell) =>
+        workbook.GetSheet(sheetId) is { } sheet &&
+        !cell.HasFormula &&
+        !workbook.DisabledFormulaErrorCodes.Contains(DataValidationErrorCode) &&
+        TryGetInvalidDataValidationDescription(workbook, sheet, address, cell, out _);
+
+    private static bool TryGetInvalidDataValidationDescription(
+        Workbook workbook,
+        Sheet sheet,
+        CellAddress address,
+        Cell cell,
+        out string description)
+    {
+        description = string.Empty;
+        foreach (var validation in DataValidationService.GetApplicable(sheet, address))
+        {
+            var error = DataValidationService.Validate(validation, cell.Value, sheet, address, workbook);
+            if (error is null)
+                continue;
+
+            description = string.IsNullOrWhiteSpace(error)
+                ? "The cell value does not satisfy the applied data validation rule."
+                : $"The cell value does not satisfy the applied data validation rule. {error}";
+            return true;
+        }
 
         return false;
     }

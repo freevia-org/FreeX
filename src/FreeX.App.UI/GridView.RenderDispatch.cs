@@ -83,10 +83,18 @@ public partial class GridView
             else if (ObjectDisplayMode == GridObjectDisplayMode.All)
             {
                 RenderCharts(dc);
-                RenderDrawingShapes(dc);
-                RenderNativeSlicerTimelineControls(dc);
-                RenderPictures(dc);
-                RenderTextBoxes(dc);
+                if (HasExplicitDrawingObjectZOrder())
+                {
+                    RenderNativeSlicerTimelineControls(dc);
+                    RenderDrawingObjectsByZOrder(dc);
+                }
+                else
+                {
+                    RenderDrawingShapes(dc);
+                    RenderNativeSlicerTimelineControls(dc);
+                    RenderPictures(dc);
+                    RenderTextBoxes(dc);
+                }
             }
 
             var selectedRect = GetSelectedObjectRect();

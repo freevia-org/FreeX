@@ -563,6 +563,33 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_ReturnsInvalidDataValidationEntries()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 2, 1);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(address, address),
+            Type = DvType.WholeNumber,
+            Operator = DvOperator.Between,
+            Formula1 = "1",
+            Formula2 = "10",
+            ErrorMessage = "Enter a whole number from 1 to 10."
+        });
+        sheet.SetCell(address, new NumberValue(99));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.DataValidationErrorCode).Subject;
+
+        issue.SheetName.Should().Be("Sheet1");
+        issue.Cell.Should().Be("A2");
+        issue.FormulaText.Should().BeNull();
+        issue.Description.Should().Contain("data validation rule");
+        issue.Description.Should().Contain("whole number from 1 to 10");
+    }
+
+    [Fact]
     public void FindFormulaErrorIssues_SkipsDisabledFormulaRefersToBlankCellsRule()
     {
         var wb = new Workbook("test");
@@ -703,6 +730,25 @@ public sealed class FormulaAuditingServiceTests
         cell.StyleId = unlockedStyleId;
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), cell);
         wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.UnlockedFormulaCellsErrorCode);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_SkipsDisabledDataValidationRule()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(address, address),
+            Type = DvType.List,
+            Formula1 = "Red,Green"
+        });
+        sheet.SetCell(address, new TextValue("Blue"));
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.DataValidationErrorCode);
 
         FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
             .Should().BeEmpty();
@@ -926,6 +972,73 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void SetFormulaErrorIgnoredCommand_IgnoresInvalidDataValidationIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 2);
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(address, address),
+            Type = DvType.List,
+            Formula1 = "Red,Green"
+        });
+        sheet.SetCell(address, new TextValue("Blue"));
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id).Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle()
+            .Which.ErrorCode.Should().Be(FormulaAuditingService.DataValidationErrorCode);
+    }
+
+    [Fact]
+    public void SetFormulaErrorIgnoredCommand_RejectsDisabledCachedFormulaErrorIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var cell = Cell.FromFormula("1/0");
+        cell.Value = ErrorValue.DivByZero;
+        sheet.SetCell(address, cell);
+        wb.DisabledFormulaErrorCodes.Add(ErrorValue.DivByZero.Code);
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("does not currently contain an issue");
+        sheet.GetCell(address)!.IgnoreFormulaError.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetFormulaErrorIgnoredCommand_RejectsDisabledModeledWarningIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new TextValue("42"));
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.NumberStoredAsTextErrorCode);
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("does not currently contain an issue");
+        sheet.GetCell(address)!.IgnoreFormulaError.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetFormulaErrorCheckingRuleCommand_TogglesRuleAndUndoRestores()
     {
         var wb = new Workbook("test");
@@ -961,6 +1074,7 @@ public sealed class FormulaAuditingServiceTests
                 (FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode, "Formulas which omit cells in a region"),
                 (FormulaAuditingService.UnlockedFormulaCellsErrorCode, "Unlocked cells containing formulas"),
                 (FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells"),
+                (FormulaAuditingService.DataValidationErrorCode, "Data entered in cells is invalid"),
                 (FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits"),
                 (FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe"));
     }

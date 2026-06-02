@@ -3097,6 +3097,57 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void NativeJsonAdapter_RoundTrip_DrawingObjectZOrder()
+    {
+        var workbook = new Workbook("DrawingObjectZOrderTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        var picture = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Kind = PictureKind.Image,
+            Name = "Logo",
+            ImageBytes = MinimalPngBytes(),
+            ContentType = "image/png"
+        };
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            Name = "Notes",
+            Text = "Callout"
+        };
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 2),
+            Name = "Marker",
+            Kind = DrawingShapeKind.Ellipse
+        };
+        sheet.Pictures.Add(picture);
+        sheet.TextBoxes.Add(textBox);
+        sheet.DrawingShapes.Add(shape);
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id));
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loadedSheet = adapter.Load(ms).GetSheetAt(0);
+
+        var loadedTextBox = loadedSheet.TextBoxes.Should().ContainSingle().Subject;
+        var loadedPicture = loadedSheet.Pictures.Should().ContainSingle().Subject;
+        var loadedShape = loadedSheet.DrawingShapes.Should().ContainSingle().Subject;
+        loadedTextBox.Id.Should().Be(textBox.Id);
+        loadedPicture.Id.Should().Be(picture.Id);
+        loadedShape.Id.Should().Be(shape.Id);
+        loadedSheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, loadedTextBox.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, loadedPicture.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, loadedShape.Id));
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadsTextBoxesAndDrawingShapes()
     {
         var workbook = new Workbook("XlsxDrawingLoadTest");
@@ -3206,6 +3257,66 @@ public partial class FileAdapterSmokeTests
         loadedShape.GradientFillEndColor.Should().Be(new CellColor(240, 245, 250));
         loadedShape.HasShadowEffect.Should().BeTrue();
         loadedShape.EffectPreset.Should().Be(DrawingShapeEffectPreset.Shadow);
+    }
+
+    [Fact]
+    public void XlsxAdapter_RoundTrip_DrawingObjectZOrder()
+    {
+        var workbook = new Workbook("XlsxDrawingObjectZOrderTest");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("x"));
+        var picture = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 2, 2),
+            Kind = PictureKind.Image,
+            Name = "Logo",
+            ImageBytes = MinimalPngBytes(),
+            ContentType = "image/png"
+        };
+        var textBox = new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 3, 2),
+            Name = "Notes",
+            Text = "Callout"
+        };
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 2),
+            Name = "Marker",
+            Kind = DrawingShapeKind.Ellipse
+        };
+        sheet.Pictures.Add(picture);
+        sheet.TextBoxes.Add(textBox);
+        sheet.DrawingShapes.Add(shape);
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id));
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id));
+
+        var ms = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var drawingXml = LoadPackageXml(archive.GetEntry("xl/drawings/drawing1.xml")!);
+            XNamespace xdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+            drawingXml.Root!.Elements()
+                .Select(anchor => anchor.Descendants(xdr + "cNvPr").First().Attribute("name")?.Value)
+                .Should()
+                .Equal("Notes", "Logo", "Marker");
+        }
+
+        ms.Position = 0;
+        var loadedSheet = adapter.Load(ms).GetSheetAt(0);
+
+        var loadedTextBox = loadedSheet.TextBoxes.Should().ContainSingle().Subject;
+        var loadedPicture = loadedSheet.Pictures.Should().ContainSingle().Subject;
+        var loadedShape = loadedSheet.DrawingShapes.Should().ContainSingle().Subject;
+        loadedSheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, loadedTextBox.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, loadedPicture.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, loadedShape.Id));
     }
 
     [Fact]
@@ -14811,29 +14922,76 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_Load_CustomStructuredTableStyle_AppliesWholeTableAndHeaderRowDxfColors()
+    public void XlsxAdapter_Load_CustomStructuredTableStyle_AppliesSupportedDxfSemantics()
     {
         var workbook = new Workbook("StructuredTableStyleSemanticTest");
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Orders"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new TextValue("Margin"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(2));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 4), new NumberValue(3));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(18));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 3), new NumberValue(4));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 4), new NumberValue(5));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("West"));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 2), new NumberValue(24));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 3), new NumberValue(6));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 4), new NumberValue(7));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 1), new TextValue("Total"));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 2), new NumberValue(54));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 3), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 5, 4), new NumberValue(15));
         sheet.StructuredTables.Add(new StructuredTableModel
         {
             Id = 1,
             Name = "SalesTable",
             DisplayName = "SalesTable",
-            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 4)),
             HasAutoFilter = true,
+            TotalsRowShown = true,
             HeaderRowCount = 1,
+            TotalsRowCount = 1,
             StyleName = "FreeXSemanticTableStyle",
+            ShowFirstColumn = true,
+            ShowLastColumn = true,
+            ShowRowStripes = true,
             Columns =
             {
                 new StructuredTableColumnModel(1, "Region"),
-                new StructuredTableColumnModel(2, "Sales")
+                new StructuredTableColumnModel(2, "Sales"),
+                new StructuredTableColumnModel(3, "Orders"),
+                new StructuredTableColumnModel(4, "Margin")
+            }
+        });
+
+        var columnSheet = workbook.AddSheet("ColumnStripes");
+        for (var row = 1u; row <= 5; row++)
+        {
+            for (var col = 1u; col <= 4; col++)
+                columnSheet.SetCell(new CellAddress(columnSheet.Id, row, col), new TextValue($"R{row}C{col}"));
+        }
+
+        columnSheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 2,
+            Name = "ColumnStripeTable",
+            DisplayName = "ColumnStripeTable",
+            Range = new GridRange(new CellAddress(columnSheet.Id, 1, 1), new CellAddress(columnSheet.Id, 5, 4)),
+            HasAutoFilter = true,
+            HeaderRowCount = 1,
+            StyleName = "FreeXSemanticTableStyle",
+            ShowColumnStripes = true,
+            Columns =
+            {
+                new StructuredTableColumnModel(1, "A"),
+                new StructuredTableColumnModel(2, "B"),
+                new StructuredTableColumnModel(3, "C"),
+                new StructuredTableColumnModel(4, "D")
             }
         });
 
@@ -14850,7 +15008,7 @@ public partial class FileAdapterSmokeTests
         var loadedStyle = loaded.StructuredTableStyles.Should()
             .ContainSingle(style => style.Name == "FreeXSemanticTableStyle")
             .Subject;
-        loadedStyle.NativeXml.Should().Contain("firstRowStripe");
+        loadedStyle.NativeXml.Should().Contain("unsupportedSemantics=\"kept\"");
         var wholeTableElement = loadedStyle.Elements.Single(element => element.Type == "wholeTable");
         wholeTableElement.DifferentialFormatId.Should().Be(0);
         wholeTableElement.Format.Should().NotBeNull();
@@ -14861,17 +15019,54 @@ public partial class FileAdapterSmokeTests
         headerRowElement.Format.Should().NotBeNull();
         headerRowElement.Format!.FillColor.Should().Be(new CellColor(31, 78, 121));
         headerRowElement.Format.FontColor.Should().Be(CellColor.White);
-        loadedStyle.Elements.Single(element => element.Type == "firstRowStripe").Format.Should().BeNull();
+        var firstRowStripeElement = loadedStyle.Elements.Single(element => element.Type == "firstRowStripe");
+        firstRowStripeElement.Size.Should().Be(2);
+        firstRowStripeElement.Format.Should().NotBeNull();
+        firstRowStripeElement.Format!.FillColor.Should().Be(new CellColor(255, 242, 204));
+        loadedStyle.Elements.Single(element => element.Type == "blankRow").Format.Should().BeNull();
 
-        var headerStyle = loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 1, 1))!.StyleId);
+        var headerStyle = loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 1, 2))!.StyleId);
         headerStyle.FillColor.Should().Be(new CellColor(31, 78, 121));
         headerStyle.FontColor.Should().Be(CellColor.White);
         headerStyle.Bold.Should().BeTrue();
 
-        var bodyStyle = loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 2, 1))!.StyleId);
-        bodyStyle.FillColor.Should().Be(new CellColor(226, 240, 217));
-        bodyStyle.FontColor.Should().Be(new CellColor(16, 32, 48));
-        bodyStyle.Bold.Should().BeFalse();
+        var firstHeaderStyle = loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 1, 1))!.StyleId);
+        firstHeaderStyle.FillColor.Should().Be(new CellColor(112, 48, 160));
+        firstHeaderStyle.FontColor.Should().Be(CellColor.White);
+
+        var rowStripeStyle = loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 2, 2))!.StyleId);
+        rowStripeStyle.FillColor.Should().Be(new CellColor(255, 242, 204));
+        rowStripeStyle.FontColor.Should().Be(new CellColor(16, 32, 48));
+        rowStripeStyle.Bold.Should().BeFalse();
+
+        loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 3, 2))!.StyleId)
+            .FillColor.Should().Be(new CellColor(255, 242, 204));
+        loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 4, 2))!.StyleId)
+            .FillColor.Should().Be(new CellColor(252, 228, 214));
+
+        var firstColumnStyle = loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 2, 1))!.StyleId);
+        firstColumnStyle.FontColor.Should().Be(new CellColor(192, 0, 0));
+        firstColumnStyle.Bold.Should().BeTrue();
+        var lastColumnStyle = loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 2, 4))!.StyleId);
+        lastColumnStyle.FontColor.Should().Be(new CellColor(0, 32, 96));
+        lastColumnStyle.Bold.Should().BeTrue();
+
+        var totalStyle = loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 5, 2))!.StyleId);
+        totalStyle.FillColor.Should().Be(new CellColor(169, 208, 142));
+        totalStyle.FontColor.Should().Be(new CellColor(0, 97, 0));
+        totalStyle.Bold.Should().BeTrue();
+        loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 5, 4))!.StyleId)
+            .FillColor.Should().Be(new CellColor(234, 220, 248));
+
+        var loadedColumnSheet = loaded.GetSheetAt(1);
+        loaded.GetStyle(loadedColumnSheet.GetCell(new CellAddress(loadedColumnSheet.Id, 2, 1))!.StyleId)
+            .FillColor.Should().Be(new CellColor(217, 234, 211));
+        loaded.GetStyle(loadedColumnSheet.GetCell(new CellAddress(loadedColumnSheet.Id, 2, 2))!.StyleId)
+            .FillColor.Should().Be(new CellColor(234, 220, 248));
+        loaded.GetStyle(loadedColumnSheet.GetCell(new CellAddress(loadedColumnSheet.Id, 2, 3))!.StyleId)
+            .FillColor.Should().Be(new CellColor(234, 220, 248));
+        loaded.GetStyle(loadedColumnSheet.GetCell(new CellAddress(loadedColumnSheet.Id, 2, 4))!.StyleId)
+            .FillColor.Should().Be(new CellColor(217, 234, 211));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -14879,7 +15074,7 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var stylesText = LoadPackageXml(archive.GetEntry("xl/styles.xml")!)
             .ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
-        stylesText.Should().Contain("semanticUnsupported=\"kept\"");
+        stylesText.Should().Contain("unsupportedSemantics=\"kept\"");
     }
 
     [Fact]
@@ -22816,30 +23011,20 @@ public partial class FileAdapterSmokeTests
             stylesXml.Root!.Elements(workbookNs + "dxfs").Remove();
             stylesXml.Root.Add(new XElement(
                 workbookNs + "dxfs",
-                new XAttribute("count", "2"),
-                new XElement(
-                    workbookNs + "dxf",
-                    new XElement(
-                        workbookNs + "font",
-                        new XElement(workbookNs + "color", new XAttribute("rgb", "FF102030"))),
-                    new XElement(
-                        workbookNs + "fill",
-                        new XElement(
-                            workbookNs + "patternFill",
-                            new XAttribute("patternType", "solid"),
-                            new XElement(workbookNs + "fgColor", new XAttribute("rgb", "FFE2F0D9"))))),
-                new XElement(
-                    workbookNs + "dxf",
-                    new XElement(
-                        workbookNs + "font",
-                        new XElement(workbookNs + "b"),
-                        new XElement(workbookNs + "color", new XAttribute("rgb", "FFFFFFFF"))),
-                    new XElement(
-                        workbookNs + "fill",
-                        new XElement(
-                            workbookNs + "patternFill",
-                            new XAttribute("patternType", "solid"),
-                            new XElement(workbookNs + "fgColor", new XAttribute("rgb", "FF1F4E79")))))));
+                new XAttribute("count", "13"),
+                CreateDxf(workbookNs, fillRgb: "FFE2F0D9", fontRgb: "FF102030"),
+                CreateDxf(workbookNs, fillRgb: "FF1F4E79", fontRgb: "FFFFFFFF", bold: true),
+                CreateDxf(workbookNs, fillRgb: "FFFFF2CC"),
+                CreateDxf(workbookNs, fillRgb: "FFFCE4D6"),
+                CreateDxf(workbookNs, fillRgb: "FFD9EAD3"),
+                CreateDxf(workbookNs, fillRgb: "FFEADCF8"),
+                CreateDxf(workbookNs, fillRgb: "FFA9D08E", fontRgb: "FF006100", bold: true),
+                CreateDxf(workbookNs, fontRgb: "FFC00000", bold: true),
+                CreateDxf(workbookNs, fontRgb: "FF002060", bold: true),
+                CreateDxf(workbookNs, fillRgb: "FF7030A0", fontRgb: "FFFFFFFF"),
+                CreateDxf(workbookNs, fillRgb: "FF00B0F0", fontRgb: "FFFFFFFF"),
+                CreateDxf(workbookNs, fillRgb: "FFC6E0B4"),
+                CreateDxf(workbookNs, fillRgb: "FFEADCF8")));
 
             var tableStyles = stylesXml.Root.Element(workbookNs + "tableStyles");
             if (tableStyles is null)
@@ -22857,7 +23042,7 @@ public partial class FileAdapterSmokeTests
                 new XAttribute("name", "FreeXSemanticTableStyle"),
                 new XAttribute("pivot", "0"),
                 new XAttribute("table", "1"),
-                new XAttribute("count", "3"),
+                new XAttribute("count", "14"),
                 new XElement(
                     workbookNs + "tableStyleElement",
                     new XAttribute("type", "wholeTable"),
@@ -22869,9 +23054,56 @@ public partial class FileAdapterSmokeTests
                 new XElement(
                     workbookNs + "tableStyleElement",
                     new XAttribute("type", "firstRowStripe"),
+                    new XAttribute("dxfId", "2"),
+                    new XAttribute("size", "2")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "secondRowStripe"),
+                    new XAttribute("dxfId", "3"),
+                    new XAttribute("size", "1")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "firstColumnStripe"),
+                    new XAttribute("dxfId", "4"),
+                    new XAttribute("size", "1")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "secondColumnStripe"),
+                    new XAttribute("dxfId", "5"),
+                    new XAttribute("size", "2")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "totalRow"),
+                    new XAttribute("dxfId", "6")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "firstColumn"),
+                    new XAttribute("dxfId", "7")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "lastColumn"),
+                    new XAttribute("dxfId", "8")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "firstHeaderCell"),
+                    new XAttribute("dxfId", "9")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "lastHeaderCell"),
+                    new XAttribute("dxfId", "10")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "firstTotalCell"),
+                    new XAttribute("dxfId", "11")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "lastTotalCell"),
+                    new XAttribute("dxfId", "12")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "blankRow"),
                     new XAttribute("dxfId", "0"),
-                    new XAttribute("size", "2"),
-                    new XAttribute("semanticUnsupported", "kept"))));
+                    new XAttribute("unsupportedSemantics", "kept"))));
             tableStyles.SetAttributeValue(
                 "count",
                 tableStyles.Elements(workbookNs + "tableStyle").Count().ToString(CultureInfo.InvariantCulture));
@@ -22880,6 +23112,36 @@ public partial class FileAdapterSmokeTests
         }
 
         packageStream.Position = 0;
+    }
+
+    private static XElement CreateDxf(
+        XNamespace workbookNs,
+        string? fillRgb = null,
+        string? fontRgb = null,
+        bool bold = false)
+    {
+        var children = new List<object>();
+        if (fontRgb is not null || bold)
+        {
+            children.Add(new XElement(
+                workbookNs + "font",
+                bold ? new XElement(workbookNs + "b") : null,
+                fontRgb is null
+                    ? null
+                    : new XElement(workbookNs + "color", new XAttribute("rgb", fontRgb))));
+        }
+
+        if (fillRgb is not null)
+        {
+            children.Add(new XElement(
+                workbookNs + "fill",
+                new XElement(
+                    workbookNs + "patternFill",
+                    new XAttribute("patternType", "solid"),
+                    new XElement(workbookNs + "fgColor", new XAttribute("rgb", fillRgb)))));
+        }
+
+        return new XElement(workbookNs + "dxf", children);
     }
 
     private static void AddStableDocumentProperties(MemoryStream packageStream)

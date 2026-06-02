@@ -370,7 +370,7 @@ public static class AccessibilityCheckerService
             return;
 
         var textColor = ResolveDefaultObjectTextColor(workbook.Theme);
-        var background = textBox.GetEffectiveFillColor(workbook.Theme, CellColor.White);
+        var background = textBox.GetEffectiveFillColor(workbook.Theme, ResolveDefaultObjectFillColor(workbook.Theme));
         var minimumContrastRatio = MinimumTextContrastRatio(DefaultObjectTextFontSize, bold: false);
         if (ContrastRatio(textColor, background) >= minimumContrastRatio)
             return;
@@ -387,6 +387,11 @@ public static class AccessibilityCheckerService
         theme.ObjectDefaults?.Text?.TextThemeColor?.Resolve(theme) ??
         theme.ObjectDefaults?.Text?.TextColor ??
         CellColor.Black;
+
+    private static CellColor ResolveDefaultObjectFillColor(WorkbookTheme theme) =>
+        theme.ObjectDefaults?.Shape?.FillThemeColor?.Resolve(theme) ??
+        theme.ObjectDefaults?.Shape?.FillColor ??
+        CellColor.White;
 
     private static ConditionalContrastRuleSet? GetConditionalContrastRules(
         Workbook workbook,

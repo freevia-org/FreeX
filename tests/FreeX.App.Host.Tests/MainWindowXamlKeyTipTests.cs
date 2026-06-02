@@ -868,7 +868,10 @@ public sealed class MainWindowXamlKeyTipTests
                 "ReviewDeleteCommentBtn_Click" or
                 "ReviewPrevCommentBtn_Click" or
                 "ReviewNextCommentBtn_Click" or
-                "ReviewShowCommentsBtn_Click")
+                "ReviewShowCommentsBtn_Click" or
+                "ReviewPrevNoteBtn_Click" or
+                "ReviewNextNoteBtn_Click" or
+                "ReviewShowNotesBtn_Click")
             .ToList();
 
         var tooltipTexts = commentButtons
@@ -923,7 +926,7 @@ public sealed class MainWindowXamlKeyTipTests
             .Single(element => element.Attribute("Click")?.Value == "SpellCheckBtn_Click");
 
         LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().Contain("known misspellings");
-        LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().Contain("text cells");
+        LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().Contain("threaded comments");
         LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().Contain("replace all");
         LocalizedAttribute(spellingButton, local + "RibbonTooltip.Description").Should().NotContain("proofing engine");
     }

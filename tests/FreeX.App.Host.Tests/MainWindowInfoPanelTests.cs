@@ -25,6 +25,7 @@ public sealed class MainWindowInfoPanelTests
             "InfoFormulaErrorSummary",
             "InfoFileSize",
             "InfoLastModified",
+            "InfoShareStatus",
             "InfoWorkbookProtectionSummary",
             "InfoActiveSheetProtectionSummary"
         ]);
@@ -45,6 +46,7 @@ public sealed class MainWindowInfoPanelTests
         source.Should().Contain("InfoStatisticsSummary.Text");
         source.Should().Contain("InfoAccessibilitySummary.Text");
         source.Should().Contain("InfoFormulaErrorSummary.Text");
+        source.Should().Contain("InfoShareStatus.Text");
         source.Should().Contain("InfoWorkbookProtectionSummary.Text");
         source.Should().Contain("InfoActiveSheetProtectionSummary.Text");
     }

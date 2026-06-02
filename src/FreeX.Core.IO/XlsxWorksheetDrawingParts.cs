@@ -18,7 +18,8 @@ internal sealed record XlsxPicturePackagePart(
     double CropLeft,
     double CropTop,
     double CropRight,
-    double CropBottom);
+    double CropBottom,
+    int DrawingOrderIndex);
 
 internal sealed record XlsxTextBoxPackagePart(
     string Text,
@@ -30,7 +31,8 @@ internal sealed record XlsxTextBoxPackagePart(
     CellColor? FillColor,
     CellColor? OutlineColor,
     WorkbookThemeColorReference? FillThemeColor,
-    WorkbookThemeColorReference? OutlineThemeColor);
+    WorkbookThemeColorReference? OutlineThemeColor,
+    int DrawingOrderIndex);
 
 internal sealed record XlsxShapePackagePart(
     DrawingShapeKind Kind,
@@ -46,7 +48,8 @@ internal sealed record XlsxShapePackagePart(
     WorkbookThemeColorReference? FillThemeColor,
     WorkbookThemeColorReference? OutlineThemeColor,
     bool HasShadowEffect,
-    DrawingShapeEffectPreset EffectPreset);
+    DrawingShapeEffectPreset EffectPreset,
+    int DrawingOrderIndex);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
     IReadOnlyList<XlsxChartPackagePart> ChartParts,
@@ -189,7 +192,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 ReadSourceRectangleRatio(sourceRectangle, "l"),
                 ReadSourceRectangleRatio(sourceRectangle, "t"),
                 ReadSourceRectangleRatio(sourceRectangle, "r"),
-                ReadSourceRectangleRatio(sourceRectangle, "b")));
+                ReadSourceRectangleRatio(sourceRectangle, "b"),
+                ReadNearestAnchorOrderIndex(pictureElement)));
         }
 
         return pictures;
@@ -260,7 +264,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                     fillThemeColor is null ? fillColor : null,
                     outlineThemeColor is null ? outlineColor : null,
                     fillThemeColor,
-                    outlineThemeColor));
+                    outlineThemeColor,
+                    ReadNearestAnchorOrderIndex(shapeElement)));
                 continue;
             }
 
@@ -283,7 +288,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                     fillThemeColor,
                     outlineThemeColor,
                     hasShadowEffect,
-                    effectPreset));
+                    effectPreset,
+                    ReadNearestAnchorOrderIndex(shapeElement)));
         }
 
         return (textBoxes, shapes);

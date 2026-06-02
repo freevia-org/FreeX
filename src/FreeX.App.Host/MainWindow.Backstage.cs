@@ -191,13 +191,19 @@ public partial class MainWindow
     private void UpdateInfoView()
     {
         var activeSheet = _workbook.GetSheet(_currentSheetId);
-        var plan = BackstageInfoPlanner.Build(_workbook, _currentFilePath, activeSheet);
+        var plan = BackstageInfoPlanner.Build(
+            _workbook,
+            _currentFilePath,
+            activeSheet,
+            hasSelection: SheetGrid.SelectedRange is not null);
         InfoWorkbookName.Text = plan.WorkbookName;
         InfoFilePath.Text = plan.FilePath;
         InfoSheetCount.Text = plan.SheetCount;
         InfoFormat.Text = plan.Format;
         InfoFileSize.Text = plan.FileSize;
         InfoLastModified.Text = plan.LastModified;
+        InfoShareStatus.Text = plan.SharingStatus;
+        InfoExportStatus.Text = plan.ExportStatus;
         InfoWorkbookProtectionSummary.Text = plan.Summary.WorkbookProtectionSummary;
         InfoActiveSheetProtectionSummary.Text = plan.Summary.ActiveSheetProtectionSummary;
         InfoStatisticsSummary.Text = plan.StatisticsSummary;
@@ -503,7 +509,12 @@ public partial class MainWindow
 
     private void SsAccountBtn_Click(object sender, RoutedEventArgs e)
     {
-        var plan = LocalAccountPlanner.Create(_options, _currentFilePath, _workbook.Name);
+        var plan = LocalAccountPlanner.Create(
+            _options,
+            _currentFilePath,
+            _workbook.Name,
+            workbook: _workbook,
+            hasSelection: SheetGrid.SelectedRange is not null);
         var message = DeferredCommandMessages.LocalAccountInfo(plan);
         ShowOwnedMessage(
             message.Body,

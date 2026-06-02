@@ -1547,6 +1547,195 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_ReadsUtf16SourceAndStylesheetInputs()
+    {
+        using var source = Utf16StreamFromString("""<?xml version="1.0" encoding="utf-16"?><rows><row name="Echo" /></rows>""");
+        using var stylesheet = Utf16StreamFromString("""
+            <?xml version="1.0" encoding="utf-16"?>
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Utf16Inputs">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Utf16Inputs");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Echo"));
+    }
+
+    [Fact]
+    public void LoadTransformed_LoadsStandaloneSpreadsheetMlOutput()
+    {
+        using var source = StreamFromString("<rows><row name=\"Echo\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:output method="xml" standalone="yes" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Standalone">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Standalone");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Echo"));
+    }
+
+    [Fact]
+    public void LoadTransformed_LoadsOmittedDeclarationSpreadsheetMlOutput()
+    {
+        using var source = StreamFromString("<rows><row name=\"Hotel\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:output method="xml" omit-xml-declaration="yes" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="NoDeclaration">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("NoDeclaration");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Hotel"));
+    }
+
+    [Fact]
+    public void LoadTransformed_LoadsCompactSpreadsheetMlOutput()
+    {
+        using var source = StreamFromString("<rows><row name=\"India\" amount=\"17.5\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:output method="xml" indent="no" />
+              <xsl:template match="/rows">
+                <ss:Workbook><ss:Worksheet ss:Name="Compact"><ss:Table><ss:Row><ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name" /></ss:Data></ss:Cell><ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@amount" /></ss:Data></ss:Cell></ss:Row></ss:Table></ss:Worksheet></ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Compact");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("India"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(17.5));
+    }
+
+    [Fact]
+    public void LoadTransformed_LoadsDefaultNamespaceSpreadsheetMlOutput()
+    {
+        using var source = StreamFromString("""
+            <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <Worksheet ss:Name="DefaultNamespace">
+                <Table>
+                  <Row>
+                    <Cell><Data ss:Type="String">Juliet</Data></Cell>
+                    <Cell><Data ss:Type="Number">21.25</Data></Cell>
+                  </Row>
+                </Table>
+              </Worksheet>
+            </Workbook>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="@*|node()">
+                <xsl:copy>
+                  <xsl:apply-templates select="@*|node()" />
+                </xsl:copy>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("DefaultNamespace");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Juliet"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(21.25));
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromWhitespaceRules()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row>
+                <label>   India   </label>
+                <note>  Juliet  </note>
+              </row>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:output method="xml" omit-xml-declaration="yes" />
+              <xsl:strip-space elements="*" />
+              <xsl:preserve-space elements="note" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Whitespace">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="normalize-space(row/label)" /></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/note" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Whitespace");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("India"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new TextValue("  Juliet  "));
+    }
+
+    [Fact]
     public void LoadTransformed_AppliesXsltParametersToGeneratedSpreadsheetMl()
     {
         using var source = StreamFromString("<rows><row amount=\"42.5\" /></rows>");
@@ -4256,6 +4445,9 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
     private static MemoryStream StreamFromString(string value) =>
         new(Encoding.UTF8.GetBytes(value));
+
+    private static MemoryStream Utf16StreamFromString(string value) =>
+        new(Encoding.Unicode.GetPreamble().Concat(Encoding.Unicode.GetBytes(value)).ToArray());
 
     private static Stream NonSeekableStreamFromString(string value) =>
         new NonSeekableReadStream(StreamFromString(value));

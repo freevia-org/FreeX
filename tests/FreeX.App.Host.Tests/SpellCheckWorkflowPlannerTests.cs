@@ -81,16 +81,17 @@ public sealed class SpellCheckWorkflowPlannerTests
     {
         var sheet = SheetId.New();
         var ignoredAddress = new CellAddress(sheet, 2, 1);
+        var ignoredIssue = Issue(ignoredAddress, "teh", "teh value");
         var kept = Issue(new CellAddress(sheet, 3, 1), "teh", "teh item");
 
         var filtered = SpellCheckWorkflowPlanner.FilterIssues(
             [
                 Issue(new CellAddress(sheet, 1, 1), "adn", "adn value"),
-                Issue(ignoredAddress, "teh", "teh value"),
+                ignoredIssue,
                 kept
             ],
             new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "adn" },
-            new HashSet<(CellAddress Address, string Word)> { (ignoredAddress, "teh") });
+            new HashSet<SpellingIssueKey> { SpellCheckWorkflowPlanner.CreateIssueKey(ignoredIssue) });
 
         filtered.Should().ContainSingle().Which.Should().Be(kept);
     }
@@ -107,9 +108,25 @@ public sealed class SpellCheckWorkflowPlannerTests
                 kept
             ],
             new HashSet<string> { "teh" },
-            new HashSet<(CellAddress Address, string Word)>());
+            new HashSet<SpellingIssueKey>());
 
         filtered.Should().ContainSingle().Which.Should().Be(kept);
+    }
+
+    [Fact]
+    public void FilterIssues_IgnoreOnceKeepsOtherSourcesAtSameAddress()
+    {
+        var sheet = SheetId.New();
+        var address = new CellAddress(sheet, 1, 1);
+        var cellIssue = Issue(address, "teh", "teh cell", SpellingIssueSource.CellText, startIndex: 0);
+        var noteIssue = Issue(address, "teh", "teh note", SpellingIssueSource.Note, startIndex: 0);
+
+        var filtered = SpellCheckWorkflowPlanner.FilterIssues(
+            [cellIssue, noteIssue],
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+            new HashSet<SpellingIssueKey> { SpellCheckWorkflowPlanner.CreateIssueKey(cellIssue) });
+
+        filtered.Should().ContainSingle().Which.Should().Be(noteIssue);
     }
 
     [Fact]
@@ -139,7 +156,7 @@ public sealed class SpellCheckWorkflowPlannerTests
             .ToArray();
         var ignoredIssues = issues
             .Where((_, index) => index % 7 == 0)
-            .Select(issue => (issue.Address, issue.Word))
+            .Select(SpellCheckWorkflowPlanner.CreateIssueKey)
             .ToHashSet();
 
         var filtered = SpellCheckWorkflowPlanner.FilterIssues(
@@ -151,7 +168,7 @@ public sealed class SpellCheckWorkflowPlannerTests
         foreach (var issue in filtered)
         {
             issue.Word.Equals("adn", StringComparison.OrdinalIgnoreCase).Should().BeFalse();
-            ignoredIssues.Contains((issue.Address, issue.Word)).Should().BeFalse();
+            ignoredIssues.Contains(SpellCheckWorkflowPlanner.CreateIssueKey(issue)).Should().BeFalse();
         }
     }
 
@@ -224,6 +241,69 @@ public sealed class SpellCheckWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildReplaceAllCommand_UpdatesCellsNotesAndThreadedCommentText()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("teh cell and teh total"));
+        sheet.Comments[a1] = "teh note and teh note";
+        sheet.ThreadedComments[b1] = new ThreadedComment("teh root")
+        {
+            Replies =
+            [
+                new CommentReply("teh reply and teh reply"),
+                new CommentReply("adn other reply")
+            ]
+        };
+        var issues = SpellCheckService.FindIssues(workbook, sheet.Id);
+        var context = new SimpleCtx(workbook);
+
+        var command = SpellCheckWorkflowPlanner.BuildReplaceAllCommand(issues, "teh", "the");
+        var outcome = command!.Apply(context);
+
+        outcome.Success.Should().BeTrue();
+        sheet.GetCell(a1)!.Value.Should().Be(new TextValue("the cell and the total"));
+        sheet.Comments[a1].Should().Be("the note and the note");
+        sheet.ThreadedComments[b1].Text.Should().Be("the root");
+        sheet.ThreadedComments[b1].Replies[0].Text.Should().Be("the reply and the reply");
+        sheet.ThreadedComments[b1].Replies[1].Text.Should().Be("adn other reply");
+
+        command.Revert(context);
+
+        sheet.GetCell(a1)!.Value.Should().Be(new TextValue("teh cell and teh total"));
+        sheet.Comments[a1].Should().Be("teh note and teh note");
+        sheet.ThreadedComments[b1].Text.Should().Be("teh root");
+        sheet.ThreadedComments[b1].Replies[0].Text.Should().Be("teh reply and teh reply");
+        sheet.ThreadedComments[b1].Replies[1].Text.Should().Be("adn other reply");
+    }
+
+    [Fact]
+    public void BuildReplacementCommand_UpdatesThreadedCommentReplyText()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.ThreadedComments[address] = new ThreadedComment("clean root")
+        {
+            Replies = [new CommentReply("Fix teh reply")]
+        };
+        var issue = SpellCheckService.FindIssues(workbook, sheet.Id).Single();
+        var context = new SimpleCtx(workbook);
+
+        var command = SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, "the");
+        var outcome = command.Apply(context);
+
+        outcome.Success.Should().BeTrue();
+        sheet.ThreadedComments[address].Replies[0].Text.Should().Be("Fix the reply");
+
+        command.Revert(context);
+
+        sheet.ThreadedComments[address].Replies[0].Text.Should().Be("Fix teh reply");
+    }
+
+    [Fact]
     public void BuildReplaceAllEdits_UsesSinglePassAddressDeduplication()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find(
@@ -233,10 +313,31 @@ public sealed class SpellCheckWorkflowPlannerTests
 
         source.Should().Contain("var filtered = new List<SpellingIssue>();");
         source.Should().Contain("var editedAddresses = new HashSet<CellAddress>();");
+        source.Should().Contain("var editedTargets = new HashSet<SpellingIssueTargetKey>();");
         source.Should().NotContain(".Where(");
         source.Should().NotContain(".GroupBy(");
     }
 
-    private static SpellingIssue Issue(CellAddress address, string word, string cellText) =>
-        new(address, word, word.Equals("adn", StringComparison.OrdinalIgnoreCase) ? "and" : "the", cellText);
+    private static SpellingIssue Issue(
+        CellAddress address,
+        string word,
+        string cellText,
+        SpellingIssueSource source = SpellingIssueSource.CellText,
+        int replyIndex = -1,
+        int startIndex = -1) =>
+        new(
+            address,
+            word,
+            word.Equals("adn", StringComparison.OrdinalIgnoreCase) ? "and" : "the",
+            cellText,
+            startIndex,
+            startIndex >= 0 ? word.Length : 0,
+            source,
+            replyIndex);
+
+    private sealed class SimpleCtx(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
+    }
 }

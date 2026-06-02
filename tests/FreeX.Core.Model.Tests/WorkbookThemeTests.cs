@@ -45,6 +45,60 @@ public sealed class WorkbookThemeTests
     }
 
     [Fact]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_InterpretsOuterShadowEffectDefaults()
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml(NativeFormatSchemeWithOuterShadow);
+
+        theme.NativeFormatSchemeXml.Should().Contain("outerShdw");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasShadow.Should().BeTrue();
+        theme.EffectDefaults.ShadowOpacity.Should().BeApproximately(0.38, 0.0001);
+        theme.EffectDefaults.ShadowOffsetX.Should().Be(0);
+        theme.EffectDefaults.ShadowOffsetY.Should().Be(2);
+    }
+
+    [Fact]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_InterpretsPresetShadowEffectDefaults()
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml(NativeFormatSchemeWithPresetShadow);
+
+        theme.NativeFormatSchemeXml.Should().Contain("prstShdw");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasShadow.Should().BeTrue();
+        theme.EffectDefaults.ShadowOpacity.Should().BeApproximately(0.5, 0.0001);
+        theme.EffectDefaults.ShadowOffsetX.Should().Be(4);
+        theme.EffectDefaults.ShadowOffsetY.Should().Be(0);
+    }
+
+    [Fact]
+    public void WorkbookTheme_WithEffects_RenamesNativeFormatSchemeAndKeepsEffectDefaults()
+    {
+        var theme = WorkbookTheme.Office
+            .WithNativeFormatSchemeXml(NativeFormatSchemeWithOuterShadow)
+            .WithEffects("Renamed Effects");
+
+        theme.NativeFormatSchemeXml.Should().Contain("name=\"Renamed Effects\"");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.ShadowOpacity.Should().BeApproximately(0.38, 0.0001);
+        theme.EffectDefaults.ShadowOffsetY.Should().Be(2);
+    }
+
+    [Fact]
+    public void WorkbookTheme_WithNativeFormatSchemeXml_IgnoresWrongNamespaceEffectDefaults()
+    {
+        var theme = WorkbookTheme.Office.WithNativeFormatSchemeXml("""
+            <fmtScheme xmlns="urn:wrong-theme-namespace" name="Wrong Effects">
+              <effectStyleLst>
+                <effectStyle><effectLst><outerShdw dist="19050"/></effectLst></effectStyle>
+              </effectStyleLst>
+            </fmtScheme>
+            """);
+
+        theme.NativeFormatSchemeXml.Should().Contain("Wrong Effects");
+        theme.EffectDefaults.Should().BeNull();
+    }
+
+    [Fact]
     public void WorkbookTheme_WithSupplementalMetadata_CapturesAlternateSchemesAndObjectDefaults()
     {
         var alternate = new WorkbookThemeAlternateColorScheme(
@@ -116,4 +170,38 @@ public sealed class WorkbookThemeTests
         style.ResolveFillColor(theme).Should().Be(new CellColor(60, 90, 120));
         style.ResolveFillPatternColor(theme).Should().Be(new CellColor(94, 124, 154));
     }
+
+    private const string NativeFormatSchemeWithOuterShadow = """
+        <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Imported Effects">
+          <a:fillStyleLst/>
+          <a:lnStyleLst/>
+          <a:effectStyleLst>
+            <a:effectStyle>
+              <a:effectLst>
+                <a:outerShdw blurRad="40000" dist="19050" dir="5400000" rotWithShape="0">
+                  <a:srgbClr val="000000"><a:alpha val="38000"/></a:srgbClr>
+                </a:outerShdw>
+              </a:effectLst>
+            </a:effectStyle>
+          </a:effectStyleLst>
+          <a:bgFillStyleLst/>
+        </a:fmtScheme>
+        """;
+
+    private const string NativeFormatSchemeWithPresetShadow = """
+        <a:fmtScheme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Imported Effects">
+          <a:fillStyleLst/>
+          <a:lnStyleLst/>
+          <a:effectStyleLst>
+            <a:effectStyle>
+              <a:effectLst>
+                <a:prstShdw prst="shdw1" dist="38100" dir="0">
+                  <a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr>
+                </a:prstShdw>
+              </a:effectLst>
+            </a:effectStyle>
+          </a:effectStyleLst>
+          <a:bgFillStyleLst/>
+        </a:fmtScheme>
+        """;
 }

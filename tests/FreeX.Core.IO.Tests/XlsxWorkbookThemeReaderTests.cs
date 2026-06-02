@@ -82,6 +82,36 @@ public sealed class XlsxWorkbookThemeReaderTests
     }
 
     [Fact]
+    public void Load_ReadsFormatSchemeOuterShadowEffectDefaults()
+    {
+        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithDeepSchemesXml));
+
+        var theme = XlsxWorkbookThemeReader.Load(package);
+
+        theme.NativeFormatSchemeXml.Should().Contain("outerShdw");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasShadow.Should().BeTrue();
+        theme.EffectDefaults.ShadowOpacity.Should().BeApproximately(0.38, 0.0001);
+        theme.EffectDefaults.ShadowOffsetX.Should().Be(0);
+        theme.EffectDefaults.ShadowOffsetY.Should().Be(2);
+    }
+
+    [Fact]
+    public void Load_ReadsFormatSchemePresetShadowEffectDefaults()
+    {
+        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithPresetShadowXml));
+
+        var theme = XlsxWorkbookThemeReader.Load(package);
+
+        theme.NativeFormatSchemeXml.Should().Contain("prstShdw");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasShadow.Should().BeTrue();
+        theme.EffectDefaults.ShadowOpacity.Should().BeApproximately(0.5, 0.0001);
+        theme.EffectDefaults.ShadowOffsetX.Should().Be(4);
+        theme.EffectDefaults.ShadowOffsetY.Should().Be(0);
+    }
+
+    [Fact]
     public void LoadSave_PreservesThemeSupplementElementsBesideThemeElements()
     {
         using var package = CreatePackage(("xl/theme/theme1.xml", """
@@ -272,6 +302,9 @@ public sealed class XlsxWorkbookThemeReaderTests
         loaded.Theme.NativeColorSchemeXml.Should().Contain("lumMod");
         loaded.Theme.NativeFontSchemeXml.Should().Contain("typeface=\"Major East Asia\"");
         loaded.Theme.NativeFormatSchemeXml.Should().Contain("outerShdw");
+        loaded.Theme.EffectDefaults.Should().NotBeNull();
+        loaded.Theme.EffectDefaults!.ShadowOpacity.Should().BeApproximately(0.38, 0.0001);
+        loaded.Theme.EffectDefaults.ShadowOffsetY.Should().Be(2);
         loaded.Theme.NativeThemeSupplementXml.Should().Contain("extraClrSchemeLst");
         loaded.Theme.NativeThemeSupplementXml.Should().Contain("compatExt");
         loaded.Theme.AlternateColorSchemes.Should().ContainSingle()
@@ -339,6 +372,8 @@ public sealed class XlsxWorkbookThemeReaderTests
             .WithEffects("Renamed Effects");
 
         theme.NativeFormatSchemeXml.Should().Contain("outerShdw");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.ShadowOffsetY.Should().Be(2);
 
         using var target = CreatePackage();
         XlsxWorkbookThemeWriter.Save(target, theme);
@@ -495,6 +530,25 @@ public sealed class XlsxWorkbookThemeReaderTests
               <a:compatExt spid="1"/>
             </a:ext>
           </a:extLst>
+        </a:theme>
+        """;
+
+    private const string NativeThemeWithPresetShadowXml = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Preset Shadow Theme">
+          <a:themeElements>
+            <a:fmtScheme name="Preset Effects">
+              <a:effectStyleLst>
+                <a:effectStyle>
+                  <a:effectLst>
+                    <a:prstShdw prst="shdw1" dist="38100" dir="0">
+                      <a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr>
+                    </a:prstShdw>
+                  </a:effectLst>
+                </a:effectStyle>
+              </a:effectStyleLst>
+            </a:fmtScheme>
+          </a:themeElements>
         </a:theme>
         """;
 }

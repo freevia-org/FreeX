@@ -160,6 +160,31 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarEdit_WhileInlineEditorVisible_SyncsInlineEditorAndPreservesFocus()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.ShowInlineEditor(1, 1);
+            harness.SetInlineEditorText("inline draft");
+            harness.FocusFormulaBar();
+
+            harness.SetFormulaBarText("formula bar draft");
+            harness.SetFormulaBarCaretIndex("formula".Length);
+
+            harness.FormulaBarText.Should().Be("formula bar draft");
+            harness.FormulaBarCaretIndex.Should().Be("formula".Length);
+            harness.InlineEditorVisible.Should().BeTrue();
+            harness.InlineEditorText.Should().Be("formula bar draft");
+            harness.FormulaBarFocused.Should().BeTrue();
+            harness.CellText(1, 1).Should().Be("original");
+        });
+    }
+
+    [Fact]
     public void EditInFormulaBar_WithFormulaCell_ShowsEditableFormulaAndPlacesCaretAtEnd()
     {
         StaTestRunner.Run(() =>
@@ -444,6 +469,56 @@ public sealed class MainWindowFormulaBarSyncTests
                 new CellAddress(harness.CurrentSheetId, 2, 1)));
             harness.CellAddressBoxText.Should().Be("A2");
             harness.InlineEditorFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void FormulaReferenceEntry_AfterFormulaBarSelection_CommitsOnlyOriginalEditCell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=");
+            harness.SetFormulaBarCaretIndex("=".Length);
+
+            harness.PressFormulaBarKey(Key.Down).Should().BeTrue();
+            harness.CommitEditAcrossSelection(fillFormulaEditCellOnly: true).Should().BeTrue();
+
+            harness.CellFormula(1, 1).Should().Be("A2");
+            harness.CellText(1, 1).Should().BeNull();
+            harness.CellFormula(2, 1).Should().BeNull();
+            harness.FormulaBarText.Should().Be("=A2");
+        });
+    }
+
+    [Fact]
+    public void FormulaBarEscape_AfterFormulaReferenceSelection_RestoresOriginalEditCell()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=");
+            harness.SetFormulaBarCaretIndex("=".Length);
+
+            harness.PressFormulaBarKey(Key.Down).Should().BeTrue();
+            harness.PressFormulaBarKey(Key.Escape).Should().BeTrue();
+
+            harness.FormulaBarText.Should().Be("original");
+            harness.CellText(1, 1).Should().Be("original");
+            harness.CellFormula(1, 1).Should().BeNull();
+            harness.CellText(2, 1).Should().BeNull();
+            harness.CellFormula(2, 1).Should().BeNull();
+            harness.SheetGridFocused.Should().BeTrue();
         });
     }
 
@@ -1217,6 +1292,7 @@ public sealed class MainWindowFormulaBarSyncTests
         private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
         private readonly FieldInfo _formulaEditCellField;
+        private readonly FieldInfo _formulaRangeEntryModeField;
         private readonly FieldInfo _inlineEditorField;
         private readonly MethodInfo _commitEdit;
         private readonly MethodInfo _commitEditAcrossSelection;
@@ -1243,6 +1319,9 @@ public sealed class MainWindowFormulaBarSyncTests
             _formulaEditCellField = typeof(MainWindow)
                 .GetField("_formulaEditCell", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_formulaEditCell");
+            _formulaRangeEntryModeField = typeof(MainWindow)
+                .GetField("_formulaRangeEntryMode", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_formulaRangeEntryMode");
             _inlineEditorField = typeof(MainWindow)
                 .GetField("_inlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_inlineEditor");
@@ -1436,6 +1515,7 @@ public sealed class MainWindowFormulaBarSyncTests
         public void SetFormulaBarText(string text)
         {
             ((TextBox)_window.FindName("FormulaBar")).Text = text;
+            UpdateFormulaRangeEntryMode(text);
             PumpDispatcher();
         }
 
@@ -1488,7 +1568,14 @@ public sealed class MainWindowFormulaBarSyncTests
         {
             var inlineEditor = InlineEditor ?? throw new InvalidOperationException("Inline editor is not visible.");
             inlineEditor.Text = text;
+            UpdateFormulaRangeEntryMode(text);
             PumpDispatcher();
+        }
+
+        private void UpdateFormulaRangeEntryMode(string text)
+        {
+            if (FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(text))
+                _formulaRangeEntryModeField.SetValue(_window, true);
         }
 
         public void FocusFormulaBar()

@@ -291,7 +291,7 @@ public partial class MainWindow
                 ReviewDeleteCommentBtn_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.ShowNotes:
-                ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());
+                ReviewShowNotesBtn_Click(this, new RoutedEventArgs());
                 break;
             case WorksheetContextMenuAction.OpenHyperlink:
                 TryOpenHyperlink(address);

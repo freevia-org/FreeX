@@ -64,7 +64,7 @@ public sealed class PivotCalculatedFieldDialog : Window
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left
         };
         insertFieldButton.Click += (_, _) => InsertSelectedField();
-        _fieldList.MouseDoubleClick += (_, _) => InsertSelectedField();
+        _fieldList.MouseDoubleClick += FieldList_MouseDoubleClick;
         fieldsPanel.Children.Add(insertFieldButton);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotCalculated_FieldsGroup"), fieldsPanel));
 
@@ -114,12 +114,19 @@ public sealed class PivotCalculatedFieldDialog : Window
         Keyboard.Focus(_nameBox);
     }
 
-    private void InsertSelectedField()
+    private void FieldList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (InsertSelectedField())
+            e.Handled = true;
+    }
+
+    private bool InsertSelectedField()
     {
         if (_fieldList.SelectedItem is not string fieldName)
-            return;
+            return false;
 
         InsertFormulaText(fieldName);
+        return true;
     }
 
     private void InsertFormulaText(string reference)

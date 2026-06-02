@@ -953,6 +953,36 @@ public sealed class PivotTableRefreshServiceTests
     }
 
     [Fact]
+    public void Refresh_SelectedItemsIgnoreBlankAndAllSentinels()
+    {
+        var workbook = new Workbook("PivotRefreshTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "C5"),
+            TargetRange = Range(sheet, "E2", "I7")
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1, SelectedItems: ["", "(All)", "q2"]));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Text(sheet, "F2").Should().Be("Q2");
+        Text(sheet, "G2").Should().Be("Grand Total");
+        Number(sheet, "F3").Should().Be(15);
+        Number(sheet, "G3").Should().Be(15);
+        Number(sheet, "F4").Should().Be(25);
+        Number(sheet, "G4").Should().Be(25);
+        Number(sheet, "F5").Should().Be(40);
+        Number(sheet, "G5").Should().Be(40);
+        sheet.GetCell(Addr(sheet, "H2")).Should().BeNull();
+    }
+
+    [Fact]
     public void Refresh_MatrixAppliesValueFiltersToColumnFields()
     {
         var workbook = new Workbook("PivotRefreshTest");
@@ -1157,6 +1187,7 @@ public sealed class PivotTableRefreshServiceTests
             $"PERF PIVOT_REFRESH_COLUMN_VALUE_FILTER_SORT rows={rowCount} column_items={columnItemCount} iterations={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={meanMs:F2} max_ms={timings.Max():F2} allocated_bytes={allocatedBytes}");
 
         Text(sheet, "E2").Should().NotBeEmpty();
+        allocatedBytes.Should().BeLessThan(18_000_000);
         total.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
     }
 

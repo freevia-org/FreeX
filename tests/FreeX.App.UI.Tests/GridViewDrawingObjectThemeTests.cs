@@ -188,6 +188,12 @@ public sealed class GridViewDrawingObjectThemeTests
         var renderDrawingShapes = drawingObjects[
             drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)..
             drawingObjects.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)];
+        var renderNativeControls = drawingObjects[
+            drawingObjects.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)];
+        var renderPlaceholders = drawingObjects[
+            drawingObjects.IndexOf("private void RenderObjectPlaceholders", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("public static string CreateObjectPlaceholderLabel", StringComparison.Ordinal)];
         var renderPictures = pictures[
             pictures.IndexOf("private void RenderPictures", StringComparison.Ordinal)..
             pictures.IndexOf("private void DrawPictureSelectionAdorner", StringComparison.Ordinal)];
@@ -197,6 +203,11 @@ public sealed class GridViewDrawingObjectThemeTests
         plannerMethod.Should().Contain("IReadOnlyDictionary<uint, RowMetric> rows");
         plannerMethod.Should().Contain("rows.TryGetValue(anchor.Row");
         plannerMethod.Should().Contain("columns.TryGetValue(anchor.Col");
+        planner.Should().Contain("IReadOnlyDictionary<uint, RowMetric> rows");
+        planner.Should().Contain("IReadOnlyDictionary<uint, ColMetric> columns");
+        planner.Should().Contain("DrawingAnchorRange anchor");
+        planner.Should().Contain("rows.TryGetValue(fromRowIndex");
+        planner.Should().Contain("columns.TryGetValue(fromColumnIndex");
         plannerMethod.Should().NotContain("FirstOrDefault");
         anchorHelpers.Should().Contain("if (metric.Row > row)");
         anchorHelpers.Should().Contain("if (metric.Col > column)");
@@ -207,6 +218,12 @@ public sealed class GridViewDrawingObjectThemeTests
         renderDrawingShapes.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
         renderDrawingShapes.Should().Contain("metricLookups,");
         renderDrawingShapes.Should().NotContain("FirstOrDefault");
+        renderNativeControls.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        renderNativeControls.Should().Contain("TryCreateDrawingAnchorRect(metricLookups, anchor");
+        renderNativeControls.Should().NotContain("TryCreateDrawingAnchorRect(Viewport, anchor");
+        renderPlaceholders.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        renderPlaceholders.Should().Contain("TryCreateDrawingAnchorRect(metricLookups, anchor");
+        renderPlaceholders.Should().NotContain("TryCreateDrawingAnchorRect(Viewport, anchor");
         renderPictures.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
         renderPictures.Should().Contain("metricLookups,");
         renderPictures.Should().NotContain("FirstOrDefault");
@@ -259,6 +276,9 @@ public sealed class GridViewDrawingObjectThemeTests
         var renderDrawingShapes = drawingObjects[
             drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)..
             drawingObjects.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)];
+        var renderNativeControls = drawingObjects[
+            drawingObjects.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)];
         var renderPictures = pictures[
             pictures.IndexOf("private void RenderPictures", StringComparison.Ordinal)..
             pictures.IndexOf("private void DrawPictureSelectionAdorner", StringComparison.Ordinal)];
@@ -288,6 +308,11 @@ public sealed class GridViewDrawingObjectThemeTests
         renderDrawingShapes.IndexOf("NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom)", StringComparison.Ordinal)
             .Should().BeLessThan(renderDrawingShapes.IndexOf("ResolveDrawingShapeColors(shape, WorkbookTheme)", StringComparison.Ordinal));
 
+        renderNativeControls.Should().Contain("GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom)");
+        renderNativeControls.Should().Contain("CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn)");
+        renderNativeControls.IndexOf("CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn)", StringComparison.Ordinal)
+            .Should().BeLessThan(renderNativeControls.IndexOf("TryCreateDrawingAnchorRect(metricLookups, anchor", StringComparison.Ordinal));
+
         renderPictures.Should().Contain("GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom)");
         renderPictures.Should().Contain("CanAnchoredObjectReachDrawingViewport(picture.Anchor");
         renderPictures.Should().Contain("NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom)");
@@ -296,6 +321,9 @@ public sealed class GridViewDrawingObjectThemeTests
             .Should().BeLessThan(renderPictures.IndexOf("TryLoadPictureImage(picture, out var image)", StringComparison.Ordinal));
 
         renderPlaceholders.Should().Contain("CanAnchoredObjectReachDrawingViewport(shape.Anchor");
+        renderPlaceholders.Should().Contain("CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn)");
+        renderPlaceholders.IndexOf("CanAnchoredObjectReachDrawingViewport(anchor, lastRenderableRow, lastRenderableColumn)", StringComparison.Ordinal)
+            .Should().BeLessThan(renderPlaceholders.IndexOf("TryCreateDrawingAnchorRect(metricLookups, anchor", StringComparison.Ordinal));
         renderPlaceholders.Should().Contain("NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom)");
         renderPlaceholders.Should().Contain("IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom)");
         renderPlaceholders.Should().Contain("IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom)");
@@ -704,9 +732,9 @@ public sealed class GridViewDrawingObjectThemeTests
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
 
-        source.Should().Contain("ContainsRotatedInclusive(r, pos, t.RotationDegrees)");
-        source.Should().Contain("ContainsRotatedInclusive(r, pos, p.RotationDegrees)");
-        source.Should().Contain("ContainsRotatedInclusive(r, pos, s.RotationDegrees)");
+        source.Should().Contain("ContainsRotatedInclusive(rect, pos, textBox.RotationDegrees)");
+        source.Should().Contain("ContainsRotatedInclusive(rect, pos, picture.RotationDegrees)");
+        source.Should().Contain("ContainsRotatedInclusive(rect, pos, shape.RotationDegrees)");
         source.Should().Contain("var radians = -rotationDegrees * Math.PI / 180.0;");
     }
 

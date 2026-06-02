@@ -290,6 +290,35 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void CalculateSplitPaneCellLayouts_NormalizesOutOfOrderOverflowOccupiedCells()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0)],
+            [new ColMetric(10, 64, 0)],
+            SplitPanes: new SplitPaneState(
+                2,
+                2,
+                [new RowMetric(1, 18, 0)],
+                [
+                    new ColMetric(1, 40, 0),
+                    new ColMetric(2, 40, 40),
+                    new ColMetric(3, 40, 80),
+                    new ColMetric(4, 40, 120)
+                ],
+                [
+                    Cell(1, 4, "later"),
+                    Cell(1, 1, "overflow"),
+                    Cell(1, 3, "stop")
+                ]));
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(viewport);
+
+        layouts.Single(layout => layout.Cell.Col == 1).TextClipRect
+            .Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight, 80, 18));
+    }
+
+    [Fact]
     public void CalculateSplitPaneCellLayouts_TreatsEditingCellAsOverflowOccupied()
     {
         var sheetId = SheetId.New();
@@ -1303,6 +1332,8 @@ public sealed class GridViewSplitPaneLayoutTests
         visitedCount.Should().Be(layoutCount);
         materializedAllocatedBytes.Should().BeGreaterThan(0);
         visitedAllocatedBytes.Should().BeLessThan(materializedAllocatedBytes);
+        materializedAllocatedBytes.Should().BeLessThan(80_000_000);
+        visitedAllocatedBytes.Should().BeLessThan(8_000_000);
     }
 
     [Fact]

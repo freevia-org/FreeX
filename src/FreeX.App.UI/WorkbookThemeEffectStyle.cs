@@ -13,6 +13,14 @@ public readonly record struct WorkbookThemeEffectStyle(
     {
         ArgumentNullException.ThrowIfNull(theme);
 
+        if (theme.EffectDefaults is { HasShadow: true } effectDefaults)
+        {
+            return new WorkbookThemeEffectStyle(
+                effectDefaults.ShadowOpacity,
+                effectDefaults.ShadowOffsetX,
+                effectDefaults.ShadowOffsetY);
+        }
+
         return theme.EffectsName.Trim().ToUpperInvariant() switch
         {
             "SUBTLE" => new WorkbookThemeEffectStyle(0.18, 2, 2),

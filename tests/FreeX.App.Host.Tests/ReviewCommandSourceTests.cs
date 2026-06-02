@@ -33,9 +33,9 @@ public sealed class ReviewCommandSourceTests
     [InlineData("New Note", "New", "O", "ReviewNewCommentBtn_Click")]
     [InlineData("Edit Note", "Edit", "E", "ReviewNewCommentBtn_Click")]
     [InlineData("Delete Note", "Delete", "D", "ReviewDeleteCommentBtn_Click")]
-    [InlineData("Previous Note", "Prev", "PN", "ReviewPrevCommentBtn_Click")]
-    [InlineData("Next Note", "Next", "N", "ReviewNextCommentBtn_Click")]
-    [InlineData("Show Notes", "Show Notes", "H", "ReviewShowCommentsBtn_Click")]
+    [InlineData("Previous Note", "Prev", "PN", "ReviewPrevNoteBtn_Click")]
+    [InlineData("Next Note", "Next", "N", "ReviewNextNoteBtn_Click")]
+    [InlineData("Show Notes", "Show Notes", "H", "ReviewShowNotesBtn_Click")]
     public void ReviewCommentAndNoteButtons_ExposeExpectedTitlesKeyTipsAndHandlers(
         string title,
         string content,
@@ -75,7 +75,8 @@ public sealed class ReviewCommandSourceTests
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("SpellCheckWorkflowPlanner.FilterIssues(");
-        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllEdits(");
+        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(");
+        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementCommand(");
         source.Should().Contain("WorkbookStatisticsService.GetStatistics(_workbook)");
         source.Should().Contain("AccessibilityCheckerService.FindIssues(_workbook)");
         source.Should().Contain("AltTextTargetResolver.Resolve(sheet, SheetGrid.SelectedRange?.Start, preferredKind)");
@@ -87,8 +88,12 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("case ThreadedCommentDialogAction.DeleteReply");
         source.Should().Contain("new DeleteThreadedCommentReplyCommand(");
         normalizedSource.Should().Contain("replyIndex,\n                            result.IsResolved");
-        source.Should().Contain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
-        source.Should().Contain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
+        source.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(sheet.ThreadedComments)");
+        source.Should().Contain("CommentNavigationPlanner.FormatThreadedCommentList(sheet.ThreadedComments)");
+        source.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(sheet.Comments)");
+        source.Should().Contain("CommentNavigationPlanner.FormatNoteList(sheet.Comments)");
+        source.Should().NotContain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
+        source.Should().NotContain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
         source.Should().Contain("ProtectionDialogPlanner.CreateSheetResult(");
         source.Should().Contain("SheetProtectionWorkflow.CreateCommand(sheet, result)");
         source.Should().Contain("WorkbookProtectionWorkflow.CreateCommand(_workbook, pwd)");

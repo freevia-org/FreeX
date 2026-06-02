@@ -65,6 +65,51 @@ public sealed class GridViewObjectSelectionHandleTests
         });
     }
 
+    [Fact]
+    public void HitTestDrawingObject_UsesExplicitMixedDrawingObjectZOrder()
+    {
+        RunOnStaThread(() =>
+        {
+            var sheetId = SheetId.New();
+            var anchor = new CellAddress(sheetId, 1, 1);
+            var picture = new PictureModel
+            {
+                Anchor = anchor,
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var shape = new DrawingShapeModel
+            {
+                Anchor = anchor,
+                Width = 80,
+                Height = 40,
+                IsVisible = true
+            };
+            var grid = new GridView
+            {
+                Viewport = new ViewportModel(
+                    [],
+                    [new RowMetric(1, 24, 0), new RowMetric(2, 24, 24)],
+                    [new ColMetric(1, 80, 0), new ColMetric(2, 80, 80)]),
+                Pictures = [picture],
+                DrawingShapes = [shape],
+                DrawingObjectZOrder =
+                [
+                    new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id),
+                    new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id)
+                ]
+            };
+
+            var hit = InvokeHitTestDrawingObject(
+                grid,
+                new Point(GridView.RowHeaderWidth + 10, GridView.ColHeaderHeight + 10));
+
+            hit.Id.Should().Be(shape.Id);
+            hit.Kind.Should().Be(ObjectKind.Shape);
+        });
+    }
+
     private static GridView CreateGridWithSelectedObject(
         ObjectKind kind,
         Guid id,

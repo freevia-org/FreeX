@@ -76,6 +76,33 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void FindIssues_ReturnsKnownMisspellingsInNotesAndThreadedComments()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("adn cell"));
+        sheet.Comments[a1] = "teh note";
+        sheet.ThreadedComments[b1] = new ThreadedComment("recieve root")
+        {
+            Replies =
+            [
+                new CommentReply("adn reply"),
+                new CommentReply("clean reply")
+            ]
+        };
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Address, issue.Word, issue.Source, issue.ReplyIndex)).Should().Equal(
+            (a1, "adn", SpellingIssueSource.CellText, -1),
+            (a1, "teh", SpellingIssueSource.Note, -1),
+            (b1, "recieve", SpellingIssueSource.ThreadedComment, -1),
+            (b1, "adn", SpellingIssueSource.ThreadedCommentReply, 0));
+    }
+
+    [Fact]
     public void FindIssuesInCell_IgnoresInternetEmailAndFileAddressSpans()
     {
         var address = new CellAddress(SheetId.New(), 1, 1);
@@ -244,6 +271,38 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void PlanKnownCorrections_CoversExpandedCommonProofingMisspellings()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var textAddress = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(
+            textAddress,
+            new TextValue(
+                "Alot of thier neccessary maintainance was mispelled, with a commited arguement about the reciept and existance."));
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id);
+        var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
+
+        issues.Select(issue => (issue.Word, issue.Suggestion)).Should().Equal(
+            ("Alot", "A lot"),
+            ("thier", "their"),
+            ("neccessary", "necessary"),
+            ("maintainance", "maintenance"),
+            ("mispelled", "misspelled"),
+            ("commited", "committed"),
+            ("arguement", "argument"),
+            ("reciept", "receipt"),
+            ("existance", "existence"));
+        plan.IssueCount.Should().Be(9);
+        plan.Edits.Should().ContainSingle();
+        plan.Edits[0].Address.Should().Be(textAddress);
+        plan.Edits[0].CorrectedText.Should().Be(
+            "A lot of their necessary maintenance was misspelled, with a committed argument about the receipt and existence.");
+        plan.Edits[0].ReplacementCount.Should().Be(9);
+    }
+
+    [Fact]
     public void PlanKnownCorrections_DoesNotRewriteIgnoredAddressSpansButCorrectsProse()
     {
         var wb = new Workbook("test");
@@ -309,6 +368,19 @@ public sealed class SpellCheckServiceTests
         var corrected = SpellCheckService.ApplyCorrectionToAllOccurrences(issue, "the");
 
         corrected.Should().Be("the THE The");
+    }
+
+    [Fact]
+    public void ApplyCorrectionToAllOccurrences_SkipsIgnoredAddressSpans()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+        var issue = SpellCheckService
+            .FindIssuesInCell(address, "Fix teh but leave https://teh.example.com and C:\\teh\\file.txt")
+            .First();
+
+        var corrected = SpellCheckService.ApplyCorrectionToAllOccurrences(issue, "the");
+
+        corrected.Should().Be("Fix the but leave https://teh.example.com and C:\\teh\\file.txt");
     }
 
     [Theory]

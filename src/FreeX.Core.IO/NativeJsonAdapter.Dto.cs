@@ -531,6 +531,7 @@ public sealed partial class NativeJsonAdapter
         public List<PictureDto> Pictures { get; set; } = [];
         public List<TextBoxDto> TextBoxes { get; set; } = [];
         public List<DrawingShapeDto> DrawingShapes { get; set; } = [];
+        public List<DrawingObjectZOrderEntryDto> DrawingObjectZOrder { get; set; } = [];
         public List<SparklineDto> Sparklines { get; set; } = [];
         public List<ChartDto> Charts { get; set; } = [];
         public List<PivotTableDto> PivotTables { get; set; } = [];
@@ -722,6 +723,12 @@ public sealed partial class NativeJsonAdapter
         public IReadOnlyList<string>? NativePayloadChildXmls { get; set; }
         public IReadOnlyDictionary<string, string>? NativeContainerAttributes { get; set; }
         public IReadOnlyList<string>? NativeContainerChildXmls { get; set; }
+    }
+
+    private class DrawingObjectZOrderEntryDto
+    {
+        public SelectionPaneObjectKind Kind { get; set; }
+        public Guid Id { get; set; }
     }
 
     private class CellStyleDto

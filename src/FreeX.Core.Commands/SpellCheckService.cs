@@ -4,13 +4,23 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
+public enum SpellingIssueSource
+{
+    CellText,
+    Note,
+    ThreadedComment,
+    ThreadedCommentReply
+}
+
 public sealed record SpellingIssue(
     CellAddress Address,
     string Word,
     string Suggestion,
     string CellText,
     int StartIndex = -1,
-    int Length = 0);
+    int Length = 0,
+    SpellingIssueSource Source = SpellingIssueSource.CellText,
+    int ReplyIndex = -1);
 
 public sealed record SpellingCorrectionEdit(
     CellAddress Address,
@@ -39,25 +49,49 @@ public static partial class SpellCheckService
                 if (cell.HasFormula || cell.Value is not TextValue textValue)
                     continue;
 
-                if (!HasSpellCheckIssueCandidate(textValue.Value, customDictionary))
-                    continue;
+                AddIssuesForText(
+                    ref sheetIssues,
+                    address,
+                    textValue.Value,
+                    customDictionary,
+                    SpellingIssueSource.CellText);
+            }
 
-                var cellIssues = FindIssuesInCell(address, textValue.Value, customDictionary);
-                if (cellIssues.Count == 0)
-                    continue;
+            foreach (var (address, noteText) in sheet.Comments)
+            {
+                AddIssuesForText(
+                    ref sheetIssues,
+                    address,
+                    noteText,
+                    customDictionary,
+                    SpellingIssueSource.Note);
+            }
 
-                sheetIssues ??= [];
-                sheetIssues.AddRange(cellIssues);
+            foreach (var (address, threadedComment) in sheet.ThreadedComments)
+            {
+                AddIssuesForText(
+                    ref sheetIssues,
+                    address,
+                    threadedComment.Text,
+                    customDictionary,
+                    SpellingIssueSource.ThreadedComment);
+
+                for (var replyIndex = 0; replyIndex < threadedComment.Replies.Count; replyIndex++)
+                {
+                    AddIssuesForText(
+                        ref sheetIssues,
+                        address,
+                        threadedComment.Replies[replyIndex].Text,
+                        customDictionary,
+                        SpellingIssueSource.ThreadedCommentReply,
+                        replyIndex);
+                }
             }
 
             if (sheetIssues is null)
                 continue;
 
-            sheetIssues.Sort((left, right) =>
-            {
-                var rowCmp = left.Address.Row.CompareTo(right.Address.Row);
-                return rowCmp != 0 ? rowCmp : left.Address.Col.CompareTo(right.Address.Col);
-            });
+            sheetIssues.Sort(CompareIssues);
             result ??= [];
             result.AddRange(sheetIssues);
         }
@@ -72,7 +106,15 @@ public static partial class SpellCheckService
     public static IReadOnlyList<SpellingIssue> FindIssuesInCell(
         CellAddress address,
         string text,
-        IReadOnlySet<string>? customDictionary = null)
+        IReadOnlySet<string>? customDictionary = null) =>
+        FindIssuesInText(address, text, customDictionary, SpellingIssueSource.CellText);
+
+    private static IReadOnlyList<SpellingIssue> FindIssuesInText(
+        CellAddress address,
+        string text,
+        IReadOnlySet<string>? customDictionary,
+        SpellingIssueSource source,
+        int replyIndex = -1)
     {
         List<SpellingIssue>? issues = null;
         var ignoredSpans = FindIgnoredSpans(text);
@@ -93,7 +135,15 @@ public static partial class SpellCheckService
             {
                 var wordText = wordSpan.ToString();
                 issues ??= [];
-                issues.Add(new SpellingIssue(address, wordText, MatchCapitalization(wordSpan, suggestion), text, word.Start, word.Length));
+                issues.Add(new SpellingIssue(
+                    address,
+                    wordText,
+                    MatchCapitalization(wordSpan, suggestion),
+                    text,
+                    word.Start,
+                    word.Length,
+                    source,
+                    replyIndex));
             }
 
             if (previousWord is { } previous &&
@@ -111,13 +161,34 @@ public static partial class SpellCheckService
                     text.Substring(previous.Start, previous.Length),
                     text,
                     previous.Start,
-                    word.End - previous.Start));
+                    word.End - previous.Start,
+                    source,
+                    replyIndex));
             }
 
             previousWord = word;
         }
 
         return issues ?? [];
+    }
+
+    private static void AddIssuesForText(
+        ref List<SpellingIssue>? issues,
+        CellAddress address,
+        string text,
+        IReadOnlySet<string>? customDictionary,
+        SpellingIssueSource source,
+        int replyIndex = -1)
+    {
+        if (!HasSpellCheckIssueCandidate(text, customDictionary))
+            return;
+
+        var textIssues = FindIssuesInText(address, text, customDictionary, source, replyIndex);
+        if (textIssues.Count == 0)
+            return;
+
+        issues ??= [];
+        issues.AddRange(textIssues);
     }
 
     /// <summary>
@@ -196,9 +267,30 @@ public static partial class SpellCheckService
             RegexOptions.IgnoreCase,
             TimeSpan.FromMilliseconds(100));
 
-        return replaceAll
-            ? regex.Replace(issue.CellText, match => MatchCapitalization(match.Value, replacement))
-            : regex.Replace(issue.CellText, match => MatchCapitalization(match.Value, replacement), 1);
+        var ignoredSpans = FindIgnoredSpans(issue.CellText);
+        StringBuilder? builder = null;
+        var appendStart = 0;
+        var replaced = false;
+        foreach (Match match in regex.Matches(issue.CellText))
+        {
+            if (OverlapsIgnoredSpan(match.Index, match.Length, ignoredSpans))
+                continue;
+
+            builder ??= new StringBuilder(issue.CellText.Length);
+            builder.Append(issue.CellText, appendStart, match.Index - appendStart);
+            builder.Append(MatchCapitalization(match.Value, replacement));
+            appendStart = match.Index + match.Length;
+            replaced = true;
+
+            if (!replaceAll)
+                break;
+        }
+
+        if (!replaced || builder is null)
+            return issue.CellText;
+
+        builder.Append(issue.CellText, appendStart, issue.CellText.Length - appendStart);
+        return builder.ToString();
     }
 
     private static string ApplyKnownCorrections(string text, out int replacementCount)
@@ -278,6 +370,33 @@ public static partial class SpellCheckService
                 yield return sheet;
         }
     }
+
+    private static int CompareIssues(SpellingIssue left, SpellingIssue right)
+    {
+        var addressCmp = left.Address.CompareTo(right.Address);
+        if (addressCmp != 0)
+            return addressCmp;
+
+        var sourceCmp = GetIssueSourceOrder(left.Source).CompareTo(GetIssueSourceOrder(right.Source));
+        if (sourceCmp != 0)
+            return sourceCmp;
+
+        var replyCmp = left.ReplyIndex.CompareTo(right.ReplyIndex);
+        if (replyCmp != 0)
+            return replyCmp;
+
+        return left.StartIndex.CompareTo(right.StartIndex);
+    }
+
+    private static int GetIssueSourceOrder(SpellingIssueSource source) =>
+        source switch
+        {
+            SpellingIssueSource.CellText => 0,
+            SpellingIssueSource.Note => 1,
+            SpellingIssueSource.ThreadedComment => 2,
+            SpellingIssueSource.ThreadedCommentReply => 3,
+            _ => 4
+        };
 
     private static string MatchCapitalization(string original, string replacement) =>
         MatchCapitalization(original.AsSpan(), replacement);
@@ -445,7 +564,21 @@ public static partial class SpellCheckService
                 }
 
                 break;
+            case 4:
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "alot"))
+                {
+                    suggestion = "a lot";
+                    return true;
+                }
+
+                break;
             case 5:
+                if (first == 't' && EqualAsciiWordIgnoreCase(word, "thier"))
+                {
+                    suggestion = "their";
+                    return true;
+                }
+
                 if (first == 'w' && EqualAsciiWordIgnoreCase(word, "wierd"))
                 {
                     suggestion = "weird";
@@ -474,9 +607,27 @@ public static partial class SpellCheckService
 
                 break;
             case 7:
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "acheive"))
+                {
+                    suggestion = "achieve";
+                    return true;
+                }
+
+                if (first == 'b' && EqualAsciiWordIgnoreCase(word, "beleive"))
+                {
+                    suggestion = "believe";
+                    return true;
+                }
+
                 if (first == 'r' && EqualAsciiWordIgnoreCase(word, "recieve"))
                 {
                     suggestion = "receive";
+                    return true;
+                }
+
+                if (first == 'r' && EqualAsciiWordIgnoreCase(word, "reciept"))
+                {
+                    suggestion = "receipt";
                     return true;
                 }
 
@@ -488,6 +639,18 @@ public static partial class SpellCheckService
 
                 break;
             case 8:
+                if (first == 'a' && EqualAsciiWordIgnoreCase(word, "arguement"))
+                {
+                    suggestion = "argument";
+                    return true;
+                }
+
+                if (first == 'c' && EqualAsciiWordIgnoreCase(word, "commited"))
+                {
+                    suggestion = "committed";
+                    return true;
+                }
+
                 if (first == 's' && EqualAsciiWordIgnoreCase(word, "seperate"))
                 {
                     suggestion = "separate";
@@ -514,9 +677,21 @@ public static partial class SpellCheckService
 
                 break;
             case 9:
+                if (first == 'e' && EqualAsciiWordIgnoreCase(word, "existance"))
+                {
+                    suggestion = "existence";
+                    return true;
+                }
+
                 if (first == 'g' && EqualAsciiWordIgnoreCase(word, "goverment"))
                 {
                     suggestion = "government";
+                    return true;
+                }
+
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "mispelled"))
+                {
+                    suggestion = "misspelled";
                     return true;
                 }
 
@@ -534,9 +709,23 @@ public static partial class SpellCheckService
                     return true;
                 }
 
+                if (first == 'n' && EqualAsciiWordIgnoreCase(word, "neccessary"))
+                {
+                    suggestion = "necessary";
+                    return true;
+                }
+
                 if (first == 'p' && EqualAsciiWordIgnoreCase(word, "publically"))
                 {
                     suggestion = "publicly";
+                    return true;
+                }
+
+                break;
+            case 12:
+                if (first == 'm' && EqualAsciiWordIgnoreCase(word, "maintainance"))
+                {
+                    suggestion = "maintenance";
                     return true;
                 }
 

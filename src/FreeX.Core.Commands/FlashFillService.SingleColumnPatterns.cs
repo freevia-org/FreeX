@@ -1469,7 +1469,7 @@ public static partial class FlashFillService
     {
         name = string.Empty;
         if (!TryRemoveKnownNameTitle(source, out var withoutTitle) ||
-            !TryRemoveKnownNameSuffix(withoutTitle, out name))
+            !TryRemoveKnownTrailingNameSuffixes(withoutTitle, removeAll: true, out name))
         {
             return false;
         }
@@ -1484,7 +1484,7 @@ public static partial class FlashFillService
         if (tokens.Length < 2)
             return false;
 
-        var title = tokens[0].TrimEnd('.');
+        var title = NormalizeKnownNameAffixToken(tokens[0]);
         if (!KnownNameTitles.Contains(title))
             return false;
 
@@ -1502,19 +1502,7 @@ public static partial class FlashFillService
 
     private static bool TryRemoveKnownNameSuffix(string source, out string name)
     {
-        name = string.Empty;
-        var tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (tokens.Length < 2)
-            return false;
-
-        var suffix = tokens[^1].TrimEnd('.');
-        if (!KnownNameSuffixes.Contains(suffix))
-            return false;
-
-        var nameTokens = tokens[..^1];
-        nameTokens[^1] = nameTokens[^1].TrimEnd(',');
-        name = string.Join(' ', nameTokens);
-        return name.Length > 0;
+        return TryRemoveKnownTrailingNameSuffixes(source, removeAll: false, out name);
     }
 
     private static Func<string, string?>? TryKnownOrganizationSuffixRemoval(IReadOnlyList<(string Source, string Expected)> examples)
@@ -1532,7 +1520,7 @@ public static partial class FlashFillService
         if (tokens.Length < 2)
             return false;
 
-        var suffix = tokens[^1].TrimEnd('.');
+        var suffix = NormalizeKnownNameAffixToken(tokens[^1]);
         if (!KnownOrganizationSuffixes.Contains(suffix))
             return false;
 
@@ -1541,6 +1529,39 @@ public static partial class FlashFillService
         name = string.Join(' ', nameTokens);
         return name.Length > 0;
     }
+
+    private static bool TryRemoveKnownTrailingNameSuffixes(string source, bool removeAll, out string name)
+    {
+        name = string.Empty;
+        var tokens = source.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length < 2)
+            return false;
+
+        var endExclusive = tokens.Length;
+        var removedSuffix = false;
+        while (endExclusive > 1)
+        {
+            var suffix = NormalizeKnownNameAffixToken(tokens[endExclusive - 1]);
+            if (!KnownNameSuffixes.Contains(suffix))
+                break;
+
+            endExclusive--;
+            removedSuffix = true;
+            if (!removeAll)
+                break;
+        }
+
+        if (!removedSuffix)
+            return false;
+
+        var nameTokens = tokens[..endExclusive];
+        nameTokens[^1] = nameTokens[^1].TrimEnd(',');
+        name = string.Join(' ', nameTokens);
+        return name.Length > 0;
+    }
+
+    private static string NormalizeKnownNameAffixToken(string token) =>
+        token.TrimEnd('.', ',');
 
     private static Func<string, string?>? TryDigitMask(IReadOnlyList<(string Source, string Expected)> examples)
     {

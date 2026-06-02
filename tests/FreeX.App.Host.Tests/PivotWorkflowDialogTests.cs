@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -1452,6 +1453,30 @@ public sealed class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotCalculatedFieldDialog_FieldListDoubleClickInsertsSelectedFieldAndHandlesMouseEvent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new PivotCalculatedFieldDialog(formula: "Sales+", fieldNames: ["Region"]);
+            var fieldList = GetPrivateField<ListBox>(dialog, "_fieldList");
+            var formulaBox = GetPrivateField<TextBox>(dialog, "_formulaBox");
+
+            fieldList.SelectedItem = "Region";
+            formulaBox.SelectionStart = formulaBox.Text.Length;
+            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = Control.MouseDoubleClickEvent
+            };
+
+            fieldList.RaiseEvent(doubleClick);
+
+            doubleClick.Handled.Should().BeTrue();
+            formulaBox.Text.Should().Be("Sales+Region");
+            formulaBox.SelectionStart.Should().Be("Sales+Region".Length);
+        });
+    }
+
+    [Fact]
     public void PivotCalculatedItemDialog_CreateResult_TrimsClampsAndBuildsModel()
     {
         var result = PivotCalculatedItemDialog.CreateResult(
@@ -1682,6 +1707,14 @@ public sealed class PivotWorkflowDialogTests
             end = source.Length;
         end.Should().BeGreaterThan(start);
         return source[start..end];
+    }
+
+    private static T GetPrivateField<T>(object instance, string name)
+        where T : class
+    {
+        var field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        field.Should().NotBeNull();
+        return field!.GetValue(instance).Should().BeOfType<T>().Subject;
     }
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root)

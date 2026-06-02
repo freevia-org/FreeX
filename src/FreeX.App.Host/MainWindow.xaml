@@ -2624,16 +2624,16 @@
                                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_RemoveTheSimpleCellNoteFromTheSelectedCell}" local:RibbonMetadata.CommandName="Delete Note"/>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <Button Content="{local:Loc Key=MainWindow_Content_Prev}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewPrevCommentBtn_Click"
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Prev}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewPrevNoteBtn_Click"
                                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_PreviousNote}"
                                                 local:RibbonTooltip.KeyTip="PN"
                                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_NavigateToThePreviousSimpleCellNoteInTheSheet}" local:RibbonMetadata.CommandName="Previous Note"/>
-                                        <Button Content="{local:Loc Key=MainWindow_Content_Next}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNextCommentBtn_Click"
+                                        <Button Content="{local:Loc Key=MainWindow_Content_Next}" Width="50" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewNextNoteBtn_Click"
                                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_NextNote}"
                                                 local:RibbonTooltip.KeyTip="N"
                                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_NavigateToTheNextSimpleCellNoteInTheSheet}" local:RibbonMetadata.CommandName="Next Note"/>
                                     </StackPanel>
-                                    <Button Content="{local:Loc Key=MainWindow_Content_ShowNotes}" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewShowCommentsBtn_Click"
+                                    <Button Content="{local:Loc Key=MainWindow_Content_ShowNotes}" Width="102" Height="22" Margin="1,1" Style="{StaticResource RibbonBtn}" Click="ReviewShowNotesBtn_Click"
                                             local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_ShowNotes}"
                                             local:RibbonTooltip.KeyTip="H"
                                             local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_OpenAListOfSimpleCellNotesOnTheActiveSheet}" local:RibbonMetadata.CommandName="Show Notes"/>
@@ -3688,6 +3688,7 @@
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
                         Height="28"
+                        Margin="0,1,0,0"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Top"
                         Panel.ZIndex="1"
@@ -3733,7 +3734,7 @@
                 <!-- Sheet tabs in a clipped, scrollbar-free viewport -->
                 <ScrollViewer x:Name="SheetTabsScroller" Grid.Column="1"
                               Grid.ColumnSpan="4"
-                              Margin="0,0,0,0"
+                              Margin="0,1,0,0"
                               Panel.ZIndex="3"
                               ClipToBounds="True"
                               HorizontalAlignment="Left"
@@ -4005,6 +4006,7 @@
                         Grid.Column="0"
                         Grid.ColumnSpan="6"
                         Height="28"
+                        Margin="0,1,0,0"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Top"
                         Panel.ZIndex="6"
@@ -4796,7 +4798,15 @@
                                     <TextBlock x:Name="InfoFileSize" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,12"/>
 
                                     <TextBlock Text="{local:Loc Key=MainWindow_Text_LastModified}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
-                                    <TextBlock x:Name="InfoLastModified" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,20"/>
+                                    <TextBlock x:Name="InfoLastModified" FontSize="13" Foreground="#1F1F1F" Margin="0,0,0,12"/>
+
+                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_Share}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoShareStatus" FontSize="13" Foreground="#1F1F1F"
+                                               TextWrapping="Wrap" Margin="0,0,0,20"/>
+
+                                    <TextBlock Text="{local:Loc Key=MainWindow_Text_Export}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
+                                    <TextBlock x:Name="InfoExportStatus" FontSize="13" Foreground="#1F1F1F"
+                                               TextWrapping="Wrap" Margin="0,0,0,20"/>
 
                                     <TextBlock Text="{local:Loc Key=MainWindow_Text_WorkbookProtection}" FontSize="11" Foreground="#888" Margin="0,0,0,2"/>
                                     <TextBlock x:Name="InfoWorkbookProtectionSummary" FontSize="13" Foreground="#1F1F1F"

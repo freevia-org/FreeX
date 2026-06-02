@@ -286,7 +286,9 @@ public sealed class OptionsDialogSourceTests
         xaml.Should().Contain("AutomationProperties.AutomationId=\"QuickAccessToolbarCommandSearchBox\"");
         xaml.Should().Contain("TextChanged=\"QuickAccessSearchBox_TextChanged\"");
         xaml.Should().Contain("x:Name=\"QuickAccessAvailableCommandsList\"");
+        xaml.Should().Contain("KeyDown=\"QuickAccessAvailableCommandsList_KeyDown\"");
         xaml.Should().Contain("x:Name=\"QuickAccessSelectedCommandsList\"");
+        xaml.Should().Contain("KeyDown=\"QuickAccessSelectedCommandsList_KeyDown\"");
         xaml.Should().Contain("x:Name=\"QuickAccessAddButton\"");
         xaml.Should().Contain("x:Name=\"QuickAccessRemoveButton\"");
         xaml.Should().Contain("x:Name=\"QuickAccessMoveUpButton\"");
@@ -310,6 +312,13 @@ public sealed class OptionsDialogSourceTests
         source.Should().Contain("private void QuickAccessSelectedCommandsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)");
         source.Should().Contain("QuickAccessAddButton_Click(sender, e);");
         source.Should().Contain("QuickAccessRemoveButton_Click(sender, e);");
+        source.Should().Contain("private void QuickAccessAvailableCommandsList_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("private bool TryHandleQuickAccessAvailableCommandsListKey(Key key)");
+        source.Should().Contain("private void QuickAccessSelectedCommandsList_KeyDown(object sender, KeyEventArgs e)");
+        source.Should().Contain("private bool TryHandleQuickAccessSelectedCommandsListKey(Key key, ModifierKeys modifiers)");
+        source.Should().Contain("key is not (Key.Enter or Key.Return)");
+        source.Should().Contain("key is not (Key.Delete or Key.Back)");
+        source.Should().Contain("(modifiers & ModifierKeys.Control) == ModifierKeys.Control");
         source.Should().Contain("e.Handled = true;");
         source.Should().Contain("QuickAccessToolbarCustomizationFile.TryLoad(dialog.FileName)");
         source.Should().Contain("QuickAccessToolbarCustomizationFile.TrySave(");
@@ -351,6 +360,55 @@ public sealed class OptionsDialogSourceTests
                 GetListDisplayNames(availableList).Should().BeEmpty();
                 GetListDisplayNames(selectedList).Should().Contain("Bold");
                 addButton.IsEnabled.Should().BeFalse();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void OptionsDialog_RuntimeQuickAccessToolbarKeyboardAddsRemovesAndReordersCommands()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new OptionsDialog(new FreeXOptions());
+            dialog.Show();
+            try
+            {
+                var tabList = GetControl<ListBox>(dialog, "TabList");
+                var searchBox = GetControl<TextBox>(dialog, "QuickAccessSearchBox");
+                var availableList = GetControl<ListBox>(dialog, "QuickAccessAvailableCommandsList");
+                var selectedList = GetControl<ListBox>(dialog, "QuickAccessSelectedCommandsList");
+
+                tabList.SelectedIndex = 8;
+                searchBox.Text = "bold";
+                availableList.SelectedIndex = 0;
+
+                var addKey = CreateKeyDownEvent(dialog, Key.Return);
+                availableList.RaiseEvent(addKey);
+
+                addKey.Handled.Should().BeTrue();
+                GetListDisplayNames(availableList).Should().BeEmpty();
+                GetListDisplayNames(selectedList).Should().Contain("Bold");
+
+                selectedList.SelectedItem = selectedList.Items
+                    .Cast<object>()
+                    .First(item => string.Equals(GetListDisplayName(item), "Bold", StringComparison.Ordinal));
+
+                InvokeQuickAccessSelectedKeyHandler(dialog, Key.Up, ModifierKeys.Control).Should().BeTrue();
+                GetListDisplayNames(selectedList).Should().Equal("Save", "Undo", "Bold", "Redo");
+
+                InvokeQuickAccessSelectedKeyHandler(dialog, Key.Down, ModifierKeys.Control).Should().BeTrue();
+                GetListDisplayNames(selectedList).Should().Equal("Save", "Undo", "Redo", "Bold");
+
+                var removeKey = CreateKeyDownEvent(dialog, Key.Delete);
+                selectedList.RaiseEvent(removeKey);
+
+                removeKey.Handled.Should().BeTrue();
+                GetListDisplayNames(availableList).Should().Equal("Bold");
+                GetListDisplayNames(selectedList).Should().NotContain("Bold");
             }
             finally
             {
@@ -524,6 +582,28 @@ public sealed class OptionsDialogSourceTests
         {
             RoutedEvent = Control.MouseDoubleClickEvent
         };
+
+    private static KeyEventArgs CreateKeyDownEvent(OptionsDialog dialog, Key key)
+    {
+        var source = PresentationSource.FromVisual(dialog);
+        source.Should().NotBeNull();
+        return new KeyEventArgs(Keyboard.PrimaryDevice, source!, Environment.TickCount, key)
+        {
+            RoutedEvent = Keyboard.KeyDownEvent
+        };
+    }
+
+    private static bool InvokeQuickAccessSelectedKeyHandler(
+        OptionsDialog dialog,
+        Key key,
+        ModifierKeys modifiers)
+    {
+        var method = typeof(OptionsDialog).GetMethod(
+            "TryHandleQuickAccessSelectedCommandsListKey",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        method.Should().NotBeNull();
+        return method!.Invoke(dialog, [key, modifiers]).Should().BeOfType<bool>().Subject;
+    }
 
     private static void ClickOkAllowingNonModalDialogResult(OptionsDialog dialog)
     {

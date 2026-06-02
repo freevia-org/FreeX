@@ -18,7 +18,11 @@ public sealed class BackstageInfoPlannerTests
             new CellAddress(sheet.Id, 2, 1),
             new CellAddress(sheet.Id, 2, 2)));
 
-        var plan = BackstageInfoPlanner.Build(workbook, @"C:\work\budget.xlsx");
+        var plan = BackstageInfoPlanner.Build(
+            workbook,
+            @"C:\work\budget.xlsx",
+            fileExists: path => path == @"C:\work\budget.xlsx",
+            hasSelection: true);
 
         plan.WorkbookName.Should().Be("Budget");
         plan.FilePath.Should().Be(@"C:\work\budget.xlsx");
@@ -28,6 +32,9 @@ public sealed class BackstageInfoPlannerTests
         plan.StatisticsSummary.Should().Contain("Formulas: 1");
         plan.AccessibilitySummary.Should().Be(UiText.Get("Backstage_Info_OneIssueFound"));
         plan.FormulaErrorSummary.Should().Be(UiText.Get("Backstage_Info_NoFormulaErrors"));
+        plan.SharingStatus.Should().Be(@"Ready for Windows Share from C:\work\budget.xlsx.");
+        plan.ExportStatus.Should().Contain("selected range");
+        plan.ExportStatus.Should().Contain("No Microsoft account or cloud service is required.");
     }
 
     [Fact]
@@ -42,6 +49,9 @@ public sealed class BackstageInfoPlannerTests
         plan.Format.Should().Be(".xlsx");
         plan.FileSize.Should().Be(UiText.Get("Backstage_Info_NotSavedYet"));
         plan.LastModified.Should().Be(UiText.Get("Backstage_Info_NotSavedYet"));
+        plan.SharingStatus.Should().Be("Save As is required before Windows Share can send the workbook because it has not been saved yet.");
+        plan.ExportStatus.Should().Contain("Ready for local PDF/XPS export");
+        plan.ExportStatus.Should().Contain("select a range to enable selected-range export");
         plan.AccessibilitySummary.Should().Be(UiText.Get("Backstage_Info_NoAccessibilityIssues"));
         plan.FormulaErrorSummary.Should().Be(UiText.Get("Backstage_Info_NoFormulaErrors"));
     }
@@ -79,6 +89,8 @@ public sealed class BackstageInfoPlannerTests
 
             plan.FileSize.Should().Be("1.5 KB (1,536 bytes)");
             plan.LastModified.Should().Be(expectedLastWrite);
+            plan.SharingStatus.Should().Be($"Ready for Windows Share from {path}.");
+            plan.ExportStatus.Should().Contain("Ready for local PDF/XPS export");
             plan.Summary.ActiveSheetProtectionSummary.Should().Be("Active sheet unprotected.");
         }
         finally
@@ -101,6 +113,8 @@ public sealed class BackstageInfoPlannerTests
         plan.FilePath.Should().Be(@"C:\work\missing.xlsx");
         plan.FileSize.Should().Be(UiText.Get("Backstage_Info_FileMissing"));
         plan.LastModified.Should().Be(UiText.Get("Backstage_Info_FileMissing"));
+        plan.SharingStatus.Should().Be(@"Save As is required before Windows Share can send the workbook because the saved path is missing: C:\work\missing.xlsx.");
+        plan.ExportStatus.Should().Contain("Ready for local PDF/XPS export");
     }
 
     [Fact]

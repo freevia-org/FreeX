@@ -15,6 +15,8 @@ public sealed record BackstageInfoPlan(
     string FormulaErrorSummary,
     string FileSize,
     string LastModified,
+    string SharingStatus,
+    string ExportStatus,
     InfoPanelSummaryPlan Summary);
 
 public static class BackstageInfoPlanner
@@ -23,13 +25,18 @@ public static class BackstageInfoPlanner
         Workbook workbook,
         string? currentFilePath,
         Sheet? activeSheet = null,
-        CultureInfo? culture = null)
+        CultureInfo? culture = null,
+        Func<string, bool>? fileExists = null,
+        bool hasSelection = false)
     {
         culture ??= CultureInfo.CurrentCulture;
         var statistics = WorkbookStatisticsService.GetStatistics(workbook);
         var accessibilityIssues = AccessibilityCheckerService.FindIssues(workbook);
         var formulaIssues = FormulaAuditingService.FindFormulaErrorIssues(workbook);
         var summary = InfoPanelSummaryPlanner.Create(workbook, activeSheet, culture);
+        var sharingStatus = ShareWorkbookPlanner.FormatStatus(
+            ShareWorkbookPlanner.CreatePlan(currentFilePath, fileExists));
+        var exportStatus = ExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
         var filePath = string.IsNullOrWhiteSpace(currentFilePath)
             ? UiText.Get("Backstage_Info_NotSavedYet")
             : currentFilePath;
@@ -47,6 +54,8 @@ public static class BackstageInfoPlanner
             FormatFormulaErrorSummary(formulaIssues.Count),
             FormatFileSize(currentFilePath, culture),
             FormatLastModified(currentFilePath, culture),
+            sharingStatus,
+            exportStatus,
             summary);
     }
 

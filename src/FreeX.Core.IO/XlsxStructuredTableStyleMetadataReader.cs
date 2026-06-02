@@ -5,6 +5,23 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxStructuredTableStyleMetadataReader
 {
+    private static readonly HashSet<string> SupportedSemanticElementTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "wholeTable",
+        "headerRow",
+        "totalRow",
+        "firstColumn",
+        "lastColumn",
+        "firstRowStripe",
+        "secondRowStripe",
+        "firstColumnStripe",
+        "secondColumnStripe",
+        "firstHeaderCell",
+        "lastHeaderCell",
+        "firstTotalCell",
+        "lastTotalCell"
+    };
+
     public static List<StructuredTableStyleModel> Load(XDocument? stylesXml)
     {
         var result = new List<StructuredTableStyleModel>();
@@ -51,7 +68,7 @@ internal static class XlsxStructuredTableStyleMetadataReader
                         type,
                         dxfId,
                         XlsxXmlAttributeReader.ReadIntAttribute(element, "size"),
-                        IsSupportedSemanticElementType(type) &&
+                        SupportedSemanticElementTypes.Contains(type) &&
                         dxfId is >= 0 &&
                         dxfId.Value < differentialStyles.Count
                             ? ReadDifferentialStyleDiff(differentialStyles[dxfId.Value], workbookNs)
@@ -68,10 +85,6 @@ internal static class XlsxStructuredTableStyleMetadataReader
 
         return result;
     }
-
-    private static bool IsSupportedSemanticElementType(string type) =>
-        string.Equals(type, "wholeTable", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(type, "headerRow", StringComparison.OrdinalIgnoreCase);
 
     private static StyleDiff? ReadDifferentialStyleDiff(XElement dxf, XNamespace workbookNs)
     {
