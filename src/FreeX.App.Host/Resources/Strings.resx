@@ -1039,7 +1039,7 @@
     <value>Objects</value>
   </data>
   <data name="SelectionPane_ObjectListHelpText" xml:space="preserve">
-    <value>Workbook objects available for selection, rename, visibility, and stacking order changes.</value>
+    <value>Workbook objects available for selection, rename, visibility, and stacking order changes. Press F2 to rename, Space to show or hide, and Ctrl+Up or Ctrl+Down to reorder.</value>
   </data>
   <data name="SelectionPane_SearchAutomationName" xml:space="preserve">
     <value>Search objects</value>
