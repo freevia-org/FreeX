@@ -311,7 +311,9 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
                 {
                     if (!TryGetCellAddress(cDto, sheet.Id, out var addr))
                         continue;
-                    var value = NativeJsonScalarValueMapper.Deserialize(cDto.Value, cDto.ValueType);
+                    var value = cDto.ParsedValueType == '\0'
+                        ? NativeJsonScalarValueMapper.Deserialize(cDto.Value, cDto.ValueType)
+                        : NativeJsonScalarValueMapper.Deserialize(cDto.Value, cDto.ParsedValueType);
                     var cell = cDto.Formula != null
                         ? Cell.FromFormula(NormalizeNativeFormulaText(cDto.Formula))
                         : Cell.FromValue(value);
