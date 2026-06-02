@@ -54,6 +54,18 @@ internal static partial class XlsxWorksheetMetadataPreserver
         "sqref"
     };
 
+    private static readonly HashSet<string> ModeledSheetPropertiesAttributes = new(StringComparer.Ordinal)
+    {
+        "codeName"
+    };
+
+    private static readonly HashSet<string> ModeledSheetPropertiesElements = new(StringComparer.Ordinal)
+    {
+        "tabColor",
+        "outlinePr",
+        "pageSetUpPr"
+    };
+
     private static readonly HashSet<string> ModeledRowAttributes = new(StringComparer.Ordinal)
     {
         "r",
@@ -104,7 +116,6 @@ internal static partial class XlsxWorksheetMetadataPreserver
         XNamespace workbookNs)
     {
         if (sourceBlocks.Count > 0 ||
-            sourceSheetProperties is not null ||
             sourceMergeCells is not null ||
             sourceSheetProtection is not null ||
             sourceHyperlinks is not null ||
@@ -114,6 +125,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
 
         return
+            HasPreservableSheetPropertiesMetadata(sourceSheetProperties) ||
             HasNativeOnlyElementMetadataByLocalName(sourceSheetFormatProperties, ModeledSheetFormatAttributes) ||
             HasNativeOnlyElementMetadata(sourceDimension, ModeledDimensionAttributes) ||
             HasNativeOnlyElementMetadata(sourcePrintOptions, ModeledPrintOptionsAttributes) ||
@@ -123,6 +135,17 @@ internal static partial class XlsxWorksheetMetadataPreserver
             HasPreservableColumnMetadata(sourceColumns, workbookNs) ||
             HasPreservableSheetDataMetadata(sourceSheetData, workbookNs) ||
             HasPreservableSheetViewMetadata(sourceSheetViews, workbookNs);
+    }
+
+    private static bool HasPreservableSheetPropertiesMetadata(XElement? sourceSheetProperties)
+    {
+        if (sourceSheetProperties is null)
+            return false;
+
+        return sourceSheetProperties.Attributes()
+                   .Any(attribute => IsNativeOnlyLocalAttribute(attribute, ModeledSheetPropertiesAttributes)) ||
+               sourceSheetProperties.Elements()
+                   .Any(element => !ModeledSheetPropertiesElements.Contains(element.Name.LocalName));
     }
 
     private static bool HasNativeOnlyElementMetadata(XElement? sourceElement, HashSet<string> modeledAttributeNames)
