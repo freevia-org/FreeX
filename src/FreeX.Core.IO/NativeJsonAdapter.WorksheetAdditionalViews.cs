@@ -49,7 +49,7 @@ public sealed partial class NativeJsonAdapter
             return null;
 
         var nativeAttributes = CleanNativeAttributes(model.NativeAttributes);
-        var views = model.Views
+        var views = (model.Views ?? [])
             .Select(ToWorksheetAdditionalViewDto)
             .OfType<WorksheetAdditionalViewDto>()
             .ToList();

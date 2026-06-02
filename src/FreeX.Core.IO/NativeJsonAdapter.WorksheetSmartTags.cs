@@ -93,7 +93,7 @@ public sealed partial class NativeJsonAdapter
             return null;
 
         var nativeXml = string.IsNullOrWhiteSpace(model.NativeXml) ? null : model.NativeXml;
-        var cells = model.Cells
+        var cells = (model.Cells ?? [])
             .Select(ToWorksheetCellSmartTagsDto)
             .OfType<WorksheetCellSmartTagsDto>()
             .ToList();
@@ -114,7 +114,7 @@ public sealed partial class NativeJsonAdapter
 
         var reference = string.IsNullOrWhiteSpace(model.Reference) ? null : model.Reference;
         var nativeAttributes = CleanNativeAttributes(model.NativeAttributes);
-        var tags = model.Tags
+        var tags = (model.Tags ?? [])
             .Select(ToWorksheetCellSmartTagDto)
             .OfType<WorksheetCellSmartTagDto>()
             .ToList();
@@ -136,7 +136,7 @@ public sealed partial class NativeJsonAdapter
 
         var type = string.IsNullOrWhiteSpace(model.Type) ? null : model.Type;
         var nativeAttributes = CleanNativeAttributes(model.NativeAttributes);
-        var properties = model.Properties
+        var properties = (model.Properties ?? [])
             .Select(ToWorksheetCellSmartTagPropertyDto)
             .OfType<WorksheetCellSmartTagPropertyDto>()
             .ToList();
