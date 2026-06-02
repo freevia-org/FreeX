@@ -163,6 +163,31 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderHeaders_CachesRowLabelsAcrossRenderPasses()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var drawRowHeader = source[
+            source.IndexOf("private void DrawRowHeader", StringComparison.Ordinal)..
+            source.IndexOf("private static IReadOnlyList<HeaderSelectionInterval>", StringComparison.Ordinal)];
+        var formatRowHeader = source[
+            source.IndexOf("internal static string FormatRowHeader", StringComparison.Ordinal)..];
+
+        source.Should().Contain("private static readonly ConcurrentDictionary<uint, string> RowHeaderCache = new();");
+        drawRowHeader.Should().Contain("FormatRowHeader(row.Row)");
+        drawRowHeader.Should().NotContain("row.Row.ToString");
+        formatRowHeader.Should().Contain("RowHeaderCache.GetOrAdd(row");
+        formatRowHeader.Should().Contain("rowNumber.ToString(CultureInfo.InvariantCulture)");
+
+        var formatter = typeof(GridView).GetMethod(
+            "FormatRowHeader",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        formatter.Should().NotBeNull();
+        formatter!.Invoke(null, [1u]).Should().Be("1");
+        formatter.Invoke(null, [1_048_576u]).Should().Be("1048576");
+    }
+
+    [Fact]
     public void RenderHeaders_WalksSelectionIntervalsInsteadOfScanningRangesPerHeader()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
@@ -411,6 +436,8 @@ public sealed class GridViewRenderPerformanceTests
             .Should().BeLessThan(onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal));
         onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal)
             .Should().BeLessThan(onRender.IndexOf("RenderPostSelectionLayers", StringComparison.Ordinal));
+        onRender.IndexOf("RenderPostSelectionLayers", StringComparison.Ordinal)
+            .Should().BeLessThan(onRender.IndexOf("_selectionVisualOnlyChangePending = false;", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1013,6 +1040,39 @@ public sealed class GridViewRenderPerformanceTests
         tryGetCellRect.Should().NotContain("FirstOrDefault");
         source.Should().Contain("private static RowMetric? FindRowMetric");
         source.Should().Contain("private static ColMetric? FindColMetric");
+    }
+
+    [Fact]
+    public void DrawFormulaTraceArrow_ReusesCachedFrozenArrowHeadGeometry()
+    {
+        var overlaysSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var drawFormulaTraceArrow = overlaysSource[
+            overlaysSource.IndexOf("private void DrawFormulaTraceArrow", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private Geometry GetFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)];
+        var getArrowHeadGeometry = overlaysSource[
+            overlaysSource.IndexOf("private Geometry GetFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private static Geometry CreateFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)];
+        var createArrowHeadGeometry = overlaysSource[
+            overlaysSource.IndexOf("private static Geometry CreateFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private void ClearFormulaTraceArrowHeadGeometryCache", StringComparison.Ordinal)];
+
+        overlaysSource.Should().Contain("private const int FormulaTraceArrowHeadGeometryCacheLimit = 4096;");
+        overlaysSource.Should().Contain("private readonly Dictionary<FormulaTraceArrowHeadGeometryKey, Geometry> _formulaTraceArrowHeadGeometryCache = new();");
+        overlaysSource.Should().Contain("private readonly record struct FormulaTraceArrowHeadGeometryKey(Point Start, Point End);");
+        drawFormulaTraceArrow.Should().Contain("GetFormulaTraceArrowHeadGeometry(start, end, vector, perpendicular)");
+        drawFormulaTraceArrow.Should().NotContain("CreateFormulaTraceArrowHeadGeometry");
+        getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.TryGetValue(key, out var cached)");
+        getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Count >= FormulaTraceArrowHeadGeometryCacheLimit");
+        getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Clear();");
+        getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Add(key, geometry);");
+        createArrowHeadGeometry.Should().Contain("new StreamGeometry()");
+        createArrowHeadGeometry.Should().Contain("geometry.Freeze();");
+        overlaysSource.Should().Contain("private void ClearFormulaTraceArrowHeadGeometryCache() => _formulaTraceArrowHeadGeometryCache.Clear();");
+        propertiesSource.Should().Contain("OnFormulaTraceRenderCacheInputChanged");
+        propertiesSource.Should().Contain("grid.ClearFormulaTraceArrowHeadGeometryCache();");
+        propertiesSource.Should().Contain("FormulaTraceArrowsProperty");
+        propertiesSource.Should().Contain("FormulaTraceSheetIdProperty");
     }
 
     [Fact]

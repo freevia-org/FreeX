@@ -83,11 +83,11 @@ public sealed partial class NativeJsonAdapter
             TextRuleText = formatDto.TextRuleText,
             DateOccurringPeriod = ValidDateOccurringPeriodOrDefault(formatDto.DateOccurringPeriod),
             StopIfTrue = formatDto.StopIfTrue,
-            NativeAttributes = formatDto.NativeAttributes,
+            NativeAttributes = CleanOptionalNativeAttributes(formatDto.NativeAttributes),
             NativeChildXmls = CleanNativeXmlList(formatDto.NativeChildXmls),
-            NativePayloadAttributes = formatDto.NativePayloadAttributes,
+            NativePayloadAttributes = CleanOptionalNativeAttributes(formatDto.NativePayloadAttributes),
             NativePayloadChildXmls = CleanNativeXmlList(formatDto.NativePayloadChildXmls),
-            NativeContainerAttributes = formatDto.NativeContainerAttributes,
+            NativeContainerAttributes = CleanOptionalNativeAttributes(formatDto.NativeContainerAttributes),
             NativeContainerChildXmls = CleanNativeXmlList(formatDto.NativeContainerChildXmls)
         };
         format.IconSetThresholds.AddRange((formatDto.IconSetThresholds ?? [])
@@ -149,11 +149,11 @@ public sealed partial class NativeJsonAdapter
             TextRuleText = format.TextRuleText,
             DateOccurringPeriod = ValidDateOccurringPeriodOrDefault(format.DateOccurringPeriod),
             StopIfTrue = format.StopIfTrue,
-            NativeAttributes = format.NativeAttributes,
+            NativeAttributes = CleanOptionalNativeAttributes(format.NativeAttributes),
             NativeChildXmls = CleanNativeXmlList(format.NativeChildXmls),
-            NativePayloadAttributes = format.NativePayloadAttributes,
+            NativePayloadAttributes = CleanOptionalNativeAttributes(format.NativePayloadAttributes),
             NativePayloadChildXmls = CleanNativeXmlList(format.NativePayloadChildXmls),
-            NativeContainerAttributes = format.NativeContainerAttributes,
+            NativeContainerAttributes = CleanOptionalNativeAttributes(format.NativeContainerAttributes),
             NativeContainerChildXmls = CleanNativeXmlList(format.NativeContainerChildXmls)
         };
 

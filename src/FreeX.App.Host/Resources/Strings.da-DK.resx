@@ -4084,6 +4084,42 @@ Vil du sende nedbrudsrapporter for denne testversion?</value>
   <data name="MainWindow_Header_20Accent6" xml:space="preserve">
     <value>20 % - Accent 6</value>
   </data>
+  <data name="MainWindow_Header_40Accent1" xml:space="preserve">
+    <value>40% - Accent 1</value>
+  </data>
+  <data name="MainWindow_Header_40Accent2" xml:space="preserve">
+    <value>40% - Accent 2</value>
+  </data>
+  <data name="MainWindow_Header_40Accent3" xml:space="preserve">
+    <value>40% - Accent 3</value>
+  </data>
+  <data name="MainWindow_Header_40Accent4" xml:space="preserve">
+    <value>40% - Accent 4</value>
+  </data>
+  <data name="MainWindow_Header_40Accent5" xml:space="preserve">
+    <value>40% - Accent 5</value>
+  </data>
+  <data name="MainWindow_Header_40Accent6" xml:space="preserve">
+    <value>40% - Accent 6</value>
+  </data>
+  <data name="MainWindow_Header_60Accent1" xml:space="preserve">
+    <value>60% - Accent 1</value>
+  </data>
+  <data name="MainWindow_Header_60Accent2" xml:space="preserve">
+    <value>60% - Accent 2</value>
+  </data>
+  <data name="MainWindow_Header_60Accent3" xml:space="preserve">
+    <value>60% - Accent 3</value>
+  </data>
+  <data name="MainWindow_Header_60Accent4" xml:space="preserve">
+    <value>60% - Accent 4</value>
+  </data>
+  <data name="MainWindow_Header_60Accent5" xml:space="preserve">
+    <value>60% - Accent 5</value>
+  </data>
+  <data name="MainWindow_Header_60Accent6" xml:space="preserve">
+    <value>60% - Accent 6</value>
+  </data>
   <data name="MainWindow_Header_3Arrows" xml:space="preserve">
     <value>3 pile</value>
   </data>

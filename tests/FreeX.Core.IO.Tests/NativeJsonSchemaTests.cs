@@ -1028,6 +1028,37 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsNullNativeJsonWorksheetCustomPropertyEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullWorksheetCustomProperties",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "CustomProperties": [
+                    null,
+                    { "Name": "ModeledProperty", "Id": 7 },
+                    { "Name": "MissingId" },
+                    { "Id": 8 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var property = new NativeJsonAdapter().Load(stream).GetSheetAt(0).CustomProperties
+            .Should().ContainSingle().Subject;
+
+        property.Name.Should().Be("ModeledProperty");
+        property.Id.Should().Be(7);
+    }
+
+    [Fact]
     public void Load_DropsNullNativeJsonWorksheetDimensionEntries()
     {
         const string json = """
@@ -1241,8 +1272,26 @@ public sealed class NativeJsonSchemaTests
             AppliesTo = GridRange.Parse("A1:A3", sheet.Id),
             RuleType = CfRuleType.IconSet,
             IconSetStyle = "3Arrows",
+            NativeAttributes = new Dictionary<string, string>
+            {
+                [""] = "dropped",
+                ["priority"] = "7",
+                ["nullAttr"] = null!
+            },
             NativeChildXmls = [null!, " ", "<x:ext />"],
+            NativePayloadAttributes = new Dictionary<string, string>
+            {
+                [" "] = "dropped",
+                ["x14:axisPosition"] = "middle",
+                ["nullAttr"] = null!
+            },
             NativePayloadChildXmls = [null!, "", "<x:payload />"],
+            NativeContainerAttributes = new Dictionary<string, string>
+            {
+                [""] = "dropped",
+                ["pivot"] = "1",
+                ["nullAttr"] = null!
+            },
             NativeContainerChildXmls = [null!, " ", "<x:container />"]
         };
         format.IconSetThresholds.Add(null!);
@@ -1261,10 +1310,19 @@ public sealed class NativeJsonSchemaTests
             .Should().ContainSingle().Which.GetProperty("Value").GetString().Should().Be("5");
         formatJson.GetProperty("IconOverrides").EnumerateArray()
             .Should().ContainSingle().Which.GetProperty("IconSet").GetString().Should().Be("3Arrows");
+        formatJson.GetProperty("NativeAttributes").EnumerateObject()
+            .Should().ContainSingle().Which.Should().Match<JsonProperty>(
+                property => property.Name == "priority" && property.Value.GetString() == "7");
         formatJson.GetProperty("NativeChildXmls").EnumerateArray()
             .Should().ContainSingle().Which.GetString().Should().Be("<x:ext />");
+        formatJson.GetProperty("NativePayloadAttributes").EnumerateObject()
+            .Should().ContainSingle().Which.Should().Match<JsonProperty>(
+                property => property.Name == "x14:axisPosition" && property.Value.GetString() == "middle");
         formatJson.GetProperty("NativePayloadChildXmls").EnumerateArray()
             .Should().ContainSingle().Which.GetString().Should().Be("<x:payload />");
+        formatJson.GetProperty("NativeContainerAttributes").EnumerateObject()
+            .Should().ContainSingle().Which.Should().Match<JsonProperty>(
+                property => property.Name == "pivot" && property.Value.GetString() == "1");
         formatJson.GetProperty("NativeContainerChildXmls").EnumerateArray()
             .Should().ContainSingle().Which.GetString().Should().Be("<x:container />");
     }
@@ -1286,8 +1344,23 @@ public sealed class NativeJsonSchemaTests
                       "AppliesTo": "A1:A3",
                       "RuleType": 6,
                       "IconSetStyle": "3Arrows",
+                      "NativeAttributes": {
+                        "": "dropped",
+                        "priority": "7",
+                        "nullAttr": null
+                      },
                       "NativeChildXmls": [ null, " ", "<x:ext />" ],
+                      "NativePayloadAttributes": {
+                        " ": "dropped",
+                        "x14:axisPosition": "middle",
+                        "nullAttr": null
+                      },
                       "NativePayloadChildXmls": [ null, "", "<x:payload />" ],
+                      "NativeContainerAttributes": {
+                        "": "dropped",
+                        "pivot": "1",
+                        "nullAttr": null
+                      },
                       "NativeContainerChildXmls": [ null, " ", "<x:container />" ]
                     }
                   ]
@@ -1301,7 +1374,13 @@ public sealed class NativeJsonSchemaTests
             .Should().ContainSingle().Subject;
 
         format.NativeChildXmls.Should().ContainSingle().Which.Should().Be("<x:ext />");
+        format.NativeAttributes.Should().ContainSingle()
+            .Which.Should().Be(new KeyValuePair<string, string>("priority", "7"));
+        format.NativePayloadAttributes.Should().ContainSingle()
+            .Which.Should().Be(new KeyValuePair<string, string>("x14:axisPosition", "middle"));
         format.NativePayloadChildXmls.Should().ContainSingle().Which.Should().Be("<x:payload />");
+        format.NativeContainerAttributes.Should().ContainSingle()
+            .Which.Should().Be(new KeyValuePair<string, string>("pivot", "1"));
         format.NativeContainerChildXmls.Should().ContainSingle().Which.Should().Be("<x:container />");
     }
 

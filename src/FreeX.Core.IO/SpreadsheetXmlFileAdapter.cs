@@ -79,7 +79,7 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
         var settings = new XmlWriterSettings
         {
             Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-            Indent = true,
+            Indent = false,
             OmitXmlDeclaration = false,
             NewLineChars = "\r\n",
             NewLineHandling = NewLineHandling.Replace
@@ -1194,6 +1194,9 @@ public sealed class SpreadsheetXmlFileAdapter : IFileAdapter
 
     private static List<uint> BuildSortedRowLayoutIndexes(Sheet sheet)
     {
+        if (sheet.RowHeights.Count == 0 && sheet.HiddenRows.Count == 0)
+            return [];
+
         var rows = new List<uint>(sheet.RowHeights.Count + sheet.HiddenRows.Count);
         foreach (var row in sheet.RowHeights.Keys)
         {

@@ -69,10 +69,7 @@ internal static class AppLanguageCatalog
 
     private static string GetResourceProbeDirectory()
     {
-        var assemblyLocation = typeof(UiText).Assembly.Location;
-        return string.IsNullOrWhiteSpace(assemblyLocation)
-            ? AppContext.BaseDirectory
-            : Path.GetDirectoryName(assemblyLocation) ?? AppContext.BaseDirectory;
+        return AppContext.BaseDirectory;
     }
 
     private static IEnumerable<string> EnumerateSatelliteCultureNames(string baseDirectory)

@@ -801,6 +801,16 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void SaveValueStreaming_UsesCompactXmlAndSkipsEmptyRowLayoutAllocation()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "SpreadsheetXmlFileAdapter.cs"));
+
+        source.Should().Contain("Indent = false");
+        source.Should().Contain("if (sheet.RowHeights.Count == 0 && sheet.HiddenRows.Count == 0)");
+        source.Should().Contain("return [];");
+    }
+
+    [Fact]
     public void Load_AdvancesImplicitCellIndexPastMergeAcrossSpan()
     {
         using var stream = StreamFromString("""
@@ -3626,6 +3636,22 @@ public sealed class SpreadsheetXmlFileAdapterTests
         stylesheet.CanRead.Should().BeTrue();
     }
 
+    [Fact]
+    public void LoadTransformed_EmptyStylesheet_ReportsTransformStylesheetDiagnostic()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString(string.Empty);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+        source.Position.Should().Be(0);
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(0, 1, "maxOutputBytes")]
     [InlineData(1, 0, "maxInputCharacters")]
@@ -3856,7 +3882,9 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
         var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
 
-        act.Should().Throw<Exception>();
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*External document access*")
+            .WithInnerException<XsltException>();
     }
 
     [Fact]
@@ -3875,6 +3903,31 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
         act.Should().Throw<InvalidDataException>()
             .WithMessage("*External document access*")
+            .WithInnerException<XsltException>();
+    }
+
+    [Fact]
+    public void LoadTransformed_RejectsStylesheetScript()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:msxsl="urn:schemas-microsoft-com:xslt"
+                xmlns:user="urn:freex-test-script">
+              <msxsl:script language="C#" implements-prefix="user">
+                public string Value() { return "blocked"; }
+              </msxsl:script>
+              <xsl:template match="/">
+                <xsl:value-of select="user:Value()"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*External document access and script are disabled*")
             .WithInnerException<XsltException>();
     }
 
@@ -4096,6 +4149,21 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
     private static Stream NonSeekableStreamFromString(string value) =>
         new NonSeekableReadStream(StreamFromString(value));
+
+    private static string FindRepoFile(params string[] relativeParts)
+    {
+        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = dir.Parent;
+        }
+
+        return Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(relativeParts).ToArray());
+    }
 
     private static Workbook CreateDenseWorkbook(int sheetCount, int rowCount, int columnCount)
     {
