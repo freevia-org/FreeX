@@ -2567,6 +2567,49 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromInternalHyperlinkAttributeValueTemplates()
+    {
+        using var source = StreamFromString("""
+            <links>
+              <link label="Jump to summary" target="#'Q1 Summary'!A1" tip="Open summary"/>
+            </links>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/links">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Links">
+                    <ss:Table>
+                      <xsl:for-each select="link">
+                        <ss:Row>
+                          <ss:Cell ss:HRef="{@target}" ss:HRefScreenTip="{@tip}">
+                            <ss:Data ss:Type="String"><xsl:value-of select="@label"/></ss:Data>
+                          </ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Links");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.GetCell(address)!.Value.Should().Be(new TextValue("Jump to summary"));
+        sheet.Hyperlinks[address].Should().Be("#'Q1 Summary'!A1");
+        sheet.HyperlinkMetadata[address].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.PlaceInThisDocument,
+            "Open summary",
+            "'Q1 Summary'!A1"));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlNumberFormatStyles()
     {
         using var source = StreamFromString("""
