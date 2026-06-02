@@ -104,6 +104,18 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void SplitPaneCellLayoutPlanner_VisitLayouts_MatchesCalculateLayouts()
+    {
+        var viewport = MeasuredSplitPaneViewport();
+        var expected = SplitPaneCellLayoutPlanner.CalculateLayouts(viewport);
+        var consumer = new CollectingSplitPaneCellLayoutConsumer();
+
+        SplitPaneCellLayoutPlanner.VisitLayouts(viewport, null, null, ref consumer);
+
+        consumer.Layouts.Should().Equal(expected);
+    }
+
+    [Fact]
     public void CalculateSplitPaneCellLayouts_UsesIndependentTopRightAndBottomLeftMetrics()
     {
         var viewport = new ViewportModel(
@@ -1153,6 +1165,26 @@ public sealed class GridViewSplitPaneLayoutTests
         public readonly IReadOnlyList<FormulaTraceArrowLayout> Layouts => _layouts ?? [];
     }
 
+    private struct CollectingSplitPaneCellLayoutConsumer : ISplitPaneCellLayoutConsumer
+    {
+        private List<SplitPaneCellLayout>? _layouts;
+
+        public void AcceptLayout(SplitPaneCellLayout layout)
+        {
+            _layouts ??= [];
+            _layouts.Add(layout);
+        }
+
+        public readonly IReadOnlyList<SplitPaneCellLayout> Layouts => _layouts ?? [];
+    }
+
+    private struct CountingSplitPaneCellLayoutConsumer : ISplitPaneCellLayoutConsumer
+    {
+        public int Count { get; private set; }
+
+        public void AcceptLayout(SplitPaneCellLayout layout) => Count++;
+    }
+
     [Fact]
     public void Benchmark_SplitPaneCellLayoutMaterialization_ReportsAllocations()
     {
@@ -1161,27 +1193,54 @@ public sealed class GridViewSplitPaneLayoutTests
 
         SplitPaneCellLayoutPlanner.CalculateLayouts(viewport).Should().HaveCount(2_040);
         SplitPaneCellLayoutPlanner.CalculateLayouts(viewport).Should().HaveCount(2_040);
+        var warmVisitor = new CountingSplitPaneCellLayoutConsumer();
+        SplitPaneCellLayoutPlanner.VisitLayouts(viewport, null, null, ref warmVisitor);
+        warmVisitor.Count.Should().Be(2_040);
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
 
-        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
-        var total = Stopwatch.StartNew();
+        var materializedAllocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var materializedTotal = Stopwatch.StartNew();
         var layoutCount = 0;
         for (var i = 0; i < iterations; i++)
             layoutCount += SplitPaneCellLayoutPlanner.CalculateLayouts(viewport).Count;
 
-        total.Stop();
-        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        materializedTotal.Stop();
+        var materializedAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - materializedAllocatedBefore;
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var visitedAllocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var visitedTotal = Stopwatch.StartNew();
+        var visitedCount = 0;
+        for (var i = 0; i < iterations; i++)
+        {
+            var consumer = new CountingSplitPaneCellLayoutConsumer();
+            SplitPaneCellLayoutPlanner.VisitLayouts(viewport, null, null, ref consumer);
+            visitedCount += consumer.Count;
+        }
+
+        visitedTotal.Stop();
+        var visitedAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - visitedAllocatedBefore;
 
         Console.WriteLine(
             "PERF SPLIT_PANE_CELL_LAYOUT_MATERIALIZATION " +
-            $"steps={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
-            $"allocated_bytes={allocatedBytes:N0}");
+            $"steps={iterations} total_ms={materializedTotal.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={materializedAllocatedBytes:N0}");
+
+        Console.WriteLine(
+            "PERF SPLIT_PANE_CELL_LAYOUT_VISITOR " +
+            $"steps={iterations} total_ms={visitedTotal.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={visitedAllocatedBytes:N0}");
 
         layoutCount.Should().Be(2_040 * iterations);
-        allocatedBytes.Should().BeGreaterThan(0);
+        visitedCount.Should().Be(layoutCount);
+        materializedAllocatedBytes.Should().BeGreaterThan(0);
+        visitedAllocatedBytes.Should().BeLessThan(materializedAllocatedBytes);
     }
 
     private static DisplayCell Cell(uint row, uint col, string text, CellStyle? style = null) =>
