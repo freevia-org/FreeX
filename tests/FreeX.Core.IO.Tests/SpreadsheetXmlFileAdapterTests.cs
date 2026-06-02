@@ -3715,6 +3715,33 @@ public sealed class SpreadsheetXmlFileAdapterTests
         stylesheet.CanRead.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData("<rows>")]
+    [InlineData("")]
+    public void LoadTransformed_InvalidSourceXml_ReportsTransformSourceDiagnostic(string sourceXml)
+    {
+        using var source = StreamFromString(sourceXml);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Invalid Source"><ss:Table/></ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*source XML*")
+            .WithInnerException<XmlException>();
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
     [Fact]
     public void LoadTransformed_StylesheetAboveInputLimit_ReportsTransformStylesheetDiagnostic()
     {
