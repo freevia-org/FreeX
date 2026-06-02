@@ -421,6 +421,80 @@ public sealed class FormulaAuditingServiceTests
         issue.FormulaText.Should().Be("=" + formula);
     }
 
+    [Theory]
+    [InlineData("SUBTOTAL(9,A1:A2)")]
+    [InlineData("SUBTOTAL(109,A1:A2)")]
+    [InlineData("AGGREGATE(9,4,A1:A2)")]
+    [InlineData("AGGREGATE(14,4,A1:A2,1)")]
+    public void FindFormulaErrorIssues_ReturnsFormulaOmitsAdjacentCellsForAggregateWrappers(string formula)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromFormula(formula));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode).Subject;
+
+        issue.Cell.Should().Be("A4");
+        issue.FormulaText.Should().Be("=" + formula);
+    }
+
+    [Theory]
+    [InlineData("SUBTOTAL(9,A1,A3)")]
+    [InlineData("AGGREGATE(9,4,A1,A3)")]
+    public void FindFormulaErrorIssues_ReturnsFormulaOmitsAdjacentCellsBetweenAggregateWrapperArguments(string formula)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromFormula(formula));
+
+        var issue = FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().ContainSingle(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode).Subject;
+
+        issue.Cell.Should().Be("A4");
+        issue.FormulaText.Should().Be("=" + formula);
+    }
+
+    [Theory]
+    [InlineData("SUBTOTAL(A1:A2,A1:A2)")]
+    [InlineData("SUBTOTAL(12,A1:A2)")]
+    [InlineData("AGGREGATE(A1:A2,4,A1:A2)")]
+    [InlineData("AGGREGATE(9,A1:A2,A1:A2)")]
+    [InlineData("AGGREGATE(20,4,A1:A2)")]
+    [InlineData("AGGREGATE(9,8,A1:A2)")]
+    public void FindFormulaErrorIssues_DoesNotFlagAggregateWrappersWithUnsupportedSelectorArguments(string formula)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromFormula(formula));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode);
+    }
+
+    [Fact]
+    public void FindFormulaErrorIssues_DoesNotTreatAggregateKArgumentAsOmittedAdjacentRangeArgument()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(30));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), Cell.FromFormula("AGGREGATE(14,4,A1,A3)"));
+
+        FormulaAuditingService.FindFormulaErrorIssues(wb, sheet.Id)
+            .Should().NotContain(i => i.ErrorCode == FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode);
+    }
+
     [Fact]
     public void FindFormulaErrorIssues_ReturnsFormulaOmitsAdjacentCellsBetweenSumArgumentsInColumn()
     {

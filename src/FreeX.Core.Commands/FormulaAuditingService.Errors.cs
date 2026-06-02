@@ -7,7 +7,7 @@ namespace FreeX.Core.Commands;
 
 public static partial class FormulaAuditingService
 {
-    private const string OmittedAdjacentCellsAggregateFunctionPattern = "SUM|AVERAGE|COUNTA|COUNT|MIN|MAX|PRODUCT";
+    private const string OmittedAdjacentCellsAggregateFunctionPattern = "SUM|AVERAGE|COUNTA|COUNT|MIN|MAX|PRODUCT|SUBTOTAL|AGGREGATE";
 
     private static readonly string[] OmittedAdjacentCellsAggregateFunctions =
     [
@@ -17,7 +17,9 @@ public static partial class FormulaAuditingService
         "COUNTA",
         "MIN",
         "MAX",
-        "PRODUCT"
+        "PRODUCT",
+        "SUBTOTAL",
+        "AGGREGATE"
     ];
 
     public static IReadOnlyList<FormulaErrorInfo> FindFormulaErrors(Workbook workbook, SheetId? sheetId = null)
@@ -675,11 +677,20 @@ public static partial class FormulaAuditingService
     {
         foreach (Match aggregateMatch in Regex.Matches(
                      formulaText,
-                     $@"\b(?:{OmittedAdjacentCellsAggregateFunctionPattern})\s*\((?<args>[^)]*)\)",
+                     $@"\b(?<function>{OmittedAdjacentCellsAggregateFunctionPattern})\s*\((?<args>[^)]*)\)",
                      RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
         {
+            var arguments = aggregateMatch.Groups["args"].Value.Split(',', StringSplitOptions.TrimEntries);
+            if (!TryGetAggregateRangeArgumentTokens(
+                    aggregateMatch.Groups["function"].Value,
+                    arguments,
+                    out var rangeArgumentTokens))
+            {
+                continue;
+            }
+
             var ranges = new List<GridRange>();
-            foreach (var token in aggregateMatch.Groups["args"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            foreach (var token in rangeArgumentTokens)
             {
                 if (TryParseLocalRange(sheetId, token, out var range))
                     ranges.Add(range);
@@ -688,6 +699,71 @@ public static partial class FormulaAuditingService
             if (ranges.Count > 0)
                 yield return ranges;
         }
+    }
+
+    private static bool TryGetAggregateRangeArgumentTokens(
+        string functionName,
+        IReadOnlyList<string> arguments,
+        out IReadOnlyList<string> rangeArgumentTokens)
+    {
+        rangeArgumentTokens = [];
+        if (functionName.Equals("SUBTOTAL", StringComparison.OrdinalIgnoreCase))
+        {
+            if (arguments.Count < 2 ||
+                HasBlankArgument(arguments) ||
+                !TryParseWholeNumberArgument(arguments[0], out var functionNumber) ||
+                !IsSupportedSubtotalFunctionNumber(functionNumber))
+            {
+                return false;
+            }
+
+            rangeArgumentTokens = arguments.Skip(1).ToArray();
+            return true;
+        }
+
+        if (functionName.Equals("AGGREGATE", StringComparison.OrdinalIgnoreCase))
+        {
+            if (arguments.Count < 3 ||
+                HasBlankArgument(arguments) ||
+                !TryParseWholeNumberArgument(arguments[0], out var functionNumber) ||
+                functionNumber is < 1 or > 19 ||
+                !TryParseWholeNumberArgument(arguments[1], out var options) ||
+                options is < 0 or > 7)
+            {
+                return false;
+            }
+
+            var firstRangeArgumentIndex = 2;
+            var lastRangeArgumentExclusive = functionNumber is >= 14 and <= 19
+                ? arguments.Count - 1
+                : arguments.Count;
+            if (lastRangeArgumentExclusive <= firstRangeArgumentIndex)
+                return false;
+
+            rangeArgumentTokens = arguments
+                .Skip(firstRangeArgumentIndex)
+                .Take(lastRangeArgumentExclusive - firstRangeArgumentIndex)
+                .ToArray();
+            return true;
+        }
+
+        rangeArgumentTokens = arguments
+            .Where(argument => !string.IsNullOrWhiteSpace(argument))
+            .ToArray();
+        return true;
+    }
+
+    private static bool HasBlankArgument(IReadOnlyList<string> arguments) =>
+        arguments.Any(string.IsNullOrWhiteSpace);
+
+    private static bool TryParseWholeNumberArgument(string argument, out int value) =>
+        int.TryParse(argument, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+
+    private static bool IsSupportedSubtotalFunctionNumber(int functionNumber)
+    {
+        var baseFunctionNumber = functionNumber >= 100 ? functionNumber - 100 : functionNumber;
+        return baseFunctionNumber is >= 1 and <= 11 &&
+               (functionNumber < 100 || functionNumber is >= 101 and <= 111);
     }
 
     private static bool TryParseLocalRange(SheetId sheetId, string token, out GridRange range)
