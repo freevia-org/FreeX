@@ -586,7 +586,10 @@ public partial class MainWindow
             else if (intent.Action == ExcelEditKeyAction.CommitSelection)
             {
                 if (CommitEditAcrossSelection(fillFormulaEditCellOnly: formulaRangeEntryActive))
+                {
+                    HideInlineEditor(commit: false);
                     ClearFormulaRangeEntryState();
+                }
                 e.Handled = true;
             }
             else if (intent.Action == ExcelEditKeyAction.SelectFormulaReference && intent.Target is { } referenceTarget)
@@ -601,6 +604,7 @@ public partial class MainWindow
             {
                 if (CommitEdit())
                 {
+                    HideInlineEditor(commit: false);
                     ClearFormulaRangeEntryState();
                     SetActiveCell(target);
                     EnsureCellVisible(target);
