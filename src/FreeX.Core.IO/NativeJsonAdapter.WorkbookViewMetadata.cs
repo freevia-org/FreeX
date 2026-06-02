@@ -87,7 +87,7 @@ public sealed partial class NativeJsonAdapter
 
         var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
         var builtInGroupCount = string.IsNullOrWhiteSpace(model.BuiltInGroupCount) ? null : model.BuiltInGroupCount;
-        var groups = model.Groups
+        var groups = (model.Groups ?? [])
             .Select(FromWorkbookFunctionGroup)
             .OfType<WorkbookFunctionGroupDto>()
             .ToList();
@@ -125,7 +125,7 @@ public sealed partial class NativeJsonAdapter
             return null;
 
         var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var views = model.Views
+        var views = (model.Views ?? [])
             .Select(FromWorkbookAdditionalView)
             .OfType<WorkbookAdditionalViewDto>()
             .ToList();
