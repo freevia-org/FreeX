@@ -49,7 +49,7 @@ public sealed partial class NativeJsonAdapter
             return null;
 
         var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
-        var cells = model.Cells
+        var cells = (model.Cells ?? [])
             .Select(ToWorksheetSingleXmlCellDto)
             .OfType<WorksheetSingleXmlCellDto>()
             .ToList();
