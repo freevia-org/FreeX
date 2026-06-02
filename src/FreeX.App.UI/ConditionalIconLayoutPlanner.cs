@@ -9,7 +9,7 @@ public static class ConditionalIconLayoutPlanner
 {
     private const double ConditionalIconGutterWidth = 20;
     private const double ConditionalIconSize = 10;
-    private static readonly ConcurrentDictionary<string, ConditionalIconStyleTraits> StyleTraitCache = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, ConditionalIconStyleTraits> StyleTraitCache = new(StringComparer.OrdinalIgnoreCase);
 
     public static ConditionalIconCellLayout CalculateCellLayout(
         Rect cellRect,

@@ -1307,6 +1307,7 @@ public sealed partial class NativeJsonAdapter
         private static readonly JsonEncodedText IgnoreFormulaErrorName = JsonEncodedText.Encode(nameof(CellDto.IgnoreFormulaError));
         private static readonly JsonEncodedText StyleIdName = JsonEncodedText.Encode(nameof(CellDto.StyleId));
         private static readonly JsonEncodedText StyleName = JsonEncodedText.Encode(nameof(CellDto.Style));
+        public const int MaxCellAddressTextLength = 10;
 
         public override CellDto Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
@@ -1397,6 +1398,20 @@ public sealed partial class NativeJsonAdapter
         {
             writer.WriteStartObject();
             writer.WriteString(AddressName, value.Address);
+            WriteCellPayload(writer, value, options);
+            writer.WriteEndObject();
+        }
+
+        public static void WriteCell(Utf8JsonWriter writer, CellDto value, JsonSerializerOptions options, uint row, uint col)
+        {
+            writer.WriteStartObject();
+            WriteAddress(writer, row, col);
+            WriteCellPayload(writer, value, options);
+            writer.WriteEndObject();
+        }
+
+        private static void WriteCellPayload(Utf8JsonWriter writer, CellDto value, JsonSerializerOptions options)
+        {
             if (value.Value is not null)
                 writer.WriteString(ValueName, value.Value);
             if (value.ValueType is not null)
@@ -1412,8 +1427,54 @@ public sealed partial class NativeJsonAdapter
                 writer.WritePropertyName(StyleName);
                 JsonSerializer.Serialize(writer, value.Style, options);
             }
-            writer.WriteEndObject();
         }
+
+        private static void WriteAddress(Utf8JsonWriter writer, uint row, uint col)
+        {
+            Span<char> address = stackalloc char[MaxCellAddressTextLength];
+            var length = FormatAddress(address, row, col);
+            writer.WritePropertyName(AddressName);
+            writer.WriteStringValue(address[..length]);
+        }
+
+        public static int FormatAddress(Span<char> destination, uint row, uint col)
+        {
+            var columnLength = GetColumnNameLength(col);
+            WriteColumnName(col, destination[..columnLength]);
+
+            var rowLength = GetRowDigitCount(row);
+            var rowIndex = columnLength + rowLength;
+            do
+            {
+                destination[--rowIndex] = (char)('0' + row % 10);
+                row /= 10;
+            }
+            while (row > 0);
+
+            return columnLength + rowLength;
+        }
+
+        private static int GetColumnNameLength(uint col) =>
+            col <= 26 ? 1 :
+            col <= 702 ? 2 : 3;
+
+        private static void WriteColumnName(uint col, Span<char> destination)
+        {
+            for (var index = destination.Length - 1; index >= 0; index--)
+            {
+                col--;
+                destination[index] = (char)('A' + col % 26);
+                col /= 26;
+            }
+        }
+
+        private static int GetRowDigitCount(uint row) =>
+            row < 10 ? 1 :
+            row < 100 ? 2 :
+            row < 1_000 ? 3 :
+            row < 10_000 ? 4 :
+            row < 100_000 ? 5 :
+            row < 1_000_000 ? 6 : 7;
     }
 
     private sealed class StyleOnlyCellDtoJsonConverter : JsonConverter<StyleOnlyCellDto>
@@ -1491,6 +1552,20 @@ public sealed partial class NativeJsonAdapter
         {
             writer.WriteStartObject();
             writer.WriteString(AddressName, value.Address);
+            WriteCellPayload(writer, value, options);
+            writer.WriteEndObject();
+        }
+
+        public static void WriteCell(Utf8JsonWriter writer, StyleOnlyCellDto value, JsonSerializerOptions options, uint row, uint col)
+        {
+            writer.WriteStartObject();
+            WriteAddress(writer, row, col);
+            WriteCellPayload(writer, value, options);
+            writer.WriteEndObject();
+        }
+
+        private static void WriteCellPayload(Utf8JsonWriter writer, StyleOnlyCellDto value, JsonSerializerOptions options)
+        {
             if (value.StyleId is { } styleId)
                 writer.WriteNumber(StyleIdName, styleId);
             if (value.Style is not null)
@@ -1498,7 +1573,14 @@ public sealed partial class NativeJsonAdapter
                 writer.WritePropertyName(StyleName);
                 JsonSerializer.Serialize(writer, value.Style, options);
             }
-            writer.WriteEndObject();
+        }
+
+        private static void WriteAddress(Utf8JsonWriter writer, uint row, uint col)
+        {
+            Span<char> address = stackalloc char[CellDtoJsonConverter.MaxCellAddressTextLength];
+            var length = CellDtoJsonConverter.FormatAddress(address, row, col);
+            writer.WritePropertyName(AddressName);
+            writer.WriteStringValue(address[..length]);
         }
     }
 }

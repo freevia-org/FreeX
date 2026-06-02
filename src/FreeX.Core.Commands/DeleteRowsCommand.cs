@@ -57,17 +57,11 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
         foreach (var (addr, cell) in _shiftedSnapshot)
             sheet.SetCell(new CellAddress(addr.Sheet, addr.Row - _count, addr.Col), cell.Clone());
 
-        var inRangeHidden = sheet.HiddenRows.Where(r => r >= _startRow && r <= endRow).ToList();
-        var belowHidden   = sheet.HiddenRows.Where(r => r > endRow).ToList();
         _hiddenRowsSnapshot = [.. sheet.HiddenRows];
-        foreach (var r in inRangeHidden) sheet.HiddenRows.Remove(r);
-        foreach (var r in belowHidden) { sheet.HiddenRows.Remove(r); sheet.HiddenRows.Add(r - _count); }
+        RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.HiddenRows, _startRow, _count);
 
-        var inRangeFilterHidden = sheet.FilterHiddenRows.Where(r => r >= _startRow && r <= endRow).ToList();
-        var belowFilterHidden = sheet.FilterHiddenRows.Where(r => r > endRow).ToList();
         _filterHiddenRowsSnapshot = [.. sheet.FilterHiddenRows];
-        foreach (var r in inRangeFilterHidden) sheet.FilterHiddenRows.Remove(r);
-        foreach (var r in belowFilterHidden) { sheet.FilterHiddenRows.Remove(r); sheet.FilterHiddenRows.Add(r - _count); }
+        RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.FilterHiddenRows, _startRow, _count);
 
         _rowHeightSnapshot = new Dictionary<uint, double>(sheet.RowHeights);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.RowHeights, _startRow, _count);

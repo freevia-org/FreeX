@@ -433,7 +433,7 @@ public partial class GridView
 }
 
 public sealed record SplitDividerLayout(double? HorizontalY, double? VerticalX);
-public sealed record SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region);
+public readonly record struct SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region);
 public sealed record SplitDividerDragTarget(uint? Row, uint? Column);
 public sealed record SplitPaneScrollbarChrome(
     SplitPaneScrollbar? HorizontalTopRight,

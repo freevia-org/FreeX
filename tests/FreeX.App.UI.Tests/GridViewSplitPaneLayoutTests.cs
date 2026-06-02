@@ -1088,8 +1088,81 @@ public sealed class GridViewSplitPaneLayoutTests
         public readonly IReadOnlyList<FormulaTraceArrowLayout> Layouts => _layouts ?? [];
     }
 
+    [Fact]
+    public void Benchmark_SplitPaneCellLayoutMaterialization_ReportsAllocations()
+    {
+        const int iterations = 400;
+        var viewport = MeasuredSplitPaneViewport();
+
+        SplitPaneCellLayoutPlanner.CalculateLayouts(viewport).Should().HaveCount(2_040);
+        SplitPaneCellLayoutPlanner.CalculateLayouts(viewport).Should().HaveCount(2_040);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var total = Stopwatch.StartNew();
+        var layoutCount = 0;
+        for (var i = 0; i < iterations; i++)
+            layoutCount += SplitPaneCellLayoutPlanner.CalculateLayouts(viewport).Count;
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            "PERF SPLIT_PANE_CELL_LAYOUT_MATERIALIZATION " +
+            $"steps={iterations} total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+
+        layoutCount.Should().Be(2_040 * iterations);
+        allocatedBytes.Should().BeGreaterThan(0);
+    }
+
     private static DisplayCell Cell(uint row, uint col, string text, CellStyle? style = null) =>
         new(row, col, new TextValue(text), text, null, StyleId.Default, null, style);
+
+    private static ViewportModel MeasuredSplitPaneViewport()
+    {
+        var topRows = new List<RowMetric>(20);
+        var bottomRows = new List<RowMetric>(80);
+        var leftColumns = new List<ColMetric>(12);
+        var rightColumns = new List<ColMetric>(90);
+        var cells = new List<DisplayCell>(2_040);
+
+        for (uint row = 1; row <= 20; row++)
+            topRows.Add(new RowMetric(row, 18, (row - 1) * 18));
+
+        for (uint row = 200; row < 280; row++)
+            bottomRows.Add(new RowMetric(row, 18, (row - 200) * 18));
+
+        for (uint col = 1; col <= 12; col++)
+            leftColumns.Add(new ColMetric(col, 64, (col - 1) * 64));
+
+        for (uint col = 80; col < 170; col++)
+            rightColumns.Add(new ColMetric(col, 64, (col - 80) * 64));
+
+        foreach (var row in topRows)
+        {
+            foreach (var col in leftColumns)
+                cells.Add(Cell(row.Row, col.Col, "pinned"));
+            foreach (var col in rightColumns)
+                cells.Add(Cell(row.Row, col.Col, "top"));
+        }
+
+        return new ViewportModel(
+            [],
+            bottomRows,
+            rightColumns,
+            SplitPanes: new SplitPaneState(
+                21,
+                13,
+                topRows,
+                leftColumns,
+                cells,
+                rightColumns,
+                bottomRows));
+    }
 
     private static ViewportModel SplitViewport() =>
         new(
