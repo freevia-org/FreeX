@@ -29,6 +29,8 @@ public static class SplitPaneViewportChrome
                 Math.Max(GridView.ColHeaderHeight, horizontalY - SplitPaneScrollbarLayoutPlanner.Thickness),
                 Math.Max(0, actualWidth - verticalX),
                 SplitPaneScrollbarLayoutPlanner.Thickness);
+            var visibleSpan = Math.Max(1, topRightColumns.Count);
+            var maxStartIndex = Math.Max(1, CellAddress.MaxCol - (uint)visibleSpan + 1);
             horizontalTopRight = new SplitPaneScrollbar(
                 SplitPaneScrollbarOrientation.Horizontal,
                 SplitPaneRegion.TopRight,
@@ -39,8 +41,8 @@ public static class SplitPaneViewportChrome
                     topRightColumns[0].Col,
                     topRightColumns.Count,
                     CellAddress.MaxCol),
-                Math.Max(1, topRightColumns.Count),
-                Math.Max(1, CellAddress.MaxCol - (uint)Math.Max(1, topRightColumns.Count) + 1));
+                visibleSpan,
+                maxStartIndex);
         }
 
         if (dividerLayout.HorizontalY is { } bottomY &&
@@ -53,6 +55,8 @@ public static class SplitPaneViewportChrome
                 bottomY,
                 SplitPaneScrollbarLayoutPlanner.Thickness,
                 Math.Max(0, actualHeight - bottomY));
+            var visibleSpan = Math.Max(1, bottomLeftRows.Count);
+            var maxStartIndex = Math.Max(1, CellAddress.MaxRow - (uint)visibleSpan + 1);
             verticalBottomLeft = new SplitPaneScrollbar(
                 SplitPaneScrollbarOrientation.Vertical,
                 SplitPaneRegion.BottomLeft,
@@ -63,8 +67,8 @@ public static class SplitPaneViewportChrome
                     bottomLeftRows[0].Row,
                     bottomLeftRows.Count,
                     CellAddress.MaxRow),
-                Math.Max(1, bottomLeftRows.Count),
-                Math.Max(1, CellAddress.MaxRow - (uint)Math.Max(1, bottomLeftRows.Count) + 1));
+                visibleSpan,
+                maxStartIndex);
         }
 
         return new SplitPaneScrollbarChrome(horizontalTopRight, verticalBottomLeft);
