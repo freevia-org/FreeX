@@ -47,7 +47,7 @@ public static class SplitPaneCellLayoutPlanner
         var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);
         var horizontalY = dividerLayout.HorizontalY ?? GridView.ColHeaderHeight;
         var verticalX = dividerLayout.VerticalX ?? rowHeaderWidth;
-        HashSet<(uint Row, uint Col)>? occupied = null;
+        SplitPaneOccupiedCellMap? occupied = null;
 
         foreach (var cell in cells)
         {
@@ -90,7 +90,7 @@ public static class SplitPaneCellLayoutPlanner
             if (CanOverflowSplitPaneText(cell, merge))
             {
                 occupied ??= BuildOccupiedCells(cells, editingCell);
-                var renderWidth = width + SumEmptyOverflowColumnWidths(cell, colMetrics, occupied);
+                var renderWidth = width + SumEmptyOverflowColumnWidths(cell, colMetrics, occupied.Value);
                 textClipRect = new Rect(x, y, renderWidth, height);
             }
 
@@ -143,27 +143,124 @@ public static class SplitPaneCellLayoutPlanner
     private static bool CanOverflowSplitPaneText(DisplayCell cell, GridRange? merge) =>
         GridView.CanOverflowCellText(cell.Style, cell.RawValue, cell.DisplayText, merge);
 
-    private static HashSet<(uint Row, uint Col)> BuildOccupiedCells(IReadOnlyList<DisplayCell> cells, CellAddress? editingCell)
+    private readonly record struct OccupiedColumnSpan(uint Start, uint End);
+
+    private readonly struct SplitPaneOccupiedCellMap(Dictionary<uint, List<OccupiedColumnSpan>> spansByRow)
     {
-        var occupied = new HashSet<(uint Row, uint Col)>(cells.Count);
+        private readonly Dictionary<uint, List<OccupiedColumnSpan>> _spansByRow = spansByRow;
+
+        public bool Contains(uint row, uint col)
+        {
+            if (!_spansByRow.TryGetValue(row, out var spans))
+                return false;
+
+            foreach (var span in spans)
+            {
+                if (col < span.Start)
+                    return false;
+                if (col <= span.End)
+                    return true;
+            }
+
+            return false;
+        }
+    }
+
+    private static SplitPaneOccupiedCellMap BuildOccupiedCells(
+        IReadOnlyList<DisplayCell> cells,
+        CellAddress? editingCell)
+    {
+        var spansByRow = new Dictionary<uint, List<OccupiedColumnSpan>>();
+        var needsNormalize = false;
         foreach (var cell in cells)
         {
-            if (GridView.IsOverflowOccupied(cell, editingCell))
-                occupied.Add((cell.Row, cell.Col));
+            if (!GridView.IsOverflowOccupied(cell, editingCell))
+                continue;
+
+            if (!spansByRow.TryGetValue(cell.Row, out var spans))
+            {
+                spans = [];
+                spansByRow.Add(cell.Row, spans);
+            }
+
+            AddOccupiedColumn(spans, cell.Col, ref needsNormalize);
         }
 
-        return occupied;
+        if (needsNormalize)
+            NormalizeOccupiedColumnSpans(spansByRow);
+
+        return new SplitPaneOccupiedCellMap(spansByRow);
+    }
+
+    private static void AddOccupiedColumn(List<OccupiedColumnSpan> spans, uint col, ref bool needsNormalize)
+    {
+        if (spans.Count == 0)
+        {
+            spans.Add(new OccupiedColumnSpan(col, col));
+            return;
+        }
+
+        var last = spans[^1];
+        if (last.End < uint.MaxValue && col == last.End + 1)
+        {
+            spans[^1] = new OccupiedColumnSpan(last.Start, col);
+            return;
+        }
+
+        if (col > last.End)
+        {
+            spans.Add(new OccupiedColumnSpan(col, col));
+            return;
+        }
+
+        if (col >= last.Start)
+            return;
+
+        needsNormalize = true;
+        spans.Add(new OccupiedColumnSpan(col, col));
+    }
+
+    private static void NormalizeOccupiedColumnSpans(Dictionary<uint, List<OccupiedColumnSpan>> spansByRow)
+    {
+        foreach (var spans in spansByRow.Values)
+        {
+            if (spans.Count <= 1)
+                continue;
+
+            spans.Sort(static (left, right) => left.Start.CompareTo(right.Start));
+            var writeIndex = 0;
+            for (var readIndex = 1; readIndex < spans.Count; readIndex++)
+            {
+                var current = spans[readIndex];
+                var merged = spans[writeIndex];
+                if (current.Start <= merged.End ||
+                    (merged.End < uint.MaxValue && current.Start == merged.End + 1))
+                {
+                    spans[writeIndex] = new OccupiedColumnSpan(
+                        merged.Start,
+                        Math.Max(merged.End, current.End));
+                    continue;
+                }
+
+                writeIndex++;
+                spans[writeIndex] = current;
+            }
+
+            var keepCount = writeIndex + 1;
+            if (keepCount < spans.Count)
+                spans.RemoveRange(keepCount, spans.Count - keepCount);
+        }
     }
 
     private static double SumEmptyOverflowColumnWidths(
         DisplayCell cell,
         IReadOnlyDictionary<uint, ColMetric> columns,
-        HashSet<(uint Row, uint Col)> occupied)
+        SplitPaneOccupiedCellMap occupied)
     {
         double width = 0;
         var nextCol = cell.Col + 1;
         while (columns.TryGetValue(nextCol, out var nextMetric) &&
-               !occupied.Contains((cell.Row, nextCol)))
+               !occupied.Contains(cell.Row, nextCol))
         {
             width += nextMetric.Width;
             nextCol++;

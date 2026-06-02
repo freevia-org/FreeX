@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Media;
@@ -196,6 +197,7 @@ public partial class GridView : FrameworkElement
     private readonly Dictionary<Brush, Pen> _underlinePenCache = new();
     private readonly Dictionary<DefaultTextLayoutKey, FormattedText> _defaultTextLayoutCache = new();
     private readonly Dictionary<DefaultWrappedTextLayoutKey, FormattedText> _defaultWrappedTextLayoutCache = new();
+    private readonly Dictionary<CellStyle, bool> _defaultTextLayoutStyleCache = new(CellStyleReferenceComparer.Instance);
     private readonly Dictionary<TextWidthLayoutKey, double> _textWidthLayoutCache = new();
     private readonly Dictionary<ShrinkTextLayoutKey, double> _shrinkTextLayoutCache = new();
     private readonly Dictionary<Rect, RectangleGeometry> _cellClipGeometryCache = new();
@@ -208,6 +210,19 @@ public partial class GridView : FrameworkElement
 
     private static double ToDisplayFontSize(double pointSize) =>
         Math.Max(1.0, Math.Round(pointSize * (96.0 / 72.0), MidpointRounding.AwayFromZero));
+
+    private sealed class CellStyleReferenceComparer : IEqualityComparer<CellStyle>
+    {
+        public static readonly CellStyleReferenceComparer Instance = new();
+
+        private CellStyleReferenceComparer()
+        {
+        }
+
+        public bool Equals(CellStyle? x, CellStyle? y) => ReferenceEquals(x, y);
+
+        public int GetHashCode(CellStyle obj) => RuntimeHelpers.GetHashCode(obj);
+    }
 
     public static double ResolveShrinkFontSize(
         double requestedFontSize,

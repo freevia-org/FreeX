@@ -117,9 +117,13 @@ public static partial class PivotTableRefreshService
     {
         for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
         {
-            var values = new List<ScalarValue>(fieldCount);
-            for (var col = range.Start.Col; col <= range.End.Col; col++)
-                values.Add(sheet.GetCell(row, col)?.Value ?? BlankValue.Instance);
+            var values = new ScalarValue[fieldCount];
+            for (var index = 0; index < fieldCount; index++)
+            {
+                var col = range.Start.Col + (uint)index;
+                values[index] = sheet.GetCell(row, col)?.Value ?? BlankValue.Instance;
+            }
+
             yield return values;
         }
     }

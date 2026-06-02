@@ -55,6 +55,12 @@ public static partial class PivotTableRefreshService
     {
         var rowCapacity = rows is ICollection<IReadOnlyList<ScalarValue>> collection ? collection.Count : 0;
         var map = new PivotColumnRowMap(rowCapacity);
+        if (columnFields.Count == 1)
+        {
+            BuildSingleColumnRowsByKey(rows, columnFields[0], map, rowCapacity);
+            return map;
+        }
+
         foreach (var row in rows)
         {
             var key = BuildColumnKey(row, columnFields);
@@ -69,6 +75,34 @@ public static partial class PivotTableRefreshService
         }
 
         return map;
+    }
+
+    private static void BuildSingleColumnRowsByKey(
+        IEnumerable<IReadOnlyList<ScalarValue>> rows,
+        PivotFieldModel columnField,
+        PivotColumnRowMap map,
+        int rowCapacity)
+    {
+        var bucketCapacity = rowCapacity == 0 ? 0 : Math.Min(rowCapacity, 1024);
+        var buckets = new Dictionary<string, PivotColumnBucket>(
+            bucketCapacity,
+            StringComparer.CurrentCultureIgnoreCase);
+
+        foreach (var row in rows)
+        {
+            var keyText = GroupKeyText(row[columnField.SourceFieldIndex], columnField);
+            if (!buckets.TryGetValue(keyText, out var bucket))
+            {
+                var key = new PivotKey([keyText]);
+                var keyRows = new List<IReadOnlyList<ScalarValue>>();
+                bucket = new PivotColumnBucket(key, keyRows);
+                buckets.Add(keyText, bucket);
+                map.RowsByKey.Add(key, keyRows);
+            }
+
+            bucket.Rows.Add(row);
+            map.RowsInSourceOrder.Add((row, bucket.Key));
+        }
     }
 
     private static IReadOnlyList<IReadOnlyList<ScalarValue>> RowsForColumnKey(
@@ -229,5 +263,12 @@ public static partial class PivotTableRefreshService
         public Dictionary<PivotKey, List<IReadOnlyList<ScalarValue>>> RowsByKey { get; } = [];
 
         public List<(IReadOnlyList<ScalarValue> Row, PivotKey Key)> RowsInSourceOrder { get; }
+    }
+
+    private sealed class PivotColumnBucket(PivotKey key, List<IReadOnlyList<ScalarValue>> rows)
+    {
+        public PivotKey Key { get; } = key;
+
+        public List<IReadOnlyList<ScalarValue>> Rows { get; } = rows;
     }
 }

@@ -1577,6 +1577,66 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_LoadsStandaloneSpreadsheetMlOutput()
+    {
+        using var source = StreamFromString("<rows><row name=\"Echo\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:output method="xml" standalone="yes" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Standalone">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Standalone");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Echo"));
+    }
+
+    [Fact]
+    public void LoadTransformed_LoadsOmittedDeclarationSpreadsheetMlOutput()
+    {
+        using var source = StreamFromString("<rows><row name=\"Hotel\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:output method="xml" omit-xml-declaration="yes" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="NoDeclaration">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("NoDeclaration");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Hotel"));
+    }
+
+    [Fact]
     public void LoadTransformed_AppliesXsltParametersToGeneratedSpreadsheetMl()
     {
         using var source = StreamFromString("<rows><row amount=\"42.5\" /></rows>");
