@@ -1188,11 +1188,15 @@ public sealed class GridViewRenderPerformanceTests
         var renderSplitPaneCells = rendering[
             rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
             rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+        var textSetup = renderSplitPaneCells[
+            renderSplitPaneCells.IndexOf("var hAlign = style?.HorizontalAlignment", StringComparison.Ordinal)..
+            renderSplitPaneCells.IndexOf("if (style?.ShrinkToFit == true && !wrapText)", StringComparison.Ordinal)];
 
         renderSplitPaneCells.Should().Contain("var wrapText = style?.WrapText == true;");
         renderSplitPaneCells.Should().Contain("var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);");
         renderSplitPaneCells.Should().Contain("var useDefaultWrappedTextLayout = !useDefaultTextLayout && wrapText && CanUseDefaultWrappedFormattedText(style);");
         renderSplitPaneCells.Should().Contain("GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)");
+        textSetup.Should().NotContain("CreateCellTypeface");
         renderSplitPaneCells.Should().Contain("text.MaxTextWidth = wrapMaxTextWidth;");
         renderSplitPaneCells.Should().Contain("text.TextAlignment = wrapTextAlignment;");
         renderSplitPaneCells.Should().Contain("if (style?.ShrinkToFit == true && !wrapText)");
