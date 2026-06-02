@@ -125,6 +125,17 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void FindIssuesInCell_IgnoresQuotedAndBracketedFilePathsWithSpaces()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+        var text = "Open \"C:\\teh folder\\adn report.xlsx\", '\\\\server\\recieve share\\adn file.txt', and [C:\\teh archive\\adn log.csv] before seperate.";
+
+        var issues = SpellCheckService.FindIssuesInCell(address, text);
+
+        issues.Select(issue => issue.Word).Should().Equal("seperate");
+    }
+
+    [Fact]
     public void FindIssuesInCell_ReturnsRepeatedWordsInTextOrder()
     {
         var address = new CellAddress(SheetId.New(), 1, 1);
@@ -308,13 +319,13 @@ public sealed class SpellCheckServiceTests
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var textAddress = new CellAddress(sheet.Id, 1, 1);
-        sheet.SetCell(textAddress, new TextValue("Open https://teh.example.com and C:\\adn\\file.txt, then recieve teh package."));
+        sheet.SetCell(textAddress, new TextValue("Open https://teh.example.com and \"C:\\adn folder\\teh file.txt\", then recieve teh package."));
 
         var plan = SpellCheckService.PlanKnownCorrections(wb, sheet.Id);
 
         plan.IssueCount.Should().Be(2);
         plan.Edits.Should().ContainSingle();
-        plan.Edits[0].CorrectedText.Should().Be("Open https://teh.example.com and C:\\adn\\file.txt, then receive the package.");
+        plan.Edits[0].CorrectedText.Should().Be("Open https://teh.example.com and \"C:\\adn folder\\teh file.txt\", then receive the package.");
         plan.Edits[0].ReplacementCount.Should().Be(2);
     }
 

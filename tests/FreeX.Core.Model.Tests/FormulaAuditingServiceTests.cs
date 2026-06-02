@@ -401,6 +401,7 @@ public sealed class FormulaAuditingServiceTests
     [InlineData("AVERAGE")]
     [InlineData("COUNT")]
     [InlineData("COUNTA")]
+    [InlineData("MEDIAN")]
     [InlineData("MIN")]
     [InlineData("MAX")]
     [InlineData("PRODUCT")]
