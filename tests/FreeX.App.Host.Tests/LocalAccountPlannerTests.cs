@@ -20,7 +20,7 @@ public sealed class LocalAccountPlannerTests
 
         plan.Title.Should().Be("Account");
         plan.WorkbookStatus.Should().Be(@"Budget.xlsx (C:\Work\Budget.xlsx)");
-        plan.SharingStatus.Should().Be("Ready for Windows Share from the saved local file.");
+        plan.SharingStatus.Should().Be(@"Ready for Windows Share from C:\Work\Budget.xlsx.");
         plan.Details.Should().ContainEquivalentOf(new LocalAccountDetail("FreeX user name", "Analyst"));
         plan.Details.Should().ContainEquivalentOf(new LocalAccountDetail("Windows account", @"DESKTOP\quinn"));
         plan.Details.Should().ContainEquivalentOf(new LocalAccountDetail("Device", "FREEX-PC"));
@@ -46,7 +46,7 @@ public sealed class LocalAccountPlannerTests
             fileExists: _ => false);
 
         unsaved.WorkbookStatus.Should().Be("Book1 (not saved yet)");
-        unsaved.SharingStatus.Should().Be("Save As is required before Windows Share can send the workbook.");
+        unsaved.SharingStatus.Should().Be("Save As is required before Windows Share can send the workbook because it has not been saved yet.");
         unsaved.Details.Should().ContainEquivalentOf(new LocalAccountDetail("FreeX user name", "quinn"));
 
         var missing = LocalAccountPlanner.Create(
@@ -60,7 +60,7 @@ public sealed class LocalAccountPlannerTests
             fileExists: _ => false);
 
         missing.WorkbookStatus.Should().Be(@"Book1 (saved path missing: C:\Missing\Book1.xlsx)");
-        missing.SharingStatus.Should().Be("Save As is required before Windows Share can send the workbook.");
+        missing.SharingStatus.Should().Be(@"Save As is required before Windows Share can send the workbook because the saved path is missing: C:\Missing\Book1.xlsx.");
     }
 
     [Fact]

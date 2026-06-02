@@ -69,6 +69,23 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
+    public void ArrowKeyOnAddSheetButton_DoesNotRouteAsFocusedSheetTabNavigation()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.FocusAddSheetButton().Should().BeTrue();
+            harness.ActiveSheetTabName.Should().Be("Sheet1");
+
+            harness.HandleFocusedSheetTabKeyboardNavigation(Key.Right).Should().BeFalse();
+
+            harness.ActiveSheetTabName.Should().Be("Sheet1");
+            harness.AddSheetButtonHasKeyboardFocus.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void RightClickSheetTab_ClearsPreviousGroupedHighlight()
     {
         StaTestRunner.Run(() =>
@@ -181,6 +198,7 @@ public sealed class MainWindowSheetTabKeyboardTests
         private readonly MethodInfo _updateSheetTabNavigation;
         private readonly MethodInfo _tryFocusCurrentSheetTab;
         private readonly MethodInfo _tryOpenFocusedSheetTabContextMenu;
+        private readonly MethodInfo _tryHandleFocusedSheetTabKeyboardNavigation;
         private readonly MethodInfo _sheetTabContextMenuOpened;
         private FrameworkElement? _routedSheetTabTarget;
 
@@ -202,6 +220,9 @@ public sealed class MainWindowSheetTabKeyboardTests
             _tryOpenFocusedSheetTabContextMenu = typeof(MainWindow)
                 .GetMethod("TryOpenFocusedSheetTabContextMenu", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "TryOpenFocusedSheetTabContextMenu");
+            _tryHandleFocusedSheetTabKeyboardNavigation = typeof(MainWindow)
+                .GetMethod("TryHandleFocusedSheetTabKeyboardNavigation", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFocusedSheetTabKeyboardNavigation");
             _sheetTabContextMenuOpened = typeof(MainWindow)
                 .GetMethod("SheetTabContextMenu_Opened", BindingFlags.Static | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "SheetTabContextMenu_Opened");
@@ -218,6 +239,10 @@ public sealed class MainWindowSheetTabKeyboardTests
                 is { } active
                     ? GetStringProperty(active, "Name")
                     : null;
+
+        public bool AddSheetButtonHasKeyboardFocus =>
+            _window.FindName("AddSheetButton") is FrameworkElement addSheet &&
+            addSheet.IsKeyboardFocusWithin;
 
         public IReadOnlyList<string> GroupedSheetTabNames =>
             SheetTabViewModels
@@ -259,6 +284,28 @@ public sealed class MainWindowSheetTabKeyboardTests
             var focused = (bool)_tryFocusCurrentSheetTab.Invoke(_window, [])!;
             PumpDispatcher();
             return focused;
+        }
+
+        public bool FocusAddSheetButton()
+        {
+            if (_window.FindName("AddSheetButton") is not FrameworkElement addSheet)
+                return false;
+
+            var focused = addSheet.Focus();
+            Keyboard.Focus(addSheet);
+            PumpDispatcher();
+            return focused;
+        }
+
+        public bool HandleFocusedSheetTabKeyboardNavigation(Key key)
+        {
+            var source = PresentationSource.FromVisual(_window);
+            var args = new KeyEventArgs(Keyboard.PrimaryDevice, source, Environment.TickCount, key)
+            {
+                RoutedEvent = Keyboard.KeyDownEvent
+            };
+
+            return (bool)_tryHandleFocusedSheetTabKeyboardNavigation.Invoke(_window, [args])!;
         }
 
         public void InsertNewSheet()
