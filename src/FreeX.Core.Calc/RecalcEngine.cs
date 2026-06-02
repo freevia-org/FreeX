@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -10,12 +11,15 @@ namespace FreeX.Core.Calc;
 public sealed class RecalcEngine
 {
     private const long CompactRangeCellThreshold = 1024;
+    private const int MaxDependencyPlanCacheEntries = 1024;
     private static readonly RecalcReport EmptyReport = new([], [], []);
 
     private readonly DependencyGraph _graph;
     private readonly FormulaEvaluator _evaluator;
     // Single-threaded only. If multi-threaded recalc is added (Phase 4), protect with a lock.
     private readonly HashSet<CellAddress> _volatileCells = [];
+    private readonly Dictionary<DependencyPlanCacheKey, FormulaDependencyPlan> _dependencyPlanCache = [];
+    private readonly Queue<DependencyPlanCacheKey> _dependencyPlanCacheOrder = [];
 
     public RecalcEngine(DependencyGraph graph, FormulaEvaluator evaluator)
     {
@@ -209,14 +213,54 @@ public sealed class RecalcEngine
     /// </summary>
     public void RegisterFormulaDependencies(CellAddress formulaCell, FormulaNode ast, SheetId sheetId, FreeX.Core.Model.Workbook? workbook = null)
     {
+        var cacheKey = new DependencyPlanCacheKey(ast, sheetId);
+        if (_dependencyPlanCache.TryGetValue(cacheKey, out var cachedPlan))
+        {
+            ApplyDependencyPlan(formulaCell, cachedPlan);
+            return;
+        }
+
         var refs = new FormulaDependencySet();
-        var containsVolatileFunction = CollectReferences(ast, sheetId, formulaCell, workbook, refs);
+        var cacheableForDependencyPlan = true;
+        var containsVolatileFunction = CollectReferences(ast, sheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan);
         _graph.SetDependencies(formulaCell, refs.Cells, refs.Ranges);
 
+        SetVolatileTracking(formulaCell, containsVolatileFunction);
+
+        if (cacheableForDependencyPlan)
+            AddDependencyPlanToCache(cacheKey, refs, containsVolatileFunction);
+    }
+
+    private void ApplyDependencyPlan(CellAddress formulaCell, FormulaDependencyPlan plan)
+    {
+        _graph.SetDependenciesFromTemplate(formulaCell, plan.Cells, plan.Ranges);
+        SetVolatileTracking(formulaCell, plan.ContainsVolatileFunction);
+    }
+
+    private void SetVolatileTracking(CellAddress formulaCell, bool containsVolatileFunction)
+    {
         if (containsVolatileFunction)
             _volatileCells.Add(formulaCell);
         else
             _volatileCells.Remove(formulaCell);
+    }
+
+    private void AddDependencyPlanToCache(
+        DependencyPlanCacheKey cacheKey,
+        FormulaDependencySet refs,
+        bool containsVolatileFunction)
+    {
+        if (_dependencyPlanCache.Count >= MaxDependencyPlanCacheEntries &&
+            _dependencyPlanCacheOrder.TryDequeue(out var oldest))
+        {
+            _dependencyPlanCache.Remove(oldest);
+        }
+
+        var cells = refs.Cells.Count == 0 ? Array.Empty<CellAddress>() : refs.Cells.ToArray();
+        var ranges = refs.Ranges.Count == 0 ? Array.Empty<GridRange>() : refs.Ranges.ToArray();
+
+        _dependencyPlanCache[cacheKey] = new FormulaDependencyPlan(cells, ranges, containsVolatileFunction);
+        _dependencyPlanCacheOrder.Enqueue(cacheKey);
     }
 
     /// <summary>Remove a cell's dependencies (when its formula is cleared).</summary>
@@ -379,12 +423,14 @@ public sealed class RecalcEngine
         SheetId defaultSheetId,
         CellAddress formulaCell,
         FreeX.Core.Model.Workbook? workbook,
-        FormulaDependencySet refs)
+        FormulaDependencySet refs,
+        ref bool cacheableForDependencyPlan)
     {
         switch (node)
         {
             case CellRefNode cellRef when cellRef.SheetName is not null:
             {
+                cacheableForDependencyPlan = false;
                 var targetSheet = workbook?.GetSheet(cellRef.SheetName);
                 if (targetSheet is not null)
                     refs.Add(new CellAddress(targetSheet.Id, cellRef.Row, cellRef.ColumnNumber));
@@ -396,6 +442,7 @@ public sealed class RecalcEngine
 
             case RangeRefNode range when range.SheetName is not null:
             {
+                cacheableForDependencyPlan = false;
                 var targetSheet = workbook?.GetSheet(range.SheetName);
                 if (targetSheet is not null)
                 {
@@ -411,6 +458,7 @@ public sealed class RecalcEngine
 
             case FullColumnRangeRefNode range when range.SheetName is not null:
             {
+                cacheableForDependencyPlan = false;
                 var targetSheet = workbook?.GetSheet(range.SheetName);
                 if (targetSheet is not null)
                     refs.AddRange(CreateGridRange(targetSheet.Id, range));
@@ -424,6 +472,7 @@ public sealed class RecalcEngine
 
             case FullRowRangeRefNode range when range.SheetName is not null:
             {
+                cacheableForDependencyPlan = false;
                 var targetSheet = workbook?.GetSheet(range.SheetName);
                 if (targetSheet is not null)
                     refs.AddRange(CreateGridRange(targetSheet.Id, range));
@@ -437,6 +486,7 @@ public sealed class RecalcEngine
 
             case NamedRangeNode named:
             {
+                cacheableForDependencyPlan = false;
                 if (workbook is not null && workbook.TryGetNamedRange(named.Name, out var namedRange))
                 {
                     refs.AddRange(namedRange);
@@ -446,6 +496,7 @@ public sealed class RecalcEngine
 
             case StructuredReferenceNode structured:
             {
+                cacheableForDependencyPlan = false;
                 if (workbook is null)
                     return false;
 
@@ -464,6 +515,7 @@ public sealed class RecalcEngine
 
             case StructuredCurrentRowReferenceNode currentRow:
             {
+                cacheableForDependencyPlan = false;
                 var address = StructuredReferenceResolver.ResolveCurrentRowColumn(
                     workbook,
                     workbook?.GetSheet(defaultSheetId),
@@ -477,13 +529,13 @@ public sealed class RecalcEngine
 
             case BinaryOpNode binary:
             {
-                var leftHasVolatile = CollectReferences(binary.Left, defaultSheetId, formulaCell, workbook, refs);
-                var rightHasVolatile = CollectReferences(binary.Right, defaultSheetId, formulaCell, workbook, refs);
+                var leftHasVolatile = CollectReferences(binary.Left, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan);
+                var rightHasVolatile = CollectReferences(binary.Right, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan);
                 return leftHasVolatile || rightHasVolatile;
             }
 
             case UnaryOpNode unary:
-                return CollectReferences(unary.Operand, defaultSheetId, formulaCell, workbook, refs);
+                return CollectReferences(unary.Operand, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan);
 
             case FunctionCallNode func:
             {
@@ -491,7 +543,7 @@ public sealed class RecalcEngine
                 var arguments = func.Arguments;
                 for (var i = 0; i < arguments.Count; i++)
                 {
-                    if (CollectReferences(arguments[i], defaultSheetId, formulaCell, workbook, refs))
+                    if (CollectReferences(arguments[i], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan))
                         containsVolatileFunction = true;
                 }
 
@@ -521,6 +573,44 @@ public sealed class RecalcEngine
         var start = new CellAddress(sheetId, range.StartRow, 1);
         var end = new CellAddress(sheetId, range.EndRow, CellAddress.MaxCol);
         return new GridRange(start, end);
+    }
+
+    private readonly struct DependencyPlanCacheKey : IEquatable<DependencyPlanCacheKey>
+    {
+        private readonly FormulaNode _ast;
+        private readonly SheetId _sheetId;
+
+        public DependencyPlanCacheKey(FormulaNode ast, SheetId sheetId)
+        {
+            _ast = ast;
+            _sheetId = sheetId;
+        }
+
+        public bool Equals(DependencyPlanCacheKey other) =>
+            ReferenceEquals(_ast, other._ast) && _sheetId.Equals(other._sheetId);
+
+        public override bool Equals(object? obj) =>
+            obj is DependencyPlanCacheKey other && Equals(other);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(RuntimeHelpers.GetHashCode(_ast), _sheetId);
+    }
+
+    private sealed class FormulaDependencyPlan
+    {
+        public FormulaDependencyPlan(
+            IReadOnlyList<CellAddress> cells,
+            IReadOnlyList<GridRange> ranges,
+            bool containsVolatileFunction)
+        {
+            Cells = cells;
+            Ranges = ranges;
+            ContainsVolatileFunction = containsVolatileFunction;
+        }
+
+        public IReadOnlyList<CellAddress> Cells { get; }
+        public IReadOnlyList<GridRange> Ranges { get; }
+        public bool ContainsVolatileFunction { get; }
     }
 
     private sealed class FormulaDependencySet
