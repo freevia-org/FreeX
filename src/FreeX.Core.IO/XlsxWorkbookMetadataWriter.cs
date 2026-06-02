@@ -9,6 +9,23 @@ internal static class XlsxWorkbookMetadataWriter
 {
     private static readonly XNamespace WorkbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
+    public static bool HasPostProcessingMetadata(Workbook workbook) =>
+        workbook.Uses1904DateSystem ||
+        workbook.Properties is not null ||
+        workbook.ShowSheetTabs is not null ||
+        workbook.SheetTabRatio is not null ||
+        workbook.FirstVisibleSheetIndex is not null ||
+        workbook.ActiveSheetIndex is not null ||
+        workbook.AdditionalViews is not null ||
+        workbook.FileVersion is not null ||
+        workbook.FunctionGroups is not null ||
+        workbook.SmartTags is not null ||
+        workbook.FileSharing is not null ||
+        workbook.FileRecoveryProperties.Count > 0 ||
+        workbook.IsStructureProtected ||
+        workbook.ProtectionMetadata is not null ||
+        HasCalculationProperties(workbook);
+
     public static void SavePostProcessingMetadata(Stream xlsxStream, Workbook workbook) =>
         SaveWorkbookXml(xlsxStream, workbook, static (workbookXml, root, model) =>
         {
@@ -59,6 +76,14 @@ internal static class XlsxWorkbookMetadataWriter
         workbook.SmartTags is not null ||
         workbook.FileSharing is not null ||
         workbook.FileRecoveryProperties.Count > 0;
+
+    private static bool HasCalculationProperties(Workbook workbook) =>
+        workbook.CalculationMode != WorkbookCalculationMode.Automatic ||
+        workbook.FullCalculationOnLoad ||
+        workbook.ForceFullCalculation ||
+        workbook.IterativeCalculation ||
+        workbook.MaxCalculationIterations is not null ||
+        workbook.MaxCalculationChange is not null;
 
     public static void SaveWorkbookProperties(Stream xlsxStream, Workbook workbook)
     {

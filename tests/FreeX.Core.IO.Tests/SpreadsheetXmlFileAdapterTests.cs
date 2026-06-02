@@ -1726,6 +1726,54 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromDynamicCellAttributes()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row first="12.5" second="7.25" formula="=SUM(RC[-2]:RC[-1])" total="19.75" style="total"/>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <ss:Style ss:ID="total">
+                      <ss:NumberFormat ss:Format="0.00"/>
+                    </ss:Style>
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Dynamic Attributes">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@first"/></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@second"/></ss:Data></ss:Cell>
+                        <xsl:element name="ss:Cell">
+                          <xsl:attribute name="ss:Formula"><xsl:value-of select="row/@formula"/></xsl:attribute>
+                          <xsl:attribute name="ss:StyleID"><xsl:value-of select="row/@style"/></xsl:attribute>
+                          <ss:Data ss:Type="Number"><xsl:value-of select="row/@total"/></ss:Data>
+                        </xsl:element>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        var formulaCell = sheet.GetCell(1, 3);
+        sheet.Name.Should().Be("Dynamic Attributes");
+        formulaCell.Should().NotBeNull();
+        formulaCell!.FormulaText.Should().Be("SUM(RC[-2]:RC[-1])");
+        formulaCell.Value.Should().Be(new NumberValue(19.75));
+        workbook.GetStyle(formulaCell.StyleId).NumberFormat.Should().Be("0.00");
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromNamespaceUriDynamicElements()
     {
         using var source = StreamFromString("<rows><row sheet=\"UriDynamic\" label=\"Bravo\" amount=\"18.75\" /></rows>");
@@ -3299,8 +3347,8 @@ public sealed class SpreadsheetXmlFileAdapterTests
     public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromRowColumnLayoutAttributeValueTemplates()
     {
         using var source = StreamFromString("""
-            <layout columnIndex="2" columnSpan="1" width="22.75" columnHidden="1"
-                    rowIndex="3" rowSpan="1" height="28.5" rowHidden="1">
+            <layout columnIndex="2" columnSpan="1" width="22.75" columnHidden="TRUE"
+                    rowIndex="3" rowSpan="1" height="28.5" rowHidden="TRUE">
               <cell value="Layout"/>
             </layout>
             """);

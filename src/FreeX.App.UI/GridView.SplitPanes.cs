@@ -203,7 +203,7 @@ public partial class GridView
             var dividerLayout = CalculateSplitDividerLayout(viewport);
             var horizontalY = dividerLayout.HorizontalY;
             var verticalX = dividerLayout.VerticalX;
-            var region = HitTestSplitPaneRegion(viewport, pos);
+            var region = HitTestSplitPaneRegion(dividerLayout, pos);
             var topRows = splitPanes.TopRows ?? [];
             var leftColumns = splitPanes.LeftColumns ?? [];
             var topRightColumns = splitPanes.TopRightColumns ?? viewport.ColMetrics;
@@ -237,6 +237,11 @@ public partial class GridView
     public static SplitPaneRegion HitTestSplitPaneRegion(ViewportModel viewport, Point pos)
     {
         var dividerLayout = CalculateSplitDividerLayout(viewport);
+        return HitTestSplitPaneRegion(dividerLayout, pos);
+    }
+
+    private static SplitPaneRegion HitTestSplitPaneRegion(SplitDividerLayout dividerLayout, Point pos)
+    {
         var isTop = dividerLayout.HorizontalY.HasValue && pos.Y < dividerLayout.HorizontalY.Value;
         var isLeft = dividerLayout.VerticalX.HasValue && pos.X < dividerLayout.VerticalX.Value;
 

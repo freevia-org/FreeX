@@ -745,6 +745,33 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_TreatsNullNativeJsonWorksheetDataListsAsEmpty()
+    {
+        var workbook = new Workbook("NullWorksheetDataLists");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DataConsolidation = new WorksheetDataConsolidationModel
+        {
+            Function = "sum",
+            References = null!
+        };
+        sheet.SortState = new WorksheetSortStateModel
+        {
+            Reference = "A1:B2",
+            Conditions = null!
+        };
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var sheetJson = document.RootElement.GetProperty("Sheets").EnumerateArray().Single();
+        sheetJson.GetProperty("DataConsolidation").GetProperty("References")
+            .EnumerateArray().Should().BeEmpty();
+        sheetJson.GetProperty("SortState").GetProperty("Conditions")
+            .EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
     public void Save_TreatsNullNativeJsonChartListsAsEmpty()
     {
         var workbook = new Workbook("NullChartLists");
@@ -883,6 +910,61 @@ public sealed class NativeJsonSchemaTests
         document.RootElement
             .GetProperty("PivotCaches").EnumerateArray()
             .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Save_DropsNullNativeJsonPivotChildEntries()
+    {
+        var workbook = new Workbook("NullPivotChildEntries");
+        var sheet = workbook.AddSheet("Sheet1");
+        var sourceRange = GridRange.Parse("A1:B2", sheet.Id);
+
+        var cache = new PivotCacheModel
+        {
+            CacheId = 1,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = sourceRange.ToString()
+        };
+        cache.Fields.Add(null!);
+        workbook.PivotCaches.Add(cache);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "Pivot1",
+            CacheId = 1,
+            SourceRange = sourceRange,
+            TargetRange = GridRange.Parse("D1:E2", sheet.Id)
+        };
+        pivot.RowFields.Add(null!);
+        pivot.ColumnFields.Add(null!);
+        pivot.PageFields.Add(null!);
+        pivot.DataFields.Add(null!);
+        pivot.CalculatedFields.Add(null!);
+        pivot.CalculatedItems.Add(null!);
+        pivot.LabelFilters.Add(null!);
+        pivot.ValueFilters.Add(null!);
+        pivot.Sorts.Add(null!);
+        sheet.PivotTables.Add(pivot);
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        document.RootElement.GetProperty("PivotCaches").EnumerateArray().Single()
+            .GetProperty("Fields").EnumerateArray().Should().BeEmpty();
+
+        var pivotJson = document.RootElement.GetProperty("Sheets").EnumerateArray().Single()
+            .GetProperty("PivotTables").EnumerateArray().Single();
+        pivotJson.GetProperty("RowFields").EnumerateArray().Should().BeEmpty();
+        pivotJson.GetProperty("ColumnFields").EnumerateArray().Should().BeEmpty();
+        pivotJson.GetProperty("PageFields").EnumerateArray().Should().BeEmpty();
+        pivotJson.GetProperty("DataFields").EnumerateArray().Should().BeEmpty();
+        pivotJson.GetProperty("CalculatedFields").EnumerateArray().Should().BeEmpty();
+        pivotJson.GetProperty("CalculatedItems").EnumerateArray().Should().BeEmpty();
+        pivotJson.GetProperty("LabelFilters").EnumerateArray().Should().BeEmpty();
+        pivotJson.GetProperty("ValueFilters").EnumerateArray().Should().BeEmpty();
+        pivotJson.GetProperty("Sorts").EnumerateArray().Should().BeEmpty();
     }
 
     [Fact]

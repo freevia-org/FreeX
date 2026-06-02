@@ -923,11 +923,14 @@ public sealed class XlsxFileAdapterPerformanceTests
         var writerSource = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "XlsxWorkbookMetadataWriter.cs"));
 
         adapterSource.Should().Contain("XlsxWorkbookMetadataWriter.SavePostProcessingMetadata(packageStream, workbook);");
+        adapterSource.Should().Contain("if (featurePlan.HasWorkbookPostProcessingMetadata)");
         adapterSource.Should().Contain("XlsxWorkbookMetadataWriter.SaveSourcePackageReplayMetadata(packageStream, workbook);");
         adapterSource.Should().NotContain("XlsxWorkbookMetadataWriter.SaveWorkbookProperties(packageStream, workbook);");
         adapterSource.Should().NotContain("XlsxWorkbookMetadataWriter.SaveCalculationProperties(packageStream, workbook);");
         adapterSource.Should().NotContain("XlsxWorkbookAdditionalViewMapper.Save(packageStream, workbook);");
 
+        writerSource.Should().Contain("public static bool HasPostProcessingMetadata(Workbook workbook)");
+        writerSource.Should().Contain("private static bool HasCalculationProperties(Workbook workbook)");
         writerSource.Should().Contain("public static void SavePostProcessingMetadata(Stream xlsxStream, Workbook workbook)");
         writerSource.Should().Contain("public static void SaveSourcePackageReplayMetadata(Stream xlsxStream, Workbook workbook)");
         writerSource.Should().Contain("private static void SaveWorkbookXml(Stream xlsxStream, Workbook workbook");

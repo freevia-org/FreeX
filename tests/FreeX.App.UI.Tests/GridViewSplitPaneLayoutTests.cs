@@ -426,6 +426,28 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void HitTestViewportCell_ReusesSplitDividerLayoutForRegionClassification()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.SplitPanes.cs"));
+        var hitTestViewportCell = source[
+            source.IndexOf("public static CellAddress? HitTestViewportCell", StringComparison.Ordinal)..
+            source.IndexOf("public static SplitPaneRegion HitTestSplitPaneRegion", StringComparison.Ordinal)];
+        var splitPaneRegionMethods = source[
+            source.IndexOf("public static SplitPaneRegion HitTestSplitPaneRegion", StringComparison.Ordinal)..
+            source.IndexOf("public static SplitDividerHandle HitTestSplitDividerHandle", StringComparison.Ordinal)];
+
+        hitTestViewportCell.Should().Contain("var dividerLayout = CalculateSplitDividerLayout(viewport);");
+        hitTestViewportCell.Should().Contain("var region = HitTestSplitPaneRegion(dividerLayout, pos);");
+        hitTestViewportCell[
+            hitTestViewportCell.IndexOf("var dividerLayout = CalculateSplitDividerLayout(viewport);", StringComparison.Ordinal)..]
+            .Should()
+            .NotContain("HitTestSplitPaneRegion(viewport, pos)");
+        splitPaneRegionMethods.Should().Contain("private static SplitPaneRegion HitTestSplitPaneRegion(SplitDividerLayout dividerLayout, Point pos)");
+        splitPaneRegionMethods.Should().Contain("return HitTestSplitPaneRegion(dividerLayout, pos);");
+    }
+
+    [Fact]
     public void HitTestSplitPaneRegion_ClassifiesSplitQuadrants()
     {
         var viewport = SplitViewport();
