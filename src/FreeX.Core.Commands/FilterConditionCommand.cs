@@ -174,8 +174,7 @@ public sealed class FilterConditionCommand : IWorkbookCommand
     private readonly GridRange _range;
     private readonly uint _filterColOffset;
     private readonly IFilterCriterion _criterion;
-    private uint[]? _previousHiddenRows;
-    private uint[]? _previousFilterHiddenRows;
+    private FilterUndoSnapshot _undoSnapshot;
 
     public string Label => "Apply Filter";
 
@@ -195,8 +194,7 @@ public sealed class FilterConditionCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousHiddenRows = [.. sheet.HiddenRows];
-        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+        _undoSnapshot.Capture(sheet);
 
         var filterCol = _range.Start.Col + _filterColOffset;
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
@@ -210,14 +208,10 @@ public sealed class FilterConditionCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        if (_previousHiddenRows is null)
+        if (!_undoSnapshot.HasSnapshot)
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        sheet.HiddenRows.Clear();
-        sheet.HiddenRows.UnionWith(_previousHiddenRows);
-        sheet.FilterHiddenRows.Clear();
-        if (_previousFilterHiddenRows is not null)
-            sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
+        _undoSnapshot.Restore(sheet);
     }
 }

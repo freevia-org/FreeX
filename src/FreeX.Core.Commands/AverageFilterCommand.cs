@@ -9,8 +9,7 @@ public sealed class AverageFilterCommand : IWorkbookCommand
     private readonly GridRange _range;
     private readonly uint _filterColOffset;
     private readonly bool _above;
-    private uint[]? _previousHiddenRows;
-    private uint[]? _previousFilterHiddenRows;
+    private FilterUndoSnapshot _undoSnapshot;
 
     public string Label => _above ? "Above Average Filter" : "Below Average Filter";
 
@@ -30,8 +29,7 @@ public sealed class AverageFilterCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UseAutoFilter) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousHiddenRows = null;
-        _previousFilterHiddenRows = null;
+        _undoSnapshot.Reset();
 
         var filterCol = _range.Start.Col + _filterColOffset;
         var firstDataRow = _range.Start.Row + 1;
@@ -66,7 +64,7 @@ public sealed class AverageFilterCommand : IWorkbookCommand
                 if (!FilterHiddenRowUpdater.ContainsAnyInRange(sheet.FilterHiddenRows, _range))
                     return new CommandOutcome(true);
 
-                SnapshotHiddenRows(sheet);
+                _undoSnapshot.CaptureIfNeeded(sheet);
                 FilterHiddenRowUpdater.ClearRange(sheet.FilterHiddenRows, _range);
                 return new CommandOutcome(true);
             }
@@ -81,7 +79,7 @@ public sealed class AverageFilterCommand : IWorkbookCommand
                 if (sheet.FilterHiddenRows.Contains(row) == !visible)
                     continue;
 
-                SnapshotHiddenRows(sheet);
+                _undoSnapshot.CaptureIfNeeded(sheet);
                 FilterHiddenRowUpdater.SetHidden(sheet.FilterHiddenRows, row, !visible);
             }
         }
@@ -95,23 +93,10 @@ public sealed class AverageFilterCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        if (_previousHiddenRows is null)
+        if (!_undoSnapshot.HasSnapshot)
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        sheet.HiddenRows.Clear();
-        sheet.HiddenRows.UnionWith(_previousHiddenRows);
-        sheet.FilterHiddenRows.Clear();
-        if (_previousFilterHiddenRows is not null)
-            sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
-    }
-
-    private void SnapshotHiddenRows(Sheet sheet)
-    {
-        if (_previousHiddenRows is not null)
-            return;
-
-        _previousHiddenRows = [.. sheet.HiddenRows];
-        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+        _undoSnapshot.Restore(sheet);
     }
 }
