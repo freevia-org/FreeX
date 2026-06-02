@@ -22,11 +22,11 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
                 for (var index = 0; index < sourceEntries.Count; index++)
                 {
                     var sourceEntry = sourceEntries[index];
-                    var strippedWorksheet = TryStripWorksheet(sourceEntry);
+                    var shouldStripWorksheet = ShouldStripWorksheet(sourceEntry);
 
                     if (strippedArchive is null)
                     {
-                        if (strippedWorksheet is null)
+                        if (!shouldStripWorksheet)
                             continue;
 
                         strippedPackage = new MemoryStream();
@@ -34,13 +34,13 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
                         for (var priorIndex = 0; priorIndex < index; priorIndex++)
                             CopyEntry(sourceEntries[priorIndex], strippedArchive);
 
-                        WriteEntry(sourceEntry, strippedArchive, strippedWorksheet);
+                        WriteStrippedWorksheetEntry(sourceEntry, strippedArchive);
                         continue;
                     }
 
-                    if (strippedWorksheet is not null)
+                    if (shouldStripWorksheet)
                     {
-                        WriteEntry(sourceEntry, strippedArchive, strippedWorksheet);
+                        WriteStrippedWorksheetEntry(sourceEntry, strippedArchive);
                         continue;
                     }
 
@@ -66,19 +66,18 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
         }
     }
 
-    private static byte[]? TryStripWorksheet(ZipArchiveEntry sourceEntry)
+    private static bool ShouldStripWorksheet(ZipArchiveEntry sourceEntry)
     {
         if (!IsWorksheetXml(sourceEntry))
-            return null;
+            return false;
 
         using (var scanStream = sourceEntry.Open())
         {
             if (!ContainsDuplicateStyleOnlyCells(scanStream))
-                return null;
+                return false;
         }
 
-        using var sourceStream = sourceEntry.Open();
-        return StripRedundantStyleOnlyCells(sourceStream);
+        return true;
     }
 
     private static bool ContainsDuplicateStyleOnlyCells(Stream worksheetStream)
@@ -146,11 +145,12 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
         sourceStream.CopyTo(targetStream);
     }
 
-    private static void WriteEntry(ZipArchiveEntry sourceEntry, ZipArchive strippedArchive, byte[] worksheetXml)
+    private static void WriteStrippedWorksheetEntry(ZipArchiveEntry sourceEntry, ZipArchive strippedArchive)
     {
         var targetEntry = CreateTargetEntry(sourceEntry, strippedArchive);
         using var targetStream = targetEntry.Open();
-        targetStream.Write(worksheetXml);
+        using var sourceStream = sourceEntry.Open();
+        StripRedundantStyleOnlyCells(sourceStream, targetStream);
     }
 
     private static ZipArchiveEntry CreateTargetEntry(ZipArchiveEntry sourceEntry, ZipArchive strippedArchive)
@@ -164,12 +164,11 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
         entry.FullName.StartsWith("xl/worksheets/", StringComparison.OrdinalIgnoreCase) &&
         entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase);
 
-    private static byte[]? StripRedundantStyleOnlyCells(Stream worksheetStream)
+    private static void StripRedundantStyleOnlyCells(Stream worksheetStream, Stream outputStream)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var cellName = worksheetNs + "c";
         var seenStyleIndexes = new HashSet<string>(StringComparer.Ordinal);
-        var changed = false;
 
         var readerSettings = new XmlReaderSettings
         {
@@ -179,14 +178,13 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
             IgnoreProcessingInstructions = false
         };
         using var reader = XmlReader.Create(worksheetStream, readerSettings);
-        using var output = new MemoryStream();
         var writerSettings = new XmlWriterSettings
         {
             Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             OmitXmlDeclaration = true,
             ConformanceLevel = ConformanceLevel.Auto
         };
-        using (var writer = XmlWriter.Create(output, writerSettings))
+        using (var writer = XmlWriter.Create(outputStream, writerSettings))
         {
             var hasNode = reader.Read();
             while (hasNode)
@@ -198,14 +196,8 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
                 {
                     if (reader.IsEmptyElement)
                     {
-                        if (!seenStyleIndexes.Add(styleIndex))
-                        {
-                            changed = true;
-                        }
-                        else
-                        {
+                        if (seenStyleIndexes.Add(styleIndex))
                             WriteCurrentNode(reader, writer);
-                        }
 
                         hasNode = reader.Read();
                         continue;
@@ -214,7 +206,6 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
                     var cell = (XElement)XNode.ReadFrom(reader);
                     if (!cell.HasElements && !seenStyleIndexes.Add(styleIndex))
                     {
-                        changed = true;
                         continue;
                     }
 
@@ -227,8 +218,6 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
                 hasNode = reader.Read();
             }
         }
-
-        return changed ? output.ToArray() : null;
     }
 
     private static void WriteCurrentNode(XmlReader reader, XmlWriter writer)
