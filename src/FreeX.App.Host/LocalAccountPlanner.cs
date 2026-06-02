@@ -1,4 +1,5 @@
 using System.IO;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
@@ -8,7 +9,8 @@ public sealed record LocalAccountPlan(
     string Title,
     IReadOnlyList<LocalAccountDetail> Details,
     string WorkbookStatus,
-    string SharingStatus);
+    string SharingStatus,
+    string ExportStatus);
 
 public static class LocalAccountPlanner
 {
@@ -20,7 +22,9 @@ public static class LocalAccountPlanner
         Func<string>? userDomainProvider = null,
         Func<string>? machineNameProvider = null,
         Func<string>? optionsPathProvider = null,
-        Func<string, bool>? fileExists = null)
+        Func<string, bool>? fileExists = null,
+        Workbook? workbook = null,
+        bool hasSelection = false)
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -38,6 +42,9 @@ public static class LocalAccountPlanner
         var workbookDisplayName = Normalize(workbookName, "Unsaved workbook");
         var workbookStatus = FormatWorkbookStatus(workbookDisplayName, currentFilePath, fileExists);
         var sharingStatus = FormatSharingStatus(ShareWorkbookPlanner.CreatePlan(currentFilePath, fileExists));
+        var exportStatus = workbook is null
+            ? ExportReadinessPlanner.CreateForAvailableWorkbook(hasSelection).StatusText
+            : ExportReadinessPlanner.Create(workbook, hasSelection).StatusText;
 
         var details = new List<LocalAccountDetail>
         {
@@ -48,6 +55,7 @@ public static class LocalAccountPlanner
             new("Options file", optionsPath),
             new("Current workbook", workbookStatus),
             new("Sharing", sharingStatus),
+            new("Export", exportStatus),
             new("Microsoft 365 services", "Not connected; account sign-in, cloud links, and coauthoring are not implemented.")
         };
 
@@ -55,7 +63,8 @@ public static class LocalAccountPlanner
             UiText.Get("DeferredCommand_LocalAccount_Title"),
             details,
             workbookStatus,
-            sharingStatus);
+            sharingStatus,
+            exportStatus);
     }
 
     public static string FormatMessageBody(LocalAccountPlan plan)
