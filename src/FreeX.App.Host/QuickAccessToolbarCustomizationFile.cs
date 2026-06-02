@@ -134,7 +134,11 @@ internal static class QuickAccessToolbarCustomizationFile
             return QuickAccessToolbarCustomizationFileResult.Fail(
                 "The selected file does not list any Quick Access Toolbar commands.");
 
-        var commandIds = NormalizeImportedCommandIds(payload.Commands);
+        var commandIds = NormalizeImportedCommandIds(payload.Commands, out var unsupportedCommandIds);
+        if (unsupportedCommandIds.Count > 0)
+            return QuickAccessToolbarCustomizationFileResult.Fail(
+                $"The selected file contains Quick Access Toolbar commands FreeX cannot add: {string.Join(", ", unsupportedCommandIds)}.");
+
         if (commandIds.Count == 0)
             return QuickAccessToolbarCustomizationFileResult.Fail(
                 "The selected file does not contain any commands FreeX can add to the Quick Access Toolbar.");
@@ -145,15 +149,28 @@ internal static class QuickAccessToolbarCustomizationFile
                 commandIds));
     }
 
-    private static IReadOnlyList<string> NormalizeImportedCommandIds(IEnumerable<string?> commandIds)
+    private static IReadOnlyList<string> NormalizeImportedCommandIds(
+        IEnumerable<string?> commandIds,
+        out IReadOnlyList<string> unsupportedCommandIds)
     {
         var result = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var unsupported = new List<string>();
+        var seenUnsupported = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var commandId in commandIds)
         {
-            if (string.IsNullOrWhiteSpace(commandId) ||
-                !QuickAccessToolbarCatalog.TryGet(commandId.Trim(), out var command) ||
-                !seen.Add(command.Id))
+            var value = commandId?.Trim();
+            if (string.IsNullOrWhiteSpace(value))
+                continue;
+
+            if (!QuickAccessToolbarCatalog.TryGet(value, out var command))
+            {
+                if (seenUnsupported.Add(value))
+                    unsupported.Add(value);
+                continue;
+            }
+
+            if (!seen.Add(command.Id))
             {
                 continue;
             }
@@ -161,6 +178,7 @@ internal static class QuickAccessToolbarCustomizationFile
             result.Add(command.Id);
         }
 
+        unsupportedCommandIds = unsupported;
         return result;
     }
 

@@ -31,14 +31,14 @@ public sealed class QuickAccessToolbarCustomizationFileTests
     }
 
     [Fact]
-    public void TryDeserialize_NormalizesKnownCommandsAndDropsDuplicatesAndUnknownCommands()
+    public void TryDeserialize_NormalizesKnownCommandsAndDropsDuplicates()
     {
         var json = """
             {
               "format": "FreeX.QuickAccessToolbarCustomization",
               "version": 1,
               "quickAccessToolbarBelowRibbon": true,
-              "commands": [ "save", "MissingCommand", "Bold", "SAVE", "Undo" ]
+              "commands": [ "save", "Bold", "SAVE", "Undo" ]
             }
             """;
 
@@ -53,10 +53,31 @@ public sealed class QuickAccessToolbarCustomizationFileTests
             QuickAccessToolbarCommandIds.Undo);
     }
 
+    [Fact]
+    public void TryDeserialize_RejectsMixedUnknownCommandIdsInsteadOfSilentlyDroppingThem()
+    {
+        var json = """
+            {
+              "format": "FreeX.QuickAccessToolbarCustomization",
+              "version": 1,
+              "quickAccessToolbarBelowRibbon": true,
+              "commands": [ "Save", "MissingCommand", "Bold", "missingcommand", "FutureCommand" ]
+            }
+            """;
+
+        var result = QuickAccessToolbarCustomizationFile.TryDeserialize(json);
+
+        result.Success.Should().BeFalse();
+        result.Customization.Should().BeNull();
+        result.ErrorMessage.Should().Contain("cannot add");
+        result.ErrorMessage.Should().Contain("MissingCommand");
+        result.ErrorMessage.Should().Contain("FutureCommand");
+    }
+
     [Theory]
     [InlineData("""{ "format": "Office.CustomUI", "version": 1, "commands": [ "Save" ] }""", "not a FreeX")]
     [InlineData("""{ "format": "FreeX.QuickAccessToolbarCustomization", "version": 2, "commands": [ "Save" ] }""", "Unsupported")]
-    [InlineData("""{ "format": "FreeX.QuickAccessToolbarCustomization", "version": 1, "commands": [ "Missing" ] }""", "does not contain any commands")]
+    [InlineData("""{ "format": "FreeX.QuickAccessToolbarCustomization", "version": 1, "commands": [ "Missing" ] }""", "cannot add")]
     [InlineData("""{ "format": "FreeX.QuickAccessToolbarCustomization", "version": 1 }""", "does not list any")]
     [InlineData("""{ """, "not valid FreeX")]
     public void TryDeserialize_RejectsInvalidCustomizationFiles(string json, string expectedErrorFragment)
