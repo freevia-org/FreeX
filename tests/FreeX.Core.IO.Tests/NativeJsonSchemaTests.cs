@@ -719,6 +719,52 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_DropsNullNativeJsonChartEntries()
+    {
+        var workbook = new Workbook("NullChartEntries");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1));
+
+        sheet.Charts.Add(null!);
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = GridRange.Parse("A1:B2", sheet.Id),
+            Title = "Kept"
+        });
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var chartJson = document.RootElement
+            .GetProperty("Sheets").EnumerateArray().Single()
+            .GetProperty("Charts").EnumerateArray().Should().ContainSingle().Subject;
+        chartJson.GetProperty("Title").GetString().Should().Be("Kept");
+    }
+
+    [Fact]
+    public void Save_DropsNullNativeJsonDataValidationEntries()
+    {
+        var workbook = new Workbook("NullDataValidationEntries");
+        var sheet = workbook.AddSheet("Sheet1");
+
+        sheet.DataValidations.Add(null!);
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        document.RootElement
+            .GetProperty("Sheets").EnumerateArray().Single()
+            .GetProperty("DataValidations").EnumerateArray()
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void Save_DropsNullNativeJsonChartListEntries()
     {
         var workbook = new Workbook("NullChartListEntries");
