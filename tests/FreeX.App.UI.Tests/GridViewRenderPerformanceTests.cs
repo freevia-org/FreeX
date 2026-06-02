@@ -233,17 +233,28 @@ public sealed class GridViewRenderPerformanceTests
         var buildHeaderBaseLayer = source[
             source.IndexOf("private DrawingGroup BuildHeaderBaseLayerCache(", StringComparison.Ordinal)..
             source.IndexOf("private void RenderHeaderBase(", StringComparison.Ordinal)];
+        var renderSelectedHeaderLayer = source[
+            source.IndexOf("private void RenderSelectedHeaderLayer(", StringComparison.Ordinal)..
+            source.IndexOf("private SelectedHeaderLayerCacheKey CreateSelectedHeaderLayerCacheKey", StringComparison.Ordinal)];
 
         source.Should().Contain("private DrawingGroup? _headerBaseLayerCache;");
         source.Should().Contain("private HeaderBaseLayerCacheKey _headerBaseLayerCacheKey;");
         renderHeaders.Should().Contain("RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
-        renderHeaders.Should().Contain("RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
+        renderHeaders.Should().Contain("RenderSelectedHeaderLayer(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
         renderHeaderBaseLayer.Should().Contain("_headerBaseLayerCache is { } cached && _headerBaseLayerCacheKey == key");
         renderHeaderBaseLayer.Should().Contain("dc.DrawDrawing(cached);");
         renderHeaderBaseLayer.Should().NotContain("SelectedRange");
         renderHeaderBaseLayer.Should().NotContain("SelectedRanges");
         buildHeaderBaseLayer.Should().Contain("RenderHeaderBase(groupContext, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
         buildHeaderBaseLayer.Should().Contain("group.Freeze();");
+        source.Should().Contain("private DrawingGroup? _selectedHeaderLayerCache;");
+        source.Should().Contain("private SelectedHeaderLayerCacheKey _selectedHeaderLayerCacheKey;");
+        renderSelectedHeaderLayer.Should().Contain("_selectedHeaderLayerCache is { } cached && _selectedHeaderLayerCacheKey == key");
+        renderSelectedHeaderLayer.Should().Contain("ShouldBuildSelectedHeaderLayerCache(key)");
+        renderSelectedHeaderLayer.Should().Contain("RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);");
+        source.Should().Contain("_hasLastSelectedHeaderLayerRenderKey && _lastSelectedHeaderLayerRenderKey == key");
+        source.Should().Contain("BuildSelectedHeaderLayerCache(");
+        source.Should().Contain("CalculateGridRangeListSignature(selectedRanges)");
     }
 
     [Fact]
@@ -460,7 +471,8 @@ public sealed class GridViewRenderPerformanceTests
         properties.Should().Contain("grid.MarkSelectionVisualOnlyChange();");
         dispatch.Should().Contain("RenderPreSelectionLayersWithCache(dc, skipHeavyLayers, isLiveResizing);");
         cache.Should().Contain("RenderPreSelectionLayers(dc, skipHeavyLayers, isLiveResizing);");
-        cache.Should().Contain("_selectionVisualOnlyChangePending &&");
+        cache.Should().Contain("ShouldBuildPreSelectionLayerCache(key)");
+        cache.Should().Contain("_selectionVisualOnlyChangePending ||");
         cache.Should().Contain("dc.DrawDrawing(cached);");
         cache.Should().Contain("BuildPreSelectionLayerCache(skipHeavyLayers, isLiveResizing)");
         cache.Should().NotContain("SelectedRange");
@@ -474,6 +486,24 @@ public sealed class GridViewRenderPerformanceTests
             .Should().BeLessThan(onRender.IndexOf("RenderPostSelectionLayers", StringComparison.Ordinal));
         onRender.IndexOf("RenderPostSelectionLayers", StringComparison.Ordinal)
             .Should().BeLessThan(onRender.IndexOf("_selectionVisualOnlyChangePending = false;", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void StableRenderInvalidations_WarmAndReusePreSelectionLayerCache()
+    {
+        var cache = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.RenderSurfaceCache.cs"));
+        var renderWithCache = cache[
+            cache.IndexOf("private void RenderPreSelectionLayersWithCache", StringComparison.Ordinal)..
+            cache.IndexOf("private static bool CanCachePreSelectionLayers", StringComparison.Ordinal)];
+
+        renderWithCache.Should().Contain("_preSelectionLayerCache is { } cached");
+        renderWithCache.Should().Contain("_preSelectionLayerCacheKey == key");
+        renderWithCache.Should().Contain("dc.DrawDrawing(cached);");
+        renderWithCache.Should().Contain("ShouldBuildPreSelectionLayerCache(key)");
+        renderWithCache.Should().Contain("RememberPreSelectionLayerRenderKey(key);");
+        cache.Should().Contain("_hasLastPreSelectionLayerRenderKey && _lastPreSelectionLayerRenderKey == key");
+        cache.Should().Contain("_selectionVisualOnlyChangePending ||");
+        cache.Should().Contain("_hasLastPreSelectionLayerRenderKey = false;");
     }
 
     [Fact]
