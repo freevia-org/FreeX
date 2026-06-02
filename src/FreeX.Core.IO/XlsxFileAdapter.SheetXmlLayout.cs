@@ -86,6 +86,8 @@ public sealed partial class XlsxFileAdapter
         Dictionary<(uint Row, uint Col), ErrorValue> CachedFormulaErrors,
         bool HasStyleOnlyCells,
         IReadOnlyList<(uint Row, uint Col, int StyleIndex)> ExplicitStyleOnlyCells,
+        bool HasPreservableSourceWorksheetMetadata,
+        bool HasUnsupportedConditionalFormatting,
         string? CodeName);
 
     private static Dictionary<string, SheetXmlLayout> LoadSheetXmlLayout(
@@ -255,6 +257,10 @@ public sealed partial class XlsxFileAdapter
         var comments = XlsxWorksheetCommentReader.Read(archive, worksheetPath);
         var threadedComments = XlsxWorksheetThreadedCommentMapper.Read(archive, worksheetPath);
         var codeName = sheetPr?.Attribute("codeName")?.Value;
+        var hasPreservableSourceWorksheetMetadata = HasRetainedWorksheetMetadataElement(worksheetXml.Root, worksheetNs) ||
+            XlsxWorksheetMetadataPreserver.HasPreservableSourceWorksheetMetadata(worksheetXml, worksheetNs);
+        var hasUnsupportedConditionalFormatting =
+            XlsxConditionalFormatRuleSupport.HasUnsupportedRule(worksheetXml, worksheetNs, allowBlankType: true);
 
         return new SheetXmlLayout(
             rowColumnLayout.HiddenRows,
@@ -335,8 +341,39 @@ public sealed partial class XlsxFileAdapter
             cellLayout.CachedFormulaErrors,
             cellLayout.HasStyleOnlyCells,
             cellLayout.ExplicitStyleOnlyCells,
+            hasPreservableSourceWorksheetMetadata,
+            hasUnsupportedConditionalFormatting,
             codeName);
     }
+
+    private static bool HasRetainedWorksheetMetadataElement(XElement? root, XNamespace worksheetNs) =>
+        root is not null &&
+        (root.Element(worksheetNs + "customSheetViews") is not null ||
+         root.Element(worksheetNs + "scenarios") is not null ||
+         root.Element(worksheetNs + "ignoredErrors") is not null ||
+         root.Element(worksheetNs + "cellWatches") is not null ||
+         root.Element(worksheetNs + "sheetCalcPr") is not null ||
+         root.Element(worksheetNs + "phoneticPr") is not null ||
+         root.Element(worksheetNs + "sortState") is not null ||
+         root.Element(worksheetNs + "dataConsolidate") is not null ||
+         root.Element(worksheetNs + "legacyDrawing") is not null ||
+         root.Element(worksheetNs + "legacyDrawingHF") is not null ||
+         root.Element(worksheetNs + "picture") is not null ||
+         root.Element(worksheetNs + "customProperties") is not null ||
+         root.Element(worksheetNs + "smartTags") is not null ||
+         root.Element(worksheetNs + "singleXmlCells") is not null ||
+         root.Element(worksheetNs + "autoFilter") is not null ||
+         root.Element(worksheetNs + "protectedRanges") is not null ||
+         root.Element(worksheetNs + "rowBreaks") is not null ||
+         root.Element(worksheetNs + "colBreaks") is not null ||
+         root.Element(worksheetNs + "queryTableParts") is not null ||
+         root.Element(worksheetNs + "webPublishItems") is not null ||
+         root.Element(worksheetNs + "oleObjects") is not null ||
+         root.Element(worksheetNs + "controls") is not null ||
+         root.Element(worksheetNs + "mergeCells") is not null ||
+         root.Element(worksheetNs + "sheetProtection") is not null ||
+         root.Element(worksheetNs + "hyperlinks") is not null ||
+         root.Element(worksheetNs + "extLst") is not null);
 
     private static bool TryParseSqrefToken(string token, SheetId sheet, out GridRange range)
     {

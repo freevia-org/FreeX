@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -13,6 +14,8 @@ internal static class XlsxStylesheetMetadataPreserver
         var sourceStylesEntry = sourceArchive.GetEntry("xl/styles.xml");
         var targetStylesEntry = targetArchive.GetEntry("xl/styles.xml");
         if (sourceStylesEntry is null || targetStylesEntry is null)
+            return;
+        if (!HasPreservableStylesheetMetadata(sourceStylesEntry))
             return;
 
         var sourceStylesXml = XlsxPackageXmlEditor.LoadXml(sourceStylesEntry);
@@ -34,6 +37,171 @@ internal static class XlsxStylesheetMetadataPreserver
         if (changed)
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/styles.xml", targetStylesXml);
     }
+
+    private static bool HasPreservableStylesheetMetadata(ZipArchiveEntry sourceStylesEntry)
+    {
+        try
+        {
+            using var stream = sourceStylesEntry.Open();
+            using var reader = XmlReader.Create(stream, new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null,
+                IgnoreComments = true,
+                IgnoreProcessingInstructions = true,
+                IgnoreWhitespace = true
+            });
+
+            var stylesheetDepth = -1;
+            while (reader.Read())
+            {
+                if (reader.NodeType != XmlNodeType.Element)
+                    continue;
+
+                if (stylesheetDepth < 0)
+                {
+                    if (reader.LocalName == "styleSheet" &&
+                        reader.NamespaceURI == "http://schemas.openxmlformats.org/spreadsheetml/2006/main")
+                    {
+                        stylesheetDepth = reader.Depth;
+                    }
+
+                    continue;
+                }
+
+                if (reader.Depth != stylesheetDepth + 1 ||
+                    reader.NamespaceURI != "http://schemas.openxmlformats.org/spreadsheetml/2006/main")
+                {
+                    continue;
+                }
+
+                switch (reader.LocalName)
+                {
+                    case "colors":
+                    case "extLst":
+                        return true;
+                    case "dxfs":
+                        if (HasPreservableDifferentialStyles(reader))
+                            return true;
+                        break;
+                    case "tableStyles":
+                        if (HasPreservableTableStyles(reader))
+                            return true;
+                        break;
+                }
+            }
+
+            return false;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private static bool HasPreservableDifferentialStyles(XmlReader reader)
+    {
+        if (HasNativeOnlyAttributes(reader, "count"))
+            return true;
+        if (reader.IsEmptyElement)
+            return false;
+
+        using var subtree = reader.ReadSubtree();
+        while (subtree.Read())
+        {
+            if (subtree.NodeType == XmlNodeType.Element && subtree.Depth > 0)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasPreservableTableStyles(XmlReader reader)
+    {
+        if (reader.HasAttributes)
+        {
+            for (var i = 0; i < reader.AttributeCount; i++)
+            {
+                reader.MoveToAttribute(i);
+                if (IsNamespaceDeclaration(reader))
+                    continue;
+
+                if (reader.LocalName == "count")
+                {
+                    if (!string.Equals(reader.Value, "0", StringComparison.Ordinal))
+                    {
+                        reader.MoveToElement();
+                        return true;
+                    }
+
+                    continue;
+                }
+
+                if (reader.LocalName == "defaultTableStyle")
+                {
+                    if (!string.Equals(reader.Value, "TableStyleMedium2", StringComparison.Ordinal))
+                    {
+                        reader.MoveToElement();
+                        return true;
+                    }
+
+                    continue;
+                }
+
+                if (reader.LocalName == "defaultPivotStyle")
+                {
+                    if (!string.Equals(reader.Value, "PivotStyleLight16", StringComparison.Ordinal))
+                    {
+                        reader.MoveToElement();
+                        return true;
+                    }
+
+                    continue;
+                }
+
+                reader.MoveToElement();
+                return true;
+            }
+
+            reader.MoveToElement();
+        }
+
+        if (reader.IsEmptyElement)
+            return false;
+
+        using var subtree = reader.ReadSubtree();
+        while (subtree.Read())
+        {
+            if (subtree.NodeType == XmlNodeType.Element && subtree.Depth > 0)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HasNativeOnlyAttributes(XmlReader reader, params string[] modeledLocalNames)
+    {
+        if (!reader.HasAttributes)
+            return false;
+
+        for (var i = 0; i < reader.AttributeCount; i++)
+        {
+            reader.MoveToAttribute(i);
+            if (!IsNamespaceDeclaration(reader) &&
+                !modeledLocalNames.Contains(reader.LocalName, StringComparer.Ordinal))
+            {
+                reader.MoveToElement();
+                return true;
+            }
+        }
+
+        reader.MoveToElement();
+        return false;
+    }
+
+    private static bool IsNamespaceDeclaration(XmlReader reader) =>
+        reader.Prefix == "xmlns" ||
+        (reader.Prefix.Length == 0 && reader.LocalName == "xmlns");
 
     private static bool MergeStylesheetColors(XElement? sourceColors, XElement targetRoot, XNamespace workbookNs)
     {
