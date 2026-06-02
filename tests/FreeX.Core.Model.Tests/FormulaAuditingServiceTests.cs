@@ -999,6 +999,46 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void SetFormulaErrorIgnoredCommand_RejectsDisabledCachedFormulaErrorIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var cell = Cell.FromFormula("1/0");
+        cell.Value = ErrorValue.DivByZero;
+        sheet.SetCell(address, cell);
+        wb.DisabledFormulaErrorCodes.Add(ErrorValue.DivByZero.Code);
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("does not currently contain an issue");
+        sheet.GetCell(address)!.IgnoreFormulaError.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SetFormulaErrorIgnoredCommand_RejectsDisabledModeledWarningIssues()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(address, new TextValue("42"));
+        wb.DisabledFormulaErrorCodes.Add(FormulaAuditingService.NumberStoredAsTextErrorCode);
+        var ctx = new SimpleCtx(wb);
+
+        var command = new SetFormulaErrorIgnoredCommand(sheet.Id, address, ignored: true);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("does not currently contain an issue");
+        sheet.GetCell(address)!.IgnoreFormulaError.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetFormulaErrorCheckingRuleCommand_TogglesRuleAndUndoRestores()
     {
         var wb = new Workbook("test");
