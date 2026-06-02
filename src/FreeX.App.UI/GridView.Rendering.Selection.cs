@@ -46,6 +46,13 @@ public partial class GridView
         double columnHeaderHeight) =>
         SelectionMarqueeLayoutPlanner.CalculateVisibleSelectionRect(viewport, range, rowHeaderWidth, columnHeaderHeight);
 
+    public static SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateVisibleSelectionLayout(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight) =>
+        SelectionMarqueeLayoutPlanner.CalculateVisibleSelectionLayout(viewport, range, rowHeaderWidth, columnHeaderHeight);
+
     public static Rect? CalculateClipboardMarquee(
         ViewportModel viewport,
         GridRange range,
@@ -584,38 +591,45 @@ public partial class GridView
 
         var rowHeaderWidth = ActualRowHeaderWidth;
         var columnHeaderHeight = EffectiveColHeaderHeight;
-        var (top, left, bottom, right) = GetRangePixels(Viewport, range, rowHeaderWidth, columnHeaderHeight);
-        var rect = CalculateVisibleSelectionRect(Viewport, range, rowHeaderWidth, columnHeaderHeight);
-        if (rect is null) return;
+        var layout = CalculateVisibleSelectionLayout(Viewport, range, rowHeaderWidth, columnHeaderHeight);
+        if (layout is null) return;
 
-        double drawTop    = rect.Value.Top;
-        double drawBottom = rect.Value.Bottom;
-        double drawLeft   = rect.Value.Left;
-        double drawRight  = rect.Value.Right;
+        var selectionLayout = layout.Value;
+        var rect = selectionLayout.Rect;
+        double drawTop    = rect.Top;
+        double drawBottom = rect.Bottom;
+        double drawLeft   = rect.Left;
+        double drawRight  = rect.Right;
 
-        dc.DrawRectangle(SelectionBrush, null, rect.Value);
+        dc.DrawRectangle(SelectionBrush, null, rect);
 
-        if (top.HasValue)    dc.DrawLine(SelectionPen, new Point(drawLeft,  drawTop),    new Point(drawRight, drawTop));
-        if (bottom.HasValue) dc.DrawLine(SelectionPen, new Point(drawLeft,  drawBottom), new Point(drawRight, drawBottom));
-        if (left.HasValue)   dc.DrawLine(SelectionPen, new Point(drawLeft,  drawTop),    new Point(drawLeft,  drawBottom));
-        if (right.HasValue)  dc.DrawLine(SelectionPen, new Point(drawRight, drawTop),    new Point(drawRight, drawBottom));
+        if (selectionLayout.HasTopEdge)    dc.DrawLine(SelectionPen, new Point(drawLeft,  drawTop),    new Point(drawRight, drawTop));
+        if (selectionLayout.HasBottomEdge) dc.DrawLine(SelectionPen, new Point(drawLeft,  drawBottom), new Point(drawRight, drawBottom));
+        if (selectionLayout.HasLeftEdge)   dc.DrawLine(SelectionPen, new Point(drawLeft,  drawTop),    new Point(drawLeft,  drawBottom));
+        if (selectionLayout.HasRightEdge)  dc.DrawLine(SelectionPen, new Point(drawRight, drawTop),    new Point(drawRight, drawBottom));
 
         if (drawHandle)
-            DrawSelectionHandle(dc, right, bottom, drawRight, drawBottom);
+            DrawSelectionHandle(dc, selectionLayout.HasRightEdge, selectionLayout.HasBottomEdge, drawRight, drawBottom);
     }
 
     private void RenderSelectionHandle(DrawingContext dc, GridRange range)
     {
         if (Viewport == null) return;
-        var (top, left, bottom, right) = GetRangePixels(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight);
-        double drawBottom = bottom ?? ActualHeight;
-        double drawRight  = right  ?? ActualWidth;
-        DrawSelectionHandle(dc, right, bottom, drawRight, drawBottom);
+        var layout = CalculateVisibleSelectionLayout(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight);
+        if (layout is null) return;
+        var selectionLayout = layout.Value;
+
+        DrawSelectionHandle(
+            dc,
+            selectionLayout.HasRightEdge,
+            selectionLayout.HasBottomEdge,
+            selectionLayout.Rect.Right,
+            selectionLayout.Rect.Bottom);
     }
 
-    private static void DrawSelectionHandle(DrawingContext dc, double? right, double? bottom, double drawRight, double drawBottom)
+    private static void DrawSelectionHandle(DrawingContext dc, bool hasRightEdge, bool hasBottomEdge, double drawRight, double drawBottom)
     {
-        if (!right.HasValue || !bottom.HasValue)
+        if (!hasRightEdge || !hasBottomEdge)
             return;
 
         const double handleSize = 6;
