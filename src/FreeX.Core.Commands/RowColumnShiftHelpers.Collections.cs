@@ -4,9 +4,18 @@ internal static partial class RowColumnShiftHelpers
 {
     internal static void ShiftIndexesUp(Dictionary<uint, double> values, uint start, uint count)
     {
-        var shifted = values
-            .Where(p => p.Key >= start)
-            .ToList();
+        if (values.Count == 0)
+            return;
+
+        List<KeyValuePair<uint, double>>? shifted = null;
+        foreach (var pair in values)
+        {
+            if (pair.Key >= start)
+                (shifted ??= new List<KeyValuePair<uint, double>>(values.Count)).Add(pair);
+        }
+
+        if (shifted is null)
+            return;
 
         foreach (var (key, _) in shifted)
             values.Remove(key);
@@ -43,7 +52,19 @@ internal static partial class RowColumnShiftHelpers
 
     internal static void ShiftSortedSetUp(SortedSet<uint> values, uint start, uint count)
     {
-        var shifted = values.Where(value => value >= start).ToList();
+        if (values.Count == 0)
+            return;
+
+        List<uint>? shifted = null;
+        foreach (var value in values)
+        {
+            if (value >= start)
+                (shifted ??= new List<uint>(values.Count)).Add(value);
+        }
+
+        if (shifted is null)
+            return;
+
         foreach (var value in shifted)
             values.Remove(value);
         foreach (var value in shifted)
@@ -52,6 +73,78 @@ internal static partial class RowColumnShiftHelpers
 
     internal static void ShiftSortedSetDown(SortedSet<uint> values, uint start, uint count)
     {
+        var end = start + count - 1;
+        List<uint>? removed = null;
+        List<uint>? shifted = null;
+        foreach (var value in values)
+        {
+            if (value > end)
+                (shifted ??= new List<uint>(values.Count)).Add(value);
+            else if (value >= start)
+                (removed ??= []).Add(value);
+        }
+
+        if (removed is not null)
+        {
+            foreach (var value in removed)
+                values.Remove(value);
+        }
+        if (shifted is not null)
+        {
+            foreach (var value in shifted)
+                values.Remove(value);
+            foreach (var value in shifted)
+                values.Add(value - count);
+        }
+    }
+
+    internal static void ShiftSetUpFrom(HashSet<uint> values, uint start, uint count)
+    {
+        if (values.Count == 0)
+            return;
+
+        List<uint>? shifted = null;
+        foreach (var value in values)
+        {
+            if (value >= start)
+                (shifted ??= new List<uint>(values.Count)).Add(value);
+        }
+
+        if (shifted is null)
+            return;
+
+        foreach (var value in shifted)
+            values.Remove(value);
+        foreach (var value in shifted)
+            values.Add(value + count);
+    }
+
+    internal static void ShiftSetDownFrom(HashSet<uint> values, uint start, uint count)
+    {
+        if (values.Count == 0)
+            return;
+
+        List<uint>? shifted = null;
+        foreach (var value in values)
+        {
+            if (value >= start)
+                (shifted ??= new List<uint>(values.Count)).Add(value);
+        }
+
+        if (shifted is null)
+            return;
+
+        foreach (var value in shifted)
+            values.Remove(value);
+        foreach (var value in shifted)
+            values.Add(value - count);
+    }
+
+    internal static void DeleteSetRangeAndShiftDown(HashSet<uint> values, uint start, uint count)
+    {
+        if (values.Count == 0)
+            return;
+
         var end = start + count - 1;
         List<uint>? removed = null;
         List<uint>? shifted = null;

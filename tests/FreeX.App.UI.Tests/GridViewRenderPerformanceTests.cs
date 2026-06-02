@@ -773,6 +773,7 @@ public sealed class GridViewRenderPerformanceTests
             source.IndexOf("public static string ResolveColor", StringComparison.Ordinal)..];
 
         source.Should().Contain("private static readonly ConcurrentDictionary<string, ConditionalIconStyleTraits> StyleTraitCache");
+        source.Should().Contain("new(StringComparer.OrdinalIgnoreCase)");
         resolveGlyphKind.Should().Contain("ResolveStyleTraits(icon.Style)");
         resolveGlyphKind.Should().NotContain("Contains(");
         resolveColor.Should().Contain("ResolveStyleTraits(icon.Style).IsGray");
@@ -1124,7 +1125,7 @@ public sealed class GridViewRenderPerformanceTests
         loop.Should().NotContain("new RectangleGeometry(clipRect)");
         loop.Should().NotContain("GetSplitPaneClipRectForCell");
         rendering.Should().Contain("geometry.Freeze();");
-        splitPanes.Should().Contain("public sealed record SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region)");
+        splitPanes.Should().Contain("public readonly record struct SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region)");
     }
 
     [Fact]
