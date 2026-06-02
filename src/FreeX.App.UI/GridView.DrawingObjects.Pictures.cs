@@ -25,12 +25,14 @@ public partial class GridView
         var visibleRight = GetDrawingViewportRight();
         var visibleBottom = GetDrawingViewportBottom();
         var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
+        var metricLookups = GetRenderMetricLookups(Viewport);
         foreach (var picture in Pictures)
-            RenderPicture(dc, picture, fill, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
+            RenderPicture(dc, metricLookups, picture, fill, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
     }
 
     private void RenderPicture(
         DrawingContext dc,
+        RenderMetricLookupCache metricLookups,
         PictureModel picture,
         Brush fill,
         double pixelsPerDip,
@@ -42,7 +44,9 @@ public partial class GridView
         if (!picture.IsVisible) return;
         if (!CanAnchoredObjectReachDrawingViewport(picture.Anchor, lastRenderableRow, lastRenderableColumn))
             return;
-        if (!TryCreateAnchoredObjectRect(picture.Anchor,
+        if (!TryCreateAnchoredObjectRect(
+                metricLookups,
+                picture.Anchor,
                 picture.Width,
                 picture.Height,
                 MinimumPictureObjectWidth,

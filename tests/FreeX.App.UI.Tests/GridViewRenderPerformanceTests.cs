@@ -312,6 +312,25 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void DrawingObjectRenderAndHitTest_ReusesMetricLookupsForAnchoredObjects()
+    {
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var pictures = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.Pictures.cs"));
+        var objectDrag = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
+        var planner = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridDrawingObjectPlanner.cs"));
+
+        drawingObjects.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        pictures.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        objectDrag.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        drawingObjects.Should().Contain("metricLookups,");
+        pictures.Should().Contain("metricLookups,");
+        objectDrag.Should().Contain("metricLookups,");
+        planner.Should().Contain("IReadOnlyDictionary<uint, RowMetric> rows");
+        planner.Should().Contain("rows.TryGetValue(anchor.Row");
+        planner.Should().Contain("columns.TryGetValue(anchor.Col");
+    }
+
+    [Fact]
     public void RenderAutofillPreview_ReusesFrozenStaticDashedPen()
     {
         var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));

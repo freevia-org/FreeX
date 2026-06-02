@@ -190,12 +190,14 @@ public partial class GridView
         var visibleRight = GetDrawingViewportRight();
         var visibleBottom = GetDrawingViewportBottom();
         var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
+        var metricLookups = GetRenderMetricLookups(Viewport);
         foreach (var textBox in TextBoxes)
-            RenderTextBox(dc, textBox, themeEffect, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
+            RenderTextBox(dc, metricLookups, textBox, themeEffect, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
     }
 
     private void RenderTextBox(
         DrawingContext dc,
+        RenderMetricLookupCache metricLookups,
         TextBoxModel textBox,
         WorkbookThemeEffectStyle themeEffect,
         double pixelsPerDip,
@@ -207,7 +209,9 @@ public partial class GridView
         if (!textBox.IsVisible) return;
         if (!CanAnchoredObjectReachDrawingViewport(textBox.Anchor, lastRenderableRow, lastRenderableColumn))
             return;
-        if (!TryCreateAnchoredObjectRect(textBox.Anchor,
+        if (!TryCreateAnchoredObjectRect(
+                metricLookups,
+                textBox.Anchor,
                 textBox.Width,
                 textBox.Height,
                 MinimumTextBoxObjectWidth,
@@ -243,12 +247,14 @@ public partial class GridView
         var visibleRight = GetDrawingViewportRight();
         var visibleBottom = GetDrawingViewportBottom();
         var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
+        var metricLookups = GetRenderMetricLookups(Viewport);
         foreach (var shape in DrawingShapes)
-            RenderDrawingShape(dc, shape, themeEffect, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
+            RenderDrawingShape(dc, metricLookups, shape, themeEffect, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
     }
 
     private void RenderDrawingShape(
         DrawingContext dc,
+        RenderMetricLookupCache metricLookups,
         DrawingShapeModel shape,
         WorkbookThemeEffectStyle themeEffect,
         double visibleRight,
@@ -259,7 +265,9 @@ public partial class GridView
         if (!shape.IsVisible) return;
         if (!CanAnchoredObjectReachDrawingViewport(shape.Anchor, lastRenderableRow, lastRenderableColumn))
             return;
-        if (!TryCreateAnchoredObjectRect(shape.Anchor,
+        if (!TryCreateAnchoredObjectRect(
+                metricLookups,
+                shape.Anchor,
                 shape.Width,
                 shape.Height,
                 MinimumShapeObjectWidth,
@@ -307,18 +315,19 @@ public partial class GridView
         var visibleRight = GetDrawingViewportRight();
         var visibleBottom = GetDrawingViewportBottom();
         var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
+        var metricLookups = GetRenderMetricLookups(Viewport);
         foreach (var entry in order)
         {
             switch (entry.Kind)
             {
                 case SelectionPaneObjectKind.Shape when FindDrawingShape(entry.Id) is { } shape:
-                    RenderDrawingShape(dc, shape, themeEffect, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
+                    RenderDrawingShape(dc, metricLookups, shape, themeEffect, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
                     break;
                 case SelectionPaneObjectKind.Picture when FindPicture(entry.Id) is { } picture:
-                    RenderPicture(dc, picture, Brushes.White, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
+                    RenderPicture(dc, metricLookups, picture, Brushes.White, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
                     break;
                 case SelectionPaneObjectKind.TextBox when FindTextBox(entry.Id) is { } textBox:
-                    RenderTextBox(dc, textBox, themeEffect, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
+                    RenderTextBox(dc, metricLookups, textBox, themeEffect, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
                     break;
             }
         }
@@ -712,6 +721,7 @@ public partial class GridView
         }
 
         var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
+        var metricLookups = GetRenderMetricLookups(Viewport);
         if (DrawingShapes is not null)
         {
             var index = 1;
@@ -719,7 +729,9 @@ public partial class GridView
             {
                 if (shape.IsVisible &&
                     CanAnchoredObjectReachDrawingViewport(shape.Anchor, lastRenderableRow, lastRenderableColumn) &&
-                    TryCreateAnchoredObjectRect(shape.Anchor,
+                    TryCreateAnchoredObjectRect(
+                        metricLookups,
+                        shape.Anchor,
                         shape.Width,
                         shape.Height,
                         MinimumShapeObjectWidth,
@@ -739,7 +751,9 @@ public partial class GridView
             {
                 if (picture.IsVisible &&
                     CanAnchoredObjectReachDrawingViewport(picture.Anchor, lastRenderableRow, lastRenderableColumn) &&
-                    TryCreateAnchoredObjectRect(picture.Anchor,
+                    TryCreateAnchoredObjectRect(
+                        metricLookups,
+                        picture.Anchor,
                         picture.Width,
                         picture.Height,
                         MinimumPictureObjectWidth,
@@ -759,7 +773,9 @@ public partial class GridView
             {
                 if (textBox.IsVisible &&
                     CanAnchoredObjectReachDrawingViewport(textBox.Anchor, lastRenderableRow, lastRenderableColumn) &&
-                    TryCreateAnchoredObjectRect(textBox.Anchor,
+                    TryCreateAnchoredObjectRect(
+                        metricLookups,
+                        textBox.Anchor,
                         textBox.Width,
                         textBox.Height,
                         MinimumTextBoxObjectWidth,
@@ -817,6 +833,26 @@ public partial class GridView
         out Rect rect) =>
         GridDrawingObjectPlanner.TryCreateAnchoredObjectRect(
             Viewport,
+            anchor,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
+            width,
+            height,
+            minimumWidth,
+            minimumHeight,
+            out rect);
+
+    private bool TryCreateAnchoredObjectRect(
+        RenderMetricLookupCache metricLookups,
+        CellAddress anchor,
+        double width,
+        double height,
+        double minimumWidth,
+        double minimumHeight,
+        out Rect rect) =>
+        GridDrawingObjectPlanner.TryCreateAnchoredObjectRect(
+            metricLookups.Rows,
+            metricLookups.Columns,
             anchor,
             ActualRowHeaderWidth,
             EffectiveColHeaderHeight,

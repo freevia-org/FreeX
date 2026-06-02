@@ -544,6 +544,75 @@ public sealed class GridViewPerformanceMeasurementTests
     }
 
     [Fact]
+    public void Benchmark_DrawingObjectAnchorRectMetricLookup_ReportsTiming()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const int iterations = 96;
+            const int width = 1440;
+            const int height = 900;
+            var grid = CreateOffscreenDrawingObjectHeavyGrid(width, height);
+            var viewport = grid.Viewport!;
+            var rows = viewport.RowMetrics.ToDictionary(row => row.Row);
+            var columns = viewport.ColMetrics.ToDictionary(column => column.Col);
+            var objects = grid.TextBoxes!
+                .Select(textBox => (
+                    textBox.Anchor,
+                    textBox.Width,
+                    textBox.Height,
+                    MinimumWidth: 32d,
+                    MinimumHeight: 18d))
+                .Concat(grid.DrawingShapes!.Select(shape => (
+                    shape.Anchor,
+                    shape.Width,
+                    shape.Height,
+                    MinimumWidth: 24d,
+                    MinimumHeight: 16d)))
+                .ToArray();
+
+            CountAnchorRectsWithScans(viewport, objects).Should().Be(objects.Length);
+            CountAnchorRectsWithLookups(rows, columns, objects).Should().Be(objects.Length);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var scanAllocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var scan = Stopwatch.StartNew();
+            var scanCount = 0;
+            for (var i = 0; i < iterations; i++)
+                scanCount += CountAnchorRectsWithScans(viewport, objects);
+            scan.Stop();
+            var scanAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - scanAllocatedBefore;
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var lookupAllocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var lookup = Stopwatch.StartNew();
+            var lookupCount = 0;
+            for (var i = 0; i < iterations; i++)
+                lookupCount += CountAnchorRectsWithLookups(rows, columns, objects);
+            lookup.Stop();
+            var lookupAllocatedBytes = GC.GetAllocatedBytesForCurrentThread() - lookupAllocatedBefore;
+
+            Console.WriteLine(
+                "PERF DRAWING_OBJECT_ANCHOR_RECT_LOOKUP " +
+                $"objects={objects.Length} iterations={iterations} " +
+                $"scan_total_ms={scan.Elapsed.TotalMilliseconds:F2} " +
+                $"lookup_total_ms={lookup.Elapsed.TotalMilliseconds:F2} " +
+                $"scan_allocated_bytes={scanAllocatedBytes:N0} " +
+                $"lookup_allocated_bytes={lookupAllocatedBytes:N0}");
+
+            scanCount.Should().Be(objects.Length * iterations);
+            lookupCount.Should().Be(scanCount);
+            lookup.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
+            lookupAllocatedBytes.Should().BeLessThanOrEqualTo(scanAllocatedBytes);
+        });
+    }
+
+    [Fact]
     public void Benchmark_FormulaTraceLayoutVisitor_ReportsTimingAndAllocatedBytes()
     {
         const int iterations = 160;
@@ -1300,6 +1369,58 @@ public sealed class GridViewPerformanceMeasurementTests
         grid.UpdateLayout();
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(grid);
+    }
+
+    private static int CountAnchorRectsWithScans(
+        ViewportModel viewport,
+        IReadOnlyList<(CellAddress Anchor, double Width, double Height, double MinimumWidth, double MinimumHeight)> objects)
+    {
+        var count = 0;
+        foreach (var item in objects)
+        {
+            if (GridDrawingObjectPlanner.TryCreateAnchoredObjectRect(
+                    viewport,
+                    item.Anchor,
+                    GridView.RowHeaderWidth,
+                    GridView.ColHeaderHeight,
+                    item.Width,
+                    item.Height,
+                    item.MinimumWidth,
+                    item.MinimumHeight,
+                    out _))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static int CountAnchorRectsWithLookups(
+        IReadOnlyDictionary<uint, RowMetric> rows,
+        IReadOnlyDictionary<uint, ColMetric> columns,
+        IReadOnlyList<(CellAddress Anchor, double Width, double Height, double MinimumWidth, double MinimumHeight)> objects)
+    {
+        var count = 0;
+        foreach (var item in objects)
+        {
+            if (GridDrawingObjectPlanner.TryCreateAnchoredObjectRect(
+                    rows,
+                    columns,
+                    item.Anchor,
+                    GridView.RowHeaderWidth,
+                    GridView.ColHeaderHeight,
+                    item.Width,
+                    item.Height,
+                    item.MinimumWidth,
+                    item.MinimumHeight,
+                    out _))
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private static void DrawFormulaTraceArrowsOnce(

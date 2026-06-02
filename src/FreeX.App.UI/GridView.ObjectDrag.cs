@@ -327,6 +327,7 @@ public partial class GridView
     {
         if (Viewport is null || ObjectDisplayMode == GridObjectDisplayMode.Nothing) return default;
 
+        var metricLookups = GetRenderMetricLookups(Viewport);
         if (HasExplicitDrawingObjectZOrder())
         {
             var order = GetNormalizedDrawingObjectZOrder();
@@ -335,21 +336,21 @@ public partial class GridView
                 var entry = order[index];
                 if (entry.Kind == SelectionPaneObjectKind.TextBox &&
                     FindTextBox(entry.Id) is { } textBox &&
-                    TryHitTextBox(textBox, pos, out var textBoxHit))
+                    TryHitTextBox(metricLookups, textBox, pos, out var textBoxHit))
                 {
                     return textBoxHit;
                 }
 
                 if (entry.Kind == SelectionPaneObjectKind.Picture &&
                     FindPicture(entry.Id) is { } picture &&
-                    TryHitPicture(picture, pos, out var pictureHit))
+                    TryHitPicture(metricLookups, picture, pos, out var pictureHit))
                 {
                     return pictureHit;
                 }
 
                 if (entry.Kind == SelectionPaneObjectKind.Shape &&
                     FindDrawingShape(entry.Id) is { } shape &&
-                    TryHitDrawingShape(shape, pos, out var shapeHit))
+                    TryHitDrawingShape(metricLookups, shape, pos, out var shapeHit))
                 {
                     return shapeHit;
                 }
@@ -361,21 +362,21 @@ public partial class GridView
         if (TextBoxes is not null)
             for (var i = TextBoxes.Count - 1; i >= 0; i--)
             {
-                if (TryHitTextBox(TextBoxes[i], pos, out var hit))
+                if (TryHitTextBox(metricLookups, TextBoxes[i], pos, out var hit))
                     return hit;
             }
 
         if (Pictures is not null)
             for (var i = Pictures.Count - 1; i >= 0; i--)
             {
-                if (TryHitPicture(Pictures[i], pos, out var hit))
+                if (TryHitPicture(metricLookups, Pictures[i], pos, out var hit))
                     return hit;
             }
 
         if (DrawingShapes is not null)
             for (var i = DrawingShapes.Count - 1; i >= 0; i--)
             {
-                if (TryHitDrawingShape(DrawingShapes[i], pos, out var hit))
+                if (TryHitDrawingShape(metricLookups, DrawingShapes[i], pos, out var hit))
                     return hit;
             }
 
@@ -383,12 +384,14 @@ public partial class GridView
     }
 
     private bool TryHitTextBox(
+        RenderMetricLookupCache metricLookups,
         TextBoxModel textBox,
         Point pos,
         out (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) hit)
     {
         if (textBox.IsVisible &&
             TryCreateAnchoredObjectRect(
+                metricLookups,
                 textBox.Anchor,
                 textBox.Width,
                 textBox.Height,
@@ -406,12 +409,14 @@ public partial class GridView
     }
 
     private bool TryHitPicture(
+        RenderMetricLookupCache metricLookups,
         PictureModel picture,
         Point pos,
         out (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) hit)
     {
         if (picture.IsVisible &&
             TryCreateAnchoredObjectRect(
+                metricLookups,
                 picture.Anchor,
                 picture.Width,
                 picture.Height,
@@ -429,12 +434,14 @@ public partial class GridView
     }
 
     private bool TryHitDrawingShape(
+        RenderMetricLookupCache metricLookups,
         DrawingShapeModel shape,
         Point pos,
         out (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) hit)
     {
         if (shape.IsVisible &&
             TryCreateAnchoredObjectRect(
+                metricLookups,
                 shape.Anchor,
                 shape.Width,
                 shape.Height,
