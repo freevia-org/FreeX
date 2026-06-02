@@ -94,4 +94,26 @@ public sealed class WorkbookThemeTests
         theme.ResolveColor(WorkbookThemeColorSlot.Accent1, tint)
             .Should().Be(new CellColor(expectedR, expectedG, expectedB));
     }
+
+    [Fact]
+    public void CellStyle_ResolvesThemeColorReferencesWithTint()
+    {
+        var theme = WorkbookTheme.Office
+            .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(100, 150, 200))
+            .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(80, 120, 160))
+            .WithColor(WorkbookThemeColorSlot.Accent3, new CellColor(40, 80, 120));
+        var style = new CellStyle
+        {
+            FontColor = CellColor.Black,
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.5),
+            FillColor = CellColor.White,
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.25),
+            FillPatternColor = CellColor.Black,
+            FillPatternThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.25)
+        };
+
+        style.ResolveFontColor(theme).Should().Be(new CellColor(178, 202, 228));
+        style.ResolveFillColor(theme).Should().Be(new CellColor(60, 90, 120));
+        style.ResolveFillPatternColor(theme).Should().Be(new CellColor(94, 124, 154));
+    }
 }

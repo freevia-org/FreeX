@@ -347,7 +347,7 @@ public static class AccessibilityCheckerService
                 address,
                 cell,
                 ref workbookStyleCache);
-            var contrast = GetCellContrastCheck(style, ref contrastCache);
+            var contrast = GetCellContrastCheck(style, workbook.Theme, ref contrastCache);
             if (contrast.HasSufficientContrast)
                 continue;
 
@@ -534,6 +534,7 @@ public static class AccessibilityCheckerService
 
     private static CellContrastCheck GetCellContrastCheck(
         CellStyle style,
+        WorkbookTheme theme,
         ref Dictionary<CellStyle, CellContrastCheck>? contrastCache)
     {
         contrastCache ??= new Dictionary<CellStyle, CellContrastCheck>(CellStyleReferenceComparer.Instance);
@@ -542,7 +543,7 @@ public static class AccessibilityCheckerService
             var minimumContrastRatio = MinimumTextContrastRatio(style);
             check = new CellContrastCheck(
                 minimumContrastRatio,
-                HasSufficientCellTextContrast(style, minimumContrastRatio));
+                HasSufficientCellTextContrast(style, theme, minimumContrastRatio));
             contrastCache[style] = check;
         }
 
@@ -1005,20 +1006,24 @@ public static class AccessibilityCheckerService
             ? 3.0
             : 4.5;
 
-    private static bool HasSufficientCellTextContrast(CellStyle style, double minimumContrastRatio)
+    private static bool HasSufficientCellTextContrast(
+        CellStyle style,
+        WorkbookTheme theme,
+        double minimumContrastRatio)
     {
-        var baseFill = style.FillColor ?? CellColor.White;
-        if (ContrastRatio(style.FontColor, baseFill) < minimumContrastRatio)
+        var fontColor = style.ResolveFontColor(theme);
+        var baseFill = style.ResolveFillColor(theme) ?? CellColor.White;
+        if (ContrastRatio(fontColor, baseFill) < minimumContrastRatio)
             return false;
 
         if (style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
             return true;
 
-        var patternColor = style.FillPatternColor ?? CellColor.Black;
+        var patternColor = style.ResolveFillPatternColor(theme) ?? CellColor.Black;
         if (TryGetGrayPatternOpacity(style.FillPatternStyle, out var opacity))
-            return ContrastRatio(style.FontColor, Blend(patternColor, baseFill, opacity)) >= minimumContrastRatio;
+            return ContrastRatio(fontColor, Blend(patternColor, baseFill, opacity)) >= minimumContrastRatio;
 
-        return ContrastRatio(style.FontColor, patternColor) >= minimumContrastRatio;
+        return ContrastRatio(fontColor, patternColor) >= minimumContrastRatio;
     }
 
     private static bool TryGetGrayPatternOpacity(CellFillPatternStyle patternStyle, out double opacity)

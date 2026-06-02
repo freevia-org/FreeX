@@ -72,6 +72,59 @@ public class ApplyStyleCommandTests
     }
 
     [Fact]
+    public void ApplyBold_PreservesThemeColorReferences()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var cell = Cell.FromValue(new NumberValue(1));
+        cell.StyleId = wb.RegisterStyle(new CellStyle
+        {
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.2),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.2),
+            FillPatternThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.4)
+        });
+        sheet.SetCell(addr, cell);
+
+        var cmd = new ApplyStyleCommand(sheet.Id, new GridRange(addr, addr), new StyleDiff(Bold: true));
+        cmd.Apply(ctx);
+
+        var style = wb.GetStyle(sheet.GetCell(addr)!.StyleId);
+        style.Bold.Should().BeTrue();
+        style.FontThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, 0.2));
+        style.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.2));
+        style.FillPatternThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.4));
+    }
+
+    [Fact]
+    public void ApplyExplicitColors_ClearThemeColorReferences()
+    {
+        var (wb, sheet, ctx) = Setup();
+        var addr = new CellAddress(sheet.Id, 1, 1);
+        var cell = Cell.FromValue(new NumberValue(1));
+        cell.StyleId = wb.RegisterStyle(new CellStyle
+        {
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2),
+            FillPatternThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3)
+        });
+        sheet.SetCell(addr, cell);
+
+        var cmd = new ApplyStyleCommand(
+            sheet.Id,
+            new GridRange(addr, addr),
+            new StyleDiff(
+                FontColor: new CellColor(10, 20, 30),
+                FillColor: new CellColor(40, 50, 60),
+                FillPatternColor: new CellColor(70, 80, 90)));
+        cmd.Apply(ctx);
+
+        var style = wb.GetStyle(sheet.GetCell(addr)!.StyleId);
+        style.FontThemeColor.Should().BeNull();
+        style.FillThemeColor.Should().BeNull();
+        style.FillPatternThemeColor.Should().BeNull();
+    }
+
+    [Fact]
     public void ClearFill_RemovesPatternState()
     {
         var (wb, sheet, ctx) = Setup();
