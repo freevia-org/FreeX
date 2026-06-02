@@ -419,6 +419,13 @@ public sealed partial class Sheet
         Name = name;
     }
 
+    /// <summary>Pre-size cell storage for bulk writers.</summary>
+    public void EnsureCellCapacity(int capacity)
+    {
+        if (capacity > _cells.Count)
+            _cells.EnsureCapacity(capacity);
+    }
+
     /// <summary>Get the cell at the given address, or null if no cell exists there.</summary>
     public Cell? GetCell(uint row, uint col)
     {
