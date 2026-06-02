@@ -1188,6 +1188,10 @@ public sealed class GridViewRenderPerformanceTests
         renderSplitPaneCells.Should().Contain("SplitPaneCellLayoutPlanner.VisitLayouts(Viewport, MergedRegions, EditingCell, ref consumer);");
         renderConsumer.Should().Contain("GetSplitPaneClipGeometryForRegion(");
         renderConsumer.Should().Contain("layout.Region");
+        renderConsumer.Should().Contain("if (clipGeometry.Rect.Width <= 0 || clipGeometry.Rect.Height <= 0)");
+        renderConsumer.IndexOf("if (clipGeometry.Rect.Width <= 0 || clipGeometry.Rect.Height <= 0)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderConsumer.IndexOf("dc.PushClip(clipGeometry);", StringComparison.Ordinal));
         renderConsumer.Should().Contain("grid.RenderSplitPaneCell(dc, layout, gridPen, pixelsPerDip);");
         renderConsumer.Should().NotContain("new RectangleGeometry(clipRect)");
         renderConsumer.Should().NotContain("GetSplitPaneClipRectForCell");
