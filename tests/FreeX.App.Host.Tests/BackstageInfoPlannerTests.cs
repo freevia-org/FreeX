@@ -118,6 +118,26 @@ public sealed class BackstageInfoPlannerTests
     }
 
     [Fact]
+    public void Build_ReportsInvalidSavedPathsWithoutThrowing()
+    {
+        var workbook = new Workbook("InvalidPath");
+        workbook.AddSheet("Sheet1");
+
+        var plan = BackstageInfoPlanner.Build(
+            workbook,
+            "bad\0path.xlsx",
+            culture: CultureInfo.InvariantCulture,
+            fileExists: _ => throw new InvalidOperationException("invalid paths must not be probed"));
+
+        plan.FilePath.Should().Be("bad\0path.xlsx");
+        plan.Format.Should().Be(".xlsx");
+        plan.FileSize.Should().Be(UiText.Get("Backstage_Info_FileMissing"));
+        plan.LastModified.Should().Be(UiText.Get("Backstage_Info_FileMissing"));
+        plan.SharingStatus.Should().Be("Save As is required before Windows Share can send the workbook because the saved path is not a valid local file path.");
+        plan.ExportStatus.Should().Contain("Ready for local PDF/XPS export");
+    }
+
+    [Fact]
     public void Build_IncludesWorkbookAndActiveSheetProtectionSummaries()
     {
         var workbook = new Workbook("Protected") { IsStructureProtected = true };
