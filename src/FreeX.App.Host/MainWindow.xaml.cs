@@ -60,6 +60,7 @@ public partial class MainWindow : Window, IWorkbookWindow
     private QuickAccessCommandState? _lastQuickAccessCommandState;
     private WorkbookId? _lastQuickAccessCommandStateWorkbookId;
     private readonly StatusBarStatsCache _statusBarStatsCache = new();
+    private readonly StatusBarDisplayStateCache _statusBarDisplayStateCache = new();
     private StatusBarDisplayState? _lastStatusBarDisplayState;
     private readonly SparklineValueCache _sparklineValueCache = new();
     private ulong _navigationCacheRevision;
