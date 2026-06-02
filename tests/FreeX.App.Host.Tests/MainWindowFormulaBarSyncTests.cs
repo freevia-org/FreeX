@@ -418,6 +418,60 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarDown_WithInlineFormulaReferenceDraft_SyncsInlineEditorWithoutCommitting()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.ShowInlineEditor(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=");
+            harness.SetFormulaBarCaretIndex("=".Length);
+            harness.SetInlineEditorCaretIndex("=".Length);
+
+            harness.PressFormulaBarKey(Key.Down).Should().BeTrue();
+
+            harness.FormulaBarText.Should().Be("=A2");
+            harness.InlineEditorText.Should().Be("=A2");
+            harness.InlineEditorVisible.Should().BeTrue();
+            harness.CellText(1, 1).Should().Be("original");
+            harness.CellFormula(1, 1).Should().BeNull();
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 2, 1),
+                new CellAddress(harness.CurrentSheetId, 2, 1)));
+            harness.CellAddressBoxText.Should().Be("A2");
+            harness.InlineEditorFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void FormulaBarDown_WithExistingFormulaEdit_PreservesDraftAndSelection()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellFormula(1, 1, "SUM(B1:C1)");
+            harness.SelectActiveCell(1, 1);
+            harness.EditActiveCellInFormulaBar();
+
+            harness.PressFormulaBarKey(Key.Down).Should().BeFalse();
+
+            harness.FormulaBarText.Should().Be("=SUM(B1:C1)");
+            harness.FormulaBarCaretIndex.Should().Be("=SUM(B1:C1)".Length);
+            harness.CellFormula(1, 1).Should().Be("SUM(B1:C1)");
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 1),
+                new CellAddress(harness.CurrentSheetId, 1, 1)));
+            harness.CellAddressBoxText.Should().Be("A1");
+            harness.FormulaBarFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void FormulaBarTab_CommitsEditMovesSelectionRightAndRefreshesEditors()
     {
         StaTestRunner.Run(() =>
@@ -1242,6 +1296,8 @@ public sealed class MainWindowFormulaBarSyncTests
 
         public bool InlineEditorVisible => InlineEditor?.IsVisible == true;
 
+        public bool InlineEditorFocused => InlineEditor is { } inlineEditor && IsFocused(inlineEditor);
+
         public bool FormulaBarFocused => IsFocused((TextBox)_window.FindName("FormulaBar"));
 
         public bool CellAddressBoxFocused => IsFocused((TextBox)_window.FindName("CellAddressBox"));
@@ -1386,6 +1442,13 @@ public sealed class MainWindowFormulaBarSyncTests
         public void SetFormulaBarCaretIndex(int caretIndex)
         {
             ((TextBox)_window.FindName("FormulaBar")).CaretIndex = caretIndex;
+            PumpDispatcher();
+        }
+
+        public void SetInlineEditorCaretIndex(int caretIndex)
+        {
+            var inlineEditor = InlineEditor ?? throw new InvalidOperationException("Inline editor is not visible.");
+            inlineEditor.CaretIndex = caretIndex;
             PumpDispatcher();
         }
 

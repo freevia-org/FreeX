@@ -96,7 +96,7 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("TryExecuteCommand(command, \"Allow Users to Edit Ranges\")");
         source.Should().Contain("_messageService.ShowInfo(successMessage, UiText.Get(\"MainWindowMessage_AllowEditRangesTitle\"))");
         source.Should().Contain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
-        source.Should().Contain("_shareService.ShareFileAsync(this, _currentFilePath, _workbook.Name)");
+        source.Should().Contain("_shareService.ShareFileAsync(this, sharePath, _workbook.Name)");
     }
 
     private static string ReadMainWindowXaml() =>

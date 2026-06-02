@@ -135,6 +135,7 @@ public sealed partial class NativeJsonAdapter
                     .ToList(),
                 ProtectionMetadata = FromWorksheetProtectionMetadata(s.ProtectionMetadata),
                 CustomProperties = s.CustomProperties
+                    .OfType<WorksheetCustomProperty>()
                     .Where(property => !string.IsNullOrWhiteSpace(property.Name) && property.Id > 0)
                     .Select(property => new WorksheetCustomPropertyDto
                     {

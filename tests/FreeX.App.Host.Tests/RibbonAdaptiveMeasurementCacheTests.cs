@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -135,6 +136,48 @@ public sealed class RibbonAdaptiveMeasurementCacheTests
             repeatedWidth.ResizeThresholdRebuildCount.Should().Be(0);
             repeatedWidth.LayoutPlanComputeCount.Should().Be(0);
             repeatedWidth.LayoutPlanCacheHitCount.Should().Be(1);
+        });
+    }
+
+    [Fact]
+    public void Benchmark_DataTabRepeatedCompact_ReusesCachedOverrideLayout()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const int iterations = 120;
+            using var harness = RibbonAdaptiveDiagnosticsHarness.Create();
+
+            harness.SelectRibbonTab("Data", 1280);
+            harness.SetWidth(1290);
+            harness.UpdateCompact(force: true);
+            harness.ResetDiagnostics();
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var stopwatch = Stopwatch.StartNew();
+            for (var i = 0; i < iterations; i++)
+                harness.UpdateCompact(force: true);
+            stopwatch.Stop();
+
+            var diagnostics = harness.Diagnostics;
+            var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            Console.WriteLine(
+                "PERF RIBBON_DATA_REPEATED_COMPACT " +
+                $"steps={iterations} total_ms={stopwatch.Elapsed.TotalMilliseconds:F2} " +
+                $"allocated_bytes={allocatedBytes:N0} " +
+                $"layout_compute={diagnostics.LayoutPlanComputeCount:N0} " +
+                $"layout_cache_hits={diagnostics.LayoutPlanCacheHitCount:N0} " +
+                $"applied_state_skips={diagnostics.AppliedStateSkipCount:N0}");
+
+            diagnostics.LayoutPlanComputeCount.Should().Be(0);
+            diagnostics.LayoutPlanCacheHitCount.Should().Be(iterations);
+            diagnostics.AppliedStateSkipCount.Should().Be(iterations);
+            diagnostics.StateApplyCount.Should().Be(0);
+            diagnostics.StateChangedGroupCount.Should().Be(0);
+            diagnostics.CollapsedFootprintApplyCount.Should().Be(0);
         });
     }
 

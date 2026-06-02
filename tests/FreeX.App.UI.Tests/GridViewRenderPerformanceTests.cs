@@ -527,7 +527,8 @@ public sealed class GridViewRenderPerformanceTests
         continuation.Should().Contain("RenderLiveResizeColumnContinuation(dc, gridRight, gridTop, pixelsPerDip);");
         continuation.Should().Contain("RenderLiveResizeRowContinuation(dc, gridLeft, gridRight, gridBottom, pixelsPerDip);");
         continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatColumnHeader(++lastColumn, UseR1C1ReferenceStyle), headerRect, pixelsPerDip);");
-        continuation.Should().Contain("DrawLiveResizeHeaderText(dc, (++lastRow).ToString(CultureInfo.InvariantCulture), headerRect, pixelsPerDip);");
+        continuation.Should().Contain("DrawLiveResizeHeaderText(dc, FormatRowHeader(++lastRow), headerRect, pixelsPerDip);");
+        continuation.Should().NotContain("(++lastRow).ToString");
         continuation.Should().NotContain("VisualTreeHelper.GetDpi(this).PixelsPerDip);");
     }
 
@@ -981,6 +982,64 @@ public sealed class GridViewRenderPerformanceTests
         cacheSource.Should().Contain("ChartRenderer.Render(chart, viewport, theme, renderScale)");
         propertiesSource.Should().Contain("OnChartRenderCacheInputChanged");
         propertiesSource.Should().Contain("grid.ClearChartRenderCache();");
+    }
+
+    [Fact]
+    public void RenderNativeControls_ReusesPixelsPerDipAcrossClippedTextCalls()
+    {
+        var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var renderNativeControls = drawingSource[
+            drawingSource.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)..
+            drawingSource.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)];
+        var drawNativeSlicer = drawingSource[
+            drawingSource.IndexOf("private void DrawNativeSlicerControl", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private void DrawNativeTimelineControl", StringComparison.Ordinal)];
+        var drawNativeTimeline = drawingSource[
+            drawingSource.IndexOf("private void DrawNativeTimelineControl", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private void DrawNativeControlFrame", StringComparison.Ordinal)];
+        var drawNativeFrame = drawingSource[
+            drawingSource.IndexOf("private void DrawNativeControlFrame", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private void DrawClippedText", StringComparison.Ordinal)];
+        var drawClippedText = drawingSource[
+            drawingSource.IndexOf("private void DrawClippedText", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private static string GetNativeControlCaption", StringComparison.Ordinal)];
+
+        renderNativeControls.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
+        renderNativeControls.Should().Contain("DrawNativeSlicerControl(dc, controlRect, slicer, pixelsPerDip);");
+        renderNativeControls.Should().Contain("DrawNativeTimelineControl(dc, controlRect, timeline, pixelsPerDip);");
+        drawNativeSlicer.Should().Contain("DrawNativeControlFrame(dc, rect, GetNativeControlCaption(slicer.Caption, slicer.Name, slicer.DrawingShapeName), pixelsPerDip);");
+        drawNativeSlicer.Should().Contain("DrawClippedText(dc, tileText, tileRect, NativeControlMutedTextBrush, 10, verticalPadding: 1, pixelsPerDip);");
+        drawNativeTimeline.Should().Contain("DrawNativeControlFrame(dc, rect, GetNativeControlCaption(timeline.Caption, timeline.Name, timeline.DrawingShapeName), pixelsPerDip);");
+        drawNativeTimeline.Should().Contain("DrawClippedText(dc, label, new Rect");
+        drawNativeTimeline.Should().Contain("pixelsPerDip);");
+        drawNativeFrame.Should().Contain("DrawClippedText(dc, caption, new Rect");
+        drawNativeFrame.Should().Contain("pixelsPerDip);");
+        drawClippedText.Should().Contain("double pixelsPerDip)");
+        drawClippedText.Should().Contain("GetDrawingObjectText(");
+        drawClippedText.Should().NotContain("VisualTreeHelper.GetDpi(this)");
+    }
+
+    [Fact]
+    public void RenderObjectPlaceholders_ReusesPixelsPerDipAcrossPlaceholderLabels()
+    {
+        var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var renderObjectPlaceholders = drawingSource[
+            drawingSource.IndexOf("private void RenderObjectPlaceholders", StringComparison.Ordinal)..
+            drawingSource.IndexOf("public static string CreateObjectPlaceholderLabel", StringComparison.Ordinal)];
+        var drawObjectPlaceholder = drawingSource[
+            drawingSource.IndexOf("private void DrawObjectPlaceholder", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private static void DrawPlaceholderDiagonals", StringComparison.Ordinal)];
+
+        renderObjectPlaceholders.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Chart\", chart.Name, index), pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Shape\", shape.Name, index), pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Picture\", picture.Name, index), pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Text Box\", textBox.Name, index), pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel(\"Slicer\"");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel(\"Timeline\"");
+        drawObjectPlaceholder.Should().Contain("double pixelsPerDip)");
+        drawObjectPlaceholder.Should().Contain("GetDrawingObjectText(");
+        drawObjectPlaceholder.Should().NotContain("VisualTreeHelper.GetDpi(this)");
     }
 
     [Fact]

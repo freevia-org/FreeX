@@ -4071,6 +4071,31 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_WrapsHtmlTransformOutputWithXsltContext()
+    {
+        using var source = StreamFromString("<rows><row name=\"April\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="html" omit-xml-declaration="yes" />
+              <xsl:template match="/rows">
+                <html>
+                  <body>
+                    <br />
+                    <span><xsl:value-of select="row/@name" /></span>
+                  </body>
+                </html>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*XSLT transform output*")
+            .WithInnerException<XmlException>();
+    }
+
+    [Fact]
     public void LoadTransformed_WrapsNonSpreadsheetMlOutputWithXsltContext()
     {
         using var source = StreamFromString("<rows/>");
@@ -4096,6 +4121,31 @@ public sealed class SpreadsheetXmlFileAdapterTests
         using var stylesheet = StreamFromString("""
             <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
               <xsl:output method="xml" doctype-system="freex-workbook.dtd" omit-xml-declaration="yes" />
+              <xsl:template match="/">
+                <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+                  <ss:Worksheet ss:Name="Bad"><ss:Table /></ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*XSLT transform output*")
+            .WithInnerException<XmlException>();
+    }
+
+    [Fact]
+    public void LoadTransformed_RejectsStylesheetEmittedPublicDtdOutput()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:output method="xml"
+                  doctype-public="-//FreeX//DTD Workbook 1.0//EN"
+                  doctype-system="freex-workbook.dtd"
+                  omit-xml-declaration="yes" />
               <xsl:template match="/">
                 <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
                   <ss:Worksheet ss:Name="Bad"><ss:Table /></ss:Worksheet>
