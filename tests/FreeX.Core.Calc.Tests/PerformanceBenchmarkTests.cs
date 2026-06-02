@@ -401,6 +401,48 @@ public class PerformanceBenchmarkTests
     }
 
     [Fact]
+    public void Benchmark_RepeatedIdenticalFormulaDependencyRebuild_ReportsParserCacheTail()
+    {
+        var workbook = new Workbook("Benchmark");
+        var sheet = workbook.AddSheet("Sheet1");
+        var graph = new DependencyGraph();
+        var engine = new RecalcEngine(graph, new FormulaEvaluator());
+        const uint formulaCount = 5_000;
+        const string formulaText = "SUM($A$1:$A$10)+$B$1";
+
+        for (uint row = 1; row <= 10; row++)
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(5));
+
+        for (uint row = 1; row <= formulaCount; row++)
+            sheet.SetFormula(new CellAddress(sheet.Id, row, 3), formulaText);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        var sw = Stopwatch.StartNew();
+        engine.RebuildFormulaDependencies(workbook);
+        sw.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+        Console.WriteLine(
+            $"Repeated identical formula dependency rebuild: {formulaCount:N0} formulas, " +
+            $"{sw.Elapsed.TotalMilliseconds:F2}ms, {allocated:N0} bytes allocated, " +
+            $"{allocated / formulaCount:N0} bytes/formula");
+        Console.WriteLine(
+            $"PERF REPEATED_IDENTICAL_FORMULA_REBUILD formulas={formulaCount:N0} total_ms={sw.Elapsed.TotalMilliseconds:F2} " +
+            $"allocated_bytes={allocated:N0} bytes_per_formula={allocated / formulaCount:N0}");
+
+        sheet.GetCell(new CellAddress(sheet.Id, 1, 3))!.CachedAst.Should().NotBeNull();
+        allocated.Should().BeGreaterThan(0);
+        (allocated / formulaCount).Should().BeLessThan(
+            5_500,
+            "repeated formula dependency rebuilds should reuse the shared text-to-AST parse cache");
+    }
+
+    [Fact]
     public void RebuildFormulaDependencies_SkipsFormulaFreeSheetsBeforeEnumeratingCells()
     {
         var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.Calc", "RecalcEngine.cs"));

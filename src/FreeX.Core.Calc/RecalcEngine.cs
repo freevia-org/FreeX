@@ -92,7 +92,7 @@ public sealed class RecalcEngine
                 // Use cached AST to avoid re-running Lexer+Parser on every recalc pass.
                 if (cell.CachedAst is not FormulaNode cachedAst)
                 {
-                    cachedAst = new Parser(new Lexer("=" + cell.FormulaText).Tokenize()).Parse();
+                    cachedAst = FormulaEvaluator.ParseFormula(cell.FormulaText!);
                     cell.CachedAst = cachedAst;
                     RegisterFormulaDependencies(addr, cachedAst, addr.Sheet, workbook);
                 }
@@ -247,7 +247,7 @@ public sealed class RecalcEngine
                 {
                     if (cell.CachedAst is not FormulaNode ast)
                     {
-                        ast = new Parser(new Lexer("=" + cell.FormulaText).Tokenize()).Parse();
+                        ast = FormulaEvaluator.ParseFormula(cell.FormulaText!);
                         cell.CachedAst = ast;
                     }
 
