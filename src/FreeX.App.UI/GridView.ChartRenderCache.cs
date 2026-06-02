@@ -54,11 +54,12 @@ public partial class GridView
                 _renderScale);
     }
 
-    private ImageSource? GetCachedChartImage(ChartModel chart, ViewportModel viewport, WorkbookTheme theme)
+    private ImageSource? GetCachedChartImage(
+        ChartModel chart,
+        ViewportModel viewport,
+        WorkbookTheme theme,
+        double renderScale)
     {
-        var dpi = VisualTreeHelper.GetDpi(this);
-        var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
-        var renderScale = Math.Clamp(Math.Max(dpi.DpiScaleX, dpi.DpiScaleY) * zoom, 0.25, 4.0);
         var pixelWidth = Math.Max(1, (int)Math.Ceiling(chart.Width * renderScale));
         var pixelHeight = Math.Max(1, (int)Math.Ceiling(chart.Height * renderScale));
         var key = new ChartRenderCacheKey(chart, viewport, theme, pixelWidth, pixelHeight, renderScale);

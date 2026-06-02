@@ -177,6 +177,9 @@ public partial class GridView
         if (Charts == null || Viewport == null) return;
         var visibleRight = GetDrawingViewportRight();
         var visibleBottom = GetDrawingViewportBottom();
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;
+        var renderScale = Math.Clamp(Math.Max(dpi.DpiScaleX, dpi.DpiScaleY) * zoom, 0.25, 4.0);
         foreach (var chart in Charts)
         {
             if (!chart.IsVisible) continue;
@@ -186,7 +189,7 @@ public partial class GridView
             if (!IntersectsDrawingViewport(rect, 0, visibleRight, visibleBottom))
                 continue;
 
-            var img = GetCachedChartImage(chart, Viewport, WorkbookTheme);
+            var img = GetCachedChartImage(chart, Viewport, WorkbookTheme, renderScale);
             if (img == null) continue;
             dc.DrawImage(img, rect);
         }

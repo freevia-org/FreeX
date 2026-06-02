@@ -1008,13 +1008,23 @@ public sealed class GridViewRenderPerformanceTests
         var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
         var cacheSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ChartRenderCache.cs"));
         var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var renderCharts = drawingSource[
+            drawingSource.IndexOf("private void RenderCharts", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private void RenderTextBoxes", StringComparison.Ordinal)];
+        var getCachedChartImage = cacheSource[
+            cacheSource.IndexOf("private ImageSource? GetCachedChartImage", StringComparison.Ordinal)..
+            cacheSource.IndexOf("private void ClearChartRenderCache", StringComparison.Ordinal)];
 
         gridViewSource.Should().Contain("private readonly Dictionary<ChartRenderCacheKey, ImageSource> _chartRenderCache = new();");
-        drawingSource.Should().Contain("GetCachedChartImage(chart, Viewport, WorkbookTheme)");
+        drawingSource.Should().Contain("GetCachedChartImage(chart, Viewport, WorkbookTheme, renderScale)");
         drawingSource.Should().NotContain("ChartRenderer.Render(chart, Viewport, WorkbookTheme)");
         cacheSource.Should().Contain("_chartRenderCache.TryGetValue");
-        cacheSource.Should().Contain("VisualTreeHelper.GetDpi(this)");
-        cacheSource.Should().Contain("ZoomFactor > 0 ? ZoomFactor : 1.0");
+        renderCharts.Should().Contain("var dpi = VisualTreeHelper.GetDpi(this);");
+        renderCharts.Should().Contain("var zoom = ZoomFactor > 0 ? ZoomFactor : 1.0;");
+        renderCharts.Should().Contain("var renderScale = Math.Clamp(Math.Max(dpi.DpiScaleX, dpi.DpiScaleY) * zoom, 0.25, 4.0);");
+        getCachedChartImage.Should().Contain("double renderScale");
+        getCachedChartImage.Should().NotContain("VisualTreeHelper.GetDpi(this)");
+        getCachedChartImage.Should().NotContain("ZoomFactor > 0 ? ZoomFactor : 1.0");
         cacheSource.Should().Contain("private readonly double _renderScale;");
         cacheSource.Should().Contain("chart.Width * renderScale");
         cacheSource.Should().Contain("chart.Height * renderScale");
