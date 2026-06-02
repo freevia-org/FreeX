@@ -273,6 +273,45 @@ public sealed class FlashFillServiceTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public void Fill_EmbeddedDateExtraction_NormalizesDateInsideLabels()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Invoice INV-1001 due 2024-1-5", "01/05/2024"),
+                ("Ship date: 2.9.2023", "02/09/2023")
+            ],
+            ["Paid on 2022-11-3", "Renewal 2026.12.31 confirmed"]);
+
+        result.Should().BeEquivalentTo(["11/03/2022", "12/31/2026"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateExtraction_ExtractsDateTokenFromLabeledText()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Start: 2024-01-05", "2024-01-05"),
+                ("Start: 2023-02-09", "2023-02-09")
+            ],
+            ["Start: 2022-11-03.", "Start: 2026-12-31"]);
+
+        result.Should().BeEquivalentTo(["2022-11-03", "2026-12-31"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_EmbeddedDateExtraction_ReturnsNullWhenRemainingHasMultipleDates()
+    {
+        var result = FlashFillService.Fill(
+            [
+                ("Start: 2024-01-05", "2024-01-05"),
+                ("Start: 2023-02-09", "2023-02-09")
+            ],
+            ["Window: 2022-11-03 to 2022-11-04"]);
+
+        result.Should().BeNull();
+    }
+
     [Theory]
     [InlineData("North (Retail)", "Retail", "South (Wholesale)", "Wholesale", "East (Online)", "Online")]
     [InlineData("INV [Open]", "Open", "INV [Closed]", "Closed", "INV [Pending]", "Pending")]
