@@ -30,34 +30,8 @@ public static partial class ChartRenderer
                 : $"Series {seriesNames.Count + 1}");
         }
 
-        model.Axes.Add(new LinearAxis
-        {
-            Position = AxisPosition.Bottom,
-            Title = chart.XAxisTitle,
-            Minimum = -0.5,
-            Maximum = Math.Max(0.5, categories.Count - 0.5),
-            MajorStep = 1,
-            MinorStep = 1,
-            LabelFormatter = value =>
-            {
-                var index = (int)Math.Round(value);
-                return index >= 0 && index < categories.Count ? categories[index] : "";
-            }
-        });
-        model.Axes.Add(new LinearAxis
-        {
-            Position = AxisPosition.Left,
-            Title = chart.YAxisTitle,
-            Minimum = -0.5,
-            Maximum = Math.Max(0.5, seriesNames.Count - 0.5),
-            MajorStep = 1,
-            MinorStep = 1,
-            LabelFormatter = value =>
-            {
-                var index = (int)Math.Round(value);
-                return index >= 0 && index < seriesNames.Count ? seriesNames[index] : "";
-            }
-        });
+        model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+        model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Left, chart.YAxisTitle, seriesNames));
 
         var surfaceValueCapacity = categoryCount > 0 && seriesCount <= int.MaxValue / categoryCount
             ? seriesCount * categoryCount
