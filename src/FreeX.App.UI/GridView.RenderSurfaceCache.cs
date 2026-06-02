@@ -9,6 +9,8 @@ public partial class GridView
 {
     private DrawingGroup? _preSelectionLayerCache;
     private PreSelectionLayerCacheKey _preSelectionLayerCacheKey;
+    private PreSelectionLayerCacheKey _lastPreSelectionLayerRenderKey;
+    private bool _hasLastPreSelectionLayerRenderKey;
     private bool _selectionVisualOnlyChangePending;
 
     private readonly record struct PreSelectionLayerCacheKey(
@@ -55,32 +57,43 @@ public partial class GridView
         }
 
         var key = CreatePreSelectionLayerCacheKey();
-        if (_selectionVisualOnlyChangePending &&
-            _preSelectionLayerCache is { } cached &&
+        if (_preSelectionLayerCache is { } cached &&
             _preSelectionLayerCacheKey == key)
         {
             dc.DrawDrawing(cached);
             return;
         }
 
-        if (_selectionVisualOnlyChangePending)
+        if (_preSelectionLayerCache is not null)
+            ClearPreSelectionLayerCache();
+
+        if (ShouldBuildPreSelectionLayerCache(key))
         {
             var rebuilt = BuildPreSelectionLayerCache(skipHeavyLayers, isLiveResizing);
             _preSelectionLayerCache = rebuilt;
             _preSelectionLayerCacheKey = key;
+            RememberPreSelectionLayerRenderKey(key);
             dc.DrawDrawing(rebuilt);
             return;
         }
 
-        if (_preSelectionLayerCache is not null && _preSelectionLayerCacheKey != key)
-            ClearPreSelectionLayerCache();
-
         RenderPreSelectionLayers(dc, skipHeavyLayers, isLiveResizing);
+        RememberPreSelectionLayerRenderKey(key);
     }
 
     private static bool CanCachePreSelectionLayers(bool skipHeavyLayers, bool isLiveResizing) =>
         !skipHeavyLayers &&
         !isLiveResizing;
+
+    private bool ShouldBuildPreSelectionLayerCache(PreSelectionLayerCacheKey key) =>
+        _selectionVisualOnlyChangePending ||
+        (_hasLastPreSelectionLayerRenderKey && _lastPreSelectionLayerRenderKey == key);
+
+    private void RememberPreSelectionLayerRenderKey(PreSelectionLayerCacheKey key)
+    {
+        _lastPreSelectionLayerRenderKey = key;
+        _hasLastPreSelectionLayerRenderKey = true;
+    }
 
     private DrawingGroup BuildPreSelectionLayerCache(bool skipHeavyLayers, bool isLiveResizing)
     {
@@ -136,5 +149,9 @@ public partial class GridView
 
     private void MarkSelectionVisualOnlyChange() => _selectionVisualOnlyChangePending = true;
 
-    private void ClearPreSelectionLayerCache() => _preSelectionLayerCache = null;
+    private void ClearPreSelectionLayerCache()
+    {
+        _preSelectionLayerCache = null;
+        _hasLastPreSelectionLayerRenderKey = false;
+    }
 }

@@ -13,9 +13,25 @@ public partial class GridView
     private static readonly ConcurrentDictionary<uint, string> RowHeaderCache = new();
     private DrawingGroup? _headerBaseLayerCache;
     private HeaderBaseLayerCacheKey _headerBaseLayerCacheKey;
+    private DrawingGroup? _selectedHeaderLayerCache;
+    private SelectedHeaderLayerCacheKey _selectedHeaderLayerCacheKey;
+    private SelectedHeaderLayerCacheKey _lastSelectedHeaderLayerRenderKey;
+    private bool _hasLastSelectedHeaderLayerRenderKey;
 
     private readonly record struct HeaderBaseLayerCacheKey(
         ViewportModel Viewport,
+        double RowHeaderWidth,
+        double ColumnHeaderHeight,
+        bool UseR1C1ReferenceStyle,
+        string CultureName,
+        double PixelsPerDip);
+
+    private readonly record struct SelectedHeaderLayerCacheKey(
+        ViewportModel Viewport,
+        IReadOnlyList<GridRange>? SelectedRanges,
+        int SelectedRangeCount,
+        long SelectedRangeSignature,
+        GridRange? SelectedRange,
         double RowHeaderWidth,
         double ColumnHeaderHeight,
         bool UseR1C1ReferenceStyle,
@@ -64,7 +80,7 @@ public partial class GridView
         var columnHeaderHeight = EffectiveColHeaderHeight;
 
         RenderHeaderBaseLayer(dc, viewport, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
-        RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
+        RenderSelectedHeaderLayer(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
     }
 
     private void RenderHeaderBaseLayer(
@@ -107,6 +123,126 @@ public partial class GridView
             group.Freeze();
 
         return group;
+    }
+
+    private void RenderSelectedHeaderLayer(
+        DrawingContext dc,
+        ViewportModel viewport,
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridRange? selRange,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double pixelsPerDip)
+    {
+        if (selectedRanges is not { Count: > 0 } && selRange is null)
+        {
+            ClearSelectedHeaderLayerCache();
+            return;
+        }
+
+        var key = CreateSelectedHeaderLayerCacheKey(
+            viewport,
+            selectedRanges,
+            selRange,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            pixelsPerDip);
+        if (_selectedHeaderLayerCache is { } cached && _selectedHeaderLayerCacheKey == key)
+        {
+            dc.DrawDrawing(cached);
+            return;
+        }
+
+        if (_selectedHeaderLayerCache is not null)
+            ClearSelectedHeaderLayerCache();
+
+        if (ShouldBuildSelectedHeaderLayerCache(key))
+        {
+            var rebuilt = BuildSelectedHeaderLayerCache(
+                viewport,
+                selectedRanges,
+                selRange,
+                rowHeaderWidth,
+                columnHeaderHeight,
+                pixelsPerDip);
+            _selectedHeaderLayerCache = rebuilt;
+            _selectedHeaderLayerCacheKey = key;
+            RememberSelectedHeaderLayerRenderKey(key);
+            dc.DrawDrawing(rebuilt);
+            return;
+        }
+
+        RenderSelectedHeaders(dc, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
+        RememberSelectedHeaderLayerRenderKey(key);
+    }
+
+    private SelectedHeaderLayerCacheKey CreateSelectedHeaderLayerCacheKey(
+        ViewportModel viewport,
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridRange? selRange,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double pixelsPerDip) =>
+        new(
+            viewport,
+            selectedRanges,
+            selectedRanges?.Count ?? 0,
+            selectedRanges is { Count: > 0 } ? CalculateGridRangeListSignature(selectedRanges) : 0,
+            selRange,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            UseR1C1ReferenceStyle,
+            CultureInfo.CurrentCulture.Name,
+            pixelsPerDip);
+
+    private bool ShouldBuildSelectedHeaderLayerCache(SelectedHeaderLayerCacheKey key) =>
+        _hasLastSelectedHeaderLayerRenderKey && _lastSelectedHeaderLayerRenderKey == key;
+
+    private void RememberSelectedHeaderLayerRenderKey(SelectedHeaderLayerCacheKey key)
+    {
+        _lastSelectedHeaderLayerRenderKey = key;
+        _hasLastSelectedHeaderLayerRenderKey = true;
+    }
+
+    private DrawingGroup BuildSelectedHeaderLayerCache(
+        ViewportModel viewport,
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridRange? selRange,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        double pixelsPerDip)
+    {
+        var group = new DrawingGroup();
+        using (var groupContext = group.Open())
+            RenderSelectedHeaders(groupContext, viewport, selectedRanges, selRange, rowHeaderWidth, columnHeaderHeight, pixelsPerDip);
+
+        if (group.CanFreeze)
+            group.Freeze();
+
+        return group;
+    }
+
+    private void ClearSelectedHeaderLayerCache()
+    {
+        _selectedHeaderLayerCache = null;
+        _hasLastSelectedHeaderLayerRenderKey = false;
+    }
+
+    private static long CalculateGridRangeListSignature(IReadOnlyList<GridRange> ranges)
+    {
+        unchecked
+        {
+            var signature = 17L;
+            foreach (var range in ranges)
+            {
+                signature = signature * 31 + range.Start.Row;
+                signature = signature * 31 + range.Start.Col;
+                signature = signature * 31 + range.End.Row;
+                signature = signature * 31 + range.End.Col;
+            }
+
+            return signature;
+        }
     }
 
     private void RenderHeaderBase(
