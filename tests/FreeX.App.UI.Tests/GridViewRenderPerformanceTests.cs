@@ -1020,6 +1020,29 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderObjectPlaceholders_ReusesPixelsPerDipAcrossPlaceholderLabels()
+    {
+        var drawingSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var renderObjectPlaceholders = drawingSource[
+            drawingSource.IndexOf("private void RenderObjectPlaceholders", StringComparison.Ordinal)..
+            drawingSource.IndexOf("public static string CreateObjectPlaceholderLabel", StringComparison.Ordinal)];
+        var drawObjectPlaceholder = drawingSource[
+            drawingSource.IndexOf("private void DrawObjectPlaceholder", StringComparison.Ordinal)..
+            drawingSource.IndexOf("private static void DrawPlaceholderDiagonals", StringComparison.Ordinal)];
+
+        renderObjectPlaceholders.Should().Contain("var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Chart\", chart.Name, index), pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Shape\", shape.Name, index), pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Picture\", picture.Name, index), pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel(\"Text Box\", textBox.Name, index), pixelsPerDip);");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel(\"Slicer\"");
+        renderObjectPlaceholders.Should().Contain("DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel(\"Timeline\"");
+        drawObjectPlaceholder.Should().Contain("double pixelsPerDip)");
+        drawObjectPlaceholder.Should().Contain("GetDrawingObjectText(");
+        drawObjectPlaceholder.Should().NotContain("VisualTreeHelper.GetDpi(this)");
+    }
+
+    [Fact]
     public void RenderManualPageBreaks_ScansVisibleMetricsOnce()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));

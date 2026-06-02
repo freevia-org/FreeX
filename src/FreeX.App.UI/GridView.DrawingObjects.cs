@@ -533,6 +533,7 @@ public partial class GridView
 
         var visibleRight = GetDrawingViewportRight();
         var visibleBottom = GetDrawingViewportBottom();
+        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         if (Charts is not null)
         {
             var index = 1;
@@ -546,7 +547,7 @@ public partial class GridView
                         Math.Max(24, chart.Width),
                         Math.Max(18, chart.Height));
                     if (IntersectsDrawingViewport(rect, 0, visibleRight, visibleBottom))
-                        DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Chart", chart.Name, index));
+                        DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Chart", chart.Name, index), pixelsPerDip);
                 }
                 index++;
             }
@@ -568,7 +569,7 @@ public partial class GridView
                         out var rect) &&
                     (!NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom) ||
                         IntersectsDrawingViewport(rect, shape.RotationDegrees, visibleRight, visibleBottom)))
-                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Shape", shape.Name, index));
+                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Shape", shape.Name, index), pixelsPerDip);
                 index++;
             }
         }
@@ -588,7 +589,7 @@ public partial class GridView
                         out var rect) &&
                     (!NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom) ||
                         IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom)))
-                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Picture", picture.Name, index));
+                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Picture", picture.Name, index), pixelsPerDip);
                 index++;
             }
         }
@@ -608,7 +609,7 @@ public partial class GridView
                         out var rect) &&
                     (!NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom) ||
                         IntersectsDrawingViewport(rect, textBox.RotationDegrees, visibleRight, visibleBottom)))
-                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Text Box", textBox.Name, index));
+                    DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Text Box", textBox.Name, index), pixelsPerDip);
                 index++;
             }
         }
@@ -623,7 +624,7 @@ public partial class GridView
                 {
                     var controlRect = EnsureMinimumControlRect(rect);
                     if (IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
-                        DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel("Slicer", slicer.DrawingShapeName ?? slicer.Caption ?? slicer.Name, index));
+                        DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel("Slicer", slicer.DrawingShapeName ?? slicer.Caption ?? slicer.Name, index), pixelsPerDip);
                 }
                 index++;
             }
@@ -639,7 +640,7 @@ public partial class GridView
                 {
                     var controlRect = EnsureMinimumControlRect(rect);
                     if (IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
-                        DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel("Timeline", timeline.DrawingShapeName ?? timeline.Caption ?? timeline.Name, index));
+                        DrawObjectPlaceholder(dc, controlRect, CreateObjectPlaceholderLabel("Timeline", timeline.DrawingShapeName ?? timeline.Caption ?? timeline.Name, index), pixelsPerDip);
                 }
                 index++;
             }
@@ -667,7 +668,7 @@ public partial class GridView
             minimumHeight,
             out rect);
 
-    private void DrawObjectPlaceholder(DrawingContext dc, Rect rect, string label)
+    private void DrawObjectPlaceholder(DrawingContext dc, Rect rect, string label, double pixelsPerDip)
     {
         dc.DrawRectangle(ObjectPlaceholderFill, ObjectPlaceholderPen, rect);
         DrawPlaceholderDiagonals(dc, rect);
@@ -678,7 +679,7 @@ public partial class GridView
             11,
             Math.Max(1, rect.Width - 8),
             Math.Max(1, rect.Height - 8),
-            VisualTreeHelper.GetDpi(this).PixelsPerDip,
+            pixelsPerDip,
             TextTrimming.CharacterEllipsis);
 
         var textPoint = new Point(
