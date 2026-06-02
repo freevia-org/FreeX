@@ -55,9 +55,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         foreach (var (addr, cell) in _movedSnapshot)
             sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col + _count), cell.Clone());
 
-        var hiddenToShift = sheet.HiddenCols.Where(c => c >= _beforeCol).ToList();
-        foreach (var c in hiddenToShift) sheet.HiddenCols.Remove(c);
-        foreach (var c in hiddenToShift) sheet.HiddenCols.Add(c + _count);
+        RowColumnShiftHelpers.ShiftSetUpFrom(sheet.HiddenCols, _beforeCol, _count);
 
         _columnWidthSnapshot = new Dictionary<uint, double>(sheet.ColumnWidths);
         RowColumnShiftHelpers.ShiftIndexesUp(sheet.ColumnWidths, _beforeCol, _count);
@@ -109,9 +107,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         foreach (var (addr, cell) in _movedSnapshot)
             sheet.SetCell(addr, cell.Clone());
 
-        var shifted = sheet.HiddenCols.Where(c => c >= _beforeCol + _count).ToList();
-        foreach (var c in shifted) sheet.HiddenCols.Remove(c);
-        foreach (var c in shifted) sheet.HiddenCols.Add(c - _count);
+        RowColumnShiftHelpers.ShiftSetDownFrom(sheet.HiddenCols, _beforeCol + _count, _count);
 
         if (_mergeSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergeSnapshot);
@@ -201,11 +197,8 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
         foreach (var (addr, cell) in _shiftedSnapshot)
             sheet.SetCell(new CellAddress(addr.Sheet, addr.Row, addr.Col - _count), cell.Clone());
 
-        var inRangeHidden = sheet.HiddenCols.Where(c => c >= _startCol && c <= endCol).ToList();
-        var aboveHidden   = sheet.HiddenCols.Where(c => c > endCol).ToList();
         _hiddenColsSnapshot = [.. sheet.HiddenCols];
-        foreach (var c in inRangeHidden) sheet.HiddenCols.Remove(c);
-        foreach (var c in aboveHidden) { sheet.HiddenCols.Remove(c); sheet.HiddenCols.Add(c - _count); }
+        RowColumnShiftHelpers.DeleteSetRangeAndShiftDown(sheet.HiddenCols, _startCol, _count);
 
         _columnWidthSnapshot = new Dictionary<uint, double>(sheet.ColumnWidths);
         RowColumnShiftHelpers.ShiftIndexesDown(sheet.ColumnWidths, _startCol, _count);

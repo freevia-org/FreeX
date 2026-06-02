@@ -1124,7 +1124,7 @@ public sealed class GridViewRenderPerformanceTests
         loop.Should().NotContain("new RectangleGeometry(clipRect)");
         loop.Should().NotContain("GetSplitPaneClipRectForCell");
         rendering.Should().Contain("geometry.Freeze();");
-        splitPanes.Should().Contain("public sealed record SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region)");
+        splitPanes.Should().Contain("public readonly record struct SplitPaneCellLayout(DisplayCell Cell, Rect Rect, Rect TextClipRect, SplitPaneRegion Region)");
     }
 
     [Fact]
