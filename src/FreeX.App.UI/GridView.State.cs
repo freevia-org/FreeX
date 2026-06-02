@@ -16,6 +16,12 @@ public partial class GridView
     private Point _objectDragStartPos;
     private Rect _objectDragStartRect;
     private CellAddress _objectDragStartAnchor;
+    private Guid _pictureCropDragId;
+    private PictureCropHandle _pictureCropDragHandle;
+    private Point _pictureCropDragStartPos;
+    private Rect _pictureCropDragRect;
+    private PictureCropRatios _pictureCropStartCrop;
+    private PictureCropRatios _pictureCropCurrentCrop;
 
     private Dictionary<(uint Row, uint Col), GridRange> _mergeLookup = [];
     private bool _mergeLookupCacheValid;

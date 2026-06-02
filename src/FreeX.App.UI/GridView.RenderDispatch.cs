@@ -92,10 +92,16 @@ public partial class GridView
             var selectedRect = GetSelectedObjectRect();
             if (!selectedRect.IsEmpty)
             {
-                if (_objectDragKind != ObjectDragKind.None)
+                if (_pictureCropDragHandle != PictureCropHandle.None)
+                    RenderPictureCropPreview(dc, selectedRect);
+                else if (_objectDragKind != ObjectDragKind.None)
                     RenderObjectDragPreview(dc, selectedRect);
                 else
+                {
                     DrawObjectSelectionHandles(dc, selectedRect);
+                    if (TryGetSelectedImagePicture(out _, out _))
+                        DrawSelectedPictureCropHandles(dc, selectedRect);
+                }
             }
         }
     }
