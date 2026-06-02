@@ -115,6 +115,7 @@ public partial class MainWindow
             return;
         }
 
+        _worksheetSelections.Remove(_currentSheetId);
         _currentSheetId = _workbook.Sheets[0].Id;
         RecalculateWorkbook();
         RefreshSheetTabs();

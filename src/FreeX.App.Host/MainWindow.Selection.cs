@@ -693,9 +693,74 @@ public partial class MainWindow
             return;
         }
 
+        // The selection still describes the sheet we navigated away from. Remember its full
+        // selection (range + multi-ranges) so the sheet keeps it, then restore this sheet's
+        // selection. When sheets are grouped, mirror the outgoing selection onto this sheet so
+        // every grouped sheet shows the same selection, the way Excel does.
+        var outgoing = CaptureOutgoingSelection();
+
+        if (outgoing is { } mirrored &&
+            _groupedSheetIds.Count > 1 &&
+            _groupedSheetIds.Contains(_currentSheetId))
+        {
+            ApplyWorksheetSelectionSnapshot(mirrored.Remap(_currentSheetId));
+            return;
+        }
+
+        if (_worksheetSelections.TryGet(_currentSheetId, out var saved))
+        {
+            ApplyWorksheetSelectionSnapshot(saved);
+            return;
+        }
+
         var row = Math.Clamp(sheet.ActiveRow ?? 1u, 1u, CellAddress.MaxRow);
         var col = Math.Clamp(sheet.ActiveCol ?? 1u, 1u, CellAddress.MaxCol);
         SetActiveCell(new CellAddress(_currentSheetId, row, col));
+    }
+
+    // Saves the selection that still describes the sheet being navigated away from, so it can be
+    // restored later. Returns the captured snapshot, or null when there is nothing coherent to save.
+    private WorksheetSelectionSnapshot? CaptureOutgoingSelection()
+    {
+        if (SheetGrid.SelectedRange is not { } range)
+            return null;
+        if (_selectionAnchor is not { } anchor || _selectionCursor is not { } cursor)
+            return null;
+
+        var outgoingSheet = range.Start.Sheet;
+        if (outgoingSheet == _currentSheetId || anchor.Sheet != outgoingSheet)
+            return null;
+
+        var snapshot = new WorksheetSelectionSnapshot(anchor, cursor, range, SheetGrid.SelectedRanges);
+        _worksheetSelections.Save(outgoingSheet, snapshot);
+        return snapshot;
+    }
+
+    // Applies a remembered (or mirrored) selection to the grid for the current sheet.
+    private void ApplyWorksheetSelectionSnapshot(WorksheetSelectionSnapshot snapshot)
+    {
+        _selectionMode = ExcelSelectionMode.Normal;
+        _selectionAnchor = snapshot.Anchor;
+        _selectionCursor = snapshot.Cursor;
+        SheetGrid.SelectedRanges = snapshot.AdditionalRanges;
+        SheetGrid.SelectedRange = snapshot.PrimaryRange;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is not null)
+        {
+            sheet.ActiveRow = snapshot.Anchor.Row;
+            sheet.ActiveCol = snapshot.Anchor.Col;
+        }
+
+        CellAddressBox.Text = snapshot.PrimaryRange.Start == snapshot.PrimaryRange.End
+            ? FormatCellReference(snapshot.Anchor)
+            : FormatRangeReference(snapshot.Anchor, snapshot.Cursor);
+        FormulaBar.Text = FormatFormulaBarText(sheet?.GetCell(snapshot.Anchor), snapshot.Anchor);
+
+        RefreshToolbarAfterSelectionChange();
+        RefreshStatusBar();
+        RefreshValidationDropdown();
+        UpdateCommentPreview(snapshot.Anchor);
     }
 
     private void SelectCurrentRegionOrAll()

@@ -314,6 +314,7 @@ public partial class MainWindow
         _workbook = wb;
         _workbookRef.Current = wb;
         InvalidateToolbarVisualState();
+        _worksheetSelections.Clear();
         _currentSheetId = wb.Sheets[0].Id;
         InvalidateNavigationCaches();
         _currentFilePath = null;
@@ -363,6 +364,7 @@ public partial class MainWindow
             _workbookRef.Current = result.Workbook;
             InvalidateToolbarVisualState();
             _workbook.Name = result.DisplayName;
+            _worksheetSelections.Clear();
             _currentSheetId = _workbook.Sheets[0].Id;
             InvalidateNavigationCaches();
             _currentFilePath = result.OpenedAsTemplate ? null : path;

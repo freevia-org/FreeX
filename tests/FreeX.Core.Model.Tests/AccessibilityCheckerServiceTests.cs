@@ -692,6 +692,11 @@ public sealed class AccessibilityCheckerServiceTests
     [InlineData("more")]
     [InlineData("read more")]
     [InlineData("learn more")]
+    [InlineData("download")]
+    [InlineData("download now")]
+    [InlineData("open")]
+    [InlineData("view")]
+    [InlineData("visit website")]
     public void FindIssues_FlagsHyperlinksWithBlankOrGenericDisplayText(string displayText)
     {
         var workbook = new Workbook("Accessibility");

@@ -74,6 +74,8 @@ public partial class MainWindow : Window, IWorkbookWindow
     private CellAddress? _selectionAnchor;
     private CellAddress? _selectionCursor;
     private ExcelSelectionMode _selectionMode = ExcelSelectionMode.Normal;
+    // Remembers each sheet's selection within this window so switching sheets restores it (Excel parity).
+    private readonly FreeX.Core.Commands.WorksheetSelectionStore _worksheetSelections = new();
     private bool _endMode;
     private bool _dragSelectActive;
     private bool _dragSelectAddsAdditionalRange;
