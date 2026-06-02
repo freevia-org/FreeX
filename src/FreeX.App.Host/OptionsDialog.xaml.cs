@@ -1,8 +1,11 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.IO;
 using FreeX.Core.Commands;
+using Microsoft.Win32;
 
 namespace FreeX.App.Host;
 
@@ -12,6 +15,8 @@ public partial class OptionsDialog : Window
     private readonly HashSet<string> _disabledFormulaErrorCodes;
     private readonly Dictionary<string, CheckBox> _errorRuleBoxes = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _quickAccessCommandIds = [];
+    private const string QuickAccessImportMenuHeader = "_Import customization file...";
+    private const string QuickAccessExportMenuHeader = "_Export customization file...";
     public FreeXOptions Result { get; private set; }
     public IReadOnlySet<string> DisabledFormulaErrorCodesResult { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -402,6 +407,87 @@ public partial class OptionsDialog : Window
         _quickAccessCommandIds.Clear();
         _quickAccessCommandIds.AddRange(QuickAccessToolbarCatalog.DefaultCommandIds);
         RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessCommandIds[0]);
+    }
+
+    private void QuickAccessImportExportButton_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu
+        {
+            PlacementTarget = QuickAccessImportExportButton,
+            Placement = PlacementMode.Bottom
+        };
+
+        var importItem = new MenuItem { Header = QuickAccessImportMenuHeader };
+        AutomationProperties.SetAutomationId(importItem, "QuickAccessToolbarImportCustomizationMenuItem");
+        importItem.Click += QuickAccessImportCustomizationMenuItem_Click;
+
+        var exportItem = new MenuItem { Header = QuickAccessExportMenuHeader };
+        AutomationProperties.SetAutomationId(exportItem, "QuickAccessToolbarExportCustomizationMenuItem");
+        exportItem.Click += QuickAccessExportCustomizationMenuItem_Click;
+
+        menu.Items.Add(importItem);
+        menu.Items.Add(exportItem);
+        QuickAccessImportExportButton.ContextMenu = menu;
+        menu.IsOpen = true;
+    }
+
+    private void QuickAccessImportCustomizationMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Import Quick Access Toolbar customization",
+            Filter = QuickAccessToolbarCustomizationFile.DialogFilter,
+            DefaultExt = QuickAccessToolbarCustomizationFile.DefaultExtension,
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        var result = QuickAccessToolbarCustomizationFile.TryLoad(dialog.FileName);
+        if (!result.Success || result.Customization is null)
+        {
+            DialogMessageHelper.ShowWarning(this, result.ErrorMessage, UiText.Get("Options_QuickAccessToolbar"));
+            return;
+        }
+
+        QuickAccessBelowRibbonCheckBox.IsChecked = result.Customization.QuickAccessToolbarBelowRibbon;
+        _quickAccessCommandIds.Clear();
+        _quickAccessCommandIds.AddRange(result.Customization.CommandIds);
+        RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessCommandIds[0]);
+        DialogMessageHelper.ShowInfo(
+            this,
+            $"Imported Quick Access Toolbar customization from '{dialog.FileName}'.",
+            UiText.Get("Options_QuickAccessToolbar"));
+    }
+
+    private void QuickAccessExportCustomizationMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export Quick Access Toolbar customization",
+            Filter = QuickAccessToolbarCustomizationFile.DialogFilter,
+            DefaultExt = QuickAccessToolbarCustomizationFile.DefaultExtension,
+            FileName = QuickAccessToolbarCustomizationFile.DefaultFileName,
+            AddExtension = true,
+            OverwritePrompt = true
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        if (!QuickAccessToolbarCustomizationFile.TrySave(
+                dialog.FileName,
+                _quickAccessCommandIds,
+                QuickAccessBelowRibbonCheckBox.IsChecked == true,
+                out var errorMessage))
+        {
+            DialogMessageHelper.ShowError(this, errorMessage, UiText.Get("Options_QuickAccessToolbar"));
+            return;
+        }
+
+        DialogMessageHelper.ShowInfo(
+            this,
+            $"Exported Quick Access Toolbar customization to '{dialog.FileName}'.",
+            UiText.Get("Options_QuickAccessToolbar"));
     }
 
     private void AddInsGoButton_Click(object sender, RoutedEventArgs e) =>
