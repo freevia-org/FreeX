@@ -93,6 +93,51 @@ public static partial class ChartRenderer
         }
     }
 
+    private static LinearAxis CreateCenteredIndexedCategoryAxis(
+        AxisPosition position,
+        string? title,
+        IReadOnlyList<string> labels) =>
+        CreateIndexedCategoryAxis(position, title, labels, -0.5, Math.Max(0.5, labels.Count - 0.5));
+
+    private static LinearAxis CreateZeroBasedIndexedCategoryAxis(
+        AxisPosition position,
+        string? title,
+        IReadOnlyList<string> labels) =>
+        CreateIndexedCategoryAxis(position, title, labels, 0, Math.Max(1, labels.Count - 1));
+
+    private static LinearAxis CreateIndexedCategoryAxis(
+        AxisPosition position,
+        string? title,
+        IReadOnlyList<string> labels,
+        double minimum,
+        double maximum) =>
+        new()
+        {
+            Position = position,
+            Title = title,
+            Minimum = minimum,
+            Maximum = maximum,
+            MajorStep = 1,
+            MinorStep = 1,
+            LabelFormatter = value => GetIndexedCategoryAxisLabel(labels, value)
+        };
+
+    private static CategoryAxis CreateCategoryAxis(
+        AxisPosition position,
+        string? title,
+        IReadOnlyList<string> labels)
+    {
+        var axis = new CategoryAxis { Position = position, Title = title };
+        axis.Labels.AddRange(labels);
+        return axis;
+    }
+
+    private static string GetIndexedCategoryAxisLabel(IReadOnlyList<string> labels, double value)
+    {
+        var index = (int)Math.Round(value);
+        return index >= 0 && index < labels.Count ? labels[index] : "";
+    }
+
     private static void ApplyAreaStyle(PlotModel model, ChartModel chart, WorkbookTheme theme)
     {
         if (chart.ResolveChartAreaFillColor(theme) is { } chartFill)

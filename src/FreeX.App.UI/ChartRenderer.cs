@@ -218,20 +218,7 @@ public static partial class ChartRenderer
             {
                 if (!model.Axes.Any())
                 {
-                    model.Axes.Add(new LinearAxis
-                    {
-                        Position = AxisPosition.Bottom,
-                        Title = chart.XAxisTitle,
-                        Minimum = -0.5,
-                        Maximum = Math.Max(0.5, categories.Count - 0.5),
-                        MajorStep = 1,
-                        MinorStep = 1,
-                        LabelFormatter = value =>
-                        {
-                            var index = (int)Math.Round(value);
-                            return index >= 0 && index < categories.Count ? categories[index] : "";
-                        }
-                    });
+                    model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
                     model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
                     AddSecondaryAxisIfRequested(model, chart);
                 }
@@ -284,12 +271,9 @@ public static partial class ChartRenderer
             }
             else if (chart.Type is ChartType.Bar or ChartType.ThreeDBar)
             {
-                var catAxis = new CategoryAxis { Position = AxisPosition.Left };
-                catAxis.Labels.AddRange(categories);
                 if (!model.Axes.Any(a => a is CategoryAxis))
                 {
-                    catAxis.Title = chart.YAxisTitle;
-                    model.Axes.Add(catAxis);
+                    model.Axes.Add(CreateCategoryAxis(AxisPosition.Left, chart.YAxisTitle, categories));
                     model.Axes.Add(new LinearAxis { Position = AxisPosition.Bottom, Title = chart.XAxisTitle });
                 }
 
@@ -331,21 +315,7 @@ public static partial class ChartRenderer
             {
                 if (!model.Axes.Any())
                 {
-                    var categoryAxis = new LinearAxis
-                    {
-                        Position = AxisPosition.Bottom,
-                        Title = chart.XAxisTitle,
-                        Minimum = 0,
-                        Maximum = Math.Max(1, categories.Count - 1),
-                        MajorStep = 1,
-                        MinorStep = 1,
-                        LabelFormatter = value =>
-                        {
-                            var index = (int)Math.Round(value);
-                            return index >= 0 && index < categories.Count ? categories[index] : "";
-                        }
-                    };
-                    model.Axes.Add(categoryAxis);
+                    model.Axes.Add(CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
                     model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
                     AddSecondaryAxisIfRequested(model, chart);
                 }
@@ -443,21 +413,7 @@ public static partial class ChartRenderer
             {
                 if (!model.Axes.Any())
                 {
-                    var categoryAxis = new LinearAxis
-                    {
-                        Position = AxisPosition.Bottom,
-                        Title = chart.XAxisTitle,
-                        Minimum = 0,
-                        Maximum = Math.Max(1, categories.Count - 1),
-                        MajorStep = 1,
-                        MinorStep = 1,
-                        LabelFormatter = value =>
-                        {
-                            var index = (int)Math.Round(value);
-                            return index >= 0 && index < categories.Count ? categories[index] : "";
-                        }
-                    };
-                    model.Axes.Add(categoryAxis);
+                    model.Axes.Add(CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
                     model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
                     AddSecondaryAxisIfRequested(model, chart);
                 }
