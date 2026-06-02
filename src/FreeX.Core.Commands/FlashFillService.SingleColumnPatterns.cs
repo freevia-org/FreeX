@@ -758,6 +758,37 @@ public static partial class FlashFillService
         return false;
     }
 
+    private static Func<string, string?>? TryEmbeddedDateExtraction(IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        DateOutputPattern? outputPattern = null;
+        var changedAny = false;
+
+        foreach (var (source, expected) in examples)
+        {
+            if (!TryFindEmbeddedDateLikeValue(source, out var sourceDate, out _) ||
+                !TryParseDateLikeValue(expected, out var expectedDate, out var currentPattern) ||
+                sourceDate != expectedDate)
+            {
+                return null;
+            }
+
+            if (outputPattern is null)
+                outputPattern = currentPattern;
+            else if (outputPattern.Value != currentPattern)
+                return null;
+
+            changedAny |= !string.Equals(source, expected, StringComparison.Ordinal);
+        }
+
+        if (outputPattern is null || !changedAny)
+            return null;
+
+        var pattern = outputPattern.Value;
+        return source => TryFindEmbeddedDateLikeValue(source, out var date, out _)
+            ? FormatDateParts(date, pattern)
+            : null;
+    }
+
     private static Func<string, string?>? TryDateNormalization(IReadOnlyList<(string Source, string Expected)> examples)
     {
         DateOutputPattern? outputPattern = null;
@@ -843,6 +874,99 @@ public static partial class FlashFillService
         parts = [];
         separator = default;
         return false;
+    }
+
+    private static bool TryFindEmbeddedDateLikeValue(
+        string source,
+        out DateParts date,
+        out DateOutputPattern pattern)
+    {
+        date = default;
+        pattern = default;
+
+        var found = false;
+        for (var start = 0; start < source.Length; start++)
+        {
+            if (!char.IsDigit(source[start]) ||
+                (start > 0 && char.IsDigit(source[start - 1])))
+            {
+                continue;
+            }
+
+            foreach (var separator in DateComponentSeparators)
+            {
+                if (!TryReadDateTokenAt(source, start, separator, out var endExclusive) ||
+                    !HasDateTokenBoundary(source, start, endExclusive, separator))
+                {
+                    continue;
+                }
+
+                var token = source[start..endExclusive];
+                if (!TryParseDateLikeValue(token, out var currentDate, out var currentPattern))
+                    continue;
+
+                if (found)
+                    return false;
+
+                date = currentDate;
+                pattern = currentPattern;
+                found = true;
+            }
+        }
+
+        return found;
+    }
+
+    private static bool TryReadDateTokenAt(
+        string source,
+        int start,
+        char separator,
+        out int endExclusive)
+    {
+        endExclusive = start;
+        var index = start;
+
+        for (var group = 0; group < 3; group++)
+        {
+            var groupStart = index;
+            while (index < source.Length && char.IsDigit(source[index]))
+                index++;
+
+            if (index == groupStart)
+                return false;
+
+            if (group < 2)
+            {
+                if (index >= source.Length || source[index] != separator)
+                    return false;
+
+                index++;
+            }
+        }
+
+        endExclusive = index;
+        return true;
+    }
+
+    private static bool HasDateTokenBoundary(
+        string source,
+        int start,
+        int endExclusive,
+        char separator)
+    {
+        if (start > 0 && char.IsLetterOrDigit(source[start - 1]))
+            return false;
+
+        if (endExclusive >= source.Length)
+            return true;
+
+        var next = source[endExclusive];
+        if (char.IsLetterOrDigit(next))
+            return false;
+
+        return next != separator ||
+            endExclusive == source.Length - 1 ||
+            !char.IsDigit(source[endExclusive + 1]);
     }
 
     private static bool TryCreateDateParts(string[] parts, DatePartKind[] order, out DateParts date)
