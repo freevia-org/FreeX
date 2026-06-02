@@ -352,6 +352,28 @@ public sealed class ProtectionDialogTests
     }
 
     [Fact]
+    public void AllowEditRangeDialogExistingRangesList_DoubleClickWithoutSelectionDoesNotHandleMouseEvent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var sheetId = SheetId.New();
+            var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 2, 2));
+            var dialog = new AllowEditRangeDialog(sheetId, "C3:D4", [range]);
+            var existingRangesBox = GetPrivateField<ListBox>(dialog, "_existingRangesBox");
+
+            existingRangesBox.SelectedItem = null;
+            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = Control.MouseDoubleClickEvent
+            };
+            existingRangesBox.RaiseEvent(doubleClick);
+
+            doubleClick.Handled.Should().BeFalse();
+            dialog.DialogResult.Should().BeNull();
+        });
+    }
+
+    [Fact]
     public void AllowEditRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
         AllowEditRangeDialog.CreateRangeSelectionRequest(" $A$1:$C$10 ")
