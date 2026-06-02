@@ -7,6 +7,13 @@ namespace FreeX.App.UI;
 
 public partial class GridView
 {
+    private const double MinimumShapeObjectWidth = 8.0;
+    private const double MinimumShapeObjectHeight = 8.0;
+    private const double MinimumPictureObjectWidth = 24.0;
+    private const double MinimumPictureObjectHeight = 18.0;
+    private const double MinimumTextBoxObjectWidth = 24.0;
+    private const double MinimumTextBoxObjectHeight = 18.0;
+
     private const double HandleSize = 8.0;
     private const double HandleHitPad = 4.0;
 
@@ -59,45 +66,73 @@ public partial class GridView
     // Returns the Rect of the selected object if it is currently selected, else Rect.Empty
     private Rect GetSelectedObjectRect()
     {
-        if (SelectedObjectId == Guid.Empty || SelectedObjectKind == ObjectKind.None)
+        if (ObjectDisplayMode == GridObjectDisplayMode.Nothing ||
+            SelectedObjectId == Guid.Empty ||
+            SelectedObjectKind == ObjectKind.None)
+        {
             return Rect.Empty;
+        }
 
         return SelectedObjectKind switch
         {
             ObjectKind.Picture when Pictures is not null =>
-                TryGetObjectRect(Pictures, p => p.Id == SelectedObjectId, p => (p.Anchor, p.Width, p.Height)),
+                TryGetObjectRect(
+                    Pictures,
+                    p => p.Id == SelectedObjectId && p.IsVisible,
+                    p => (p.Anchor, p.Width, p.Height),
+                    MinimumPictureObjectWidth,
+                    MinimumPictureObjectHeight),
             ObjectKind.Shape when DrawingShapes is not null =>
-                TryGetObjectRect(DrawingShapes, s => s.Id == SelectedObjectId, s => (s.Anchor, s.Width, s.Height)),
+                TryGetObjectRect(
+                    DrawingShapes,
+                    s => s.Id == SelectedObjectId && s.IsVisible,
+                    s => (s.Anchor, s.Width, s.Height),
+                    MinimumShapeObjectWidth,
+                    MinimumShapeObjectHeight),
             ObjectKind.TextBox when TextBoxes is not null =>
-                TryGetObjectRect(TextBoxes, t => t.Id == SelectedObjectId, t => (t.Anchor, t.Width, t.Height)),
+                TryGetObjectRect(
+                    TextBoxes,
+                    t => t.Id == SelectedObjectId && t.IsVisible,
+                    t => (t.Anchor, t.Width, t.Height),
+                    MinimumTextBoxObjectWidth,
+                    MinimumTextBoxObjectHeight),
             _ => Rect.Empty
         };
     }
 
     private CellAddress? GetSelectedObjectAnchor()
     {
-        if (SelectedObjectId == Guid.Empty || SelectedObjectKind == ObjectKind.None)
+        if (ObjectDisplayMode == GridObjectDisplayMode.Nothing ||
+            SelectedObjectId == Guid.Empty ||
+            SelectedObjectKind == ObjectKind.None)
+        {
             return null;
+        }
 
         return SelectedObjectKind switch
         {
             ObjectKind.Picture when Pictures is not null =>
-                TryGetObjectAnchor(Pictures, p => p.Id == SelectedObjectId, p => p.Anchor),
+                TryGetObjectAnchor(Pictures, p => p.Id == SelectedObjectId && p.IsVisible, p => p.Anchor),
             ObjectKind.Shape when DrawingShapes is not null =>
-                TryGetObjectAnchor(DrawingShapes, s => s.Id == SelectedObjectId, s => s.Anchor),
+                TryGetObjectAnchor(DrawingShapes, s => s.Id == SelectedObjectId && s.IsVisible, s => s.Anchor),
             ObjectKind.TextBox when TextBoxes is not null =>
-                TryGetObjectAnchor(TextBoxes, t => t.Id == SelectedObjectId, t => t.Anchor),
+                TryGetObjectAnchor(TextBoxes, t => t.Id == SelectedObjectId && t.IsVisible, t => t.Anchor),
             _ => null
         };
     }
 
-    private Rect TryGetObjectRect<T>(IEnumerable<T> items, Func<T, bool> match, Func<T, (CellAddress Anchor, double Width, double Height)> props)
+    private Rect TryGetObjectRect<T>(
+        IEnumerable<T> items,
+        Func<T, bool> match,
+        Func<T, (CellAddress Anchor, double Width, double Height)> props,
+        double minimumWidth,
+        double minimumHeight)
     {
         foreach (var item in items)
         {
             if (!match(item)) continue;
             var (anchor, width, height) = props(item);
-            if (TryCreateAnchoredObjectRect(anchor, width, height, 8, 8, out var rect))
+            if (TryCreateAnchoredObjectRect(anchor, width, height, minimumWidth, minimumHeight, out var rect))
                 return rect;
         }
         return Rect.Empty;
@@ -158,7 +193,8 @@ public partial class GridView
     {
         picture = null;
         rect = Rect.Empty;
-        if (SelectedObjectId == Guid.Empty ||
+        if (ObjectDisplayMode == GridObjectDisplayMode.Nothing ||
+            SelectedObjectId == Guid.Empty ||
             SelectedObjectKind != ObjectKind.Picture ||
             Pictures is null)
         {
@@ -174,8 +210,16 @@ public partial class GridView
                 continue;
             }
 
-            if (!TryCreateAnchoredObjectRect(candidate.Anchor, candidate.Width, candidate.Height, 24, 18, out rect))
+            if (!TryCreateAnchoredObjectRect(
+                    candidate.Anchor,
+                    candidate.Width,
+                    candidate.Height,
+                    MinimumPictureObjectWidth,
+                    MinimumPictureObjectHeight,
+                    out rect))
+            {
                 return false;
+            }
 
             picture = candidate;
             return true;
@@ -281,30 +325,60 @@ public partial class GridView
 
     private (Guid Id, ObjectKind Kind, Rect Rect, CellAddress Anchor) HitTestDrawingObject(Point pos)
     {
-        if (Viewport is null) return default;
+        if (Viewport is null || ObjectDisplayMode == GridObjectDisplayMode.Nothing) return default;
 
         if (TextBoxes is not null)
             for (var i = TextBoxes.Count - 1; i >= 0; i--)
             {
                 var t = TextBoxes[i];
-                if (t.IsVisible && TryCreateAnchoredObjectRect(t.Anchor, t.Width, t.Height, 8, 8, out var r) && ContainsRotatedInclusive(r, pos, t.RotationDegrees))
+                if (t.IsVisible &&
+                    TryCreateAnchoredObjectRect(
+                        t.Anchor,
+                        t.Width,
+                        t.Height,
+                        MinimumTextBoxObjectWidth,
+                        MinimumTextBoxObjectHeight,
+                        out var r) &&
+                    ContainsRotatedInclusive(r, pos, t.RotationDegrees))
+                {
                     return (t.Id, ObjectKind.TextBox, r, t.Anchor);
+                }
             }
 
         if (Pictures is not null)
             for (var i = Pictures.Count - 1; i >= 0; i--)
             {
                 var p = Pictures[i];
-                if (p.IsVisible && TryCreateAnchoredObjectRect(p.Anchor, p.Width, p.Height, 24, 18, out var r) && ContainsRotatedInclusive(r, pos, p.RotationDegrees))
+                if (p.IsVisible &&
+                    TryCreateAnchoredObjectRect(
+                        p.Anchor,
+                        p.Width,
+                        p.Height,
+                        MinimumPictureObjectWidth,
+                        MinimumPictureObjectHeight,
+                        out var r) &&
+                    ContainsRotatedInclusive(r, pos, p.RotationDegrees))
+                {
                     return (p.Id, ObjectKind.Picture, r, p.Anchor);
+                }
             }
 
         if (DrawingShapes is not null)
             for (var i = DrawingShapes.Count - 1; i >= 0; i--)
             {
                 var s = DrawingShapes[i];
-                if (s.IsVisible && TryCreateAnchoredObjectRect(s.Anchor, s.Width, s.Height, 8, 8, out var r) && ContainsRotatedInclusive(r, pos, s.RotationDegrees))
+                if (s.IsVisible &&
+                    TryCreateAnchoredObjectRect(
+                        s.Anchor,
+                        s.Width,
+                        s.Height,
+                        MinimumShapeObjectWidth,
+                        MinimumShapeObjectHeight,
+                        out var r) &&
+                    ContainsRotatedInclusive(r, pos, s.RotationDegrees))
+                {
                     return (s.Id, ObjectKind.Shape, r, s.Anchor);
+                }
             }
 
         return default;

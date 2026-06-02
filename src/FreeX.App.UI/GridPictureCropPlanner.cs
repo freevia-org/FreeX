@@ -158,6 +158,6 @@ public static class GridPictureCropPlanner
         if (!double.IsFinite(value) || value < 0)
             return 0;
 
-        return value;
+        return Math.Round(value, 12);
     }
 }
