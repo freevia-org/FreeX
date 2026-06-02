@@ -446,12 +446,13 @@ public partial class GridView
         var visibleRight = GetDrawingViewportRight();
         var visibleBottom = GetDrawingViewportBottom();
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var metricLookups = GetRenderMetricLookups(Viewport);
         if (NativeSlicers is not null)
         {
             foreach (var slicer in NativeSlicers)
             {
                 if (slicer.DrawingAnchor is not { } anchor ||
-                    !TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
+                    !TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                     continue;
 
                 var controlRect = EnsureMinimumControlRect(rect);
@@ -467,7 +468,7 @@ public partial class GridView
             foreach (var timeline in NativeTimelines)
             {
                 if (timeline.DrawingAnchor is not { } anchor ||
-                    !TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
+                    !TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                     continue;
 
                 var controlRect = EnsureMinimumControlRect(rect);
@@ -794,7 +795,7 @@ public partial class GridView
             foreach (var slicer in NativeSlicers)
             {
                 if (slicer.DrawingAnchor is { } anchor &&
-                    TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
+                    TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                 {
                     var controlRect = EnsureMinimumControlRect(rect);
                     if (IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
@@ -810,7 +811,7 @@ public partial class GridView
             foreach (var timeline in NativeTimelines)
             {
                 if (timeline.DrawingAnchor is { } anchor &&
-                    TryCreateDrawingAnchorRect(Viewport, anchor, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var rect))
+                    TryCreateDrawingAnchorRect(metricLookups, anchor, out var rect))
                 {
                     var controlRect = EnsureMinimumControlRect(rect);
                     if (IntersectsDrawingViewport(controlRect, 0, visibleRight, visibleBottom))
@@ -860,6 +861,18 @@ public partial class GridView
             height,
             minimumWidth,
             minimumHeight,
+            out rect);
+
+    private bool TryCreateDrawingAnchorRect(
+        RenderMetricLookupCache metricLookups,
+        DrawingAnchorRange anchor,
+        out Rect rect) =>
+        GridDrawingObjectPlanner.TryCreateDrawingAnchorRect(
+            metricLookups.Rows,
+            metricLookups.Columns,
+            anchor,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
             out rect);
 
     private void DrawObjectPlaceholder(DrawingContext dc, Rect rect, string label, double pixelsPerDip)

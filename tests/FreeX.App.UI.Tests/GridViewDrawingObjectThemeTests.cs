@@ -188,6 +188,12 @@ public sealed class GridViewDrawingObjectThemeTests
         var renderDrawingShapes = drawingObjects[
             drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)..
             drawingObjects.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)];
+        var renderNativeControls = drawingObjects[
+            drawingObjects.IndexOf("private void RenderNativeSlicerTimelineControls", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("public static bool TryCreateDrawingAnchorRect", StringComparison.Ordinal)];
+        var renderPlaceholders = drawingObjects[
+            drawingObjects.IndexOf("private void RenderObjectPlaceholders", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("public static string CreateObjectPlaceholderLabel", StringComparison.Ordinal)];
         var renderPictures = pictures[
             pictures.IndexOf("private void RenderPictures", StringComparison.Ordinal)..
             pictures.IndexOf("private void DrawPictureSelectionAdorner", StringComparison.Ordinal)];
@@ -197,6 +203,11 @@ public sealed class GridViewDrawingObjectThemeTests
         plannerMethod.Should().Contain("IReadOnlyDictionary<uint, RowMetric> rows");
         plannerMethod.Should().Contain("rows.TryGetValue(anchor.Row");
         plannerMethod.Should().Contain("columns.TryGetValue(anchor.Col");
+        planner.Should().Contain("IReadOnlyDictionary<uint, RowMetric> rows");
+        planner.Should().Contain("IReadOnlyDictionary<uint, ColMetric> columns");
+        planner.Should().Contain("DrawingAnchorRange anchor");
+        planner.Should().Contain("rows.TryGetValue(fromRowIndex");
+        planner.Should().Contain("columns.TryGetValue(fromColumnIndex");
         plannerMethod.Should().NotContain("FirstOrDefault");
         anchorHelpers.Should().Contain("if (metric.Row > row)");
         anchorHelpers.Should().Contain("if (metric.Col > column)");
@@ -207,6 +218,12 @@ public sealed class GridViewDrawingObjectThemeTests
         renderDrawingShapes.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
         renderDrawingShapes.Should().Contain("metricLookups,");
         renderDrawingShapes.Should().NotContain("FirstOrDefault");
+        renderNativeControls.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        renderNativeControls.Should().Contain("TryCreateDrawingAnchorRect(metricLookups, anchor");
+        renderNativeControls.Should().NotContain("TryCreateDrawingAnchorRect(Viewport, anchor");
+        renderPlaceholders.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        renderPlaceholders.Should().Contain("TryCreateDrawingAnchorRect(metricLookups, anchor");
+        renderPlaceholders.Should().NotContain("TryCreateDrawingAnchorRect(Viewport, anchor");
         renderPictures.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
         renderPictures.Should().Contain("metricLookups,");
         renderPictures.Should().NotContain("FirstOrDefault");
