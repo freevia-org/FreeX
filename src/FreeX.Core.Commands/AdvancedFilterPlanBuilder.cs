@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using System.Text;
 
 namespace FreeX.Core.Commands;
 
@@ -66,14 +67,14 @@ internal static class AdvancedFilterPlanBuilder
     {
         var result = new List<uint>(GetRowResultCapacity(listRange));
         var seen = uniqueRecordsOnly ? new HashSet<string>(StringComparer.Ordinal) : null;
-        var keyParts = uniqueRecordsOnly ? new string[(int)listRange.ColCount] : null;
+        var keyBuilder = uniqueRecordsOnly ? CreateUniqueRowKeyBuilder(listRange) : null;
 
         for (var row = listRange.Start.Row + 1; row <= listRange.End.Row; row++)
         {
             if (!MatchesAnyCriteriaRow(sheet, row, criteriaRows))
                 continue;
 
-            if (seen is null || AddUniqueRowKey(sheet, listRange, row, seen, keyParts!))
+            if (seen is null || AddUniqueRowKey(sheet, listRange, row, seen, keyBuilder!))
                 result.Add(row);
         }
 
@@ -84,10 +85,10 @@ internal static class AdvancedFilterPlanBuilder
     {
         var result = new List<uint>(rows.Count);
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var keyParts = new string[(int)listRange.ColCount];
+        var keyBuilder = CreateUniqueRowKeyBuilder(listRange);
         foreach (var row in rows)
         {
-            if (AddUniqueRowKey(sheet, listRange, row, seen, keyParts))
+            if (AddUniqueRowKey(sheet, listRange, row, seen, keyBuilder))
                 result.Add(row);
         }
 
@@ -138,15 +139,23 @@ internal static class AdvancedFilterPlanBuilder
         GridRange listRange,
         uint row,
         HashSet<string> seen,
-        string[] keyParts)
+        StringBuilder keyBuilder)
     {
-        var index = 0;
+        keyBuilder.Clear();
         for (var col = listRange.Start.Col; col <= listRange.End.Col; col++)
         {
-            keyParts[index] = FilterValueFormatter.ToText(sheet.GetValue(row, col));
-            index++;
+            if (col != listRange.Start.Col)
+                keyBuilder.Append('\u001f');
+
+            FilterValueFormatter.AppendText(keyBuilder, sheet.GetValue(row, col));
         }
 
-        return seen.Add(string.Join('\u001f', keyParts));
+        return seen.Add(keyBuilder.ToString());
+    }
+
+    private static StringBuilder CreateUniqueRowKeyBuilder(GridRange listRange)
+    {
+        var capacity = (int)Math.Min((ulong)listRange.ColCount * 16, 4096UL);
+        return new StringBuilder(capacity);
     }
 }
