@@ -1488,6 +1488,28 @@ public sealed class RemainingDialogTests
     }
 
     [Fact]
+    public void SpellCheckDialogSuggestionsList_DoubleClickWithoutSelectionDoesNotAccept()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SpellCheckDialog("mispelled", "misspelled");
+            var suggestionsBox = GetField<ListBox>(dialog, "_suggestionsBox");
+
+            suggestionsBox.SelectedItem = null;
+            var doubleClick = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = Control.MouseDoubleClickEvent
+            };
+
+            suggestionsBox.RaiseEvent(doubleClick);
+
+            doubleClick.Handled.Should().BeFalse();
+            dialog.DialogResult.Should().BeNull();
+            dialog.Result.Should().Be(new SpellCheckDialogResult(SpellCheckDialogAction.Replace, "misspelled"));
+        });
+    }
+
+    [Fact]
     public void ExportOptionsDialog_ExposesOnlyHonoredPdfXpsChoices()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "ExportOptionsDialog.cs"));

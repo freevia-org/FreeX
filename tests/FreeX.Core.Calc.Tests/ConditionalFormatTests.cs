@@ -400,6 +400,29 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void IconSetNumberThresholds_DoNotRequireAggregateScans()
+    {
+        var evaluatorSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportConditionalFormatEvaluator.cs"));
+        var iconsSource = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.Core.Calc", "ViewportService.ConditionalFormatIcons.cs"));
+        var aggregateThresholds = evaluatorSource[
+            evaluatorSource.IndexOf("private static bool RequiresAggregateThreshold", StringComparison.Ordinal)..
+            evaluatorSource.IndexOf("private static IReadOnlySet<CellAddress>? ResolveTopBottomMatches", StringComparison.Ordinal)];
+
+        evaluatorSource.Should().Contain("CfRuleType.IconSet => RequiresIconSetAggregateCache(cf)");
+        evaluatorSource.Should().Contain("List<double>? numericValues = RequiresSortedNumericValues(cf) ? [] : null");
+        evaluatorSource.Should().Contain("TryGetIconSetAggregateCache(cf, aggregates, out var cache)");
+        aggregateThresholds.Should().NotContain(
+            "CfThresholdType.Number",
+            "static numeric icon-set thresholds should use the precomputed threshold cache without scanning the applies-to range");
+        iconsSource.Should().Contain("cfContext.Aggregates.TryGetValue(rule, out var cache);");
+        iconsSource.Should().NotContain(
+            "!cfContext.Aggregates.TryGetValue(rule, out var cache)",
+            "cached numeric icon-set thresholds should render even when no aggregate cache was built for the rule");
+    }
+
+    [Fact]
     public void FormulaConditionalFormatEvaluation_DoesNotSerializeShiftedFormulaPerDisplayedCell()
     {
         var formulaSource = File.ReadAllText(FindWorkspaceFile(
@@ -885,6 +908,37 @@ public class ConditionalFormatTests
     }
 
     [Fact]
+    public void IconSet_ShiftsRelativeFormulaThresholdsFromAppliesToAnchor()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(5)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(40)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), Cell.FromValue(new NumberValue(30)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromValue(new NumberValue(30)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), Cell.FromValue(new NumberValue(50)));
+
+        var cf = new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.IconSet,
+            IconSetStyle = "3TrafficLights1"
+        };
+        cf.IconSetThresholds.AddRange([
+            new CfThresholdModel(CfThresholdType.Formula, "B1"),
+            new CfThresholdModel(CfThresholdType.Formula, "C1")
+        ]);
+        sheet.ConditionalFormats.Add(cf);
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 2, 1).ConditionalIcon.Should().Be(
+            new ConditionalFormatIcon("3TrafficLights1", 1, 3, true),
+            "relative threshold formulas should shift to B2 and C2 for the second applies-to cell");
+    }
+
+    [Fact]
     public void ColorScale_ResolvesFormulaMidpointThreshold()
     {
         var (wb, sheet) = MakeWorkbook();
@@ -910,6 +964,38 @@ public class ConditionalFormatTests
         var vp = GetViewport(wb, sheet);
 
         GetCell(vp, 2, 1).Style!.FillColor.Should().Be(new CellColor(255, 255, 255));
+    }
+
+    [Fact]
+    public void ColorScale_ShiftsRelativeFormulaThresholdsFromAppliesToAnchor()
+    {
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(25)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(50)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(0)));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), Cell.FromValue(new NumberValue(100)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromValue(new NumberValue(50)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 3), Cell.FromValue(new NumberValue(100)));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.ColorScale,
+            UseThreeColorScale = false,
+            MinThresholdType = CfThresholdType.Formula,
+            MinThresholdValue = "B1",
+            MaxThresholdType = CfThresholdType.Formula,
+            MaxThresholdValue = "C1",
+            MinColor = new RgbColor(0, 0, 255),
+            MaxColor = new RgbColor(255, 0, 0)
+        });
+
+        var vp = GetViewport(wb, sheet);
+
+        GetCell(vp, 2, 1).Style!.FillColor.Should().Be(
+            new CellColor(0, 0, 255),
+            "relative threshold formulas should shift to B2 and C2 for the second applies-to cell");
     }
 
     [Fact]

@@ -244,6 +244,28 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarEscape_WhileInlineEditorVisible_CancelsFormulaBarDraftAndReturnsFocusToGrid()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.ShowInlineEditor(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("formula bar draft");
+
+            harness.PressFormulaBarKey(Key.Escape).Should().BeTrue();
+
+            harness.InlineEditorVisible.Should().BeFalse();
+            harness.FormulaBarText.Should().Be("original");
+            harness.CellText(1, 1).Should().Be("original");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void FormulaBarEnter_CommitsEditMovesSelectionAndRefreshesEditors()
     {
         StaTestRunner.Run(() =>
@@ -334,6 +356,30 @@ public sealed class MainWindowFormulaBarSyncTests
             harness.PressFormulaBarKey(Key.Enter).Should().BeTrue();
 
             harness.CellFormula(1, 1).Should().Be("SUM(B1:C1)");
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 2, 1),
+                new CellAddress(harness.CurrentSheetId, 2, 1)));
+            harness.CellAddressBoxText.Should().Be("A2");
+            harness.FormulaBarText.Should().BeEmpty();
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void FormulaBarDown_WithPlainDraft_CommitsEditMovesSelectionAndRefreshesEditors()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("down from formula bar");
+
+            harness.PressFormulaBarKey(Key.Down).Should().BeTrue();
+
+            harness.CellText(1, 1).Should().Be("down from formula bar");
             harness.SelectedRange.Should().Be(new GridRange(
                 new CellAddress(harness.CurrentSheetId, 2, 1),
                 new CellAddress(harness.CurrentSheetId, 2, 1)));

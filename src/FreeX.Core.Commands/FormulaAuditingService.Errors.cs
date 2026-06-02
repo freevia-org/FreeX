@@ -7,7 +7,7 @@ namespace FreeX.Core.Commands;
 
 public static partial class FormulaAuditingService
 {
-    private const string OmittedAdjacentCellsAggregateFunctionPattern = "SUM|AVERAGE|COUNTA|COUNT|MIN|MAX|PRODUCT";
+    private const string OmittedAdjacentCellsAggregateFunctionPattern = "SUM|AVERAGE|COUNTA|COUNT|MIN|MAX|PRODUCT|SUBTOTAL|AGGREGATE";
 
     private static readonly string[] OmittedAdjacentCellsAggregateFunctions =
     [
@@ -17,7 +17,9 @@ public static partial class FormulaAuditingService
         "COUNTA",
         "MIN",
         "MAX",
-        "PRODUCT"
+        "PRODUCT",
+        "SUBTOTAL",
+        "AGGREGATE"
     ];
 
     public static IReadOnlyList<FormulaErrorInfo> FindFormulaErrors(Workbook workbook, SheetId? sheetId = null)
@@ -598,9 +600,16 @@ public static partial class FormulaAuditingService
         return false;
     }
 
-    private static bool ContainsOmittedAdjacentCellsAggregateFunction(string formulaText) =>
-        OmittedAdjacentCellsAggregateFunctions.Any(functionName =>
-            formulaText.Contains(functionName, StringComparison.OrdinalIgnoreCase));
+    private static bool ContainsOmittedAdjacentCellsAggregateFunction(string formulaText)
+    {
+        for (var index = 0; index < OmittedAdjacentCellsAggregateFunctions.Length; index++)
+        {
+            if (formulaText.Contains(OmittedAdjacentCellsAggregateFunctions[index], StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
 
     private static bool HasOmittedValuesBetweenAggregateArguments(Workbook workbook, IReadOnlyList<GridRange> ranges)
     {
@@ -675,12 +684,27 @@ public static partial class FormulaAuditingService
     {
         foreach (Match aggregateMatch in Regex.Matches(
                      formulaText,
-                     $@"\b(?:{OmittedAdjacentCellsAggregateFunctionPattern})\s*\((?<args>[^)]*)\)",
+                     $@"\b(?<function>{OmittedAdjacentCellsAggregateFunctionPattern})\s*\((?<args>[^)]*)\)",
                      RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
         {
-            var ranges = new List<GridRange>();
-            foreach (var token in aggregateMatch.Groups["args"].Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            var arguments = aggregateMatch.Groups["args"].Value.Split(',', StringSplitOptions.TrimEntries);
+            if (!TryGetAggregateRangeArgumentBounds(
+                    aggregateMatch.Groups["function"].Value,
+                    arguments,
+                    out var firstRangeArgumentIndex,
+                    out var lastRangeArgumentExclusive,
+                    out var skipBlankRangeArguments))
             {
+                continue;
+            }
+
+            var ranges = new List<GridRange>();
+            for (var argumentIndex = firstRangeArgumentIndex; argumentIndex < lastRangeArgumentExclusive; argumentIndex++)
+            {
+                var token = arguments[argumentIndex];
+                if (skipBlankRangeArguments && string.IsNullOrWhiteSpace(token))
+                    continue;
+
                 if (TryParseLocalRange(sheetId, token, out var range))
                     ranges.Add(range);
             }
@@ -688,6 +712,79 @@ public static partial class FormulaAuditingService
             if (ranges.Count > 0)
                 yield return ranges;
         }
+    }
+
+    private static bool TryGetAggregateRangeArgumentBounds(
+        string functionName,
+        IReadOnlyList<string> arguments,
+        out int firstRangeArgumentIndex,
+        out int lastRangeArgumentExclusive,
+        out bool skipBlankRangeArguments)
+    {
+        firstRangeArgumentIndex = 0;
+        lastRangeArgumentExclusive = arguments.Count;
+        skipBlankRangeArguments = true;
+
+        if (functionName.Equals("SUBTOTAL", StringComparison.OrdinalIgnoreCase))
+        {
+            if (arguments.Count < 2 ||
+                HasBlankArgument(arguments) ||
+                !TryParseWholeNumberArgument(arguments[0], out var functionNumber) ||
+                !IsSupportedSubtotalFunctionNumber(functionNumber))
+            {
+                return false;
+            }
+
+            firstRangeArgumentIndex = 1;
+            skipBlankRangeArguments = false;
+            return true;
+        }
+
+        if (functionName.Equals("AGGREGATE", StringComparison.OrdinalIgnoreCase))
+        {
+            if (arguments.Count < 3 ||
+                HasBlankArgument(arguments) ||
+                !TryParseWholeNumberArgument(arguments[0], out var functionNumber) ||
+                functionNumber is < 1 or > 19 ||
+                !TryParseWholeNumberArgument(arguments[1], out var options) ||
+                options is < 0 or > 7)
+            {
+                return false;
+            }
+
+            firstRangeArgumentIndex = 2;
+            lastRangeArgumentExclusive = functionNumber is >= 14 and <= 19
+                ? arguments.Count - 1
+                : arguments.Count;
+            if (lastRangeArgumentExclusive <= firstRangeArgumentIndex)
+                return false;
+
+            skipBlankRangeArguments = false;
+            return true;
+        }
+
+        return true;
+    }
+
+    private static bool HasBlankArgument(IReadOnlyList<string> arguments)
+    {
+        for (var index = 0; index < arguments.Count; index++)
+        {
+            if (string.IsNullOrWhiteSpace(arguments[index]))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseWholeNumberArgument(string argument, out int value) =>
+        int.TryParse(argument, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+
+    private static bool IsSupportedSubtotalFunctionNumber(int functionNumber)
+    {
+        var baseFunctionNumber = functionNumber >= 100 ? functionNumber - 100 : functionNumber;
+        return baseFunctionNumber is >= 1 and <= 11 &&
+               (functionNumber < 100 || functionNumber is >= 101 and <= 111);
     }
 
     private static bool TryParseLocalRange(SheetId sheetId, string token, out GridRange range)
