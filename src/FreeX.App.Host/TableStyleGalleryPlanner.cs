@@ -10,6 +10,16 @@ public sealed record TableStyleGalleryOption(
 
 public static class TableStyleGalleryPlanner
 {
+    private static readonly WorkbookThemeColorSlot[] AccentSlots =
+    [
+        WorkbookThemeColorSlot.Accent1,
+        WorkbookThemeColorSlot.Accent2,
+        WorkbookThemeColorSlot.Accent3,
+        WorkbookThemeColorSlot.Accent4,
+        WorkbookThemeColorSlot.Accent5,
+        WorkbookThemeColorSlot.Accent6
+    ];
+
     public static IReadOnlyList<TableStyleGalleryOption> GetOptions() =>
         GetOptions(WorkbookTheme.Office);
 
@@ -120,10 +130,40 @@ public static class TableStyleGalleryPlanner
         if (ReferenceEquals(theme, WorkbookTheme.Office))
             return null;
 
-        if (string.Equals(styleName, "TableStyleMedium2", StringComparison.OrdinalIgnoreCase))
-            return CreateThemedMediumBanding(theme, WorkbookThemeColorSlot.Accent1);
+        if (TryResolveMediumThemeSlot(styleName, out var mediumSlot))
+            return CreateThemedMediumBanding(theme, mediumSlot);
+
+        if (TryResolveLightThemeSlot(styleName, out var lightSlot))
+            return CreateThemedLightBanding(theme, lightSlot);
 
         return null;
+    }
+
+    private static bool TryResolveMediumThemeSlot(string styleName, out WorkbookThemeColorSlot slot) =>
+        TryResolveSequentialAccentStyle(styleName, "TableStyleMedium", firstThemedIndex: 2, out slot);
+
+    private static bool TryResolveLightThemeSlot(string styleName, out WorkbookThemeColorSlot slot) =>
+        TryResolveSequentialAccentStyle(styleName, "TableStyleLight", firstThemedIndex: 16, out slot);
+
+    private static bool TryResolveSequentialAccentStyle(
+        string styleName,
+        string prefix,
+        int firstThemedIndex,
+        out WorkbookThemeColorSlot slot)
+    {
+        slot = default;
+        if (!styleName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+            !int.TryParse(styleName[prefix.Length..], out var index))
+        {
+            return false;
+        }
+
+        var offset = index - firstThemedIndex;
+        if (offset < 0 || offset >= AccentSlots.Length)
+            return false;
+
+        slot = AccentSlots[offset];
+        return true;
     }
 
     private static StructuredTableStyleBanding CreateThemedMediumBanding(
@@ -134,6 +174,15 @@ public static class TableStyleGalleryPlanner
             OddRowFill: theme.ResolveColor(slot, 0.8),
             EvenRowFill: CellColor.White,
             HeaderFontColor: CellColor.White);
+
+    private static StructuredTableStyleBanding CreateThemedLightBanding(
+        WorkbookTheme theme,
+        WorkbookThemeColorSlot slot) =>
+        new(
+            HeaderFill: theme.ResolveColor(slot, 0.8),
+            OddRowFill: theme.ResolveColor(slot, 0.95),
+            EvenRowFill: CellColor.White,
+            HeaderFontColor: CellColor.Black);
 
     private static CellColor Lighten(CellColor color, int amount) =>
         new(

@@ -161,6 +161,42 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
     }
 
+    public static IEnumerable<object[]> DirectRangeVarianceAggregateCases()
+    {
+        double sampleVariance = (double)RowCount * (RowCount + 1) / 12;
+        double populationVariance = ((double)RowCount * RowCount - 1) / 12;
+
+        yield return ["=STDEV(A1:A100000)", Math.Sqrt(sampleVariance)];
+        yield return ["=STDEV.P(A1:A100000)", Math.Sqrt(populationVariance)];
+        yield return ["=VAR(A1:A100000)", sampleVariance];
+        yield return ["=VAR.P(A1:A100000)", populationVariance];
+    }
+
+    [Theory]
+    [MemberData(nameof(DirectRangeVarianceAggregateCases))]
+    public void DirectRangeVarianceAggregates_AvoidListMaterialization(string formula, double expected)
+    {
+        var evaluator = new FormulaEvaluator();
+        var sheet = MakeNumericSheet();
+
+        ((NumberValue)evaluator.Evaluate(formula, sheet)).Value.Should().BeApproximately(expected, 1e-7);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var stopwatch = Stopwatch.StartNew();
+        var result = evaluator.Evaluate(formula, sheet);
+        stopwatch.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        ((NumberValue)result).Value.Should().BeApproximately(expected, 1e-7);
+        _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_000_000);
+        stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());
+    }
+
     [Fact]
     public void CrossSheetSingleDirectRangeAggregate_CachesSheetNameLookup()
     {
