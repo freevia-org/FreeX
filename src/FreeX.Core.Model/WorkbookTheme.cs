@@ -1,3 +1,5 @@
+using System.Xml.Linq;
+
 namespace FreeX.Core.Model;
 
 /// <summary>
@@ -65,12 +67,15 @@ public sealed record WorkbookTheme(
             NativeFontSchemeXml = null
         };
 
-    public WorkbookTheme WithEffects(string effectsName) =>
-        this with
+    public WorkbookTheme WithEffects(string effectsName)
+    {
+        var normalizedEffectsName = string.IsNullOrWhiteSpace(effectsName) ? Office.EffectsName : effectsName.Trim();
+        return this with
         {
-            EffectsName = string.IsNullOrWhiteSpace(effectsName) ? Office.EffectsName : effectsName.Trim(),
-            NativeFormatSchemeXml = null
+            EffectsName = normalizedEffectsName,
+            NativeFormatSchemeXml = RenameNativeFormatScheme(NativeFormatSchemeXml, normalizedEffectsName)
         };
+    }
 
     public WorkbookTheme WithNativeFormatSchemeXml(string? formatSchemeXml) =>
         this with
@@ -122,6 +127,28 @@ public sealed record WorkbookTheme(
             ? channel * (1.0 + tint)
             : channel + ((255 - channel) * tint);
         return (byte)Math.Clamp(Math.Round(value), 0, 255);
+    }
+
+    private static string? RenameNativeFormatScheme(string? formatSchemeXml, string effectsName)
+    {
+        if (string.IsNullOrWhiteSpace(formatSchemeXml))
+            return null;
+
+        try
+        {
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var formatScheme = XElement.Parse(formatSchemeXml);
+            if (formatScheme.Name != drawingNs + "fmtScheme")
+                return null;
+
+            var renamedFormatScheme = new XElement(formatScheme);
+            renamedFormatScheme.SetAttributeValue("name", effectsName);
+            return renamedFormatScheme.ToString(SaveOptions.DisableFormatting);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
 
