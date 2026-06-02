@@ -75,7 +75,8 @@ public sealed class ReviewCommandSourceTests
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("SpellCheckWorkflowPlanner.FilterIssues(");
-        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllEdits(");
+        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(");
+        source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplacementCommand(");
         source.Should().Contain("WorkbookStatisticsService.GetStatistics(_workbook)");
         source.Should().Contain("AccessibilityCheckerService.FindIssues(_workbook)");
         source.Should().Contain("AltTextTargetResolver.Resolve(sheet, SheetGrid.SelectedRange?.Start, preferredKind)");

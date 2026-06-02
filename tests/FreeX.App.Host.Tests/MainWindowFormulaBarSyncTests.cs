@@ -1267,6 +1267,7 @@ public sealed class MainWindowFormulaBarSyncTests
         private readonly FieldInfo _workbookField;
         private readonly FieldInfo _currentSheetIdField;
         private readonly FieldInfo _formulaEditCellField;
+        private readonly FieldInfo _formulaRangeEntryModeField;
         private readonly FieldInfo _inlineEditorField;
         private readonly MethodInfo _commitEdit;
         private readonly MethodInfo _commitEditAcrossSelection;
@@ -1293,6 +1294,9 @@ public sealed class MainWindowFormulaBarSyncTests
             _formulaEditCellField = typeof(MainWindow)
                 .GetField("_formulaEditCell", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_formulaEditCell");
+            _formulaRangeEntryModeField = typeof(MainWindow)
+                .GetField("_formulaRangeEntryMode", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_formulaRangeEntryMode");
             _inlineEditorField = typeof(MainWindow)
                 .GetField("_inlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_inlineEditor");
@@ -1486,6 +1490,7 @@ public sealed class MainWindowFormulaBarSyncTests
         public void SetFormulaBarText(string text)
         {
             ((TextBox)_window.FindName("FormulaBar")).Text = text;
+            UpdateFormulaRangeEntryMode(text);
             PumpDispatcher();
         }
 
@@ -1538,7 +1543,14 @@ public sealed class MainWindowFormulaBarSyncTests
         {
             var inlineEditor = InlineEditor ?? throw new InvalidOperationException("Inline editor is not visible.");
             inlineEditor.Text = text;
+            UpdateFormulaRangeEntryMode(text);
             PumpDispatcher();
+        }
+
+        private void UpdateFormulaRangeEntryMode(string text)
+        {
+            if (FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(text))
+                _formulaRangeEntryModeField.SetValue(_window, true);
         }
 
         public void FocusFormulaBar()
