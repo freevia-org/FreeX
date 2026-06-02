@@ -88,7 +88,8 @@ public static partial class PivotTableRefreshService
         PivotColumnRowMap rowsByColumnKey,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
-        IReadOnlyList<PivotFieldModel> fields)
+        IReadOnlyList<PivotFieldModel> fields,
+        PivotColumnAggregateCache? aggregateCache)
     {
         foreach (var filter in pivotTable.ValueFilters)
         {
@@ -107,13 +108,13 @@ public static partial class PivotTableRefreshService
                 continue;
 
             var dataField = pivotTable.DataFields[filter.DataFieldIndex];
-            var aggregates = keys
-                .Select(key => new
-                {
-                    Key = key,
-                    Value = Aggregate(RowsForColumnKey(rowsByColumnKey, key), dataField, pivotTable, headers)
-                })
-                .ToList();
+            var aggregates = new List<(PivotKey Key, double Value)>(keys.Count);
+            foreach (var key in keys)
+            {
+                aggregates.Add((
+                    key,
+                    ColumnAggregate(key, rowsByColumnKey, dataField, filter.DataFieldIndex, pivotTable, headers, aggregateCache)));
+            }
             var average = aggregates.Count == 0 ? 0 : aggregates.Average(item => item.Value);
 
             keys = filter.Kind switch
@@ -242,7 +243,8 @@ public static partial class PivotTableRefreshService
         PivotColumnRowMap rowsByColumnKey,
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
-        IReadOnlyList<PivotFieldModel> fields)
+        IReadOnlyList<PivotFieldModel> fields,
+        PivotColumnAggregateCache? aggregateCache)
     {
         if (pivotTable.Sorts.Count == 0)
             return keys.Order(PivotKeyComparer.Instance).ToList();
@@ -262,15 +264,70 @@ public static partial class PivotTableRefreshService
             sort.DataFieldIndex < pivotTable.DataFields.Count)
         {
             var dataField = pivotTable.DataFields[sort.DataFieldIndex];
-            var aggregates = keys
-                .Select(key => (Key: key, Value: Aggregate(RowsForColumnKey(rowsByColumnKey, key), dataField, pivotTable, headers)))
-                .ToList();
+            var aggregates = new List<(PivotKey Key, double Value)>(keys.Count);
+            foreach (var key in keys)
+            {
+                aggregates.Add((
+                    key,
+                    ColumnAggregate(key, rowsByColumnKey, dataField, sort.DataFieldIndex, pivotTable, headers, aggregateCache)));
+            }
             return sort.Direction == PivotSortDirection.Descending
                 ? aggregates.OrderByDescending(item => item.Value).ThenBy(item => item.Key, PivotKeyComparer.Instance).Select(item => item.Key).ToList()
                 : aggregates.OrderBy(item => item.Value).ThenBy(item => item.Key, PivotKeyComparer.Instance).Select(item => item.Key).ToList();
         }
 
         return keys.Order(PivotKeyComparer.Instance).ToList();
+    }
+
+    private static double ColumnAggregate(
+        PivotKey key,
+        PivotColumnRowMap rowsByColumnKey,
+        PivotDataFieldModel dataField,
+        int dataFieldIndex,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        PivotColumnAggregateCache? aggregateCache) =>
+        aggregateCache?.Get(key, dataFieldIndex) ??
+        Aggregate(RowsForColumnKey(rowsByColumnKey, key), dataField, pivotTable, headers);
+
+    private static PivotColumnAggregateCache? CreateColumnAggregateCacheIfNeeded(
+        PivotColumnRowMap rowsByColumnKey,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers,
+        IReadOnlyList<PivotFieldModel> columnFields)
+    {
+        var aggregateConsumers = 0;
+        foreach (var filter in pivotTable.ValueFilters)
+        {
+            if (filter.SourceFieldIndex is null ||
+                IndexOfSourceField(columnFields, filter.SourceFieldIndex.Value) < 0 ||
+                filter.DataFieldIndex < 0 ||
+                filter.DataFieldIndex >= pivotTable.DataFields.Count)
+            {
+                continue;
+            }
+
+            aggregateConsumers++;
+            if (aggregateConsumers > 1)
+                return new PivotColumnAggregateCache(rowsByColumnKey, pivotTable, headers);
+        }
+
+        foreach (var sort in pivotTable.Sorts)
+        {
+            if (sort.Target != PivotSortTarget.Value ||
+                IndexOfSourceField(columnFields, sort.FieldIndex) < 0 ||
+                sort.DataFieldIndex < 0 ||
+                sort.DataFieldIndex >= pivotTable.DataFields.Count)
+            {
+                continue;
+            }
+
+            aggregateConsumers++;
+            if (aggregateConsumers > 1)
+                return new PivotColumnAggregateCache(rowsByColumnKey, pivotTable, headers);
+        }
+
+        return null;
     }
 
     private static string GroupKeyText(ScalarValue value, PivotFieldModel field) =>
@@ -391,4 +448,24 @@ public static partial class PivotTableRefreshService
         }
     }
 
+    private readonly record struct PivotColumnAggregateCacheKey(PivotKey Key, int DataFieldIndex);
+
+    private sealed class PivotColumnAggregateCache(
+        PivotColumnRowMap rowsByColumnKey,
+        PivotTableModel pivotTable,
+        IReadOnlyList<string> headers)
+    {
+        private readonly Dictionary<PivotColumnAggregateCacheKey, double> _values = [];
+
+        public double Get(PivotKey key, int dataFieldIndex)
+        {
+            var cacheKey = new PivotColumnAggregateCacheKey(key, dataFieldIndex);
+            if (_values.TryGetValue(cacheKey, out var value))
+                return value;
+
+            value = Aggregate(RowsForColumnKey(rowsByColumnKey, key), pivotTable.DataFields[dataFieldIndex], pivotTable, headers);
+            _values.Add(cacheKey, value);
+            return value;
+        }
+    }
 }

@@ -23,8 +23,9 @@ public static partial class PivotTableRefreshService
         var rowsByColumnKey = BuildColumnRowsByKey(retainedRows, columnFields);
         var columnKeys = BuildColumnKeys(workbook, pivotTable, retainedRows, columnFields, rowsByColumnKey);
         columnKeys = ApplyLabelFilters(columnKeys, pivotTable, columnFields);
-        columnKeys = ApplyValueFilters(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields);
-        columnKeys = ApplySorts(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields);
+        var columnAggregateCache = CreateColumnAggregateCacheIfNeeded(rowsByColumnKey, pivotTable, headers, columnFields);
+        columnKeys = ApplyValueFilters(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields, columnAggregateCache);
+        columnKeys = ApplySorts(columnKeys, rowsByColumnKey, pivotTable, headers, columnFields, columnAggregateCache);
         var visibleRows = RowsForColumnKeys(rowsByColumnKey, columnKeys);
         var visibleRowsByColumnKey = BuildColumnRowsByKey(visibleRows, columnFields);
         var singleDataField = pivotTable.DataFields.Count == 1;
