@@ -771,6 +771,23 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsHiddenSheetsThatContainOnlyComments()
+    {
+        var workbook = new Workbook("Accessibility");
+        var hiddenSheet = workbook.AddSheet("Archived Notes");
+        hiddenSheet.IsVeryHidden = true;
+        hiddenSheet.Comments[new CellAddress(hiddenSheet.Id, 2, 3)] = "Confidential forecast note";
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.HiddenSheetWithContent).Subject;
+
+        issue.SheetId.Should().Be(hiddenSheet.Id);
+        issue.SheetName.Should().Be("Archived Notes");
+        issue.Location.Should().Be("Archived Notes");
+        issue.Message.Should().Be("Hidden sheets with content may not be available to assistive technologies.");
+    }
+
+    [Fact]
     public void FindIssues_FlagsHiddenRowsAndColumnsThatContainContent()
     {
         var workbook = new Workbook("Accessibility");
@@ -796,6 +813,62 @@ public sealed class AccessibilityCheckerServiceTests
             .Should()
             .BeEquivalentTo(["C:C", "F:F"]);
         issues.Should().NotContain(i => i.Location == "H8");
+    }
+
+    [Fact]
+    public void FindIssues_FlagsHiddenRowsAndColumnsThatContainNonCellContent()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Q1 Revenue");
+        sheet.HiddenRows.Add(4);
+        sheet.GroupHiddenRows.Add(5);
+        sheet.HiddenRows.Add(7);
+        sheet.HiddenRows.Add(8);
+        sheet.HiddenCols.Add(3);
+        sheet.GroupHiddenCols.Add(6);
+
+        sheet.Comments[new CellAddress(sheet.Id, 4, 1)] = "Hidden row note";
+        sheet.ThreadedComments[new CellAddress(sheet.Id, 1, 3)] = new ThreadedComment("Hidden column thread");
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "Table1",
+            DisplayName = "Table1",
+            Range = new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 6, 2)),
+            HeaderRowCount = 1,
+            HasAutoFilter = true
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Region"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Sales"));
+        sheet.StructuredTables.Add(table);
+        sheet.Sparklines.Add(new SparklineModel
+        {
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1)),
+            Location = new CellAddress(sheet.Id, 2, 6)
+        });
+        sheet.Pictures.Add(new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 7, 2),
+            AltText = "Regional revenue image"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 8, 2),
+            AltText = "Hidden object marker",
+            IsVisible = false
+        });
+
+        var issues = AccessibilityCheckerService.FindIssues(workbook);
+
+        issues.Where(i => i.Kind == AccessibilityIssueKind.HiddenRowWithContent)
+            .Select(i => i.Location)
+            .Should()
+            .Equal("4:4", "5:5", "7:7");
+        issues.Where(i => i.Kind == AccessibilityIssueKind.HiddenColumnWithContent)
+            .Select(i => i.Location)
+            .Should()
+            .Equal("C:C", "F:F");
+        issues.Should().NotContain(i => i.Kind == AccessibilityIssueKind.HiddenRowWithContent && i.Location == "8:8");
     }
 
     [Fact]
