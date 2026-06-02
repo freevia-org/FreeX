@@ -1028,6 +1028,37 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsNullNativeJsonWorksheetCustomPropertyEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullWorksheetCustomProperties",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "CustomProperties": [
+                    null,
+                    { "Name": "ModeledProperty", "Id": 7 },
+                    { "Name": "MissingId" },
+                    { "Id": 8 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var property = new NativeJsonAdapter().Load(stream).GetSheetAt(0).CustomProperties
+            .Should().ContainSingle().Subject;
+
+        property.Name.Should().Be("ModeledProperty");
+        property.Id.Should().Be(7);
+    }
+
+    [Fact]
     public void Load_DropsNullNativeJsonWorksheetDimensionEntries()
     {
         const string json = """
