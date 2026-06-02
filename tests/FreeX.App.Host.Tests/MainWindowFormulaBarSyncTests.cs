@@ -244,6 +244,28 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarEscape_WhileInlineEditorVisible_CancelsFormulaBarDraftAndReturnsFocusToGrid()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.ShowInlineEditor(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("formula bar draft");
+
+            harness.PressFormulaBarKey(Key.Escape).Should().BeTrue();
+
+            harness.InlineEditorVisible.Should().BeFalse();
+            harness.FormulaBarText.Should().Be("original");
+            harness.CellText(1, 1).Should().Be("original");
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void FormulaBarEnter_CommitsEditMovesSelectionAndRefreshesEditors()
     {
         StaTestRunner.Run(() =>
