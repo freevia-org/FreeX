@@ -906,9 +906,9 @@ public static partial class BuiltInFunctions
             if (arr.ColCount == 1)
                 return UniqueSingleColumn(arr, exactlyOnce);
 
-            var keyIndex  = new Dictionary<string, int>();
-            var keyCounts = new List<int>();
-            var rowOfKey  = new List<int>();
+            var keyIndex  = new Dictionary<string, int>(arr.RowCount);
+            var keyCounts = new List<int>(arr.RowCount);
+            var rowOfKey  = new List<int>(arr.RowCount);
 
             var keySb = new System.Text.StringBuilder();
             for (int r = 0; r < arr.RowCount; r++)
@@ -953,9 +953,9 @@ public static partial class BuiltInFunctions
         }
         else
         {
-            var keyIndex  = new Dictionary<string, int>();
-            var keyCounts = new List<int>();
-            var colOfKey  = new List<int>();
+            var keyIndex  = new Dictionary<string, int>(arr.ColCount);
+            var keyCounts = new List<int>(arr.ColCount);
+            var colOfKey  = new List<int>(arr.ColCount);
 
             var colKeySb = new System.Text.StringBuilder();
             for (int c = 0; c < arr.ColCount; c++)
@@ -1004,8 +1004,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue UniqueSingleColumn(RangeValue arr, bool exactlyOnce)
     {
         var keyIndex  = new Dictionary<ScalarValue, int>(arr.RowCount, UniqueScalarComparer.Instance);
-        var rowOfKey  = new List<int>();
-        List<int>? keyCounts = exactlyOnce ? new List<int>() : null;
+        var rowOfKey  = new List<int>(arr.RowCount);
+        List<int>? keyCounts = exactlyOnce ? new List<int>(arr.RowCount) : null;
 
         for (int r = 0; r < arr.RowCount; r++)
         {
