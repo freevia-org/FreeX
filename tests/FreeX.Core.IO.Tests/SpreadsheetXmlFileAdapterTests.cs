@@ -801,6 +801,16 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void SaveValueStreaming_UsesCompactXmlAndSkipsEmptyRowLayoutAllocation()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "FreeX.Core.IO", "SpreadsheetXmlFileAdapter.cs"));
+
+        source.Should().Contain("Indent = false");
+        source.Should().Contain("if (sheet.RowHeights.Count == 0 && sheet.HiddenRows.Count == 0)");
+        source.Should().Contain("return [];");
+    }
+
+    [Fact]
     public void Load_AdvancesImplicitCellIndexPastMergeAcrossSpan()
     {
         using var stream = StreamFromString("""
@@ -4114,6 +4124,21 @@ public sealed class SpreadsheetXmlFileAdapterTests
 
     private static Stream NonSeekableStreamFromString(string value) =>
         new NonSeekableReadStream(StreamFromString(value));
+
+    private static string FindRepoFile(params string[] relativeParts)
+    {
+        var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(relativeParts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = dir.Parent;
+        }
+
+        return Path.Combine(new[] { Directory.GetCurrentDirectory() }.Concat(relativeParts).ToArray());
+    }
 
     private static Workbook CreateDenseWorkbook(int sheetCount, int rowCount, int columnCount)
     {
