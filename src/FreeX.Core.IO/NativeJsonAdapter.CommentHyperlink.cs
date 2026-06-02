@@ -36,6 +36,7 @@ public sealed partial class NativeJsonAdapter
                 return null;
 
             var replies = (commentDto.Replies ?? [])
+                .OfType<CommentReplyDto>()
                 .Where(reply => reply.Text is not null)
                 .Select(reply => new CommentReply(
                     reply.Text!,
@@ -95,6 +96,7 @@ public sealed partial class NativeJsonAdapter
         CreatedAtUtc = ToUtc(pair.Value.CreatedAtUtc),
         ModifiedAtUtc = ToUtc(pair.Value.ModifiedAtUtc),
         Replies = pair.Value.Replies
+            .OfType<CommentReply>()
             .Select(reply => new CommentReplyDto
             {
                 Text = reply.Text,

@@ -26,7 +26,8 @@ internal sealed record CfIconSetThresholdCache(double[] Values, bool[] GreaterTh
 internal sealed record CfFormulaCache(
     FormulaNode Ast,
     bool HasRelativeReferences,
-    CfSimpleFormulaComparison? SimpleComparison);
+    CfSimpleFormulaComparison? SimpleComparison,
+    CfSimpleFormulaAnd? SimpleAnd);
 
 internal readonly record struct CfStyleResult(CellStyle Style, bool CanUseAsDefaultMergedStyle);
 
@@ -34,6 +35,8 @@ internal readonly record struct CfSimpleFormulaComparison(
     CfFormulaScalarOperand Left,
     BinaryOperator Operator,
     CfFormulaScalarOperand Right);
+
+internal sealed record CfSimpleFormulaAnd(CfSimpleFormulaComparison[] Comparisons);
 
 internal readonly record struct CfFormulaScalarOperand(
     CfFormulaScalarOperandKind Kind,
@@ -311,10 +314,18 @@ internal static class ViewportConditionalFormatEvaluator
             try
             {
                 var ast = ParseFormulaText(cf.FormulaText);
+                var simpleComparison = TryCreateSimpleComparison(ast, out var comparison)
+                    ? comparison
+                    : (CfSimpleFormulaComparison?)null;
+                var simpleAnd = simpleComparison is null && TryCreateSimpleAnd(ast, out var and)
+                    ? and
+                    : null;
+
                 result[cf] = new CfFormulaCache(
                     ast,
                     HasRelativeReferences(ast),
-                    TryCreateSimpleComparison(ast, out var comparison) ? comparison : null);
+                    simpleComparison,
+                    simpleAnd);
             }
             catch
             {
@@ -336,6 +347,26 @@ internal static class ViewportConditionalFormatEvaluator
             return false;
 
         comparison = new CfSimpleFormulaComparison(left, binary.Operator, right);
+        return true;
+    }
+
+    private static bool TryCreateSimpleAnd(FormulaNode ast, out CfSimpleFormulaAnd and)
+    {
+        and = default!;
+        if (ast is not FunctionCallNode { Arguments.Count: > 0 } function ||
+            !string.Equals(function.FunctionName, "AND", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var comparisons = new CfSimpleFormulaComparison[function.Arguments.Count];
+        for (var i = 0; i < function.Arguments.Count; i++)
+        {
+            if (!TryCreateSimpleComparison(function.Arguments[i], out comparisons[i]))
+                return false;
+        }
+
+        and = new CfSimpleFormulaAnd(comparisons);
         return true;
     }
 

@@ -2147,6 +2147,8 @@ public sealed class MainWindowSourceHygieneTests
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
         var sheetTabsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var focusAdjacentSource = ExtractMethodSource(sheetTabsSource, "private bool FocusAdjacentVisibleSheetTab(");
+        var focusEdgeSource = ExtractMethodSource(sheetTabsSource, "private bool FocusEdgeVisibleSheetTab(");
 
         selectionSource.Should().Contain("if (TryHandleFocusedSheetTabKeyboardNavigation(e))");
         sheetTabsSource.Should().Contain("private bool TryHandleFocusedSheetTabKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
@@ -2157,6 +2159,10 @@ public sealed class MainWindowSourceHygieneTests
         sheetTabsSource.Should().Contain("Key.End => FocusEdgeVisibleSheetTab(first: false)");
         sheetTabsSource.Should().Contain("FocusSheetTab(nextSheetId.Value);");
         sheetTabsSource.Should().Contain("FocusSheetTab(sheetId.Value);");
+        focusAdjacentSource.Should().Contain("SheetTabFocusPlanner.AdjacentTab(_sheetTabs, _currentSheetId, direction)");
+        focusAdjacentSource.Should().NotContain("_sheetTabs.ToList()");
+        focusEdgeSource.Should().Contain("SheetTabFocusPlanner.EdgeTab(_sheetTabs, first)");
+        focusEdgeSource.Should().NotContain("_sheetTabs.ToList()");
     }
 
     [Fact]
