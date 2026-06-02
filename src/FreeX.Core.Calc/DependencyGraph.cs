@@ -10,13 +10,13 @@ namespace FreeX.Core.Calc;
 public sealed class DependencyGraph
 {
     // Cell -> set of cells it depends on (precedents)
-    private readonly Dictionary<CellAddress, HashSet<CellAddress>> _precedents = [];
+    private readonly Dictionary<CellAddress, IReadOnlySet<CellAddress>> _precedents = [];
 
-    // Cell -> set of cells that depend on it (dependents)
-    private readonly Dictionary<CellAddress, HashSet<CellAddress>> _dependents = [];
+    // Cell -> cells that depend on it. Exact dependency inputs are deduplicated before insertion.
+    private readonly Dictionary<CellAddress, List<CellAddress>> _dependents = [];
 
     // Cell -> compact range precedents it depends on.
-    private readonly Dictionary<CellAddress, List<GridRange>> _rangePrecedents = [];
+    private readonly Dictionary<CellAddress, IReadOnlyList<GridRange>> _rangePrecedents = [];
 
     // Sheet -> compact range index and the cells that depend on those ranges.
     private readonly Dictionary<SheetId, RangeDependencyIndex> _rangeDependentsBySheet = [];
@@ -34,25 +34,16 @@ public sealed class DependencyGraph
     /// Set dependencies using a fresh, caller-owned set that will not be mutated after transfer.
     /// </summary>
     internal void SetDependenciesFromOwnedSet(CellAddress cell, HashSet<CellAddress> precedents)
-        => SetDependencies(cell, precedents, []);
+        => SetDependenciesCore(cell, precedents, Array.Empty<GridRange>(), copyRangePrecedents: false);
 
     /// <summary>
-    /// Set dependencies from a cached immutable template while still giving the graph fresh storage.
+    /// Set dependencies from cached immutable templates.
     /// </summary>
     internal void SetDependenciesFromTemplate(
         CellAddress cell,
-        IReadOnlyList<CellAddress> precedents,
+        IReadOnlySet<CellAddress> precedents,
         IReadOnlyList<GridRange> rangePrecedents)
-    {
-        var precedentSet = precedents.Count == 0
-            ? []
-            : new HashSet<CellAddress>(precedents.Count);
-
-        for (var i = 0; i < precedents.Count; i++)
-            precedentSet.Add(precedents[i]);
-
-        SetDependencies(cell, precedentSet, rangePrecedents);
-    }
+        => SetDependenciesCore(cell, precedents, rangePrecedents, copyRangePrecedents: false);
 
     /// <summary>
     /// Set dependencies using a fresh, caller-owned set plus compact range precedents.
@@ -61,13 +52,22 @@ public sealed class DependencyGraph
         CellAddress cell,
         HashSet<CellAddress> precedents,
         IReadOnlyList<GridRange> rangePrecedents)
+        => SetDependenciesCore(cell, precedents, rangePrecedents, copyRangePrecedents: true);
+
+    private void SetDependenciesCore(
+        CellAddress cell,
+        IReadOnlySet<CellAddress> precedents,
+        IReadOnlyList<GridRange> rangePrecedents,
+        bool copyRangePrecedents)
     {
         ClearDependencies(cell);
 
         _precedents[cell] = precedents;
         if (rangePrecedents.Count > 0)
         {
-            var ranges = new List<GridRange>(rangePrecedents);
+            var ranges = copyRangePrecedents
+                ? new List<GridRange>(rangePrecedents)
+                : rangePrecedents;
             _rangePrecedents[cell] = ranges;
 
             foreach (var range in ranges)
@@ -81,16 +81,7 @@ public sealed class DependencyGraph
             }
         }
 
-        // Register reverse links
-        foreach (var prec in precedents)
-        {
-            if (!_dependents.TryGetValue(prec, out var deps))
-            {
-                deps = [];
-                _dependents[prec] = deps;
-            }
-            deps.Add(cell);
-        }
+        AddDependentLinks(precedents, cell);
     }
 
     /// <summary>Remove all dependencies for a cell.</summary>
@@ -98,15 +89,7 @@ public sealed class DependencyGraph
     {
         if (_precedents.TryGetValue(cell, out var oldPrecs))
         {
-            foreach (var prec in oldPrecs)
-            {
-                if (_dependents.TryGetValue(prec, out var deps))
-                {
-                    deps.Remove(cell);
-                    if (deps.Count == 0)
-                        _dependents.Remove(prec);
-                }
-            }
+            RemoveDependentLinks(oldPrecs, cell);
             _precedents.Remove(cell);
         }
 
@@ -122,6 +105,67 @@ public sealed class DependencyGraph
                     _rangeDependentsBySheet.Remove(range.Start.Sheet);
             }
         }
+    }
+
+    private void AddDependentLinks(IReadOnlySet<CellAddress> precedents, CellAddress cell)
+    {
+        if (precedents is HashSet<CellAddress> hashSet)
+        {
+            foreach (var prec in hashSet)
+                AddDependentLink(prec, cell);
+            return;
+        }
+
+        if (precedents is FrozenSet<CellAddress> frozenSet)
+        {
+            foreach (var prec in frozenSet)
+                AddDependentLink(prec, cell);
+            return;
+        }
+
+        foreach (var prec in precedents)
+            AddDependentLink(prec, cell);
+    }
+
+    private void AddDependentLink(CellAddress precedent, CellAddress cell)
+    {
+        if (!_dependents.TryGetValue(precedent, out var deps))
+        {
+            deps = [];
+            _dependents[precedent] = deps;
+        }
+
+        deps.Add(cell);
+    }
+
+    private void RemoveDependentLinks(IReadOnlySet<CellAddress> precedents, CellAddress cell)
+    {
+        if (precedents is HashSet<CellAddress> hashSet)
+        {
+            foreach (var prec in hashSet)
+                RemoveDependentLink(prec, cell);
+            return;
+        }
+
+        if (precedents is FrozenSet<CellAddress> frozenSet)
+        {
+            foreach (var prec in frozenSet)
+                RemoveDependentLink(prec, cell);
+            return;
+        }
+
+        foreach (var prec in precedents)
+            RemoveDependentLink(prec, cell);
+    }
+
+    private void RemoveDependentLink(CellAddress precedent, CellAddress cell)
+    {
+        if (!_dependents.TryGetValue(precedent, out var deps))
+            return;
+
+        deps.Remove(cell);
+        if (deps.Count == 0)
+            _dependents.Remove(precedent);
     }
 
     /// <summary>Remove every dependency edge from the graph.</summary>
@@ -143,7 +187,7 @@ public sealed class DependencyGraph
     {
         var rangeDeps = CollectRangeDependents(cell);
         if (rangeDeps is null)
-            return _dependents.TryGetValue(cell, out var deps) ? deps : EmptySet;
+            return _dependents.TryGetValue(cell, out var deps) ? new HashSet<CellAddress>(deps) : EmptySet;
 
         var allDeps = _dependents.TryGetValue(cell, out var exactDeps)
             ? new HashSet<CellAddress>(exactDeps)
@@ -313,7 +357,7 @@ public sealed class DependencyGraph
     }
 
     private static void EnqueueExactDependents(
-        HashSet<CellAddress>? exactDeps,
+        List<CellAddress>? exactDeps,
         HashSet<CellAddress> toRecalc,
         Queue<CellAddress> queue)
     {
@@ -354,7 +398,7 @@ public sealed class DependencyGraph
     }
 
     private static void DecrementExactDependentInDegrees(
-        HashSet<CellAddress>? exactDeps,
+        List<CellAddress>? exactDeps,
         Dictionary<CellAddress, int> inDegree,
         Queue<CellAddress> ready)
     {
@@ -537,13 +581,7 @@ public sealed class DependencyGraph
         var count = 0;
 
         if (_precedents.TryGetValue(cell, out var exactPrecs))
-        {
-            foreach (var prec in exactPrecs)
-            {
-                if (candidates.Contains(prec))
-                    count++;
-            }
-        }
+            count = CountExactPrecedentsWithin(exactPrecs, candidates);
 
         if (!_rangePrecedents.TryGetValue(cell, out var ranges))
             return count;
@@ -552,11 +590,7 @@ public sealed class DependencyGraph
         if (count > 0 && exactPrecs is not null)
         {
             counted = new HashSet<CellAddress>(count);
-            foreach (var prec in exactPrecs)
-            {
-                if (candidates.Contains(prec))
-                    counted.Add(prec);
-            }
+            AddExactPrecedentsWithin(exactPrecs, candidates, counted);
         }
 
         foreach (var candidate in candidates)
@@ -577,6 +611,71 @@ public sealed class DependencyGraph
         {
             counted ??= [];
             return counted.Add(address);
+        }
+    }
+
+    private static int CountExactPrecedentsWithin(
+        IReadOnlySet<CellAddress> exactPrecs,
+        HashSet<CellAddress> candidates)
+    {
+        var count = 0;
+        if (exactPrecs is HashSet<CellAddress> hashSet)
+        {
+            foreach (var prec in hashSet)
+            {
+                if (candidates.Contains(prec))
+                    count++;
+            }
+            return count;
+        }
+
+        if (exactPrecs is FrozenSet<CellAddress> frozenSet)
+        {
+            foreach (var prec in frozenSet)
+            {
+                if (candidates.Contains(prec))
+                    count++;
+            }
+            return count;
+        }
+
+        foreach (var prec in exactPrecs)
+        {
+            if (candidates.Contains(prec))
+                count++;
+        }
+        return count;
+    }
+
+    private static void AddExactPrecedentsWithin(
+        IReadOnlySet<CellAddress> exactPrecs,
+        HashSet<CellAddress> candidates,
+        HashSet<CellAddress> counted)
+    {
+        if (exactPrecs is HashSet<CellAddress> hashSet)
+        {
+            foreach (var prec in hashSet)
+            {
+                if (candidates.Contains(prec))
+                    counted.Add(prec);
+            }
+            return;
+        }
+
+        if (exactPrecs is FrozenSet<CellAddress> frozenSet)
+        {
+            foreach (var prec in frozenSet)
+            {
+                if (candidates.Contains(prec))
+                    counted.Add(prec);
+            }
+            return;
+        }
+
+        foreach (var prec in exactPrecs)
+        {
+            if (candidates.Contains(prec))
+                counted.Add(prec);
         }
     }
 }
