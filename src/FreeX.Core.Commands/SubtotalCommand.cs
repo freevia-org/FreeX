@@ -75,34 +75,7 @@ public sealed class SubtotalCommand : IWorkbookCommand
             _summaryBelowData);
         var affected = new List<CellAddress>();
 
-        if (_summaryBelowData)
-        {
-            foreach (var subtotalRow in plan.GroupRows)
-            {
-                if (!ApplyInsertAndEdit(ctx, subtotalRow, affected))
-                    return new CommandOutcome(false, "Could not insert subtotal row.");
-            }
-
-            AddPlannedPageBreaks(sheet, plan);
-
-            if (!ApplyInsertAndEdit(ctx, plan.GrandTotalRow, affected))
-                return new CommandOutcome(false, "Could not insert subtotal row.");
-
-            return new CommandOutcome(true, AffectedCells: affected);
-        }
-
-        foreach (var subtotalRow in plan.GroupRows)
-        {
-            if (!ApplyInsertAndEdit(ctx, subtotalRow, affected))
-                return new CommandOutcome(false, "Could not insert subtotal row.");
-        }
-
-        if (!ApplyInsertAndEdit(ctx, plan.GrandTotalRow, affected))
-            return new CommandOutcome(false, "Could not insert subtotal row.");
-
-        AddPlannedPageBreaks(sheet, plan);
-
-        return new CommandOutcome(true, AffectedCells: affected);
+        return ApplyPlan(ctx, sheet, plan, affected);
     }
 
     public void Revert(ICommandContext ctx)
@@ -155,6 +128,41 @@ public sealed class SubtotalCommand : IWorkbookCommand
         _appliedCommands.Add(edit);
         affected.Add(labelAddress);
         affected.AddRange(edits.Skip(1).Select(editItem => editItem.Address));
+        return true;
+    }
+
+    private CommandOutcome ApplyPlan(
+        ICommandContext ctx,
+        Sheet sheet,
+        SubtotalPlan plan,
+        List<CellAddress> affected)
+    {
+        if (!ApplyInsertions(ctx, plan.GroupRows, affected))
+            return new CommandOutcome(false, "Could not insert subtotal row.");
+
+        if (_summaryBelowData)
+            AddPlannedPageBreaks(sheet, plan);
+
+        if (!ApplyInsertAndEdit(ctx, plan.GrandTotalRow, affected))
+            return new CommandOutcome(false, "Could not insert subtotal row.");
+
+        if (!_summaryBelowData)
+            AddPlannedPageBreaks(sheet, plan);
+
+        return new CommandOutcome(true, AffectedCells: affected);
+    }
+
+    private bool ApplyInsertions(
+        ICommandContext ctx,
+        IReadOnlyList<SubtotalInsertionPlan> subtotalRows,
+        List<CellAddress> affected)
+    {
+        foreach (var subtotalRow in subtotalRows)
+        {
+            if (!ApplyInsertAndEdit(ctx, subtotalRow, affected))
+                return false;
+        }
+
         return true;
     }
 
