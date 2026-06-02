@@ -723,6 +723,23 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderCells_DelaysCustomTextResourcesUntilCustomLayoutIsNeeded()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderCells = source[
+            source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
+            source.IndexOf("private void RenderCellBackgroundBase", StringComparison.Ordinal)];
+        var textSetup = renderCells[
+            renderCells.IndexOf("double fontSize = ToDisplayFontSize", StringComparison.Ordinal)..
+            renderCells.IndexOf("if (style?.ShrinkToFit == true && !wrapText)", StringComparison.Ordinal)];
+
+        textSetup.Should().NotContain("CreateCellTypeface");
+        textSetup.Should().NotContain("BrushForCellColor");
+        renderCells.Should().Contain("if (style?.FontColor is { } fc && !fc.IsBlack)");
+        renderCells.Should().Contain("textBrush = BrushForCellColor(fc, _brushCache);");
+    }
+
+    [Fact]
     public void RenderCells_ReusesDoubleUnderlinePensWithinRenderPass()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
