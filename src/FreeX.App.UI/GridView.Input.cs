@@ -81,9 +81,9 @@ public partial class GridView
         {
             if (Viewport is not null)
             {
-                if (_splitPaneScrollbarDragSource is not null &&
+                if (_splitPaneScrollbarDragSource is { } dragSource &&
                     CalculateSplitPaneScrollbarThumbDragTarget(
-                        _splitPaneScrollbarDragSource,
+                        dragSource,
                         pos,
                         _splitPaneScrollbarDragPointerOffset) is { } target)
                     SplitPaneScrollbarScrolled?.Invoke(target);
@@ -441,16 +441,17 @@ public partial class GridView
             var chrome = CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight);
             if (HitTestSplitPaneScrollbar(chrome, pos) is { } scrollbarHit)
             {
-                _splitPaneScrollbarDragSource = scrollbarHit.Region == SplitPaneRegion.TopRight
+                var dragSource = scrollbarHit.Region == SplitPaneRegion.TopRight
                     ? chrome.HorizontalTopRight
                     : chrome.VerticalBottomLeft;
+                _splitPaneScrollbarDragSource = dragSource;
                 _splitPaneScrollbarDragging = scrollbarHit.Part == SplitPaneScrollbarPart.Thumb &&
-                    _splitPaneScrollbarDragSource is not null;
-                _splitPaneScrollbarDragPointerOffset = _splitPaneScrollbarDragSource is null
+                    dragSource is not null;
+                _splitPaneScrollbarDragPointerOffset = dragSource is not { } scrollbar
                     ? 0
                     : scrollbarHit.Orientation == SplitPaneScrollbarOrientation.Horizontal
-                        ? pos.X - _splitPaneScrollbarDragSource.Thumb.Left
-                        : pos.Y - _splitPaneScrollbarDragSource.Thumb.Top;
+                        ? pos.X - scrollbar.Thumb.Left
+                        : pos.Y - scrollbar.Thumb.Top;
                 if (!_splitPaneScrollbarDragging)
                 {
                     _splitPaneScrollbarDragSource = null;
@@ -704,10 +705,10 @@ public partial class GridView
         if (_splitPaneScrollbarDragging)
         {
             var pos = e.GetPosition(this);
-            if (Viewport is not null && _splitPaneScrollbarDragSource is not null)
+            if (Viewport is not null && _splitPaneScrollbarDragSource is { } dragSource)
             {
                 var target = CalculateSplitPaneScrollbarThumbDragTarget(
-                    _splitPaneScrollbarDragSource,
+                    dragSource,
                     pos,
                     _splitPaneScrollbarDragPointerOffset);
                 SplitPaneScrollbarScrolled?.Invoke(target);

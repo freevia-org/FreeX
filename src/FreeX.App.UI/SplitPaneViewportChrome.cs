@@ -110,8 +110,7 @@ public static class SplitPaneViewportChrome
         SplitPaneScrollbarChrome chrome,
         Point pos)
     {
-        var hit = HitTestScrollbar(chrome, pos);
-        if (hit is null)
+        if (HitTestScrollbar(chrome, pos) is not { } hit)
             return null;
 
         if (hit.Part == SplitPaneScrollbarPart.Thumb)
