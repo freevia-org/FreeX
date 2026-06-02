@@ -11,7 +11,7 @@ public sealed class CalculationOptionsCommandTests
     public void SetCalculationModeCommand_SetsModeAndUndoRestores()
     {
         var wb = new Workbook("test");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         wb.CalculationMode = WorkbookCalculationMode.Manual;
 
         var command = new SetCalculationModeCommand(WorkbookCalculationMode.Automatic);
@@ -28,18 +28,12 @@ public sealed class CalculationOptionsCommandTests
     public void SetCalculationModeCommand_RejectsInvalidMode()
     {
         var wb = new Workbook("test");
-        var ctx = new SimpleCtx(wb);
+        var ctx = new TestCommandContext(wb);
         wb.CalculationMode = WorkbookCalculationMode.Automatic;
 
         var outcome = new SetCalculationModeCommand((WorkbookCalculationMode)99).Apply(ctx);
 
         outcome.Success.Should().BeFalse();
         wb.CalculationMode.Should().Be(WorkbookCalculationMode.Automatic);
-    }
-
-    private sealed class SimpleCtx(Workbook wb) : ICommandContext
-    {
-        public Workbook Workbook { get; } = wb;
-        public Sheet GetSheet(SheetId id) => Workbook.GetSheet(id)!;
     }
 }
