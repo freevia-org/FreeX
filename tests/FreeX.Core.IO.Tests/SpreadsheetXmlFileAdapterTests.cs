@@ -3166,6 +3166,99 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromRowColumnLayoutAttributeValueTemplates()
+    {
+        using var source = StreamFromString("""
+            <layout columnIndex="2" columnSpan="1" width="22.75" columnHidden="1"
+                    rowIndex="3" rowSpan="1" height="28.5" rowHidden="1">
+              <cell value="Layout"/>
+            </layout>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/layout">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Layout AVT">
+                    <ss:Table>
+                      <ss:Column ss:Index="{@columnIndex}" ss:Span="{@columnSpan}" ss:Width="{@width}" ss:Hidden="{@columnHidden}"/>
+                      <ss:Row ss:Index="{@rowIndex}" ss:Span="{@rowSpan}" ss:Height="{@height}" ss:Hidden="{@rowHidden}">
+                        <ss:Cell ss:Index="{@columnIndex}">
+                          <ss:Data ss:Type="String"><xsl:value-of select="cell/@value"/></ss:Data>
+                        </ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Layout AVT");
+        sheet.ColumnWidths.Should().Contain(new KeyValuePair<uint, double>(2, 22.75));
+        sheet.ColumnWidths.Should().Contain(new KeyValuePair<uint, double>(3, 22.75));
+        sheet.HiddenCols.Should().Contain([2u, 3u]);
+        sheet.RowHeights.Should().Contain(new KeyValuePair<uint, double>(3, 28.5));
+        sheet.RowHeights.Should().Contain(new KeyValuePair<uint, double>(4, 28.5));
+        sheet.HiddenRows.Should().Contain([3u, 4u]);
+        sheet.GetCell(3, 2)!.Value.Should().Be(new TextValue("Layout"));
+    }
+
+    [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromWorksheetOptionsDynamicValues()
+    {
+        using var source = StreamFromString("""
+            <view sheet="Frozen report" rows="2" cols="3" showGridlines="false" printGridlines="true"/>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+                xmlns:x="urn:schemas-microsoft-com:office:excel">
+              <xsl:template match="/view">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="{@sheet}">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@sheet"/></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                    <x:WorksheetOptions>
+                      <xsl:if test="@showGridlines = 'false'">
+                        <x:DoNotDisplayGridlines/>
+                      </xsl:if>
+                      <xsl:if test="@printGridlines = 'true'">
+                        <x:Print><x:Gridlines/></x:Print>
+                      </xsl:if>
+                      <x:FreezePanes/>
+                      <x:FrozenNoSplit/>
+                      <x:SplitHorizontal><xsl:value-of select="@rows"/></x:SplitHorizontal>
+                      <x:TopRowBottomPane><xsl:value-of select="@rows"/></x:TopRowBottomPane>
+                      <x:SplitVertical><xsl:value-of select="@cols"/></x:SplitVertical>
+                      <x:LeftColumnRightPane><xsl:value-of select="@cols"/></x:LeftColumnRightPane>
+                    </x:WorksheetOptions>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Frozen report");
+        sheet.ShowGridlines.Should().BeFalse();
+        sheet.PrintGridlines.Should().BeTrue();
+        sheet.FrozenRows.Should().Be(2);
+        sheet.FrozenCols.Should().Be(3);
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Frozen report"));
+    }
+
+    [Fact]
     public void LoadTransformed_UsesCurrentStreamPositionsAndLeavesInputStreamsOpen()
     {
         using var source = PositionedStreamFromString("ignored", "<rows><row name=\"Gamma\"/></rows>");
