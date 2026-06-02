@@ -95,9 +95,7 @@ public static class LocalAccountPlanner
     }
 
     private static string FormatSharingStatus(ShareWorkbookPlan plan) =>
-        plan.Kind == ShareWorkbookPlanKind.ShareExistingFile
-            ? "Ready for Windows Share from the saved local file."
-            : "Save As is required before Windows Share can send the workbook.";
+        ShareWorkbookPlanner.FormatStatus(plan);
 
     private static string Normalize(string? value, string fallback) =>
         string.IsNullOrWhiteSpace(value)
