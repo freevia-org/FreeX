@@ -1107,6 +1107,80 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_DropsNullNativeJsonThemeAlternateColorSchemeEntries()
+    {
+        var workbook = new Workbook("NullThemeAlternateColorSchemes");
+        workbook.AddSheet("Sheet1");
+        workbook.Theme = WorkbookTheme.Office.WithSupplementalMetadata(
+            [
+                null!,
+                new WorkbookThemeAlternateColorScheme("Empty", null!),
+                new WorkbookThemeAlternateColorScheme(
+                    "Kept",
+                    new Dictionary<WorkbookThemeColorSlot, CellColor>
+                    {
+                        [WorkbookThemeColorSlot.Accent1] = new(1, 2, 3)
+                    })
+            ],
+            hasObjectDefaults: false);
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var schemes = document.RootElement
+            .GetProperty("Theme")
+            .GetProperty("AlternateColorSchemes")
+            .EnumerateArray()
+            .ToList();
+
+        schemes.Should().HaveCount(2);
+        schemes[0].GetProperty("Name").GetString().Should().Be("Empty");
+        schemes[0].GetProperty("Colors").EnumerateArray().Should().BeEmpty();
+        schemes[1].GetProperty("Name").GetString().Should().Be("Kept");
+        schemes[1].GetProperty("Colors").EnumerateArray().Should().ContainSingle()
+            .Which.GetProperty("Color").GetString().Should().Be("#010203");
+    }
+
+    [Fact]
+    public void Load_DropsNullNativeJsonThemeAlternateColorSchemeEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullThemeAlternateColorSchemes",
+              "Theme": {
+                "AlternateColorSchemes": [
+                  null,
+                  {
+                    "Name": "Kept",
+                    "Colors": [
+                      null,
+                      { "Slot": 4, "Color": "#010203" }
+                    ]
+                  }
+                ]
+              },
+              "Sheets": [
+                { "Name": "Sheet1" }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var scheme = new NativeJsonAdapter().Load(stream).Theme.AlternateColorSchemes
+            .Should().ContainSingle().Subject;
+
+        scheme.Name.Should().Be("Kept");
+        scheme.Colors.Should().ContainSingle()
+            .Which.Should().Be(new KeyValuePair<WorkbookThemeColorSlot, CellColor>(
+                WorkbookThemeColorSlot.Accent1,
+                new CellColor(1, 2, 3)));
+    }
+
+    [Fact]
     public void Save_NormalizesNativeJsonWaterfallTotalPointIndices()
     {
         var workbook = new Workbook("WaterfallTotals");

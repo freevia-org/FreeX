@@ -610,6 +610,20 @@ public sealed class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void CalculateSplitPaneScrollbarChrome_SuppressesCollapsedTracks()
+    {
+        var viewport = SplitViewport();
+
+        var chrome = SplitPaneViewportChrome.CalculateScrollbarChrome(
+            viewport,
+            actualWidth: GridView.RowHeaderWidth + 208,
+            actualHeight: GridView.ColHeaderHeight + 58);
+
+        chrome.HorizontalTopRight.Should().BeNull();
+        chrome.VerticalBottomLeft.Should().BeNull();
+    }
+
+    [Fact]
     public void SplitPaneScrollbarLayoutPlanner_MapsThumbHitAndDragMath()
     {
         var scrollbar = new SplitPaneScrollbar(
