@@ -277,6 +277,18 @@ public sealed class RecalcEngine
     {
         _graph.ClearAll();
         _volatileCells.Clear();
+        var formulaCellCount = 0;
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheet.HasFormulas)
+                formulaCellCount += sheet.FormulaCellCount;
+        }
+
+        if (formulaCellCount == 0)
+            return;
+
+        _graph.EnsureFormulaCapacity(formulaCellCount);
 
         foreach (var sheet in workbook.Sheets)
         {

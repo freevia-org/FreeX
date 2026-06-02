@@ -177,6 +177,14 @@ public sealed class DependencyGraph
         _rangeDependentsBySheet.Clear();
     }
 
+    internal void EnsureFormulaCapacity(int formulaCount)
+    {
+        if (formulaCount <= 0)
+            return;
+
+        _precedents.EnsureCapacity(formulaCount);
+    }
+
     private static readonly IReadOnlySet<CellAddress> EmptySet =
         new HashSet<CellAddress>().ToFrozenSet();
 

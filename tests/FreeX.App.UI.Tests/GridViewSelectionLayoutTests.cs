@@ -423,14 +423,19 @@ public sealed class GridViewSelectionLayoutTests
         var renderSelectionRange = rendering[
             rendering.IndexOf("private void RenderSelectionRange", StringComparison.Ordinal)..
             rendering.IndexOf("private void RenderSelectionHandle", StringComparison.Ordinal)];
+        var calculateSelectionRangeLayout = rendering[
+            rendering.IndexOf("private SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateSelectionRangeLayout", StringComparison.Ordinal)..
+            rendering.IndexOf("private SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateVisibleSingleCellSelectionLayout", StringComparison.Ordinal)];
 
-        renderSelectionRange.Should().Contain("CalculateVisibleSelectionLayout(Viewport, range, rowHeaderWidth, columnHeaderHeight)");
+        renderSelectionRange.Should().Contain("CalculateSelectionRangeLayout(Viewport, range, rowHeaderWidth, columnHeaderHeight)");
         renderSelectionRange.Should().Contain("selectionLayout.HasTopEdge");
         renderSelectionRange.Should().Contain("selectionLayout.HasBottomEdge");
         renderSelectionRange.Should().Contain("selectionLayout.HasLeftEdge");
         renderSelectionRange.Should().Contain("selectionLayout.HasRightEdge");
         renderSelectionRange.Should().NotContain("GetRangePixels(Viewport, range, rowHeaderWidth, columnHeaderHeight)");
         renderSelectionRange.Should().NotContain("CalculateVisibleSelectionRect(Viewport, range, rowHeaderWidth, columnHeaderHeight)");
+        calculateSelectionRangeLayout.Should().Contain("IsSingleCellRange(range)");
+        calculateSelectionRangeLayout.Should().Contain("CalculateVisibleSelectionLayout(viewport, range, rowHeaderWidth, columnHeaderHeight)");
         planner.Should().Contain("public static SelectionMarqueeLayout? CalculateVisibleSelectionLayout");
         planner.Should().Contain("if (row.Row == range.Start.Row)");
         planner.Should().Contain("if (column.Col == range.End.Col)");

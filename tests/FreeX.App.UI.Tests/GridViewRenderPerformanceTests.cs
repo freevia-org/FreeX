@@ -221,6 +221,37 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderSelectionAndHeaders_FastPathSingleCellSelectionsWithMetricLookups()
+    {
+        var headerSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));
+        var renderSelectedHeaders = headerSource[
+            headerSource.IndexOf("private void RenderSelectedHeaders(", StringComparison.Ordinal)..
+            headerSource.IndexOf("private void DrawColumnHeader(", StringComparison.Ordinal)];
+        renderSelectedHeaders.Should().Contain("TryRenderSingleCellSelectedHeaders(");
+        renderSelectedHeaders.Should().Contain("TryGetSingleCellSelectedHeaderRange(");
+        renderSelectedHeaders.Should().Contain("GetRenderMetricLookups(viewport)");
+        renderSelectedHeaders.Should().Contain("lookups.Columns.TryGetValue(range.Start.Col");
+        renderSelectedHeaders.Should().Contain("lookups.Rows.TryGetValue(range.Start.Row");
+        renderSelectedHeaders.IndexOf("TryRenderSingleCellSelectedHeaders", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSelectedHeaders.IndexOf("BuildColumnHeaderSelectionIntervals", StringComparison.Ordinal));
+
+        var selectionSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
+        var renderSelectionRange = selectionSource[
+            selectionSource.IndexOf("private void RenderSelectionRange(", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private static void DrawSelectionHandle", StringComparison.Ordinal)];
+        renderSelectionRange.Should().Contain("CalculateSelectionRangeLayout(Viewport, range, rowHeaderWidth, columnHeaderHeight)");
+        renderSelectionRange.Should().Contain("IsSingleCellRange(range)");
+        renderSelectionRange.Should().Contain("CalculateVisibleSingleCellSelectionLayout(viewport, range, rowHeaderWidth, columnHeaderHeight)");
+        renderSelectionRange.Should().Contain("GetRenderMetricLookups(viewport)");
+        renderSelectionRange.Should().Contain("lookups.Rows.TryGetValue(range.Start.Row");
+        renderSelectionRange.Should().Contain("lookups.Columns.TryGetValue(range.Start.Col");
+        renderSelectionRange.IndexOf("IsSingleCellRange(range)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSelectionRange.IndexOf("CalculateVisibleSelectionLayout", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void RenderHeaders_CachesUnselectedHeaderLayerAcrossSelectionRepaints()
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.Headers.cs"));

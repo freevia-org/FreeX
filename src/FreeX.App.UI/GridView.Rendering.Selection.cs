@@ -613,7 +613,7 @@ public partial class GridView
 
         var rowHeaderWidth = ActualRowHeaderWidth;
         var columnHeaderHeight = EffectiveColHeaderHeight;
-        var layout = CalculateVisibleSelectionLayout(Viewport, range, rowHeaderWidth, columnHeaderHeight);
+        var layout = CalculateSelectionRangeLayout(Viewport, range, rowHeaderWidth, columnHeaderHeight);
         if (layout is null) return;
 
         var selectionLayout = layout.Value;
@@ -637,7 +637,7 @@ public partial class GridView
     private void RenderSelectionHandle(DrawingContext dc, GridRange range)
     {
         if (Viewport == null) return;
-        var layout = CalculateVisibleSelectionLayout(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight);
+        var layout = CalculateSelectionRangeLayout(Viewport, range, ActualRowHeaderWidth, EffectiveColHeaderHeight);
         if (layout is null) return;
         var selectionLayout = layout.Value;
 
@@ -648,6 +648,50 @@ public partial class GridView
             selectionLayout.Rect.Right,
             selectionLayout.Rect.Bottom);
     }
+
+    private SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateSelectionRangeLayout(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        if (IsSingleCellRange(range))
+            return CalculateVisibleSingleCellSelectionLayout(viewport, range, rowHeaderWidth, columnHeaderHeight);
+
+        return CalculateVisibleSelectionLayout(viewport, range, rowHeaderWidth, columnHeaderHeight);
+    }
+
+    private SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout? CalculateVisibleSingleCellSelectionLayout(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        var lookups = GetRenderMetricLookups(viewport);
+        if (!lookups.Rows.TryGetValue(range.Start.Row, out var row) ||
+            !lookups.Columns.TryGetValue(range.Start.Col, out var column))
+        {
+            return null;
+        }
+
+        var left = column.LeftOffset + rowHeaderWidth;
+        var top = row.TopOffset + columnHeaderHeight;
+        var right = left + column.Width;
+        var bottom = top + row.Height;
+        if (right <= left || bottom <= top)
+            return null;
+
+        return new SelectionMarqueeLayoutPlanner.SelectionMarqueeLayout(
+            new Rect(new Point(left, top), new Point(right, bottom)),
+            HasTopEdge: true,
+            HasLeftEdge: true,
+            HasBottomEdge: true,
+            HasRightEdge: true);
+    }
+
+    private static bool IsSingleCellRange(GridRange range) =>
+        range.Start.Row == range.End.Row &&
+        range.Start.Col == range.End.Col;
 
     private static void DrawSelectionHandle(DrawingContext dc, bool hasRightEdge, bool hasBottomEdge, double drawRight, double drawBottom)
     {
