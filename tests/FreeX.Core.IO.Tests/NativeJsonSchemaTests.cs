@@ -714,6 +714,37 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_TreatsNullNativeJsonWorksheetMetadataListsAsEmpty()
+    {
+        var workbook = new Workbook("NullWorksheetMetadataLists");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SmartTags = new WorksheetSmartTagsModel
+        {
+            NativeXml = "<smartTags />",
+            Cells = null!
+        };
+        sheet.SingleXmlCells = new WorksheetSingleXmlCellsModel
+        {
+            NativeAttributes = new Dictionary<string, string> { ["xr:uid"] = "{singleXmlCells}" },
+            Cells = null!
+        };
+        sheet.AdditionalViews = new WorksheetAdditionalViewsModel
+        {
+            NativeAttributes = new Dictionary<string, string> { ["xr:uid"] = "{sheetViews}" },
+            Views = null!
+        };
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var sheetJson = document.RootElement.GetProperty("Sheets").EnumerateArray().Single();
+        sheetJson.GetProperty("SmartTags").GetProperty("Cells").EnumerateArray().Should().BeEmpty();
+        sheetJson.GetProperty("SingleXmlCells").GetProperty("Cells").EnumerateArray().Should().BeEmpty();
+        sheetJson.GetProperty("AdditionalViews").GetProperty("Views").EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
     public void Save_TreatsNullNativeJsonChartListsAsEmpty()
     {
         var workbook = new Workbook("NullChartLists");
