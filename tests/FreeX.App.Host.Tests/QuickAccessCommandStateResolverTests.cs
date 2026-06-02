@@ -101,4 +101,20 @@ public sealed class QuickAccessCommandStateResolverTests
 
         QuickAccessCommandStateResolver.CanExecute("MissingCommand", state).Should().BeFalse();
     }
+
+    [Theory]
+    [InlineData(QuickAccessToolbarCommandIds.Save, (int)QuickAccessCommandAvailability.Always)]
+    [InlineData(QuickAccessToolbarCommandIds.Undo, (int)QuickAccessCommandAvailability.Undo)]
+    [InlineData(QuickAccessToolbarCommandIds.Redo, (int)QuickAccessCommandAvailability.Redo)]
+    [InlineData(QuickAccessToolbarCommandIds.Print, (int)QuickAccessCommandAvailability.Worksheet)]
+    [InlineData(QuickAccessToolbarCommandIds.Bold, (int)QuickAccessCommandAvailability.Selection)]
+    [InlineData("MissingCommand", (int)QuickAccessCommandAvailability.Never)]
+    public void GetAvailability_ClassifiesCommandsForCachedToolbarState(
+        string commandId,
+        int expected)
+    {
+        QuickAccessCommandStateResolver.GetAvailability(commandId)
+            .Should()
+            .Be((QuickAccessCommandAvailability)expected);
+    }
 }
