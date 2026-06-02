@@ -321,7 +321,8 @@ public sealed class ShapeCommandTests
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
             FillColor = new CellColor(10, 20, 30),
-            GradientFillEndColor = new CellColor(200, 210, 220)
+            GradientFillEndColor = new CellColor(200, 210, 220),
+            GradientFillDirection = DrawingShapeGradientDirection.Vertical
         };
         sheet.DrawingShapes.Add(shape);
 
@@ -334,11 +335,13 @@ public sealed class ShapeCommandTests
         command.Apply(ctx).Success.Should().BeTrue();
         shape.FillColor.Should().Be(new CellColor(40, 50, 60));
         shape.GradientFillEndColor.Should().BeNull();
+        shape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.DiagonalDown);
 
         command.Revert(ctx);
 
         shape.FillColor.Should().Be(new CellColor(10, 20, 30));
         shape.GradientFillEndColor.Should().Be(new CellColor(200, 210, 220));
+        shape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.Vertical);
     }
 
     [Fact]
@@ -350,7 +353,8 @@ public sealed class ShapeCommandTests
         var shape = new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 1, 1),
-            FillColor = new CellColor(10, 20, 30)
+            FillColor = new CellColor(10, 20, 30),
+            GradientFillDirection = DrawingShapeGradientDirection.DiagonalUp
         };
         sheet.DrawingShapes.Add(shape);
 
@@ -358,16 +362,47 @@ public sealed class ShapeCommandTests
             sheet.Id,
             shape.Id,
             new CellColor(100, 110, 120),
-            new CellColor(200, 210, 220));
+            new CellColor(200, 210, 220),
+            DrawingShapeGradientDirection.Vertical);
 
         command.Apply(ctx).Success.Should().BeTrue();
         shape.FillColor.Should().Be(new CellColor(100, 110, 120));
         shape.GradientFillEndColor.Should().Be(new CellColor(200, 210, 220));
+        shape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.Vertical);
 
         command.Revert(ctx);
 
         shape.FillColor.Should().Be(new CellColor(10, 20, 30));
         shape.GradientFillEndColor.Should().BeNull();
+        shape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.DiagonalUp);
+    }
+
+    [Fact]
+    public void SetDrawingShapeGradientCommand_RejectsUnknownDirection()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            FillColor = new CellColor(10, 20, 30),
+            GradientFillEndColor = new CellColor(20, 30, 40),
+            GradientFillDirection = DrawingShapeGradientDirection.Horizontal
+        };
+        sheet.DrawingShapes.Add(shape);
+
+        var outcome = new SetDrawingShapeGradientCommand(
+            sheet.Id,
+            shape.Id,
+            new CellColor(100, 110, 120),
+            new CellColor(200, 210, 220),
+            (DrawingShapeGradientDirection)99).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        shape.FillColor.Should().Be(new CellColor(10, 20, 30));
+        shape.GradientFillEndColor.Should().Be(new CellColor(20, 30, 40));
+        shape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.Horizontal);
     }
 
     [Fact]

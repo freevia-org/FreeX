@@ -58,6 +58,7 @@ internal static class DuplicateSheetDrawingCloner
             FillColor = shape.FillColor,
             OutlineColor = shape.OutlineColor,
             GradientFillEndColor = shape.GradientFillEndColor,
+            GradientFillDirection = shape.GradientFillDirection,
             FillThemeColor = shape.FillThemeColor,
             OutlineThemeColor = shape.OutlineThemeColor,
             HasShadowEffect = shape.HasShadowEffect,

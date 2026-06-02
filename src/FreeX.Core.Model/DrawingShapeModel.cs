@@ -15,6 +15,14 @@ public enum DrawingShapeEffectPreset
     SoftEdges
 }
 
+public enum DrawingShapeGradientDirection
+{
+    DiagonalDown,
+    Horizontal,
+    Vertical,
+    DiagonalUp
+}
+
 public sealed class DrawingShapeModel
 {
     public Guid Id { get; init; } = Guid.NewGuid();
@@ -30,6 +38,7 @@ public sealed class DrawingShapeModel
     public CellColor? FillColor { get; set; }
     public CellColor? OutlineColor { get; set; }
     public CellColor? GradientFillEndColor { get; set; }
+    public DrawingShapeGradientDirection GradientFillDirection { get; set; } = DrawingShapeGradientDirection.DiagonalDown;
     public WorkbookThemeColorReference? FillThemeColor { get; set; }
     public WorkbookThemeColorReference? OutlineThemeColor { get; set; }
     public bool HasShadowEffect { get; set; }
@@ -41,6 +50,11 @@ public sealed class DrawingShapeModel
 
     public CellColor GetEffectiveOutlineColor(WorkbookTheme theme, CellColor fallback) =>
         OutlineThemeColor?.Resolve(theme) ?? OutlineColor ?? fallback;
+
+    public DrawingShapeGradientDirection GetEffectiveGradientFillDirection() =>
+        Enum.IsDefined(GradientFillDirection)
+            ? GradientFillDirection
+            : DrawingShapeGradientDirection.DiagonalDown;
 
     public DrawingShapeEffectPreset GetEffectiveEffectPreset()
     {

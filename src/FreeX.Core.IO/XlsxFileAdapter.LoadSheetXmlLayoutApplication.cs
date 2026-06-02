@@ -150,6 +150,7 @@ public sealed partial class XlsxFileAdapter
                 FillColor = shapePart.FillColor,
                 OutlineColor = shapePart.OutlineColor,
                 GradientFillEndColor = shapePart.GradientFillEndColor,
+                GradientFillDirection = shapePart.GradientFillDirection,
                 FillThemeColor = shapePart.FillThemeColor,
                 OutlineThemeColor = shapePart.OutlineThemeColor,
                 HasShadowEffect = shapePart.HasShadowEffect,

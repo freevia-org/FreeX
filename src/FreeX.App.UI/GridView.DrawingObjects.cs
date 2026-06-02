@@ -395,7 +395,7 @@ public partial class GridView
     private Brush CreateDrawingShapeFill(DrawingShapeModel shape, CellColor startColor)
     {
         if (shape.GradientFillEndColor is { } endColor && shape.Kind != DrawingShapeKind.Line)
-            return GetDrawingObjectGradientBrush(startColor, endColor);
+            return GetDrawingObjectGradientBrush(startColor, endColor, shape.GetEffectiveGradientFillDirection());
 
         return GetDrawingObjectBrush(32, startColor);
     }
@@ -735,24 +735,40 @@ public partial class GridView
         return pen;
     }
 
-    private Brush GetDrawingObjectGradientBrush(CellColor startColor, CellColor endColor)
+    private Brush GetDrawingObjectGradientBrush(
+        CellColor startColor,
+        CellColor endColor,
+        DrawingShapeGradientDirection direction)
     {
-        var key = new DrawingObjectGradientBrushKey(startColor, endColor);
+        var effectiveDirection = Enum.IsDefined(direction)
+            ? direction
+            : DrawingShapeGradientDirection.DiagonalDown;
+        var key = new DrawingObjectGradientBrushKey(startColor, endColor, effectiveDirection);
         if (_drawingObjectGradientBrushCache.TryGetValue(key, out var cached))
             return cached;
 
         if (_drawingObjectGradientBrushCache.Count >= DrawingObjectGradientBrushCacheLimit)
             _drawingObjectGradientBrushCache.Clear();
 
+        var (startPoint, endPoint) = GetDrawingObjectGradientPoints(effectiveDirection);
         var brush = new LinearGradientBrush(
             Color.FromArgb(72, startColor.R, startColor.G, startColor.B),
             Color.FromArgb(72, endColor.R, endColor.G, endColor.B),
-            new Point(0, 0),
-            new Point(1, 1));
+            startPoint,
+            endPoint);
         brush.Freeze();
         _drawingObjectGradientBrushCache.Add(key, brush);
         return brush;
     }
+
+    private static (Point Start, Point End) GetDrawingObjectGradientPoints(DrawingShapeGradientDirection direction) =>
+        direction switch
+        {
+            DrawingShapeGradientDirection.Horizontal => (new Point(0, 0.5), new Point(1, 0.5)),
+            DrawingShapeGradientDirection.Vertical => (new Point(0.5, 0), new Point(0.5, 1)),
+            DrawingShapeGradientDirection.DiagonalUp => (new Point(0, 1), new Point(1, 0)),
+            _ => (new Point(0, 0), new Point(1, 1))
+        };
 
     private RectangleGeometry GetDrawingObjectClipGeometry(Rect rect)
     {
@@ -813,7 +829,10 @@ public partial class GridView
 
     private readonly record struct DrawingObjectPenKey(byte Alpha, byte R, byte G, byte B, double Thickness);
 
-    private readonly record struct DrawingObjectGradientBrushKey(CellColor StartColor, CellColor EndColor);
+    private readonly record struct DrawingObjectGradientBrushKey(
+        CellColor StartColor,
+        CellColor EndColor,
+        DrawingShapeGradientDirection Direction);
 
     private readonly record struct DrawingObjectTextLayoutKey(
         string Text,

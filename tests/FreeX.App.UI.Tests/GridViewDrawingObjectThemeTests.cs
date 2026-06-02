@@ -313,6 +313,20 @@ public sealed class GridViewDrawingObjectThemeTests
     }
 
     [Fact]
+    public void DrawingObjectRendering_UsesAuthoredGradientDirectionMetadata()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+
+        source.Should().Contain("shape.GetEffectiveGradientFillDirection()");
+        source.Should().Contain("DrawingShapeGradientDirection.Horizontal");
+        source.Should().Contain("DrawingShapeGradientDirection.Vertical");
+        source.Should().Contain("DrawingShapeGradientDirection.DiagonalUp");
+        source.Should().Contain("DrawingObjectGradientBrushKey(");
+        source.Should().Contain("DrawingShapeGradientDirection Direction");
+    }
+
+    [Fact]
     public void NativeSlicerRendering_DrawsSelectedTilesWithoutMaterializingArray()
     {
         var source = File.ReadAllText(FindWorkspaceFile(

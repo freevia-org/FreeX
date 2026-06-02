@@ -119,6 +119,7 @@ public class SheetTabCommandTests
             FillColor = new CellColor(200, 210, 220),
             OutlineColor = new CellColor(30, 40, 50),
             GradientFillEndColor = new CellColor(220, 230, 240),
+            GradientFillDirection = DrawingShapeGradientDirection.Vertical,
             FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.1),
             OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.1),
             HasShadowEffect = true,
@@ -225,6 +226,7 @@ public class SheetTabCommandTests
         copiedShape.FillColor.Should().Be(new CellColor(200, 210, 220));
         copiedShape.OutlineColor.Should().Be(new CellColor(30, 40, 50));
         copiedShape.GradientFillEndColor.Should().Be(new CellColor(220, 230, 240));
+        copiedShape.GradientFillDirection.Should().Be(DrawingShapeGradientDirection.Vertical);
         copiedShape.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.1));
         copiedShape.OutlineThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.1));
         copiedShape.HasShadowEffect.Should().BeTrue();

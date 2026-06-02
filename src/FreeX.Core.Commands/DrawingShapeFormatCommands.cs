@@ -11,6 +11,7 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
     private CellColor? _previousFillColor;
     private CellColor? _previousOutlineColor;
     private CellColor? _previousGradientFillEndColor;
+    private DrawingShapeGradientDirection _previousGradientFillDirection;
     private WorkbookThemeColorReference? _previousFillThemeColor;
     private WorkbookThemeColorReference? _previousOutlineThemeColor;
     private bool _applied;
@@ -42,11 +43,13 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         _previousFillColor = shape.FillColor;
         _previousOutlineColor = shape.OutlineColor;
         _previousGradientFillEndColor = shape.GradientFillEndColor;
+        _previousGradientFillDirection = shape.GradientFillDirection;
         _previousFillThemeColor = shape.FillThemeColor;
         _previousOutlineThemeColor = shape.OutlineThemeColor;
         shape.FillColor = _fillColor;
         shape.OutlineColor = _outlineColor;
         shape.GradientFillEndColor = null;
+        shape.GradientFillDirection = DrawingShapeGradientDirection.DiagonalDown;
         shape.FillThemeColor = null;
         shape.OutlineThemeColor = null;
         _applied = true;
@@ -61,6 +64,7 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
         shape.FillColor = _previousFillColor;
         shape.OutlineColor = _previousOutlineColor;
         shape.GradientFillEndColor = _previousGradientFillEndColor;
+        shape.GradientFillDirection = _previousGradientFillDirection;
         shape.FillThemeColor = _previousFillThemeColor;
         shape.OutlineThemeColor = _previousOutlineThemeColor;
         _applied = false;
@@ -73,21 +77,36 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
     private readonly Guid _shapeId;
     private readonly CellColor _startColor;
     private readonly CellColor _endColor;
-    private (CellColor? FillColor, CellColor? GradientEndColor, WorkbookThemeColorReference? FillThemeColor) _previous;
+    private readonly DrawingShapeGradientDirection _direction;
+    private (CellColor? FillColor, CellColor? GradientEndColor, DrawingShapeGradientDirection Direction, WorkbookThemeColorReference? FillThemeColor) _previous;
     private bool _applied;
 
     public string Label => "Shape Gradient";
 
     public SetDrawingShapeGradientCommand(SheetId sheetId, Guid shapeId, CellColor startColor, CellColor endColor)
+        : this(sheetId, shapeId, startColor, endColor, DrawingShapeGradientDirection.DiagonalDown)
+    {
+    }
+
+    public SetDrawingShapeGradientCommand(
+        SheetId sheetId,
+        Guid shapeId,
+        CellColor startColor,
+        CellColor endColor,
+        DrawingShapeGradientDirection direction)
     {
         _sheetId = sheetId;
         _shapeId = shapeId;
         _startColor = startColor;
         _endColor = endColor;
+        _direction = direction;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        if (!Enum.IsDefined(_direction))
+            return new CommandOutcome(false, "Drawing shape gradient direction is not supported.");
+
         var sheet = ctx.GetSheet(_sheetId);
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
             return protectedOutcome;
@@ -98,9 +117,10 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
         if (shape.Kind == DrawingShapeKind.Line)
             return new CommandOutcome(false, "Line shapes do not support gradient fills.");
 
-        _previous = (shape.FillColor, shape.GradientFillEndColor, shape.FillThemeColor);
+        _previous = (shape.FillColor, shape.GradientFillEndColor, shape.GradientFillDirection, shape.FillThemeColor);
         shape.FillColor = _startColor;
         shape.GradientFillEndColor = _endColor;
+        shape.GradientFillDirection = _direction;
         shape.FillThemeColor = null;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
@@ -113,6 +133,7 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
         if (shape is null) return;
         shape.FillColor = _previous.FillColor;
         shape.GradientFillEndColor = _previous.GradientEndColor;
+        shape.GradientFillDirection = _previous.Direction;
         shape.FillThemeColor = _previous.FillThemeColor;
         _applied = false;
     }
