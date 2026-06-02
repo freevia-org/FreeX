@@ -600,9 +600,16 @@ public static partial class FormulaAuditingService
         return false;
     }
 
-    private static bool ContainsOmittedAdjacentCellsAggregateFunction(string formulaText) =>
-        OmittedAdjacentCellsAggregateFunctions.Any(functionName =>
-            formulaText.Contains(functionName, StringComparison.OrdinalIgnoreCase));
+    private static bool ContainsOmittedAdjacentCellsAggregateFunction(string formulaText)
+    {
+        for (var index = 0; index < OmittedAdjacentCellsAggregateFunctions.Length; index++)
+        {
+            if (formulaText.Contains(OmittedAdjacentCellsAggregateFunctions[index], StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
 
     private static bool HasOmittedValuesBetweenAggregateArguments(Workbook workbook, IReadOnlyList<GridRange> ranges)
     {
@@ -681,17 +688,23 @@ public static partial class FormulaAuditingService
                      RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
         {
             var arguments = aggregateMatch.Groups["args"].Value.Split(',', StringSplitOptions.TrimEntries);
-            if (!TryGetAggregateRangeArgumentTokens(
+            if (!TryGetAggregateRangeArgumentBounds(
                     aggregateMatch.Groups["function"].Value,
                     arguments,
-                    out var rangeArgumentTokens))
+                    out var firstRangeArgumentIndex,
+                    out var lastRangeArgumentExclusive,
+                    out var skipBlankRangeArguments))
             {
                 continue;
             }
 
             var ranges = new List<GridRange>();
-            foreach (var token in rangeArgumentTokens)
+            for (var argumentIndex = firstRangeArgumentIndex; argumentIndex < lastRangeArgumentExclusive; argumentIndex++)
             {
+                var token = arguments[argumentIndex];
+                if (skipBlankRangeArguments && string.IsNullOrWhiteSpace(token))
+                    continue;
+
                 if (TryParseLocalRange(sheetId, token, out var range))
                     ranges.Add(range);
             }
@@ -701,12 +714,17 @@ public static partial class FormulaAuditingService
         }
     }
 
-    private static bool TryGetAggregateRangeArgumentTokens(
+    private static bool TryGetAggregateRangeArgumentBounds(
         string functionName,
         IReadOnlyList<string> arguments,
-        out IReadOnlyList<string> rangeArgumentTokens)
+        out int firstRangeArgumentIndex,
+        out int lastRangeArgumentExclusive,
+        out bool skipBlankRangeArguments)
     {
-        rangeArgumentTokens = [];
+        firstRangeArgumentIndex = 0;
+        lastRangeArgumentExclusive = arguments.Count;
+        skipBlankRangeArguments = true;
+
         if (functionName.Equals("SUBTOTAL", StringComparison.OrdinalIgnoreCase))
         {
             if (arguments.Count < 2 ||
@@ -717,7 +735,8 @@ public static partial class FormulaAuditingService
                 return false;
             }
 
-            rangeArgumentTokens = arguments.Skip(1).ToArray();
+            firstRangeArgumentIndex = 1;
+            skipBlankRangeArguments = false;
             return true;
         }
 
@@ -733,28 +752,30 @@ public static partial class FormulaAuditingService
                 return false;
             }
 
-            var firstRangeArgumentIndex = 2;
-            var lastRangeArgumentExclusive = functionNumber is >= 14 and <= 19
+            firstRangeArgumentIndex = 2;
+            lastRangeArgumentExclusive = functionNumber is >= 14 and <= 19
                 ? arguments.Count - 1
                 : arguments.Count;
             if (lastRangeArgumentExclusive <= firstRangeArgumentIndex)
                 return false;
 
-            rangeArgumentTokens = arguments
-                .Skip(firstRangeArgumentIndex)
-                .Take(lastRangeArgumentExclusive - firstRangeArgumentIndex)
-                .ToArray();
+            skipBlankRangeArguments = false;
             return true;
         }
 
-        rangeArgumentTokens = arguments
-            .Where(argument => !string.IsNullOrWhiteSpace(argument))
-            .ToArray();
         return true;
     }
 
-    private static bool HasBlankArgument(IReadOnlyList<string> arguments) =>
-        arguments.Any(string.IsNullOrWhiteSpace);
+    private static bool HasBlankArgument(IReadOnlyList<string> arguments)
+    {
+        for (var index = 0; index < arguments.Count; index++)
+        {
+            if (string.IsNullOrWhiteSpace(arguments[index]))
+                return true;
+        }
+
+        return false;
+    }
 
     private static bool TryParseWholeNumberArgument(string argument, out int value) =>
         int.TryParse(argument, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
