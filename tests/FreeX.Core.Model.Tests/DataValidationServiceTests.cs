@@ -107,6 +107,12 @@ public sealed class DataValidationServiceTests
     }
 
     [Fact]
+    public void InputPrompt_IsValueTypedToAvoidLookupAllocations()
+    {
+        typeof(DataValidationService.InputPrompt).IsValueType.Should().BeTrue();
+    }
+
+    [Fact]
     public void Benchmark_ValidateLargeRangeListMatch_ReportsTimingAndAllocatedBytes()
     {
         const int itemCount = 5_000;
@@ -207,6 +213,7 @@ public sealed class DataValidationServiceTests
             $"allocated_bytes={allocatedBytes:N0}");
 
         prompt.Should().Be(new DataValidationService.InputPrompt("Input", $"Rule {ruleCount}"));
+        allocatedBytes.Should().BeLessThan(6_000);
     }
 
     private static DataValidation NewListRule(SheetId sheetId, string formula1) =>
