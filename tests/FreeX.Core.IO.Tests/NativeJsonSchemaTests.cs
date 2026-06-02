@@ -869,6 +869,29 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_DropsNullNativeJsonWorkbookFileRecoveryEntries()
+    {
+        var workbook = new Workbook("NullWorkbookFileRecoveryEntries");
+        workbook.FileRecoveryProperties.Add(null!);
+        workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel());
+        workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel
+        {
+            AutoRecover = true
+        });
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var propertyJson = document.RootElement
+            .GetProperty("FileRecoveryProperties").EnumerateArray()
+            .Should().ContainSingle().Subject;
+
+        propertyJson.GetProperty("AutoRecover").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
     public void Save_TreatsNullNativeJsonWorkbookFileMetadataNativeAttributesAsEmpty()
     {
         var workbook = new Workbook("NullWorkbookFileMetadataNativeAttributes")
