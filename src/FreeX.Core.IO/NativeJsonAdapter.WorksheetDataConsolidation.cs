@@ -65,7 +65,7 @@ public sealed partial class NativeJsonAdapter
         var function = string.IsNullOrWhiteSpace(model.Function) ? null : model.Function;
         var nativeXml = string.IsNullOrWhiteSpace(model.NativeXml) ? null : model.NativeXml;
         var nativeAttributes = CleanNativeAttributes(model.NativeAttributes);
-        var references = model.References
+        var references = (model.References ?? [])
             .Select(ToWorksheetDataConsolidationReferenceDto)
             .OfType<WorksheetDataConsolidationReferenceDto>()
             .ToList();

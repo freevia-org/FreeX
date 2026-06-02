@@ -78,7 +78,7 @@ public sealed partial class NativeJsonAdapter
         var sortMethod = string.IsNullOrWhiteSpace(model.SortMethod) ? null : model.SortMethod;
         var nativeXml = string.IsNullOrWhiteSpace(model.NativeXml) ? null : model.NativeXml;
         var nativeAttributes = CleanNativeAttributes(model.NativeAttributes);
-        var conditions = model.Conditions
+        var conditions = (model.Conditions ?? [])
             .Select(condition => ToWorksheetSortConditionDto(condition, sheetId))
             .OfType<WorksheetSortConditionDto>()
             .ToList();
