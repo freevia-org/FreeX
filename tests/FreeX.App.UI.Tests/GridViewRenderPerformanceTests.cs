@@ -1175,6 +1175,23 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderSplitPaneCells_SkipsZeroSizedCellsBeforeDrawingWork()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
+        var renderSplitPaneCells = rendering[
+            rendering.IndexOf("private void RenderSplitPaneCells(DrawingContext dc)", StringComparison.Ordinal)..
+            rendering.IndexOf("private static RectangleGeometry FrozenClipGeometry", StringComparison.Ordinal)];
+
+        renderSplitPaneCells.Should().Contain("if (rect.Width <= 0 || rect.Height <= 0)");
+        renderSplitPaneCells.IndexOf("if (rect.Width <= 0 || rect.Height <= 0)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSplitPaneCells.IndexOf("var style = cell.Style;", StringComparison.Ordinal));
+        renderSplitPaneCells.IndexOf("if (rect.Width <= 0 || rect.Height <= 0)", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(renderSplitPaneCells.IndexOf("dc.PushClip(clipGeometry);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void RenderSplitPaneCells_SkipsNoOpDefaultBackgroundDraw()
     {
         var rendering = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Rendering.cs"));
