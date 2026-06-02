@@ -1016,6 +1016,39 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void DrawFormulaTraceArrow_ReusesCachedFrozenArrowHeadGeometry()
+    {
+        var overlaysSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Overlays.cs"));
+        var propertiesSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.Properties.cs"));
+        var drawFormulaTraceArrow = overlaysSource[
+            overlaysSource.IndexOf("private void DrawFormulaTraceArrow", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private Geometry GetFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)];
+        var getArrowHeadGeometry = overlaysSource[
+            overlaysSource.IndexOf("private Geometry GetFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private static Geometry CreateFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)];
+        var createArrowHeadGeometry = overlaysSource[
+            overlaysSource.IndexOf("private static Geometry CreateFormulaTraceArrowHeadGeometry", StringComparison.Ordinal)..
+            overlaysSource.IndexOf("private void ClearFormulaTraceArrowHeadGeometryCache", StringComparison.Ordinal)];
+
+        overlaysSource.Should().Contain("private const int FormulaTraceArrowHeadGeometryCacheLimit = 4096;");
+        overlaysSource.Should().Contain("private readonly Dictionary<FormulaTraceArrowHeadGeometryKey, Geometry> _formulaTraceArrowHeadGeometryCache = new();");
+        overlaysSource.Should().Contain("private readonly record struct FormulaTraceArrowHeadGeometryKey(Point Start, Point End);");
+        drawFormulaTraceArrow.Should().Contain("GetFormulaTraceArrowHeadGeometry(start, end, vector, perpendicular)");
+        drawFormulaTraceArrow.Should().NotContain("CreateFormulaTraceArrowHeadGeometry");
+        getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.TryGetValue(key, out var cached)");
+        getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Count >= FormulaTraceArrowHeadGeometryCacheLimit");
+        getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Clear();");
+        getArrowHeadGeometry.Should().Contain("_formulaTraceArrowHeadGeometryCache.Add(key, geometry);");
+        createArrowHeadGeometry.Should().Contain("new StreamGeometry()");
+        createArrowHeadGeometry.Should().Contain("geometry.Freeze();");
+        overlaysSource.Should().Contain("private void ClearFormulaTraceArrowHeadGeometryCache() => _formulaTraceArrowHeadGeometryCache.Clear();");
+        propertiesSource.Should().Contain("OnFormulaTraceRenderCacheInputChanged");
+        propertiesSource.Should().Contain("grid.ClearFormulaTraceArrowHeadGeometryCache();");
+        propertiesSource.Should().Contain("FormulaTraceArrowsProperty");
+        propertiesSource.Should().Contain("FormulaTraceSheetIdProperty");
+    }
+
+    [Fact]
     public void SplitPaneCellLayoutPlanner_BoundsTallMergeWorkToVisibleCells()
     {
         var sheetId = SheetId.New();

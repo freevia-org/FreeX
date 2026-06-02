@@ -58,6 +58,33 @@ internal static class XlsxStructuredTableModelMapper
         }
     }
 
+    public static void MaterializeStyle(Workbook workbook, Sheet sheet, StructuredTableModel table)
+    {
+        if (string.IsNullOrWhiteSpace(table.StyleName) || workbook.StructuredTableStyles.Count == 0)
+            return;
+
+        var style = workbook.StructuredTableStyles.FirstOrDefault(candidate =>
+            candidate.AppliesToTables &&
+            string.Equals(candidate.Name, table.StyleName, StringComparison.OrdinalIgnoreCase));
+        if (style is null)
+            return;
+
+        if (FindElementFormat(style, "wholeTable") is { } wholeTableFormat)
+            ApplyStyleDiff(workbook, sheet, table.Range, wholeTableFormat);
+
+        var hasHeaderRow = table.HeaderRowCount is null or > 0;
+        if (hasHeaderRow && FindElementFormat(style, "headerRow") is { } headerRowFormat)
+        {
+            ApplyStyleDiff(
+                workbook,
+                sheet,
+                new GridRange(
+                    table.Range.Start,
+                    new CellAddress(sheet.Id, table.Range.Start.Row, table.Range.End.Col)),
+                headerRowFormat);
+        }
+    }
+
     private static IEnumerable<StructuredTableFilterState> BuildFilters(StructuredTableModel table)
     {
         foreach (var filterColumn in table.FilterColumns)
@@ -101,4 +128,33 @@ internal static class XlsxStructuredTableModelMapper
         uint Column,
         HashSet<string> AllowedValues,
         bool IncludeBlank);
+
+    private static StyleDiff? FindElementFormat(StructuredTableStyleModel style, string type) =>
+        style.Elements
+            .FirstOrDefault(element =>
+                string.Equals(element.Type, type, StringComparison.OrdinalIgnoreCase) &&
+                element.Format is not null)
+            ?.Format;
+
+    private static void ApplyStyleDiff(Workbook workbook, Sheet sheet, GridRange range, StyleDiff diff)
+    {
+        var styleCache = new Dictionary<StyleId, StyleId>();
+        foreach (var address in range.AllCells())
+        {
+            var cell = sheet.GetCell(address);
+            var baseStyleId = cell?.StyleId ??
+                sheet.GetStyleOnly(address.Row, address.Col) ??
+                StyleId.Default;
+            if (!styleCache.TryGetValue(baseStyleId, out var styleId))
+            {
+                styleId = workbook.RegisterStyle(diff.ApplyTo(workbook.GetStyle(baseStyleId)));
+                styleCache[baseStyleId] = styleId;
+            }
+
+            if (cell is null)
+                sheet.SetStyleOnly(address.Row, address.Col, styleId);
+            else
+                cell.StyleId = styleId;
+        }
+    }
 }

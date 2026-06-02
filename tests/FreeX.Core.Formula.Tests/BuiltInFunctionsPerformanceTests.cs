@@ -61,9 +61,10 @@ public sealed class BuiltInFunctionsPerformanceTests
 
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         result.Should().BeOfType<TextValue>().Which.Value.Length.Should().Be(32_764);
+        Console.WriteLine($"PERF REPT_LARGE_RESULT allocated_bytes={allocatedBytes}");
         allocatedBytes.Should().BeLessThan(
-            180_000,
-            "REPT should size the StringBuilder once instead of growing through intermediate buffers");
+            80_000,
+            "REPT should write directly into the final output string instead of allocating an intermediate builder buffer");
     }
 
     [Fact]

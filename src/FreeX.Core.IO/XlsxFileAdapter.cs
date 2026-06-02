@@ -261,6 +261,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     var table = XlsxStructuredTableModelMapper.ToModel(structuredTable, sheet.Id);
                     sheet.StructuredTables.Add(table);
                     XlsxStructuredTableModelMapper.MaterializeFilters(sheet, table);
+                    XlsxStructuredTableModelMapper.MaterializeStyle(workbook, sheet, table);
                 }
             }
 
