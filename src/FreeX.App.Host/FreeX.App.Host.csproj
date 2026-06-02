@@ -13,6 +13,10 @@
     <Resource Include="Resources\FreeX.ico" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(FreeXTesterReleaseEnglishOnly)' == 'true'">
+    <EmbeddedResource Remove="Resources\Strings.*.resx" />
+  </ItemGroup>
+
   <ItemGroup>
     <EmbeddedResource Include="..\..\LICENSE" LogicalName="FreeX.Legal.ProjectLicense.txt" />
     <EmbeddedResource Include="..\..\docs\LEGAL_NOTICES.md" LogicalName="FreeX.Legal.LegalNotices.md" />

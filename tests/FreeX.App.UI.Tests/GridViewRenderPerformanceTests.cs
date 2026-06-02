@@ -430,6 +430,8 @@ public sealed class GridViewRenderPerformanceTests
             .Should().BeLessThan(onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal));
         onRender.IndexOf("RenderSelection(dc);", StringComparison.Ordinal)
             .Should().BeLessThan(onRender.IndexOf("RenderPostSelectionLayers", StringComparison.Ordinal));
+        onRender.IndexOf("RenderPostSelectionLayers", StringComparison.Ordinal)
+            .Should().BeLessThan(onRender.IndexOf("_selectionVisualOnlyChangePending = false;", StringComparison.Ordinal));
     }
 
     [Fact]
