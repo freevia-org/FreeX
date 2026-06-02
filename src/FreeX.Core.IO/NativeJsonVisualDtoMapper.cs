@@ -6,6 +6,7 @@ internal static class NativeJsonVisualDtoMapper
 {
     public static PictureDto FromPicture(PictureModel picture) => new()
     {
+        Id = picture.Id,
         Name = picture.Name,
         Anchor = picture.Anchor.ToA1(),
         Kind = ValidEnumOrDefault(picture.Kind, PictureKind.CellRangeSnapshot),
@@ -53,6 +54,7 @@ internal static class NativeJsonVisualDtoMapper
         {
             var picture = new PictureModel
             {
+                Id = ExistingOrNewId(pictureDto.Id),
                 Anchor = CellAddress.Parse(pictureDto.Anchor, sheetId),
                 Name = pictureDto.Name,
                 Kind = ValidEnumOrDefault(pictureDto.Kind, PictureKind.CellRangeSnapshot),
@@ -95,6 +97,7 @@ internal static class NativeJsonVisualDtoMapper
 
     public static TextBoxDto FromTextBox(TextBoxModel textBox) => new()
     {
+        Id = textBox.Id,
         Name = textBox.Name,
         Anchor = textBox.Anchor.ToA1(),
         Text = textBox.Text,
@@ -122,6 +125,7 @@ internal static class NativeJsonVisualDtoMapper
         {
             return new TextBoxModel
             {
+                Id = ExistingOrNewId(textBoxDto.Id),
                 Anchor = CellAddress.Parse(textBoxDto.Anchor, sheetId),
                 Name = textBoxDto.Name,
                 Text = textBoxDto.Text ?? "",
@@ -145,6 +149,7 @@ internal static class NativeJsonVisualDtoMapper
 
     public static DrawingShapeDto FromDrawingShape(DrawingShapeModel shape) => new()
     {
+        Id = shape.Id,
         Name = shape.Name,
         Anchor = shape.Anchor.ToA1(),
         Kind = ValidEnumOrDefault(shape.Kind, DrawingShapeKind.Rectangle),
@@ -182,6 +187,7 @@ internal static class NativeJsonVisualDtoMapper
 
             return new DrawingShapeModel
             {
+                Id = ExistingOrNewId(shapeDto.Id),
                 Anchor = CellAddress.Parse(shapeDto.Anchor, sheetId),
                 Name = shapeDto.Name,
                 Kind = ValidEnumOrDefault(shapeDto.Kind, DrawingShapeKind.Rectangle),
@@ -212,6 +218,9 @@ internal static class NativeJsonVisualDtoMapper
     private static TEnum ValidEnumOrDefault<TEnum>(TEnum value, TEnum defaultValue)
         where TEnum : struct, Enum =>
         Enum.IsDefined(value) ? value : defaultValue;
+
+    private static Guid ExistingOrNewId(Guid? id) =>
+        id is { } value && value != Guid.Empty ? value : Guid.NewGuid();
 
     private static double PositiveFiniteOrDefault(double value, double defaultValue) =>
         double.IsFinite(value) && value > 0 ? value : defaultValue;
@@ -253,6 +262,7 @@ internal static class NativeJsonVisualDtoMapper
 
 internal class PictureDto
 {
+    public Guid? Id { get; set; }
     public string? Name { get; set; }
     public string? Anchor { get; set; }
     public PictureKind Kind { get; set; } = PictureKind.CellRangeSnapshot;
@@ -286,6 +296,7 @@ internal class PictureCellDto
 
 internal class TextBoxDto
 {
+    public Guid? Id { get; set; }
     public string? Name { get; set; }
     public string? Anchor { get; set; }
     public string? Text { get; set; }
@@ -303,6 +314,7 @@ internal class TextBoxDto
 
 internal class DrawingShapeDto
 {
+    public Guid? Id { get; set; }
     public string? Name { get; set; }
     public string? Anchor { get; set; }
     public DrawingShapeKind Kind { get; set; } = DrawingShapeKind.Rectangle;
