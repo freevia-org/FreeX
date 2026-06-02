@@ -82,6 +82,21 @@ public sealed class XlsxWorkbookThemeReaderTests
     }
 
     [Fact]
+    public void Load_ReadsFormatSchemeOuterShadowEffectDefaults()
+    {
+        using var package = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithDeepSchemesXml));
+
+        var theme = XlsxWorkbookThemeReader.Load(package);
+
+        theme.NativeFormatSchemeXml.Should().Contain("outerShdw");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.HasShadow.Should().BeTrue();
+        theme.EffectDefaults.ShadowOpacity.Should().BeApproximately(0.38, 0.0001);
+        theme.EffectDefaults.ShadowOffsetX.Should().Be(0);
+        theme.EffectDefaults.ShadowOffsetY.Should().Be(2);
+    }
+
+    [Fact]
     public void LoadSave_PreservesThemeSupplementElementsBesideThemeElements()
     {
         using var package = CreatePackage(("xl/theme/theme1.xml", """
@@ -272,6 +287,9 @@ public sealed class XlsxWorkbookThemeReaderTests
         loaded.Theme.NativeColorSchemeXml.Should().Contain("lumMod");
         loaded.Theme.NativeFontSchemeXml.Should().Contain("typeface=\"Major East Asia\"");
         loaded.Theme.NativeFormatSchemeXml.Should().Contain("outerShdw");
+        loaded.Theme.EffectDefaults.Should().NotBeNull();
+        loaded.Theme.EffectDefaults!.ShadowOpacity.Should().BeApproximately(0.38, 0.0001);
+        loaded.Theme.EffectDefaults.ShadowOffsetY.Should().Be(2);
         loaded.Theme.NativeThemeSupplementXml.Should().Contain("extraClrSchemeLst");
         loaded.Theme.NativeThemeSupplementXml.Should().Contain("compatExt");
         loaded.Theme.AlternateColorSchemes.Should().ContainSingle()
@@ -339,6 +357,8 @@ public sealed class XlsxWorkbookThemeReaderTests
             .WithEffects("Renamed Effects");
 
         theme.NativeFormatSchemeXml.Should().Contain("outerShdw");
+        theme.EffectDefaults.Should().NotBeNull();
+        theme.EffectDefaults!.ShadowOffsetY.Should().Be(2);
 
         using var target = CreatePackage();
         XlsxWorkbookThemeWriter.Save(target, theme);
