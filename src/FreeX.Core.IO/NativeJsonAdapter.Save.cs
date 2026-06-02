@@ -95,7 +95,7 @@ public sealed partial class NativeJsonAdapter
                     Hidden = scenario.Hidden,
                     Locked = scenario.Locked,
                     User = string.IsNullOrWhiteSpace(scenario.User) ? null : scenario.User,
-                    ChangingCells = (scenario.ChangingCells ?? []).Select(change =>
+                    ChangingCells = (scenario.ChangingCells ?? []).OfType<ScenarioCellValue>().Select(change =>
                     {
                         var sheet = workbook.GetSheet(change.Address.Sheet);
                         if (sheet is null || !IsValidAddressOnSheet(change.Address, sheet.Id))

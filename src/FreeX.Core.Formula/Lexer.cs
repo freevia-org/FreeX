@@ -45,7 +45,7 @@ public sealed class Lexer
     /// <summary>Tokenize the entire formula into a list of tokens.</summary>
     public List<Token> Tokenize()
     {
-        var tokens = new List<Token>();
+        var tokens = new List<Token>(Math.Min(_text.Length + 1, FormulaSafetyLimits.MaxParseTokens + 1));
 
         while (_pos < _text.Length)
         {
@@ -96,10 +96,30 @@ public sealed class Lexer
 
     private Token SingleChar(TokenType type)
     {
-        var token = new Token(type, _text[_pos].ToString(), _pos);
+        var token = new Token(type, SingleCharTokenValue(type), _pos);
         _pos++;
         return token;
     }
+
+    private static string SingleCharTokenValue(TokenType type) => type switch
+    {
+        TokenType.Plus => "+",
+        TokenType.Minus => "-",
+        TokenType.Multiply => "*",
+        TokenType.Divide => "/",
+        TokenType.Power => "^",
+        TokenType.Ampersand => "&",
+        TokenType.Percent => "%",
+        TokenType.OpenParen => "(",
+        TokenType.CloseParen => ")",
+        TokenType.OpenBrace => "{",
+        TokenType.CloseBrace => "}",
+        TokenType.Comma => ",",
+        TokenType.Semicolon => ";",
+        TokenType.Colon => ":",
+        TokenType.Equal => "=",
+        _ => ""
+    };
 
     private Token ReadNumber()
     {
@@ -226,7 +246,6 @@ public sealed class Lexer
     private Token ReadIdentifierOrRef()
     {
         var start = _pos;
-        var sb = new StringBuilder();
 
         // Allow $ for absolute references
         while (_pos < _text.Length)
@@ -234,7 +253,6 @@ public sealed class Lexer
             var c = _text[_pos];
             if (char.IsLetterOrDigit(c) || c == '_' || c == '$' || c == '.')
             {
-                sb.Append(c);
                 _pos++;
             }
             else
@@ -243,8 +261,8 @@ public sealed class Lexer
             }
         }
 
-        var value = sb.ToString();
-        var upper = value.ToUpperInvariant();
+        var value = _text[start.._pos];
+        var valueSpan = value.AsSpan();
 
         if (_pos < _text.Length && _text[_pos] == '!')
         {
@@ -259,20 +277,20 @@ public sealed class Lexer
             lookAhead++;
 
         if (lookAhead < _text.Length && _text[lookAhead] == '(')
-            return new Token(TokenType.FunctionName, NormalizeFunctionName(upper), start);
+            return new Token(TokenType.FunctionName, NormalizeFunctionName(ToUpperInvariantIfNeeded(value)), start);
 
         // Check for boolean literals
-        if (upper == "TRUE")
+        if (valueSpan.Equals("TRUE", StringComparison.OrdinalIgnoreCase))
             return new Token(TokenType.Boolean, "TRUE", start);
-        if (upper == "FALSE")
+        if (valueSpan.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
             return new Token(TokenType.Boolean, "FALSE", start);
 
         // Otherwise it's a cell reference
         if (IsCellReference(value))
-            return new Token(TokenType.CellRef, value.ToUpperInvariant(), start);
+            return new Token(TokenType.CellRef, ToUpperInvariantIfNeeded(value), start);
 
         // Named range (identifier that is not a cell reference, function, or boolean)
-        return new Token(TokenType.NamedRange, upper, start);
+        return new Token(TokenType.NamedRange, ToUpperInvariantIfNeeded(value), start);
     }
 
     private Token ReadQuotedSheetQualifier()
@@ -328,19 +346,41 @@ public sealed class Lexer
 
     private static bool IsCellReference(string value)
     {
-        // Strip $ signs for validation
-        var clean = value.Replace("$", "").ToUpperInvariant();
-
         int i = 0;
-        while (i < clean.Length && char.IsLetter(clean[i])) i++;
+        if (i < value.Length && value[i] == '$')
+            i++;
 
-        // Column names can be at most 3 letters (A–XFD = columns 1–16384)
-        if (i == 0 || i > 3 || i == clean.Length) return false;
+        int colStart = i;
+        while (i < value.Length && char.IsLetter(value[i]))
+            i++;
+
+        // Column names can be at most 3 letters (A-XFD = columns 1-16384)
+        var columnLength = i - colStart;
+        if (columnLength is 0 or > 3 || i == value.Length)
+            return false;
 
         int digitStart = i;
-        while (i < clean.Length && char.IsDigit(clean[i])) i++;
+        if (i < value.Length && value[i] == '$')
+        {
+            i++;
+            digitStart = i;
+        }
 
-        return i == clean.Length && digitStart < clean.Length;
+        while (i < value.Length && char.IsDigit(value[i]))
+            i++;
+
+        return i == value.Length && digitStart < value.Length;
+    }
+
+    private static string ToUpperInvariantIfNeeded(string value)
+    {
+        foreach (var c in value)
+        {
+            if (char.IsLower(c))
+                return value.ToUpperInvariant();
+        }
+
+        return value;
     }
 
     private static string NormalizeFunctionName(string name)

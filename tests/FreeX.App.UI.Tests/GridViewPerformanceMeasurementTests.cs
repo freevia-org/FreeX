@@ -621,6 +621,56 @@ public sealed class GridViewPerformanceMeasurementTests
         visitedAllocatedBytes.Should().BeLessThan(materializedAllocatedBytes);
     }
 
+    [Fact]
+    public void Benchmark_DrawFormulaTraceVisibleArrows_ReportsTimingAndAllocatedBytes()
+    {
+        StaTestRunner.Run(() =>
+        {
+            const int iterations = 48;
+            const int arrowCount = 1_000;
+            var drawMethod = typeof(GridView).GetMethod(
+                "DrawFormulaTraceArrow",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            drawMethod.Should().NotBeNull();
+            var grid = new GridView();
+            var drawArrow = drawMethod!.CreateDelegate<Action<DrawingContext, Point, Point, FormulaTraceArrowLayoutKind>>(grid);
+            var starts = new Point[arrowCount];
+            var ends = new Point[arrowCount];
+            for (var i = 0; i < arrowCount; i++)
+            {
+                var row = i / 40;
+                var col = i % 40;
+                starts[i] = new Point(42 + col * 31, 34 + row * 23);
+                ends[i] = new Point(58 + col * 31, 46 + row * 23);
+            }
+
+            DrawFormulaTraceArrowsOnce(drawArrow, starts, ends);
+            DrawFormulaTraceArrowsOnce(drawArrow, starts, ends);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            var total = Stopwatch.StartNew();
+            for (var iteration = 0; iteration < iterations; iteration++)
+                DrawFormulaTraceArrowsOnce(drawArrow, starts, ends);
+
+            total.Stop();
+            var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+
+            Console.WriteLine(
+                "PERF FORMULA_TRACE_VISIBLE_ARROW_DRAW " +
+                $"arrows={arrowCount} steps={iterations} " +
+                $"total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+                $"mean_ms={total.Elapsed.TotalMilliseconds / iterations:F2} " +
+                $"allocated_bytes={allocatedBytes:N0}");
+
+            total.Elapsed.TotalMilliseconds.Should().BeGreaterThan(0);
+            allocatedBytes.Should().BeLessThan(45_000_000);
+        });
+    }
+
     private static GridView CreateTextHeavyGrid(double width, double height)
         => CreateTextHeavyGrid(width, height, null);
 
@@ -1250,6 +1300,17 @@ public sealed class GridViewPerformanceMeasurementTests
         grid.UpdateLayout();
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(grid);
+    }
+
+    private static void DrawFormulaTraceArrowsOnce(
+        Action<DrawingContext, Point, Point, FormulaTraceArrowLayoutKind> drawArrow,
+        IReadOnlyList<Point> starts,
+        IReadOnlyList<Point> ends)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+        for (var i = 0; i < starts.Count; i++)
+            drawArrow(dc, starts[i], ends[i], FormulaTraceArrowLayoutKind.VisibleArrow);
     }
 
     private static void SetResizeTarget(GridView grid, string target)

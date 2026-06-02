@@ -139,6 +139,10 @@ public sealed partial class GoToDialog : Window
 
     private void HistoryList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
+        if (_historyList.SelectedItem is not string reference)
+            return;
+
+        _addressBox.Text = reference;
         Accept();
         e.Handled = true;
     }
