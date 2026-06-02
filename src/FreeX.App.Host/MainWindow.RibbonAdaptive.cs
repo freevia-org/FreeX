@@ -72,8 +72,7 @@ public partial class MainWindow
             adaptiveGroups,
             fixedChromeWidth,
             selectedTabHeader);
-        var layoutStates = ApplyRibbonVisualStateOverrides(adaptiveGroups, layout.States, availableWidth, selectedTabHeader);
-        IReadOnlyList<RibbonAdaptiveGroupState> plannedStatesSource = layoutStates;
+        IReadOnlyList<RibbonAdaptiveGroupState> plannedStatesSource = layout.States;
 
         var correctionCacheKey = CreateRibbonCorrectionCacheKey(cacheKey, availableWidth, plannedStatesSource);
         var hasCachedCorrection = _ribbonCorrectedStateCache.TryGetValue(correctionCacheKey, out var correctedStates);
@@ -83,7 +82,7 @@ public partial class MainWindow
         if (hasCachedCorrection && correctedStates is not null)
         {
             plannedStatesSource = correctedStates;
-            cachedCorrectionNeedsExpansion = RibbonStatesAreMoreCollapsedThan(plannedStatesSource, layoutStates);
+            cachedCorrectionNeedsExpansion = RibbonStatesAreMoreCollapsedThan(plannedStatesSource, layout.States);
         }
 
         var appliedStateKey = CreateRibbonAppliedStateKey(availableWidth, plannedStatesSource);
@@ -402,8 +401,9 @@ public partial class MainWindow
 
         _ribbonAdaptiveLayoutPlanComputeCount++;
         var layout = RibbonAdaptiveLayoutEngine.Plan(availableWidth, adaptiveGroups, fixedChromeWidth, selectedTabHeader);
+        var layoutStates = ApplyRibbonVisualStateOverrides(adaptiveGroups, layout.States, availableWidth, selectedTabHeader);
         var cached = new RibbonAdaptiveLayoutResult(
-            layout.States.ToArray(),
+            layoutStates,
             layout.PlannedWidth,
             layout.RequiresMeasuredCorrection);
         _ribbonAdaptiveLayoutPlanCache[planCacheKey] = cached;

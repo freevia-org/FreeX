@@ -102,8 +102,10 @@ public sealed class MainWindowSheetTabKeyboardTests
         });
     }
 
-    [Fact]
-    public void EnterKeyOnFocusedSheetTab_DoesNotRouteAsSheetTabNavigation()
+    [Theory]
+    [InlineData(Key.Enter)]
+    [InlineData(Key.Escape)]
+    public void NonNavigationKeyOnFocusedSheetTab_DoesNotRouteAsSheetTabNavigation(Key key)
     {
         StaTestRunner.Run(() =>
         {
@@ -112,7 +114,7 @@ public sealed class MainWindowSheetTabKeyboardTests
             harness.FocusCurrentSheetTab().Should().BeTrue();
             harness.FocusedSheetTabName.Should().Be("Sheet1");
 
-            harness.HandleFocusedSheetTabKeyboardNavigation(Key.Enter).Should().BeFalse();
+            harness.HandleFocusedSheetTabKeyboardNavigation(key).Should().BeFalse();
 
             harness.ActiveSheetTabName.Should().Be("Sheet1");
             harness.FocusedSheetTabName.Should().Be("Sheet1");
