@@ -14,6 +14,14 @@ internal static class XlsxPackageMetadataMerger
             .Select(entry => XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        // OPC part names are compared case-insensitively. A source part whose name differs only by
+        // case from one already in the generated package (e.g. Excel's xl/drawings/vmlDrawing2.vml
+        // vs ClosedXML's xl/drawings/vmldrawing2.vml for the same legacy comment) must NOT be copied:
+        // two case-colliding parts make the package unreadable ("Format error in package"), so Excel
+        // drops PivotTables/formulas on repair. Track existing names case-insensitively (zip entry
+        // lookups via GetEntry are case-sensitive and miss the collision).
+        var existingPartNames = new HashSet<string>(generatedEntriesBeforeMerge, StringComparer.OrdinalIgnoreCase);
+
         foreach (var sourceEntry in sourceArchive.Entries)
         {
             if (!TryNormalizeCopyableEntryName(sourceEntry.FullName, out var sourceEntryName))
@@ -22,7 +30,7 @@ internal static class XlsxPackageMetadataMerger
                 continue;
             if (IsPackageMetadataEntry(sourceEntryName))
                 continue;
-            if (targetArchive.GetEntry(sourceEntryName) is not null)
+            if (!existingPartNames.Add(sourceEntryName))
                 continue;
 
             CopyEntry(sourceEntry, targetArchive, sourceEntryName);
@@ -36,6 +44,7 @@ internal static class XlsxPackageMetadataMerger
 
     private static void CopyEntry(ZipArchiveEntry sourceEntry, ZipArchive targetArchive, string targetEntryName)
     {
+        DeleteEntries(targetArchive, targetEntryName);
         var targetEntry = targetArchive.CreateEntry(targetEntryName, CompressionLevel.Optimal);
         targetEntry.LastWriteTime = sourceEntry.LastWriteTime;
         using var sourceStream = sourceEntry.Open();
@@ -116,7 +125,7 @@ internal static class XlsxPackageMetadataMerger
             if (IsExcludedSourcePart(sourceEntry.FullName, excludedSourceParts))
                 continue;
 
-            var targetEntry = targetArchive.GetEntry(sourceEntry.FullName);
+            var targetEntry = GetEntry(targetArchive, sourceEntry.FullName);
             if (targetEntry is null)
             {
                 if (RelationshipsPartTargetsOnlyExcludedParts(sourceEntry, excludedSourceParts))
@@ -169,7 +178,32 @@ internal static class XlsxPackageMetadataMerger
             }
 
             if (changed)
-                XlsxPackageXmlEditor.ReplaceXml(targetArchive, sourceEntry.FullName, targetXml);
+                XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetEntry.FullName, targetXml);
+        }
+    }
+
+    private static ZipArchiveEntry? GetEntry(ZipArchive archive, string entryName)
+    {
+        var normalizedEntryName = XlsxPackagePath.NormalizeZipPath(entryName.Replace('\\', '/'));
+        return archive.GetEntry(entryName) ??
+               archive.Entries.FirstOrDefault(entry =>
+                   string.Equals(
+                       XlsxPackagePath.NormalizeZipPath(entry.FullName.Replace('\\', '/')),
+                       normalizedEntryName,
+                       StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void DeleteEntries(ZipArchive archive, string entryName)
+    {
+        var normalizedEntryName = XlsxPackagePath.NormalizeZipPath(entryName.Replace('\\', '/'));
+        foreach (var entry in archive.Entries
+                     .Where(candidate => string.Equals(
+                         XlsxPackagePath.NormalizeZipPath(candidate.FullName.Replace('\\', '/')),
+                         normalizedEntryName,
+                         StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            entry.Delete();
         }
     }
 

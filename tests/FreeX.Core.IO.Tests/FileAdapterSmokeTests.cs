@@ -20049,6 +20049,60 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_RetargetsPivotWorksheetRelationshipWhenWorksheetPartPathChanges()
+    {
+        var workbook = new Workbook("PivotRemappedWorksheetPathRetentionTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("B"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(20));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddMinimalPivotTablePackage(source, includeCacheRecords: true);
+        MoveWorksheetPackagePart(source, "xl/worksheets/sheet1.xml", "xl/worksheets/sheet7.xml");
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 4, 1), new TextValue("C"));
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 4, 2), new NumberValue(30));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+        var pivotReference = worksheetXml.Root!.Elements(workbookNs + "pivotTableDefinition")
+            .Should().ContainSingle().Subject;
+        var pivotRelationshipId = pivotReference.Attribute(relNs + "id")!.Value;
+
+        var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
+        var pivotRelationship = worksheetRelsXml.Root!.Elements(packageRelNs + "Relationship")
+            .SingleOrDefault(relationship =>
+                string.Equals((string?)relationship.Attribute("Id"), pivotRelationshipId, StringComparison.Ordinal) &&
+                string.Equals(
+                    (string?)relationship.Attribute("Type"),
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable",
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals((string?)relationship.Attribute("Target"), "../pivotTables/pivotTable1.xml", StringComparison.Ordinal));
+        pivotRelationship.Should().NotBeNull();
+
+        archive.GetEntry("xl/worksheets/_rels/sheet7.xml.rels").Should().BeNull();
+        archive.GetEntry("xl/pivotCache/pivotCacheRecords1.xml").Should().NotBeNull();
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesNativePivotChartGraphAndCacheBinding()
     {
         var workbook = new Workbook("PivotChartPackageRetentionTest");
@@ -25261,6 +25315,50 @@ public partial class FileAdapterSmokeTests
                 ReplacePackageXml(archive, "xl/pivotCache/pivotCacheRecords1.xml", XDocument.Parse(MinimalPivotCacheRecordsXml));
             }
             ReplacePackageXml(archive, "xl/pivotTables/pivotTable1.xml", XDocument.Parse(pivotTableDefinitionXml ?? MinimalPivotTableDefinitionXml));
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void MoveWorksheetPackagePart(MemoryStream packageStream, string sourceWorksheetPath, string targetWorksheetPath)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+            XNamespace contentTypeNs = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+            var contentTypesXml = LoadPackageXml(archive.GetEntry("[Content_Types].xml")!);
+            foreach (var contentTypeOverride in contentTypesXml.Root!.Elements(contentTypeNs + "Override"))
+            {
+                if (string.Equals(contentTypeOverride.Attribute("PartName")?.Value, "/" + sourceWorksheetPath, StringComparison.OrdinalIgnoreCase))
+                    contentTypeOverride.SetAttributeValue("PartName", "/" + targetWorksheetPath);
+            }
+
+            ReplacePackageXml(archive, "[Content_Types].xml", contentTypesXml);
+
+            var workbookRelsPath = "xl/_rels/workbook.xml.rels";
+            var workbookRelsXml = LoadPackageXml(archive.GetEntry(workbookRelsPath)!);
+            workbookRelsXml.Root!
+                .Elements(packageRelNs + "Relationship")
+                .Single(relationship => string.Equals(
+                    XlsxPackagePath.ResolveRelationshipTarget("xl/workbook.xml", relationship.Attribute("Target")?.Value ?? ""),
+                    sourceWorksheetPath,
+                    StringComparison.OrdinalIgnoreCase))
+                .SetAttributeValue("Target", XlsxPackagePath.GetRelationshipTarget("xl/workbook.xml", targetWorksheetPath));
+            ReplacePackageXml(archive, workbookRelsPath, workbookRelsXml);
+
+            var worksheetXml = LoadPackageXml(archive.GetEntry(sourceWorksheetPath)!);
+            ReplacePackageXml(archive, targetWorksheetPath, worksheetXml);
+            archive.GetEntry(sourceWorksheetPath)?.Delete();
+
+            var sourceWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath);
+            var targetWorksheetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+            if (archive.GetEntry(sourceWorksheetRelsPath) is { } sourceWorksheetRelsEntry)
+            {
+                var worksheetRelsXml = LoadPackageXml(sourceWorksheetRelsEntry);
+                ReplacePackageXml(archive, targetWorksheetRelsPath, worksheetRelsXml);
+                archive.GetEntry(sourceWorksheetRelsPath)?.Delete();
+            }
         }
 
         packageStream.Position = 0;
