@@ -14,6 +14,9 @@ public static class FileSavePlanner
             return false;
 
         var savePath = currentFilePath.Trim();
+        if (ContainsInvalidPathCharacter(savePath))
+            return false;
+
         if (!TryGetExtension(savePath, out var extension))
             return false;
 
@@ -24,6 +27,9 @@ public static class FileSavePlanner
         target = new FileSaveTarget(savePath, adapter);
         return true;
     }
+
+    private static bool ContainsInvalidPathCharacter(string path) =>
+        path.IndexOfAny(Path.GetInvalidPathChars()) >= 0;
 
     private static bool TryGetExtension(string path, out string extension)
     {
