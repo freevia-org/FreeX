@@ -367,6 +367,7 @@ public partial class MainWindow
             QuantizeSheetTabLayoutValue(rowWidth),
             QuantizeSheetTabLayoutValue(SheetTabsRowGrid.ActualHeight),
             QuantizeSheetTabLayoutValue(AddSheetButton.ActualWidth),
+            QuantizeSheetTabLayoutValue(AddSheetButton.ActualHeight),
             QuantizeSheetTabLayoutValue(AddSheetButton.MinWidth),
             _sheetTabs.Count,
             tabHash.ToHashCode());
@@ -403,7 +404,7 @@ public partial class MainWindow
             if (AddSheetButton.ActualWidth <= 0 || AddSheetButton.ActualHeight <= 0)
                 measuredWidth += ResolveLayoutWidth(AddSheetButton);
 
-            return measuredWidth;
+            return Math.Max(measuredWidth, EstimateSheetTabContentWidth());
         }
 
         return EstimateSheetTabContentWidth();
@@ -565,7 +566,7 @@ public partial class MainWindow
                 ? CreatePastelTabBrush(activeTabColor)
                 : (Brush)FindResource("FreeXRibbonSurfaceBrush");
             SheetTabsChromeLayer.Children.Add(CreateSheetTabPath(
-                CreateSheetTabFillGeometry(active, top: -1.0),
+                CreateSheetTabFillGeometry(active),
                 activeFillBrush,
                 null,
                 0,
@@ -759,10 +760,12 @@ public partial class MainWindow
     private static Geometry CreateActiveSheetTabGridRuleGeometry(double width, Rect tab)
     {
         const double top = SheetTabGridRuleTop;
+        const double sideTop = top + 7.5;
         const double sideInset = 8.0;
-        const double sideBottom = 22.0;
+        const double sideBottom = top + 21.5;
+        const double sideBottomControl = top + 23.5;
         const double bottomInset = 12.0;
-        const double bottom = 26.0;
+        const double bottom = top + 25.5;
         var left = Math.Clamp(tab.Left, 0, width);
         var right = Math.Clamp(tab.Right, 0, width);
 
@@ -773,13 +776,13 @@ public partial class MainWindow
             context.LineTo(new Point(left, top), true, true);
             context.BezierTo(
                 new Point(left + sideInset, top),
-                new Point(left + sideInset, 8),
-                new Point(left + sideInset, 8),
+                new Point(left + sideInset, sideTop),
+                new Point(left + sideInset, sideTop),
                 true,
                 true);
             context.LineTo(new Point(left + sideInset, sideBottom), true, true);
             context.BezierTo(
-                new Point(left + sideInset, 24),
+                new Point(left + sideInset, sideBottomControl),
                 new Point(left + bottomInset - 2, bottom),
                 new Point(left + bottomInset, bottom),
                 true,
@@ -787,13 +790,13 @@ public partial class MainWindow
             context.LineTo(new Point(right - bottomInset, bottom), true, true);
             context.BezierTo(
                 new Point(right - bottomInset + 2, bottom),
-                new Point(right - sideInset, 24),
+                new Point(right - sideInset, sideBottomControl),
                 new Point(right - sideInset, sideBottom),
                 true,
                 true);
-            context.LineTo(new Point(right - sideInset, 8), true, true);
+            context.LineTo(new Point(right - sideInset, sideTop), true, true);
             context.BezierTo(
-                new Point(right - sideInset, 8),
+                new Point(right - sideInset, sideTop),
                 new Point(right - sideInset, top),
                 new Point(right, top),
                 true,
@@ -805,12 +808,14 @@ public partial class MainWindow
         return geometry;
     }
 
-    private static Geometry CreateSheetTabFillGeometry(Rect tab, double top = 0.5, bool drawLeft = true)
+    private static Geometry CreateSheetTabFillGeometry(Rect tab, double top = SheetTabGridRuleTop, bool drawLeft = true)
     {
+        var sideTop = top + 7.5;
         const double sideInset = 8.0;
-        const double sideBottom = 22.0;
+        var sideBottom = top + 21.5;
+        var sideBottomControl = top + 23.5;
         const double bottomInset = 12.0;
-        const double bottom = 26.0;
+        var bottom = top + 25.5;
         var left = tab.Left;
         var right = tab.Right;
 
@@ -820,9 +825,9 @@ public partial class MainWindow
             context.BeginFigure(new Point(left, top), true, true);
             if (drawLeft)
             {
-                context.BezierTo(new Point(left + sideInset, top), new Point(left + sideInset, 8), new Point(left + sideInset, 8), true, true);
+                context.BezierTo(new Point(left + sideInset, top), new Point(left + sideInset, sideTop), new Point(left + sideInset, sideTop), true, true);
                 context.LineTo(new Point(left + sideInset, sideBottom), true, true);
-                context.BezierTo(new Point(left + sideInset, 24), new Point(left + bottomInset - 2, bottom), new Point(left + bottomInset, bottom), true, true);
+                context.BezierTo(new Point(left + sideInset, sideBottomControl), new Point(left + bottomInset - 2, bottom), new Point(left + bottomInset, bottom), true, true);
             }
             else
             {
@@ -830,9 +835,9 @@ public partial class MainWindow
             }
 
             context.LineTo(new Point(right - bottomInset, bottom), true, true);
-            context.BezierTo(new Point(right - bottomInset + 2, bottom), new Point(right - sideInset, 24), new Point(right - sideInset, sideBottom), true, true);
-            context.LineTo(new Point(right - sideInset, 8), true, true);
-            context.BezierTo(new Point(right - sideInset, 8), new Point(right - sideInset, top), new Point(right, top), true, true);
+            context.BezierTo(new Point(right - bottomInset + 2, bottom), new Point(right - sideInset, sideBottomControl), new Point(right - sideInset, sideBottom), true, true);
+            context.LineTo(new Point(right - sideInset, sideTop), true, true);
+            context.BezierTo(new Point(right - sideInset, sideTop), new Point(right - sideInset, top), new Point(right, top), true, true);
             context.LineTo(new Point(left, top), true, true);
         }
 
@@ -842,11 +847,13 @@ public partial class MainWindow
 
     private static Geometry CreateSheetTabOutlineGeometry(Rect tab, bool drawLeft, bool drawRight)
     {
-        const double top = 0.5;
+        const double top = SheetTabGridRuleTop;
+        const double sideTop = top + 7.5;
         const double sideInset = 8.0;
-        const double sideBottom = 22.0;
+        const double sideBottom = top + 21.5;
+        const double sideBottomControl = top + 23.5;
         const double bottomInset = 12.0;
-        const double bottom = 26.0;
+        const double bottom = top + 25.5;
         var left = tab.Left;
         var right = tab.Right;
         var bottomStart = drawLeft ? left + bottomInset : left;
@@ -858,9 +865,9 @@ public partial class MainWindow
             if (drawLeft)
             {
                 context.BeginFigure(new Point(left, top), false, false);
-                context.BezierTo(new Point(left + sideInset, top), new Point(left + sideInset, 8), new Point(left + sideInset, 8), true, true);
+                context.BezierTo(new Point(left + sideInset, top), new Point(left + sideInset, sideTop), new Point(left + sideInset, sideTop), true, true);
                 context.LineTo(new Point(left + sideInset, sideBottom), true, true);
-                context.BezierTo(new Point(left + sideInset, 24), new Point(left + bottomInset - 2, bottom), new Point(bottomStart, bottom), true, true);
+                context.BezierTo(new Point(left + sideInset, sideBottomControl), new Point(left + bottomInset - 2, bottom), new Point(bottomStart, bottom), true, true);
             }
             else
             {
@@ -871,9 +878,9 @@ public partial class MainWindow
 
             if (drawRight)
             {
-                context.BezierTo(new Point(right - bottomInset + 2, bottom), new Point(right - sideInset, 24), new Point(right - sideInset, sideBottom), true, true);
-                context.LineTo(new Point(right - sideInset, 8), true, true);
-                context.BezierTo(new Point(right - sideInset, 8), new Point(right - sideInset, top), new Point(right, top), true, true);
+                context.BezierTo(new Point(right - bottomInset + 2, bottom), new Point(right - sideInset, sideBottomControl), new Point(right - sideInset, sideBottom), true, true);
+                context.LineTo(new Point(right - sideInset, sideTop), true, true);
+                context.BezierTo(new Point(right - sideInset, sideTop), new Point(right - sideInset, top), new Point(right, top), true, true);
             }
         }
 
@@ -1413,6 +1420,7 @@ public partial class MainWindow
         long RowWidth,
         long RowHeight,
         long AddButtonActualWidth,
+        long AddButtonActualHeight,
         long AddButtonMinWidth,
         int TabCount,
         int TabHash);

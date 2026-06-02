@@ -3697,10 +3697,10 @@
                         SnapsToDevicePixels="True"
                         IsHitTestVisible="False"/>
 
-                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="26" Padding="0"
+                <Button x:Name="SheetNavLeftBtn" Grid.Column="0" Content="&lt;" Width="18" Height="22" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
-                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,6,0,0"
+                        Cursor="Hand" Click="SheetNavLeftBtn_Click" Visibility="Hidden" Margin="0,12,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="7"
@@ -3953,6 +3953,8 @@
                                 Click="AddSheetButton_Click"
                                 MouseEnter="AddSheetButton_MouseEnter"
                                 MouseLeave="AddSheetButton_MouseLeave"
+                                Loaded="SheetTabsScroller_Loaded"
+                                SizeChanged="SheetTabsScroller_SizeChanged"
                                 local:RibbonTooltip.Title="{local:Loc Key=MainWindow_TooltipTitle_InsertSheet}"
                                 local:RibbonTooltip.KeyTip="IS"
                                 local:RibbonTooltip.Description="{local:Loc Key=MainWindow_TooltipDescription_AddANewSheetToTheWorkbook}" local:RibbonMetadata.CommandName="Insert Sheet">
@@ -4015,10 +4017,10 @@
                         IsHitTestVisible="False"/>
 
                 <Button x:Name="SheetNavRightBtn" Grid.Column="3" Content="&gt;"
-                        Width="18" Height="26" Padding="0"
+                        Width="18" Height="22" Padding="0"
                         FontSize="13" Background="{StaticResource FreeXSheetSurfaceBrush}" BorderBrush="Transparent" BorderThickness="0"
                         Foreground="{StaticResource FreeXAccentDarkBrush}"
-                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,6,0,0"
+                        Cursor="Hand" Click="SheetNavRightBtn_Click" Visibility="Hidden" Margin="0,12,0,0"
                         HorizontalAlignment="Right" HorizontalContentAlignment="Center"
                         VerticalAlignment="Top" VerticalContentAlignment="Center"
                         Panel.ZIndex="7"

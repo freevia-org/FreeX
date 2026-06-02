@@ -135,15 +135,19 @@ public sealed class MainWindowSheetTabKeyboardTests
     {
         StaTestRunner.Run(() =>
         {
-            using var harness = MainWindowHarness.Create(sheetCount: 140);
+            using var harness = MainWindowHarness.Create(sheetCount: 20, width: 520);
             var window = harness.Window;
 
             harness.UpdateSheetTabNavigation();
             window.UpdateLayout();
             PumpDispatcher();
             window.UpdateLayout();
+            PumpDispatcher();
+            harness.UpdateSheetTabNavigation();
+            window.UpdateLayout();
 
             var row = (FrameworkElement)window.FindName("SheetTabsRowGrid");
+            var scroller = (ScrollViewer)window.FindName("SheetTabsScroller");
             var overlayLayer = (FrameworkElement)window.FindName("SheetTabsOverlayLayer");
             var visibleNavButtons = new[]
                 {
@@ -153,20 +157,67 @@ public sealed class MainWindowSheetTabKeyboardTests
                 .Where(button => button.Visibility == Visibility.Visible)
                 .ToList();
 
-            visibleNavButtons.Should().NotBeEmpty("the many-sheet viewport should expose at least one sheet-tab navigation button");
-
             var rowBounds = BoundsRelativeToWindow(row, window);
             var overlayBounds = BoundsRelativeToWindow(overlayLayer, window);
             overlayBounds.Top.Should().BeGreaterThan(rowBounds.Top + 3.5, "the blue sheet-tab rule should not sit on the row's clipping edge");
+            visibleNavButtons.Should().HaveCount(
+                2,
+                "the narrow many-sheet viewport must expose both navigation arrows so their rule clearance is covered; rowWidth={0:F1}, scrollerWidth={1:F1}, viewportWidth={2:F1}, extentWidth={3:F1}, scrollableWidth={4:F1}",
+                rowBounds.Width,
+                scroller.ActualWidth,
+                scroller.ViewportWidth,
+                scroller.ExtentWidth,
+                scroller.ScrollableWidth);
 
             foreach (var button in visibleNavButtons)
             {
                 var buttonBounds = BoundsRelativeToWindow(button, window);
-                buttonBounds.Top.Should().BeGreaterThan(overlayBounds.Top + 1.0, "sheet-tab nav buttons should not cover or overlap the blue rule");
+                buttonBounds.Top.Should().BeGreaterThan(overlayBounds.Top + 7.0, "sheet-tab nav buttons should sit below the internal blue rule, not cover or overlap it");
                 buttonBounds.Bottom.Should().BeLessThanOrEqualTo(rowBounds.Bottom + 0.5, "sheet-tab nav buttons should stay inside the sheet-tab row");
             }
 
             CaptureSheetTabLowerBandIfRequested(window, row);
+        });
+    }
+
+    [Fact]
+    public void SheetTabActiveAndAddTab_StayBelowGridRule()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(sheetCount: 1);
+            var window = harness.Window;
+
+            harness.FocusCurrentSheetTab().Should().BeTrue();
+            window.UpdateLayout();
+            PumpDispatcher();
+            window.UpdateLayout();
+
+            var row = (FrameworkElement)window.FindName("SheetTabsRowGrid");
+            var scroller = (FrameworkElement)window.FindName("SheetTabsScroller");
+            var overlayLayer = (FrameworkElement)window.FindName("SheetTabsOverlayLayer");
+            var addSheet = (FrameworkElement)window.FindName("AddSheetButton");
+            var leftNav = (FrameworkElement)window.FindName("SheetNavLeftBtn");
+            var rightNav = (FrameworkElement)window.FindName("SheetNavRightBtn");
+            var focusedTab = Keyboard.FocusedElement.Should().BeAssignableTo<FrameworkElement>().Subject;
+
+            var rowBounds = BoundsRelativeToWindow(row, window);
+            var scrollerBounds = BoundsRelativeToWindow(scroller, window);
+            var overlayBounds = BoundsRelativeToWindow(overlayLayer, window);
+            var addBounds = BoundsRelativeToWindow(addSheet, window);
+            var focusedTabBounds = BoundsRelativeToWindow(focusedTab, window);
+
+            overlayBounds.Top.Should().BeGreaterThan(rowBounds.Top + 3.5, "the sheet-tab rule should not sit on the row clipping edge");
+            focusedTabBounds.Top.Should().BeGreaterThanOrEqualTo(scrollerBounds.Top - 0.5);
+            focusedTabBounds.Bottom.Should().BeLessThanOrEqualTo(scrollerBounds.Bottom + 0.5);
+            addBounds.Top.Should().BeGreaterThanOrEqualTo(scrollerBounds.Top - 0.5);
+            addBounds.Bottom.Should().BeLessThanOrEqualTo(scrollerBounds.Bottom + 0.5, "the add-sheet tab must fit inside the unclipped tab viewport");
+            addBounds.Left.Should().BeGreaterThanOrEqualTo(scrollerBounds.Left - 0.5);
+            addBounds.Right.Should().BeLessThanOrEqualTo(scrollerBounds.Right + 0.5, "the add-sheet tab plus sign must be visible in the single-sheet viewport");
+            leftNav.Visibility.Should().Be(Visibility.Hidden, "the disabled sheet-tab left arrow should not be shown when a single sheet plus the add tab fits");
+            rightNav.Visibility.Should().Be(Visibility.Hidden, "the disabled sheet-tab right arrow should not be shown when a single sheet plus the add tab fits");
+
+            CaptureSheetTabLowerBandIfRequested(window, row, "FREEX_SHEET_TAB_SINGLE_CAPTURE");
         });
     }
 
@@ -538,11 +589,10 @@ public sealed class MainWindowSheetTabKeyboardTests
             return routed;
         }
 
-        public static MainWindowHarness Create(int sheetCount = 2)
+        public static MainWindowHarness Create(int sheetCount = 1, double width = 1280)
         {
             var workbook = new Workbook("Book1");
-            for (var i = 1; i <= sheetCount; i++)
-                workbook.AddSheet($"Sheet{i}");
+            workbook.AddSheet("Sheet1");
             var workbookRef = new WorkbookRef { Current = workbook };
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();
@@ -557,14 +607,18 @@ public sealed class MainWindowSheetTabKeyboardTests
                 NullUserMessageService.Instance)
             {
                 WindowState = WindowState.Normal,
-                Width = 1280,
+                Width = width,
                 Height = 720
             };
 
             window.Show();
             window.UpdateLayout();
             PumpDispatcher();
-            return new MainWindowHarness(window);
+            var harness = new MainWindowHarness(window);
+            for (var i = 1; i < sheetCount; i++)
+                harness.InsertNewSheet();
+
+            return harness;
         }
 
         public void Dispose()
@@ -664,9 +718,12 @@ public sealed class MainWindowSheetTabKeyboardTests
     private static Rect BoundsRelativeToWindow(FrameworkElement element, Window window) =>
         element.TransformToAncestor(window).TransformBounds(new Rect(new Size(element.ActualWidth, element.ActualHeight)));
 
-    private static void CaptureSheetTabLowerBandIfRequested(Window window, FrameworkElement row)
+    private static void CaptureSheetTabLowerBandIfRequested(
+        Window window,
+        FrameworkElement row,
+        string environmentVariableName = "FREEX_SHEET_TAB_LOWER_BAND_CAPTURE")
     {
-        var outputPath = Environment.GetEnvironmentVariable("FREEX_SHEET_TAB_LOWER_BAND_CAPTURE");
+        var outputPath = Environment.GetEnvironmentVariable(environmentVariableName);
         if (string.IsNullOrWhiteSpace(outputPath))
             return;
 

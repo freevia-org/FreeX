@@ -1751,6 +1751,7 @@ public sealed class MainWindowSourceHygieneTests
     {
         var xaml = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml"));
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var xamlCodeBehind = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.xaml.cs"));
         var navigationStart = source.IndexOf("private void UpdateSheetTabNavigation()", StringComparison.Ordinal);
         var navigationEnd = source.IndexOf("private void BringCurrentSheetTabIntoView()", navigationStart, StringComparison.Ordinal);
         navigationStart.Should().BeGreaterThanOrEqualTo(0);
@@ -1784,9 +1785,11 @@ public sealed class MainWindowSourceHygieneTests
         xaml.Should().Contain("CornerRadius=\"0,0,4,4\"");
         xaml.Should().Contain("x:Name=\"SheetNavRightBtn\" Grid.Column=\"3\"");
         xaml.Should().Contain("BorderBrush=\"Transparent\" BorderThickness=\"0\"");
-        xaml.Should().Contain("Width=\"18\" Height=\"26\"");
-        xaml.Should().Contain("Margin=\"0,6,0,0\"");
+        xaml.Should().Contain("Width=\"18\" Height=\"22\"");
+        xaml.Should().Contain("Margin=\"0,12,0,0\"");
         xaml.Should().NotContain("<TranslateTransform Y=\"-2\"/>");
+        xamlCodeBehind.Should().Contain("private const double SheetTabGridRuleTop = 4.5;");
+        source.Should().NotContain("CreateSheetTabFillGeometry(active, top: -1.0)");
         xaml.Should().Contain("VerticalAlignment=\"Top\" VerticalContentAlignment=\"Center\"");
         xaml.Should().Contain("FontFamily=\"Segoe UI\"");
         xaml.Should().Contain("<Setter Property=\"FontWeight\" Value=\"SemiBold\"/>");
