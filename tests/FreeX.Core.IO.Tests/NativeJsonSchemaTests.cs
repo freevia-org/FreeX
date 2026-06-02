@@ -719,6 +719,85 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_DropsNullNativeJsonChartListEntries()
+    {
+        var workbook = new Workbook("NullChartListEntries");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = GridRange.Parse("A1:B2", sheet.Id),
+            LegendEntries = [null!, new ChartLegendEntryModel(0, true)],
+            SeriesFormats = [null!, new ChartSeriesFormat(0, FillColor: new CellColor(1, 2, 3))],
+            SeriesDataLabelFormats = [null!, new ChartSeriesDataLabelFormat(0, ShowValue: false)],
+            PointDataLabelFormats = [null!, new ChartPointDataLabelFormat(0, 0, IsDeleted: true)]
+        });
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var chartJson = document.RootElement
+            .GetProperty("Sheets").EnumerateArray().Single()
+            .GetProperty("Charts").EnumerateArray().Single();
+
+        chartJson.GetProperty("LegendEntries").EnumerateArray().Should().ContainSingle();
+        chartJson.GetProperty("SeriesFormats").EnumerateArray().Should().ContainSingle();
+        chartJson.GetProperty("SeriesDataLabelFormats").EnumerateArray().Should().ContainSingle();
+        chartJson.GetProperty("PointDataLabelFormats").EnumerateArray().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Load_DropsNullNativeJsonChartListEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullChartListEntries",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Cells": [
+                    { "Address": "A1", "Value": "Name", "ValueType": "t" },
+                    { "Address": "B1", "Value": "Value", "ValueType": "t" },
+                    { "Address": "A2", "Value": "A", "ValueType": "t" },
+                    { "Address": "B2", "Value": "1", "ValueType": "n" }
+                  ],
+                  "Charts": [
+                    {
+                      "Type": 0,
+                      "DataRange": "A1:B2",
+                      "LegendEntries": [ null, { "Index": 0, "IsDeleted": true } ],
+                      "SeriesFormats": [ null, { "SeriesIndex": 0, "FillColor": { "R": 1, "G": 2, "B": 3 } } ],
+                      "SeriesDataLabelFormats": [ null, { "SeriesIndex": 0, "ShowValue": false } ],
+                      "PointDataLabelFormats": [ null, { "SeriesIndex": 0, "PointIndex": 0, "IsDeleted": true } ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var chart = new NativeJsonAdapter().Load(stream).GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+
+        chart.LegendEntries.Should().ContainSingle().Which.Should().Be(new ChartLegendEntryModel(0, true));
+        chart.SeriesFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartSeriesFormat(0, FillColor: new CellColor(1, 2, 3)));
+        chart.SeriesDataLabelFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartSeriesDataLabelFormat(0, ShowValue: false));
+        chart.PointDataLabelFormats.Should().ContainSingle().Which.Should().Be(
+            new ChartPointDataLabelFormat(0, 0, IsDeleted: true));
+    }
+
+    [Fact]
     public void Load_RejectsUnsupportedFutureNativeJsonSchema()
     {
         const string futureJson = """
