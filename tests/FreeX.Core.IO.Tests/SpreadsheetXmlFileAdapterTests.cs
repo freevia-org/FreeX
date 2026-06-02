@@ -2491,6 +2491,7 @@ public sealed class SpreadsheetXmlFileAdapterTests
               <cell type="Number" value="42.25"/>
               <cell type="Boolean" value="1"/>
               <cell type="DateTime" value="2026-05-31T08:15:30"/>
+              <cell type="Error" value="#VALUE!"/>
             </cells>
             """);
         using var stylesheet = StreamFromString("""
@@ -2523,6 +2524,7 @@ public sealed class SpreadsheetXmlFileAdapterTests
         sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(42.25));
         sheet.GetCell(1, 3)!.Value.Should().Be(new BoolValue(true));
         sheet.GetCell(1, 4)!.Value.Should().Be(DateTimeValue.FromDateTime(new DateTime(2026, 5, 31, 8, 15, 30)));
+        sheet.GetCell(1, 5)!.Value.Should().Be(new ErrorValue("#VALUE!"));
     }
 
     [Fact]
