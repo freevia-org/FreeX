@@ -55,22 +55,30 @@ internal static class NativeJsonScalarValueMapper
 
     public static ScalarValue Deserialize(string? value, string? type)
     {
+        if (type is { Length: 1 })
+            return Deserialize(value, type[0]);
+
+        return Deserialize(value, '\0');
+    }
+
+    public static ScalarValue Deserialize(string? value, char type)
+    {
         if (value == null)
             return BlankValue.Instance;
 
         return type switch
         {
-            "n" => TryParseFiniteNumber(value, out var d)
+            'n' => TryParseFiniteNumber(value, out var d)
                 ? new NumberValue(d)
                 : new TextValue(value),
-            "d" => TryParseFiniteNumber(value, out var d)
+            'd' => TryParseFiniteNumber(value, out var d)
                 ? new DateTimeValue(d)
                 : new TextValue(value),
-            "b" => bool.TryParse(value, out var b)
+            'b' => bool.TryParse(value, out var b)
                 ? new BoolValue(b)
                 : new TextValue(value),
-            "t" => new TextValue(value),
-            "e" => value switch
+            't' => new TextValue(value),
+            'e' => value switch
             {
                 "#DIV/0!" => ErrorValue.DivByZero,
                 "#VALUE!" => ErrorValue.Value,

@@ -801,6 +801,59 @@ public sealed class AccessibilityCheckerServiceTests
     }
 
     [Fact]
+    public void FindIssues_FlagsLowContrastCellText_WithThemeTintFontAndFill()
+    {
+        var workbook = new Workbook("Accessibility")
+        {
+            Theme = WorkbookTheme.Office
+                .WithColor(WorkbookThemeColorSlot.Accent1, new CellColor(245, 245, 245))
+                .WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(230, 230, 230))
+        };
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 4, 2);
+        var themedStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = CellColor.Black,
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.1),
+            FillColor = CellColor.White,
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1)
+        });
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("Theme-derived warning"),
+            StyleId = themedStyle
+        });
+
+        var issue = AccessibilityCheckerService.FindIssues(workbook)
+            .Should().ContainSingle(i => i.Kind == AccessibilityIssueKind.LowContrastCellText).Subject;
+
+        issue.Location.Should().Be("B4");
+    }
+
+    [Fact]
+    public void FindIssues_IgnoresCellRgbFallbackWhenThemeColorsHaveSufficientContrast()
+    {
+        var workbook = new Workbook("Accessibility");
+        var sheet = workbook.AddSheet("Sales");
+        var address = new CellAddress(sheet.Id, 5, 2);
+        var themedStyle = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(245, 245, 245),
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Dark1),
+            FillColor = CellColor.White,
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Light1)
+        });
+        sheet.SetCell(address, new Cell
+        {
+            Value = new TextValue("Readable themed text"),
+            StyleId = themedStyle
+        });
+
+        AccessibilityCheckerService.FindIssues(workbook)
+            .Should().NotContain(i => i.Kind == AccessibilityIssueKind.LowContrastCellText);
+    }
+
+    [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromMatchingConditionalFormat()
     {
         var workbook = new Workbook("Accessibility");
