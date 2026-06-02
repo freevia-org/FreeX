@@ -1637,6 +1637,29 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_LoadsCompactSpreadsheetMlOutput()
+    {
+        using var source = StreamFromString("<rows><row name=\"India\" amount=\"17.5\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:output method="xml" indent="no" />
+              <xsl:template match="/rows">
+                <ss:Workbook><ss:Worksheet ss:Name="Compact"><ss:Table><ss:Row><ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name" /></ss:Data></ss:Cell><ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@amount" /></ss:Data></ss:Cell></ss:Row></ss:Table></ss:Worksheet></ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Compact");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("India"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(17.5));
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromWhitespaceRules()
     {
         using var source = StreamFromString("""

@@ -332,6 +332,22 @@ public sealed class GridViewRenderPerformanceTests
     }
 
     [Fact]
+    public void RenderTextBoxes_ReusesNamedClipRectForText()
+    {
+        var drawingObjects = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.DrawingObjects.cs"));
+        var renderTextBox = drawingObjects[
+            drawingObjects.IndexOf("private void RenderTextBox(", StringComparison.Ordinal)..
+            drawingObjects.IndexOf("private void RenderDrawingShapes", StringComparison.Ordinal)];
+
+        renderTextBox.Should().Contain("var textWidth = Math.Max(1, rect.Width - 8);");
+        renderTextBox.Should().Contain("var textHeight = Math.Max(1, rect.Height - 8);");
+        renderTextBox.Should().Contain("var textClipRect = new Rect(rect.Left + 4, rect.Top + 4, textWidth, textHeight);");
+        renderTextBox.Should().Contain("dc.PushClip(GetDrawingObjectClipGeometry(textClipRect));");
+        renderTextBox.Should().NotContain("GetDrawingObjectClipGeometry(new Rect");
+        renderTextBox.Should().NotContain("new RectangleGeometry");
+    }
+
+    [Fact]
     public void RenderAutofillPreview_ReusesFrozenStaticDashedPen()
     {
         var gridViewSource = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.cs"));
