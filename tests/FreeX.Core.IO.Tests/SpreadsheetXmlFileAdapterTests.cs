@@ -1487,6 +1487,66 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_LoadsSpreadsheetMlCDataOutput()
+    {
+        using var source = StreamFromString("<rows><row note=\"A &lt; B &amp; C\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:output method="xml" cdata-section-elements="ss:Data" omit-xml-declaration="yes" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="CData">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@note" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("CData");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("A < B & C"));
+    }
+
+    [Fact]
+    public void LoadTransformed_LoadsUtf16SpreadsheetMlOutput()
+    {
+        using var source = StreamFromString("<rows><row name=\"Delta\" /></rows>");
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:output method="xml" encoding="utf-16" />
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Utf16">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="row/@name" /></ss:Data></ss:Cell>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Utf16");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Delta"));
+    }
+
+    [Fact]
     public void LoadTransformed_AppliesXsltParametersToGeneratedSpreadsheetMl()
     {
         using var source = StreamFromString("<rows><row amount=\"42.5\" /></rows>");
