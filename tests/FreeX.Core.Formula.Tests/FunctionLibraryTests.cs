@@ -471,7 +471,12 @@ public class FunctionLibraryTests
 
         _eval.Evaluate("=INDEX(A:A,2)", sheet).Should().Be(new NumberValue(20));
         _eval.Evaluate("=INDEX(A:B,1,2)", sheet).Should().Be(new NumberValue(99));
-        _eval.Evaluate("=INDEX(A:A,0)", sheet).Should().Be(ErrorValue.Ref);
+        // INDEX(col, 0) returns the entire column. The column clamps to the used extent (A1:A2),
+        // so this yields that range rather than #REF!.
+        var entireColumn = _eval.Evaluate("=INDEX(A:A,0)", sheet).Should().BeOfType<RangeValue>().Subject;
+        entireColumn.RowCount.Should().Be(2);
+        entireColumn.Cells[0, 0].Should().Be(new NumberValue(10));
+        entireColumn.Cells[1, 0].Should().Be(new NumberValue(20));
     }
 
     [Fact]
@@ -6572,14 +6577,32 @@ public class FunctionLibraryTests
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Ref);
     }
 
+    [Fact]
+    public void NonFastPathFullColumnRanges_ClampToUsedRange_ComputeLikeExcel()
+    {
+        // Excel evaluates full-column ranges over the populated extent, not the whole 1,048,576-row
+        // grid. These non-fast-path aggregates used to return #REF! (refusing to materialize); they
+        // now clamp to the used range and compute the same result Excel does.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(2)),
+            (2, 1, new NumberValue(4)),
+            (3, 1, new NumberValue(6)));
+
+        _eval.Evaluate("=COUNTA(A:A)", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=STDEV(A:A)", sheet).Should().Be(new NumberValue(2));      // sample stdev of 2,4,6
+        _eval.Evaluate("=CONCAT(A:A)", sheet).Should().Be(new TextValue("246"));
+        _eval.Evaluate("=MAX(A:A)", sheet).Should().Be(new NumberValue(6));
+    }
+
     [Theory]
     [InlineData("=COUNTA(A:A)")]
-    [InlineData("=AND(A:A)")]
-    [InlineData("=CONCAT(A:A)")]
-    [InlineData("=STDEV(A:A)")]
-    public void NonFastPathFullColumnRanges_ReturnRefWithoutMaterializing(string formula)
+    [InlineData("=COUNT(A:A)")]
+    [InlineData("=SUM(A:A)")]
+    public void FullColumnRanges_EmptySheet_ComputeZeroNotRef(string formula)
     {
-        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Ref);
+        // On an empty sheet the used range is empty, so full-column aggregates evaluate over nothing
+        // (0), matching Excel — rather than returning #REF!.
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(new NumberValue(0));
     }
 
     [Fact]
