@@ -175,7 +175,7 @@ internal static class XlsxWorkbookMetadataPreserver
                 var retainedViews = sourceCustomWorkbookViews
                     .Elements(workbookNs + "customWorkbookView")
                     .Where(view => !modeledCustomViewIds.Contains(XlsxCustomViewMapper.NormalizeId(view.Attribute("guid")?.Value) ?? string.Empty))
-                    .Select(view => new XElement(view))
+                    .Select(CloneCustomWorkbookViewForPreservation)
                     .ToList();
                 if (retainedViews.Count == 0)
                     return false;
@@ -183,11 +183,22 @@ internal static class XlsxWorkbookMetadataPreserver
                 InsertCustomWorkbookViewsInOrder(
                     targetRoot,
                     workbookNs,
-                    new XElement(sourceCustomWorkbookViews.Name, sourceCustomWorkbookViews.Attributes(), retainedViews));
+                    new XElement(
+                        sourceCustomWorkbookViews.Name,
+                        sourceCustomWorkbookViews.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration),
+                        retainedViews));
                 return true;
             }
 
-            InsertCustomWorkbookViewsInOrder(targetRoot, workbookNs, new XElement(sourceCustomWorkbookViews));
+            InsertCustomWorkbookViewsInOrder(
+                targetRoot,
+                workbookNs,
+                new XElement(
+                    sourceCustomWorkbookViews.Name,
+                    sourceCustomWorkbookViews.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration),
+                    sourceCustomWorkbookViews
+                        .Elements(workbookNs + "customWorkbookView")
+                        .Select(CloneCustomWorkbookViewForPreservation)));
             return true;
         }
 
@@ -203,8 +214,9 @@ internal static class XlsxWorkbookMetadataPreserver
             .GroupBy(item => item.Id!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First().View, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var sourceView in sourceCustomWorkbookViews.Elements(workbookNs + "customWorkbookView"))
+        foreach (var originalSourceView in sourceCustomWorkbookViews.Elements(workbookNs + "customWorkbookView"))
         {
+            var sourceView = CloneCustomWorkbookViewForPreservation(originalSourceView);
             var id = XlsxCustomViewMapper.NormalizeId(sourceView.Attribute("guid")?.Value);
             if (!string.IsNullOrWhiteSpace(id) && targetViewsById.TryGetValue(id, out var targetView))
             {
@@ -215,13 +227,23 @@ internal static class XlsxWorkbookMetadataPreserver
             if (!string.IsNullOrWhiteSpace(id) && modeledCustomViewIds.Contains(id))
                 continue;
 
-            targetCustomWorkbookViews.Add(new XElement(sourceView));
+            targetCustomWorkbookViews.Add(sourceView);
             if (!string.IsNullOrWhiteSpace(id))
                 targetViewsById[id] = targetCustomWorkbookViews.Elements(workbookNs + "customWorkbookView").Last();
             changed = true;
         }
 
         return changed;
+    }
+
+    private static XElement CloneCustomWorkbookViewForPreservation(XElement sourceView)
+    {
+        var clone = new XElement(sourceView);
+        if (XlsxCustomViewMapper.NormalizeId(clone.Attribute("guid")?.Value) is { } id)
+            clone.SetAttributeValue("guid", id);
+        if (string.IsNullOrWhiteSpace(clone.Attribute("activeSheetId")?.Value))
+            clone.SetAttributeValue("activeSheetId", "1");
+        return clone;
     }
 
     private static bool MergeWorkbookProtection(XElement? sourceWorkbookProtection, XElement targetRoot, XNamespace workbookNs)
@@ -320,7 +342,7 @@ internal static class XlsxWorkbookMetadataPreserver
         var targetBookViews = targetRoot.Element(workbookNs + "bookViews");
         if (targetBookViews is null)
         {
-            targetRoot.AddFirst(new XElement(sourceBookViews!));
+            targetRoot.AddFirst(CloneWorkbookViewsForPreservation(sourceBookViews!, workbookNs));
             return true;
         }
 
@@ -333,8 +355,9 @@ internal static class XlsxWorkbookMetadataPreserver
 
         var changed = false;
         var mergedTargetViewKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var sourceView in sourceViews)
+        foreach (var originalSourceView in sourceViews)
         {
+            var sourceView = CloneWorkbookViewForPreservation(originalSourceView);
             var raw = sourceView.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
             if (existingRawViews.Contains(raw))
                 continue;
@@ -383,6 +406,51 @@ internal static class XlsxWorkbookMetadataPreserver
                    string.Equals(visibility, "visible", StringComparison.OrdinalIgnoreCase);
         }
     }
+
+    private static XElement CloneWorkbookViewsForPreservation(XElement sourceBookViews, XNamespace workbookNs)
+    {
+        var clone = new XElement(sourceBookViews.Name, sourceBookViews.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration));
+        foreach (var child in sourceBookViews.Elements())
+        {
+            clone.Add(child.Name == workbookNs + "workbookView"
+                ? CloneWorkbookViewForPreservation(child)
+                : new XElement(child));
+        }
+
+        return clone;
+    }
+
+    private static XElement CloneWorkbookViewForPreservation(XElement sourceView)
+    {
+        var clone = new XElement(sourceView);
+        RemoveOfficeRevisionAttributes(clone);
+        return clone;
+    }
+
+    private static void RemoveOfficeRevisionAttributes(XElement element)
+    {
+        foreach (var attribute in element.Attributes().Where(IsOfficeRevisionAttribute).ToList())
+            attribute.Remove();
+
+        foreach (var namespaceAttribute in element.Attributes().Where(attribute =>
+                     attribute.IsNamespaceDeclaration &&
+                     IsOfficeRevisionNamespace(attribute.Value) &&
+                     !element.Attributes().Any(other =>
+                         !other.IsNamespaceDeclaration &&
+                         other.Name.NamespaceName == attribute.Value)).ToList())
+        {
+            namespaceAttribute.Remove();
+        }
+    }
+
+    private static bool IsOfficeRevisionAttribute(XAttribute attribute) =>
+        !attribute.IsNamespaceDeclaration &&
+        string.Equals(attribute.Name.LocalName, "uid", StringComparison.Ordinal) &&
+        IsOfficeRevisionNamespace(attribute.Name.NamespaceName);
+
+    private static bool IsOfficeRevisionNamespace(string namespaceName) =>
+        namespaceName.StartsWith("http://schemas.microsoft.com/office/spreadsheetml/", StringComparison.Ordinal) &&
+        namespaceName.Contains("/revision", StringComparison.Ordinal);
 
     private static bool MergeDefinedNames(XElement? sourceDefinedNames, XElement targetRoot, XNamespace workbookNs)
     {
@@ -465,6 +533,7 @@ internal static class XlsxWorkbookMetadataPreserver
         foreach (var attribute in sourceElement.Attributes())
         {
             if (attribute.IsNamespaceDeclaration ||
+                IsOfficeRevisionAttribute(attribute) ||
                 excludedLocalNames.Contains(attribute.Name.LocalName, StringComparer.Ordinal) ||
                 targetElement.Attribute(attribute.Name) is not null)
             {

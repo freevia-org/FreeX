@@ -1126,7 +1126,7 @@ public class XlsxCorpusRunnerTests
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-workbook-views-001");
-        AssertWorkbookViews(saved, "generated-workbook-views-001 saved");
+        AssertWorkbookViews(saved, "generated-workbook-views-001 saved", expectCustomViews: false);
     }
 
     [Fact]
@@ -1641,7 +1641,7 @@ public class XlsxCorpusRunnerTests
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-custom-sheet-views-001");
-        AssertWorksheetCustomSheetViews(saved, "generated-worksheet-custom-sheet-views-001 saved");
+        AssertWorksheetCustomSheetViews(saved, "generated-worksheet-custom-sheet-views-001 saved", expectCustomSheetViews: false);
     }
 
     [Fact]
@@ -1690,14 +1690,20 @@ public class XlsxCorpusRunnerTests
             .ContainSingle(because);
     }
 
-    private static void AssertWorksheetCustomSheetViews(Stream package, string because)
+    private static void AssertWorksheetCustomSheetViews(Stream package, string because, bool expectCustomSheetViews = true)
     {
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
         using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-        var customSheetView = worksheetXml.Root!
-            .Element(worksheetNs + "customSheetViews")!
+        var customSheetViews = worksheetXml.Root!.Element(worksheetNs + "customSheetViews");
+        if (!expectCustomSheetViews)
+        {
+            customSheetViews.Should().BeNull(because);
+            return;
+        }
+
+        var customSheetView = customSheetViews!
             .Elements(worksheetNs + "customSheetView")
             .Should()
             .ContainSingle(because)
@@ -2378,7 +2384,7 @@ public class XlsxCorpusRunnerTests
         functionGroup.Attribute("customGroupFlag")!.Value.Should().Be("keep", because);
     }
 
-    private static void AssertWorkbookViews(Stream package, string because)
+    private static void AssertWorkbookViews(Stream package, string because, bool expectCustomViews = true)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 
@@ -2400,7 +2406,14 @@ public class XlsxCorpusRunnerTests
             string.Equals(view.Attribute("showHorizontalScroll")?.Value, "0", StringComparison.Ordinal));
         hasAdditionalView.Should().BeTrue(because);
 
-        var customView = workbookXml.Root.Element(workbookNs + "customWorkbookViews")!
+        var customWorkbookViews = workbookXml.Root.Element(workbookNs + "customWorkbookViews");
+        if (!expectCustomViews)
+        {
+            customWorkbookViews.Should().BeNull(because);
+            return;
+        }
+
+        var customView = customWorkbookViews!
             .Elements(workbookNs + "customWorkbookView")
             .Should()
             .ContainSingle(because)

@@ -144,9 +144,31 @@ internal static class XlsxWorksheetBackgroundReaderWriter
 
         root.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
         root.Elements(worksheetNs + "picture").Remove();
-        root.Add(new XElement(worksheetNs + "picture", new XAttribute(relNs + "id", relId)));
+        InsertPictureInOrder(root, worksheetNs, new XElement(worksheetNs + "picture", new XAttribute(relNs + "id", relId)));
 
         XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
+    }
+
+    private static void InsertPictureInOrder(XElement worksheetRoot, XNamespace worksheetNs, XElement picture)
+    {
+        string[] laterWorksheetElements =
+        [
+            "oleObjects",
+            "controls",
+            "webPublishItems",
+            "tableParts",
+            "extLst"
+        ];
+
+        var insertionPoint = worksheetRoot.Elements()
+            .FirstOrDefault(element =>
+                element.Name.Namespace == worksheetNs &&
+                laterWorksheetElements.Contains(element.Name.LocalName, StringComparer.Ordinal));
+
+        if (insertionPoint is null)
+            worksheetRoot.Add(picture);
+        else
+            insertionPoint.AddBeforeSelf(picture);
     }
 
     private static XDocument LoadXml(ZipArchiveEntry entry)

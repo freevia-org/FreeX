@@ -11391,16 +11391,14 @@ public partial class FileAdapterSmokeTests
             .Attribute("w")!
             .Value.Should().Be("6350");
         var categoryAxis = chartXml.Descendants(chartNs + "dateAx").Single();
-        categoryAxis.Element(chartNs + "tickLblSkip")!.Attribute("val")!.Value.Should().Be("2");
-        categoryAxis.Element(chartNs + "tickMarkSkip")!.Attribute("val")!.Value.Should().Be("3");
+        categoryAxis.Element(chartNs + "tickLblSkip").Should().BeNull();
+        categoryAxis.Element(chartNs + "tickMarkSkip").Should().BeNull();
         categoryAxis.Element(chartNs + "lblOffset")!.Attribute("val")!.Value.Should().Be("250");
 
         saved.Position = 0;
         var loaded = new XlsxFileAdapter().Load(saved);
         var loadedChart = loaded.GetSheetAt(0).Charts.Should().ContainSingle().Subject;
         loadedChart.XAxisIsDateAxis.Should().BeTrue();
-        loadedChart.XAxisLabelSkip.Should().Be(2);
-        loadedChart.XAxisTickMarkSkip.Should().Be(3);
         loadedChart.XAxisLabelOffset.Should().Be(250);
     }
 
@@ -13217,6 +13215,20 @@ public partial class FileAdapterSmokeTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Amount"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(10));
+        var table = new StructuredTableModel
+        {
+            Id = 1,
+            Name = "UnsupportedChartData",
+            DisplayName = "UnsupportedChartData",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 2)),
+            HasAutoFilter = true,
+            StyleName = "TableStyleMedium2",
+            ShowRowStripes = true,
+            PackagePart = "xl/tables/table1.xml"
+        };
+        table.Columns.Add(new StructuredTableColumnModel(1, "Category"));
+        table.Columns.Add(new StructuredTableColumnModel(2, "Amount"));
+        sheet.StructuredTables.Add(table);
 
         var source = new MemoryStream();
         var adapter = new XlsxFileAdapter();
@@ -13241,6 +13253,8 @@ public partial class FileAdapterSmokeTests
 
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         worksheetXml.ToString().Should().Contain("drawing");
+        worksheetXml.Root!.Elements().Select(element => element.Name.LocalName)
+            .Should().ContainInOrder("drawing", "tableParts");
 
         var worksheetRelsXml = LoadPackageXml(archive.GetEntry("xl/worksheets/_rels/sheet1.xml.rels")!);
         worksheetRelsXml.ToString().Should().Contain("../drawings/drawing1.xml");
@@ -13760,7 +13774,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesCustomWorkbookViews()
+    public void XlsxAdapter_LoadedWorkbookSave_RemovesSourceCustomWorkbookViewsForExcelCompatibility()
     {
         var workbook = new Workbook("CustomWorkbookViewsRetentionTest");
         var sheet = workbook.AddSheet("Data");
@@ -13784,9 +13798,7 @@ public partial class FileAdapterSmokeTests
         var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var customViews = workbookXml.Root!.Element(workbookNs + "customWorkbookViews");
-        customViews.Should().NotBeNull();
-        customViews!.ToString().Should().Contain("FreeXView");
-        customViews.ToString().Should().Contain("guid=\"{22222222-2222-2222-2222-222222222222}\"");
+        customViews.Should().BeNull();
     }
 
     [Fact]
@@ -14959,7 +14971,7 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_PreservesWorksheetCustomSheetViews()
+    public void XlsxAdapter_LoadedWorkbookSave_RemovesSourceWorksheetCustomSheetViewsForExcelCompatibility()
     {
         var workbook = new Workbook("CustomSheetViewsRetentionTest");
         var sheet = workbook.AddSheet("Data");
@@ -14983,10 +14995,7 @@ public partial class FileAdapterSmokeTests
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var customSheetViews = worksheetXml.Root!.Element(worksheetNs + "customSheetViews");
-        customSheetViews.Should().NotBeNull();
-        customSheetViews!.ToString().Should().Contain("{11111111-1111-1111-1111-111111111111}");
-        customSheetViews.ToString().Should().Contain("topLeftCell=\"B2\"");
-        customSheetViews.ToString().Should().Contain("showGridLines=\"0\"");
+        customSheetViews.Should().BeNull();
     }
 
     [Fact]
@@ -15112,16 +15121,15 @@ public partial class FileAdapterSmokeTests
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var firstWorksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         firstWorksheetXml.Root!
-            .Element(workbookNs + "customSheetViews")!
-            .Elements(workbookNs + "customSheetView")
-            .Should().ContainSingle();
+            .Element(workbookNs + "customSheetViews")
+            .Should()
+            .BeNull();
 
         var secondWorksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet2.xml")!);
-        var secondSheetViews = secondWorksheetXml.Root!
-            .Element(workbookNs + "customSheetViews")?
-            .Elements(workbookNs + "customSheetView") ?? [];
-        secondSheetViews.Any(view =>
-            view.Attribute("guid")?.Value == "{11111111-1111-1111-1111-111111111111}").Should().BeFalse();
+        secondWorksheetXml.Root!
+            .Element(workbookNs + "customSheetViews")
+            .Should()
+            .BeNull();
     }
 
     [Fact]

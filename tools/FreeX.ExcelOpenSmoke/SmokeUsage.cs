@@ -11,6 +11,8 @@ internal static class SmokeUsage
               --save-reopen                 Open each workbook in Excel, SaveCopyAs, close, reopen in Excel,
                                             and load the Excel-saved copy through FreeX.
               --generate-freex-fixture      Generate a non-chart FreeX XLSX smoke file.
+              --generate-freex-feature-fixtures
+                                            Generate representative FreeX feature XLSX smoke files.
               --generate-chart-fixtures     Generate FreeX histogram and waterfall XLSX smoke files.
               --generate-excel-fixture      Generate an Excel-authored XLSX fixture through COM, then load/save it through FreeX.
               --freex-resave-before-excel   For user inputs, load/save through FreeX before Excel validation.
@@ -20,6 +22,7 @@ internal static class SmokeUsage
 
             Examples:
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --generate-freex-fixture --generate-excel-fixture
+              dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --generate-freex-feature-fixtures
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --generate-chart-fixtures
               dotnet run --project tools/FreeX.ExcelOpenSmoke -- --save-reopen --freex-resave-before-excel C:\Users\quinn\freex-xlsx-verify\excel-authored.xlsx
             """);

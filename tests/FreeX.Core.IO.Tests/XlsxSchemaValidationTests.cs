@@ -57,6 +57,18 @@ public sealed class XlsxSchemaValidationTests
         themeErrors.Should().BeEmpty();
     }
 
+    [Fact]
+    public void XlsxAdapter_Save_ProducesSchemaValidWorkbookProtection()
+    {
+        var workbook = new Workbook("WorkbookProtectionValid");
+        workbook.IsStructureProtected = true;
+        workbook.StructureProtectionPassword = "structure";
+        workbook.AddSheet("Visible").SetCell(new CellAddress(workbook.GetSheetAt(0).Id, 1, 1), new TextValue("x"));
+        workbook.AddSheet("Hidden").IsHidden = true;
+
+        SchemaErrors(workbook).Should().BeEmpty();
+    }
+
     [Theory]
     // Classic (c:) charts — a schema-valid title/axis text body (a:bodyPr) is required for Excel to open them.
     [InlineData(ChartType.Column)]

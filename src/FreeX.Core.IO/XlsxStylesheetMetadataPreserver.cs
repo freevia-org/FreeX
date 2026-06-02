@@ -62,7 +62,7 @@ internal static class XlsxStylesheetMetadataPreserver
             return true;
         }
 
-        var changed = XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceDifferentialStyles, targetDifferentialStyles);
+        var changed = MergeDifferentialStyleContainerAttributes(sourceDifferentialStyles, targetDifferentialStyles);
         var targetStyles = targetDifferentialStyles.Elements(workbookNs + "dxf").ToList();
         foreach (var (sourceStyle, index) in sourceDifferentialStyles.Elements(workbookNs + "dxf").Select((style, index) => (style, index)))
         {
@@ -70,17 +70,39 @@ internal static class XlsxStylesheetMetadataPreserver
             {
                 targetDifferentialStyles.Add(new XElement(sourceStyle));
                 targetStyles.Add(targetDifferentialStyles.Elements(workbookNs + "dxf").Last());
+                XlsxAdvancedConditionalFormatWriter.NormalizeDifferentialStyleOrder(targetStyles[^1], workbookNs);
                 changed = true;
                 continue;
             }
 
             if (XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceStyle, targetStyles[index]))
                 changed = true;
+            if (XlsxAdvancedConditionalFormatWriter.NormalizeDifferentialStyleOrder(targetStyles[index], workbookNs))
+                changed = true;
         }
 
         targetDifferentialStyles.SetAttributeValue(
             "count",
             targetDifferentialStyles.Elements(workbookNs + "dxf").Count().ToString(CultureInfo.InvariantCulture));
+        return changed;
+    }
+
+    private static bool MergeDifferentialStyleContainerAttributes(XElement sourceDifferentialStyles, XElement targetDifferentialStyles)
+    {
+        var changed = false;
+        foreach (var attribute in sourceDifferentialStyles.Attributes())
+        {
+            if (attribute.IsNamespaceDeclaration ||
+                string.Equals(attribute.Name.LocalName, "count", StringComparison.Ordinal) ||
+                string.Equals(targetDifferentialStyles.Attribute(attribute.Name)?.Value, attribute.Value, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            targetDifferentialStyles.SetAttributeValue(attribute.Name, attribute.Value);
+            changed = true;
+        }
+
         return changed;
     }
 

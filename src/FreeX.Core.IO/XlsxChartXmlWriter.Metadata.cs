@@ -80,6 +80,7 @@ internal static partial class XlsxChartXmlWriter
             return null;
 
         return new XElement(chartNs + "txPr",
+            ToTextBodyProperties(0, drawingNs),
             new XElement(drawingNs + "p",
                 new XElement(drawingNs + "pPr",
                     new XElement(drawingNs + "defRPr",

@@ -131,7 +131,20 @@ internal static class XlsxPackageMetadataMerger
                 if (RelationshipsPartTargetsOnlyExcludedParts(sourceEntry, excludedSourceParts))
                     continue;
 
-                CopyEntry(sourceEntry, targetArchive);
+                var filteredRelationships = CreateFilteredRelationshipPart(
+                    sourceEntry,
+                    targetArchive,
+                    generatedEntriesBeforeMerge,
+                    excludedSourceParts,
+                    relationshipNs,
+                    out var relationshipsChanged);
+                if (filteredRelationships is null)
+                    continue;
+
+                if (relationshipsChanged)
+                    WriteXml(targetArchive, sourceEntry.FullName, filteredRelationships, sourceEntry.LastWriteTime);
+                else
+                    CopyEntry(sourceEntry, targetArchive);
                 continue;
             }
 
@@ -155,7 +168,8 @@ internal static class XlsxPackageMetadataMerger
             var changed = false;
             foreach (var sourceRelationship in sourceRoot.Elements(relationshipNs + "Relationship"))
             {
-                if (!ShouldPreserveRelationship(
+                if (!IsStructurallyValidPackageRelationship(sourceRelationship) ||
+                    !ShouldPreserveRelationship(
                         sourceEntry.FullName,
                         sourceRelationship,
                         targetArchive,
@@ -180,6 +194,77 @@ internal static class XlsxPackageMetadataMerger
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetEntry.FullName, targetXml);
         }
+    }
+
+    private static XDocument? CreateFilteredRelationshipPart(
+        ZipArchiveEntry sourceEntry,
+        ZipArchive targetArchive,
+        IReadOnlySet<string> generatedEntriesBeforeMerge,
+        IReadOnlySet<string>? excludedSourceParts,
+        XNamespace relationshipNs,
+        out bool changed)
+    {
+        changed = false;
+        var sourceXml = XlsxPackageXmlEditor.LoadXml(sourceEntry);
+        var sourceRoot = sourceXml.Root;
+        if (sourceRoot is null)
+            return null;
+
+        var targetXml = new XDocument(new XElement(relationshipNs + "Relationships"));
+        var existingRelationships = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var existingIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceRelationship in sourceRoot.Elements(relationshipNs + "Relationship"))
+        {
+            if (!IsStructurallyValidPackageRelationship(sourceRelationship) ||
+                !ShouldPreserveRelationship(
+                    sourceEntry.FullName,
+                    sourceRelationship,
+                    targetArchive,
+                    generatedEntriesBeforeMerge,
+                    excludedSourceParts))
+            {
+                changed = true;
+                continue;
+            }
+
+            if (!existingRelationships.Add(RelationshipSignature(sourceRelationship)))
+            {
+                changed = true;
+                continue;
+            }
+
+            var copy = new XElement(sourceRelationship);
+            var id = copy.Attribute("Id")?.Value;
+            if (!string.IsNullOrWhiteSpace(id) && existingIds.Contains(id))
+            {
+                copy.SetAttributeValue("Id", XlsxPackageXmlEditor.NextRelationshipId(targetXml, relationshipNs));
+                changed = true;
+            }
+
+            targetXml.Root!.Add(copy);
+            var copiedId = copy.Attribute("Id")?.Value;
+            if (!string.IsNullOrWhiteSpace(copiedId))
+                existingIds.Add(copiedId);
+        }
+
+        return targetXml.Root!.Elements(relationshipNs + "Relationship").Any() && changed
+            ? targetXml
+            : changed
+                ? null
+                : new XDocument(sourceXml);
+    }
+
+    private static void WriteXml(
+        ZipArchive targetArchive,
+        string targetEntryName,
+        XDocument xml,
+        DateTimeOffset lastWriteTime)
+    {
+        DeleteEntries(targetArchive, targetEntryName);
+        var targetEntry = targetArchive.CreateEntry(targetEntryName, CompressionLevel.Optimal);
+        targetEntry.LastWriteTime = lastWriteTime;
+        using var stream = targetEntry.Open();
+        xml.Save(stream);
     }
 
     private static ZipArchiveEntry? GetEntry(ZipArchive archive, string entryName)
@@ -276,6 +361,35 @@ internal static class XlsxPackageMetadataMerger
         return !string.IsNullOrWhiteSpace(targetPart) &&
                !generatedEntriesBeforeMerge.Contains(targetPart) &&
                targetArchive.GetEntry(targetPart) is not null;
+    }
+
+    private static bool IsStructurallyValidPackageRelationship(XElement relationship)
+    {
+        if (relationship.Attributes().Any(attribute =>
+                !attribute.IsNamespaceDeclaration &&
+                attribute.Name.NamespaceName.Length != 0))
+        {
+            return false;
+        }
+
+        if (relationship.Attributes().Any(attribute =>
+                !attribute.IsNamespaceDeclaration &&
+                attribute.Name.LocalName is not "Id" and not "Type" and not "Target" and not "TargetMode"))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(relationship.Attribute("Id")?.Value) ||
+            string.IsNullOrWhiteSpace(relationship.Attribute("Type")?.Value) ||
+            string.IsNullOrWhiteSpace(relationship.Attribute("Target")?.Value))
+        {
+            return false;
+        }
+
+        var targetMode = relationship.Attribute("TargetMode")?.Value;
+        return string.IsNullOrWhiteSpace(targetMode) ||
+               string.Equals(targetMode.Trim(), "External", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(targetMode.Trim(), "Internal", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool RelationshipsPartTargetsOnlyExcludedParts(

@@ -19,7 +19,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             var retainedViews = sourceCustomSheetViews
                 .Elements(workbookNs + "customSheetView")
                 .Where(view => !modeledCustomViewIds.Contains(XlsxCustomViewMapper.NormalizeId(view.Attribute("guid")?.Value) ?? string.Empty))
-                .Select(view => new XElement(view))
+                .Select(CloneCustomSheetViewForPreservation)
                 .ToList();
             if (retainedViews.Count == 0)
                 return false;
@@ -27,7 +27,10 @@ internal static partial class XlsxWorksheetMetadataPreserver
             InsertWorksheetMetadataElementInOrder(
                 targetRoot,
                 workbookNs,
-                new XElement(sourceCustomSheetViews.Name, sourceCustomSheetViews.Attributes(), retainedViews));
+                new XElement(
+                    sourceCustomSheetViews.Name,
+                    sourceCustomSheetViews.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration),
+                    retainedViews));
             return true;
         }
 
@@ -43,8 +46,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
             .GroupBy(item => item.Id!, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First().View, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var sourceView in sourceCustomSheetViews.Elements(workbookNs + "customSheetView"))
+        foreach (var originalSourceView in sourceCustomSheetViews.Elements(workbookNs + "customSheetView"))
         {
+            var sourceView = CloneCustomSheetViewForPreservation(originalSourceView);
             var id = XlsxCustomViewMapper.NormalizeId(sourceView.Attribute("guid")?.Value);
             if (!string.IsNullOrWhiteSpace(id) && targetViewsById.TryGetValue(id, out var targetView))
             {
@@ -55,13 +59,21 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (!string.IsNullOrWhiteSpace(id) && modeledCustomViewIds.Contains(id))
                 continue;
 
-            targetCustomSheetViews.Add(new XElement(sourceView));
+            targetCustomSheetViews.Add(sourceView);
             if (!string.IsNullOrWhiteSpace(id))
                 targetViewsById[id] = targetCustomSheetViews.Elements(workbookNs + "customSheetView").Last();
             changed = true;
         }
 
         return changed;
+    }
+
+    private static XElement CloneCustomSheetViewForPreservation(XElement sourceView)
+    {
+        var clone = new XElement(sourceView);
+        if (XlsxCustomViewMapper.NormalizeId(clone.Attribute("guid")?.Value) is { } id)
+            clone.SetAttributeValue("guid", id);
+        return clone;
     }
 
     private static bool MergeModeledCustomSheetViewMetadata(

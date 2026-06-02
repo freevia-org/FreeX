@@ -8,6 +8,7 @@ internal static class XlsxWorksheetSourceIndependentMetadataBatchWriter
     public static bool HasMetadata(Sheet sheet) =>
         sheet.AutoFilter is not null ||
         XlsxDataValidationNativeMetadataMapper.HasNativeMetadata(sheet) ||
+        XlsxWorksheetPageBreaksMetadataWriter.HasModeledBreaksOrMetadata(sheet) ||
         XlsxWorksheetNativeMetadataBatchWriter.HasMetadata(sheet);
 
     public static void Save(
@@ -20,17 +21,19 @@ internal static class XlsxWorksheetSourceIndependentMetadataBatchWriter
 
         var hasAutoFilter = false;
         var hasDataValidationNativeMetadata = false;
+        var hasWorksheetPageBreaks = false;
         var hasWorksheetNativeMetadata = false;
         foreach (var sheet in workbook.Sheets)
         {
             hasAutoFilter |= sheet.AutoFilter is not null;
             hasDataValidationNativeMetadata |= XlsxDataValidationNativeMetadataMapper.HasNativeMetadata(sheet);
+            hasWorksheetPageBreaks |= XlsxWorksheetPageBreaksMetadataWriter.HasModeledBreaksOrMetadata(sheet);
             hasWorksheetNativeMetadata |= XlsxWorksheetNativeMetadataBatchWriter.HasMetadata(sheet);
-            if (hasAutoFilter && hasDataValidationNativeMetadata && hasWorksheetNativeMetadata)
+            if (hasAutoFilter && hasDataValidationNativeMetadata && hasWorksheetPageBreaks && hasWorksheetNativeMetadata)
                 break;
         }
 
-        if (!hasAutoFilter && !hasDataValidationNativeMetadata && !hasWorksheetNativeMetadata)
+        if (!hasAutoFilter && !hasDataValidationNativeMetadata && !hasWorksheetPageBreaks && !hasWorksheetNativeMetadata)
             return;
 
         using var session = new XlsxWorksheetXmlEditSession(xlsxStream, worksheetPathMap);
@@ -40,5 +43,7 @@ internal static class XlsxWorksheetSourceIndependentMetadataBatchWriter
             XlsxDataValidationNativeMetadataMapper.Save(session, workbook);
         if (hasWorksheetNativeMetadata)
             XlsxWorksheetNativeMetadataBatchWriter.Save(session, workbook);
+        else if (hasWorksheetPageBreaks)
+            XlsxWorksheetPageBreaksMetadataWriter.Save(session, workbook);
     }
 }

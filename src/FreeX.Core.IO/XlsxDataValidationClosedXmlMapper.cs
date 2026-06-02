@@ -84,6 +84,9 @@ internal static class XlsxDataValidationClosedXmlMapper
                 foreach (var additionalRange in ranges.Skip(1))
                     dv.AdditionalRanges.Add(ToGridRange(additionalRange, sheetId));
 
+                if (IsDuplicateCoveredValidation(sheet.DataValidations, dv))
+                    continue;
+
                 sheet.DataValidations.Add(dv);
             }
             catch
@@ -138,7 +141,7 @@ internal static class XlsxDataValidationClosedXmlMapper
                 switch (dv.Type)
                 {
                     case DvType.List:
-                        xlDv.List(f1, dv.ShowDropdown);
+                        xlDv.List(NormalizeListFormulaForSave(f1), dv.ShowDropdown);
                         break;
                     case DvType.WholeNumber:
                         ApplyNumeric(xlDv.WholeNumber, dv.Operator, f1, f2);
@@ -166,6 +169,49 @@ internal static class XlsxDataValidationClosedXmlMapper
             }
         }
     }
+
+    private static string NormalizeListFormulaForSave(string formula)
+    {
+        if (string.IsNullOrWhiteSpace(formula))
+            return formula;
+
+        var trimmed = formula.Trim();
+        if (trimmed.Length < 2 || !trimmed.Contains(',', StringComparison.Ordinal))
+            return formula;
+
+        if (trimmed.StartsWith('"') && trimmed.EndsWith('"') ||
+            trimmed.StartsWith('=') ||
+            trimmed.Contains('!', StringComparison.Ordinal) ||
+            trimmed.Contains(':', StringComparison.Ordinal) ||
+            trimmed.Contains('$', StringComparison.Ordinal))
+        {
+            return formula;
+        }
+
+        return $"\"{trimmed.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+    }
+
+    private static bool IsDuplicateCoveredValidation(IEnumerable<DataValidation> existingRules, DataValidation candidate) =>
+        CandidateRanges(candidate).All(range => existingRules.Any(existing => CoversRange(existing, range)));
+
+    private static IEnumerable<GridRange> CandidateRanges(DataValidation validation)
+    {
+        yield return validation.AppliesTo;
+        foreach (var range in validation.AdditionalRanges)
+            yield return range;
+    }
+
+    private static bool CoversRange(DataValidation validation, GridRange range) =>
+        IsSameRange(validation.AppliesTo, range) ||
+        validation.AdditionalRanges.Any(additionalRange => IsSameRange(additionalRange, range));
+
+    private static bool IsSameRange(GridRange left, GridRange right) =>
+        left.Start.Sheet == right.Start.Sheet &&
+        left.Start.Row == right.Start.Row &&
+        left.Start.Col == right.Start.Col &&
+        left.End.Sheet == right.End.Sheet &&
+        left.End.Row == right.End.Row &&
+        left.End.Col == right.End.Col;
 
     private static void ApplyNumeric(IXLValidationCriteria rule, DvOperator op, string f1, string f2)
     {

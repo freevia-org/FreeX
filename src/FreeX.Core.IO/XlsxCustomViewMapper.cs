@@ -91,6 +91,7 @@ internal static class XlsxCustomViewMapper
                 workbookNs + "customWorkbookView",
                 new XAttribute("name", item.View.Name),
                 new XAttribute("guid", item.Id),
+                new XAttribute("activeSheetId", "1"),
                 item.View.IncludePrintSettings ? new XAttribute("includePrintSettings", "1") : new XAttribute("includePrintSettings", "0"),
                 item.View.IncludeHiddenRowsColumnsAndFilterSettings ? new XAttribute("includeHiddenRowCol", "1") : new XAttribute("includeHiddenRowCol", "0"),
                 new XAttribute("autoUpdate", "0"),
@@ -149,7 +150,7 @@ internal static class XlsxCustomViewMapper
 
         var trimmed = id.Trim();
         if (Guid.TryParse(trimmed.Trim('{', '}'), out var guid))
-            return $"{{{guid:D}}}";
+            return $"{{{guid:D}}}".ToUpperInvariant();
 
         return trimmed;
     }
@@ -157,7 +158,7 @@ internal static class XlsxCustomViewMapper
     private static string CreateDeterministicId(string name, int index)
     {
         var bytes = MD5.HashData(Encoding.UTF8.GetBytes($"FreeX.CustomView:{index}:{name}"));
-        return $"{{{new Guid(bytes):D}}}";
+        return $"{{{new Guid(bytes):D}}}".ToUpperInvariant();
     }
 
     private static XElement ToCustomSheetViewXml(XNamespace workbookNs, string id, WorksheetCustomViewState state)

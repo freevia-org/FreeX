@@ -67,6 +67,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
         if (attribute.IsNamespaceDeclaration)
             return false;
 
+        if (IsOfficeRevisionAttribute(attribute))
+            return false;
+
         if (attribute.Name.NamespaceName.Length == 0 &&
             modeledAttributeNames.Contains(attribute.Name.LocalName))
         {
@@ -87,6 +90,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
         foreach (var attribute in sourceElement.Attributes())
         {
             if (attribute.IsNamespaceDeclaration ||
+                IsOfficeRevisionAttribute(attribute) ||
                 excludedLocalNames.Contains(attribute.Name.LocalName, StringComparer.Ordinal) ||
                 targetElement.Attribute(attribute.Name) is not null)
             {
@@ -105,8 +109,12 @@ internal static partial class XlsxWorksheetMetadataPreserver
         var changed = false;
         foreach (var attribute in sourceElement.Attributes())
         {
-            if (targetElement.Attribute(attribute.Name) is not null)
+            if (attribute.IsNamespaceDeclaration ||
+                IsOfficeRevisionAttribute(attribute) ||
+                targetElement.Attribute(attribute.Name) is not null)
+            {
                 continue;
+            }
 
             targetElement.SetAttributeValue(attribute.Name, attribute.Value);
             changed = true;
@@ -114,6 +122,15 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
         return changed;
     }
+
+    private static bool IsOfficeRevisionAttribute(XAttribute attribute) =>
+        !attribute.IsNamespaceDeclaration &&
+        string.Equals(attribute.Name.LocalName, "uid", StringComparison.Ordinal) &&
+        IsOfficeRevisionNamespace(attribute.Name.NamespaceName);
+
+    private static bool IsOfficeRevisionNamespace(string namespaceName) =>
+        namespaceName.StartsWith("http://schemas.microsoft.com/office/spreadsheetml/", StringComparison.Ordinal) &&
+        namespaceName.Contains("/revision", StringComparison.Ordinal);
 
     private static string ElementIdentityKey(XElement element)
     {
