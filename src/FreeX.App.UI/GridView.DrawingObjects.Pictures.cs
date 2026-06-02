@@ -25,94 +25,109 @@ public partial class GridView
         var visibleRight = GetDrawingViewportRight();
         var visibleBottom = GetDrawingViewportBottom();
         var (lastRenderableRow, lastRenderableColumn) = GetRenderableDrawingAnchorBounds(visibleRight, visibleBottom);
+        var metricLookups = GetRenderMetricLookups(Viewport);
         foreach (var picture in Pictures)
+            RenderPicture(dc, metricLookups, picture, fill, pixelsPerDip, visibleRight, visibleBottom, lastRenderableRow, lastRenderableColumn);
+    }
+
+    private void RenderPicture(
+        DrawingContext dc,
+        RenderMetricLookupCache metricLookups,
+        PictureModel picture,
+        Brush fill,
+        double pixelsPerDip,
+        double visibleRight,
+        double visibleBottom,
+        uint lastRenderableRow,
+        uint lastRenderableColumn)
+    {
+        if (!picture.IsVisible) return;
+        if (!CanAnchoredObjectReachDrawingViewport(picture.Anchor, lastRenderableRow, lastRenderableColumn))
+            return;
+        if (!TryCreateAnchoredObjectRect(
+                metricLookups,
+                picture.Anchor,
+                picture.Width,
+                picture.Height,
+                MinimumPictureObjectWidth,
+                MinimumPictureObjectHeight,
+                out var rect))
+            return;
+        if (NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom) &&
+            !IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom))
+            return;
+
+        if (Math.Abs(picture.RotationDegrees) > 0.0001)
+            dc.PushTransform(new RotateTransform(
+                picture.RotationDegrees,
+                rect.Left + rect.Width / 2,
+                rect.Top + rect.Height / 2));
+
+        if (picture.Kind == PictureKind.Image &&
+            TryLoadPictureImage(picture, out var image) &&
+            image is not null)
         {
-            if (!picture.IsVisible) continue;
-            if (!CanAnchoredObjectReachDrawingViewport(picture.Anchor, lastRenderableRow, lastRenderableColumn))
-                continue;
-            if (!TryCreateAnchoredObjectRect(picture.Anchor,
-                    picture.Width,
-                    picture.Height,
-                    MinimumPictureObjectWidth,
-                    MinimumPictureObjectHeight,
-                    out var rect))
-                continue;
-            if (NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom) &&
-                !IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom))
-                continue;
-
-            if (Math.Abs(picture.RotationDegrees) > 0.0001)
-                dc.PushTransform(new RotateTransform(
-                    picture.RotationDegrees,
-                    rect.Left + rect.Width / 2,
-                    rect.Top + rect.Height / 2));
-
-            if (picture.Kind == PictureKind.Image &&
-                TryLoadPictureImage(picture, out var image) &&
-                image is not null)
+            if (HasPictureCrop(picture))
             {
-                if (HasPictureCrop(picture))
-                {
-                    var brush = GetCroppedPictureBrush(picture, image);
-                    dc.DrawRectangle(brush, null, rect);
-                }
-                else
-                {
-                    dc.DrawImage(image, rect);
-                }
-                dc.DrawRectangle(null, PictureBorderPen, rect);
-                DrawPictureSelectionAdorner(dc, picture, rect);
-                if (Math.Abs(picture.RotationDegrees) > 0.0001)
-                    dc.Pop();
-                continue;
+                var brush = GetCroppedPictureBrush(picture, image);
+                dc.DrawRectangle(brush, null, rect);
             }
-
-            dc.DrawRectangle(fill, PictureBorderPen, rect);
-
-            var rows = Math.Max(1, picture.SourceRowCount);
-            var cols = Math.Max(1, picture.SourceColumnCount);
-            var cellWidth = rect.Width / cols;
-            var cellHeight = rect.Height / rows;
-
-            for (uint r = 1; r < rows; r++)
+            else
             {
-                var y = rect.Top + r * cellHeight;
-                dc.DrawLine(PictureGridPen, new Point(rect.Left, y), new Point(rect.Right, y));
+                dc.DrawImage(image, rect);
             }
-
-            for (uint c = 1; c < cols; c++)
-            {
-                var x = rect.Left + c * cellWidth;
-                dc.DrawLine(PictureGridPen, new Point(x, rect.Top), new Point(x, rect.Bottom));
-            }
-
-            foreach (var cell in picture.Cells)
-            {
-                if (cell.RowOffset >= rows || cell.ColumnOffset >= cols || string.IsNullOrEmpty(cell.Text))
-                    continue;
-                var textRect = new Rect(
-                    rect.Left + cell.ColumnOffset * cellWidth + 3,
-                    rect.Top + cell.RowOffset * cellHeight + 1,
-                    Math.Max(1, cellWidth - 6),
-                    Math.Max(1, cellHeight - 2));
-                var text = GetDrawingObjectText(
-                    cell.Text,
-                    TextBrush,
-                    11,
-                    textRect.Width,
-                    textRect.Height,
-                    pixelsPerDip,
-                    TextTrimming.CharacterEllipsis);
-                dc.PushClip(GetDrawingObjectClipGeometry(textRect));
-                dc.DrawText(text, textRect.TopLeft);
-                dc.Pop();
-            }
-
+            dc.DrawRectangle(null, PictureBorderPen, rect);
             DrawPictureSelectionAdorner(dc, picture, rect);
-
             if (Math.Abs(picture.RotationDegrees) > 0.0001)
                 dc.Pop();
+            return;
         }
+
+        dc.DrawRectangle(fill, PictureBorderPen, rect);
+
+        var rows = Math.Max(1, picture.SourceRowCount);
+        var cols = Math.Max(1, picture.SourceColumnCount);
+        var cellWidth = rect.Width / cols;
+        var cellHeight = rect.Height / rows;
+
+        for (uint r = 1; r < rows; r++)
+        {
+            var y = rect.Top + r * cellHeight;
+            dc.DrawLine(PictureGridPen, new Point(rect.Left, y), new Point(rect.Right, y));
+        }
+
+        for (uint c = 1; c < cols; c++)
+        {
+            var x = rect.Left + c * cellWidth;
+            dc.DrawLine(PictureGridPen, new Point(x, rect.Top), new Point(x, rect.Bottom));
+        }
+
+        foreach (var cell in picture.Cells)
+        {
+            if (cell.RowOffset >= rows || cell.ColumnOffset >= cols || string.IsNullOrEmpty(cell.Text))
+                continue;
+            var textRect = new Rect(
+                rect.Left + cell.ColumnOffset * cellWidth + 3,
+                rect.Top + cell.RowOffset * cellHeight + 1,
+                Math.Max(1, cellWidth - 6),
+                Math.Max(1, cellHeight - 2));
+            var text = GetDrawingObjectText(
+                cell.Text,
+                TextBrush,
+                11,
+                textRect.Width,
+                textRect.Height,
+                pixelsPerDip,
+                TextTrimming.CharacterEllipsis);
+            dc.PushClip(GetDrawingObjectClipGeometry(textRect));
+            dc.DrawText(text, textRect.TopLeft);
+            dc.Pop();
+        }
+
+        DrawPictureSelectionAdorner(dc, picture, rect);
+
+        if (Math.Abs(picture.RotationDegrees) > 0.0001)
+            dc.Pop();
     }
 
     private void DrawPictureSelectionAdorner(DrawingContext dc, PictureModel picture, Rect rect)

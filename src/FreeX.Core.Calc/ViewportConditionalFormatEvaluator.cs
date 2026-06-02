@@ -20,10 +20,26 @@ internal sealed record CfEvaluationContext(
     Dictionary<CfThresholdFormulaKey, double> StaticThresholdFormulaValues,
     Dictionary<ConditionalFormat, CfColorScaleThresholdCache> ColorScaleThresholds,
     Dictionary<ConditionalFormat, CfIconSetThresholdCache> IconSetThresholds,
-    Dictionary<ConditionalFormat, CellStyle> DefaultMergedFormatStyles);
+    Dictionary<ConditionalFormat, CellStyle> DefaultMergedFormatStyles,
+    CfColorScaleStyleCache? ColorScaleStyles);
 
 internal sealed record CfColorScaleThresholdCache(double Min, double Max, double? Mid);
 internal sealed record CfIconSetThresholdCache(double[] Values, bool[] GreaterThanOrEqual);
+
+internal sealed class CfColorScaleStyleCache
+{
+    private Dictionary<CellColor, CellStyle>? _styles;
+
+    public CellStyle Get(CellColor fillColor)
+    {
+        if (_styles is not null && _styles.TryGetValue(fillColor, out var cached))
+            return cached;
+
+        var style = new CellStyle { FillColor = fillColor };
+        (_styles ??= new Dictionary<CellColor, CellStyle>(128)).Add(fillColor, style);
+        return style;
+    }
+}
 
 internal sealed record CfFormulaCache(
     FormulaNode Ast,
@@ -90,7 +106,8 @@ internal static class ViewportConditionalFormatEvaluator
         EmptyStaticThresholdFormulaValues,
         EmptyColorScaleThresholds,
         EmptyIconSetThresholds,
-        EmptyDefaultMergedFormatStyles);
+        EmptyDefaultMergedFormatStyles,
+        null);
 
     public static CfEvaluationContext BuildContext(Sheet sheet, Workbook workbook)
     {
@@ -112,7 +129,19 @@ internal static class ViewportConditionalFormatEvaluator
             staticThresholdFormulaValues,
             PrecomputeColorScaleThresholdCaches(sheet, aggregates, staticThresholdFormulaValues),
             PrecomputeIconSetThresholdCaches(sheet, aggregates, staticThresholdFormulaValues),
-            PrecomputeDefaultMergedFormatStyles(rulesByPriority));
+            PrecomputeDefaultMergedFormatStyles(rulesByPriority),
+            CreateColorScaleStyleCache(rulesByPriority));
+    }
+
+    private static CfColorScaleStyleCache? CreateColorScaleStyleCache(IReadOnlyList<ConditionalFormat> rulesByPriority)
+    {
+        for (var i = 0; i < rulesByPriority.Count; i++)
+        {
+            if (rulesByPriority[i].RuleType == CfRuleType.ColorScale)
+                return new CfColorScaleStyleCache();
+        }
+
+        return null;
     }
 
     private static ConditionalFormat[] CopyRulesByPriority(IReadOnlyList<ConditionalFormat> rules)
@@ -1407,7 +1436,7 @@ internal static class ViewportConditionalFormatEvaluator
                 : null;
         }
 
-        if (max <= min) return new CellStyle { FillColor = cf.MinColor.ToCellColor() };
+        if (max <= min) return GetColorScaleStyle(cfContext, cf.MinColor.ToCellColor());
 
         var interpolated = mid.HasValue
             ? cellVal <= mid.Value
@@ -1415,8 +1444,11 @@ internal static class ViewportConditionalFormatEvaluator
                 : Lerp(cf.MidColor, cf.MaxColor, Math.Clamp((cellVal - mid.Value) / (max - mid.Value), 0d, 1d))
             : Lerp(cf.MinColor, cf.MaxColor, Math.Clamp((cellVal - min) / (max - min), 0d, 1d));
 
-        return new CellStyle { FillColor = interpolated };
+        return GetColorScaleStyle(cfContext, interpolated);
     }
+
+    private static CellStyle GetColorScaleStyle(CfEvaluationContext cfContext, CellColor fillColor) =>
+        cfContext.ColorScaleStyles?.Get(fillColor) ?? new CellStyle { FillColor = fillColor };
 
     internal static bool TryResolveThreshold(
         CfThresholdType type,

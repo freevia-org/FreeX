@@ -327,6 +327,9 @@ public sealed partial class Sheet
     /// <summary>Pictures embedded in this sheet, including pasted cell-range pictures.</summary>
     public List<PictureModel> Pictures { get; } = [];
 
+    /// <summary>Back-to-front z-order for supported drawing objects: shapes, pictures, and text boxes.</summary>
+    public List<DrawingObjectZOrderEntry> DrawingObjectZOrder { get; } = [];
+
     /// <summary>Sparklines embedded in cells on this sheet.</summary>
     public List<SparklineModel> Sparklines { get; } = [];
 

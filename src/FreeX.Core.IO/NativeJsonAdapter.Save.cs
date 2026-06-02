@@ -291,6 +291,7 @@ public sealed partial class NativeJsonAdapter
                     .Where(shape => NativeJsonVisualDtoMapper.IsDrawingShapeOnSheet(shape, s.Id))
                     .Select(NativeJsonVisualDtoMapper.FromDrawingShape)
                     .ToList(),
+                DrawingObjectZOrder = ToDrawingObjectZOrderDtos(s),
                 Sparklines = s.Sparklines
                     .OfType<SparklineModel>()
                     .Where(sparkline => IsSparklineOnSheet(sparkline, s.Id) && Enum.IsDefined(sparkline.Kind))

@@ -10,6 +10,11 @@ public partial class GridView
         Dictionary<uint, RowMetric> Rows,
         Dictionary<uint, ColMetric> Columns);
 
+    private sealed record RenderMetricLookupCache(
+        ViewportModel Viewport,
+        Dictionary<uint, RowMetric> Rows,
+        Dictionary<uint, ColMetric> Columns);
+
     private sealed record OccupiedCellLookupCache(
         ViewportModel Viewport,
         CellAddress? EditingCell,

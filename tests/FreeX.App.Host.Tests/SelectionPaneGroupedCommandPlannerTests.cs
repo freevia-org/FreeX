@@ -38,8 +38,12 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
         groupedBack.IsVisible.Should().BeFalse();
         activeBack.Name.Should().Be("Quarter Logo");
         groupedBack.Name.Should().Be("Quarter Logo");
-        activeSheet.Pictures.Should().Equal(activeFront, activeBack);
-        groupedSheet.Pictures.Should().Equal(groupedFront, groupedBack);
+        activeSheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, activeFront.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, activeBack.Id));
+        groupedSheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, groupedFront.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, groupedBack.Id));
 
         command.Revert(ctx);
 
@@ -47,8 +51,8 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
         groupedBack.IsVisible.Should().BeTrue();
         activeBack.Name.Should().Be("Active Back");
         groupedBack.Name.Should().Be("Grouped Back");
-        activeSheet.Pictures.Should().Equal(activeBack, activeFront);
-        groupedSheet.Pictures.Should().Equal(groupedBack, groupedFront);
+        activeSheet.DrawingObjectZOrder.Should().BeEmpty();
+        groupedSheet.DrawingObjectZOrder.Should().BeEmpty();
     }
 
     [Fact]
@@ -86,6 +90,46 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
     }
 
     [Fact]
+    public void CreateCommand_PropagatesMixedSupportedDrawingObjectMovesAcrossGroupedSheets()
+    {
+        var wb = new Workbook("test");
+        var activeSheet = wb.AddSheet("Sheet1");
+        var groupedSheet = wb.AddSheet("Sheet2");
+        var ctx = new SimpleCtx(wb);
+        var activeShape = AddShape(activeSheet, 2, 2, "Active Shape");
+        var activePicture = AddPicture(activeSheet, 3, 2, "Active Picture");
+        var groupedShape = AddShape(groupedSheet, 2, 2, "Grouped Shape");
+        var groupedPicture = AddPicture(groupedSheet, 3, 2, "Grouped Picture");
+        var result = new SelectionPaneDialogResult(
+            SelectionPaneDialogAction.ApplyVisibility,
+            null,
+            [],
+            [],
+            [new SelectionPaneMoveChange(SelectionPaneObjectKind.Shape, activeShape.Id, Forward: true)]);
+        var command = new CompositeWorkbookCommand(
+            "Selection Pane",
+            [
+                SelectionPaneGroupedCommandPlanner.CreateCommand(wb, activeSheet.Id, activeSheet.Id, result),
+                SelectionPaneGroupedCommandPlanner.CreateCommand(wb, activeSheet.Id, groupedSheet.Id, result)
+            ]);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        activeSheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, activePicture.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, activeShape.Id));
+        groupedSheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, groupedPicture.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, groupedShape.Id));
+
+        command.Revert(ctx);
+
+        activeSheet.DrawingObjectZOrder.Should().BeEmpty();
+        groupedSheet.DrawingObjectZOrder.Should().BeEmpty();
+    }
+
+    [Fact]
     public void MainWindowDrawing_RoutesSelectionPaneChangesThroughGroupedPlanner()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Drawing.cs"));
@@ -109,6 +153,18 @@ public sealed class SelectionPaneGroupedCommandPlannerTests
         };
         sheet.Pictures.Add(picture);
         return picture;
+    }
+
+    private static DrawingShapeModel AddShape(Sheet sheet, uint row, uint col, string name)
+    {
+        var shape = new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, row, col),
+            Name = name,
+            IsVisible = true
+        };
+        sheet.DrawingShapes.Add(shape);
+        return shape;
     }
 
     private static string SourceMethod(string source, string start, string end) =>

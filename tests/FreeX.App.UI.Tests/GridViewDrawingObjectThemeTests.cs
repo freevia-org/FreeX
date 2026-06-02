@@ -194,15 +194,21 @@ public sealed class GridViewDrawingObjectThemeTests
 
         plannerMethod.Should().Contain("TryFindAnchorRow(viewport.RowMetrics, anchor.Row");
         plannerMethod.Should().Contain("TryFindAnchorColumn(viewport.ColMetrics, anchor.Col");
+        plannerMethod.Should().Contain("IReadOnlyDictionary<uint, RowMetric> rows");
+        plannerMethod.Should().Contain("rows.TryGetValue(anchor.Row");
+        plannerMethod.Should().Contain("columns.TryGetValue(anchor.Col");
         plannerMethod.Should().NotContain("FirstOrDefault");
         anchorHelpers.Should().Contain("if (metric.Row > row)");
         anchorHelpers.Should().Contain("if (metric.Col > column)");
         anchorHelpers.Should().Contain("break;");
-        renderTextBoxes.Should().Contain("TryCreateAnchoredObjectRect(textBox.Anchor");
+        renderTextBoxes.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        renderTextBoxes.Should().Contain("metricLookups,");
         renderTextBoxes.Should().NotContain("FirstOrDefault");
-        renderDrawingShapes.Should().Contain("TryCreateAnchoredObjectRect(shape.Anchor");
+        renderDrawingShapes.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        renderDrawingShapes.Should().Contain("metricLookups,");
         renderDrawingShapes.Should().NotContain("FirstOrDefault");
-        renderPictures.Should().Contain("TryCreateAnchoredObjectRect(picture.Anchor");
+        renderPictures.Should().Contain("var metricLookups = GetRenderMetricLookups(Viewport);");
+        renderPictures.Should().Contain("metricLookups,");
         renderPictures.Should().NotContain("FirstOrDefault");
     }
 
@@ -698,9 +704,9 @@ public sealed class GridViewDrawingObjectThemeTests
     {
         var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.App.UI", "GridView.ObjectDrag.cs"));
 
-        source.Should().Contain("ContainsRotatedInclusive(r, pos, t.RotationDegrees)");
-        source.Should().Contain("ContainsRotatedInclusive(r, pos, p.RotationDegrees)");
-        source.Should().Contain("ContainsRotatedInclusive(r, pos, s.RotationDegrees)");
+        source.Should().Contain("ContainsRotatedInclusive(rect, pos, textBox.RotationDegrees)");
+        source.Should().Contain("ContainsRotatedInclusive(rect, pos, picture.RotationDegrees)");
+        source.Should().Contain("ContainsRotatedInclusive(rect, pos, shape.RotationDegrees)");
         source.Should().Contain("var radians = -rotationDegrees * Math.PI / 180.0;");
     }
 
