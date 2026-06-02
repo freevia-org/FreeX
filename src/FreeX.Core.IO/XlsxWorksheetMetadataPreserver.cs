@@ -51,6 +51,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (sourceWorksheetEntry is null || targetWorksheetEntry is null)
                 continue;
 
+            if (!HasPreservableSourceWorksheetMetadata(sourceWorksheetEntry, workbookNs))
+                continue;
+
             var sourceWorksheetXml = XlsxPackageXmlEditor.LoadXml(sourceWorksheetEntry);
             var sourceBlocks = retainedChildNames
                 .Select(name => sourceWorksheetXml.Root?.Element(name))
@@ -331,14 +334,17 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
 
+            var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
+            if (sourceWorksheetEntry is null)
+                continue;
+
+            if (!HasPreservableSourceWorksheetMetadata(sourceWorksheetEntry, workbookNs))
+                continue;
+
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
             var sourceWorksheetXml = context?.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
             if (sourceWorksheetXml is null)
             {
-                var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
-                if (sourceWorksheetEntry is null)
-                    continue;
-
                 sourceWorksheetXml = XlsxPackageXmlEditor.LoadXml(sourceWorksheetEntry);
             }
 
