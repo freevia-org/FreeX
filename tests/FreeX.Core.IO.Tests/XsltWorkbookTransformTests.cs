@@ -1182,6 +1182,44 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_WorksheetVisibleAttributeValueTemplates_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <sheets>
+              <sheet name="Hidden report" visible="SheetHidden"/>
+              <sheet name="Audit stash" visible="SheetVeryHidden"/>
+            </sheets>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/sheets">
+                <ss:Workbook>
+                  <xsl:for-each select="sheet">
+                    <ss:Worksheet ss:Name="{@name}" ss:Visible="{@visible}">
+                      <ss:Table>
+                        <ss:Row><ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@name"/></ss:Data></ss:Cell></ss:Row>
+                      </ss:Table>
+                    </ss:Worksheet>
+                  </xsl:for-each>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var worksheets = XDocument.Load(transformed).Descendants(ss + "Worksheet").ToList();
+
+        worksheets.Select(sheet => sheet.Attribute(ss + "Name")!.Value)
+            .Should().Equal("Hidden report", "Audit stash");
+        worksheets.Select(sheet => sheet.Attribute(ss + "Visible")!.Value)
+            .Should().Equal("SheetHidden", "SheetVeryHidden");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NamedRangeAttributeValueTemplate_GeneratesSpreadsheetMl()
     {
         using var source = StreamFromString("""
