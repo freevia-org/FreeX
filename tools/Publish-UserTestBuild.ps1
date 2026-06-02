@@ -236,7 +236,6 @@ if ($PublishMode -eq "SingleFile") {
     $publishArgs += @(
         "-p:PublishSingleFile=true",
         "-p:FreeXTesterReleaseEnglishOnly=true",
-        "-p:EnableCompressionInSingleFile=true",
         "-p:IncludeNativeLibrariesForSelfExtract=true",
         "-p:IncludeAllContentForSelfExtract=true"
     )
