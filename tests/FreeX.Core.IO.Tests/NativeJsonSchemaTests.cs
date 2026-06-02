@@ -681,6 +681,44 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_TreatsNullNativeJsonChartListsAsEmpty()
+    {
+        var workbook = new Workbook("NullChartLists");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Name"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("A"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = GridRange.Parse("A1:B2", sheet.Id),
+            LegendEntries = null!,
+            SecondaryAxisSeriesIndexes = null!,
+            ComboLineSeriesIndexes = null!,
+            SeriesFormats = null!,
+            SeriesDataLabelFormats = null!,
+            PointDataLabelFormats = null!
+        });
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var chartJson = document.RootElement
+            .GetProperty("Sheets").EnumerateArray().Single()
+            .GetProperty("Charts").EnumerateArray().Single();
+
+        chartJson.GetProperty("LegendEntries").EnumerateArray().Should().BeEmpty();
+        chartJson.GetProperty("SecondaryAxisSeriesIndexes").EnumerateArray().Should().BeEmpty();
+        chartJson.GetProperty("ComboLineSeriesIndexes").EnumerateArray().Should().BeEmpty();
+        chartJson.GetProperty("SeriesFormats").EnumerateArray().Should().BeEmpty();
+        chartJson.GetProperty("SeriesDataLabelFormats").EnumerateArray().Should().BeEmpty();
+        chartJson.GetProperty("PointDataLabelFormats").EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
     public void Load_RejectsUnsupportedFutureNativeJsonSchema()
     {
         const string futureJson = """

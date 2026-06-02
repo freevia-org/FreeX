@@ -80,6 +80,85 @@ public sealed class XlsxThreadedCommentMapperTests
         });
     }
 
+    [Fact]
+    public void Save_WritesThreadedCommentRepliesAsParentedPackageElements()
+    {
+        using var package = SaveWorkbook(CreateWorkbookWithReplies());
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var threadedCommentsXml = LoadXml(archive, "xl/threadedComments/threadedComment1.xml");
+        var personsXml = LoadXml(archive, "xl/persons/person.xml");
+
+        var personIds = personsXml.Root!
+            .Elements(ThreadedCommentNs + "person")
+            .ToDictionary(
+                person => person.Attribute("displayName")!.Value,
+                person => person.Attribute("id")!.Value,
+                StringComparer.Ordinal);
+
+        personIds.Keys.Should().BeEquivalentTo("Quinn", "Codex", "Dana");
+
+        var comments = threadedCommentsXml.Root!
+            .Elements(ThreadedCommentNs + "threadedComment")
+            .ToList();
+        comments.Should().HaveCount(3);
+
+        var root = comments[0];
+        var rootId = root.Attribute("id")!.Value;
+        root.Attribute("ref")!.Value.Should().Be("C2");
+        root.Attribute("personId")!.Value.Should().Be(personIds["Quinn"]);
+        root.Attribute("parentId").Should().BeNull();
+        root.Attribute("dT")!.Value.Should().Be("2026-06-02T10:00:00Z");
+        root.Attribute("done")!.Value.Should().Be("1");
+        root.Element(ThreadedCommentNs + "text")!.Value.Should().Be("Please review total");
+
+        comments[1].Attribute("ref")!.Value.Should().Be("C2");
+        comments[1].Attribute("personId")!.Value.Should().Be(personIds["Codex"]);
+        comments[1].Attribute("parentId")!.Value.Should().Be(rootId);
+        comments[1].Attribute("dT")!.Value.Should().Be("2026-06-02T10:05:00Z");
+        comments[1].Element(ThreadedCommentNs + "text")!.Value.Should().Be("Looks high");
+
+        comments[2].Attribute("ref")!.Value.Should().Be("C2");
+        comments[2].Attribute("personId")!.Value.Should().Be(personIds["Dana"]);
+        comments[2].Attribute("parentId")!.Value.Should().Be(rootId);
+        comments[2].Attribute("dT")!.Value.Should().Be("2026-06-02T10:10:00Z");
+        comments[2].Element(ThreadedCommentNs + "text")!.Value.Should().Be("Updated after audit");
+    }
+
+    [Fact]
+    public void SaveLoadSaveLoad_RoundTripsThreadedCommentRepliesAndResolvedMetadata()
+    {
+        using var firstPackage = SaveWorkbook(CreateWorkbookWithReplies());
+
+        firstPackage.Position = 0;
+        var loaded = new XlsxFileAdapter().Load(firstPackage);
+
+        using var secondPackage = SaveWorkbook(loaded);
+        secondPackage.Position = 0;
+        var reloaded = new XlsxFileAdapter().Load(secondPackage);
+        var sheet = reloaded.GetSheetAt(0);
+        var loadedAddress = new CellAddress(sheet.Id, 2, 3);
+
+        sheet.ThreadedComments.Should().ContainKey(loadedAddress);
+        var comment = sheet.ThreadedComments[loadedAddress];
+        comment.Text.Should().Be("Please review total");
+        comment.Author.Should().Be("Quinn");
+        comment.CreatedAtUtc.Should().Be(new DateTimeOffset(2026, 6, 2, 10, 0, 0, TimeSpan.Zero));
+        comment.ModifiedAtUtc.Should().Be(new DateTimeOffset(2026, 6, 2, 10, 10, 0, TimeSpan.Zero));
+        comment.IsResolved.Should().BeTrue();
+        comment.Replies.Should().Equal(
+            new CommentReply("Looks high", "Codex")
+            {
+                CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 5, 0, TimeSpan.Zero),
+                ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 5, 0, TimeSpan.Zero)
+            },
+            new CommentReply("Updated after audit", "Dana")
+            {
+                CreatedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 10, 0, TimeSpan.Zero),
+                ModifiedAtUtc = new DateTimeOffset(2026, 6, 2, 10, 10, 0, TimeSpan.Zero)
+            });
+    }
+
     private static Workbook CreateWorkbook(DateTimeOffset createdAt)
     {
         var workbook = new Workbook("ThreadedRootXlsxTest");
@@ -91,6 +170,37 @@ public sealed class XlsxThreadedCommentMapperTests
             CreatedAtUtc = createdAt,
             ModifiedAtUtc = createdAt,
             IsResolved = true
+        };
+        return workbook;
+    }
+
+    private static Workbook CreateWorkbookWithReplies()
+    {
+        var rootCreatedAt = new DateTimeOffset(2026, 6, 2, 10, 0, 0, TimeSpan.Zero);
+        var firstReplyCreatedAt = new DateTimeOffset(2026, 6, 2, 10, 5, 0, TimeSpan.Zero);
+        var secondReplyCreatedAt = new DateTimeOffset(2026, 6, 2, 10, 10, 0, TimeSpan.Zero);
+        var workbook = new Workbook("ThreadedRepliesXlsxTest");
+        var sheet = workbook.AddSheet("S1");
+        var address = new CellAddress(sheet.Id, 2, 3);
+        sheet.SetCell(address, new TextValue("Total"));
+        sheet.ThreadedComments[address] = new ThreadedComment("Please review total", "Quinn")
+        {
+            CreatedAtUtc = rootCreatedAt,
+            ModifiedAtUtc = secondReplyCreatedAt,
+            IsResolved = true,
+            Replies =
+            [
+                new CommentReply("Looks high", "Codex")
+                {
+                    CreatedAtUtc = firstReplyCreatedAt,
+                    ModifiedAtUtc = firstReplyCreatedAt
+                },
+                new CommentReply("Updated after audit", "Dana")
+                {
+                    CreatedAtUtc = secondReplyCreatedAt,
+                    ModifiedAtUtc = secondReplyCreatedAt
+                }
+            ]
         };
         return workbook;
     }
