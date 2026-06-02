@@ -14811,6 +14811,78 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
+    public void XlsxAdapter_Load_CustomStructuredTableStyle_AppliesWholeTableAndHeaderRowDxfColors()
+    {
+        var workbook = new Workbook("StructuredTableStyleSemanticTest");
+        var sheet = workbook.AddSheet("Data");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Sales"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("North"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(12));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("South"));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(18));
+        sheet.StructuredTables.Add(new StructuredTableModel
+        {
+            Id = 1,
+            Name = "SalesTable",
+            DisplayName = "SalesTable",
+            Range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2)),
+            HasAutoFilter = true,
+            HeaderRowCount = 1,
+            StyleName = "FreeXSemanticTableStyle",
+            Columns =
+            {
+                new StructuredTableColumnModel(1, "Region"),
+                new StructuredTableColumnModel(2, "Sales")
+            }
+        });
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+        AddStructuredTableStyleSemanticMetadata(source);
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+
+        var loadedSheet = loaded.GetSheetAt(0);
+        var loadedStyle = loaded.StructuredTableStyles.Should()
+            .ContainSingle(style => style.Name == "FreeXSemanticTableStyle")
+            .Subject;
+        loadedStyle.NativeXml.Should().Contain("firstRowStripe");
+        var wholeTableElement = loadedStyle.Elements.Single(element => element.Type == "wholeTable");
+        wholeTableElement.DifferentialFormatId.Should().Be(0);
+        wholeTableElement.Format.Should().NotBeNull();
+        wholeTableElement.Format!.FillColor.Should().Be(new CellColor(226, 240, 217));
+        wholeTableElement.Format.FontColor.Should().Be(new CellColor(16, 32, 48));
+        var headerRowElement = loadedStyle.Elements.Single(element => element.Type == "headerRow");
+        headerRowElement.DifferentialFormatId.Should().Be(1);
+        headerRowElement.Format.Should().NotBeNull();
+        headerRowElement.Format!.FillColor.Should().Be(new CellColor(31, 78, 121));
+        headerRowElement.Format.FontColor.Should().Be(CellColor.White);
+        loadedStyle.Elements.Single(element => element.Type == "firstRowStripe").Format.Should().BeNull();
+
+        var headerStyle = loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 1, 1))!.StyleId);
+        headerStyle.FillColor.Should().Be(new CellColor(31, 78, 121));
+        headerStyle.FontColor.Should().Be(CellColor.White);
+        headerStyle.Bold.Should().BeTrue();
+
+        var bodyStyle = loaded.GetStyle(loadedSheet.GetCell(new CellAddress(loadedSheet.Id, 2, 1))!.StyleId);
+        bodyStyle.FillColor.Should().Be(new CellColor(226, 240, 217));
+        bodyStyle.FontColor.Should().Be(new CellColor(16, 32, 48));
+        bodyStyle.Bold.Should().BeFalse();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var stylesText = LoadPackageXml(archive.GetEntry("xl/styles.xml")!)
+            .ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+        stylesText.Should().Contain("semanticUnsupported=\"kept\"");
+    }
+
+    [Fact]
     public void XlsxAdapter_LoadedWorkbookSave_PreservesStableDocumentProperties()
     {
         var workbook = new Workbook("DocumentPropertiesRetentionTest");
@@ -22728,6 +22800,82 @@ public partial class FileAdapterSmokeTests
                     workbookNs + "ext",
                     new XAttribute("uri", "{FFEEDDCC-7788-6655-4433-22110099AABB}"),
                     new XElement(workbookNs + "FreeXNativeStylesExtension"))));
+            ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
+        }
+
+        packageStream.Position = 0;
+    }
+
+    private static void AddStructuredTableStyleSemanticMetadata(MemoryStream packageStream)
+    {
+        using (var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+            var stylesXml = LoadPackageXml(archive.GetEntry("xl/styles.xml")!);
+            stylesXml.Root!.Elements(workbookNs + "dxfs").Remove();
+            stylesXml.Root.Add(new XElement(
+                workbookNs + "dxfs",
+                new XAttribute("count", "2"),
+                new XElement(
+                    workbookNs + "dxf",
+                    new XElement(
+                        workbookNs + "font",
+                        new XElement(workbookNs + "color", new XAttribute("rgb", "FF102030"))),
+                    new XElement(
+                        workbookNs + "fill",
+                        new XElement(
+                            workbookNs + "patternFill",
+                            new XAttribute("patternType", "solid"),
+                            new XElement(workbookNs + "fgColor", new XAttribute("rgb", "FFE2F0D9"))))),
+                new XElement(
+                    workbookNs + "dxf",
+                    new XElement(
+                        workbookNs + "font",
+                        new XElement(workbookNs + "b"),
+                        new XElement(workbookNs + "color", new XAttribute("rgb", "FFFFFFFF"))),
+                    new XElement(
+                        workbookNs + "fill",
+                        new XElement(
+                            workbookNs + "patternFill",
+                            new XAttribute("patternType", "solid"),
+                            new XElement(workbookNs + "fgColor", new XAttribute("rgb", "FF1F4E79")))))));
+
+            var tableStyles = stylesXml.Root.Element(workbookNs + "tableStyles");
+            if (tableStyles is null)
+            {
+                tableStyles = new XElement(workbookNs + "tableStyles");
+                stylesXml.Root.Add(tableStyles);
+            }
+
+            tableStyles
+                .Elements(workbookNs + "tableStyle")
+                .Where(element => element.Attribute("name")?.Value == "FreeXSemanticTableStyle")
+                .Remove();
+            tableStyles.Add(new XElement(
+                workbookNs + "tableStyle",
+                new XAttribute("name", "FreeXSemanticTableStyle"),
+                new XAttribute("pivot", "0"),
+                new XAttribute("table", "1"),
+                new XAttribute("count", "3"),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "wholeTable"),
+                    new XAttribute("dxfId", "0")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "headerRow"),
+                    new XAttribute("dxfId", "1")),
+                new XElement(
+                    workbookNs + "tableStyleElement",
+                    new XAttribute("type", "firstRowStripe"),
+                    new XAttribute("dxfId", "0"),
+                    new XAttribute("size", "2"),
+                    new XAttribute("semanticUnsupported", "kept"))));
+            tableStyles.SetAttributeValue(
+                "count",
+                tableStyles.Elements(workbookNs + "tableStyle").Count().ToString(CultureInfo.InvariantCulture));
+
             ReplacePackageXml(archive, "xl/styles.xml", stylesXml);
         }
 
