@@ -108,6 +108,7 @@ public sealed partial class NativeJsonAdapter
                 }).OfType<ScenarioCellDto>().ToList()
             }).Where(scenario => scenario.ChangingCells.Count > 0).ToList(),
             PivotCaches = workbook.PivotCaches
+                .OfType<PivotCacheModel>()
                 .Where(cache => cache.CacheId > 0)
                 .Select(ToPivotCacheDto)
                 .ToList(),
