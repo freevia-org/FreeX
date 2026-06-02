@@ -322,6 +322,32 @@ public sealed class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaBarTab_WhileInlineEditorVisible_CommitsDraftAndHidesInlineEditor()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.ShowInlineEditor(1, 1);
+            harness.SetInlineEditorText("tab draft");
+            harness.FocusFormulaBar();
+
+            harness.PressFormulaBarKey(Key.Tab).Should().BeTrue();
+
+            harness.CellText(1, 1).Should().Be("tab draft");
+            harness.InlineEditorVisible.Should().BeFalse();
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 2),
+                new CellAddress(harness.CurrentSheetId, 1, 2)));
+            harness.CellAddressBoxText.Should().Be("B1");
+            harness.FormulaBarText.Should().BeEmpty();
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public void CtrlEnterFormulaBarEdit_FillsSelectedRangeWhenNotChoosingFormulaReferences()
     {
         StaTestRunner.Run(() =>
