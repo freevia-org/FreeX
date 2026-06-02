@@ -666,6 +666,53 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_DynamicCellAttributes_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <rows>
+              <row first="12.5" second="7.25" formula="=SUM(RC[-2]:RC[-1])" total="19.75" style="total"/>
+            </rows>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/rows">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <ss:Style ss:ID="total">
+                      <ss:NumberFormat ss:Format="0.00"/>
+                    </ss:Style>
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Dynamic Attributes">
+                    <ss:Table>
+                      <ss:Row>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@first"/></ss:Data></ss:Cell>
+                        <ss:Cell><ss:Data ss:Type="Number"><xsl:value-of select="row/@second"/></ss:Data></ss:Cell>
+                        <xsl:element name="ss:Cell">
+                          <xsl:attribute name="ss:Formula"><xsl:value-of select="row/@formula"/></xsl:attribute>
+                          <xsl:attribute name="ss:StyleID"><xsl:value-of select="row/@style"/></xsl:attribute>
+                          <ss:Data ss:Type="Number"><xsl:value-of select="row/@total"/></ss:Data>
+                        </xsl:element>
+                      </ss:Row>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var formulaCell = XDocument.Load(transformed).Descendants(ss + "Cell").ElementAt(2);
+
+        formulaCell.Attribute(ss + "Formula")!.Value.Should().Be("=SUM(RC[-2]:RC[-1])");
+        formulaCell.Attribute(ss + "StyleID")!.Value.Should().Be("total");
+        formulaCell.Element(ss + "Data")!.Value.Should().Be("19.75");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NamespaceUriDynamicElements_GenerateSpreadsheetMl()
     {
         using var source = StreamFromString("<rows><row sheet=\"UriDynamic\" label=\"Bravo\" amount=\"18.75\" /></rows>");
