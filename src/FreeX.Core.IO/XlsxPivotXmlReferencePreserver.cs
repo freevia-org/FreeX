@@ -56,11 +56,10 @@ internal static class XlsxPivotXmlReferencePreserver
         if (targetRoot is null || targetRoot.Element(workbookNs + "pivotCaches") is not null)
             return;
 
-        var sheetsElement = targetRoot.Element(workbookNs + "sheets");
-        if (sheetsElement is not null)
-            sheetsElement.AddBeforeSelf(new XElement(sourcePivotCaches));
-        else
-            targetRoot.Add(new XElement(sourcePivotCaches));
+        // Per CT_Workbook, <pivotCaches> must come after <sheets> (and customWorkbookViews) and before
+        // smartTagPr/webPublishing/extLst. Inserting it before <sheets> is schema-invalid and makes
+        // Excel reject the workbook and drop every PivotTable.
+        XlsxPivotTableWriter.InsertWorkbookPivotCaches(targetRoot, workbookNs, new XElement(sourcePivotCaches));
 
         XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/workbook.xml", targetXml);
     }
@@ -77,11 +76,10 @@ internal static class XlsxPivotXmlReferencePreserver
         if (targetRoot is null || targetRoot.Element(context.WorkbookNs + "pivotCaches") is not null)
             return;
 
-        var sheetsElement = targetRoot.Element(context.WorkbookNs + "sheets");
-        if (sheetsElement is not null)
-            sheetsElement.AddBeforeSelf(new XElement(sourcePivotCaches));
-        else
-            targetRoot.Add(new XElement(sourcePivotCaches));
+        // Per CT_Workbook, <pivotCaches> must come after <sheets> (and customWorkbookViews) and before
+        // smartTagPr/webPublishing/extLst. Inserting it before <sheets> is schema-invalid and makes
+        // Excel reject the workbook and drop every PivotTable.
+        XlsxPivotTableWriter.InsertWorkbookPivotCaches(targetRoot, context.WorkbookNs, new XElement(sourcePivotCaches));
 
         XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/workbook.xml", context.TargetWorkbookXml);
     }
