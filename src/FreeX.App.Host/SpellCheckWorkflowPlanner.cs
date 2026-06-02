@@ -13,7 +13,7 @@ public static class SpellCheckWorkflowPlanner
         var filtered = new List<SpellingIssue>();
         foreach (var issue in issues)
         {
-            if (ignoredWords.Contains(issue.Word) ||
+            if (ContainsIgnoredWord(ignoredWords, issue.Word) ||
                 ignoredIssues.Contains((issue.Address, issue.Word)))
             {
                 continue;
@@ -23,6 +23,17 @@ public static class SpellCheckWorkflowPlanner
         }
 
         return filtered;
+    }
+
+    private static bool ContainsIgnoredWord(IEnumerable<string> ignoredWords, string word)
+    {
+        foreach (var ignoredWord in ignoredWords)
+        {
+            if (string.Equals(ignoredWord, word, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     public static (CellAddress Address, Cell NewCell) BuildReplacementEdit(
