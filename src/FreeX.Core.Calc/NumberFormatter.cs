@@ -6,8 +6,6 @@ namespace FreeX.Core.Calc;
 
 public static partial class NumberFormatter
 {
-    private static readonly Regex NumericElapsedTokenRegex = new(@"\[([hH])\]|\[([mM])\]|\[([sS])\]");
-    private static readonly Regex NumericBracketDirectiveRegex = new(@"\[[^\]]*\]");
     private static readonly Regex NumericQuotedTextRegex = new("\"[^\"]*\"");
 
     // Returned alongside display text so the grid can apply conditional colors.
@@ -199,14 +197,16 @@ public static partial class NumberFormatter
         // and must be handled before the generic bracket-stripping pass.
         if (format.IndexOf('[') >= 0)
         {
-            var elapsedMatch = NumericElapsedTokenRegex.Match(format);
-            if (elapsedMatch.Success)
+            var directiveFormat = PreprocessBracketFormatDirectives(format);
+            if (directiveFormat.ElapsedTimeMatch.Success)
             {
-                return NativeDigits(FormatElapsedTime(value, RemoveSpacingAndFillDirectives(format), elapsedMatch));
+                return NativeDigits(FormatElapsedTime(
+                    value,
+                    directiveFormat.Format,
+                    directiveFormat.ElapsedTimeMatch));
             }
 
-            // Remove any remaining bracket content (conditions, locale, etc.)
-            format = NumericBracketDirectiveRegex.Replace(format, "");
+            format = directiveFormat.Format;
         }
 
         format = PreserveAccountingFillSpace(format);
