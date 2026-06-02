@@ -814,6 +814,18 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void FindFormulaErrorIssues_CombinesLiteralIssueScans()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile("src", "FreeX.Core.Commands", "FormulaAuditingService.Errors.cs"));
+
+        source.Should().Contain("FindLiteralFormulaErrorIssues(workbook, sheetId)");
+        source.Should().Contain("foreach (var (address, cell) in sheet.EnumerateCells())");
+        source.Should().NotContain("result.AddRange(FindNumbersStoredAsTextIssues(workbook, sheetId));");
+        source.Should().NotContain("result.AddRange(FindTwoDigitYearTextDateIssues(workbook, sheetId));");
+        source.Should().NotContain("result.AddRange(FindFormulaStoredAsTextIssues(workbook, sheetId));");
+    }
+
+    [Fact]
     public void Benchmark_SparseFormulaErrorIssues_ReportsTimingAndAllocatedBytes()
     {
         const int valueRows = 100_000;
@@ -855,6 +867,21 @@ public sealed class FormulaAuditingServiceTests
 
         Console.WriteLine(
             $"PERF FORMULA_AUDIT_SPARSE_FORMULAS occupied={sheet.CellCount} formulas={sheet.FormulaCellCount} steps={steps} total_ms={total.Elapsed.TotalMilliseconds:F2} mean_ms={meanMs:F2} max_ms={maxStepMs:F2} allocated_bytes={allocatedBytes}");
+    }
+
+    private static string FindWorkspaceFile(params string[] parts)
+    {
+        var dir = AppContext.BaseDirectory;
+        while (dir is not null)
+        {
+            var candidate = Path.Combine([dir, .. parts]);
+            if (File.Exists(candidate))
+                return candidate;
+
+            dir = Directory.GetParent(dir)?.FullName;
+        }
+
+        throw new FileNotFoundException($"Could not find workspace file '{Path.Combine(parts)}'.");
     }
 
     private sealed class SimpleCtx(Workbook wb) : ICommandContext
