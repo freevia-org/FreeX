@@ -28,6 +28,13 @@ public partial class MainWindow
     private void EditActiveCellInFormulaBar()
     {
         CaptureFormulaEditCell();
+        if (_inlineEditor?.IsVisible == true)
+        {
+            SyncFormulaBarTextFromInlineEditor();
+            FocusFormulaBarAtEnd();
+            return;
+        }
+
         if (SheetGrid.SelectedRange?.Start is { } address)
         {
             var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(address);

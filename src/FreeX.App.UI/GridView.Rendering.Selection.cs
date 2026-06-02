@@ -178,6 +178,9 @@ public partial class GridView
             return;
         }
 
+        if (!QuickAnalysisPreviewLayoutPlanner.TryCalculateDataBarPreviewMax(viewport, range, out var max))
+            return;
+
         var lookups = GetRenderCellLookups(viewport);
         var geometry = new StreamGeometry();
         var dataBarCount = 0;
@@ -191,6 +194,7 @@ public partial class GridView
                 columnHeaderHeight,
                 lookups.Rows,
                 lookups.Columns,
+                max,
                 ref dataBarConsumer);
             dataBarCount = dataBarConsumer.Count;
         }

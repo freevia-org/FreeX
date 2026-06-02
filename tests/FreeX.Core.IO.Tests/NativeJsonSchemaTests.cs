@@ -798,6 +798,74 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Save_NormalizesNativeJsonWaterfallTotalPointIndices()
+    {
+        var workbook = new Workbook("WaterfallTotals");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Value"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(10));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new NumberValue(30));
+
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Waterfall,
+            DataRange = GridRange.Parse("A1:A4", sheet.Id),
+            WaterfallTotalPointIndices = [3, -1, 0, 3, 1]
+        });
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var totals = document.RootElement
+            .GetProperty("Sheets").EnumerateArray().Single()
+            .GetProperty("Charts").EnumerateArray().Single()
+            .GetProperty("WaterfallTotalPointIndices")
+            .EnumerateArray()
+            .Select(element => element.GetInt32());
+
+        totals.Should().Equal(0, 1, 3);
+    }
+
+    [Fact]
+    public void Load_ClearsUnsupportedNativeJsonWaterfallTotalPointIndices()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "UnsupportedWaterfallTotals",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Cells": [
+                    { "Address": "A1", "Value": "Name", "ValueType": "t" },
+                    { "Address": "B1", "Value": "Value", "ValueType": "t" },
+                    { "Address": "A2", "Value": "A", "ValueType": "t" },
+                    { "Address": "B2", "Value": "1", "ValueType": "n" }
+                  ],
+                  "Charts": [
+                    {
+                      "Type": 0,
+                      "DataRange": "A1:B2",
+                      "WaterfallTotalPointIndices": [ 0, 1 ]
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var chart = new NativeJsonAdapter().Load(stream).GetSheetAt(0).Charts.Should().ContainSingle().Subject;
+
+        chart.Type.Should().Be(ChartType.Column);
+        chart.WaterfallTotalPointIndices.Should().BeNull();
+    }
+
+    [Fact]
     public void Load_RejectsUnsupportedFutureNativeJsonSchema()
     {
         const string futureJson = """
