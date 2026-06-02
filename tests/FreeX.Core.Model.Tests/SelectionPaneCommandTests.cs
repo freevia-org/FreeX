@@ -74,6 +74,35 @@ public sealed class SelectionPaneCommandTests
     }
 
     [Fact]
+    public void MoveSelectionPaneObjectCommand_MovesTextBoxWithinMixedSupportedStack()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new SimpleCtx(wb);
+        var back = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
+        var middle = new TextBoxModel { Anchor = new CellAddress(sheet.Id, 1, 2) };
+        var front = new PictureModel { Anchor = new CellAddress(sheet.Id, 1, 3) };
+        sheet.DrawingShapes.Add(back);
+        sheet.TextBoxes.Add(middle);
+        sheet.Pictures.Add(front);
+        sheet.DrawingObjectZOrder.AddRange(
+        [
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, back.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, middle.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, front.Id)
+        ]);
+
+        var command = new MoveSelectionPaneObjectCommand(sheet.Id, SelectionPaneObjectKind.TextBox, middle.Id, forward: false);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.DrawingObjectZOrder.Should().Equal(
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, middle.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, back.Id),
+            new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, front.Id));
+    }
+
+    [Fact]
     public void RenameSelectionPaneObjectCommand_RenamesTextBoxAndUndoRestores()
     {
         var wb = new Workbook("test");
