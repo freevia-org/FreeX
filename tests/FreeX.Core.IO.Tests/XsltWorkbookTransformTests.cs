@@ -1059,6 +1059,50 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_CommentAttributeValueTemplates_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <notes>
+              <note label="Total" author="Finance" text="Check generated total"/>
+            </notes>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/notes">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Comments">
+                    <ss:Table>
+                      <xsl:for-each select="note">
+                        <ss:Row>
+                          <ss:Cell>
+                            <ss:Data ss:Type="String"><xsl:value-of select="@label"/></ss:Data>
+                            <ss:Comment ss:Author="{@author}">
+                              <ss:Data><xsl:value-of select="@text"/></ss:Data>
+                            </ss:Comment>
+                          </ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var cell = XDocument.Load(transformed).Descendants(ss + "Cell").Single();
+        var comment = cell.Element(ss + "Comment")!;
+
+        cell.Element(ss + "Data")!.Value.Should().Be("Total");
+        comment.Attribute(ss + "Author")!.Value.Should().Be("Finance");
+        comment.Element(ss + "Data")!.Value.Should().Be("Check generated total");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_FormulaAttributeValueTemplate_GeneratesSpreadsheetMl()
     {
         using var source = StreamFromString("""
@@ -1223,6 +1267,46 @@ public sealed class XsltWorkbookTransformTests
             .Should().Equal("String", "Number", "Boolean", "DateTime");
         data.Select(element => element.Value)
             .Should().Equal("Ready", "42.25", "1", "2026-05-31T08:15:30");
+    }
+
+    [Fact]
+    public void TransformToSpreadsheetXml_HyperlinkAttributeValueTemplates_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <links>
+              <link label="Review" url="https://example.com/review" tip="Open review"/>
+            </links>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/links">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Links">
+                    <ss:Table>
+                      <xsl:for-each select="link">
+                        <ss:Row>
+                          <ss:Cell ss:HRef="{@url}" ss:HRefScreenTip="{@tip}">
+                            <ss:Data ss:Type="String"><xsl:value-of select="@label"/></ss:Data>
+                          </ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var cell = XDocument.Load(transformed).Descendants(ss + "Cell").Single();
+
+        cell.Attribute(ss + "HRef")!.Value.Should().Be("https://example.com/review");
+        cell.Attribute(ss + "HRefScreenTip")!.Value.Should().Be("Open review");
+        cell.Element(ss + "Data")!.Value.Should().Be("Review");
     }
 
     [Fact]
