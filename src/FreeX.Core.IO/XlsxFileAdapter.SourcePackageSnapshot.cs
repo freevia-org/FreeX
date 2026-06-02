@@ -5,7 +5,13 @@ namespace FreeX.Core.IO;
 
 public sealed partial class XlsxFileAdapter
 {
-    private sealed record XlsxSourcePackage(byte[] Buffer, int Offset, int Count, string? ModelFingerprint)
+    private sealed record XlsxSourcePackage(
+        byte[] Buffer,
+        int Offset,
+        int Count,
+        string? ModelFingerprint,
+        IReadOnlySet<string>? WorksheetsWithPreservableSourceMetadata,
+        bool? HasUnsupportedConditionalFormatting)
     {
         private const int FingerprintCellLimit = 25_000;
 
@@ -15,21 +21,78 @@ public sealed partial class XlsxFileAdapter
         public static XlsxSourcePackage Capture(Stream stream, Workbook workbook, bool allowBufferReuse)
             => Capture(stream, workbook, allowBufferReuse, currentModelFingerprint: null);
 
+        public static XlsxSourcePackage Capture(
+            Stream stream,
+            Workbook workbook,
+            bool allowBufferReuse,
+            IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata,
+            bool? hasUnsupportedConditionalFormatting = null)
+            => Capture(
+                stream,
+                workbook,
+                allowBufferReuse,
+                currentModelFingerprint: null,
+                worksheetsWithPreservableSourceMetadata,
+                hasUnsupportedConditionalFormatting);
+
         public static XlsxSourcePackage Capture(Stream stream, Workbook workbook, string? currentModelFingerprint)
             => Capture(stream, workbook, allowBufferReuse: false, currentModelFingerprint);
+
+        public static XlsxSourcePackage Capture(
+            Stream stream,
+            Workbook workbook,
+            string? currentModelFingerprint,
+            IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata,
+            bool? hasUnsupportedConditionalFormatting = null)
+            => Capture(
+                stream,
+                workbook,
+                allowBufferReuse: false,
+                currentModelFingerprint,
+                worksheetsWithPreservableSourceMetadata,
+                hasUnsupportedConditionalFormatting);
 
         private static XlsxSourcePackage Capture(
             Stream stream,
             Workbook workbook,
             bool allowBufferReuse,
             string? currentModelFingerprint)
+            => Capture(
+                stream,
+                workbook,
+                allowBufferReuse,
+                currentModelFingerprint,
+                worksheetsWithPreservableSourceMetadata: null,
+                hasUnsupportedConditionalFormatting: null);
+
+        private static XlsxSourcePackage Capture(
+            Stream stream,
+            Workbook workbook,
+            bool allowBufferReuse,
+            string? currentModelFingerprint,
+            IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata,
+            bool? hasUnsupportedConditionalFormatting)
         {
             if (stream is MemoryStream memoryStream)
-                return Capture(memoryStream, workbook, allowBufferReuse, currentModelFingerprint);
+            {
+                return Capture(
+                    memoryStream,
+                    workbook,
+                    allowBufferReuse,
+                    currentModelFingerprint,
+                    worksheetsWithPreservableSourceMetadata,
+                    hasUnsupportedConditionalFormatting);
+            }
 
             var fingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             var bytes = ReadBytes(stream);
-            return new XlsxSourcePackage(bytes, 0, bytes.Length, fingerprint);
+            return new XlsxSourcePackage(
+                bytes,
+                0,
+                bytes.Length,
+                fingerprint,
+                worksheetsWithPreservableSourceMetadata,
+                hasUnsupportedConditionalFormatting);
         }
 
         public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook)
@@ -38,11 +101,40 @@ public sealed partial class XlsxFileAdapter
         public static XlsxSourcePackage Capture(MemoryStream stream, Workbook workbook, bool allowBufferReuse)
             => Capture(stream, workbook, allowBufferReuse, currentModelFingerprint: null);
 
+        public static XlsxSourcePackage Capture(
+            MemoryStream stream,
+            Workbook workbook,
+            bool allowBufferReuse,
+            IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata,
+            bool? hasUnsupportedConditionalFormatting = null)
+            => Capture(
+                stream,
+                workbook,
+                allowBufferReuse,
+                currentModelFingerprint: null,
+                worksheetsWithPreservableSourceMetadata,
+                hasUnsupportedConditionalFormatting);
+
         private static XlsxSourcePackage Capture(
             MemoryStream stream,
             Workbook workbook,
             bool allowBufferReuse,
             string? currentModelFingerprint)
+            => Capture(
+                stream,
+                workbook,
+                allowBufferReuse,
+                currentModelFingerprint,
+                worksheetsWithPreservableSourceMetadata: null,
+                hasUnsupportedConditionalFormatting: null);
+
+        private static XlsxSourcePackage Capture(
+            MemoryStream stream,
+            Workbook workbook,
+            bool allowBufferReuse,
+            string? currentModelFingerprint,
+            IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata,
+            bool? hasUnsupportedConditionalFormatting)
         {
             var fingerprint = GetModelFingerprint(workbook, currentModelFingerprint);
             if (stream.TryGetBuffer(out var buffer))
@@ -53,7 +145,13 @@ public sealed partial class XlsxFileAdapter
                     buffer.Offset >= 0 &&
                     buffer.Offset + (int)stream.Length <= buffer.Array.Length)
                 {
-                    return new XlsxSourcePackage(buffer.Array, buffer.Offset, (int)stream.Length, fingerprint);
+                    return new XlsxSourcePackage(
+                        buffer.Array,
+                        buffer.Offset,
+                        (int)stream.Length,
+                        fingerprint,
+                        worksheetsWithPreservableSourceMetadata,
+                        hasUnsupportedConditionalFormatting);
                 }
 
                 var copiedBytes = buffer.Array is not null &&
@@ -62,11 +160,23 @@ public sealed partial class XlsxFileAdapter
                     buffer.Offset + (int)stream.Length <= buffer.Array.Length
                     ? buffer.Array.AsSpan(buffer.Offset, (int)stream.Length).ToArray()
                     : ReadBytes(stream);
-                return new XlsxSourcePackage(copiedBytes, 0, copiedBytes.Length, fingerprint);
+                return new XlsxSourcePackage(
+                    copiedBytes,
+                    0,
+                    copiedBytes.Length,
+                    fingerprint,
+                    worksheetsWithPreservableSourceMetadata,
+                    hasUnsupportedConditionalFormatting);
             }
 
             var bytes = ReadBytes(stream);
-            return new XlsxSourcePackage(bytes, 0, bytes.Length, fingerprint);
+            return new XlsxSourcePackage(
+                bytes,
+                0,
+                bytes.Length,
+                fingerprint,
+                worksheetsWithPreservableSourceMetadata,
+                hasUnsupportedConditionalFormatting);
         }
 
         private static byte[] ReadBytes(Stream stream)
