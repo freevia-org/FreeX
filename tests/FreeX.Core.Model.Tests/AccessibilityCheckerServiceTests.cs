@@ -385,9 +385,33 @@ public sealed class AccessibilityCheckerServiceTests
             Kind = DrawingShapeKind.Rectangle,
             Name = "Shape 2"
         });
-        sheet.TextBoxes.Add(new TextBoxModel
+        sheet.DrawingShapes.Add(new DrawingShapeModel
         {
             Anchor = new CellAddress(sheet.Id, 3, 1),
+            Kind = DrawingShapeKind.Rectangle,
+            Name = "Rectangle 1"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 4, 1),
+            Kind = DrawingShapeKind.Ellipse,
+            Name = "Ellipse 1"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 5, 1),
+            Kind = DrawingShapeKind.Ellipse,
+            Name = "Oval 1"
+        });
+        sheet.DrawingShapes.Add(new DrawingShapeModel
+        {
+            Anchor = new CellAddress(sheet.Id, 6, 1),
+            Kind = DrawingShapeKind.Line,
+            Name = "Line 1"
+        });
+        sheet.TextBoxes.Add(new TextBoxModel
+        {
+            Anchor = new CellAddress(sheet.Id, 7, 1),
             Text = "Risk summary",
             Name = "TextBox 3",
             FillColor = CellColor.White
@@ -397,9 +421,13 @@ public sealed class AccessibilityCheckerServiceTests
             .Where(i => i.Kind == AccessibilityIssueKind.GenericAltText)
             .ToList();
 
-        issues.Select(i => i.Location).Should().Equal("A1", "A2", "A3");
+        issues.Select(i => i.Location).Should().Equal("A1", "A2", "A3", "A4", "A5", "A6", "A7");
         issues.Select(i => i.Message).Should().Equal(
             "Picture alternate text should describe the object.",
+            "Shape alternate text should describe the object.",
+            "Shape alternate text should describe the object.",
+            "Shape alternate text should describe the object.",
+            "Shape alternate text should describe the object.",
             "Shape alternate text should describe the object.",
             "Text box alternate text should describe the object.");
     }
