@@ -2679,7 +2679,7 @@ public sealed class MainWindowSourceHygieneTests
         source.Should().NotContain("TryExecuteEditCells(edits, \"Spell Check\")");
 
         var plannerSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "SpellCheckWorkflowPlanner.cs"));
-        plannerSource.Should().Contain("ignoredWords.Contains(issue.Word)");
+        plannerSource.Should().Contain("ContainsIgnoredWord(ignoredWords, issue.Word)");
         plannerSource.Should().Contain("ignoredIssues.Contains((issue.Address, issue.Word))");
         plannerSource.Should().Contain("SpellCheckService.ApplyCorrection(issue, replacement)");
     }

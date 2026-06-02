@@ -121,6 +121,42 @@ public sealed class SpellCheckServiceTests
     }
 
     [Fact]
+    public void FindIssuesInCell_UsesCustomDictionaryToSuppressKnownMisspellingsCaseInsensitively()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+        var customDictionary = new HashSet<string> { "teh" };
+
+        var issues = SpellCheckService.FindIssuesInCell(address, "TEH Teh teh adn", customDictionary);
+
+        issues.Select(issue => issue.Word).Should().Equal("adn");
+    }
+
+    [Fact]
+    public void FindIssuesInCell_UsesCustomDictionaryToSuppressRepeatedWordPhrases()
+    {
+        var address = new CellAddress(SheetId.New(), 1, 1);
+        var customDictionary = new HashSet<string> { "the the" };
+
+        var issues = SpellCheckService.FindIssuesInCell(address, "the the adn", customDictionary);
+
+        issues.Select(issue => issue.Word).Should().Equal("adn");
+    }
+
+    [Fact]
+    public void FindIssues_UsesCustomDictionaryAcrossSheetScan()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("teh first"));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("TEH adn second"));
+        var customDictionary = new HashSet<string> { "TeH" };
+
+        var issues = SpellCheckService.FindIssues(wb, sheet.Id, customDictionary);
+
+        issues.Select(issue => issue.Word).Should().Equal("adn");
+    }
+
+    [Fact]
     public void FindIssuesInCell_TracksIssueTextSpansForCurrentOccurrenceActions()
     {
         var address = new CellAddress(SheetId.New(), 1, 1);

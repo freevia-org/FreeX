@@ -64,7 +64,7 @@ public sealed partial class NativeJsonAdapter
         var propertiesNativeAttributes = CleanNativeAttributesForSave(model.PropertiesNativeAttributes);
         var typesNativeAttributes = CleanNativeAttributesForSave(model.TypesNativeAttributes);
         var show = string.IsNullOrWhiteSpace(model.Show) ? null : model.Show;
-        var types = model.Types
+        var types = (model.Types ?? [])
             .Select(FromWorkbookSmartTagType)
             .OfType<WorkbookSmartTagTypeDto>()
             .ToList();
