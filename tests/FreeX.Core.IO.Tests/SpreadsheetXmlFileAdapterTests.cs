@@ -3799,6 +3799,28 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_StylesheetDtd_ReportsTransformStylesheetDiagnostic()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("""
+            <!DOCTYPE xsl:stylesheet [ <!ENTITY xxe SYSTEM "file:///C:/Windows/win.ini"> ]>
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <xsl:value-of select="'blocked'"/>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*")
+            .WithInnerException<XsltException>();
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
+    [Fact]
     public void LoadTransformed_RejectsExternalDocumentFunction()
     {
         using var source = StreamFromString("<rows/>");

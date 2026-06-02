@@ -668,6 +668,51 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsNullNativeJsonCommentAndHyperlinkEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "NullCommentHyperlinkEntries",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "Comments": [
+                    null,
+                    { "Address": "B2", "Text": "kept comment" }
+                  ],
+                  "ThreadedComments": [
+                    null,
+                    { "Address": "C3", "Text": "kept threaded" }
+                  ],
+                  "Hyperlinks": [
+                    null,
+                    { "Address": "D4", "Target": "https://example.invalid/kept" }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sheet = new NativeJsonAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.Comments.Should().ContainSingle()
+            .Which.Should().Be(new KeyValuePair<CellAddress, string>(
+                new CellAddress(sheet.Id, 2, 2),
+                "kept comment"));
+        sheet.ThreadedComments.Should().ContainSingle()
+            .Which.Key.Should().Be(new CellAddress(sheet.Id, 3, 3));
+        sheet.ThreadedComments[new CellAddress(sheet.Id, 3, 3)].Text.Should().Be("kept threaded");
+        sheet.Hyperlinks.Should().ContainSingle()
+            .Which.Should().Be(new KeyValuePair<CellAddress, string>(
+                new CellAddress(sheet.Id, 4, 4),
+                "https://example.invalid/kept"));
+    }
+
+    [Fact]
     public void Save_SkipsOutOfBoundsNativeJsonRanges()
     {
         var workbook = new Workbook("InvalidRanges");
@@ -775,6 +820,35 @@ public sealed class NativeJsonSchemaTests
         root.GetProperty("FunctionGroups").GetProperty("Groups").EnumerateArray().Should().BeEmpty();
         root.GetProperty("SmartTags").GetProperty("Types").EnumerateArray().Should().BeEmpty();
         root.GetProperty("AdditionalViews").GetProperty("Views").EnumerateArray().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Save_TreatsNullNativeJsonWorkbookFileMetadataNativeAttributesAsEmpty()
+    {
+        var workbook = new Workbook("NullWorkbookFileMetadataNativeAttributes")
+        {
+            FileVersion = new WorkbookFileVersionModel
+            {
+                AppName = "FreeX",
+                NativeAttributes = null!
+            }
+        };
+        workbook.FileRecoveryProperties.Add(new WorkbookFileRecoveryPropertiesModel
+        {
+            AutoRecover = true,
+            NativeAttributes = null!
+        });
+        workbook.AddSheet("Sheet1");
+
+        using var stream = new MemoryStream();
+        new NativeJsonAdapter().Save(workbook, stream);
+
+        using var document = JsonDocument.Parse(stream.ToArray());
+        var root = document.RootElement;
+        root.GetProperty("FileVersion").GetProperty("NativeAttributes")
+            .EnumerateObject().Should().BeEmpty();
+        root.GetProperty("FileRecoveryProperties").EnumerateArray().Should().ContainSingle()
+            .Which.GetProperty("NativeAttributes").EnumerateObject().Should().BeEmpty();
     }
 
     [Fact]

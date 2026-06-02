@@ -31,9 +31,7 @@ public sealed partial class NativeJsonAdapter
         if (dto is null)
             return null;
 
-        var nativeAttributes = (dto.NativeAttributes ?? new Dictionary<string, string>())
-            .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Value is not null)
-            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
         var appName = string.IsNullOrWhiteSpace(dto.AppName) ? null : dto.AppName;
         var lastEdited = string.IsNullOrWhiteSpace(dto.LastEdited) ? null : dto.LastEdited;
         var lowestEdited = string.IsNullOrWhiteSpace(dto.LowestEdited) ? null : dto.LowestEdited;
@@ -65,9 +63,7 @@ public sealed partial class NativeJsonAdapter
         if (dto is null)
             return null;
 
-        var nativeAttributes = (dto.NativeAttributes ?? new Dictionary<string, string>())
-            .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Value is not null)
-            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        var nativeAttributes = CleanNativeAttributes(dto.NativeAttributes);
         if (dto.AutoRecover is null &&
             dto.CrashSave is null &&
             dto.DataExtractLoad is null &&
@@ -114,9 +110,7 @@ public sealed partial class NativeJsonAdapter
         if (model is null)
             return null;
 
-        var nativeAttributes = (model.NativeAttributes ?? new Dictionary<string, string>())
-            .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Value is not null)
-            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
         var appName = string.IsNullOrWhiteSpace(model.AppName) ? null : model.AppName;
         var lastEdited = string.IsNullOrWhiteSpace(model.LastEdited) ? null : model.LastEdited;
         var lowestEdited = string.IsNullOrWhiteSpace(model.LowestEdited) ? null : model.LowestEdited;
@@ -148,9 +142,7 @@ public sealed partial class NativeJsonAdapter
         if (model is null)
             return null;
 
-        var nativeAttributes = (model.NativeAttributes ?? new Dictionary<string, string>())
-            .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Value is not null)
-            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        var nativeAttributes = CleanNativeAttributesForSave(model.NativeAttributes);
         if (model.AutoRecover is null &&
             model.CrashSave is null &&
             model.DataExtractLoad is null &&
