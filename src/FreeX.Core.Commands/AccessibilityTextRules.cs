@@ -74,6 +74,10 @@ internal static partial class AccessibilityTextRules
             text.StartsWith("picture ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "picture ") ||
             text.StartsWith("image ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "image ") ||
             text.StartsWith("shape ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "shape ") ||
+            text.StartsWith("rectangle ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "rectangle ") ||
+            text.StartsWith("ellipse ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "ellipse ") ||
+            text.StartsWith("oval ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "oval ") ||
+            text.StartsWith("line ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "line ") ||
             text.StartsWith("text box ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "text box ") ||
             text.StartsWith("textbox ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "textbox ") ||
             text.StartsWith("object ", StringComparison.OrdinalIgnoreCase) && IsNumberSuffix(text, "object ") ||
