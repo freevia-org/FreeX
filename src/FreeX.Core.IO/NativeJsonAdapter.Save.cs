@@ -95,7 +95,7 @@ public sealed partial class NativeJsonAdapter
                     Hidden = scenario.Hidden,
                     Locked = scenario.Locked,
                     User = string.IsNullOrWhiteSpace(scenario.User) ? null : scenario.User,
-                    ChangingCells = (scenario.ChangingCells ?? []).Select(change =>
+                    ChangingCells = (scenario.ChangingCells ?? []).OfType<ScenarioCellValue>().Select(change =>
                     {
                         var sheet = workbook.GetSheet(change.Address.Sheet);
                         if (sheet is null || !IsValidAddressOnSheet(change.Address, sheet.Id))
@@ -324,7 +324,6 @@ public sealed partial class NativeJsonAdapter
         if (cells.Count == 0)
             return;
 
-        var dto = new CellDto();
         foreach (var entry in cells)
         {
             var (row, col) = entry.Key;
@@ -333,14 +332,16 @@ public sealed partial class NativeJsonAdapter
                 continue;
 
             var cell = entry.Value;
-            var serializedValue = NativeJsonScalarValueMapper.SerializeWithType(cell.Value);
-            dto.Value = serializedValue.Value;
-            dto.ValueType = serializedValue.ValueType;
-            dto.Formula = cell.HasFormula ? NormalizeNativeFormulaText(cell.FormulaText!) : null;
-            dto.IgnoreFormulaError = cell.IgnoreFormulaError;
-            dto.StyleId = GetNativeStyleId(cell.StyleId);
-            dto.Style = null;
-            CellDtoJsonConverter.WriteCell(writer, dto, options, row, col);
+            CellDtoJsonConverter.WriteCell(
+                writer,
+                cell.Value,
+                cell.HasFormula ? NormalizeNativeFormulaText(cell.FormulaText!) : null,
+                cell.IgnoreFormulaError,
+                GetNativeStyleId(cell.StyleId),
+                style: null,
+                options,
+                row,
+                col);
         }
     }
 

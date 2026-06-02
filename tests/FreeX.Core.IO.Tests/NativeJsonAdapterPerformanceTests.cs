@@ -284,11 +284,32 @@ public sealed class NativeJsonAdapterPerformanceTests
             "FreeX.Core.IO",
             "NativeJsonAdapter.Dto.cs"));
 
-        saveSource.Should().Contain("CellDtoJsonConverter.WriteCell(writer, dto, options, row, col);");
+        saveSource.Should().Contain("CellDtoJsonConverter.WriteCell(");
+        saveSource.Should().Contain("row,");
+        saveSource.Should().Contain("col);");
         saveSource.Should().Contain("StyleOnlyCellDtoJsonConverter.WriteCell(writer, dto, options, row, col);");
         saveSource.Should().NotContain("dto.Address = address.ToA1();");
         saveSource.Should().NotContain("dto.Address = new CellAddress(sheet.Id, row, col).ToA1();");
         dtoSource.Should().Contain("WriteStringValue(address[..length])");
+    }
+
+    [Fact]
+    public void SaveCellWriters_StreamScalarValuesWithoutAllocatingFormattedNumberStrings()
+    {
+        var saveSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "NativeJsonAdapter.Save.cs"));
+        var dtoSource = File.ReadAllText(FindRepoFile(
+            "src",
+            "FreeX.Core.IO",
+            "NativeJsonAdapter.Dto.cs"));
+
+        saveSource.Should().Contain("cell.Value,");
+        saveSource.Should().NotContain("SerializeWithType(cell.Value)");
+        dtoSource.Should().Contain("WriteSmallIntegerStringValue");
+        dtoSource.Should().Contain("Utf8Formatter.TryFormat");
+        dtoSource.Should().Contain("WriteRawValue");
     }
 
     private const int DenseSheetCount = 4;

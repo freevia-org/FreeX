@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.Buffers.Text;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FreeX.Core.Model;
@@ -1307,6 +1310,7 @@ public sealed partial class NativeJsonAdapter
         private static readonly JsonEncodedText IgnoreFormulaErrorName = JsonEncodedText.Encode(nameof(CellDto.IgnoreFormulaError));
         private static readonly JsonEncodedText StyleIdName = JsonEncodedText.Encode(nameof(CellDto.StyleId));
         private static readonly JsonEncodedText StyleName = JsonEncodedText.Encode(nameof(CellDto.Style));
+        private static readonly StandardFormat GeneralNumberFormat = StandardFormat.Parse("G");
         public const int MaxCellAddressTextLength = 10;
 
         public override CellDto Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -1410,6 +1414,34 @@ public sealed partial class NativeJsonAdapter
             writer.WriteEndObject();
         }
 
+        public static void WriteCell(
+            Utf8JsonWriter writer,
+            ScalarValue value,
+            string? formula,
+            bool ignoreFormulaError,
+            int? styleId,
+            CellStyleDto? style,
+            JsonSerializerOptions options,
+            uint row,
+            uint col)
+        {
+            writer.WriteStartObject();
+            WriteAddress(writer, row, col);
+            WriteScalarValuePayload(writer, value);
+            if (formula is not null)
+                writer.WriteString(FormulaName, formula);
+            if (ignoreFormulaError)
+                writer.WriteBoolean(IgnoreFormulaErrorName, ignoreFormulaError);
+            if (styleId is { } nativeStyleId)
+                writer.WriteNumber(StyleIdName, nativeStyleId);
+            if (style is not null)
+            {
+                writer.WritePropertyName(StyleName);
+                JsonSerializer.Serialize(writer, style, options);
+            }
+            writer.WriteEndObject();
+        }
+
         private static void WriteCellPayload(Utf8JsonWriter writer, CellDto value, JsonSerializerOptions options)
         {
             if (value.Value is not null)
@@ -1427,6 +1459,81 @@ public sealed partial class NativeJsonAdapter
                 writer.WritePropertyName(StyleName);
                 JsonSerializer.Serialize(writer, value.Style, options);
             }
+        }
+
+        private static void WriteScalarValuePayload(Utf8JsonWriter writer, ScalarValue value)
+        {
+            switch (value)
+            {
+                case BlankValue:
+                    return;
+                case NumberValue number:
+                    writer.WritePropertyName(ValueName);
+                    WriteNumberStringValue(writer, number.Value);
+                    writer.WriteString(ValueTypeName, double.IsFinite(number.Value) ? "n" : "t");
+                    return;
+                case DateTimeValue dateTime:
+                    writer.WritePropertyName(ValueName);
+                    WriteNumberStringValue(writer, dateTime.Value);
+                    writer.WriteString(ValueTypeName, double.IsFinite(dateTime.Value) ? "d" : "t");
+                    return;
+                case BoolValue boolean:
+                    writer.WriteString(ValueName, boolean.Value ? "TRUE" : "FALSE");
+                    writer.WriteString(ValueTypeName, "b");
+                    return;
+                case TextValue text:
+                    writer.WriteString(ValueName, text.Value);
+                    writer.WriteString(ValueTypeName, "t");
+                    return;
+                case ErrorValue error:
+                    writer.WriteString(ValueName, error.Code);
+                    writer.WriteString(ValueTypeName, "e");
+                    return;
+            }
+        }
+
+        private static void WriteNumberStringValue(Utf8JsonWriter writer, double value)
+        {
+            if (value is >= -999_999_999 and <= 999_999_999 &&
+                value == Math.Truncate(value))
+            {
+                WriteSmallIntegerStringValue(writer, (int)value);
+                return;
+            }
+
+            Span<byte> buffer = stackalloc byte[34];
+            buffer[0] = (byte)'"';
+            if (Utf8Formatter.TryFormat(value, buffer[1..^1], out var bytesWritten, GeneralNumberFormat))
+            {
+                buffer[bytesWritten + 1] = (byte)'"';
+                writer.WriteRawValue(buffer[..(bytesWritten + 2)], skipInputValidation: true);
+            }
+            else
+            {
+                writer.WriteStringValue(value.ToString(CultureInfo.InvariantCulture));
+            }
+        }
+
+        private static void WriteSmallIntegerStringValue(Utf8JsonWriter writer, int value)
+        {
+            Span<byte> buffer = stackalloc byte[13];
+            buffer[0] = (byte)'"';
+            var index = buffer.Length - 1;
+            var magnitude = value < 0 ? (uint)-value : (uint)value;
+            do
+            {
+                buffer[--index] = (byte)('0' + magnitude % 10);
+                magnitude /= 10;
+            }
+            while (magnitude > 0);
+
+            if (value < 0)
+                buffer[--index] = (byte)'-';
+
+            var valueLength = buffer.Length - 1 - index;
+            buffer[index..^1].CopyTo(buffer[1..]);
+            buffer[valueLength + 1] = (byte)'"';
+            writer.WriteRawValue(buffer[..(valueLength + 2)], skipInputValidation: true);
         }
 
         private static void WriteAddress(Utf8JsonWriter writer, uint row, uint col)
