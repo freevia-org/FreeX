@@ -331,7 +331,7 @@ public sealed class ObjectDialogTests
     {
         StaTestRunner.Run(() =>
         {
-            var dialog = new ShapeGradientDialog();
+            var dialog = new ShapeGradientDialog(DrawingShapeGradientDirection.Vertical);
             try
             {
                 var startColorBox = GetField<TextBox>(dialog, "_startColorBox");
@@ -353,12 +353,35 @@ public sealed class ObjectDialogTests
                 AutomationProperties.GetName(endColorButton).Should().Be("Choose end gradient color");
                 AutomationProperties.GetAutomationId(endColorButton).Should().Be("ShapeGradientEndColorButton");
                 AutomationProperties.GetHelpText(endColorButton).Should().Be("Open the color picker for the second gradient stop.");
+
+                var directionBox = GetField<ComboBox>(dialog, "_directionBox");
+                AutomationProperties.GetName(directionBox).Should().Be("Direction");
+                AutomationProperties.GetAutomationId(directionBox).Should().Be("ShapeGradientDirectionBox");
+                directionBox.SelectedItem.Should()
+                    .BeOfType<ShapeGradientDirectionOption>()
+                    .Which.Direction.Should()
+                    .Be(DrawingShapeGradientDirection.Vertical);
             }
             finally
             {
                 dialog.Close();
             }
         });
+    }
+
+    [Fact]
+    public void ShapeGradientDialogPlanner_CreateDirectionOptions_OffersGradientDirectionPresets()
+    {
+        var options = ShapeGradientDialogPlanner.CreateDirectionOptions();
+
+        options.Select(option => option.Direction).Should().Equal(
+            DrawingShapeGradientDirection.DiagonalDown,
+            DrawingShapeGradientDirection.Horizontal,
+            DrawingShapeGradientDirection.Vertical,
+            DrawingShapeGradientDirection.DiagonalUp);
+        ShapeGradientDialogPlanner.NormalizeDirection((DrawingShapeGradientDirection)99)
+            .Should()
+            .Be(DrawingShapeGradientDirection.DiagonalDown);
     }
 
     [Fact]

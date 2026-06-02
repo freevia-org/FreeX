@@ -42,6 +42,7 @@ internal sealed record XlsxShapePackagePart(
     CellColor? FillColor,
     CellColor? OutlineColor,
     CellColor? GradientFillEndColor,
+    DrawingShapeGradientDirection GradientFillDirection,
     WorkbookThemeColorReference? FillThemeColor,
     WorkbookThemeColorReference? OutlineThemeColor,
     bool HasShadowEffect,
@@ -278,6 +279,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                     fillThemeColor is null ? fillColor : null,
                     outlineThemeColor is null ? outlineColor : null,
                     gradientFill.EndColor,
+                    gradientFill.Direction,
                     fillThemeColor,
                     outlineThemeColor,
                     hasShadowEffect,
@@ -389,7 +391,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             : null;
     }
 
-    private static (CellColor? StartColor, CellColor? EndColor) ReadDrawingGradientFillColors(
+    private static (CellColor? StartColor, CellColor? EndColor, DrawingShapeGradientDirection Direction) ReadDrawingGradientFillColors(
         XElement? gradientFill,
         XNamespace drawingNs)
     {
@@ -409,8 +411,38 @@ internal static partial class XlsxWorksheetDrawingPartReader
             .ToList();
 
         return colors is { Count: >= 2 }
-            ? (colors[0], colors[^1])
-            : (colors?.FirstOrDefault(), null);
+            ? (colors[0], colors[^1], ReadDrawingGradientFillDirection(gradientFill, drawingNs))
+            : (colors?.FirstOrDefault(), null, DrawingShapeGradientDirection.DiagonalDown);
+    }
+
+    private static DrawingShapeGradientDirection ReadDrawingGradientFillDirection(
+        XElement? gradientFill,
+        XNamespace drawingNs)
+    {
+        if (!long.TryParse(
+                gradientFill?.Element(drawingNs + "lin")?.Attribute("ang")?.Value,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var angle))
+        {
+            return DrawingShapeGradientDirection.DiagonalDown;
+        }
+
+        return NormalizeDrawingAngle(angle) switch
+        {
+            0 => DrawingShapeGradientDirection.Horizontal,
+            5400000 => DrawingShapeGradientDirection.DiagonalDown,
+            10800000 => DrawingShapeGradientDirection.DiagonalUp,
+            16200000 => DrawingShapeGradientDirection.Vertical,
+            _ => DrawingShapeGradientDirection.DiagonalDown
+        };
+    }
+
+    private static long NormalizeDrawingAngle(long angle)
+    {
+        const long fullTurn = 21600000;
+        var normalized = angle % fullTurn;
+        return normalized < 0 ? normalized + fullTurn : normalized;
     }
 
     private static DrawingShapeEffectPreset ReadDrawingShapeEffectPreset(

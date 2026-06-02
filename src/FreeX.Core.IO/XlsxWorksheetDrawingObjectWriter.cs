@@ -306,6 +306,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     spreadsheetDrawingNs,
                     drawingNs,
                     shape.GradientFillEndColor,
+                    shape.GetEffectiveGradientFillDirection(),
                     shape.GetEffectiveEffectPreset())),
             new XElement(spreadsheetDrawingNs + "clientData"));
 
@@ -326,6 +327,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         CellColor? gradientFillEndColor = null,
+        DrawingShapeGradientDirection gradientFillDirection = DrawingShapeGradientDirection.DiagonalDown,
         DrawingShapeEffectPreset effectPreset = DrawingShapeEffectPreset.None)
     {
         return new XElement(spreadsheetDrawingNs + "spPr",
@@ -334,7 +336,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XAttribute("prst", preset),
                 new XElement(drawingNs + "avLst")),
             gradientFillEndColor is { } gradientEndColor && fillColor is { } gradientStartColor
-                ? ToGradientFill(gradientStartColor, gradientEndColor, drawingNs)
+                ? ToGradientFill(gradientStartColor, gradientEndColor, gradientFillDirection, drawingNs)
                 : ToSolidFill(fillThemeColor, fillColor, drawingNs),
             ToLineProperties(outlineThemeColor, outlineColor, drawingNs),
             ToEffectList(effectPreset, drawingNs));
@@ -347,7 +349,11 @@ internal static class XlsxWorksheetDrawingObjectWriter
             rotation == 0 ? null : new XAttribute("rot", (long)Math.Round(rotation * 60000)));
     }
 
-    private static XElement ToGradientFill(CellColor startColor, CellColor endColor, XNamespace drawingNs) =>
+    private static XElement ToGradientFill(
+        CellColor startColor,
+        CellColor endColor,
+        DrawingShapeGradientDirection direction,
+        XNamespace drawingNs) =>
         new(drawingNs + "gradFill",
             new XElement(drawingNs + "gsLst",
                 new XElement(drawingNs + "gs",
@@ -357,8 +363,17 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XAttribute("pos", "100000"),
                     ToRgbColorElement(endColor, drawingNs))),
             new XElement(drawingNs + "lin",
-                new XAttribute("ang", "5400000"),
+                new XAttribute("ang", ToGradientFillAngle(direction)),
                 new XAttribute("scaled", "1")));
+
+    private static string ToGradientFillAngle(DrawingShapeGradientDirection direction) =>
+        (Enum.IsDefined(direction) ? direction : DrawingShapeGradientDirection.DiagonalDown) switch
+        {
+            DrawingShapeGradientDirection.Horizontal => "0",
+            DrawingShapeGradientDirection.DiagonalUp => "10800000",
+            DrawingShapeGradientDirection.Vertical => "16200000",
+            _ => "5400000"
+        };
 
     private static XElement ToOuterShadowEffect(XNamespace drawingNs) =>
         new(drawingNs + "effectLst",
