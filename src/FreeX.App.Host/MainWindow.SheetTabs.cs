@@ -1174,6 +1174,7 @@ public partial class MainWindow
             return;
         }
 
+        _worksheetSelections.Remove(tab.Id);
         _currentSheetId = _workbook.Sheets[0].Id;
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
