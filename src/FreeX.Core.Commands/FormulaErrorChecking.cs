@@ -40,6 +40,7 @@ public static class FormulaErrorCheckingRuleCatalog
         new(FormulaAuditingService.FormulaOmitsAdjacentCellsErrorCode, "Formulas which omit cells in a region", "Flag aggregate formulas that omit adjacent cells in the region."),
         new(FormulaAuditingService.UnlockedFormulaCellsErrorCode, "Unlocked cells containing formulas", "Flag formula cells that are not locked for worksheet protection."),
         new(FormulaAuditingService.FormulaRefersToBlankCellsErrorCode, "Formulas referring to blank cells", "Flag formulas that refer to blank cells."),
+        new(FormulaAuditingService.DataValidationErrorCode, "Data entered in cells is invalid", "Flag literal cell values that do not satisfy an applied data validation rule."),
         new(FormulaAuditingService.TwoDigitYearTextDateErrorCode, "Cells containing years represented as 2 digits", "Flag text dates whose year is entered with only two digits."),
         new(FormulaAuditingService.NumberStoredAsTextErrorCode, "Numbers formatted as text or preceded by an apostrophe", "Flag numbers stored as text.")
     ];
