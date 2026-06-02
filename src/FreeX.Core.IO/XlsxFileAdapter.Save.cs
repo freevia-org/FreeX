@@ -58,7 +58,7 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
-            ApplyStyleOnlyRuns(workbook, styleCache, xlSheet, sheet);
+            ApplyStyleOnlySeedCells(workbook, styleCache, xlSheet, sheet);
 
             foreach (var (rowNum, height) in sheet.RowHeights)
             {
@@ -306,50 +306,7 @@ public sealed partial class XlsxFileAdapter
         return style;
     }
 
-    private static IEnumerable<StyleOnlyRun> GetStyleOnlyRuns(Sheet sheet)
-    {
-        if (!sheet.HasStyleOnlyCells)
-            yield break;
-
-        var occupiedCells = sheet.GetOccupiedCellMap();
-        var hasRun = false;
-        uint currentRow = 0;
-        uint startCol = 0;
-        uint previousCol = 0;
-        var previousStyleId = StyleId.Default;
-        foreach (var ((row, col), styleId) in sheet.GetStyleOnlyEntries())
-        {
-            if (!IsValidWorksheetRow(row) ||
-                !IsValidWorksheetColumn(col) ||
-                occupiedCells.ContainsKey((row, col)))
-            {
-                continue;
-            }
-
-            if (hasRun &&
-                row == currentRow &&
-                styleId == previousStyleId &&
-                col == previousCol + 1)
-            {
-                previousCol = col;
-                continue;
-            }
-
-            if (hasRun)
-                yield return new StyleOnlyRun(currentRow, startCol, previousCol, previousStyleId);
-
-            currentRow = row;
-            startCol = col;
-            previousCol = col;
-            previousStyleId = styleId;
-            hasRun = true;
-        }
-
-        if (hasRun)
-            yield return new StyleOnlyRun(currentRow, startCol, previousCol, previousStyleId);
-    }
-
-    private static void ApplyStyleOnlyRuns(
+    private static void ApplyStyleOnlySeedCells(
         Workbook workbook,
         Dictionary<StyleId, CellStyle> styleCache,
         IXLWorksheet xlSheet,
@@ -358,24 +315,14 @@ public sealed partial class XlsxFileAdapter
         if (!sheet.HasStyleOnlyCells)
             return;
 
-        var xlsxStyleCache = new Dictionary<StyleId, IXLStyle>();
-        foreach (var run in GetStyleOnlyRuns(sheet))
+        foreach (var seed in XlsxStyleOnlyCellWriter.GetSeedCells(sheet))
         {
-            var style = GetCachedStyle(workbook, styleCache, run.StyleId);
+            var style = GetCachedStyle(workbook, styleCache, seed.StyleId);
             if (style.Equals(CellStyle.Default))
                 continue;
 
-            var xlRange = xlSheet.Range((int)run.Row, (int)run.StartCol, (int)run.Row, (int)run.EndCol);
-            if (xlsxStyleCache.TryGetValue(run.StyleId, out var xlsxStyle))
-            {
-                xlRange.Style = xlsxStyle;
-                continue;
-            }
-
-            XlsxClosedXmlCellMapper.ApplyStyle(xlRange.Style, style);
-            xlsxStyleCache.Add(run.StyleId, xlRange.Style);
+            var xlCell = xlSheet.Cell((int)seed.Row, (int)seed.Col);
+            XlsxClosedXmlCellMapper.ApplyStyle(xlCell, style);
         }
     }
-
-    private readonly record struct StyleOnlyRun(uint Row, uint StartCol, uint EndCol, StyleId StyleId);
 }

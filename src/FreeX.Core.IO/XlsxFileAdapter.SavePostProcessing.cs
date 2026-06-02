@@ -36,6 +36,12 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetDimensionDefaultsWriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        if (featurePlan.HasStyleOnlyCells)
+        {
+            packageStream.Position = 0;
+            XlsxStyleOnlyCellWriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
         if (featurePlan.HasFullCalculationOnLoad)
         {
             packageStream.Position = 0;
@@ -339,6 +345,7 @@ public sealed partial class XlsxFileAdapter
         public bool HasWorkbookReplayMetadata;
         public bool HasReplayMetadata;
         public bool HasSourceIndependentMetadata;
+        public bool HasStyleOnlyCells;
 
         public static XlsxPostProcessingFeaturePlan Create(Workbook workbook)
         {
@@ -375,6 +382,7 @@ public sealed partial class XlsxFileAdapter
             HasPivotCustomNumberFormats |= HasPivotCustomNumberFormats(sheet);
             HasReplayMetadata |= XlsxWorksheetPostProcessingMetadataBatchWriter.HasReplayMetadata(sheet);
             HasSourceIndependentMetadata |= XlsxWorksheetSourceIndependentMetadataBatchWriter.HasMetadata(sheet);
+            HasStyleOnlyCells |= sheet.HasStyleOnlyCells;
         }
     }
 }

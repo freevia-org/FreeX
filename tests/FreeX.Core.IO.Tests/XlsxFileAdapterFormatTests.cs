@@ -129,8 +129,9 @@ public sealed class XlsxFileAdapterFormatTests
 
         adapterSource.Should().NotContain("packageStream.ToArray()");
         saveSource.Should().NotContain("GetUsedCells()");
-        saveSource.Should().Contain("GetStyleOnlyRuns");
-        saveSource.Should().Contain("Dictionary<StyleId, IXLStyle>");
+        saveSource.Should().Contain("ApplyStyleOnlySeedCells");
+        saveSource.Should().Contain("XlsxStyleOnlyCellWriter.GetSeedCells(sheet)");
+        savePostProcessingSource.Should().Contain("XlsxStyleOnlyCellWriter.Save(packageStream, workbook, GetWorksheetPathMap());");
         saveSource.Should().NotContain(".GroupBy(entry => entry.Key.Row)");
         saveSource.Should().NotContain(".OrderBy(entry => entry.Key.Col)");
         savePostProcessingSource.Should().NotContain("GetUsedCells()");
