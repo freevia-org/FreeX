@@ -1495,6 +1495,46 @@ public sealed class XsltWorkbookTransformTests
     }
 
     [Fact]
+    public void TransformToSpreadsheetXml_EmailHyperlinkAttributeValueTemplates_GenerateSpreadsheetMl()
+    {
+        using var source = StreamFromString("""
+            <links>
+              <link label="Email finance" target="mailto:finance@example.com" tip="Send email"/>
+            </links>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/links">
+                <ss:Workbook>
+                  <ss:Worksheet ss:Name="Links">
+                    <ss:Table>
+                      <xsl:for-each select="link">
+                        <ss:Row>
+                          <ss:Cell ss:HRef="{@target}" ss:HRefScreenTip="{@tip}">
+                            <ss:Data ss:Type="String"><xsl:value-of select="@label"/></ss:Data>
+                          </ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        using var transformed = XsltWorkbookTransform.TransformToSpreadsheetXml(source, stylesheet);
+
+        XNamespace ss = "urn:schemas-microsoft-com:office:spreadsheet";
+        var cell = XDocument.Load(transformed).Descendants(ss + "Cell").Single();
+
+        cell.Attribute(ss + "HRef")!.Value.Should().Be("mailto:finance@example.com");
+        cell.Attribute(ss + "HRefScreenTip")!.Value.Should().Be("Send email");
+        cell.Element(ss + "Data")!.Value.Should().Be("Email finance");
+    }
+
+    [Fact]
     public void TransformToSpreadsheetXml_NumberInstruction_GeneratesFormattedSequenceCells()
     {
         using var source = StreamFromString("""

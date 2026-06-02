@@ -176,20 +176,24 @@ public sealed class AllowEditRangeDialog : Window
     }
 
     private void DeleteSelectedRange_Click(object sender, RoutedEventArgs e)
+        => TryDeleteSelectedRange();
+
+    private bool TryDeleteSelectedRange()
     {
         if (_existingRangesBox.SelectedItem is not string selected ||
             !ProtectionDialogPlanner.TryParseAllowEditRange(selected, _sheetId, out var range))
-            return;
+            return false;
 
         Range = range;
         Result = CreateRemoveResult(range);
         DialogResult = true;
+        return true;
     }
 
     private void ExistingRangesBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        DeleteSelectedRange_Click(sender, e);
-        e.Handled = true;
+        if (TryDeleteSelectedRange())
+            e.Handled = true;
     }
 
     private void ClearAllRanges_Click(object sender, RoutedEventArgs e)
