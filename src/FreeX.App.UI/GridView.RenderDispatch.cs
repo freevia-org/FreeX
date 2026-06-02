@@ -126,11 +126,11 @@ public partial class GridView
 
     private bool HasDrawingObjectLayerWork()
     {
-        if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
-            return true;
-
         if (ObjectDisplayMode == GridObjectDisplayMode.Nothing)
             return false;
+
+        if (SelectedObjectId != Guid.Empty && SelectedObjectKind != ObjectKind.None)
+            return true;
 
         return Charts is { Count: > 0 } ||
             DrawingShapes is { Count: > 0 } ||

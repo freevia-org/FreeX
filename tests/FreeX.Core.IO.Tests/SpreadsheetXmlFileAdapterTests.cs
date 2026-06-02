@@ -2289,6 +2289,7 @@ public sealed class SpreadsheetXmlFileAdapterTests
               <style id="percent" format="0.00%"/>
               <row label="Revenue" amount="42.5" style="money"/>
               <row label="Margin" amount="0.875" style="percent"/>
+              <marker row="4" column="3" style="percent"/>
             </report>
             """);
         using var stylesheet = StreamFromString("""
@@ -2312,6 +2313,9 @@ public sealed class SpreadsheetXmlFileAdapterTests
                           <ss:Cell ss:StyleID="{@style}"><ss:Data ss:Type="Number"><xsl:value-of select="@amount"/></ss:Data></ss:Cell>
                         </ss:Row>
                       </xsl:for-each>
+                      <ss:Row ss:Index="{marker/@row}">
+                        <ss:Cell ss:Index="{marker/@column}" ss:StyleID="{marker/@style}"/>
+                      </ss:Row>
                     </ss:Table>
                   </ss:Worksheet>
                 </ss:Workbook>
@@ -2329,6 +2333,8 @@ public sealed class SpreadsheetXmlFileAdapterTests
         sheet.GetCell(2, 2)!.Value.Should().Be(new NumberValue(0.875));
         workbook.GetStyle(sheet.GetCell(1, 2)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
         workbook.GetStyle(sheet.GetCell(2, 2)!.StyleId).NumberFormat.Should().Be("0.00%");
+        sheet.GetCell(4, 3).Should().BeNull();
+        workbook.GetStyle(sheet.GetStyleOnly(4, 3)!.Value).NumberFormat.Should().Be("0.00%");
     }
 
     [Fact]

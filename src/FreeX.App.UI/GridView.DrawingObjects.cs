@@ -195,7 +195,12 @@ public partial class GridView
             if (!textBox.IsVisible) continue;
             if (!CanAnchoredObjectReachDrawingViewport(textBox.Anchor, lastRenderableRow, lastRenderableColumn))
                 continue;
-            if (!TryCreateAnchoredObjectRect(textBox.Anchor, textBox.Width, textBox.Height, 24, 18, out var rect))
+            if (!TryCreateAnchoredObjectRect(textBox.Anchor,
+                    textBox.Width,
+                    textBox.Height,
+                    MinimumTextBoxObjectWidth,
+                    MinimumTextBoxObjectHeight,
+                    out var rect))
                 continue;
             if (NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom) &&
                 !IntersectsDrawingViewport(rect, textBox.RotationDegrees, visibleRight, visibleBottom))
@@ -232,7 +237,12 @@ public partial class GridView
             if (!shape.IsVisible) continue;
             if (!CanAnchoredObjectReachDrawingViewport(shape.Anchor, lastRenderableRow, lastRenderableColumn))
                 continue;
-            if (!TryCreateAnchoredObjectRect(shape.Anchor, shape.Width, shape.Height, 8, 8, out var rect))
+            if (!TryCreateAnchoredObjectRect(shape.Anchor,
+                    shape.Width,
+                    shape.Height,
+                    MinimumShapeObjectWidth,
+                    MinimumShapeObjectHeight,
+                    out var rect))
                 continue;
             if (NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom) &&
                 !IntersectsDrawingViewport(rect, shape.RotationDegrees, visibleRight, visibleBottom))
@@ -549,7 +559,12 @@ public partial class GridView
             {
                 if (shape.IsVisible &&
                     CanAnchoredObjectReachDrawingViewport(shape.Anchor, lastRenderableRow, lastRenderableColumn) &&
-                    TryCreateAnchoredObjectRect(shape.Anchor, shape.Width, shape.Height, 8, 8, out var rect) &&
+                    TryCreateAnchoredObjectRect(shape.Anchor,
+                        shape.Width,
+                        shape.Height,
+                        MinimumShapeObjectWidth,
+                        MinimumShapeObjectHeight,
+                        out var rect) &&
                     (!NeedsDrawingViewportCull(rect, shape.RotationDegrees, visibleRight, visibleBottom) ||
                         IntersectsDrawingViewport(rect, shape.RotationDegrees, visibleRight, visibleBottom)))
                     DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Shape", shape.Name, index));
@@ -564,7 +579,12 @@ public partial class GridView
             {
                 if (picture.IsVisible &&
                     CanAnchoredObjectReachDrawingViewport(picture.Anchor, lastRenderableRow, lastRenderableColumn) &&
-                    TryCreateAnchoredObjectRect(picture.Anchor, picture.Width, picture.Height, 24, 18, out var rect) &&
+                    TryCreateAnchoredObjectRect(picture.Anchor,
+                        picture.Width,
+                        picture.Height,
+                        MinimumPictureObjectWidth,
+                        MinimumPictureObjectHeight,
+                        out var rect) &&
                     (!NeedsDrawingViewportCull(rect, picture.RotationDegrees, visibleRight, visibleBottom) ||
                         IntersectsDrawingViewport(rect, picture.RotationDegrees, visibleRight, visibleBottom)))
                     DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Picture", picture.Name, index));
@@ -579,7 +599,12 @@ public partial class GridView
             {
                 if (textBox.IsVisible &&
                     CanAnchoredObjectReachDrawingViewport(textBox.Anchor, lastRenderableRow, lastRenderableColumn) &&
-                    TryCreateAnchoredObjectRect(textBox.Anchor, textBox.Width, textBox.Height, 24, 18, out var rect) &&
+                    TryCreateAnchoredObjectRect(textBox.Anchor,
+                        textBox.Width,
+                        textBox.Height,
+                        MinimumTextBoxObjectWidth,
+                        MinimumTextBoxObjectHeight,
+                        out var rect) &&
                     (!NeedsDrawingViewportCull(rect, textBox.RotationDegrees, visibleRight, visibleBottom) ||
                         IntersectsDrawingViewport(rect, textBox.RotationDegrees, visibleRight, visibleBottom)))
                     DrawObjectPlaceholder(dc, rect, CreateObjectPlaceholderLabel("Text Box", textBox.Name, index));
