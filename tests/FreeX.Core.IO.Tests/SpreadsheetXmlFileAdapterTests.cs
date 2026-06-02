@@ -2191,6 +2191,57 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromStyleAttributeValueTemplates()
+    {
+        using var source = StreamFromString("""
+            <report>
+              <style id="money" format="$#,##0.00"/>
+              <style id="percent" format="0.00%"/>
+              <row label="Revenue" amount="42.5" style="money"/>
+              <row label="Margin" amount="0.875" style="percent"/>
+            </report>
+            """);
+        using var stylesheet = StreamFromString("""
+            <xsl:stylesheet version="1.0"
+                xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <xsl:template match="/report">
+                <ss:Workbook>
+                  <ss:Styles>
+                    <xsl:for-each select="style">
+                      <ss:Style ss:ID="{@id}">
+                        <ss:NumberFormat ss:Format="{@format}" />
+                      </ss:Style>
+                    </xsl:for-each>
+                  </ss:Styles>
+                  <ss:Worksheet ss:Name="Styled AVT">
+                    <ss:Table>
+                      <xsl:for-each select="row">
+                        <ss:Row>
+                          <ss:Cell><ss:Data ss:Type="String"><xsl:value-of select="@label"/></ss:Data></ss:Cell>
+                          <ss:Cell ss:StyleID="{@style}"><ss:Data ss:Type="Number"><xsl:value-of select="@amount"/></ss:Data></ss:Cell>
+                        </ss:Row>
+                      </xsl:for-each>
+                    </ss:Table>
+                  </ss:Worksheet>
+                </ss:Workbook>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var workbook = SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        var sheet = workbook.GetSheetAt(0);
+        sheet.Name.Should().Be("Styled AVT");
+        sheet.GetCell(1, 1)!.Value.Should().Be(new TextValue("Revenue"));
+        sheet.GetCell(1, 2)!.Value.Should().Be(new NumberValue(42.5));
+        sheet.GetCell(2, 1)!.Value.Should().Be(new TextValue("Margin"));
+        sheet.GetCell(2, 2)!.Value.Should().Be(new NumberValue(0.875));
+        workbook.GetStyle(sheet.GetCell(1, 2)!.StyleId).NumberFormat.Should().Be("$#,##0.00");
+        workbook.GetStyle(sheet.GetCell(2, 2)!.StyleId).NumberFormat.Should().Be("0.00%");
+    }
+
+    [Fact]
     public void LoadTransformed_PreservesSpreadsheetMlGeneratedFromDecimalFormat()
     {
         using var source = StreamFromString("<rows><row amount=\"1234.5\" ratio=\"0.875\" /></rows>");
