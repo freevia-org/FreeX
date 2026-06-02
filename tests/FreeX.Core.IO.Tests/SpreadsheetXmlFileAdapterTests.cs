@@ -261,6 +261,32 @@ public sealed class SpreadsheetXmlFileAdapterTests
     }
 
     [Fact]
+    public void Load_DropsInvalidSpreadsheetMlNamedRanges()
+    {
+        using var stream = StreamFromString("""
+            <ss:Workbook xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+              <ss:Names>
+                <ss:NamedRange ss:Name="ValidRows" ss:RefersTo="=Report!A1:A2"/>
+                <ss:NamedRange ss:Name="1InvalidName" ss:RefersTo="=Report!B1:B2"/>
+                <ss:NamedRange ss:Name="MissingSheet" ss:RefersTo="=Missing!A1:A2"/>
+                <ss:NamedRange ss:Name="BadAddress" ss:RefersTo="=Report!NotA1"/>
+                <ss:NamedRange ss:Name="OutOfBounds" ss:RefersTo="=Report!A1:XFE1"/>
+                <ss:NamedRange ss:Name="BlankRef" ss:RefersTo="   "/>
+              </ss:Names>
+              <ss:Worksheet ss:Name="Report"><ss:Table/></ss:Worksheet>
+            </ss:Workbook>
+            """);
+
+        var workbook = new SpreadsheetXmlFileAdapter().Load(stream);
+
+        var report = workbook.GetSheet("Report")!;
+        workbook.NamedRanges.Should().ContainSingle();
+        workbook.NamedRanges["ValidRows"].Should().Be(new GridRange(
+            new CellAddress(report.Id, 1, 1),
+            new CellAddress(report.Id, 2, 1)));
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsWorkbookNamedRangesAsSpreadsheetMlNames()
     {
         var workbook = new Workbook("XmlNames");
