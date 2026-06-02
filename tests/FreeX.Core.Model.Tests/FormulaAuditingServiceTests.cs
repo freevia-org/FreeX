@@ -73,6 +73,21 @@ public sealed class FormulaAuditingServiceTests
     }
 
     [Fact]
+    public void GetDirectDependents_ReturnsFormulaCellsWithAbsoluteLocalReferences()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var target = new CellAddress(sheet.Id, 2, 1);
+        var dependent = new CellAddress(sheet.Id, 5, 3);
+
+        sheet.SetCell(dependent, Cell.FromFormula("$A$2*2"));
+
+        FormulaAuditingService.GetDirectDependents(wb, target)
+            .Should()
+            .Equal(dependent);
+    }
+
+    [Fact]
     public void GetDependentTraceArrows_ReturnsMultiLevelFormulaChain()
     {
         var wb = new Workbook("test");

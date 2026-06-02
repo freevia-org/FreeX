@@ -102,6 +102,29 @@ public sealed class GridViewSelectionLayoutTests
     }
 
     [Fact]
+    public void CalculateVisibleSelectionLayout_ReturnsEdgeVisibilityForClippedSelection()
+    {
+        var sheetId = SheetId.New();
+        var viewport = Viewport();
+        var range = new GridRange(
+            new CellAddress(sheetId, 2, 2),
+            new CellAddress(sheetId, 10, 10));
+
+        var layout = GridView.CalculateVisibleSelectionLayout(
+            viewport,
+            range,
+            GridView.RowHeaderWidth,
+            GridView.ColHeaderHeight);
+
+        layout.Should().NotBeNull();
+        layout!.Value.Rect.Should().Be(new Rect(90, 38, 140, 40));
+        layout.Value.HasTopEdge.Should().BeTrue();
+        layout.Value.HasLeftEdge.Should().BeTrue();
+        layout.Value.HasBottomEdge.Should().BeFalse();
+        layout.Value.HasRightEdge.Should().BeFalse();
+    }
+
+    [Fact]
     public void CalculateClipboardMarquee_ReturnsVisibleRectangle_ForCopiedRange()
     {
         var sheetId = SheetId.New();
@@ -382,6 +405,29 @@ public sealed class GridViewSelectionLayoutTests
         getRangePixels.Should().Contain("if (top.HasValue && bottom.HasValue)");
         getRangePixels.Should().Contain("if (left.HasValue && right.HasValue)");
         getRangePixels.Should().Contain("break;");
+    }
+
+    [Fact]
+    public void RenderSelectionRange_UsesUnifiedVisibleSelectionLayout()
+    {
+        var rendering = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Rendering.Selection.cs"));
+        var planner = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "SelectionMarqueeLayoutPlanner.cs"));
+        var renderSelectionRange = rendering[
+            rendering.IndexOf("private void RenderSelectionRange", StringComparison.Ordinal)..
+            rendering.IndexOf("private void RenderSelectionHandle", StringComparison.Ordinal)];
+
+        renderSelectionRange.Should().Contain("CalculateVisibleSelectionLayout(Viewport, range, rowHeaderWidth, columnHeaderHeight)");
+        renderSelectionRange.Should().Contain("selectionLayout.HasTopEdge");
+        renderSelectionRange.Should().Contain("selectionLayout.HasBottomEdge");
+        renderSelectionRange.Should().Contain("selectionLayout.HasLeftEdge");
+        renderSelectionRange.Should().Contain("selectionLayout.HasRightEdge");
+        renderSelectionRange.Should().NotContain("GetRangePixels(Viewport, range, rowHeaderWidth, columnHeaderHeight)");
+        renderSelectionRange.Should().NotContain("CalculateVisibleSelectionRect(Viewport, range, rowHeaderWidth, columnHeaderHeight)");
+        planner.Should().Contain("public static SelectionMarqueeLayout? CalculateVisibleSelectionLayout");
+        planner.Should().Contain("if (row.Row == range.Start.Row)");
+        planner.Should().Contain("if (column.Col == range.End.Col)");
     }
 
     [Fact]
