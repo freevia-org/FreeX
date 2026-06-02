@@ -224,6 +224,34 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsMalformedNativeJsonWorksheetBackgroundPayloads()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "BackgroundImage",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "BackgroundImage": {
+                    "ImageBase64": "not-base64!",
+                    "ContentType": "image/png",
+                    "FileName": "background.png"
+                  }
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sheet = new NativeJsonAdapter().Load(stream).GetSheetAt(0);
+
+        sheet.BackgroundImage.Should().BeNull();
+    }
+
+    [Fact]
     public void Save_WritesNonFiniteNativeJsonNumbersAsTextCells()
     {
         var workbook = new Workbook("NonFinite");
