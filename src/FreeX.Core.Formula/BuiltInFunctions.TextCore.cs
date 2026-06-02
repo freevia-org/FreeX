@@ -1033,9 +1033,16 @@ public static partial class BuiltInFunctions
         if (outputCharacterCount == 0) return new TextValue("");
 
         var outputLength = (long)text.Length * times;
-        var sb = new System.Text.StringBuilder((int)outputLength);
-        for (int i = 0; i < times; i++) sb.Append(text);
-        return new TextValue(sb.ToString());
+        var repeated = string.Create((int)outputLength, (text, times), static (span, state) =>
+        {
+            var source = state.text.AsSpan();
+            for (var i = 0; i < state.times; i++)
+            {
+                source.CopyTo(span);
+                span = span[source.Length..];
+            }
+        });
+        return new TextValue(repeated);
     }
 
     private static ScalarValue ValueFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
