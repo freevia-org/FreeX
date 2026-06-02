@@ -34,7 +34,8 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("IsPathRooted");
         script.Should().Contain("\"--self-contained\", \"false\"");
         script.Should().Contain("-p:PublishSingleFile=true");
-        script.Should().NotContain("-p:EnableCompressionInSingleFile=true");
+        script.Should().Contain("-p:FreeXTesterReleaseEnglishOnly=true");
+        script.Should().Contain("-p:EnableCompressionInSingleFile=true");
         script.Should().Contain("-p:IncludeAllContentForSelfExtract=true");
         script.Should().Contain("[string]$RuntimeIdentifier = \"win-x64\"");
         script.Should().Contain("\"-r\", $RuntimeIdentifier");
@@ -53,6 +54,21 @@ public sealed class UserTestPublishScriptTests
         script.Should().Contain("In the app: Help > Legal Notices");
         script.Should().Contain("docs/PRIVACY.md");
         script.Should().Contain("THIRD_PARTY_NOTICES.md");
+    }
+
+    [Fact]
+    public void PublishScript_EnglishOnlyTesterExeExcludesLocalizedSatelliteResources()
+    {
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Publish-UserTestBuild.ps1");
+        var projectPath = WorkspaceFileLocator.Find("src", "FreeX.App.Host", "FreeX.App.Host.csproj");
+        var script = File.ReadAllText(scriptPath);
+        var project = File.ReadAllText(projectPath);
+
+        script.Should().Contain("if ($PublishMode -eq \"SingleFile\")");
+        script.Should().Contain("-p:FreeXTesterReleaseEnglishOnly=true");
+        project.Should().Contain("Condition=\"'$(FreeXTesterReleaseEnglishOnly)' == 'true'\"");
+        project.Should().Contain("EmbeddedResource Remove=\"Resources\\Strings.*.resx\"");
+        project.Should().NotContain("EmbeddedResource Remove=\"Resources\\Strings.resx\"");
     }
 
     [Fact]
