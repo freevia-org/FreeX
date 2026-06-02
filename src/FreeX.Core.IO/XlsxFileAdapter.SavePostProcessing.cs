@@ -21,8 +21,11 @@ public sealed partial class XlsxFileAdapter
             return worksheetPathMap;
         }
 
-        packageStream.Position = 0;
-        XlsxWorkbookMetadataWriter.SavePostProcessingMetadata(packageStream, workbook);
+        if (featurePlan.HasWorkbookPostProcessingMetadata)
+        {
+            packageStream.Position = 0;
+            XlsxWorkbookMetadataWriter.SavePostProcessingMetadata(packageStream, workbook);
+        }
 
         if (featurePlan.HasNonDefaultDimensions)
         {
@@ -323,6 +326,7 @@ public sealed partial class XlsxFileAdapter
         public bool HasStructuredTables;
         public bool HasPivotTables;
         public bool HasPivotCustomNumberFormats;
+        public bool HasWorkbookPostProcessingMetadata;
         public bool HasWorkbookReplayMetadata;
         public bool HasReplayMetadata;
         public bool HasSourceIndependentMetadata;
@@ -330,6 +334,7 @@ public sealed partial class XlsxFileAdapter
         public static XlsxPostProcessingFeaturePlan Create(Workbook workbook)
         {
             var plan = new XlsxPostProcessingFeaturePlan();
+            plan.HasWorkbookPostProcessingMetadata = XlsxWorkbookMetadataWriter.HasPostProcessingMetadata(workbook);
             plan.HasWorkbookReplayMetadata = XlsxWorkbookMetadataWriter.HasSourcePackageReplayMetadata(workbook);
             foreach (var sheet in workbook.Sheets)
                 plan.Include(sheet);
