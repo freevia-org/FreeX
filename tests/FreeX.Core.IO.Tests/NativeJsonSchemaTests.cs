@@ -1645,6 +1645,51 @@ public sealed class NativeJsonSchemaTests
     }
 
     [Fact]
+    public void Load_DropsMalformedNativeJsonTextBoxAndShapeEntries()
+    {
+        const string json = """
+            {
+              "FileFormat": "FreeX.NativeJsonWorkbook",
+              "SchemaVersion": 1,
+              "MinimumReaderVersion": 1,
+              "Name": "MalformedDrawingObjects",
+              "Sheets": [
+                {
+                  "Name": "Sheet1",
+                  "TextBoxes": [
+                    null,
+                    { "Name": "Kept Text", "Anchor": "C3", "Text": "review", "Width": 180, "Height": 80 },
+                    { "Name": "Bad Text", "Anchor": "not-an-address", "Text": "dropped" }
+                  ],
+                  "DrawingShapes": [
+                    null,
+                    { "Name": "Kept Shape", "Anchor": "D4", "Kind": 1, "Width": 120, "Height": 70 },
+                    { "Name": "Bad Shape", "Anchor": "not-an-address", "Kind": 0 }
+                  ]
+                }
+              ]
+            }
+            """;
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+
+        var sheet = new NativeJsonAdapter().Load(stream).GetSheetAt(0);
+
+        var textBox = sheet.TextBoxes.Should().ContainSingle().Subject;
+        textBox.Name.Should().Be("Kept Text");
+        textBox.Anchor.ToA1().Should().Be("C3");
+        textBox.Text.Should().Be("review");
+        textBox.Width.Should().Be(180);
+        textBox.Height.Should().Be(80);
+
+        var shape = sheet.DrawingShapes.Should().ContainSingle().Subject;
+        shape.Name.Should().Be("Kept Shape");
+        shape.Anchor.ToA1().Should().Be("D4");
+        shape.Kind.Should().Be(DrawingShapeKind.Ellipse);
+        shape.Width.Should().Be(120);
+        shape.Height.Should().Be(70);
+    }
+
+    [Fact]
     public void Load_DropsMalformedNativeJsonSparklineEntries()
     {
         const string json = """
