@@ -170,12 +170,21 @@ public sealed class ThreadedCommentDialog : Window
         int replyIndex,
         string? replyText,
         out ThreadedCommentDialogResult result,
+        out string? error) =>
+        TryCreateReplyEditResult(existing, replyIndex, replyText, existing?.IsResolved ?? false, out result, out error);
+
+    public static bool TryCreateReplyEditResult(
+        ThreadedComment? existing,
+        int replyIndex,
+        string? replyText,
+        bool isResolved,
+        out ThreadedCommentDialogResult result,
         out string? error)
     {
         result = new ThreadedCommentDialogResult(
             null,
             null,
-            existing?.IsResolved ?? false,
+            isResolved,
             ThreadedCommentDialogAction.EditReply,
             replyIndex,
             (replyText ?? "").Trim());
@@ -205,12 +214,20 @@ public sealed class ThreadedCommentDialog : Window
         ThreadedComment? existing,
         int replyIndex,
         out ThreadedCommentDialogResult result,
+        out string? error) =>
+        TryCreateReplyDeleteResult(existing, replyIndex, existing?.IsResolved ?? false, out result, out error);
+
+    public static bool TryCreateReplyDeleteResult(
+        ThreadedComment? existing,
+        int replyIndex,
+        bool isResolved,
+        out ThreadedCommentDialogResult result,
         out string? error)
     {
         result = new ThreadedCommentDialogResult(
             null,
             null,
-            existing?.IsResolved ?? false,
+            isResolved,
             ThreadedCommentDialogAction.DeleteReply,
             replyIndex);
         if (existing is null)
@@ -308,7 +325,7 @@ public sealed class ThreadedCommentDialog : Window
 
     private void SubmitThreadedCommentReplyEdit(ThreadedComment existing)
     {
-        if (!TryCreateReplyEditResult(existing, _replySelector.SelectedIndex, _selectedReplyBox.Text, out var result, out var error))
+        if (!TryCreateReplyEditResult(existing, _replySelector.SelectedIndex, _selectedReplyBox.Text, _resolveBox.IsChecked == true, out var result, out var error))
         {
             ShowInvalidThreadedCommentWarning(error ?? UiText.Get("ThreadedComment_EnterReplyMessage"), _selectedReplyBox);
             return;
@@ -320,7 +337,7 @@ public sealed class ThreadedCommentDialog : Window
 
     private void SubmitThreadedCommentReplyDelete(ThreadedComment existing)
     {
-        if (!TryCreateReplyDeleteResult(existing, _replySelector.SelectedIndex, out var result, out var error))
+        if (!TryCreateReplyDeleteResult(existing, _replySelector.SelectedIndex, _resolveBox.IsChecked == true, out var result, out var error))
         {
             ShowInvalidThreadedCommentWarning(error ?? UiText.Get("ThreadedComment_SelectReplyMessage"), _selectedReplyBox);
             return;
