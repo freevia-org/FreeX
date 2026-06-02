@@ -21,8 +21,7 @@ public static class WorkbookDropPlanner
         if (!IsFilePathCandidate(path))
             return false;
 
-        var extension = Path.GetExtension(path);
-        if (string.IsNullOrWhiteSpace(extension))
+        if (!TryGetExtension(path, out var extension))
             return false;
 
         return FileDialogFilterBuilder.FindOpenAdapter(adapters, extension, out _) is not null;
@@ -30,4 +29,34 @@ public static class WorkbookDropPlanner
 
     private static bool IsFilePathCandidate(string? path) =>
         !string.IsNullOrWhiteSpace(path) && !Directory.Exists(path);
+
+    private static bool TryGetExtension(string? path, out string extension)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            extension = "";
+            return false;
+        }
+
+        try
+        {
+            extension = Path.GetExtension(path) ?? "";
+            return !string.IsNullOrWhiteSpace(extension);
+        }
+        catch (ArgumentException)
+        {
+            extension = "";
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            extension = "";
+            return false;
+        }
+        catch (PathTooLongException)
+        {
+            extension = "";
+            return false;
+        }
+    }
 }

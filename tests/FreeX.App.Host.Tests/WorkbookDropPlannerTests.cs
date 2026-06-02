@@ -51,6 +51,19 @@ public sealed class WorkbookDropPlannerTests
     }
 
     [Fact]
+    public void SelectOpenableFile_SkipsMalformedPathCandidates()
+    {
+        var selected = WorkbookDropPlanner.SelectOpenableFile(
+            [
+                "bad\0path.xlsx",
+                @"C:\Temp\Book.xlsx"
+            ],
+            [new FakeAdapter(".xlsx", "XLSX Workbook")]);
+
+        selected.Should().Be(@"C:\Temp\Book.xlsx");
+    }
+
+    [Fact]
     public void SelectOpenableFile_UsesAdapterFormatAliases()
     {
         var selected = WorkbookDropPlanner.SelectOpenableFile(
