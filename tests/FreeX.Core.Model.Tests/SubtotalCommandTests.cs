@@ -373,6 +373,95 @@ public sealed class SubtotalCommandTests
         sheet.GetValue(2, 1).Should().Be(new TextValue("East Total"));
     }
 
+    [Fact]
+    public void RemoveSubtotalRowsCommand_RemovesSparseSubtotalRowsOnceAcrossLargeRange()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var context = new SimpleCtx(workbook);
+        sheet.SetCell(new CellAddress(sheet.Id, 5_000, 1), new TextValue("East Total"));
+        sheet.SetFormula(new CellAddress(sheet.Id, 5_000, 2), "SUBTOTAL(9,B1:B4999)");
+        sheet.SetFormula(new CellAddress(sheet.Id, 5_000, 3), "SUBTOTAL(9,C1:C4999)");
+        sheet.SetCell(new CellAddress(sheet.Id, 5_001, 1), new TextValue("After East"));
+        sheet.SetCell(new CellAddress(sheet.Id, 10_000, 1), new TextValue("West Total"));
+        sheet.SetFormula(new CellAddress(sheet.Id, 10_000, 2), "SUBTOTAL(9,B5001:B9999)");
+        sheet.SetCell(new CellAddress(sheet.Id, 10_001, 1), new TextValue("After West"));
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 20_000, 10));
+
+        var command = new RemoveSubtotalRowsCommand(sheet.Id, range);
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.GetValue(5_000, 1).Should().Be(new TextValue("After East"));
+        sheet.GetValue(9_999, 1).Should().Be(new TextValue("After West"));
+
+        command.Revert(context);
+
+        sheet.GetValue(5_000, 1).Should().Be(new TextValue("East Total"));
+        sheet.GetCell(5_000, 2)!.FormulaText.Should().Be("SUBTOTAL(9,B1:B4999)");
+        sheet.GetCell(5_000, 3)!.FormulaText.Should().Be("SUBTOTAL(9,C1:C4999)");
+        sheet.GetValue(10_000, 1).Should().Be(new TextValue("West Total"));
+        sheet.GetCell(10_000, 2)!.FormulaText.Should().Be("SUBTOTAL(9,B5001:B9999)");
+    }
+
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Benchmark_SubtotalRowFinderSparseFormulas_ReportsTimingAndAllocatedBytes()
+    {
+        const uint rows = 100_000;
+        const uint cols = 12;
+        const int steps = 5;
+
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        for (uint row = 500; row <= rows; row += 500)
+            sheet.SetFormula(new CellAddress(sheet.Id, row, 3), "SUM(A1:A2)");
+        for (uint row = 1_000; row <= rows; row += 1_000)
+            sheet.SetFormula(new CellAddress(sheet.Id, row, 12), "SUBTOTAL(9,L1:L2)");
+
+        var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, rows, cols));
+        var find = typeof(SubtotalCommand).Assembly
+            .GetType("FreeX.Core.Commands.SubtotalRowFinder")!
+            .GetMethod("Find", BindingFlags.Public | BindingFlags.Static)!;
+
+        var warmup = (List<uint>)find.Invoke(null, [sheet, sheet.Id, range])!;
+        warmup.Count.Should().Be(100);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        var beforeBytes = GC.GetAllocatedBytesForCurrentThread();
+        var timings = new double[steps];
+        var total = Stopwatch.StartNew();
+        var checksum = 0;
+
+        for (var i = 0; i < steps; i++)
+        {
+            var step = Stopwatch.StartNew();
+            var rowsFound = (List<uint>)find.Invoke(null, [sheet, sheet.Id, range])!;
+            step.Stop();
+
+            checksum += rowsFound.Count;
+            timings[i] = step.Elapsed.TotalMilliseconds;
+        }
+
+        total.Stop();
+        var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
+
+        checksum.Should().Be(steps * 100);
+        Console.WriteLine(
+            "PERF SUBTOTAL_ROW_FINDER_SPARSE_FORMULAS " +
+            $"rows={rows} cols={cols} steps={steps} " +
+            $"subtotal_rows=100 " +
+            $"formula_cells={sheet.FormulaCellCount} " +
+            $"total_ms={total.Elapsed.TotalMilliseconds:F2} " +
+            $"mean_ms={timings.Average():F2} " +
+            $"p95_ms={timings.OrderBy(x => x).ElementAt((int)Math.Ceiling(steps * 0.95) - 1):F2} " +
+            $"max_ms={timings.Max():F2} " +
+            $"allocated_bytes={allocatedBytes:N0}");
+    }
+
     private static void SeedSubtotalRows(Sheet sheet)
     {
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
