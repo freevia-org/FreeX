@@ -24,6 +24,8 @@ public partial class GridView
         double? top = null, left = null, bottom = null, right = null;
         foreach (var row in vp.RowMetrics)
         {
+            if (row.Row > range.End.Row)
+                break;
             if (row.Row == range.Start.Row) top    = row.TopOffset + columnHeaderHeight;
             if (row.Row == range.End.Row)   bottom = row.TopOffset + row.Height + columnHeaderHeight;
             if (top.HasValue && bottom.HasValue)
@@ -31,6 +33,8 @@ public partial class GridView
         }
         foreach (var col in vp.ColMetrics)
         {
+            if (col.Col > range.End.Col)
+                break;
             if (col.Col == range.Start.Col) left  = col.LeftOffset + rowHeaderWidth;
             if (col.Col == range.End.Col)   right = col.LeftOffset + col.Width + rowHeaderWidth;
             if (left.HasValue && right.HasValue)
