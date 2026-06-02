@@ -13,7 +13,7 @@ public partial class MainWindow
 {
     private void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
     {
-        var customDictionary = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var customDictionary = SpellCheckWorkflowPlanner.CreateCustomDictionary(_options);
         var ignoredWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ignoredIssues = new HashSet<(CellAddress Address, string Word)>();
 
@@ -54,7 +54,9 @@ public partial class MainWindow
 
             if (dialog.Result.Action == SpellCheckDialogAction.Add)
             {
-                customDictionary.Add(issue.Word);
+                if (SpellCheckWorkflowPlanner.AddCustomDictionaryWord(_options, customDictionary, issue.Word))
+                    _options.Save();
+
                 continue;
             }
 

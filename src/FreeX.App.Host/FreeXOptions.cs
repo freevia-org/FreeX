@@ -39,6 +39,9 @@ public sealed class FreeXOptions
     // Language
     public string AppLanguage { get; set; } = AppLanguageCatalog.SystemDefaultCultureName;
 
+    // Proofing
+    public List<string> SpellCheckCustomDictionaryWords { get; set; } = [];
+
     // Formulas
     public bool AutoCalculate { get; set; } = true;
     public bool UseR1C1ReferenceStyle { get; set; }
@@ -93,7 +96,9 @@ public sealed class FreeXOptions
             if (File.Exists(storePath))
             {
                 var json = File.ReadAllText(storePath);
-                return JsonSerializer.Deserialize<FreeXOptions>(json) ?? new();
+                var options = JsonSerializer.Deserialize<FreeXOptions>(json) ?? new();
+                options.NormalizePersistedCollections();
+                return options;
             }
         }
         catch (Exception ex)
@@ -114,6 +119,7 @@ public sealed class FreeXOptions
         string? tempPath = null;
         try
         {
+            NormalizePersistedCollections();
             var directory = System.IO.Path.GetDirectoryName(storePath)!;
             Directory.CreateDirectory(directory);
 
@@ -135,5 +141,36 @@ public sealed class FreeXOptions
             if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
                 File.Delete(tempPath);
         }
+    }
+
+    internal void NormalizePersistedCollections()
+    {
+        SpellCheckCustomDictionaryWords = NormalizeSpellCheckCustomDictionaryWords(SpellCheckCustomDictionaryWords);
+    }
+
+    internal static List<string> NormalizeSpellCheckCustomDictionaryWords(IEnumerable<string>? words)
+    {
+        if (words is null)
+            return [];
+
+        var normalized = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var word in words)
+        {
+            var value = NormalizeSpellCheckCustomDictionaryWord(word);
+            if (value is null || !seen.Add(value))
+                continue;
+
+            normalized.Add(value);
+        }
+
+        normalized.Sort(StringComparer.OrdinalIgnoreCase);
+        return normalized;
+    }
+
+    internal static string? NormalizeSpellCheckCustomDictionaryWord(string? word)
+    {
+        var value = word?.Trim();
+        return string.IsNullOrEmpty(value) ? null : value;
     }
 }

@@ -42,7 +42,8 @@ public sealed class OptionsDialogSourceTests
                 var dialog = new OptionsDialog(new FreeXOptions
                 {
                     CollapseRibbonAutomatically = true,
-                    ShowScreenTips = false
+                    ShowScreenTips = false,
+                    SpellCheckCustomDictionaryWords = ["  TeH  ", "adn", "teh"]
                 });
                 dialog.Show();
                 try
@@ -60,6 +61,7 @@ public sealed class OptionsDialogSourceTests
 
                     dialog.Result.CollapseRibbonAutomatically.Should().BeFalse();
                     dialog.Result.ShowScreenTips.Should().BeTrue();
+                    dialog.Result.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
                 }
                 finally
                 {
@@ -70,6 +72,7 @@ public sealed class OptionsDialogSourceTests
             var reloaded = FreeXOptions.LoadFromPath(path);
             reloaded.CollapseRibbonAutomatically.Should().BeFalse();
             reloaded.ShowScreenTips.Should().BeTrue();
+            reloaded.SpellCheckCustomDictionaryWords.Should().Equal("adn", "TeH");
         }
         finally
         {
@@ -80,11 +83,12 @@ public sealed class OptionsDialogSourceTests
     }
 
     [Fact]
-    public void OptionsDialog_PreservesPersistedExportOptionsWhenSavingGeneralOptions()
+    public void OptionsDialog_PreservesPersistedHiddenOptionsWhenSavingGeneralOptions()
     {
         var source = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "OptionsDialog.xaml.cs"));
 
         source.Should().Contain("PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage)");
+        source.Should().Contain("SpellCheckCustomDictionaryWords = FreeXOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords)");
     }
 
     [Fact]

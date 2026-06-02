@@ -2147,16 +2147,23 @@ public sealed class MainWindowSourceHygieneTests
     {
         var selectionSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.Selection.cs"));
         var sheetTabsSource = File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "MainWindow.SheetTabs.cs"));
+        var focusAdjacentSource = ExtractMethodSource(sheetTabsSource, "private bool FocusAdjacentVisibleSheetTab(");
+        var focusEdgeSource = ExtractMethodSource(sheetTabsSource, "private bool FocusEdgeVisibleSheetTab(");
 
         selectionSource.Should().Contain("if (TryHandleFocusedSheetTabKeyboardNavigation(e))");
         sheetTabsSource.Should().Contain("private bool TryHandleFocusedSheetTabKeyboardNavigation(System.Windows.Input.KeyEventArgs e)");
         sheetTabsSource.Should().Contain("Keyboard.Modifiers != ModifierKeys.None");
+        sheetTabsSource.Should().Contain("if (FindSheetTabContextMenuTarget(focusedElement) is null)");
         sheetTabsSource.Should().Contain("Key.Left => FocusAdjacentVisibleSheetTab(-1)");
         sheetTabsSource.Should().Contain("Key.Right => FocusAdjacentVisibleSheetTab(1)");
         sheetTabsSource.Should().Contain("Key.Home => FocusEdgeVisibleSheetTab(first: true)");
         sheetTabsSource.Should().Contain("Key.End => FocusEdgeVisibleSheetTab(first: false)");
         sheetTabsSource.Should().Contain("FocusSheetTab(nextSheetId.Value);");
         sheetTabsSource.Should().Contain("FocusSheetTab(sheetId.Value);");
+        focusAdjacentSource.Should().Contain("SheetTabFocusPlanner.AdjacentTab(_sheetTabs, _currentSheetId, direction)");
+        focusAdjacentSource.Should().NotContain("_sheetTabs.ToList()");
+        focusEdgeSource.Should().Contain("SheetTabFocusPlanner.EdgeTab(_sheetTabs, first)");
+        focusEdgeSource.Should().NotContain("_sheetTabs.ToList()");
     }
 
     [Fact]
@@ -2243,11 +2250,11 @@ public sealed class MainWindowSourceHygieneTests
         xaml.IndexOf("x:Name=\"StatusNumericalCountText\"", StringComparison.Ordinal)
             .Should().BeLessThan(xaml.IndexOf("x:Name=\"StatusSumText\"", StringComparison.Ordinal));
 
-        gridStatusSource.Should().Contain("ApplyStatusBarDisplayState(StatusBarDisplayState.Stats(stats))");
+        gridStatusSource.Should().Contain("ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(stats))");
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusCountText, state.CountText)");
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusNumericalCountText, state.NumericalCountText)");
         gridStatusSource.Should().Contain("SetTextIfChanged(StatusSumText, state.SumText)");
-        gridStatusSource.Should().Contain("StatusBarDisplayState.Ready(UiText.Get(\"MainWindow_Text_Ready\"))");
+        gridStatusSource.Should().Contain("_statusBarDisplayStateCache.GetReady(UiText.Get(\"MainWindow_Text_Ready\"))");
         File.ReadAllText(WorkspaceFileLocator.Find("src", "FreeX.App.Host", "StatusBarDisplayState.cs"))
             .Should()
             .Contain("UiText.Format(\"StatusBar_CountFormat\", stats.Count)")

@@ -59,27 +59,7 @@ public static partial class FormulaAuditingService
     public static IReadOnlyList<FormulaErrorIssue> FindFormulaErrorIssues(Workbook workbook, SheetId? sheetId = null)
     {
         var result = new List<FormulaErrorIssue>();
-        foreach (var error in FindFormulaErrors(workbook, sheetId))
-        {
-            result.Add(new FormulaErrorIssue(
-                error.SheetId,
-                error.SheetName,
-                error.Address,
-                error.Address.ToA1(),
-                error.Error.Code,
-                error.FormulaText is null ? null : "=" + error.FormulaText,
-                DescribeError(error.Error)));
-        }
-
-        if (!workbook.DisabledFormulaErrorCodes.Contains(NumberStoredAsTextErrorCode))
-            result.AddRange(FindNumbersStoredAsTextIssues(workbook, sheetId));
-
-        if (!workbook.DisabledFormulaErrorCodes.Contains(TwoDigitYearTextDateErrorCode))
-            result.AddRange(FindTwoDigitYearTextDateIssues(workbook, sheetId));
-
-        if (!workbook.DisabledFormulaErrorCodes.Contains(FormulaStoredAsTextErrorCode))
-            result.AddRange(FindFormulaStoredAsTextIssues(workbook, sheetId));
-
+        result.AddRange(FindLiteralFormulaErrorIssues(workbook, sheetId));
         result.AddRange(FindFormulaCellIssues(workbook, sheetId));
 
         if (result.Count <= 1)
@@ -91,6 +71,77 @@ public static partial class FormulaAuditingService
 
         result.Sort((left, right) => CompareFormulaIssues(left, right, sheetOrder));
         return result;
+    }
+
+    private static IEnumerable<FormulaErrorIssue> FindLiteralFormulaErrorIssues(Workbook workbook, SheetId? sheetId)
+    {
+        var checkNumberStoredAsText = !workbook.DisabledFormulaErrorCodes.Contains(NumberStoredAsTextErrorCode);
+        var checkTwoDigitYearTextDate = !workbook.DisabledFormulaErrorCodes.Contains(TwoDigitYearTextDateErrorCode);
+        var checkFormulaStoredAsText = !workbook.DisabledFormulaErrorCodes.Contains(FormulaStoredAsTextErrorCode);
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            if (sheetId.HasValue && sheet.Id != sheetId.Value)
+                continue;
+
+            foreach (var (address, cell) in sheet.EnumerateCells())
+            {
+                if (cell.IgnoreFormulaError)
+                    continue;
+
+                if (cell.Value is ErrorValue error &&
+                    !workbook.DisabledFormulaErrorCodes.Contains(error.Code))
+                {
+                    yield return new FormulaErrorIssue(
+                        sheet.Id,
+                        sheet.Name,
+                        address,
+                        address.ToA1(),
+                        error.Code,
+                        cell.FormulaText is null ? null : "=" + cell.FormulaText,
+                        DescribeError(error));
+                }
+
+                if (cell.HasFormula || cell.Value is not TextValue text)
+                    continue;
+
+                if (checkNumberStoredAsText && IsNumberStoredAsText(text.Value))
+                {
+                    yield return new FormulaErrorIssue(
+                        sheet.Id,
+                        sheet.Name,
+                        address,
+                        address.ToA1(),
+                        NumberStoredAsTextErrorCode,
+                        null,
+                        "The number in this cell is formatted as text or preceded by an apostrophe.");
+                }
+
+                if (checkTwoDigitYearTextDate && IsTextDateWithTwoDigitYear(text.Value))
+                {
+                    yield return new FormulaErrorIssue(
+                        sheet.Id,
+                        sheet.Name,
+                        address,
+                        address.ToA1(),
+                        TwoDigitYearTextDateErrorCode,
+                        null,
+                        "The text date in this cell contains a two-digit year.");
+                }
+
+                if (checkFormulaStoredAsText && IsFormulaTextLiteral(text.Value))
+                {
+                    yield return new FormulaErrorIssue(
+                        sheet.Id,
+                        sheet.Name,
+                        address,
+                        address.ToA1(),
+                        FormulaStoredAsTextErrorCode,
+                        null,
+                        "The text in this cell starts with '=' and is stored as text instead of a formula.");
+                }
+            }
+        }
     }
 
     private static int CompareFormulaIssues(
@@ -120,34 +171,6 @@ public static partial class FormulaAuditingService
         IsInconsistentFormula(workbook, sheetId, address) ||
         FormulaOmitsAdjacentCells(workbook, sheetId, cell) ||
         IsUnlockedFormulaCell(workbook, cell);
-
-    private static bool HasIgnorableLiteralIssue(Cell cell) =>
-        cell.Value is ErrorValue ||
-        (!cell.HasFormula && cell.Value is TextValue text && IsNumberStoredAsText(text.Value));
-
-    private static IEnumerable<FormulaErrorIssue> FindNumbersStoredAsTextIssues(Workbook workbook, SheetId? sheetId)
-    {
-        foreach (var sheet in workbook.Sheets)
-        {
-            if (sheetId.HasValue && sheet.Id != sheetId.Value)
-                continue;
-
-            foreach (var (address, cell) in sheet.EnumerateCells())
-            {
-                if (cell.IgnoreFormulaError || !HasIgnorableLiteralIssue(cell) || cell.Value is not TextValue)
-                    continue;
-
-                yield return new FormulaErrorIssue(
-                    sheet.Id,
-                    sheet.Name,
-                    address,
-                    address.ToA1(),
-                    NumberStoredAsTextErrorCode,
-                    null,
-                    "The number in this cell is formatted as text or preceded by an apostrophe.");
-            }
-        }
-    }
 
     private static IEnumerable<FormulaErrorIssue> FindFormulaRefersToBlankCellsIssues(Workbook workbook, SheetId? sheetId)
     {
@@ -274,54 +297,6 @@ public static partial class FormulaAuditingService
 
             foreach (var issue in FindInconsistentFormulaRuns(sheet, formulas.GroupBy(item => item.Address.Col), flaggedInconsistentFormulas))
                 yield return issue;
-        }
-    }
-
-    private static IEnumerable<FormulaErrorIssue> FindTwoDigitYearTextDateIssues(Workbook workbook, SheetId? sheetId)
-    {
-        foreach (var sheet in workbook.Sheets)
-        {
-            if (sheetId.HasValue && sheet.Id != sheetId.Value)
-                continue;
-
-            foreach (var (address, cell) in sheet.EnumerateCells())
-            {
-                if (cell.IgnoreFormulaError || cell.HasFormula || cell.Value is not TextValue text || !IsTextDateWithTwoDigitYear(text.Value))
-                    continue;
-
-                yield return new FormulaErrorIssue(
-                    sheet.Id,
-                    sheet.Name,
-                    address,
-                    address.ToA1(),
-                    TwoDigitYearTextDateErrorCode,
-                    null,
-                    "The text date in this cell contains a two-digit year.");
-            }
-        }
-    }
-
-    private static IEnumerable<FormulaErrorIssue> FindFormulaStoredAsTextIssues(Workbook workbook, SheetId? sheetId)
-    {
-        foreach (var sheet in workbook.Sheets)
-        {
-            if (sheetId.HasValue && sheet.Id != sheetId.Value)
-                continue;
-
-            foreach (var (address, cell) in sheet.EnumerateCells())
-            {
-                if (cell.IgnoreFormulaError || !IsFormulaStoredAsText(cell))
-                    continue;
-
-                yield return new FormulaErrorIssue(
-                    sheet.Id,
-                    sheet.Name,
-                    address,
-                    address.ToA1(),
-                    FormulaStoredAsTextErrorCode,
-                    null,
-                    "The text in this cell starts with '=' and is stored as text instead of a formula.");
-            }
         }
     }
 

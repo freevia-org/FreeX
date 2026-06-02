@@ -1011,6 +1011,9 @@ public partial class MainWindow
             return false;
         }
 
+        if (FindSheetTabContextMenuTarget(focusedElement) is null)
+            return false;
+
         var handled = e.Key switch
         {
             Key.Left => FocusAdjacentVisibleSheetTab(-1),
@@ -1026,8 +1029,7 @@ public partial class MainWindow
 
     private bool FocusAdjacentVisibleSheetTab(int direction)
     {
-        var visibleTabs = _sheetTabs.ToList();
-        var nextSheetId = SheetTabFocusPlanner.AdjacentTab(visibleTabs, _currentSheetId, direction);
+        var nextSheetId = SheetTabFocusPlanner.AdjacentTab(_sheetTabs, _currentSheetId, direction);
         if (nextSheetId is null)
             return false;
 
@@ -1037,7 +1039,7 @@ public partial class MainWindow
 
     private bool FocusEdgeVisibleSheetTab(bool first)
     {
-        var sheetId = SheetTabFocusPlanner.EdgeTab(_sheetTabs.ToList(), first);
+        var sheetId = SheetTabFocusPlanner.EdgeTab(_sheetTabs, first);
         if (sheetId is null)
             return false;
 

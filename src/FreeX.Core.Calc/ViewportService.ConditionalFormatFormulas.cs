@@ -24,6 +24,8 @@ public sealed partial class ViewportService
             int dc = (int)addr.Col - (int)cf.AppliesTo.Start.Col;
             if (formulaCache.SimpleComparison is { } simpleComparison)
                 return MatchesSimpleComparison(simpleComparison, sheet, workbook, dr, dc);
+            if (formulaCache.SimpleAnd is { } simpleAnd)
+                return MatchesSimpleAnd(simpleAnd, sheet, workbook, dr, dc);
 
             var ast = GetShiftedCfFormula(formulaCache, dr, dc);
 
@@ -66,6 +68,23 @@ public sealed partial class ViewportService
             BinaryOperator.GreaterOrEqual => cmp >= 0,
             _ => false
         };
+    }
+
+    private static bool MatchesSimpleAnd(
+        CfSimpleFormulaAnd simpleAnd,
+        Sheet sheet,
+        Workbook workbook,
+        int dr,
+        int dc)
+    {
+        var comparisons = simpleAnd.Comparisons;
+        for (var i = 0; i < comparisons.Length; i++)
+        {
+            if (!MatchesSimpleComparison(comparisons[i], sheet, workbook, dr, dc))
+                return false;
+        }
+
+        return true;
     }
 
     private static bool TryResolveSimpleOperand(

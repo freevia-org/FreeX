@@ -29,7 +29,7 @@ public sealed partial class NativeJsonAdapter
                 .Where(xml => !string.IsNullOrWhiteSpace(xml))
                 .ToArray()
         };
-        foreach (var column in reference is null ? [] : dto.FilterColumns ?? [])
+        foreach (var column in (reference is null ? [] : dto.FilterColumns ?? []).OfType<WorksheetAutoFilterColumnDto>())
         {
             if (column.ColumnId >= 0)
             {
@@ -38,6 +38,7 @@ public sealed partial class NativeJsonAdapter
                     column.Values?.Where(value => !string.IsNullOrWhiteSpace(value)).ToArray() ?? [],
                     column.IncludeBlank,
                     column.CustomFilters?
+                        .OfType<WorksheetAutoFilterCustomFilterDto>()
                         .Select(filter => new WorksheetAutoFilterCustomFilterModel(
                             filter.Operator,
                             filter.Value,
@@ -83,6 +84,7 @@ public sealed partial class NativeJsonAdapter
                             column.IconFilter.IconIdRaw,
                             CleanNativeAttributes(column.IconFilter.NativeAttributes)),
                     column.DateGroups?
+                        .OfType<WorksheetAutoFilterDateGroupItemDto>()
                         .Select(dateGroup => new WorksheetAutoFilterDateGroupItemModel(
                             dateGroup.Year,
                             dateGroup.Month,
@@ -130,13 +132,14 @@ public sealed partial class NativeJsonAdapter
                 .Where(xml => !string.IsNullOrWhiteSpace(xml))
                 .ToList(),
             FilterColumns = (reference is null ? [] : autoFilter.FilterColumns)
+                .OfType<WorksheetAutoFilterColumnModel>()
                 .Where(column => column.ColumnId >= 0)
                 .Select(column => new WorksheetAutoFilterColumnDto
                 {
                         ColumnId = column.ColumnId,
-                        Values = column.Values.Where(value => !string.IsNullOrWhiteSpace(value)).ToList(),
+                        Values = (column.Values ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).ToList(),
                         IncludeBlank = column.IncludeBlank,
-                        DateGroups = column.DateGroups.Select(dateGroup => new WorksheetAutoFilterDateGroupItemDto
+                        DateGroups = (column.DateGroups ?? []).OfType<WorksheetAutoFilterDateGroupItemModel>().Select(dateGroup => new WorksheetAutoFilterDateGroupItemDto
                         {
                             Year = dateGroup.Year,
                             Month = dateGroup.Month,
@@ -154,7 +157,7 @@ public sealed partial class NativeJsonAdapter
                             NativeAttributes = CleanNativeAttributesForSave(dateGroup.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
                         }).ToList(),
                         NativeFiltersAttributes = CleanNativeAttributesForSave(column.NativeFiltersAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)),
-                        CustomFilters = column.CustomFilters.Select(filter => new WorksheetAutoFilterCustomFilterDto
+                        CustomFilters = (column.CustomFilters ?? []).OfType<WorksheetAutoFilterCustomFilterModel>().Select(filter => new WorksheetAutoFilterCustomFilterDto
                         {
                             Operator = filter.Operator,
                             Value = filter.Value,
@@ -207,7 +210,7 @@ public sealed partial class NativeJsonAdapter
                                 IconIdRaw = column.IconFilter.IconIdRaw,
                                 NativeAttributes = CleanNativeAttributesForSave(column.IconFilter.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
                             },
-                        NativeFilterXmls = column.NativeFilterXmls.Where(xml => !string.IsNullOrWhiteSpace(xml)).ToList(),
+                        NativeFilterXmls = (column.NativeFilterXmls ?? []).Where(xml => !string.IsNullOrWhiteSpace(xml)).ToList(),
                         NativeAttributes = CleanNativeAttributesForSave(column.NativeAttributes?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))
                 }).ToList()
         };

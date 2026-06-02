@@ -19,6 +19,27 @@ public sealed class XlsxWorkbookThemeReaderTests
     }
 
     [Fact]
+    public void XlsxFileAdapter_SaveDefaultTheme_RoundTripsOfficeTheme()
+    {
+        var workbook = new Workbook("DefaultTheme");
+        workbook.AddSheet("Sheet1");
+        var adapter = new XlsxFileAdapter();
+
+        using var package = new MemoryStream();
+        adapter.Save(workbook, package);
+        package.Position = 0;
+
+        var theme = adapter.Load(package).Theme;
+        theme.Name.Should().Be(WorkbookTheme.Office.Name);
+        theme.MajorFontName.Should().Be(WorkbookTheme.Office.MajorFontName);
+        theme.MinorFontName.Should().Be(WorkbookTheme.Office.MinorFontName);
+        theme.EffectsName.Should().Be(WorkbookTheme.Office.EffectsName);
+        theme.HasObjectDefaults.Should().BeFalse();
+        foreach (var slot in Enum.GetValues<WorkbookThemeColorSlot>())
+            theme.GetColor(slot).Should().Be(WorkbookTheme.Office.GetColor(slot));
+    }
+
+    [Fact]
     public void Load_ReadsThemeNameFontsEffectsAndColorScheme()
     {
         using var package = CreatePackage(("xl/theme/theme1.xml", """
@@ -308,6 +329,38 @@ public sealed class XlsxWorkbookThemeReaderTests
             .Should()
             .ContainSingle(element => element.Attribute("spid") != null &&
                                       element.Attribute("spid")!.Value == "1");
+    }
+
+    [Fact]
+    public void Save_PreservesNativeFormatSchemeDetailsWhenEffectNameChanges()
+    {
+        using var source = CreatePackage(("xl/theme/theme1.xml", NativeThemeWithDeepSchemesXml));
+        var theme = XlsxWorkbookThemeReader.Load(source)
+            .WithEffects("Renamed Effects");
+
+        theme.NativeFormatSchemeXml.Should().Contain("outerShdw");
+
+        using var target = CreatePackage();
+        XlsxWorkbookThemeWriter.Save(target, theme);
+        target.Position = 0;
+
+        using var archive = new ZipArchive(target, ZipArchiveMode.Read, leaveOpen: false);
+        var savedTheme = LoadThemeDocument(archive);
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var formatScheme = savedTheme.Root!
+            .Element(drawingNs + "themeElements")!
+            .Element(drawingNs + "fmtScheme")!;
+
+        formatScheme.Attribute("name")!.Value.Should().Be("Renamed Effects");
+        formatScheme
+            .Element(drawingNs + "effectStyleLst")!
+            .Element(drawingNs + "effectStyle")!
+            .Element(drawingNs + "effectLst")!
+            .Element(drawingNs + "outerShdw")!
+            .Attribute("dist")!
+            .Value
+            .Should()
+            .Be("19050");
     }
 
     [Fact]

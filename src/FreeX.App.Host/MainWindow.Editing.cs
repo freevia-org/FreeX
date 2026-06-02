@@ -502,7 +502,7 @@ public partial class MainWindow
         if (StatusStatsPanel is null || StatusReadyText is null)
             return;
 
-        ApplyStatusBarDisplayState(StatusBarDisplayState.Ready(text));
+        ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(text));
     }
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
