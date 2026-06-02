@@ -221,8 +221,8 @@ public partial class MainWindow
     private void DrawEllipseBtn_Click(object sender, RoutedEventArgs e) => InsertDrawingShape(DrawingShapeKind.Ellipse);
     private void DrawLineBtn_Click(object sender, RoutedEventArgs e)    => InsertDrawingShape(DrawingShapeKind.Line);
     private void DrawTextBtn_Click(object sender, RoutedEventArgs e)    => InsertTextBox();
-    private void BringForwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingShape(forward: true);
-    private void SendBackwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingShape(forward: false);
+    private void BringForwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingObject(forward: true);
+    private void SendBackwardBtn_Click(object sender, RoutedEventArgs e) => ReorderSelectedDrawingObject(forward: false);
     private void SelectionPaneBtn_Click(object sender, RoutedEventArgs e) => ShowSelectionPaneDialog();
     private void ObjectSizeBtn_Click(object sender, RoutedEventArgs e) => ResizeSelectedDrawingObject();
     private void ObjectRotateBtn_Click(object sender, RoutedEventArgs e) => RotateSelectedDrawingObject();
@@ -273,13 +273,13 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    private void ReorderSelectedDrawingShape(bool forward)
+    private void ReorderSelectedDrawingObject(bool forward)
     {
-        var currentShape = GetTargetDrawingShape(_currentSheetId);
-        if (currentShape is null)
+        var currentTarget = GetTargetDrawingZOrderObject(_currentSheetId);
+        if (currentTarget is null)
         {
             ShowOwnedMessage(
-                UiText.Get("MainWindowMessage_NoDrawingShapesOnSheet"),
+                UiText.Get("MainWindowMessage_NoDrawingObjectOnSheet"),
                 UiText.Get("MainWindowMessage_DrawTitle"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -291,15 +291,17 @@ public partial class MainWindow
                 title,
                 sheetId =>
                 {
-                    var target = GetTargetDrawingShape(sheetId);
-                    return forward
-                        ? new BringDrawingShapeForwardCommand(sheetId, target?.Id ?? Guid.Empty)
-                        : new SendDrawingShapeBackwardCommand(sheetId, target?.Id ?? Guid.Empty);
+                    var target = GetTargetDrawingZOrderObject(sheetId, currentTarget.Kind);
+                    return new MoveSelectionPaneObjectCommand(
+                        sheetId,
+                        target?.Kind ?? currentTarget.Kind,
+                        target?.Id ?? Guid.Empty,
+                        forward);
                 }))
             return;
 
-        SetActiveCell(currentShape.Anchor);
-        EnsureCellVisible(currentShape.Anchor);
+        SetActiveCell(currentTarget.Anchor);
+        EnsureCellVisible(currentTarget.Anchor);
         UpdateViewport();
     }
 
@@ -521,6 +523,14 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(sheetId);
         return DrawingTargetResolver.GetTargetDrawingObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind);
+    }
+
+    private DrawingObjectZOrderTarget? GetTargetDrawingZOrderObject(
+        SheetId sheetId,
+        SelectionPaneObjectKind? preferredKind = null)
+    {
+        var sheet = _workbook.GetSheet(sheetId);
+        return DrawingTargetResolver.GetTargetDrawingZOrderObject(sheet, SheetGrid.SelectedRange?.Start, preferredKind);
     }
 
     private void OnObjectMoved(Guid id, FreeX.App.UI.ObjectKind kind, Core.Model.CellAddress newAnchor)
