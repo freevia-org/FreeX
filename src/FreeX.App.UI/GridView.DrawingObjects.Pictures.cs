@@ -11,6 +11,8 @@ public partial class GridView
     private static readonly Pen PictureGridPen = CreateFrozenPen(MakeBrush(210, 210, 210), 0.75);
     private static readonly Brush PictureSelectionBrush = MakeBrush(33, 115, 70);
     private static readonly Pen PictureSelectionPen = CreateFrozenPen(PictureSelectionBrush, 2);
+    private ImageBrush? _worksheetBackgroundBrushCache;
+    private WorksheetBackgroundBrushCacheKey _worksheetBackgroundBrushCacheKey;
 
     private void RenderPictures(DrawingContext dc)
     {
@@ -154,6 +156,26 @@ public partial class GridView
         if (WorksheetBackground == null || !TryLoadWorksheetBackgroundImage(WorksheetBackground, out var image) || image == null)
             return;
 
+        var brush = GetWorksheetBackgroundBrush(WorksheetBackground, image);
+
+        dc.DrawRectangle(
+            brush,
+            null,
+            new Rect(ActualRowHeaderWidth, EffectiveColHeaderHeight, Math.Max(0, ActualWidth - ActualRowHeaderWidth), Math.Max(0, ActualHeight - EffectiveColHeaderHeight)));
+    }
+
+    private ImageBrush GetWorksheetBackgroundBrush(WorksheetBackgroundImage background, ImageSource image)
+    {
+        var key = new WorksheetBackgroundBrushCacheKey(
+            background,
+            image,
+            ActualRowHeaderWidth,
+            EffectiveColHeaderHeight,
+            image.Width,
+            image.Height);
+        if (_worksheetBackgroundBrushCache is { } cached && _worksheetBackgroundBrushCacheKey == key)
+            return cached;
+
         var brush = new ImageBrush(image)
         {
             TileMode = TileMode.Tile,
@@ -163,11 +185,12 @@ public partial class GridView
             AlignmentX = AlignmentX.Left,
             AlignmentY = AlignmentY.Top
         };
+        if (brush.CanFreeze)
+            brush.Freeze();
 
-        dc.DrawRectangle(
-            brush,
-            null,
-            new Rect(ActualRowHeaderWidth, EffectiveColHeaderHeight, Math.Max(0, ActualWidth - ActualRowHeaderWidth), Math.Max(0, ActualHeight - EffectiveColHeaderHeight)));
+        _worksheetBackgroundBrushCache = brush;
+        _worksheetBackgroundBrushCacheKey = key;
+        return brush;
     }
 
     private static bool TryLoadWorksheetBackgroundImage(WorksheetBackgroundImage background, out ImageSource? image)
@@ -175,4 +198,12 @@ public partial class GridView
 
     private static bool TryLoadPictureImage(PictureModel picture, out ImageSource? image)
         => WpfBitmapImageLoader.TryLoad(picture.ImageBytes, out image);
+
+    private readonly record struct WorksheetBackgroundBrushCacheKey(
+        WorksheetBackgroundImage Background,
+        ImageSource Image,
+        double RowHeaderWidth,
+        double ColumnHeaderHeight,
+        double ImageWidth,
+        double ImageHeight);
 }
