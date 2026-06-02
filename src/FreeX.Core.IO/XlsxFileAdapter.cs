@@ -90,6 +90,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
         var indexedColors = XlsxIndexedColorPaletteMapper.Load(stylesXml);
         var pivotTableStyleMetadata = XlsxPivotTableStyleMetadataReader.Load(stylesXml);
+        var structuredTableStyleMetadata = XlsxStructuredTableStyleMetadataReader.Load(stylesXml);
         var xlsxCustomViews = workbookMetadata.CustomViews;
 
         packageStream.Position = 0;
@@ -149,6 +150,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             workbook.ExternalLinks.Add(externalLink);
         foreach (var pivotTableStyle in pivotTableStyleMetadata)
             workbook.PivotTableStyles.Add(pivotTableStyle);
+        foreach (var structuredTableStyle in structuredTableStyleMetadata)
+            workbook.StructuredTableStyles.Add(structuredTableStyle);
 
         var loadedScenarioNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var customViewStatesById = new Dictionary<string, List<WorksheetCustomViewState>>(StringComparer.OrdinalIgnoreCase);

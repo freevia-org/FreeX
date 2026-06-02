@@ -175,6 +175,9 @@ public sealed class InsertFunctionDialog : Window
 
     private void ListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
+        if (_listBox.SelectedItem is not InsertFunctionCatalogEntry)
+            return;
+
         Ok_Click(sender, e);
         e.Handled = true;
     }
