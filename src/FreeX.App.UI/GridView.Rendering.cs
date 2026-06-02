@@ -194,14 +194,182 @@ public partial class GridView
         _typefaceCache.Clear();
         _underlinePenCache.Clear();
         var gridPen = ShowGridLines ? GridPen : null;
-        foreach (var layout in CalculateSplitPaneCellLayouts(Viewport, MergedRegions, EditingCell))
-        {
-            var cell = layout.Cell;
-            var rect = layout.Rect;
-            if (rect.Width <= 0 || rect.Height <= 0)
-                continue;
+        var consumer = new SplitPaneCellRenderConsumer(
+            this,
+            dc,
+            topLeftClip,
+            topRightClip,
+            bottomLeftClip,
+            bottomRightClip,
+            pixelsPerDip,
+            gridPen);
+        SplitPaneCellLayoutPlanner.VisitLayouts(Viewport, MergedRegions, EditingCell, ref consumer);
+    }
 
-            var style = cell.Style;
+    private void RenderSplitPaneCell(
+        DrawingContext dc,
+        SplitPaneCellLayout layout,
+        Pen? gridPen,
+        double pixelsPerDip)
+    {
+        var cell = layout.Cell;
+        var rect = layout.Rect;
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return;
+
+        var style = cell.Style;
+        Brush? fill = WorksheetBackground == null ? Brushes.White : null;
+        if (style?.FillColor is { } fillColor)
+            fill = BrushForCellColor(fillColor, _brushCache);
+
+        if (fill is not null || gridPen is not null)
+            dc.DrawRectangle(fill, gridPen, rect);
+        DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
+
+        if (style is not null && HasVisibleCellBorder(style))
+        {
+            DrawBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), _brushCache, _borderPenCache);
+            DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
+        }
+
+        if (cell.HasComment)
+            DrawCommentIndicator(dc, rect);
+
+        if (!ShouldDrawCellContent(cell, EditingCell))
+            return;
+
+        var textClipRect = layout.TextClipRect;
+        if (cell.ConditionalIcon is { } splitIcon)
+        {
+            var iconLayout = CalculateConditionalIconCellLayout(rect, splitIcon);
+            DrawConditionalIcon(dc, splitIcon, iconLayout.IconRect);
+            if (!iconLayout.ShouldDrawText || string.IsNullOrEmpty(cell.DisplayText))
+                return;
+
+            rect = iconLayout.TextRect;
+            textClipRect = AdjustConditionalIconTextClipRect(layout.TextClipRect, rect);
+        }
+
+        var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
+        var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
+        var wrapText = style?.WrapText == true;
+        var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
+        Brush textBrush = TextBrush;
+
+        var indentPx = (style?.IndentLevel ?? 0) * 8.0;
+        if (style?.ShrinkToFit == true && !wrapText)
+        {
+            var typefaceKey = CreateCellTypefaceKey(style);
+            var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
+            var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
+            fontSize = ResolveCachedShrinkFontSize(
+                cell.DisplayText,
+                typefaceKey,
+                typeface,
+                fontSize,
+                availableWidth,
+                ToDisplayFontSize(6),
+                pixelsPerDip);
+        }
+
+        var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);
+        var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
+        var wrapTextAlignment = TextAlignment.Left;
+        var useDefaultWrappedTextLayout = false;
+        if (!useDefaultTextLayout && wrapText)
+        {
+            wrapTextAlignment = hAlign switch
+            {
+                CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
+                CellHAlign.Right => TextAlignment.Right,
+                _ => TextAlignment.Left
+            };
+            useDefaultWrappedTextLayout = CanUseDefaultWrappedFormattedText(style);
+        }
+        FormattedText text;
+        if (useDefaultTextLayout)
+        {
+            text = GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip);
+        }
+        else if (useDefaultWrappedTextLayout)
+        {
+            text = GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip);
+        }
+        else
+        {
+            var typefaceKey = CreateCellTypefaceKey(style);
+            var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
+            if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
+                textBrush = BrushForCellColor(fontColor, _brushCache);
+            text = new FormattedText(
+                    cell.DisplayText,
+                    CultureInfo.CurrentCulture,
+                    FlowDirection.LeftToRight,
+                    typeface,
+                    fontSize,
+                    textBrush,
+                    pixelsPerDip);
+        }
+
+        if (!useDefaultTextLayout && !useDefaultWrappedTextLayout && BuildTextDecorations(style) is { } decorations)
+            text.SetTextDecorations(decorations);
+
+        if (wrapText && !useDefaultWrappedTextLayout)
+        {
+            text.MaxTextWidth = wrapMaxTextWidth;
+            text.TextAlignment = wrapTextAlignment;
+        }
+
+        var textX = hAlign switch
+        {
+            CellHAlign.Right => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
+            CellHAlign.Justify or CellHAlign.Distributed => rect.Left + (rect.Width - text.Width) / 2,
+            CellHAlign.Center => rect.Left + (rect.Width - text.Width) / 2,
+            CellHAlign.General when isNumeric => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
+            _ => rect.Left + 2 + indentPx
+        };
+        var textY = style?.VerticalAlignment switch
+        {
+            CellVAlign.Top => rect.Top + 1,
+            CellVAlign.Center => rect.Top + (rect.Height - text.Height) / 2,
+            CellVAlign.Bottom => rect.Bottom - text.Height - 1,
+            _ => rect.Top + (rect.Height - text.Height) / 2
+        };
+        textY = Math.Max(rect.Top, textY);
+
+        var textPoint = new Point(Math.Round(textX), Math.Round(textY));
+        var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textPoint);
+        if (shouldClipText)
+            dc.PushClip(GetCellClipGeometry(textClipRect));
+
+        dc.DrawText(text, textPoint);
+
+        if (style?.DoubleUnderline == true)
+        {
+            double uY = textY + text.Height + 1;
+            var underlinePen = UnderlinePenForTextBrush(textBrush, _underlinePenCache);
+            dc.DrawLine(underlinePen, new Point(textX, uY), new Point(textX + text.Width, uY));
+            dc.DrawLine(underlinePen, new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
+        }
+
+        if (shouldClipText)
+            dc.Pop();
+    }
+
+    private readonly struct SplitPaneCellRenderConsumer(
+        GridView grid,
+        DrawingContext dc,
+        RectangleGeometry topLeftClip,
+        RectangleGeometry topRightClip,
+        RectangleGeometry bottomLeftClip,
+        RectangleGeometry bottomRightClip,
+        double pixelsPerDip,
+        Pen? gridPen) : ISplitPaneCellLayoutConsumer
+    {
+        public void AcceptLayout(SplitPaneCellLayout layout)
+        {
             var clipGeometry = GetSplitPaneClipGeometryForRegion(
                 layout.Region,
                 topLeftClip,
@@ -209,151 +377,7 @@ public partial class GridView
                 bottomLeftClip,
                 bottomRightClip);
             dc.PushClip(clipGeometry);
-
-            Brush? fill = WorksheetBackground == null ? Brushes.White : null;
-            if (style?.FillColor is { } fillColor)
-                fill = BrushForCellColor(fillColor, _brushCache);
-
-            if (fill is not null || gridPen is not null)
-                dc.DrawRectangle(fill, gridPen, rect);
-            DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
-
-            if (style is not null && HasVisibleCellBorder(style))
-            {
-                DrawBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top), _brushCache, _borderPenCache);
-                DrawBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
-                DrawBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom), _brushCache, _borderPenCache);
-                DrawBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom), _brushCache, _borderPenCache);
-            }
-
-            if (cell.HasComment)
-                DrawCommentIndicator(dc, rect);
-
-            if (!ShouldDrawCellContent(cell, EditingCell))
-            {
-                dc.Pop();
-                continue;
-            }
-
-            var textClipRect = layout.TextClipRect;
-            if (cell.ConditionalIcon is { } splitIcon)
-            {
-                var iconLayout = CalculateConditionalIconCellLayout(rect, splitIcon);
-                DrawConditionalIcon(dc, splitIcon, iconLayout.IconRect);
-                if (!iconLayout.ShouldDrawText || string.IsNullOrEmpty(cell.DisplayText))
-                {
-                    dc.Pop();
-                    continue;
-                }
-
-                rect = iconLayout.TextRect;
-                textClipRect = AdjustConditionalIconTextClipRect(layout.TextClipRect, rect);
-            }
-
-            var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
-            var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
-            var wrapText = style?.WrapText == true;
-            var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
-            Brush textBrush = TextBrush;
-
-            var indentPx = (style?.IndentLevel ?? 0) * 8.0;
-            if (style?.ShrinkToFit == true && !wrapText)
-            {
-                var typefaceKey = CreateCellTypefaceKey(style);
-                var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
-                var availableWidth = Math.Max(1, rect.Width - 4 - indentPx);
-                fontSize = ResolveCachedShrinkFontSize(
-                    cell.DisplayText,
-                    typefaceKey,
-                    typeface,
-                    fontSize,
-                    availableWidth,
-                    ToDisplayFontSize(6),
-                    pixelsPerDip);
-            }
-
-            var useDefaultTextLayout = CanUseDefaultFormattedText(style, wrapText);
-            var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
-            var wrapTextAlignment = TextAlignment.Left;
-            var useDefaultWrappedTextLayout = false;
-            if (!useDefaultTextLayout && wrapText)
-            {
-                wrapTextAlignment = hAlign switch
-                {
-                    CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
-                    CellHAlign.Right => TextAlignment.Right,
-                    _ => TextAlignment.Left
-                };
-                useDefaultWrappedTextLayout = CanUseDefaultWrappedFormattedText(style);
-            }
-            FormattedText text;
-            if (useDefaultTextLayout)
-            {
-                text = GetDefaultFormattedText(cell.DisplayText, fontSize, pixelsPerDip);
-            }
-            else if (useDefaultWrappedTextLayout)
-            {
-                text = GetDefaultWrappedFormattedText(cell.DisplayText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip);
-            }
-            else
-            {
-                var typefaceKey = CreateCellTypefaceKey(style);
-                var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
-                if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
-                    textBrush = BrushForCellColor(fontColor, _brushCache);
-                text = new FormattedText(
-                        cell.DisplayText,
-                        CultureInfo.CurrentCulture,
-                        FlowDirection.LeftToRight,
-                        typeface,
-                        fontSize,
-                        textBrush,
-                        pixelsPerDip);
-            }
-
-            if (!useDefaultTextLayout && !useDefaultWrappedTextLayout && BuildTextDecorations(style) is { } decorations)
-                text.SetTextDecorations(decorations);
-
-            if (wrapText && !useDefaultWrappedTextLayout)
-            {
-                text.MaxTextWidth = wrapMaxTextWidth;
-                text.TextAlignment = wrapTextAlignment;
-            }
-
-            var textX = hAlign switch
-            {
-                CellHAlign.Right => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
-                CellHAlign.Justify or CellHAlign.Distributed => rect.Left + (rect.Width - text.Width) / 2,
-                CellHAlign.Center => rect.Left + (rect.Width - text.Width) / 2,
-                CellHAlign.General when isNumeric => rect.Right - Math.Min(text.Width, rect.Width - 2) - 2,
-                _ => rect.Left + 2 + indentPx
-            };
-            var textY = style?.VerticalAlignment switch
-            {
-                CellVAlign.Top => rect.Top + 1,
-                CellVAlign.Center => rect.Top + (rect.Height - text.Height) / 2,
-                CellVAlign.Bottom => rect.Bottom - text.Height - 1,
-                _ => rect.Top + (rect.Height - text.Height) / 2
-            };
-            textY = Math.Max(rect.Top, textY);
-
-            var textPoint = new Point(Math.Round(textX), Math.Round(textY));
-            var shouldClipText = ShouldClipText(wrapText, textClipRect, text, textPoint);
-            if (shouldClipText)
-                dc.PushClip(GetCellClipGeometry(textClipRect));
-
-            dc.DrawText(text, textPoint);
-
-            if (style?.DoubleUnderline == true)
-            {
-                double uY = textY + text.Height + 1;
-                var underlinePen = UnderlinePenForTextBrush(textBrush, _underlinePenCache);
-                dc.DrawLine(underlinePen, new Point(textX, uY), new Point(textX + text.Width, uY));
-                dc.DrawLine(underlinePen, new Point(textX, uY + 2), new Point(textX + text.Width, uY + 2));
-            }
-
-            if (shouldClipText)
-                dc.Pop();
+            grid.RenderSplitPaneCell(dc, layout, gridPen, pixelsPerDip);
             dc.Pop();
         }
     }
