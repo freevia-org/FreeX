@@ -109,6 +109,12 @@ public sealed class WatchWindowServiceTests
     }
 
     [Fact]
+    public void WatchWindowEntry_IsValueTypedToAvoidPerEntryAllocations()
+    {
+        typeof(WatchWindowEntry).IsValueType.Should().BeTrue();
+    }
+
+    [Fact]
     public void GetDeleteTargets_ReturnsDistinctSelectedAddressesInSelectionOrder()
     {
         var sheet = SheetId.New();

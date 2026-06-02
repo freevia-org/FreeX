@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -82,13 +83,16 @@ public sealed class BuiltInFunctionsPerformanceTests
         GC.Collect();
         var before = GC.GetAllocatedBytesForCurrentThread();
 
+        var stopwatch = Stopwatch.StartNew();
         var result = evaluator.Evaluate("=UNIQUE(A1:A20000)", sheet)
             .Should().BeOfType<RangeValue>().Subject;
+        stopwatch.Stop();
 
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         result.RowCount.Should().Be(20_000);
-        _output.WriteLine($"UNIQUE large single-column allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(2_000_000);
+        _output.WriteLine(
+            $"UNIQUE large single-column elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
+        allocatedBytes.Should().BeLessThan(1_100_000);
     }
 
     [Fact]
