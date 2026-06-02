@@ -250,8 +250,6 @@ public partial class GridView
             var wrapText = style?.WrapText == true;
             var fontSize = ToDisplayFontSize((style?.FontSize > 0) ? style!.FontSize : DefaultCellFontSizePoints);
             Brush textBrush = TextBrush;
-            if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
-                textBrush = BrushForCellColor(fontColor, _brushCache);
 
             var indentPx = (style?.IndentLevel ?? 0) * 8.0;
             if (style?.ShrinkToFit == true && !wrapText)
@@ -296,6 +294,8 @@ public partial class GridView
             {
                 var typefaceKey = CreateCellTypefaceKey(style);
                 var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
+                if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
+                    textBrush = BrushForCellColor(fontColor, _brushCache);
                 text = new FormattedText(
                         cell.DisplayText,
                         CultureInfo.CurrentCulture,
