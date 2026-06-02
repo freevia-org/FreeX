@@ -3611,6 +3611,21 @@ public sealed class SpreadsheetXmlFileAdapterTests
             .Where(exception => exception.ParamName == "stylesheet");
     }
 
+    [Fact]
+    public void LoadTransformed_StylesheetFailure_DoesNotReadSourceStream()
+    {
+        using var source = StreamFromString("<rows/>");
+        using var stylesheet = StreamFromString("<xsl:stylesheet");
+
+        var act = () => SpreadsheetXmlFileAdapter.LoadTransformed(source, stylesheet);
+
+        act.Should().Throw<InvalidDataException>()
+            .WithMessage("*stylesheet*");
+        source.Position.Should().Be(0);
+        source.CanRead.Should().BeTrue();
+        stylesheet.CanRead.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(0, 1, "maxOutputBytes")]
     [InlineData(1, 0, "maxInputCharacters")]

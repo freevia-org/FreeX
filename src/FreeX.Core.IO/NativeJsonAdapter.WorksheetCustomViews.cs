@@ -24,10 +24,13 @@ public sealed partial class NativeJsonAdapter
     }
 
     private static WorksheetCustomViewState? ToWorksheetCustomViewState(
-        CustomViewSheetDto sheetDto,
+        CustomViewSheetDto? sheetDto,
         Workbook workbook,
         IReadOnlyDictionary<string, Sheet> loadedSheetsBySourceName)
     {
+        if (string.IsNullOrWhiteSpace(sheetDto?.SheetName))
+            return null;
+
         var state = ToWorksheetCustomViewState(sheetDto);
         var sheet = ResolveLoadedSheet(workbook, loadedSheetsBySourceName, state.SheetName);
         return sheet is null ? null : state with { SheetName = sheet.Name };

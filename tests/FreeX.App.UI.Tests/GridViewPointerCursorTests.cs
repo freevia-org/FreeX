@@ -353,6 +353,25 @@ public sealed class GridViewPointerCursorTests
     }
 
     [Fact]
+    public void HoverCursorStopsAfterResizeOrSplitPaneScrollbarHit()
+    {
+        var source = File.ReadAllText(FindWorkspaceFile(
+            "src", "FreeX.App.UI", "GridView.Input.cs"));
+        var hoverCursorBlock = source[
+            source.IndexOf("var (target, _, _) = HitTestResize(pos);", StringComparison.Ordinal)..
+            source.IndexOf("public static GridAutoScrollRequest", StringComparison.Ordinal)];
+
+        hoverCursorBlock.Should().Contain("if (target == ResizeTarget.Column)");
+        hoverCursorBlock.Should().Contain("if (target == ResizeTarget.Row)");
+        hoverCursorBlock.Should().Contain("if (splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Horizontal)");
+        hoverCursorBlock.Should().Contain("if (splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Vertical)");
+        hoverCursorBlock.IndexOf("if (target == ResizeTarget.Column)", StringComparison.Ordinal)
+            .Should().BeLessThan(hoverCursorBlock.IndexOf("HitTestPageMarginGuide(pos)", StringComparison.Ordinal));
+        hoverCursorBlock.IndexOf("if (splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Horizontal)", StringComparison.Ordinal)
+            .Should().BeLessThan(hoverCursorBlock.IndexOf("HitTestPageMarginGuide(pos)", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void SplitPaneDividerMouseUpRaisesMoveEventAndClearsCaptureState()
     {
         var source = File.ReadAllText(FindWorkspaceFile(

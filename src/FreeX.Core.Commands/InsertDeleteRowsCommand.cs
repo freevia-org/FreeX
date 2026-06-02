@@ -9,7 +9,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly uint _beforeRow;
     private readonly uint _count;
-    private List<(CellAddress Addr, Cell Cell)>? _movedSnapshot;
+    private List<(CellAddress Addr, Cell Snapshot, Cell? Original)>? _movedSnapshot;
     private List<GridRange>? _mergeSnapshot;
     private Dictionary<uint, double>? _rowHeightSnapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
@@ -49,11 +49,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
         _movedSnapshot = movedSnapshot;
 
-        foreach (var (addr, _) in _movedSnapshot)
+        foreach (var (addr, _, _) in _movedSnapshot)
             sheet.ClearCell(addr);
 
-        foreach (var (addr, cell) in _movedSnapshot)
-            sheet.SetCell(new CellAddress(addr.Sheet, addr.Row + _count, addr.Col), cell.Clone());
+        foreach (var (addr, _, original) in _movedSnapshot)
+            sheet.SetCell(new CellAddress(addr.Sheet, addr.Row + _count, addr.Col), original!);
 
         RowColumnShiftHelpers.ShiftSetUpFrom(sheet.HiddenRows, _beforeRow, _count);
         RowColumnShiftHelpers.ShiftSetUpFrom(sheet.FilterHiddenRows, _beforeRow, _count);
@@ -110,11 +110,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
 
-        foreach (var (addr, _) in _movedSnapshot)
+        foreach (var (addr, _, _) in _movedSnapshot)
             sheet.ClearCell(new CellAddress(addr.Sheet, addr.Row + _count, addr.Col));
 
-        foreach (var (addr, cell) in _movedSnapshot)
-            sheet.SetCell(addr, cell.Clone());
+        foreach (var (addr, snapshot, _) in _movedSnapshot)
+            sheet.SetCell(addr, snapshot.Clone());
 
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.HiddenRows, _beforeRow + _count, _count);
         RowColumnShiftHelpers.ShiftSetDownFrom(sheet.FilterHiddenRows, _beforeRow + _count, _count);
@@ -133,11 +133,12 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(sheet, _chartSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
+        ReleaseOriginalCells(_movedSnapshot);
     }
 
-    private (uint MaxOccupied, List<(CellAddress Addr, Cell Cell)> Moved) CaptureMovedCells(Sheet sheet)
+    private (uint MaxOccupied, List<(CellAddress Addr, Cell Snapshot, Cell? Original)> Moved) CaptureMovedCells(Sheet sheet)
     {
-        var moved = new List<(CellAddress Addr, Cell Cell)>(sheet.CellCount);
+        var moved = new List<(CellAddress Addr, Cell Snapshot, Cell? Original)>(sheet.CellCount);
         uint maxOccupied = 0;
 
         foreach (var ((row, col), cell) in sheet.GetOccupiedCellMap())
@@ -148,10 +149,19 @@ public sealed class InsertRowsCommand : IWorkbookCommand
             if (row > maxOccupied)
                 maxOccupied = row;
 
-            moved.Add((new CellAddress(sheet.Id, row, col), cell.Clone()));
+            moved.Add((new CellAddress(sheet.Id, row, col), cell.Clone(), cell));
         }
 
         return (maxOccupied, moved);
+    }
+
+    private static void ReleaseOriginalCells(List<(CellAddress Addr, Cell Snapshot, Cell? Original)> cells)
+    {
+        for (var i = 0; i < cells.Count; i++)
+        {
+            var cell = cells[i];
+            cells[i] = (cell.Addr, cell.Snapshot, null);
+        }
     }
 }
 

@@ -1,7 +1,6 @@
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using System.Globalization;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace FreeX.Core.Commands;
@@ -752,8 +751,8 @@ public static partial class FormulaAuditingService
 
     private static string NormalizeFormulaPattern(CellAddress address, string formulaText)
     {
-        StringBuilder? builder = null;
-        var appendStart = 0;
+        var normalizedLength = formulaText.Length;
+        var replacementCount = 0;
 
         for (var index = 0; index < formulaText.Length; index++)
         {
@@ -763,23 +762,80 @@ public static partial class FormulaAuditingService
                 continue;
             }
 
-            builder ??= new StringBuilder(formulaText.Length + 8);
-            builder.Append(formulaText, appendStart, index - appendStart);
-            builder.Append("R[");
-            builder.Append((int)row - (int)address.Row);
-            builder.Append("]C[");
-            builder.Append((int)col - (int)address.Col);
-            builder.Append(']');
-
-            appendStart = end;
+            var rowDelta = (int)row - (int)address.Row;
+            var colDelta = (int)col - (int)address.Col;
+            normalizedLength += GetRelativeReferencePatternLength(rowDelta, colDelta) - (end - index);
+            replacementCount++;
             index = end - 1;
         }
 
-        if (builder is null)
+        if (replacementCount == 0)
             return formulaText;
 
-        builder.Append(formulaText, appendStart, formulaText.Length - appendStart);
-        return builder.ToString();
+        return string.Create(normalizedLength, (address, formulaText), static (buffer, state) =>
+        {
+            var (address, formulaText) = state;
+            var writeIndex = 0;
+            var appendStart = 0;
+
+            for (var index = 0; index < formulaText.Length; index++)
+            {
+                if (!IsFormulaReferenceBoundaryBefore(formulaText, index) ||
+                    !TryReadFormulaReference(formulaText, index, out var end, out var row, out var col))
+                {
+                    continue;
+                }
+
+                formulaText.AsSpan(appendStart, index - appendStart).CopyTo(buffer[writeIndex..]);
+                writeIndex += index - appendStart;
+
+                WriteRelativeReferencePattern(
+                    buffer,
+                    ref writeIndex,
+                    (int)row - (int)address.Row,
+                    (int)col - (int)address.Col);
+
+                appendStart = end;
+                index = end - 1;
+            }
+
+            formulaText.AsSpan(appendStart).CopyTo(buffer[writeIndex..]);
+        });
+    }
+
+    private static int GetRelativeReferencePatternLength(int rowDelta, int colDelta) =>
+        6 + GetSignedIntegerLength(rowDelta) + GetSignedIntegerLength(colDelta);
+
+    private static int GetSignedIntegerLength(int value)
+    {
+        var length = value < 0 ? 1 : 0;
+        var magnitude = value < 0 ? -(long)value : value;
+        do
+        {
+            length++;
+            magnitude /= 10;
+        }
+        while (magnitude != 0);
+
+        return length;
+    }
+
+    private static void WriteRelativeReferencePattern(
+        Span<char> buffer,
+        ref int writeIndex,
+        int rowDelta,
+        int colDelta)
+    {
+        buffer[writeIndex++] = 'R';
+        buffer[writeIndex++] = '[';
+        rowDelta.TryFormat(buffer[writeIndex..], out var charsWritten);
+        writeIndex += charsWritten;
+        buffer[writeIndex++] = ']';
+        buffer[writeIndex++] = 'C';
+        buffer[writeIndex++] = '[';
+        colDelta.TryFormat(buffer[writeIndex..], out charsWritten);
+        writeIndex += charsWritten;
+        buffer[writeIndex++] = ']';
     }
 
     private static bool TryReadFormulaReference(
