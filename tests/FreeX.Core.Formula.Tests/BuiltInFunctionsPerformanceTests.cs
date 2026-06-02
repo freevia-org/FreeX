@@ -91,9 +91,12 @@ public sealed class BuiltInFunctionsPerformanceTests
 
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         result.RowCount.Should().Be(20_000);
+        Console.WriteLine($"PERF UNIQUE_SINGLE_COLUMN allocated_bytes={allocatedBytes}");
         _output.WriteLine(
             $"UNIQUE large single-column elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
-        allocatedBytes.Should().BeLessThan(1_100_000);
+        allocatedBytes.Should().BeLessThan(
+            900_000,
+            "UNIQUE should append discovered single-column values directly instead of tracking source row indexes");
     }
 
     [Fact]
