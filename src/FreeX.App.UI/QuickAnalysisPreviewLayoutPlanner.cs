@@ -24,6 +24,9 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         double rowHeaderWidth,
         double columnHeaderHeight)
     {
+        if (!TryCalculateDataBarPreviewMax(viewport, range, out var max))
+            return [];
+
         var rows = BuildRowMetricLookup(viewport.RowMetrics);
         var cols = BuildColMetricLookup(viewport.ColMetrics);
         var consumer = new ListRectConsumer();
@@ -34,6 +37,7 @@ internal static class QuickAnalysisPreviewLayoutPlanner
             columnHeaderHeight,
             rows,
             cols,
+            max,
             ref consumer);
 
         return consumer.ToResult();
@@ -49,7 +53,23 @@ internal static class QuickAnalysisPreviewLayoutPlanner
         ref TConsumer consumer)
         where TConsumer : struct, IQuickAnalysisPreviewRectConsumer
     {
-        var max = 0d;
+        if (!TryCalculateDataBarPreviewMax(viewport, range, out var max))
+            return;
+
+        VisitDataBarPreviewRects(
+            viewport,
+            range,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            rows,
+            cols,
+            max,
+            ref consumer);
+    }
+
+    internal static bool TryCalculateDataBarPreviewMax(ViewportModel viewport, GridRange range, out double max)
+    {
+        max = 0d;
         var hasNumericCell = false;
         foreach (var cell in viewport.Cells)
         {
@@ -62,9 +82,20 @@ internal static class QuickAnalysisPreviewLayoutPlanner
                 max = positiveValue;
         }
 
-        if (!hasNumericCell)
-            return;
+        return hasNumericCell;
+    }
 
+    internal static void VisitDataBarPreviewRects<TConsumer>(
+        ViewportModel viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight,
+        Dictionary<uint, RowMetric> rows,
+        Dictionary<uint, ColMetric> cols,
+        double max,
+        ref TConsumer consumer)
+        where TConsumer : struct, IQuickAnalysisPreviewRectConsumer
+    {
         foreach (var cell in viewport.Cells)
         {
             if (IsCellInRange(cell, range) &&
