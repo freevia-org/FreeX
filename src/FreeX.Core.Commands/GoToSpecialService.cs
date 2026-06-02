@@ -335,14 +335,14 @@ public static class GoToSpecialService
             return [];
 
         var result = new List<CellAddress>(matches.Count);
-        for (var row = range.Start.Row; row <= range.End.Row; row++)
+        foreach (var (row, col) in matches)
+            result.Add(new CellAddress(range.Start.Sheet, row, col));
+
+        result.Sort(static (left, right) =>
         {
-            for (var col = range.Start.Col; col <= range.End.Col; col++)
-            {
-                if (matches.Contains((row, col)))
-                    result.Add(new CellAddress(range.Start.Sheet, row, col));
-            }
-        }
+            var rowComparison = left.Row.CompareTo(right.Row);
+            return rowComparison != 0 ? rowComparison : left.Col.CompareTo(right.Col);
+        });
 
         return result;
     }
